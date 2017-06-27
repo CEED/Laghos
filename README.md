@@ -1,11 +1,12 @@
-           __                __
-          / /   ____ _____ _/ /_  ____  _____
-         / /   / __ `/ __ `/ __ \/ __ \/ ___/
-        / /___/ /_/ / /_/ / / / / /_/ (__  )
-       /_____/\__,_/\__, /_/ /_/\____/____/
-                   /____/
+         High-order Lagrangian Hydrodynamics Miniapp
+               __                __
+              / /   ____ _____ _/ /_  ____  _____
+             / /   / __ `/ __ `/ __ \/ __ \/ ___/
+            / /___/ /_/ / /_/ / / / / /_/ (__  )
+           /_____/\__,_/\__, /_/ /_/\____/____/
+                       /____/
 
-    High-order Lagrangian Hydrodynamics Miniapp
+          http://ceed.exascaleproject.org/miniapps
 
 
 ## What is Laghos?
@@ -39,8 +40,6 @@ Administration) responsible for the planning and preparation of a
 [capable exascale ecosystem](https://exascaleproject.org/what-is-exascale),
 including software, applications, hardware, advanced system engineering and early
 testbed platforms, in support of the nation’s exascale computing imperative.
-
-For more details on the CEED miniapps see http://ceed.exascaleproject.org/miniapps.
 
 ## Characteristics
 
