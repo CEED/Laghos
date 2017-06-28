@@ -186,12 +186,12 @@ To make sure the results are correct, we tabulate reference final iterations
 3. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5`
 4. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25`
 
- run | `step` | `dt` | `|e|` |
----- | ------ | ---- | ----- |
-  1. | 858 | 0.001490 | 46.5170240752 |
-  2. | 386 | 0.002814 | 17.4310562326 |
-  3. | 669 | 0.000165 | 49.5731419667 |
-  4. | 457 | 0.000152 | 3389.9229830873 |
+| run | `step` | `dt` | `e` |
+| --- | ------ | ---- | --- |
+|  1. | 858 | 0.001490 | 46.5170240752 |
+|  2. | 386 | 0.002814 | 17.4310562326 |
+|  3. | 669 | 0.000165 | 49.5731419667 |
+|  4. | 457 | 0.000152 | 3389.9229830873 |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
