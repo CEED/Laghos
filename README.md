@@ -176,7 +176,7 @@ The latter produces the following density profile (when run with `-vis` instead 
 
 ![](data/tg.png)
 
-# Verification of Results
+## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the four runs listed above:
