@@ -92,21 +92,17 @@ HPC simulation codes:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra
--  METIS, used for parallel domain decomposition (optional)
-- MFEM, used for (high-order) finite element discretization
+- *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
+   https://computation.llnl.gov/casc/hypre/software.html, 
 
-To build the miniapp, first download *hypre*, METIS and MFEM from
+-  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
+   http://glaros.dtc.umn.edu/gkhome/metis/metis/download
 
-  - https://computation.llnl.gov/casc/hypre/software.html
-  - http://glaros.dtc.umn.edu/gkhome/metis/metis/download
-  - http://mfem.org/download/
-
-Below we assume that we are working with versions hypre-2.10.0b,
-[metis-4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz)
-and mfem-3.4 respectively.
-
-Put everything in the same directory:
+- MFEM, used for (high-order) finite element discretization, we recommend version 3.4 <br>
+  http://mfem.org/download
+  
+To build the miniapp, first download *hypre*, METIS and MFEM from the links above
+and put everything on the same level as Laghos:
 ```sh
 ~> ls
 Laghos/ hypre-2.10.0b.tar.gz   metis-4.0.tar.gz   mfem-3.4.tgz
@@ -135,6 +131,8 @@ Build the parallel version of MFEM:
 ~> tar -zxvf mfem-3.4.tgz
 ~> cd mfem-3.4/
 ~/mfem-3.4> make parallel -j
+~> cd ..
+~> ln -s mfem-3.4 mfem
 ```
 
 Build Laghos
