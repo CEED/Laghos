@@ -51,9 +51,10 @@ FLOP-intensive definition of artificial viscosity at quadrature points.
 It includes several computational motives, many of which are frequently found in
 HPC simulation codes:
 
-- Support for unstructured meshes, in 2D and 3D, both with quadrilateral,
-  hexahedral, triangular and tetrahedral elements. Serial and parallel mesh
-  refinement options can be set via a command-line flag.
+- Support for unstructured meshes, in 2D and 3D, with quadrilateral and
+  hexahedral elements. (Triangular and tetrahedral elements can also be used, but
+  with less efficient "full assembly".) Serial and parallel mesh refinement
+  options can be set via a command-line flag.
 - Explicit time-stepping loop with a variety of time integrator options. Laghos
   supports Runge-Kutta ODE solvers of orders 1, 2, 3, 4 and 6.
 - Continuous and discontinuous high-order finite element discretization spaces
@@ -71,29 +72,78 @@ HPC simulation codes:
 
 ## Code Structure
 
-- `laghos.cpp` contains the main driver with time integration loop
-  starting at line 290.
-
-- The problem is formulated as solving a big ordinary differential
-  equation (ODE) for the unknown high-order velocity, energy and mesh
+- The file `laghos.cpp` contains the main driver with the time integration loop
+  starting around line 290.
+- The problem is formulated as solving a big system of ordinary differential
+  equations for the unknown (high-order) velocity, internal energy and mesh
   nodes (position).
-
-- The right-hand side of the ODE is specified by the
-  `LagrangianHydroOperator` defined on line 239 of `laghos.cpp` and
-  implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
-
+- The right-hand side of the ODE is specified by the `LagrangianHydroOperator`
+  defined around line 239 of `laghos.cpp` and implemented in files
+  `laghos_solver.hpp` and `laghos_solver.cpp`.
 - The orders of the velocity and position (continuous kinematic space)
   and the internal energy (discontinuous thermodynamic space) are given
   by the `-ov` and `-ot` input parameters respectively.
-
-- The main computational kernels are...
+- The main computational kernels are the `Mult*` functions of the classes
+  `MassPAOperator` and `ForcePAOperator` implemented in file
+  `laghos_solver.cpp`. Some of these functions have specific versions for
+  quadrilateral and hexahedral elements.
 
 ## Building
 
-- Unpack hypre, METIS, mfem
-- make parallel in mfem
-- cd miniapps/hydrodynamics
-- make laghos
+Laghos has the following external dependencies:
+
+- *hypre*, used for parallel linear algebra
+-  METIS, used for parallel domain decomposition (optional)
+- MFEM, used for (high-order) finite element discretization
+
+To build the miniapp, first download *hypre*, METIS and MFEM from
+
+  - https://computation.llnl.gov/casc/hypre/software.html
+  - http://glaros.dtc.umn.edu/gkhome/metis/metis/download
+  - http://mfem.org/download/
+
+Below we assume that we are working with versions hypre-2.10.0b,
+[metis-4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz)
+and mfem-3.4 respectively.
+
+Put everything in the same directory:
+```sh
+~> ls
+Laghos/ hypre-2.10.0b.tar.gz   metis-4.0.tar.gz   mfem-3.4.tgz
+```
+
+Build hypre:
+```sh
+~> tar -zxvf hypre-2.10.0b.tar.gz
+~> cd hypre-2.10.0b/src/
+~/hypre-2.10.0b/src> ./configure --disable-fortran
+~/hypre-2.10.0b/src> make -j
+~/hypre-2.10.0b/src> cd ../..
+```
+
+Build metis:
+```sh
+~> tar -zxvf metis-4.0.3.tar.gz
+~> cd metis-4.0.3
+~/metis-4.0.3> make
+~/metis-4.0.3> cd ..
+~> ln -s metis-4.0.3 metis-4.0
+```
+
+Build the parallel version of MFEM:
+```sh
+~> tar -zxvf mfem-3.4.tgz
+~> cd mfem-3.4/
+~/mfem-3.4> make parallel -j
+```
+
+Build Laghos
+```sh
+~> cd Laghos/
+~> make
+```
+
+For more details, see the [MFEM building page](http://mfem.org/building/).
 
 ## Running
 
