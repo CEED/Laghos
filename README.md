@@ -153,7 +153,7 @@ partial assembly option (`-pa`).
 Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
-mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 2 -tf 0.8 -no-vis -pa
+mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa
 ```
 
 The latter produces the following density plot (when run with `-vis` instead of `-no-vis`)
@@ -168,8 +168,8 @@ evaluation.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
-mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25
+mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -no-vis -pa
+mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -no-vis -pa
 ```
 
 The latter produces the following velocity magnitude plot (when run with `-vis` instead of `-no-vis`)
@@ -189,12 +189,15 @@ To make sure the results are correct, we tabulate reference final iterations
 | run | `step` | `dt` | `e` |
 | --- | ------ | ---- | --- |
 |  1. | 858 | 0.001490 | 46.5170240752 |
-|  2. | 386 | 0.002814 | 17.4310562326 |
+|  2. | 444 | 0.001282 | 134.0791900734 |
 |  3. | 669 | 0.000165 | 49.5731419667 |
 |  4. | 457 | 0.000152 | 3389.9229830873 |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
+
+## Contact
+You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a comment in the [issue tracker](https://github.com/CEED/Laghos/issues). 
 
 ## Copyright
 
