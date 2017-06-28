@@ -1,21 +1,22 @@
-         High-order Lagrangian Hydrodynamics Miniapp
                __                __
-              / /   ____ _____ _/ /_  ____  _____
+              / /   ____  ____  / /_  ____  _____
              / /   / __ `/ __ `/ __ \/ __ \/ ___/
             / /___/ /_/ / /_/ / / / / /_/ (__  )
            /_____/\__,_/\__, /_/ /_/\____/____/
                        /____/
 
-          http://ceed.exascaleproject.org/miniapps
+        High-order Lagrangian Hydrodynamics Miniapp
 
 
-## What is Laghos?
+## Purpose
 
-The **Laghos** miniapp (LAGrangian High-Order Solver), solves the
+**Laghos** (LAGrangian High-Order Solver) is a miniapp that solves the
 time-dependent Euler equation of compressible gas dynamics in a moving
 Lagrangian frame using unstructured high-order finite element spatial
-discretization and explicit high-order time-stepping.  Laghos uses the
-numerical described in the following article:
+discretization and explicit high-order time-stepping.
+
+Laghos is based on the numerical algorithm described in the following
+article:
 
 > V. Dobrev, Tz. Kolev and R. Rieben,<br>
 > [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672), <br>
@@ -46,6 +47,35 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 Laghos exposes the principal computational kernels of explicit
 time-dependent shock-capturing compressible flow, including the
 FLOP-intensive definition of artificial viscosity at quadrature points.
+
+It includes the following components, the majority of which are
+frequently found in HPC simulation codes:
+
+- Support for unstructured mesh, in 2D and 3D, both with quad/hex and
+  triangle/tet elements. Serial and parallel mesh refinement options can
+  be set with a command-line flag.
+
+- Explicit time-stepping loop with a variety of time integrator
+  options. Laghos supports explicit Runge-Kutta ODE solvers of orders 1,
+  2, 3, 4 and 6.
+
+- Continuous and discontinuous high-order finite element discretization
+  spaces of runtime-specified order.
+
+- Constant-in-time *mass matrix* that is inverted iteratively on each
+  time step ("assemble" once, evaluate many times) coupled with a
+  time-dependent *force matrix* that is "assembled" on each time step
+  and evaluated just twice.
+
+- [Partial assembly](http://ceed.exascaleproject.org/ceed-code) for
+  efficient high-order operator evaluation.
+
+- Domain-decomposed MPI parallelism.
+
+- Moving (high-order) meshes.
+
+- Optional in-situ visualization with [GLVis](http:/glvis.org) and data
+  output for analysis with [VisIt](http://visit.llnl.gov).
 
 ## Code Structure
 
@@ -78,7 +108,7 @@ FLOP-intensive definition of artificial viscosity at quadrature points.
 - Sedov problem:
 
 ```sh
-mpirun -np 8 laghos -p 1 -m square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
+mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
 ```
 
 # Verification of Results
