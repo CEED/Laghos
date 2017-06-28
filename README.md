@@ -108,7 +108,7 @@ and put everything on the same level as Laghos:
 Laghos/ hypre-2.10.0b.tar.gz   metis-4.0.tar.gz   mfem-3.4.tgz
 ```
 
-Build hypre:
+Build *hypre*:
 ```sh
 ~> tar -zxvf hypre-2.10.0b.tar.gz
 ~> cd hypre-2.10.0b/src/
@@ -117,7 +117,7 @@ Build hypre:
 ~/hypre-2.10.0b/src> cd ../..
 ```
 
-Build metis:
+Build METIS:
 ```sh
 ~> tar -zxvf metis-4.0.3.tar.gz
 ~> cd metis-4.0.3
