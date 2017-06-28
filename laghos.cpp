@@ -41,7 +41,7 @@
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
-//    p = 1  --> Sedov explosion.
+//    p = 1  --> Sedov blast.
 
 
 #include "laghos_solver.hpp"

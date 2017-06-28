@@ -93,14 +93,14 @@ HPC simulation codes:
 Laghos has the following external dependencies:
 
 - *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
-   https://computation.llnl.gov/casc/hypre/software.html, 
+   https://computation.llnl.gov/casc/hypre/software.html,
 
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
    http://glaros.dtc.umn.edu/gkhome/metis/metis/download
 
 - MFEM, used for (high-order) finite element discretization, we recommend version 3.4 <br>
   http://mfem.org/download
-  
+
 To build the miniapp, first download *hypre*, METIS and MFEM from the links above
 and put everything on the same level as Laghos:
 ```sh
@@ -145,11 +145,36 @@ For more details, see the [MFEM building page](http://mfem.org/building/).
 
 ## Running
 
-- Sedov problem:
+#### Sedov blast
 
+The main problem of interest for Laghos is the Sedov blast wave (`-p 1`) with
+partial assembly option (`-pa`).
+
+Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
+mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 2 -tf 0.8 -no-vis -pa
 ```
+
+The latter produces the following density profile (when run with `-vis` instead of `-no-vis`)
+
+![](data/sedov.png)
+
+#### Taylor-Green vortex
+
+Laghos includes also a smooth test problem, that exposes all the principal
+computational kernels of the problem except for the artificial viscosity
+evaluation.
+
+Some sample runs in 2D and 3D respectively are:
+```sh
+mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
+mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25
+```
+
+The latter produces the following density profile (when run with `-vis` instead of `-no-vis`)
+
+![](data/tg.png)
 
 # Verification of Results
 
