@@ -156,7 +156,7 @@ mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
 mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 2 -tf 0.8 -no-vis -pa
 ```
 
-The latter produces the following density profile (when run with `-vis` instead of `-no-vis`)
+The latter produces the following density plot (when run with `-vis` instead of `-no-vis`)
 
 ![](data/sedov.png)
 
@@ -172,7 +172,7 @@ mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
 mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25
 ```
 
-The latter produces the following density profile (when run with `-vis` instead of `-no-vis`)
+The latter produces the following velocity magnitude plot (when run with `-vis` instead of `-no-vis`)
 
 ![](data/tg.png)
 
