@@ -453,7 +453,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          {
             for (int gd = 0; gd < dim; gd++)
             {
-              quad_data.stressJinvT(vd)(i*nqp + q, gd) = stressJiT(vd, gd);
+               quad_data.stressJinvT(vd)(i*nqp + q, gd) = stressJiT(vd, gd);
             }
          }
       }

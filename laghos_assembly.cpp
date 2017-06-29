@@ -93,7 +93,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    elmat = 0.0;
 
    DenseMatrix vshape(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim),
-         loc_force(h1dofs_cnt, dim), Jinv(dim);
+               loc_force(h1dofs_cnt, dim), Jinv(dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
 
    for (int q = 0; q < ip_cnt; q++)
@@ -143,7 +143,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    double *data_qd = QQd.GetData(), *data_q = QQ.GetData();
 
    const H1_QuadrilateralElement *fe =
-         dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
+      dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    vecH1 = 0.0;
@@ -187,7 +187,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
                // structure numbering.
                const int idx = i2 * nH1dof1D + i1;
                vecH1[h1dofs[c*nH1dof + dof_map[idx]]] +=
-                     HHx(i1, i2) + HHy(i1, i2);
+                  HHx(i1, i2) + HHy(i1, i2);
             }
          }
       }
@@ -219,7 +219,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
                HHHz(nH1dof1D * nH1dof1D, nH1dof1D);
 
    const H1_HexahedronElement *fe =
-         dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
+      dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    vecH1 = 0.0;
@@ -354,7 +354,8 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-void ForcePAOperator::MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const
+void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
+                                        Vector &vecL2) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nL2dof1D = tensors1D->LQshape1D.Height(),
@@ -369,7 +370,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1, Vector &vecL2) cons
    double *qqc = QQc.GetData();
 
    const H1_QuadrilateralElement *fe =
-         dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
+      dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    for (int z = 0; z < nzones; z++)
@@ -442,7 +443,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
    double *qqqc = QQ_Qc.GetData();
 
    const H1_HexahedronElement *fe =
-         dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
+      dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    for (int z = 0; z < nzones; z++)
@@ -606,7 +607,7 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
    const H1_QuadrilateralElement *fe_H1 =
       dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
    const DenseMatrix &DQs = (fe_H1) ? tensors1D->HQshape1D
-                                    : tensors1D->LQshape1D;
+                            : tensors1D->LQshape1D;
 
    const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
    DenseMatrix DQ(ndof1D, nqp1D), QQ(nqp1D, nqp1D);
@@ -667,7 +668,7 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
    const H1_HexahedronElement *fe_H1 =
       dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
    const DenseMatrix &DQs = (fe_H1) ? tensors1D->HQshape1D
-                                    : tensors1D->LQshape1D;
+                            : tensors1D->LQshape1D;
 
    const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
    DenseMatrix DD_Q(ndof1D * ndof1D, nqp1D);

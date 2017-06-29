@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
-              visc = false; gamma = 5.0 / 3.0; break;
+         visc = false; gamma = 5.0 / 3.0; break;
       case 1: visc = true; gamma = 1.4; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
@@ -380,7 +380,7 @@ int main(int argc, char *argv[])
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                                      << sqrt(tot_norm) << endl;
+                 << sqrt(tot_norm) << endl;
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
@@ -464,7 +464,7 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
-   switch(problem)
+   switch (problem)
    {
       case 0:
       {
