@@ -73,19 +73,19 @@ HPC simulation codes:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 290.
+  starting around line 310.
 - The problem is formulated as solving a big system of ordinary differential
   equations for the unknown (high-order) velocity, internal energy and mesh
   nodes (position).
 - The right-hand side of the ODE is specified by the `LagrangianHydroOperator`
-  defined around line 239 of `laghos.cpp` and implemented in files
+  defined around line 258 of `laghos.cpp` and implemented in files
   `laghos_solver.hpp` and `laghos_solver.cpp`.
 - The orders of the velocity and position (continuous kinematic space)
   and the internal energy (discontinuous thermodynamic space) are given
   by the `-ov` and `-ot` input parameters respectively.
 - The main computational kernels are the `Mult*` functions of the classes
   `MassPAOperator` and `ForcePAOperator` implemented in file
-  `laghos_solver.cpp`. Some of these functions have specific versions for
+  `laghos_assembly.cpp`. These functions have specific versions for
   quadrilateral and hexahedral elements.
 
 ## Building
