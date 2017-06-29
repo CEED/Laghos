@@ -12,7 +12,7 @@
 // of Science and the National Nuclear Security Administration) responsible for
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
-// testbed platforms, in support of the nation’s exascale computing imperative.
+// testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_assembly.hpp"
 
@@ -35,9 +35,9 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
      LQshape1D(L2order + 1, nqp1D)
 {
    // In this miniapp we assume:
-   //   Gauss-Legendre quadrature points.
-   //   Gauss-Lobatto kinematic basis.
-   //   Bernstein thermodynamic basis.
+   // - Gauss-Legendre quadrature points.
+   // - Gauss-Lobatto continuous kinematic basis.
+   // - Bernstein discontinuous thermodynamic basis.
 
    const double *quad1D_pos = poly1d.GetPoints(nqp1D - 1,
                                                Quadrature1D::GaussLegendre);
@@ -126,6 +126,7 @@ void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
    else { MFEM_ABORT("Unsupported dimension"); }
 }
 
+// Force matrix action on quadrilateral elements in 2D
 void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -194,6 +195,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
+// Force matrix action on hexahedral elements in 3D
 void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -354,6 +356,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
+// Transpose force matrix action on quadrilateral elements in 2D
 void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                                         Vector &vecL2) const
 {
@@ -421,6 +424,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
    }
 }
 
+// Transpose force matrix action on hexahedral elements in 3D
 void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -601,6 +605,7 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
    }
 }
 
+// Mass matrix action on quadrilateral elements in 2D
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
    // Are we working with the velocity or energy mass matrix?
@@ -662,6 +667,7 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
    }
 }
 
+// Mass matrix action on hexahedral elements in 3D
 void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
    // Are we working with the velocity or energy mass matrix?

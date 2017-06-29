@@ -7,12 +7,12 @@
 // element discretizations for exascale applications. For more information and
 // source code availability see http://github.com/ceed.
 //
-// The CEED research is supported by the Exascale Computing Project (17-SC-20-SC)
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
 // a collaborative effort of two U.S. Department of Energy organizations (Office
 // of Science and the National Nuclear Security Administration) responsible for
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
-// testbed platforms, in support of the nation’s exascale computing imperative.
+// testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
 
@@ -198,10 +198,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    UpdateQuadratureData(S);
 
-   // The big BlockVector stores the fields as follows:
-   //    Position
-   //    Velocity
-   //    Specific Internal Energy
+   // The monolithic BlockVector stores the unknown fields as follows:
+   // - Position
+   // - Velocity
+   // - Specific Internal Energy
 
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
@@ -215,7 +215,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    dv.MakeRef(&H1FESpace, dS_dt, Vsize_h1);
    de.MakeRef(&L2FESpace, dS_dt, Vsize_h1*2);
 
-   // Set dx_dt = v (explicit);
+   // Set dx_dt = v (explicit).
    dx = v;
 
    if (!p_assembly)

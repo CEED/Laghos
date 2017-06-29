@@ -197,7 +197,8 @@ An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
 ## Contact
-You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a comment in the [issue tracker](https://github.com/CEED/Laghos/issues). 
+You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
+comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
 
 ## Copyright
 

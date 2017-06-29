@@ -7,12 +7,12 @@
 // element discretizations for exascale applications. For more information and
 // source code availability see http://github.com/ceed.
 //
-// The CEED research is supported by the Exascale Computing Project (17-SC-20-SC)
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
 // a collaborative effort of two U.S. Department of Energy organizations (Office
 // of Science and the National Nuclear Security Administration) responsible for
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
-// testbed platforms, in support of the nation’s exascale computing imperative.
+// testbed platforms, in support of the nation's exascale computing imperative.
 //
 //                     __                __
 //                    / /   ____  ____  / /_  ____  _____
@@ -135,14 +135,14 @@ int main(int argc, char *argv[])
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    // Define the parallel finite element spaces. We use:
-   //    H1 (Gauss-Lobatto) for position and velocity.
-   //    L2 (Bernstein) for specific internal energy.
+   // - H1 (Gauss-Lobatto, continuous) for position and velocity.
+   // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   // Boundary conditions - all tests use v.n = 0 on the boundary, and we assume
+   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
    {
@@ -190,10 +190,10 @@ int main(int argc, char *argv[])
    int Vsize_l2 = L2FESpace.GetVSize();
    int Vsize_h1 = H1FESpace.GetVSize();
 
-   // The big BlockVector stores the fields as:
-   //    0 position
-   //    1 velocity
-   //    2 specific internal energy
+   // The monolithic BlockVector stores unknown fields as:
+   // - 0 -> position
+   // - 1 -> velocity
+   // - 2 -> specific internal energy
 
    Array<int> true_offset(4);
    true_offset[0] = 0;
@@ -211,8 +211,8 @@ int main(int argc, char *argv[])
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
 
-   // Initialize x_gf using the starting mesh coordinates.
-   // This also links the mesh positions to the values in x_gf.
+   // Initialize x_gf using the starting mesh coordinates. This also links the
+   // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
 
    // Initial density values. Note that this is a temporary function and it will
@@ -227,8 +227,8 @@ int main(int argc, char *argv[])
 
    // Initialize the specific internal energy. We interpolate in a non-positive
    // basis to get the correct values at the dofs. Then we do an L2 projection
-   // to the positive basis. The goal of all this is to have a high-order
-   // representation of the initial condition.
+   // to the positive basis in which we actually compute. The goal of all this
+   // is to get a high-order representation of the initial condition.
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_e(&l2_fes);
@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
    int  visport   = 19916;
    if (visualization)
    {
-      // Make sure all ranks have sent their 'v' solution before initiating
+      // Make sure all MPI ranks have sent their 'v' solution before initiating
       // another set of GLVis connections (one from each rank):
       MPI_Barrier(pmesh->GetComm());
 
@@ -288,7 +288,7 @@ int main(int argc, char *argv[])
                                "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
-   // VisIt visualization
+   // Save data for VisIt visualization
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
@@ -300,8 +300,8 @@ int main(int argc, char *argv[])
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
-   // time-step dt). The object oper is the LagrangianHydroOperator which has a
-   // Mult() method that is used by the time integrators.
+   // time-step dt). The object oper is of type LagrangianHydroOperator that
+   // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;

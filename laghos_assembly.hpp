@@ -7,12 +7,12 @@
 // element discretizations for exascale applications. For more information and
 // source code availability see http://github.com/ceed.
 //
-// The CEED research is supported by the Exascale Computing Project (17-SC-20-SC)
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
 // a collaborative effort of two U.S. Department of Energy organizations (Office
 // of Science and the National Nuclear Security Administration) responsible for
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
-// testbed platforms, in support of the nation’s exascale computing imperative.
+// testbed platforms, in support of the nation's exascale computing imperative.
 
 #ifndef MFEM_LAGHOS_ASSEMBLY
 #define MFEM_LAGHOS_ASSEMBLY
@@ -120,8 +120,8 @@ public:
                                        DenseMatrix &elmat);
 };
 
-// Performs partial assembly, which corresponds to (and replaces) the use of
-// the LagrangianHydroOperator::Force global matrix.
+// Performs partial assembly, which corresponds to (and replaces) the use of the
+// LagrangianHydroOperator::Force global matrix.
 class ForcePAOperator : public Operator
 {
 private:
@@ -130,10 +130,14 @@ private:
    QuadratureData *quad_data;
    ParFiniteElementSpace &H1FESpace, &L2FESpace;
 
+   // Force matrix action on quadrilateral elements in 2D
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
+   // Force matrix action on hexahedral elements in 3D
    void MultHex(const Vector &vecL2, Vector &vecH1) const;
 
+   // Transpose force matrix action on quadrilateral elements in 2D
    void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
+   // Transpose force matrix action on hexahedral elements in 3D
    void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
 public:
@@ -161,7 +165,9 @@ private:
 
    mutable ParGridFunction x_gf, y_gf;
 
+   // Mass matrix action on quadrilateral elements in 2D
    void MultQuad(const Vector &x, Vector &y) const;
+   // Mass matrix action on hexahedral elements in 3D
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
@@ -172,8 +178,8 @@ public:
         x_gf(&fes), y_gf(&fes)
    { }
 
-   // Can be used for both velocity and specific internal energy.
-   // For the case of velocity, we only work with one component at a time.
+   // Can be used for both velocity and specific internal energy. For the case
+   // of velocity, we only work with one component at a time.
    virtual void Mult(const Vector &x, Vector &y) const;
 
    void EliminateRHS(Array<int> &dofs, Vector &b)
