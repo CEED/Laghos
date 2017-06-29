@@ -14,11 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation’s exascale computing imperative.
 
-#ifndef MFEM_LAGHOS
-#define MFEM_LAGHOS
+#ifndef MFEM_LAGHOS_SOLVER
+#define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-
+#include "laghos_assembly.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -51,144 +51,8 @@ double rho0(const Vector &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
 
-struct Tensors1D
-{
-   // Values of the one-dimensional shape functions and gradients at all 1D
-   // quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).
-   DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-
-   Tensors1D(int H1order, int L2order, int nqp1D);
-};
-
-struct QuadratureData
-{
-   // TODO: use QuadratureFunctions?
-
-   // At each quadrature point, the stress and the Jacobian are (dim x dim)
-   // matrices. They must be recomputed in every time step.
-   DenseTensor stress, Jac;
-
-   // Reference to physical Jacobian for the initial mesh. These are computed
-   // only at time zero and stored here.
-   DenseTensor Jac0inv;
-
-   // TODO: have this only when PA is on.
-   // Quadrature data used for partial assembly of the force operator. It must
-   // be recomputed in every time step.
-   DenseTensor stressJinvT;
-
-   // At time zero, we compute and store rho0 * det(J0) at the chosen quadrature
-   // points. Then at any other time, we compute rho = rho0 * det(J0) / det(J),
-   // representing the notion of pointwise mass conservation.
-   Vector rho0DetJ0;
-
-   // TODO: have this only when PA is on.
-   // Quadrature data used for partial assembly of the mass matrices, namely
-   // (rho * detJ * qp_weight) at each quadrature point. These are computed only
-   // at time zero and stored here.
-   Vector rhoDetJw;
-
-   // Initial length scale. This represents a notion of local mesh size. We
-   // assume that all initial zones have similar size.
-   double h0;
-
-   // Estimate of the minimum time step over all quadrature points. This is
-   // recomputed at every time step to achieve adaptive time stepping.
-   double dt_est;
-
-   QuadratureData(int dim, int nzones, int quads_per_zone)
-      : stress(dim, dim, nzones * quads_per_zone),
-        Jac(dim, dim, nzones * quads_per_zone),
-        Jac0inv(dim, dim, nzones * quads_per_zone),
-        stressJinvT(nzones * quads_per_zone, dim, dim),
-        rho0DetJ0(nzones * quads_per_zone),
-        rhoDetJw(nzones * quads_per_zone) { }
-};
-
-
-class ForceIntegrator : public BilinearFormIntegrator
-{
-private:
-   const QuadratureData &quad_data;
-
-public:
-   ForceIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
-
-   virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
-                                       const FiniteElement &test_fe,
-                                       ElementTransformation &Trans,
-                                       DenseMatrix &elmat);
-};
-
-class DensityIntegrator : public LinearFormIntegrator
-{
-private:
-   const QuadratureData &quad_data;
-
-public:
-   DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
-
-   virtual void AssembleRHSElementVect(const FiniteElement &fe,
-                                       ElementTransformation &Tr,
-                                       Vector &elvect);
-};
-
-// Partial assembly of the LagrangianHydroOperator::Force matrix.
-class ForcePAOperator : public Operator
-{
-private:
-   const int dim, nzones;
-
-   QuadratureData *quad_data;
-   ParFiniteElementSpace &H1FESpace, &L2FESpace;
-
-   void MultQuad(const Vector &vecL2, Vector &vecH1) const;
-   void MultHex(const Vector &vecL2, Vector &vecH1) const;
-
-   void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
-   void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
-
-public:
-   ForcePAOperator(QuadratureData *quad_data_,
-                   ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes);
-
-   virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
-
-   // Here vecH1 has components for each dimension.
-   virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
-
-   ~ForcePAOperator() { }
-};
-
-class MassPAOperator : public Operator
-{
-private:
-   const int dim, nzones;
-
-   QuadratureData *quad_data;
-   ParFiniteElementSpace &FESpace;
-
-   Array<int> *ess_tdofs;
-
-   mutable ParGridFunction xg, yg;
-
-   void MultQuad(const Vector &x, Vector &y) const;
-   void MultHex(const Vector &x, Vector &y) const;
-
-public:
-   MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes);
-
-   // Can be used for both velocity and specific internal energy.
-   // For the case of velocity, we only work with one component at a time.
-   virtual void Mult(const Vector &x, Vector &y) const;
-
-   void EliminateRHS(Array<int> &dofs, Vector &b)
-   {
-      ess_tdofs = &dofs;
-      for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
-   }
-};
-
+// Given a solutions state (x, v, e), this class performs all necessary
+// computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:

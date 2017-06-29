@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
    int Vsize_l2 = L2FESpace.GetVSize();
    int Vsize_h1 = H1FESpace.GetVSize();
 
-   // the big BlockVector stores the fields as
+   // The big BlockVector stores the fields as:
    //    0 position
    //    1 velocity
    //    2 specific internal energy
