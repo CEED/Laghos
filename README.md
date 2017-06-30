@@ -15,8 +15,7 @@ time-dependent Euler equation of compressible gas dynamics in a moving
 Lagrangian frame using unstructured high-order finite element spatial
 discretization and explicit high-order time-stepping.
 
-Laghos is based on the numerical algorithm described in the following
-article:
+Laghos is based on the discretization method described in the following article:
 
 > V. Dobrev, Tz. Kolev and R. Rieben,<br>
 > [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672), <br>
@@ -26,9 +25,9 @@ Laghos captures the basic structure of many other compressible shock
 hydrocodes, including the [BLAST code](http://llnl.gov/casc/blast) at
 [Lawrence Livermore National Laboratory](http://llnl.gov). The miniapp
 is build on top of a general discretization library, [MFEM](http://mfem.org),
-separating the pointwise physics from finite element and meshing concerns.
+thus separating the pointwise physics from finite element and meshing concerns.
 
-The Laghos miniapps is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
+The Laghos miniapp is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
 a collection of software benchmarks, miniapps, libraries and APIs for
 efficient exascale discretizations based on high-order finite element
 and spectral element methods. See http://github.com/ceed for more
@@ -44,28 +43,41 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 
 ## Characteristics
 
-Laghos exposes the principal computational kernels of explicit
-time-dependent shock-capturing compressible flow, including the
-FLOP-intensive definition of artificial viscosity at quadrature points.
+In each time step, the problem is ultimately formulated as solving a big system
+of ordinary differential equations (ODE) for the unknown (high-order) velocity,
+internal energy and mesh nodes (position). The left-hand side of this ODE is
+controlled by *mass matrices* (one for velocity and one for energy), while the
+right-hand side is constructed from a *force matrix*. Laghos supports two
+options for deriving and solving the ODE system, namely the "full assembly" and
+the "partial assembly" methods. The full assembly options relies on constructing
+and utilizing global mass and force CSR matrices. The
+[partial assembly](http://ceed.exascaleproject.org/ceed-code) option defines
+only the local action of those matrices, which is then used to perform all
+necessary operations. As the local action is defined by utilizing the tensor
+structure of the finite element spaces, it is proved that the amount of data
+storage and FLOPs are lower.
 
-It includes several computational motives, many of which are frequently found in
-HPC simulation codes:
+Other computational motives in Laghos include the following:
 
 - Support for unstructured meshes, in 2D and 3D, with quadrilateral and
-  hexahedral elements. (Triangular and tetrahedral elements can also be used, but
-  with less efficient "full assembly".) Serial and parallel mesh refinement
-  options can be set via a command-line flag.
+  hexahedral elements (triangular and tetrahedral elements can also be used, but
+  with the less efficient full assembly option). Serial and parallel mesh
+  refinement options can be set via a command-line flag.
 - Explicit time-stepping loop with a variety of time integrator options. Laghos
   supports Runge-Kutta ODE solvers of orders 1, 2, 3, 4 and 6.
 - Continuous and discontinuous high-order finite element discretization spaces
   of runtime-specified order.
-- Constant-in-time *mass matrix* that is inverted iteratively on each time step
-  ("assemble" once, evaluate many times) coupled with a time-dependent *force
-  matrix* that is "assembled" on each time step and evaluated just twice.
-- [Partial assembly](http://ceed.exascaleproject.org/ceed-code) for efficient
-  high-order operator evaluation.
-- Moving (high-order) meshes. Point-wise definition of mesh size and artificial
+- Moving (high-order) meshes.
+- Separation between the assembly and the quadrature point-based computations.
+- Point-wise definition of mesh size, time-step estimate and artificial
   viscosity coefficient.
+- When full assembly is used, constant-in-time mass matrices are inverted
+  iteratively on each time step (assemble once, evaluate many times) coupled
+  with a time-dependent force matrix that is assembled on each time step and
+  evaluated just twice.
+- When partial assembly is used, the action of the 2D and 3D mass matrices and
+  force matrix is performed by using only the 1D finite element basis
+  functions and the corresponding data at quadrature points.
 - Domain-decomposed MPI parallelism.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
   for analysis with [VisIt](http://visit.llnl.gov).
@@ -74,19 +86,27 @@ HPC simulation codes:
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
   starting around line 310.
-- The problem is formulated as solving a big system of ordinary differential
-  equations for the unknown (high-order) velocity, internal energy and mesh
-  nodes (position).
-- The right-hand side of the ODE is specified by the `LagrangianHydroOperator`
-  defined around line 258 of `laghos.cpp` and implemented in files
-  `laghos_solver.hpp` and `laghos_solver.cpp`.
+- In each time step, the ODE system of interest is constructed and solved by
+  the class `LagrangianHydroOperator`, defined around line 258 of `laghos.cpp`
+  and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
+- All quadrature-based computations are performed in the function
+  `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
+- Depending on the chosen option (`-pa` for partial assembly or `-fa` for full
+  assembly), the function `LagrangianHydroOperator::Mult` uses the corresponding
+  method to construct and solve the final ODE system.
+- The full assembly computations for all mass matrices are performed by the MFEM
+  library, e.g., classes `MassIntegrator` and `VectorMassIntegrator`.
+  Full assembly of the ODE's right hand side is performed by utilizing the class
+  `ForceIntegrator` defined in `laghos_assembly.hpp`.
+- The partial assembly computations are performed by the classes
+  `ForcePAOperator` and `MassPAOperator` defined in `laghos_assembly.hpp`.
+- When partial assembly is used, the main computational kernels are the
+  `Mult*` functions of the classes `MassPAOperator` and `ForcePAOperator`
+  implemented in file `laghos_assembly.cpp`. These functions have specific
+  versions for quadrilateral and hexahedral elements.
 - The orders of the velocity and position (continuous kinematic space)
   and the internal energy (discontinuous thermodynamic space) are given
-  by the `-ov` and `-ot` input parameters respectively.
-- The main computational kernels are the `Mult*` functions of the classes
-  `MassPAOperator` and `ForcePAOperator` implemented in file
-  `laghos_assembly.cpp`. These functions have specific versions for
-  quadrilateral and hexahedral elements.
+  by the `-ov` and `-ot` input parameters, respectively.
 
 ## Building
 
@@ -198,7 +218,7 @@ round-off distance from the above reference values.
 
 ## Contact
 You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
-comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
+comment in the [issue tracker](https://github.com/CEED/Laghos/issues). 
 
 ## Copyright
 
@@ -207,4 +227,3 @@ unless otherwise stated in the file:
 
 Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
 Lawrence Livermore National Laboratory. LLNL-CODE-XXXXXX. All Rights reserved.
-
