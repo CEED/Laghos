@@ -77,13 +77,13 @@ Other computational motives in Laghos include the following:
 - Separation between the assembly and the quadrature point-based computations.
 - Point-wise definition of mesh size, time-step estimate and artificial
   viscosity coefficient.
-- When full assembly is used, constant-in-time mass matrices are inverted
-  iteratively on each time step (assemble once, evaluate many times) coupled
-  with a time-dependent force matrix that is assembled on each time step and
-  evaluated just twice.
-- When partial assembly is used, the action of the 2D and 3D mass matrices and
-  force matrix is performed by using only the 1D finite element basis
-  functions and the corresponding data at quadrature points.
+- Constant-in-time velocity mass operator that is inverted iteratively on
+  each time step. This is an example of an operator that is prepared once (fully
+  or partially assembled), but is applied many times. The application cost is
+  dominant for this operator.
+- Time-dependent force matrix that is prepared every time step (fully or
+  partially assembled) and is applied just twice per "assembly". Both the
+  preparation and the application costs are important for this operator.
 - Domain-decomposed MPI parallelism.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
   for visualization / data analysis with [VisIt](http://visit.llnl.gov).
@@ -184,7 +184,7 @@ mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa
 
 The latter produces the following density plot (when run with `-vis` instead of `-no-vis`)
 
-![](data/sedov.png)
+![Sedov blast image](data/sedov.png)
 
 #### Taylor-Green vortex
 
@@ -200,7 +200,7 @@ mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -no-vis
 
 The latter produces the following velocity magnitude plot (when run with `-vis` instead of `-no-vis`)
 
-![](data/tg.png)
+![Taylor-Green image](data/tg.png)
 
 ## Verification of Results
 
