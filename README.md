@@ -47,15 +47,21 @@ In each time step, the problem is ultimately formulated as solving a big system
 of ordinary differential equations (ODE) for the unknown (high-order) velocity,
 internal energy and mesh nodes (position). The left-hand side of this ODE is
 controlled by *mass matrices* (one for velocity and one for energy), while the
-right-hand side is constructed from a *force matrix*. Laghos supports two
-options for deriving and solving the ODE system, namely the "full assembly" and
-the "partial assembly" methods. The full assembly options relies on constructing
-and utilizing global mass and force CSR matrices. The
-[partial assembly](http://ceed.exascaleproject.org/ceed-code) option defines
+right-hand side is constructed from a *force matrix*.
+
+Laghos supports two options for deriving and solving the ODE system, namely the
+*full assembly* and the *partial assembly* methods. Partial assembly is the main
+algorithm of interest for high orders. For low orders (e.g. 2nd order in 3D),
+both algorithms are of interest.
+
+The full assembly options relies on constructing and utilizing global mass and
+force matrices stored in compressed sparse row (CSR) format.
+
+The [partial assembly](http://ceed.exascaleproject.org/ceed-code) option defines
 only the local action of those matrices, which is then used to perform all
 necessary operations. As the local action is defined by utilizing the tensor
-structure of the finite element spaces, it is proved that the amount of data
-storage and FLOPs are lower.
+structure of the finite element spaces, the amount of data storage, memory
+transfers, and FLOPs are lower (especially for higher orders).
 
 Other computational motives in Laghos include the following:
 
@@ -80,7 +86,7 @@ Other computational motives in Laghos include the following:
   functions and the corresponding data at quadrature points.
 - Domain-decomposed MPI parallelism.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
-  for analysis with [VisIt](http://visit.llnl.gov).
+  for visualization / data analysis with [VisIt](http://visit.llnl.gov).
 
 ## Code Structure
 
@@ -95,8 +101,8 @@ Other computational motives in Laghos include the following:
   assembly), the function `LagrangianHydroOperator::Mult` uses the corresponding
   method to construct and solve the final ODE system.
 - The full assembly computations for all mass matrices are performed by the MFEM
-  library, e.g., classes `MassIntegrator` and `VectorMassIntegrator`.
-  Full assembly of the ODE's right hand side is performed by utilizing the class
+  library, e.g., classes `MassIntegrator` and `VectorMassIntegrator`.  Full
+  assembly of the ODE's right hand side is performed by utilizing the class
   `ForceIntegrator` defined in `laghos_assembly.hpp`.
 - The partial assembly computations are performed by the classes
   `ForcePAOperator` and `MassPAOperator` defined in `laghos_assembly.hpp`.
@@ -218,12 +224,12 @@ round-off distance from the above reference values.
 
 ## Contact
 You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
-comment in the [issue tracker](https://github.com/CEED/Laghos/issues). 
+comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
 
 ## Copyright
 
 The following copyright applies to each file in the CEED software suite,
 unless otherwise stated in the file:
 
-Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
-Lawrence Livermore National Laboratory. LLNL-CODE-XXXXXX. All Rights reserved.
+> Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
+> Lawrence Livermore National Laboratory. LLNL-CODE-XXXXXX. All Rights reserved.
