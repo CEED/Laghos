@@ -262,6 +262,10 @@ int main(int argc, char *argv[])
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
+
+   ParGridFunction rho_gf;
+   if (visualization || visit) { oper.ComputeDensity(rho_gf); }
+
    if (visualization)
    {
       // Make sure all MPI ranks have sent their 'v' solution before initiating
@@ -276,9 +280,7 @@ int main(int argc, char *argv[])
       const int Ww = 350, Wh = 350; // window size
       int offx = Ww+10; // window offsets
 
-      ParGridFunction rho;
-      oper.ComputeDensity(rho);
-      miniapps::VisualizeField(vis_rho, vishost, visport, rho,
+      miniapps::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                "Density", Wx, Wy, Ww, Wh);
       Wx += offx;
       miniapps::VisualizeField(vis_v, vishost, visport, v_gf,
@@ -292,8 +294,9 @@ int main(int argc, char *argv[])
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
-      visit_dc.RegisterField("v", &v_gf);
-      visit_dc.RegisterField("e", &e_gf);
+      visit_dc.RegisterField("Density",  &rho_gf);
+      visit_dc.RegisterField("Velocity", &v_gf);
+      visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();
@@ -369,7 +372,6 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         // TODO: print useful stuff.
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
@@ -387,15 +389,14 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
+         if (visualization || visit) { oper.ComputeDensity(rho_gf); }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
             int offx = Ww+10; // window offsets
 
-            ParGridFunction rho;
-            oper.ComputeDensity(rho);
-            miniapps::VisualizeField(vis_rho, vishost, visport, rho,
+            miniapps::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                      "Density", Wx, Wy, Ww, Wh);
             Wx += offx;
             miniapps::VisualizeField(vis_v, vishost, visport,
