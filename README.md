@@ -232,4 +232,4 @@ The following copyright applies to each file in the CEED software suite,
 unless otherwise stated in the file:
 
 > Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
-> Lawrence Livermore National Laboratory. LLNL-CODE-XXXXXX. All Rights reserved.
+> Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights reserved.

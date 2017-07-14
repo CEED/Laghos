@@ -1,5 +1,5 @@
 // Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
-// the Lawrence Livermore National Laboratory. LLNL-CODE-XXXXXX. All Rights
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See file LICENSE for details.
 //
 // This file is part of CEED, a collection of benchmarks, miniapps, software
