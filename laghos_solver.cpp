@@ -86,8 +86,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                                                  ParGridFunction &rho0,
                                                  double cfl_,
                                                  double gamma_,
-                                                 bool use_viscosity_,
-                                                 bool p_assembly_)
+                                                 bool use_viscosity_)
 : TimeDependentOperator(o_L2FESpace_.GetVSize() + 2*o_H1FESpace_.GetVSize()),
      problem(problem_),
      o_H1FESpace(o_H1FESpace_),
@@ -108,15 +107,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
      cfl(cfl_),
      gamma(gamma_),
      use_viscosity(use_viscosity_),
-     p_assembly(p_assembly_),
      Mv(&H1FESpace),
      Me_inv(l2dofs_cnt, l2dofs_cnt, zones_cnt),
      integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
                              3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
      quad_data(dim, zones_cnt, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     Force(&H1FESpace, &L2FESpace),
-     ForcePA(&quad_data, H1FESpace, L2FESpace)
+     Force(&quad_data, H1FESpace, L2FESpace)
 {
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -179,26 +176,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
-   ForceIntegrator *fi = new ForceIntegrator(quad_data);
-   fi->SetIntRule(&integ_rule);
-   Force.AddDomainIntegrator(fi);
    // Make a dummy assembly to figure out the sparsity.
-   Force.Assemble(0);
-   Force.Finalize(0);
 
-   if (p_assembly)
-   {
-      tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
-                                L2FESpace.GetFE(0)->GetOrder(),
-                                int(floor(0.7 + pow(nqp, 1.0 / dim))));
-   }
-
-   locCG.SetOperator(locEMassPA);
-   locCG.iterative_mode = false;
-   locCG.SetRelTol(1e-8);
-   locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-   locCG.SetMaxIter(200);
-   locCG.SetPrintLevel(0);
+   tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
+                             L2FESpace.GetFE(0)->GetOrder(),
+                             int(floor(0.7 + pow(nqp, 1.0 / dim))));
 }
 
 void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
@@ -242,75 +224,53 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Set dx_dt = v (explicit).
    dx = v;
 
-   if (!p_assembly)
-   {
-      Force = 0.0;
-      Force.Assemble();
-   }
-
    // Solve for velocity.
    Vector one(Vsize_l2), rhs(Vsize_h1), B, X; one = 1.0;
-   if (p_assembly)
+   Force.Mult(one, rhs); rhs.Neg();
+
+   // Partial assembly solve for each velocity component.
+   MassPAOperator VMass(&quad_data, H1compFESpace);
+   const int size = H1compFESpace.GetVSize();
+   for (int c = 0; c < dim; c++)
    {
-      ForcePA.Mult(one, rhs); rhs.Neg();
+      Vector rhs_c(rhs.GetData() + c*size, size);
+      Vector dv_c(dv.GetData() + c*size, size);
+      Vector B(H1compFESpace.TrueVSize());
+      Vector X(H1compFESpace.TrueVSize());
 
-      // Partial assembly solve for each velocity component.
-      const int size = H1compFESpace.GetVSize();
-      for (int c = 0; c < dim; c++)
-      {
-         Vector rhs_c(rhs.GetData() + c*size, size);
-         Vector dv_c(dv.GetData() + c*size, size);
-         Vector B(H1compFESpace.TrueVSize());
-         Vector X(H1compFESpace.TrueVSize());
+      OccaVector o_rhs_c(rhs_c);
+      OccaVector o_dv_c(dv_c);
+      OccaVector o_B(H1compFESpace.TrueVSize());
+      OccaVector o_X(H1compFESpace.TrueVSize());
 
-         OccaVector o_rhs_c(rhs_c);
-         OccaVector o_dv_c(dv_c);
-         OccaVector o_B(H1compFESpace.TrueVSize());
-         OccaVector o_X(H1compFESpace.TrueVSize());
+      Array<int> c_tdofs;
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+      // we must enforce v_x/y/z = 0 for the velocity components.
+      Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
+      ess_bdr = 0; ess_bdr[c] = 1;
 
-         Array<int> c_tdofs;
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-         // we must enforce v_x/y/z = 0 for the velocity components.
-         Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
-         ess_bdr = 0; ess_bdr[c] = 1;
+      // True dofs as if there's only one component.
+      o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
-         // True dofs as if there's only one component.
-         o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
+      dv_c   = 0.0;
+      o_dv_c = 0.0;
+      o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, o_B);
+      o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, o_X);
+      B = o_B;
+      X = o_X;
 
-         dv_c   = 0.0;
-         o_dv_c = 0.0;
-         o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, o_B);
-         o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, o_X);
-         B = o_B;
-         X = o_X;
+      VMass.EliminateRHS(c_tdofs, B);
 
-         VMassPA.EliminateRHS(c_tdofs, B);
-
-         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-         cg.SetOperator(VMassPA);
-         cg.SetRelTol(1e-8);
-         cg.SetAbsTol(0.0);
-         cg.SetMaxIter(200);
-         cg.SetPrintLevel(0);
-         cg.Mult(B, X);
-         o_X = X;
-         o_H1compFESpace.GetProlongationOperator()->Mult(o_X, o_dv_c);
-         dv_c = o_dv_c;
-      }
-   }
-   else
-   {
-      Force.Mult(one, rhs); rhs.Neg();
-      HypreParMatrix A;
-      dv = 0.0;
-      Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-      cg.SetOperator(A);
-      cg.SetRelTol(1e-8); cg.SetAbsTol(0.0);
+      cg.SetOperator(VMass);
+      cg.SetRelTol(1e-8);
+      cg.SetAbsTol(0.0);
       cg.SetMaxIter(200);
       cg.SetPrintLevel(0);
       cg.Mult(B, X);
-      Mv.RecoverFEMSolution(X, rhs, dv);
+      o_X = X;
+      o_H1compFESpace.GetProlongationOperator()->Mult(o_X, o_dv_c);
+      dv_c = o_dv_c;
    }
 
    // Solve for energy, assemble the energy source if such exists.
@@ -324,33 +284,20 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
    }
-   Array<int> l2dofs;
-   Vector e_rhs(Vsize_l2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-   if (p_assembly)
-   {
-      ForcePA.MultTranspose(v, e_rhs);
-      if (e_source) { e_rhs += *e_source; }
-      for (int z = 0; z < nzones; z++)
-      {
-         L2FESpace.GetElementDofs(z, l2dofs);
-         e_rhs.GetSubVector(l2dofs, loc_rhs);
-         locEMassPA.SetZoneId(z);
-         locCG.Mult(loc_rhs, loc_de);
-         de.SetSubVector(l2dofs, loc_de);
-      }
-   }
-   else
-   {
-      Force.MultTranspose(v, e_rhs);
-      if (e_source) { e_rhs += *e_source; }
-      for (int z = 0; z < nzones; z++)
-      {
-         L2FESpace.GetElementDofs(z, l2dofs);
-         e_rhs.GetSubVector(l2dofs, loc_rhs);
-         Me_inv(z).Mult(loc_rhs, loc_de);
-         de.SetSubVector(l2dofs, loc_de);
-      }
-   }
+   Vector forceRHS(Vsize_l2);
+   Force.MultTranspose(v, forceRHS);
+
+   if (e_source) { forceRHS += *e_source; }
+
+   MassPAOperator EMass(&quad_data, L2FESpace);
+   CGSolver cg(L2FESpace.GetParMesh()->GetComm());
+   cg.SetOperator(EMass);
+   cg.SetRelTol(1e-8);
+   cg.SetAbsTol(0.0);
+   cg.SetMaxIter(200);
+   cg.SetPrintLevel(0);
+   cg.Mult(forceRHS, de);
+
    delete e_source;
 
    quad_data_is_current = false;

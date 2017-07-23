@@ -71,7 +71,7 @@ protected:
 
    const int dim, zones_cnt, l2dofs_cnt, h1dofs_cnt;
    const double cfl, gamma;
-   const bool use_viscosity, p_assembly;
+   const bool use_viscosity;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -89,10 +89,7 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it's used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force;
-
-   // Same as above, but done through partial assembly.
-   ForcePAOperator ForcePA;
+   ForcePAOperator Force;
 
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
@@ -123,8 +120,7 @@ public:
                            ParGridFunction &rho0,
                            double cfl_,
                            double gamma_,
-                           bool use_viscosity_,
-                           bool p_assembly_);
+                           bool use_viscosity_);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const OccaVector &S, OccaVector &dS_dt) const;

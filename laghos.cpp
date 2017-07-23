@@ -77,7 +77,6 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.1;
-   bool p_assembly = true;
    int intProblem = 1;
    bool visualization = false;
    bool visit = false;
@@ -107,9 +106,6 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
-   args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
-                  "--full-assembly",
-                  "Activate 1D tensor-based assembly (partial assembly).");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -342,8 +338,7 @@ int main(int argc, char *argv[])
                                 o_H1FESpace, o_L2FESpace,
                                 ess_tdofs,
                                 rho, cfl, gamma,
-                                use_viscosity,
-                                p_assembly);
+                                use_viscosity);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
