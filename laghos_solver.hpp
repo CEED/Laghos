@@ -81,6 +81,9 @@ protected:
    // Integration rule for all assemblies.
    const IntegrationRule &integ_rule;
 
+   int cg_print_level, cg_max_iters;
+   double cg_rel_tol, cg_abs_tol;
+
    // Data associated with each quadrature point in the mesh. These values are
    // recomputed at each time step.
    mutable QuadratureData quad_data;

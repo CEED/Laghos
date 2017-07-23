@@ -181,6 +181,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                              L2FESpace.GetFE(0)->GetOrder(),
                              int(floor(0.7 + pow(nqp, 1.0 / dim))));
+
+   cg_print_level = 0;
+   cg_max_iters   = 200;
+   cg_rel_tol     = 1e-16;
+   cg_abs_tol     = 0;
 }
 
 void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
@@ -197,36 +202,35 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   o_H1FESpace.GetMesh()->NewNodes(x, false);
-
-   UpdateQuadratureData(S);
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // - Position
    // - Velocity
    // - Specific Internal Energy
-
-   const int Vsize_l2 = L2FESpace.GetVSize();
-   const int Vsize_h1 = H1FESpace.GetVSize();
-
-   ParGridFunction v, e;
-   v.MakeRef(&H1FESpace, *sptr, Vsize_h1);
-   e.MakeRef(&L2FESpace, *sptr, Vsize_h1*2);
+   ParGridFunction x, v, e;
+   x.MakeRef(&H1FESpace, (Vector&) S, 0);
+   v.MakeRef(&H1FESpace, (Vector&) S, Vsize_h1);
+   e.MakeRef(&L2FESpace, (Vector&) S, Vsize_h1*2);
 
    ParGridFunction dx, dv, de;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
    dv.MakeRef(&H1FESpace, dS_dt, Vsize_h1);
    de.MakeRef(&L2FESpace, dS_dt, Vsize_h1*2);
 
+   o_H1FESpace.GetMesh()->NewNodes(x, false);
+   UpdateQuadratureData(S);
+
    // Set dx_dt = v (explicit).
    dx = v;
 
    // Solve for velocity.
-   Vector one(Vsize_l2), rhs(Vsize_h1), B, X; one = 1.0;
-   Force.Mult(one, rhs); rhs.Neg();
+   Vector one(Vsize_l2), rhs(Vsize_h1), B, X;
+   one = 1.0;
+
+   Force.Mult(one, rhs);
+   rhs.Neg();
 
    // Partial assembly solve for each velocity component.
    MassPAOperator VMass(&quad_data, H1compFESpace);
@@ -247,7 +251,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
       // we must enforce v_x/y/z = 0 for the velocity components.
       Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
-      ess_bdr = 0; ess_bdr[c] = 1;
+      ess_bdr = 0;
+      ess_bdr[c] = 1;
 
       // True dofs as if there's only one component.
       o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
@@ -261,13 +266,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
       VMass.EliminateRHS(c_tdofs, B);
 
-      CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-      cg.SetOperator(VMass);
-      cg.SetRelTol(1e-8);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(200);
-      cg.SetPrintLevel(0);
-      cg.Mult(B, X);
+      CG(H1FESpace.GetParMesh()->GetComm(),
+         VMass, B, X,
+         cg_print_level,
+         cg_max_iters,
+         cg_rel_tol,
+         cg_abs_tol);
+
       o_X = X;
       o_H1compFESpace.GetProlongationOperator()->Mult(o_X, o_dv_c);
       dv_c = o_dv_c;
@@ -290,13 +295,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (e_source) { forceRHS += *e_source; }
 
    MassPAOperator EMass(&quad_data, L2FESpace);
-   CGSolver cg(L2FESpace.GetParMesh()->GetComm());
-   cg.SetOperator(EMass);
-   cg.SetRelTol(1e-8);
-   cg.SetAbsTol(0.0);
-   cg.SetMaxIter(200);
-   cg.SetPrintLevel(0);
-   cg.Mult(forceRHS, de);
+   CG(L2FESpace.GetParMesh()->GetComm(),
+      EMass, forceRHS, de,
+      cg_print_level,
+      cg_max_iters,
+      cg_rel_tol,
+      cg_abs_tol);
 
    delete e_source;
 
