@@ -201,9 +201,6 @@ int main(int argc, char *argv[])
    OccaFiniteElementSpace o_L2FESpace(pmesh, &L2FEC);
    OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   ParFiniteElementSpace &L2FESpace = *((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
-   ParFiniteElementSpace &H1FESpace = *((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
-
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
@@ -214,7 +211,7 @@ int main(int argc, char *argv[])
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
          // enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
+         o_H1FESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
          ess_tdofs.Append(tdofs1d);
       }
    }
@@ -249,8 +246,8 @@ int main(int argc, char *argv[])
            << glob_size_l2 << endl;
    }
 
-   int Vsize_l2 = L2FESpace.GetVSize();
-   int Vsize_h1 = H1FESpace.GetVSize();
+   int Vsize_l2 = o_L2FESpace.GetVSize();
+   int Vsize_h1 = o_H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
@@ -262,17 +259,15 @@ int main(int argc, char *argv[])
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   BlockVector S(true_offset);
    OccaVector o_S(true_offset[3]);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
-   x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
+   ParGridFunction x_gf((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
+   ParGridFunction v_gf((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
+   ParGridFunction e_gf((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
 
    OccaGridFunction o_x_gf(&o_H1FESpace, o_S.GetRange(true_offset[0], Vsize_h1));
    OccaGridFunction o_v_gf(&o_H1FESpace, o_S.GetRange(true_offset[1], Vsize_h1));
@@ -285,7 +280,7 @@ int main(int argc, char *argv[])
 
    // Initial density values. Note that this is a temporary function and it will
    // not be updated during the time evolution.
-   ParGridFunction rho(&L2FESpace);
+   ParGridFunction rho((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    rho.ProjectCoefficient(rho_coeff);
 
@@ -308,9 +303,8 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition.
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec);
-   ParFiniteElementSpace &l2_fes = *((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
 
-   ParGridFunction l2_e(&l2_fes);
+   ParGridFunction l2_e((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
    if (problem == blast)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -401,7 +395,6 @@ int main(int argc, char *argv[])
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(o_S), t_old;
    bool last_step = false;
-   BlockVector S_old(S);
    OccaVector o_S_old(o_S);
    for (int ti = 1; !last_step; ti++)
    {
@@ -411,7 +404,6 @@ int main(int argc, char *argv[])
          last_step = true;
       }
 
-      S_old = S;
       o_S_old = o_S;
       t_old = t;
       oper.ResetTimeStepEstimate();
@@ -428,7 +420,6 @@ int main(int argc, char *argv[])
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
          t = t_old;
-         S = S_old;
          o_S = o_S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
