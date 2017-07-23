@@ -223,11 +223,11 @@ int main(int argc, char *argv[])
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
-      case 1: ode_solver = new /*->Occa*/ForwardEulerSolver; break;
-      case 2: ode_solver = new /*->Occa*/RK2Solver(0.5); break;
-      case 3: ode_solver = new /*->Occa*/RK3SSPSolver; break;
-      case 4: ode_solver = new /*->Occa*/RK4Solver; break;
-      case 6: ode_solver = new /*->Occa*/RK6Solver; break;
+      case 1: ode_solver = new OccaForwardEulerSolver; break;
+      case 2: ode_solver = new OccaRK2Solver(0.5); break;
+      case 3: ode_solver = new OccaRK3SSPSolver; break;
+      case 4: ode_solver = new OccaRK4Solver; break;
+      case 6: ode_solver = new OccaRK6Solver; break;
       default:
          if (myid == 0)
          {
@@ -296,6 +296,7 @@ int main(int argc, char *argv[])
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   o_v_gf = v_gf;
 
    // OccaGridFunction o_v_coeff(&o_H1FESpace);
    // o_v_coeff.ProjectCoefficient(OccaCoefficient("v0(v, q, e)")
@@ -322,6 +323,7 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   o_e_gf = e_gf;
 
    // Additional details, depending on the problem.
    bool use_viscosity; double gamma;
@@ -397,9 +399,10 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
+   double t = 0.0, dt = oper.GetTimeStepEstimate(o_S), t_old;
    bool last_step = false;
    BlockVector S_old(S);
+   OccaVector o_S_old(o_S);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -409,15 +412,16 @@ int main(int argc, char *argv[])
       }
 
       S_old = S;
+      o_S_old = o_S;
       t_old = t;
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
-      ode_solver->Step(S, t, dt);
+      ode_solver->Step(o_S, t, dt);
 
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(S);
+      const double dt_est = oper.GetTimeStepEstimate(o_S);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -425,6 +429,7 @@ int main(int argc, char *argv[])
          dt *= 0.85;
          t = t_old;
          S = S_old;
+         o_S = o_S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;
@@ -432,6 +437,7 @@ int main(int argc, char *argv[])
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       // Make sure that the mesh corresponds to the new solution state.
+      x_gf = o_x_gf;
       pmesh->NewNodes(x_gf, false);
 
       if (gfprint == 1)
@@ -462,7 +468,8 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double loc_norm = e_gf * e_gf, tot_norm;
+         double loc_norm = o_e_gf * o_e_gf;
+         double tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
          if (mpi.Root())

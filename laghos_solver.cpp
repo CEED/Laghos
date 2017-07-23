@@ -201,6 +201,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    locCG.SetPrintLevel(0);
 }
 
+void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
+  Vector h_S = S;
+  Vector h_dS_dt = dS_dt;
+  Mult(h_S, h_dS_dt);
+  dS_dt = h_dS_dt;
+}
+
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    dS_dt = 0.0;

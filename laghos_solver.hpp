@@ -127,6 +127,7 @@ public:
                            bool p_assembly_);
 
    // Solve for dx_dt, dv_dt and de_dt.
+   virtual void Mult(const OccaVector &S, OccaVector &dS_dt) const;
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
