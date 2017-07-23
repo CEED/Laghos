@@ -851,6 +851,12 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
    MultABt(LL_Q, LQs, Y);
 }
 
+void MassPAOperator::EliminateRHS(Array<int> &dofs, Vector &b)
+{
+   ess_tdofs = &dofs;
+   for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
+}
+
 } // namespace hydrodynamics
 
 } // namespace mfem

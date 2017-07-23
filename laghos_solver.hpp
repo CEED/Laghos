@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_utils.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -56,13 +57,19 @@ double e0(const Vector &);
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
+   const Problem problem;
+
+   OccaFiniteElementSpace &o_H1FESpace;
+   OccaFiniteElementSpace &o_L2FESpace;
+   mutable OccaFiniteElementSpace o_H1compFESpace;
+
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
    mutable ParFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
-   const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
+   const int dim, zones_cnt, l2dofs_cnt, h1dofs_cnt;
    const double cfl, gamma;
    const bool use_viscosity, p_assembly;
 
@@ -109,11 +116,15 @@ protected:
    void UpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
-                           ParFiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, ParGridFunction &rho0,
-                           int source_type_, double cfl_,
-                           double gamma_, bool visc, bool pa);
+   LagrangianHydroOperator(Problem problem_,
+                           OccaFiniteElementSpace &o_H1FESpace_,
+                           OccaFiniteElementSpace &o_L1FESpace_,
+                           Array<int> &ess_tdofs_,
+                           ParGridFunction &rho0,
+                           double cfl_,
+                           double gamma_,
+                           bool use_viscosity_,
+                           bool p_assembly_);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;

@@ -34,15 +34,15 @@
 //    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
-//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
-//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.5
-//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
-//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
+//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.5
+//    mpirun -np 8 laghos -p 1 -m data/square01_tri.mesh  -rs 1 -tf 0.5
+//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
+//    mpirun -np 8 laghos -p 2 -m data/square01_quad.mesh -rs 3 -tf 0.8
+//    mpirun -np 8 laghos -p 2 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
 //
 // Test problems:
-//    p = 0  --> Taylor-Green vortex (smooth problem).
-//    p = 1  --> Sedov blast.
+//    p = 1  --> Taylor-Green vortex (smooth problem).
+//    p = 2  --> Sedov blast.
 
 
 #include "laghos_solver.hpp"
@@ -55,7 +55,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+Problem problem;
 
 void display_banner(ostream & os);
 
@@ -78,11 +78,14 @@ int main(int argc, char *argv[])
    double t_final = 0.5;
    double cfl = 0.1;
    bool p_assembly = true;
+   int intProblem = 1;
    bool visualization = false;
    bool visit = false;
    int vis_steps = 5;
    int gfprint = 0;
    const char *basename = "Laghos";
+   const char *device_info = "mode: 'Serial'";
+   bool occa_verbose = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -91,7 +94,9 @@ int main(int argc, char *argv[])
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
-   args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
+   args.AddOption(&intProblem, "-p", "--problem",
+                  "Problem: 1 - Taylor-Green vortex (smooth problem)\n\t"
+                  "         2 - Sedov blast");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
    args.AddOption(&order_v, "-ov", "--order-kinematic",
@@ -114,6 +119,12 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+  args.AddOption(&device_info, "-d", "--device-info",
+                 "Device information to run example on (default: \"mode: 'Serial'\").");
+  args.AddOption(&occa_verbose,
+                 "-ov", "--occa-verbose",
+                 "--no-ov", "--no-occa-verbose",
+                 "Print verbose information about OCCA kernel compilation.");
    args.Parse();
    if (!args.Good())
    {
@@ -121,6 +132,21 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
+   problem = (Problem) intProblem;
+
+   // Set the OCCA device to run example in
+   occa::setDevice(device_info);
+
+   // Load cached kernels
+   occa::loadKernels();
+   occa::loadKernels("mfem");
+
+   // Set as the background device
+   occa::settings()["verboseCompilation"] = occa_verbose;
+
+   // Set properties that determine the problem
+   occa::properties props = GetProblemProperties();
+   props["defines/PROBLEM"] = problem;
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -171,8 +197,12 @@ int main(int argc, char *argv[])
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+
+   OccaFiniteElementSpace o_L2FESpace(pmesh, &L2FEC);
+   OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+
+   ParFiniteElementSpace &L2FESpace = *((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
+   ParFiniteElementSpace &H1FESpace = *((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -193,11 +223,11 @@ int main(int argc, char *argv[])
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
-      case 1: ode_solver = new ForwardEulerSolver; break;
-      case 2: ode_solver = new RK2Solver(0.5); break;
-      case 3: ode_solver = new RK3SSPSolver; break;
-      case 4: ode_solver = new RK4Solver; break;
-      case 6: ode_solver = new RK6Solver; break;
+      case 1: ode_solver = new /*->Occa*/ForwardEulerSolver; break;
+      case 2: ode_solver = new /*->Occa*/RK2Solver(0.5); break;
+      case 3: ode_solver = new /*->Occa*/RK3SSPSolver; break;
+      case 4: ode_solver = new /*->Occa*/RK4Solver; break;
+      case 6: ode_solver = new /*->Occa*/RK6Solver; break;
       default:
          if (myid == 0)
          {
@@ -208,8 +238,8 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   HYPRE_Int glob_size_l2 = o_L2FESpace.GetGlobalTrueVSize();
+   HYPRE_Int glob_size_h1 = o_H1FESpace.GetGlobalTrueVSize();
 
    if (mpi.Root())
    {
@@ -233,6 +263,7 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
+   OccaVector o_S(true_offset[3]);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -243,9 +274,14 @@ int main(int argc, char *argv[])
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
 
+   OccaGridFunction o_x_gf(&o_H1FESpace, o_S.GetRange(true_offset[0], Vsize_h1));
+   OccaGridFunction o_v_gf(&o_H1FESpace, o_S.GetRange(true_offset[1], Vsize_h1));
+   OccaGridFunction o_e_gf(&o_L2FESpace, o_S.GetRange(true_offset[2], Vsize_l2));
+
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
+   o_x_gf = x_gf;
 
    // Initial density values. Note that this is a temporary function and it will
    // not be updated during the time evolution.
@@ -253,18 +289,28 @@ int main(int argc, char *argv[])
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    rho.ProjectCoefficient(rho_coeff);
 
+   // OccaGridFunction o_rho(&o_L2FESpace);
+   // o_rho.ProjectCoefficient(OccaCoefficient("rho0(q, e)");
+   //                          .IncludeSource("occa://laghos/init.okl"));
+
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+
+   // OccaGridFunction o_v_coeff(&o_H1FESpace);
+   // o_v_coeff.ProjectCoefficient(OccaCoefficient("v0(v, q, e)")
+   //                              .IncludeSource("occa://laghos/init.okl"));
 
    // Initialize the specific internal energy. We interpolate in a non-positive
    // basis to get the correct values at the dofs. Then we do an L2 projection
    // to the positive basis in which we actually compute. The goal of all this
    // is to get a high-order representation of the initial condition.
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+   OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec);
+   ParFiniteElementSpace &l2_fes = *((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
+
    ParGridFunction l2_e(&l2_fes);
-   if (problem == 1)
+   if (problem == blast)
    {
       // For the Sedov test, we use a delta function at the origin.
       DeltaCoefficient e_coeff(0, 0, 0.25);
@@ -278,18 +324,30 @@ int main(int argc, char *argv[])
    e_gf.ProjectGridFunction(l2_e);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc; double gamma;
+   bool use_viscosity; double gamma;
    switch (problem)
    {
-      case 0: if (pmesh->Dimension() == 2) { source = 1; }
-         visc = false; gamma = 5.0 / 3.0; break;
-      case 1: visc = true; gamma = 1.4; break;
-      default: MFEM_ABORT("Wrong problem specification!");
+     case vortex: {
+       use_viscosity = false;
+       gamma = 5.0 / 3.0;
+       break;
+     }
+     case blast: {
+       use_viscosity = true;
+       gamma = 1.4;
+       break;
+     }
+     default: {
+       MFEM_ABORT("Wrong problem specification!");
+     }
    }
 
-   LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, gamma,
-                                visc, p_assembly);
+   LagrangianHydroOperator oper(problem,
+                                o_H1FESpace, o_L2FESpace,
+                                ess_tdofs,
+                                rho, cfl, gamma,
+                                use_viscosity,
+                                p_assembly);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -470,8 +528,8 @@ double rho0(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 1.0;
-      case 1: return 1.0;
+      case vortex: return 1.0;
+      case blast:  return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -480,7 +538,8 @@ void v0(const Vector &x, Vector &v)
 {
    switch (problem)
    {
-      case 0:
+      case vortex:
+      {
          v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
          v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
          if (x.Size() == 3)
@@ -490,7 +549,12 @@ void v0(const Vector &x, Vector &v)
             v(2) = 0.0;
          }
          break;
-      case 1: v = 0.0; break;
+      }
+      case blast:
+      {
+         v = 0.0;
+         break;
+      }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -499,7 +563,7 @@ double e0(const Vector &x)
 {
    switch (problem)
    {
-      case 0:
+      case vortex:
       {
          const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
          double val;
@@ -514,7 +578,10 @@ double e0(const Vector &x)
          }
          return val/denom;
       }
-      case 1: return 0.0; // This case in initialized in main().
+      case blast:
+      {
+        return 0.0; // This case in initialized in main().
+      }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }

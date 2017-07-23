@@ -79,33 +79,44 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
 namespace hydrodynamics
 {
-
-LagrangianHydroOperator::LagrangianHydroOperator(int size,
-                                                 ParFiniteElementSpace &h1_fes,
-                                                 ParFiniteElementSpace &l2_fes,
-                                                 Array<int> &essential_tdofs,
+LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
+                                                 OccaFiniteElementSpace &o_H1FESpace_,
+                                                 OccaFiniteElementSpace &o_L2FESpace_,
+                                                 Array<int> &ess_tdofs_,
                                                  ParGridFunction &rho0,
-                                                 int source_type_, double cfl_,
-                                                 double gamma_, bool visc,
-                                                 bool pa)
-   : TimeDependentOperator(size),
-     H1FESpace(h1_fes), L2FESpace(l2_fes),
-     H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
-     ess_tdofs(essential_tdofs),
-     dim(h1_fes.GetMesh()->Dimension()),
-     nzones(h1_fes.GetMesh()->GetNE()),
-     l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
-     h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
-     source_type(source_type_), cfl(cfl_), gamma(gamma_),
-     use_viscosity(visc), p_assembly(pa),
-     Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
-     integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
-                             3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
-     quad_data(dim, nzones, integ_rule.GetNPoints()),
+                                                 double cfl_,
+                                                 double gamma_,
+                                                 bool use_viscosity_,
+                                                 bool p_assembly_)
+: TimeDependentOperator(o_L2FESpace_.GetVSize() + 2*o_H1FESpace_.GetVSize()),
+     problem(problem_),
+     o_H1FESpace(o_H1FESpace_),
+     o_L2FESpace(o_L2FESpace_),
+     o_H1compFESpace(o_H1FESpace.GetMesh(),
+                     o_H1FESpace.FEColl(),
+                     1),
+     H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace_.GetFESpace())),
+     L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace_.GetFESpace())),
+     H1compFESpace(H1FESpace.GetParMesh(),
+                   H1FESpace.FEColl(),
+                   1),
+     ess_tdofs(ess_tdofs_),
+     dim(H1FESpace.GetMesh()->Dimension()),
+     zones_cnt(H1FESpace.GetMesh()->GetNE()),
+     l2dofs_cnt(L2FESpace.GetFE(0)->GetDof()),
+     h1dofs_cnt(H1FESpace.GetFE(0)->GetDof()),
+     cfl(cfl_),
+     gamma(gamma_),
+     use_viscosity(use_viscosity_),
+     p_assembly(p_assembly_),
+     Mv(&H1FESpace),
+     Me_inv(l2dofs_cnt, l2dofs_cnt, zones_cnt),
+     integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
+                             3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
+     quad_data(dim, zones_cnt, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1compFESpace), locEMassPA(&quad_data, l2_fes),
-     locCG()
+     Force(&H1FESpace, &L2FESpace),
+     ForcePA(&quad_data, H1FESpace, L2FESpace)
 {
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -115,8 +126,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    MassIntegrator mi(rho_coeff, &integ_rule);
    for (int i = 0; i < nzones; i++)
    {
-      mi.AssembleElementMatrix(*l2_fes.GetFE(i),
-                               *l2_fes.GetElementTransformation(i), Me);
+      mi.AssembleElementMatrix(*L2FESpace.GetFE(i),
+                               *L2FESpace.GetElementTransformation(i), Me);
       inv.Factor();
       inv.GetInverseMatrix(Me_inv(i));
    }
@@ -132,7 +143,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    for (int i = 0; i < nzones; i++)
    {
       rho0.GetValues(i, integ_rule, rho_vals);
-      ElementTransformation *T = h1_fes.GetElementTransformation(i);
+      ElementTransformation *T = H1FESpace.GetElementTransformation(i);
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = integ_rule.IntPoint(q);
@@ -200,7 +211,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
+   o_H1FESpace.GetMesh()->NewNodes(x, false);
 
    UpdateQuadratureData(S);
 
@@ -240,21 +251,31 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       const int size = H1compFESpace.GetVSize();
       for (int c = 0; c < dim; c++)
       {
-         Vector rhs_c(rhs.GetData() + c*size, size),
-                dv_c(dv.GetData() + c*size, size);
+         Vector rhs_c(rhs.GetData() + c*size, size);
+         Vector dv_c(dv.GetData() + c*size, size);
+         Vector B(H1compFESpace.TrueVSize());
+         Vector X(H1compFESpace.TrueVSize());
+
+         OccaVector o_rhs_c(rhs_c);
+         OccaVector o_dv_c(dv_c);
+         OccaVector o_B(H1compFESpace.TrueVSize());
+         OccaVector o_X(H1compFESpace.TrueVSize());
 
          Array<int> c_tdofs;
-         Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
          // we must enforce v_x/y/z = 0 for the velocity components.
+         Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
          ess_bdr = 0; ess_bdr[c] = 1;
-         // True dofs as if there's only one component.
-         H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
-         dv_c = 0.0;
-         Vector B(H1compFESpace.TrueVSize()), X(H1compFESpace.TrueVSize());
-         H1compFESpace.Dof_TrueDof_Matrix()->MultTranspose(rhs_c, B);
-         H1compFESpace.GetRestrictionMatrix()->Mult(dv_c, X);
+         // True dofs as if there's only one component.
+         o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
+
+         dv_c   = 0.0;
+         o_dv_c = 0.0;
+         o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, o_B);
+         o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, o_X);
+         B = o_B;
+         X = o_X;
 
          VMassPA.EliminateRHS(c_tdofs, B);
 
@@ -265,7 +286,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg.SetMaxIter(200);
          cg.SetPrintLevel(0);
          cg.Mult(B, X);
-         H1compFESpace.Dof_TrueDof_Matrix()->Mult(X, dv_c);
+         o_X = X;
+         o_H1compFESpace.GetProlongationOperator()->Mult(o_X, o_dv_c);
+         dv_c = o_dv_c;
       }
    }
    else
@@ -285,7 +308,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
-   if (source_type == 1) // 2D Taylor-Green.
+   if ((problem == vortex) &&
+       (dim == 2))
    {
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
@@ -330,7 +354,7 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
+   o_H1FESpace.GetMesh()->NewNodes(x, false);
    UpdateQuadratureData(S);
 
    double glob_dt_est;

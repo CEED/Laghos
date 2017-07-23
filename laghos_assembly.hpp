@@ -171,11 +171,7 @@ public:
    // Mass matrix action. We work with one velocity component at a time.
    virtual void Mult(const Vector &x, Vector &y) const;
 
-   void EliminateRHS(Array<int> &dofs, Vector &b)
-   {
-      ess_tdofs = &dofs;
-      for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
-   }
+   void EliminateRHS(Array<int> &dofs, Vector &b);
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.
