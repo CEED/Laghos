@@ -226,11 +226,15 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    dx = v;
 
    // Solve for velocity.
-   Vector one(Vsize_l2), rhs(Vsize_h1), B, X;
+   Vector one(Vsize_l2);
+   Vector rhs(Vsize_h1);
    one = 1.0;
 
    Force.Mult(one, rhs);
    rhs.Neg();
+
+   OccaVector B(H1compFESpace.TrueVSize());
+   OccaVector X(H1compFESpace.TrueVSize());
 
    // Partial assembly solve for each velocity component.
    OccaMassOperator VMass(&quad_data, o_H1compFESpace);
@@ -238,12 +242,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    for (int c = 0; c < dim; c++)
    {
       Vector rhs_c(rhs.GetData() + c*size, size);
-      Vector dv_c(dv.GetData() + c*size, size);
+      Vector dv_c(dv.GetData()   + c*size, size);
 
       OccaVector o_rhs_c(rhs_c);
       OccaVector o_dv_c(dv_c);
-      OccaVector B(H1compFESpace.TrueVSize());
-      OccaVector X(H1compFESpace.TrueVSize());
 
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
       // we must enforce v_x/y/z = 0 for the velocity components.
@@ -285,17 +287,24 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->Assemble();
    }
    Vector forceRHS(Vsize_l2);
+   OccaVector o_forceRHS(Vsize_l2);
    Force.MultTranspose(v, forceRHS);
 
-   if (e_source) { forceRHS += *e_source; }
+   if (e_source) {
+     forceRHS += *e_source;
+   }
+   o_forceRHS = forceRHS;
 
-   MassPAOperator EMass(&quad_data, L2FESpace);
+   OccaMassOperator EMass(&quad_data, o_L2FESpace);
+   OccaVector o_de = de;
+
    CG(L2FESpace.GetParMesh()->GetComm(),
-      EMass, forceRHS, de,
+      EMass, o_forceRHS, o_de,
       cg_print_level,
       cg_max_iters,
       cg_rel_tol,
       cg_abs_tol);
+   de = o_de;
 
    delete e_source;
 
