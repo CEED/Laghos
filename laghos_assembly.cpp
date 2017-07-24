@@ -580,6 +580,11 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
    }
 }
 
+void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
+{
+   ess_tdofs = &dofs;
+}
+
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    if (ess_tdofs)
@@ -851,10 +856,77 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
    MultABt(LL_Q, LQs, Y);
 }
 
-void MassPAOperator::EliminateRHS(Array<int> &dofs, Vector &b)
+void MassPAOperator::EliminateRHS(Vector &b)
 {
-   ess_tdofs = &dofs;
-   for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
+  if (ess_tdofs) {
+    int *dofs = ess_tdofs->GetData();
+     for (int i = 0; i < ess_tdofs->Size(); i++)
+     {
+        b(dofs[i]) = 0.0;
+     }
+  }
+}
+
+OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
+                                   OccaFiniteElementSpace &fes_)
+   : Operator(fes_.GetTrueVSize()),
+     device(occa::getDevice()),
+     fes(fes_),
+     dim(fes_.GetMesh()->Dimension()),
+     elements(fes_.GetMesh()->GetNE()),
+     quad_data(quad_data_),
+     ess_tdofs_count(0),
+     x_gf((ParFiniteElementSpace*) fes_.GetFESpace()),
+     y_gf((ParFiniteElementSpace*) fes_.GetFESpace()) {}
+
+OccaMassOperator::OccaMassOperator(occa::device device_,
+                                   QuadratureData *quad_data_,
+                                   OccaFiniteElementSpace &fes_)
+   : Operator(fes_.GetTrueVSize()),
+     device(device_),
+     fes(fes_),
+     dim(fes_.GetMesh()->Dimension()),
+     elements(fes_.GetMesh()->GetNE()),
+     quad_data(quad_data_),
+     ess_tdofs_count(0),
+     x_gf((ParFiniteElementSpace*) fes_.GetFESpace()),
+     y_gf((ParFiniteElementSpace*) fes_.GetFESpace()) {}
+
+void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
+  ess_tdofs_count = dofs.Size();
+  if (ess_tdofs_count == 0) {
+    return;
+  }
+  if (ess_tdofs.size<int>() < ess_tdofs_count) {
+    ess_tdofs = device.malloc(ess_tdofs_count * sizeof(int),
+                              dofs.GetData());
+  } else {
+    ess_tdofs.copyFrom(dofs.GetData(),
+                       ess_tdofs_count * sizeof(int));
+  }
+}
+
+void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
+  if (ess_tdofs_count) {
+    OccaVector distX = x;
+    distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+    x_gf.Distribute(distX);
+  } else {
+    x_gf.Distribute(x);
+  }
+
+  //
+  fes.GetProlongationOperator()->MultTranspose(y_gf, y);
+
+  if (ess_tdofs_count) {
+    y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+  }
+}
+
+void OccaMassOperator::EliminateRHS(OccaVector &b) {
+  if (ess_tdofs_count) {
+    b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+  }
 }
 
 } // namespace hydrodynamics

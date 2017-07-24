@@ -234,6 +234,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    // Partial assembly solve for each velocity component.
    MassPAOperator VMass(&quad_data, H1compFESpace);
+   OccaMassOperator o_VMass(&quad_data, o_H1compFESpace);
    const int size = H1compFESpace.GetVSize();
    for (int c = 0; c < dim; c++)
    {
@@ -247,24 +248,25 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       OccaVector o_B(H1compFESpace.TrueVSize());
       OccaVector o_X(H1compFESpace.TrueVSize());
 
-      Array<int> c_tdofs;
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
       // we must enforce v_x/y/z = 0 for the velocity components.
       Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
       ess_bdr = 0;
       ess_bdr[c] = 1;
 
-      // True dofs as if there's only one component.
-      o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
-
       dv_c   = 0.0;
       o_dv_c = 0.0;
       o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, o_B);
       o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, o_X);
-      B = o_B;
       X = o_X;
 
-      VMass.EliminateRHS(c_tdofs, B);
+      // True dofs as if there's only one component.
+      Array<int> c_tdofs;
+      o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
+      o_VMass.SetEssentialTrueDofs(c_tdofs);
+      o_VMass.EliminateRHS(o_B);
+      VMass.SetEssentialTrueDofs(c_tdofs);
+      B = o_B;
 
       CG(H1FESpace.GetParMesh()->GetComm(),
          VMass, B, X,

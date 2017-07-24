@@ -168,10 +168,39 @@ public:
         x_gf(&fes), y_gf(&fes)
    { }
 
+  void SetEssentialTrueDofs(Array<int> &dofs);
+
    // Mass matrix action. We work with one velocity component at a time.
    virtual void Mult(const Vector &x, Vector &y) const;
 
-   void EliminateRHS(Array<int> &dofs, Vector &b);
+   void EliminateRHS(Vector &b);
+};
+
+class OccaMassOperator : public Operator {
+private:
+  occa::device device;
+
+  int dim, elements;
+  QuadratureData *quad_data;
+  OccaFiniteElementSpace &fes;
+
+  int ess_tdofs_count;
+  occa::memory ess_tdofs;
+
+  mutable ParGridFunction x_gf, y_gf;
+
+public:
+  OccaMassOperator(QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
+  OccaMassOperator(occa::device device_,
+                   QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
+
+  void SetEssentialTrueDofs(Array<int> &dofs);
+
+  // Can be used for both velocity and specific internal energy. For the case
+  // of velocity, we only work with one component at a time.
+  virtual void Mult(const OccaVector &x, OccaVector &y) const;
+
+  void EliminateRHS(OccaVector &b);
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.
