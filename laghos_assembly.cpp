@@ -908,14 +908,88 @@ void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
 
 void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
   if (ess_tdofs_count) {
-    OccaVector distX = x;
+    distX = x;
     distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
     x_gf.Distribute(distX);
   } else {
     x_gf.Distribute(x);
   }
 
-  //
+  // Mult
+  {
+    Vector x2 = x_gf;
+    Vector y2;
+
+    // Are we working with the velocity or energy mass matrix?
+    const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
+    const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
+    const DenseMatrix &DQs = (fe_H1
+                              ? tensors1D->HQshape1D
+                              : tensors1D->LQshape1D);
+
+    const int ndof1D = DQs.Height();
+    const int nqp1D  = DQs.Width();
+
+    DenseMatrix DQ(ndof1D, nqp1D);
+    DenseMatrix QQ(nqp1D , nqp1D);
+
+    Vector xz(ndof1D * ndof1D);
+    Vector yz(ndof1D * ndof1D);
+
+    DenseMatrix X(xz.GetData(), ndof1D, ndof1D);
+    DenseMatrix Y(yz.GetData(), ndof1D, ndof1D);
+
+    Array<int> dofs;
+    double *qq = QQ.GetData();
+    const int nqp = nqp1D * nqp1D;
+
+    y2.SetSize(x2.Size());
+    y2 = 0.0;
+
+    for (int e = 0; e < elements; ++e) {
+      fes.GetFESpace()->GetElementDofs(e, dofs);
+      if (fe_H1) {
+        // Transfer from the mfem's H1 local numbering to the tensor structure
+        // numbering.
+        const Array<int> &dof_map = fe_H1->GetDofMap();
+        for (int j = 0; j < xz.Size(); j++) {
+          xz[j] = x2[dofs[dof_map[j]]];
+        }
+      }
+      else {
+        x2.GetSubVector(dofs, xz);
+      }
+
+      // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
+      // QQ_k1_k2 = DQs_i1_k1 DQ_i1_k2 -- contract in x direction.
+      mfem::Mult(X, DQs, DQ);
+      MultAtB(DQs, DQ, QQ);
+
+      // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
+      double *d = quad_data->rhoDetJw.GetData() + e*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qq[q] *= d[q];
+      }
+
+      // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
+      // Y_i1_i2  = DQ_i1_k2 DQs_i2_k2 -- contract in y direction.
+      mfem::Mult(DQs, QQ, DQ);
+      MultABt(DQ, DQs, Y);
+
+      if (fe_H1) {
+        const Array<int> &dof_map = fe_H1->GetDofMap();
+        for (int j = 0; j < yz.Size(); j++) {
+          y2[dofs[dof_map[j]]] += yz[j];
+        }
+      }
+      else {
+        y2.SetSubVector(dofs, yz);
+      }
+    }
+
+    y_gf = y2;
+  }
+
   fes.GetProlongationOperator()->MultTranspose(y_gf, y);
 
   if (ess_tdofs_count) {

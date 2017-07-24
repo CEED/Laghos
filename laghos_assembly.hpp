@@ -187,6 +187,8 @@ private:
   int ess_tdofs_count;
   occa::memory ess_tdofs;
 
+  // For distributing X
+  mutable OccaVector distX;
   mutable ParGridFunction x_gf, y_gf;
 
 public:
