@@ -140,9 +140,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
          Jinv.GetInverseMatrix(quad_data.Jac0inv(i*nqp + q));
 
          const double rho0DetJ0 = T->Weight() * rho_vals(q);
-         quad_data.rho0DetJ0(i*nqp + q) = rho0DetJ0;
-         quad_data.rhoDetJw(i*nqp + q)  = rho0DetJ0 *
-                                          integ_rule.IntPoint(q).weight;
+         quad_data.rho0DetJ0w(i*nqp + q) = rho0DetJ0 *
+                                           integ_rule.IntPoint(q).weight;
       }
    }
 
@@ -171,8 +170,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    fi->SetIntRule(&integ_rule);
    Force.AddDomainIntegrator(fi);
    // Make a dummy assembly to figure out the sparsity.
-   for (int i = 0; i < zones_cnt * nqp; i++)
-   { quad_data.Jac(i).Diag(1.0, dim); }
    Force.Assemble(0);
    Force.Finalize(0);
 
@@ -391,7 +388,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
    Vector e_vals;
-   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stressJiT(dim);
+   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
    DenseMatrix v_vals;
 
    for (int i = 0; i < zones_cnt; i++)
@@ -405,17 +402,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          T->SetIntPoint(&ip);
          const DenseMatrix &Jpr = T->Jacobian();
 
-         quad_data.Jac(i*nqp + q) = Jpr;
          const double detJ = T->Weight();
          MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
 
-         DenseMatrix &s = quad_data.stress(i*nqp + q);
-         s = 0.0;
-         const double rho = quad_data.rho0DetJ0(i*nqp + q) / detJ;
+         stress = 0.0;
+         const double rho = quad_data.rho0DetJ0w(i*nqp + q) / detJ / ip.weight;
          const double e   = max(0.0, e_vals(q));
          for (int d = 0; d < dim; d++)
          {
-            s(d, d) = - (gamma - 1.0) * rho * e;
+            stress(d, d) = - MaterialPressure(rho, e);
          }
 
          // Length scale at the point. The first eigenvector of the symmetric
@@ -442,12 +437,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double mu = eig_val_data[0];
             double visc_coeff = 2.0 * rho * h * h * fabs(mu);
             if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
-            s.Add(visc_coeff, sgrad_v);
+            stress.Add(visc_coeff, sgrad_v);
          }
 
          // Quadrature data for partial assembly of the force operator.
          CalcInverse(Jpr, Jinv);
-         MultABt(s, Jinv, stressJiT);
+         MultABt(stress, Jinv, stressJiT);
          stressJiT *= integ_rule.IntPoint(q).weight * detJ;
          for (int vd = 0 ; vd < dim; vd++)
          {

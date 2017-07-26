@@ -36,29 +36,22 @@ struct QuadratureData
 {
    // TODO: use QuadratureFunctions?
 
-   // At each quadrature point, the stress and the Jacobian are (dim x dim)
-   // matrices. They must be recomputed in every time step.
-   DenseTensor stress, Jac;
-
    // Reference to physical Jacobian for the initial mesh. These are computed
    // only at time zero and stored here.
    DenseTensor Jac0inv;
 
-   // TODO: have this only when PA is on.
-   // Quadrature data used for partial assembly of the force operator. It must
-   // be recomputed in every time step.
+   // Quadrature data used for full/partial assembly of the force operator. At
+   // each quadrature point, it combines the stress, inverse Jacobian,
+   // determinant of the Jacobian and the integration weight. It must be
+   // recomputed in every time step.
    DenseTensor stressJinvT;
 
-   // At time zero, we compute and store rho0 * det(J0) at the chosen quadrature
-   // points. Then at any other time, we compute rho = rho0 * det(J0) / det(J),
-   // representing the notion of pointwise mass conservation.
-   Vector rho0DetJ0;
-
-   // TODO: have this only when PA is on.
-   // Quadrature data used for partial assembly of the mass matrices, namely
-   // (rho * detJ * qp_weight) at each quadrature point. These are computed only
-   // at time zero and stored here.
-   Vector rhoDetJw;
+   // Quadrature data used for full/partial assembly of the mass matrices. At
+   // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+   // quadrature point. Note the at any other time, we can compute
+   // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+   // conservation.
+   Vector rho0DetJ0w;
 
    // Initial length scale. This represents a notion of local mesh size. We
    // assume that all initial zones have similar size.
@@ -69,12 +62,9 @@ struct QuadratureData
    double dt_est;
 
    QuadratureData(int dim, int nzones, int quads_per_zone)
-      : stress(dim, dim, nzones * quads_per_zone),
-        Jac(dim, dim, nzones * quads_per_zone),
-        Jac0inv(dim, dim, nzones * quads_per_zone),
+      : Jac0inv(dim, dim, nzones * quads_per_zone),
         stressJinvT(nzones * quads_per_zone, dim, dim),
-        rho0DetJ0(nzones * quads_per_zone),
-        rhoDetJw(nzones * quads_per_zone) { }
+        rho0DetJ0w(nzones * quads_per_zone) { }
 };
 
 // Stores values of the one-dimensional shape functions and gradients at all 1D

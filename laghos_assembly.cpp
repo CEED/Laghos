@@ -69,11 +69,9 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
 
    for (int q = 0; q < ip_cnt; q++)
    {
-      const IntegrationPoint &ip = IntRule->IntPoint(q);
-
-      fe.CalcShape(ip, shape);
+      fe.CalcShape(IntRule->IntPoint(q), shape);
       // Note that rhoDetJ = rho0DetJ0.
-      shape *= ip.weight * quad_data.rho0DetJ0(Tr.ElementNo*ip_cnt + q);
+      shape *= quad_data.rho0DetJ0w(Tr.ElementNo*ip_cnt + q);
       elvect += shape;
    }
 }
@@ -83,7 +81,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
                                              ElementTransformation &Trans,
                                              DenseMatrix &elmat)
 {
-   const int ip_cnt = IntRule->GetNPoints();
+   const int nqp = IntRule->GetNPoints();
    const int dim = trial_fe.GetDim();
    const int zone_id = Trans.ElementNo;
    const int h1dofs_cnt = test_fe.GetDof();
@@ -92,23 +90,30 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
    elmat = 0.0;
 
-   DenseMatrix vshape(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim),
-               loc_force(h1dofs_cnt, dim), Jinv(dim);
+   DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
 
-   for (int q = 0; q < ip_cnt; q++)
+   for (int q = 0; q < nqp; q++)
    {
-      const DenseMatrix &J = quad_data.Jac(zone_id*ip_cnt + q);
       const IntegrationPoint &ip = IntRule->IntPoint(q);
 
+      // Form stress:grad_shape at the current point.
       test_fe.CalcDShape(ip, vshape);
-      CalcInverse(J, Jinv);
-      Mult(vshape, Jinv, dshape);
+      for (int i = 0; i < h1dofs_cnt; i++)
+      {
+         for (int vd = 0; vd < dim; vd++) // Velocity components.
+         {
+            loc_force(i, vd) = 0.0;
+            for (int gd = 0; gd < dim; gd++) // Gradient components.
+            {
+               loc_force(i, vd) +=
+                  quad_data.stressJinvT(vd)(zone_id*nqp + q, gd) * vshape(i,gd);
+            }
+         }
+      }
 
-      MultABt(dshape, quad_data.stress(zone_id*ip_cnt + q), loc_force);
       trial_fe.CalcShape(ip, shape);
-
-      AddMult_a_VWt(ip.weight * J.Det(), Vloc_force, shape, elmat);
+      AddMultVWt(Vloc_force, shape, elmat);
    }
 }
 
@@ -647,7 +652,7 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
       MultAtB(DQs, DQ, QQ);
 
       // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-      double *d = quad_data->rhoDetJw.GetData() + z*nqp;
+      double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qq[q] *= d[q]; }
 
       // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
@@ -729,7 +734,7 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
       }
 
       // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
-      double *d = quad_data->rhoDetJw.GetData() + z*nqp;
+      double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
 
       // QDQ_k1_i2_k3 = QQQ_k1_k2_k3 DQs_i2_k2 -- contract in y direction.

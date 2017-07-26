@@ -87,6 +87,9 @@ protected:
    // Same as above, but done through partial assembly.
    ForcePAOperator ForcePA;
 
+   double MaterialPressure(double rho, double e) const
+   { return (gamma - 1.0) * rho * e; }
+
    void UpdateQuadratureData(const Vector &S) const;
 
 public:
