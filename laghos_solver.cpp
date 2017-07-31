@@ -113,7 +113,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                              3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
      quad_data(dim, zones_cnt, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     Force(&quad_data, H1FESpace, L2FESpace)
+     Force(&quad_data, o_H1FESpace, o_L2FESpace)
 {
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -226,8 +226,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    dx = v;
 
    // Solve for velocity.
-   Vector one(Vsize_l2);
-   Vector rhs(Vsize_h1);
+   OccaVector one(Vsize_l2);
+   OccaVector rhs(Vsize_h1);
    one = 1.0;
 
    Force.Mult(one, rhs);
@@ -241,10 +241,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    const int size = H1compFESpace.GetVSize();
    for (int c = 0; c < dim; c++)
    {
-      Vector rhs_c(rhs.GetData() + c*size, size);
-      Vector dv_c(dv.GetData()   + c*size, size);
+      Vector dv_c(dv.GetData() + c*size, size);
 
-      OccaVector o_rhs_c(rhs_c);
+      OccaVector o_rhs_c = rhs.GetRange(c*size, size);
       OccaVector o_dv_c(dv_c);
 
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
@@ -253,7 +252,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       ess_bdr = 0;
       ess_bdr[c] = 1;
 
-      dv_c   = 0.0;
       o_dv_c = 0.0;
       o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, B);
       o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, X);
@@ -286,14 +284,14 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
    }
-   Vector forceRHS(Vsize_l2);
+
    OccaVector o_forceRHS(Vsize_l2);
-   Force.MultTranspose(v, forceRHS);
+   OccaVector o_v = v;
+   Force.MultTranspose(o_v, o_forceRHS);
 
    if (e_source) {
-     forceRHS += *e_source;
+     o_forceRHS += *e_source;
    }
-   o_forceRHS = forceRHS;
 
    OccaMassOperator EMass(&quad_data, o_L2FESpace);
    OccaVector o_de = de;

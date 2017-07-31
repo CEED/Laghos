@@ -191,10 +191,17 @@ private:
   mutable OccaVector distX;
   mutable ParGridFunction x_gf, y_gf;
 
+   // Force matrix action on quadrilateral elements in 2D
+   void MultQuad(const OccaVector &x, OccaVector &y) const;
+   // Force matrix action on hexahedral elements in 3D
+   void MultHex(const OccaVector &x, OccaVector &y) const;
+
 public:
   OccaMassOperator(QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
   OccaMassOperator(occa::device device_,
                    QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
+
+  void Setup(occa::device device_, QuadratureData *quad_data_);
 
   void SetEssentialTrueDofs(Array<int> &dofs);
 
@@ -207,28 +214,42 @@ public:
 
 // Performs partial assembly for the energy mass matrix on a single zone.
 // Used to perform local CG solves, thus avoiding unnecessary communication.
-class LocalMassPAOperator : public Operator
+class OccaForceOperator : public Operator
 {
 private:
-   const int dim;
-   int zone_id;
+  occa::device device;
+  int dim, elements;
 
-   QuadratureData *quad_data;
+  QuadratureData *quad_data;
+  OccaFiniteElementSpace &h1fes, &l2fes;
 
-   // Mass matrix action on a quadrilateral element in 2D.
-   void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on a hexahedral element in 3D.
-   void MultHex(const Vector &x, Vector &y) const;
+  // Force matrix action on quadrilateral elements in 2D
+  void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
+  // Force matrix action on hexahedral elements in 3D
+  void MultHex(const OccaVector &vecL2, OccaVector &vecH1) const;
+
+  // Transpose force matrix action on quadrilateral elements in 2D
+  void MultTransposeQuad(const OccaVector &vecH1, OccaVector &vecL2) const;
+  // Transpose force matrix action on hexahedral elements in 3D
+  void MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : Operator(fes.GetFE(0)->GetDof()),
-        dim(fes.GetMesh()->Dimension()), zone_id(0),
-        quad_data(quad_data_)
-   { }
-   void SetZoneId(int zid) { zone_id = zid; }
+  OccaForceOperator(QuadratureData *quad_data_,
+                    OccaFiniteElementSpace &h1fes_,
+                    OccaFiniteElementSpace &l2fes_);
 
-   virtual void Mult(const Vector &x, Vector &y) const;
+  OccaForceOperator(occa::device device_,
+                    QuadratureData *quad_data_,
+                    OccaFiniteElementSpace &h1fes_,
+                    OccaFiniteElementSpace &l2fes_);
+
+  void Setup(occa::device device_,
+             QuadratureData *quad_data_);
+
+  virtual void Mult(const OccaVector &vecL2, OccaVector &vecH1) const;
+  virtual void MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const;
+
+  ~OccaForceOperator() { }
 };
 
 } // namespace hydrodynamics

@@ -869,28 +869,32 @@ void MassPAOperator::EliminateRHS(Vector &b)
 
 OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
                                    OccaFiniteElementSpace &fes_)
-   : Operator(fes_.GetTrueVSize()),
-     device(occa::getDevice()),
-     fes(fes_),
-     dim(fes_.GetMesh()->Dimension()),
-     elements(fes_.GetMesh()->GetNE()),
-     quad_data(quad_data_),
-     ess_tdofs_count(0),
-     x_gf((ParFiniteElementSpace*) fes_.GetFESpace()),
-     y_gf((ParFiniteElementSpace*) fes_.GetFESpace()) {}
+  : Operator(fes_.GetTrueVSize()),
+    fes(fes_) {
+  Setup(occa::getDevice(), quad_data_);
+}
 
 OccaMassOperator::OccaMassOperator(occa::device device_,
                                    QuadratureData *quad_data_,
                                    OccaFiniteElementSpace &fes_)
-   : Operator(fes_.GetTrueVSize()),
-     device(device_),
-     fes(fes_),
-     dim(fes_.GetMesh()->Dimension()),
-     elements(fes_.GetMesh()->GetNE()),
-     quad_data(quad_data_),
-     ess_tdofs_count(0),
-     x_gf((ParFiniteElementSpace*) fes_.GetFESpace()),
-     y_gf((ParFiniteElementSpace*) fes_.GetFESpace()) {}
+  : Operator(fes_.GetTrueVSize()),
+    fes(fes_) {
+  Setup(device_, quad_data_);
+}
+
+void OccaMassOperator::Setup(occa::device device_,
+                             QuadratureData *quad_data_) {
+  device = device_;
+
+  dim = fes.GetMesh()->Dimension();
+  elements = fes.GetMesh()->GetNE();
+
+  quad_data = quad_data_;
+  ess_tdofs_count = 0;
+
+  x_gf = (ParFiniteElementSpace*) fes.GetFESpace();
+  y_gf = (ParFiniteElementSpace*) fes.GetFESpace();
+}
 
 void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
   ess_tdofs_count = dofs.Size();
@@ -915,79 +919,14 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
     x_gf.Distribute(x);
   }
 
-  // Mult
-  {
-    Vector x2 = x_gf;
-    Vector y2;
-
-    // Are we working with the velocity or energy mass matrix?
-    const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
-    const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
-    const DenseMatrix &DQs = (fe_H1
-                              ? tensors1D->HQshape1D
-                              : tensors1D->LQshape1D);
-
-    const int ndof1D = DQs.Height();
-    const int nqp1D  = DQs.Width();
-
-    DenseMatrix DQ(ndof1D, nqp1D);
-    DenseMatrix QQ(nqp1D , nqp1D);
-
-    Vector xz(ndof1D * ndof1D);
-    Vector yz(ndof1D * ndof1D);
-
-    DenseMatrix X(xz.GetData(), ndof1D, ndof1D);
-    DenseMatrix Y(yz.GetData(), ndof1D, ndof1D);
-
-    Array<int> dofs;
-    double *qq = QQ.GetData();
-    const int nqp = nqp1D * nqp1D;
-
-    y2.SetSize(x2.Size());
-    y2 = 0.0;
-
-    for (int e = 0; e < elements; ++e) {
-      fes.GetFESpace()->GetElementDofs(e, dofs);
-      if (fe_H1) {
-        // Transfer from the mfem's H1 local numbering to the tensor structure
-        // numbering.
-        const Array<int> &dof_map = fe_H1->GetDofMap();
-        for (int j = 0; j < xz.Size(); j++) {
-          xz[j] = x2[dofs[dof_map[j]]];
-        }
-      }
-      else {
-        x2.GetSubVector(dofs, xz);
-      }
-
-      // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
-      // QQ_k1_k2 = DQs_i1_k1 DQ_i1_k2 -- contract in x direction.
-      mfem::Mult(X, DQs, DQ);
-      MultAtB(DQs, DQ, QQ);
-
-      // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-      double *d = quad_data->rhoDetJw.GetData() + e*nqp;
-      for (int q = 0; q < nqp; q++) {
-        qq[q] *= d[q];
-      }
-
-      // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
-      // Y_i1_i2  = DQ_i1_k2 DQs_i2_k2 -- contract in y direction.
-      mfem::Mult(DQs, QQ, DQ);
-      MultABt(DQ, DQs, Y);
-
-      if (fe_H1) {
-        const Array<int> &dof_map = fe_H1->GetDofMap();
-        for (int j = 0; j < yz.Size(); j++) {
-          y2[dofs[dof_map[j]]] += yz[j];
-        }
-      }
-      else {
-        y2.SetSubVector(dofs, yz);
-      }
-    }
-
-    y_gf = y2;
+  if (dim == 2) {
+    MultQuad(x, y);
+  }
+  else if (dim == 3) {
+    MultHex(x, y);
+  }
+  else {
+    MFEM_ABORT("Unsupported dimension");
   }
 
   fes.GetProlongationOperator()->MultTranspose(y_gf, y);
@@ -997,10 +936,693 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
   }
 }
 
+void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
+  Vector x2 = x_gf;
+  Vector y2;
+
+  // Are we working with the velocity or energy mass matrix?
+  const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
+  const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
+  const DenseMatrix &DQs = (fe_H1
+                            ? tensors1D->HQshape1D
+                            : tensors1D->LQshape1D);
+
+  const int ndof1D = DQs.Height();
+  const int nqp1D  = DQs.Width();
+
+  DenseMatrix DQ(ndof1D, nqp1D);
+  DenseMatrix QQ(nqp1D , nqp1D);
+
+  Vector xz(ndof1D * ndof1D);
+  Vector yz(ndof1D * ndof1D);
+
+  DenseMatrix X(xz.GetData(), ndof1D, ndof1D);
+  DenseMatrix Y(yz.GetData(), ndof1D, ndof1D);
+
+  Array<int> dofs;
+  double *qq = QQ.GetData();
+  const int nqp = nqp1D * nqp1D;
+
+  y2.SetSize(x2.Size());
+  y2 = 0.0;
+
+  for (int e = 0; e < elements; ++e) {
+    fes.GetFESpace()->GetElementDofs(e, dofs);
+    if (fe_H1) {
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < xz.Size(); j++) {
+        xz[j] = x2[dofs[dof_map[j]]];
+      }
+    }
+    else {
+      x2.GetSubVector(dofs, xz);
+    }
+
+    // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
+    // QQ_k1_k2 = DQs_i1_k1 DQ_i1_k2 -- contract in x direction.
+    mfem::Mult(X, DQs, DQ);
+    MultAtB(DQs, DQ, QQ);
+
+    // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
+    double *d = quad_data->rhoDetJw.GetData() + e*nqp;
+    for (int q = 0; q < nqp; q++) {
+      qq[q] *= d[q];
+    }
+
+    // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
+    // Y_i1_i2  = DQ_i1_k2 DQs_i2_k2 -- contract in y direction.
+    mfem::Mult(DQs, QQ, DQ);
+    MultABt(DQ, DQs, Y);
+
+    if (fe_H1) {
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < yz.Size(); j++) {
+        y2[dofs[dof_map[j]]] += yz[j];
+      }
+    }
+    else {
+      y2.SetSubVector(dofs, yz);
+    }
+  }
+
+  y_gf = y2;
+}
+
+void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
+  Vector x2 = x_gf;
+  Vector y2;
+
+  // Are we working with the velocity or energy mass matrix?
+  const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
+  const H1_HexahedronElement *fe_H1 = dynamic_cast<const H1_HexahedronElement*>(fe);
+  const DenseMatrix &DQs = (fe_H1
+                            ? tensors1D->HQshape1D
+                            : tensors1D->LQshape1D);
+
+  const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
+  DenseMatrix DD_Q(ndof1D * ndof1D, nqp1D);
+  DenseMatrix D_DQ(DD_Q.GetData(), ndof1D, ndof1D*nqp1D);
+  DenseMatrix Q_DQ(nqp1D, ndof1D*nqp1D);
+  DenseMatrix QQ_Q(nqp1D*nqp1D, nqp1D);
+  double *qqq = QQ_Q.GetData();
+  Vector xz(ndof1D * ndof1D * ndof1D), yz(ndof1D * ndof1D * ndof1D);
+  DenseMatrix X(xz.GetData(), ndof1D*ndof1D, ndof1D),
+    Y(yz.GetData(), ndof1D*ndof1D, ndof1D);
+  const int nqp = nqp1D * nqp1D * nqp1D;
+  Array<int> dofs;
+
+  y2.SetSize(x2.Size());
+  y2 = 0.0;
+
+  for (int e = 0; e < elements; e++) {
+    fes.GetFESpace()->GetElementDofs(e, dofs);
+    if (fe_H1) {
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < xz.Size(); j++) {
+        xz[j] = x2[dofs[dof_map[j]]];
+      }
+    }
+    else {
+      x2.GetSubVector(dofs, xz);
+    }
+
+    // DDQ_i1_i2_k3  = X_i1_i2_i3 DQs_i3_k3   -- contract in z direction.
+    // QDQ_k1_i2_k3  = DQs_i1_k1 DDQ_i1_i2_k3 -- contract in x direction.
+    // QQQ_k1_k2_k3  = QDQ_k1_i2_k3 DQs_i2_k2 -- contract in y direction.
+    // The last step does some reordering (it's not product of matrices).
+    mfem::Mult(X, DQs, DD_Q);
+    MultAtB(DQs, D_DQ, Q_DQ);
+    for (int k1 = 0; k1 < nqp1D; k1++) {
+      for (int k2 = 0; k2 < nqp1D; k2++) {
+        for (int k3 = 0; k3 < nqp1D; k3++) {
+          QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+          for (int i2 = 0; i2 < ndof1D; i2++) {
+            QQ_Q(k1 + nqp1D*k2, k3) +=
+              Q_DQ(k1, i2 + k3*ndof1D) * DQs(i2, k2);
+          }
+        }
+      }
+    }
+
+    // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
+    double *d = quad_data->rhoDetJw.GetData() + e*nqp;
+    for (int q = 0; q < nqp; q++) {
+      qqq[q] *= d[q];
+    }
+
+    // QDQ_k1_i2_k3 = QQQ_k1_k2_k3 DQs_i2_k2 -- contract in y direction.
+    // This first step does some reordering (it's not product of matrices).
+    // DDQ_i1_i2_k3 = DQs_i1_k1 QDQ_k1_i2_k3 -- contract in x direction.
+    // Y_i1_i2_i3   = DDQ_i1_i2_k3 DQs_i3_k3 -- contract in z direction.
+    for (int k1 = 0; k1 < nqp1D; k1++) {
+      for (int i2 = 0; i2 < ndof1D; i2++) {
+        for (int k3 = 0; k3 < nqp1D; k3++) {
+          Q_DQ(k1, i2 + ndof1D*k3) = 0.0;
+          for (int k2 = 0; k2 < nqp1D; k2++) {
+            Q_DQ(k1, i2 + ndof1D*k3) +=
+              QQ_Q(k1 + nqp1D*k2, k3) * DQs(i2, k2);
+          }
+        }
+      }
+    }
+    mfem::Mult(DQs, Q_DQ, D_DQ);
+    MultABt(DD_Q, DQs, Y);
+
+    if (fe_H1) {
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < yz.Size(); j++) {
+        y2[dofs[dof_map[j]]] += yz[j];
+      }
+    }
+    else {
+      y2.SetSubVector(dofs, yz);
+    }
+  }
+
+  y_gf = y2;
+}
+
 void OccaMassOperator::EliminateRHS(OccaVector &b) {
   if (ess_tdofs_count) {
     b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
   }
+}
+
+OccaForceOperator::OccaForceOperator(QuadratureData *quad_data_,
+                                     OccaFiniteElementSpace &h1fes_,
+                                     OccaFiniteElementSpace &l2fes_)
+  : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
+    h1fes(h1fes_),
+    l2fes(l2fes_) {
+  Setup(occa::getDevice(), quad_data_);
+}
+
+OccaForceOperator::OccaForceOperator(occa::device device_,
+                                     QuadratureData *quad_data_,
+                                     OccaFiniteElementSpace &h1fes_,
+                                     OccaFiniteElementSpace &l2fes_)
+  : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
+    h1fes(h1fes_),
+    l2fes(l2fes_) {
+  Setup(device_, quad_data_);
+}
+
+void OccaForceOperator::Setup(occa::device device_,
+                              QuadratureData *quad_data_) {
+  device = device_;
+
+  dim = h1fes.GetMesh()->Dimension();
+  elements = h1fes.GetMesh()->GetNE();
+
+  quad_data = quad_data_;
+}
+
+void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
+  if (dim == 2) {
+    MultQuad(vecL2, vecH1);
+  }
+  else if (dim == 3) {
+    MultHex(vecL2, vecH1);
+  }
+  else {
+    MFEM_ABORT("Unsupported dimension");
+  }
+}
+
+void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const {
+  if (dim == 2) {
+    MultTransposeQuad(vecH1, vecL2);
+  }
+  else if (dim == 3) {
+    MultTransposeHex(vecH1, vecL2);
+  }
+  else {
+    MFEM_ABORT("Unsupported dimension");
+  }
+}
+
+void OccaForceOperator::MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const {
+  Vector h_vecL2 = vecL2;
+  Vector h_vecH1;
+
+  const int nH1dof1D = tensors1D->HQshape1D.Height();
+  const int nL2dof1D = tensors1D->LQshape1D.Height();
+  const int nqp1D    = tensors1D->HQshape1D.Width();
+  const int nqp      =  nqp1D * nqp1D;
+  const int nH1dof   = nH1dof1D * nH1dof1D;
+
+  Array<int> h1dofs, l2dofs;
+  Vector e(nL2dof1D * nL2dof1D);
+
+  DenseMatrix E(e.GetData(), nL2dof1D, nL2dof1D);
+  DenseMatrix LQ(nL2dof1D, nqp1D);
+  DenseMatrix HQ(nH1dof1D, nqp1D);
+  DenseMatrix QQ(nqp1D, nqp1D);
+  DenseMatrix HHx(nH1dof1D, nH1dof1D);
+  DenseMatrix HHy(nH1dof1D, nH1dof1D);
+
+  // Quadrature data for a specific direction.
+  DenseMatrix QQd(nqp1D, nqp1D);
+  double *data_qd = QQd.GetData(), *data_q = QQ.GetData();
+
+  const H1_QuadrilateralElement *fe =
+    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFESpace()->GetFE(0));
+  const Array<int> &dof_map = fe->GetDofMap();
+
+  h_vecH1.SetSize(vecH1.Size());
+  h_vecH1 = 0.0;
+
+  for (int el = 0; el < elements; el++) {
+    // Note that the local numbering for L2 is the tensor numbering.
+    l2fes.GetFESpace()->GetElementDofs(el, l2dofs);
+    h_vecL2.GetSubVector(l2dofs, e);
+
+    // LQ_j2_k1 = E_j1_j2 LQs_j1_k1  -- contract in x direction.
+    // QQ_k1_k2 = LQ_j2_k1 LQs_j2_k2 -- contract in y direction.
+    MultAtB(E, tensors1D->LQshape1D, LQ);
+    MultAtB(LQ, tensors1D->LQshape1D, QQ);
+
+    // Iterate over the components (x and y) of the result.
+    for (int c = 0; c < 2; c++) {
+      // QQd_k1_k2 *= stress_k1_k2(c,0)  -- stress that scales d[v_c]_dx.
+      // HQ_i2_k1   = HQs_i2_k2 QQ_k1_k2 -- contract in y direction.
+      // HHx_i1_i2  = HQg_i1_k1 HQ_i2_k1 -- gradients in x direction.
+      double *d = quad_data->stressJinvT(c).GetData() + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        data_qd[q] = data_q[q] * d[q];
+      };
+      MultABt(tensors1D->HQshape1D, QQd, HQ);
+      MultABt(tensors1D->HQgrad1D, HQ, HHx);
+
+      // QQd_k1_k2 *= stress_k1_k2(c,1) -- stress that scales d[v_c]_dy.
+      // HQ_i2_k1  = HQg_i2_k2 QQ_k1_k2 -- gradients in y direction.
+      // HHy_i1_i2 = HQ_i1_k1 HQ_i2_k1  -- contract in x direction.
+      d = quad_data->stressJinvT(c).GetData() + 1*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        data_qd[q] = data_q[q] * d[q];
+      };
+      MultABt(tensors1D->HQgrad1D, QQd, HQ);
+      MultABt(tensors1D->HQshape1D, HQ, HHy);
+
+      // Set the c-component of the result.
+      h1fes.GetFESpace()->GetElementVDofs(el, h1dofs);
+      for (int i1 = 0; i1 < nH1dof1D; i1++) {
+        for (int i2 = 0; i2 < nH1dof1D; i2++) {
+          // Transfer from the mfem's H1 local numbering to the tensor
+          // structure numbering.
+          const int idx = i2 * nH1dof1D + i1;
+          h_vecH1[h1dofs[c*nH1dof + dof_map[idx]]] +=
+            HHx(i1, i2) + HHy(i1, i2);
+        }
+      }
+    }
+  }
+
+  vecH1 = h_vecH1;
+}
+
+void OccaForceOperator::MultHex(const OccaVector &vecL2, OccaVector &vecH1) const {
+  Vector h_vecL2 = vecL2;
+  Vector h_vecH1;
+
+  const int nH1dof1D = tensors1D->HQshape1D.Height();
+  const int nL2dof1D = tensors1D->LQshape1D.Height();
+  const int nqp1D    = tensors1D->HQshape1D.Width();
+  const int nqp      = nqp1D * nqp1D * nqp1D;
+  const int nH1dof   = nH1dof1D * nH1dof1D * nH1dof1D;
+
+  Array<int> h1dofs, l2dofs;
+
+  Vector e(nL2dof1D * nL2dof1D * nL2dof1D);
+  DenseMatrix E(e.GetData(), nL2dof1D*nL2dof1D, nL2dof1D);
+
+  DenseMatrix HH_Q(nH1dof1D * nH1dof1D, nqp1D);
+  DenseMatrix H_HQ(HH_Q.GetData(), nH1dof1D, nH1dof1D*nqp1D);
+  DenseMatrix Q_HQ(nqp1D, nH1dof1D*nqp1D);
+
+  DenseMatrix LL_Q(nL2dof1D * nL2dof1D, nqp1D);
+  DenseMatrix L_LQ(LL_Q.GetData(), nL2dof1D, nL2dof1D*nqp1D);
+  DenseMatrix Q_LQ(nqp1D, nL2dof1D*nqp1D);
+
+  DenseMatrix QQ_Q(nqp1D * nqp1D, nqp1D);
+  DenseMatrix QQ_Qc(nqp1D * nqp1D, nqp1D);
+
+  double *qqq = QQ_Q.GetData();
+  double *qqqc = QQ_Qc.GetData();
+
+  DenseMatrix HHHx(nH1dof1D * nH1dof1D, nH1dof1D);
+  DenseMatrix HHHy(nH1dof1D * nH1dof1D, nH1dof1D);
+  DenseMatrix HHHz(nH1dof1D * nH1dof1D, nH1dof1D);
+
+  const H1_HexahedronElement *fe =
+    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFESpace()->GetFE(0));
+  const Array<int> &dof_map = fe->GetDofMap();
+
+  h_vecH1.SetSize(vecH1.Size());
+  h_vecH1 = 0.0;
+
+  for (int el = 0; el < elements; el++) {
+    // Note that the local numbering for L2 is the tensor numbering.
+    l2fes.GetFESpace()->GetElementVDofs(el, l2dofs);
+    h_vecL2.GetSubVector(l2dofs, e);
+
+    // LLQ_j1_j2_k3  = E_j1_j2_j3 LQs_j3_k3   -- contract in z direction.
+    // QLQ_k1_j2_k3  = LQs_j1_k1 LLQ_j1_j2_k3 -- contract in x direction.
+    // QQQ_k1_k2_k3  = QLQ_k1_j2_k3 LQs_j2_k2 -- contract in y direction.
+    // The last step does some reordering (it's not product of matrices).
+    mfem::Mult(E, tensors1D->LQshape1D, LL_Q);
+    MultAtB(tensors1D->LQshape1D, L_LQ, Q_LQ);
+    for (int k1 = 0; k1 < nqp1D; k1++) {
+      for (int k2 = 0; k2 < nqp1D; k2++) {
+        for (int k3 = 0; k3 < nqp1D; k3++) {
+          QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+          for (int j2 = 0; j2 < nL2dof1D; j2++) {
+            QQ_Q(k1 + nqp1D*k2, k3) +=
+              Q_LQ(k1, j2 + k3*nL2dof1D) * tensors1D->LQshape1D(j2, k2);
+          }
+        }
+      }
+    }
+
+    // Iterate over the components (x, y, z) of the result.
+    for (int c = 0; c < 3; c++) {
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
+      double *d = quad_data->stressJinvT(c).GetData() + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] = qqq[q] * d[q];
+      };
+
+      // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQs_i2_k2 -- contract  in y direction.
+      // This first step does some reordering (it's not product of matrices).
+      // HHQ_i1_i2_k3  = HQg_i1_k1 QHQ_k1_i2_k3  -- gradients in x direction.
+      // HHHx_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- contract  in z direction.
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int i2 = 0; i2 < nH1dof1D; i2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            Q_HQ(k1, i2 + nH1dof1D*k3) = 0.0;
+            for (int k2 = 0; k2 < nqp1D; k2++) {
+              Q_HQ(k1, i2 + nH1dof1D*k3) +=
+                QQ_Qc(k1 + nqp1D*k2, k3) * tensors1D->HQshape1D(i2, k2);
+            }
+          }
+        }
+      }
+      mfem::Mult(tensors1D->HQgrad1D, Q_HQ, H_HQ);
+      MultABt(HH_Q, tensors1D->HQshape1D, HHHx);
+
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
+      d = quad_data->stressJinvT(c).GetData() + 1*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] = qqq[q] * d[q];
+      };
+
+      // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- gradients in y direction.
+      // This first step does some reordering (it's not product of matrices).
+      // HHQ_i1_i2_k3  = HQs_i1_k1 QHQ_k1_i2_k3  -- contract  in x direction.
+      // HHHy_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- contract  in z direction.
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int i2 = 0; i2 < nH1dof1D; i2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            Q_HQ(k1, i2 + nH1dof1D*k3) = 0.0;
+            for (int k2 = 0; k2 < nqp1D; k2++) {
+              Q_HQ(k1, i2 + nH1dof1D*k3) +=
+                QQ_Qc(k1 + nqp1D*k2, k3) * tensors1D->HQgrad1D(i2, k2);
+            }
+          }
+        }
+      }
+      mfem::Mult(tensors1D->HQshape1D, Q_HQ, H_HQ);
+      MultABt(HH_Q, tensors1D->HQshape1D, HHHy);
+
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
+      d = quad_data->stressJinvT(c).GetData() + 2*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] = qqq[q] * d[q];
+      };
+
+      // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- contract  in y direction.
+      // This first step does some reordering (it's not product of matrices).
+      // HHQ_i1_i2_k3  = HQs_i1_k1 QHQ_k1_i2_k3  -- contract  in x direction.
+      // HHHz_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- gradients in z direction.
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int i2 = 0; i2 < nH1dof1D; i2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            Q_HQ(k1, i2 + nH1dof1D*k3) = 0.0;
+            for (int k2 = 0; k2 < nqp1D; k2++) {
+              Q_HQ(k1, i2 + nH1dof1D*k3) +=
+                QQ_Qc(k1 + nqp1D*k2, k3) * tensors1D->HQshape1D(i2, k2);
+            }
+          }
+        }
+      }
+      mfem::Mult(tensors1D->HQshape1D, Q_HQ, H_HQ);
+      MultABt(HH_Q, tensors1D->HQgrad1D, HHHz);
+
+      // Set the c-component of the result.
+      h1fes.GetFESpace()->GetElementVDofs(el, h1dofs);
+      for (int i1 = 0; i1 < nH1dof1D; i1++) {
+        for (int i2 = 0; i2 < nH1dof1D; i2++) {
+          for (int i3 = 0; i3 < nH1dof1D; i3++) {
+            // Transfer from the mfem's H1 local numbering to the tensor
+            // structure numbering.
+            const int idx = i3*nH1dof1D*nH1dof1D + i2*nH1dof1D + i1;
+            h_vecH1[h1dofs[c*nH1dof + dof_map[idx]]] +=
+              HHHx(i1 + i2*nH1dof1D, i3) +
+              HHHy(i1 + i2*nH1dof1D, i3) +
+              HHHz(i1 + i2*nH1dof1D, i3);
+          }
+        }
+      }
+    }
+  }
+
+  vecH1 = h_vecH1;
+}
+
+void OccaForceOperator::MultTransposeQuad(const OccaVector &vecH1, OccaVector &vecL2) const {
+  Vector h_vecH1 = vecH1;
+  Vector h_vecL2;
+
+  const int nH1dof1D = tensors1D->HQshape1D.Height();
+  const int nL2dof1D = tensors1D->LQshape1D.Height();
+  const int nqp1D    = tensors1D->HQshape1D.Width();
+  const int nqp      = nqp1D * nqp1D;
+  const int nH1dof   = nH1dof1D * nH1dof1D;
+
+  Array<int> h1dofs, l2dofs;
+
+  Vector v(nH1dof * 2), e(nL2dof1D * nL2dof1D);
+  DenseMatrix V, E(e.GetData(), nL2dof1D, nL2dof1D);
+
+  DenseMatrix HQ(nH1dof1D, nqp1D);
+  DenseMatrix LQ(nL2dof1D, nqp1D);
+  DenseMatrix QQc(nqp1D, nqp1D);
+  DenseMatrix QQ(nqp1D, nqp1D);
+  double *qqc = QQc.GetData();
+
+  const H1_QuadrilateralElement *fe =
+    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFESpace()->GetFE(0));
+  const Array<int> &dof_map = fe->GetDofMap();
+
+  h_vecL2.SetSize(vecL2.Size());
+
+  for (int el = 0; el < elements; el++) {
+    h1fes.GetFESpace()->GetElementVDofs(el, h1dofs);
+
+    // Form (stress:grad_v) at all quadrature points.
+    QQ = 0.0;
+    for (int c = 0; c < 2; c++) {
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      for (int j = 0; j < nH1dof; j++) {
+        v[c*nH1dof + j] = h_vecH1[h1dofs[c*nH1dof + dof_map[j]]];
+      }
+      // Connect to [v_c], i.e., the c-component of v.
+      V.UseExternalData(v.GetData() + c*nH1dof, nH1dof1D, nH1dof1D);
+
+      // HQ_i2_k1   = V_i1_i2 HQg_i1_k1  -- gradients in x direction.
+      // QQc_k1_k2  = HQ_i2_k1 HQs_i2_k2 -- contract  in y direction.
+      // QQc_k1_k2 *= stress_k1_k2(c,0)  -- stress that scales d[v_c]_dx.
+      MultAtB(V, tensors1D->HQgrad1D, HQ);
+      MultAtB(HQ, tensors1D->HQshape1D, QQc);
+      double *d = quad_data->stressJinvT(c).GetData() + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqc[q] *= d[q];
+      }
+      // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
+      QQ += QQc;
+
+      // HQ_i2_k1   = V_i1_i2 HQs_i1_k1  -- contract  in x direction.
+      // QQc_k1_k2  = HQ_i2_k1 HQg_i2_k2 -- gradients in y direction.
+      // QQc_k1_k2 *= stress_k1_k2(c,1)  -- stress that scales d[v_c]_dy.
+      MultAtB(V, tensors1D->HQshape1D, HQ);
+      MultAtB(HQ, tensors1D->HQgrad1D, QQc);
+      d = quad_data->stressJinvT(c).GetData() + 1*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqc[q] *= d[q];
+      }
+      // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
+      QQ += QQc;
+    }
+
+    // LQ_j1_k2 = LQs_j1_k1 QQ_k1_k2 -- contract in x direction.
+    // E_j1_j2  = LQ_j1_k2 LQs_j2_k2 -- contract in y direction.
+    mfem::Mult(tensors1D->LQshape1D, QQ, LQ);
+    MultABt(LQ, tensors1D->LQshape1D, E);
+
+    l2fes.GetFESpace()->GetElementDofs(el, l2dofs);
+    h_vecL2.SetSubVector(l2dofs, e);
+  }
+
+  vecL2 = h_vecL2;
+}
+
+void OccaForceOperator::MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const {
+  Vector h_vecH1 = vecH1;
+  Vector h_vecL2;
+
+  const int nH1dof1D = tensors1D->HQshape1D.Height(),
+    nL2dof1D = tensors1D->LQshape1D.Height(),
+    nqp1D    = tensors1D->HQshape1D.Width(),
+    nqp      = nqp1D * nqp1D * nqp1D,
+    nH1dof   = nH1dof1D * nH1dof1D * nH1dof1D;
+  Array<int> h1dofs, l2dofs;
+
+  Vector v(nH1dof * 3), e(nL2dof1D * nL2dof1D * nL2dof1D);
+  DenseMatrix V, E(e.GetData(), nL2dof1D * nL2dof1D, nL2dof1D);
+
+  DenseMatrix HH_Q(nH1dof1D * nH1dof1D, nqp1D),
+    H_HQ(HH_Q.GetData(), nH1dof1D, nH1dof1D * nqp1D),
+    Q_HQ(nqp1D, nH1dof1D*nqp1D);
+  DenseMatrix LL_Q(nL2dof1D * nL2dof1D, nqp1D),
+    L_LQ(LL_Q.GetData(), nL2dof1D, nL2dof1D * nqp1D),
+    Q_LQ(nqp1D, nL2dof1D*nqp1D);
+  DenseMatrix QQ_Q(nqp1D * nqp1D, nqp1D),  QQ_Qc(nqp1D * nqp1D, nqp1D);
+  double *qqqc = QQ_Qc.GetData();
+
+  const H1_HexahedronElement *fe =
+    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFESpace()->GetFE(0));
+  const Array<int> &dof_map = fe->GetDofMap();
+
+  h_vecL2.SetSize(vecL2.Size());
+
+  for (int el = 0; el < elements; el++) {
+    h1fes.GetFESpace()->GetElementVDofs(el, h1dofs);
+
+    // Form (stress:grad_v) at all quadrature points.
+    QQ_Q = 0.0;
+    for (int c = 0; c < 3; c++) {
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      for (int j = 0; j < nH1dof; j++) {
+        v[c*nH1dof + j] = h_vecH1[h1dofs[c*nH1dof + dof_map[j]]];
+      }
+      // Connect to [v_c], i.e., the c-component of v.
+      V.UseExternalData(v.GetData() + c*nH1dof, nH1dof1D*nH1dof1D, nH1dof1D);
+
+      // HHQ_i1_i2_k3  = V_i1_i2_i3 HQs_i3_k3   -- contract  in z direction.
+      // QHQ_k1_i2_k3  = HQg_i1_k1 HHQ_i1_i2_k3 -- gradients in x direction.
+      // QQQc_k1_k2_k3 = QHQ_k1_i2_k3 HQs_i2_k2 -- contract  in y direction.
+      // The last step does some reordering (it's not product of matrices).
+      mfem::Mult(V, tensors1D->HQshape1D, HH_Q);
+      MultAtB(tensors1D->HQgrad1D, H_HQ, Q_HQ);
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int k2 = 0; k2 < nqp1D; k2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            QQ_Qc(k1 + nqp1D*k2, k3) = 0.0;
+            for (int i2 = 0; i2 < nH1dof1D; i2++) {
+              QQ_Qc(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                tensors1D->HQshape1D(i2, k2);
+            }
+          }
+        }
+      }
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
+      double *d = quad_data->stressJinvT(c).GetData() + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] *= d[q];
+      };
+      // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
+      QQ_Q += QQ_Qc;
+
+      // HHQ_i1_i2_k3  = V_i1_i2_i3 HQs_i3_k3   -- contract  in z direction.
+      // QHQ_k1_i2_k3  = HQs_i1_k1 HHQ_i1_i2_k3 -- contract  in x direction.
+      // QQQc_k1_k2_k3 = QHQ_k1_i2_k3 HQg_i2_k2 -- gradients in y direction.
+      // The last step does some reordering (it's not product of matrices).
+      mfem::Mult(V, tensors1D->HQshape1D, HH_Q);
+      MultAtB(tensors1D->HQshape1D, H_HQ, Q_HQ);
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int k2 = 0; k2 < nqp1D; k2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            QQ_Qc(k1 + nqp1D*k2, k3) = 0.0;
+            for (int i2 = 0; i2 < nH1dof1D; i2++) {
+              QQ_Qc(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                tensors1D->HQgrad1D(i2, k2);
+            }
+          }
+        }
+      }
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
+      d = quad_data->stressJinvT(c).GetData() + 1*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] *= d[q];
+      };
+      // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
+      QQ_Q += QQ_Qc;
+
+      // HHQ_i1_i2_k3  = V_i1_i2_i3 HQg_i3_k3   -- gradients in z direction.
+      // QHQ_k1_i2_k3  = HQs_i1_k1 HHQ_i1_i2_k3 -- contract  in x direction.
+      // QQQc_k1_k2_k3 = QHQ_k1_i2_k3 HQs_i2_k2 -- contract  in y direction.
+      // The last step does some reordering (it's not product of matrices).
+      mfem::Mult(V, tensors1D->HQgrad1D, HH_Q);
+      MultAtB(tensors1D->HQshape1D, H_HQ, Q_HQ);
+      for (int k1 = 0; k1 < nqp1D; k1++) {
+        for (int k2 = 0; k2 < nqp1D; k2++) {
+          for (int k3 = 0; k3 < nqp1D; k3++) {
+            QQ_Qc(k1 + nqp1D*k2, k3) = 0.0;
+            for (int i2 = 0; i2 < nH1dof1D; i2++) {
+              QQ_Qc(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                tensors1D->HQshape1D(i2, k2);
+            }
+          }
+        }
+      }
+      // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
+      d = quad_data->stressJinvT(c).GetData() + 2*elements*nqp + el*nqp;
+      for (int q = 0; q < nqp; q++) {
+        qqqc[q] *= d[q];
+      };
+      // Add the (stress(c,2) * d[v_c]_dz) part of (stress:grad_v).
+      QQ_Q += QQ_Qc;
+    }
+
+    // QLQ_k1_j2_k3 = QQQ_k1_k2_k3 LQs_j2_k2 -- contract in y direction.
+    // This first step does some reordering (it's not product of matrices).
+    // LLQ_j1_j2_k3 = LQs_j1_k1 QLQ_k1_j2_k3 -- contract in x direction.
+    // E_j1_j2_i3   = LLQ_j1_j2_k3 LQs_j3_k3 -- contract in z direction.
+    for (int k1 = 0; k1 < nqp1D; k1++) {
+      for (int j2 = 0; j2 < nL2dof1D; j2++) {
+        for (int k3 = 0; k3 < nqp1D; k3++) {
+          Q_LQ(k1, j2 + nL2dof1D*k3) = 0.0;
+          for (int k2 = 0; k2 < nqp1D; k2++) {
+            Q_LQ(k1, j2 + nL2dof1D*k3) +=
+              QQ_Q(k1 + nqp1D*k2, k3) * tensors1D->LQshape1D(j2, k2);
+          }
+        }
+      }
+    }
+    mfem::Mult(tensors1D->LQshape1D, Q_LQ, L_LQ);
+    MultABt(LL_Q, tensors1D->LQshape1D, E);
+
+    l2fes.GetFESpace()->GetElementDofs(el, l2dofs);
+    h_vecL2.SetSubVector(l2dofs, e);
+  }
+
+  vecL2 = h_vecL2;
 }
 
 } // namespace hydrodynamics
