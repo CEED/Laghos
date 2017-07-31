@@ -42,6 +42,10 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
                                                BasisType::GaussLegendre);
    Poly_1D::Basis &basisH1 = poly1d.GetBasis(H1order,
                                              BasisType::GaussLobatto);
+   Poly_1D::Basis &basisL2 = poly1d.GetBasis(L2order,
+                                             BasisType::Positive,
+                                             Poly_1D::Positive);
+
    Vector col, grad_col;
    for (int q = 0; q < nqp1D; q++)
    {
@@ -52,7 +56,7 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
    for (int q = 0; q < nqp1D; q++)
    {
       LQshape1D.GetColumnReference(q, col);
-      poly1d.CalcBernstein(L2order, quad1D_pos[q], col);
+      basisL2.Eval(quad1D_pos[q], col);
    }
 }
 
@@ -149,7 +153,7 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
   Vector y2;
 
   // Are we working with the velocity or energy mass matrix?
-  const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
+  const FiniteElement *fe = fes.GetFE(0);
   const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
   const DenseMatrix &DQs = (fe_H1
                             ? tensors1D->HQshape1D
@@ -223,7 +227,7 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
   Vector y2;
 
   // Are we working with the velocity or energy mass matrix?
-  const FiniteElement *fe = fes.GetFESpace()->GetFE(0);
+  const FiniteElement *fe = fes.GetFE(0);
   const H1_HexahedronElement *fe_H1 = dynamic_cast<const H1_HexahedronElement*>(fe);
   const DenseMatrix &DQs = (fe_H1
                             ? tensors1D->HQshape1D
@@ -398,7 +402,7 @@ void OccaForceOperator::MultQuad(const OccaVector &vecL2, OccaVector &vecH1) con
   double *data_qd = QQd.GetData(), *data_q = QQ.GetData();
 
   const H1_QuadrilateralElement *fe =
-    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFESpace()->GetFE(0));
+    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFE(0));
   const Array<int> &dof_map = fe->GetDofMap();
 
   h_vecH1.SetSize(vecH1.Size());
@@ -487,7 +491,7 @@ void OccaForceOperator::MultHex(const OccaVector &vecL2, OccaVector &vecH1) cons
   DenseMatrix HHHz(nH1dof1D * nH1dof1D, nH1dof1D);
 
   const H1_HexahedronElement *fe =
-    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFESpace()->GetFE(0));
+    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFE(0));
   const Array<int> &dof_map = fe->GetDofMap();
 
   h_vecH1.SetSize(vecH1.Size());
@@ -633,7 +637,7 @@ void OccaForceOperator::MultTransposeQuad(const OccaVector &vecH1, OccaVector &v
   double *qqc = QQc.GetData();
 
   const H1_QuadrilateralElement *fe =
-    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFESpace()->GetFE(0));
+    dynamic_cast<const H1_QuadrilateralElement *>(h1fes.GetFE(0));
   const Array<int> &dof_map = fe->GetDofMap();
 
   h_vecL2.SetSize(vecL2.Size());
@@ -713,7 +717,7 @@ void OccaForceOperator::MultTransposeHex(const OccaVector &vecH1, OccaVector &ve
   double *qqqc = QQ_Qc.GetData();
 
   const H1_HexahedronElement *fe =
-    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFESpace()->GetFE(0));
+    dynamic_cast<const H1_HexahedronElement *>(h1fes.GetFE(0));
   const Array<int> &dof_map = fe->GetDofMap();
 
   h_vecL2.SetSize(vecL2.Size());

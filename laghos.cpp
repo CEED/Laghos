@@ -44,6 +44,25 @@
 //    p = 1  --> Taylor-Green vortex (smooth problem).
 //    p = 2  --> Sedov blast.
 
+//  TODO
+//    - Tensorize Pos elements properly
+//    - Mass
+//        - Mult
+//            - MultQuad
+//            - MultHex
+//    - Force
+//        - Mult
+//            - MultQuad
+//            - MultHex
+//        - MultTranspose
+//            - MultTransposeQuad
+//            - MultTransposeHex
+//    - UpdateQuadratureData
+//    - OccaMesh for setting nodes quickly
+//    - OccaLinearForm
+//        - DomainLFIntegrator
+//    - OccaGridFunction::ProjectCoefficient
+//    - ComputeDensity (for vis)
 
 #include "laghos_solver.hpp"
 #include <memory>
