@@ -113,7 +113,7 @@ protected:
       }
    }
 
-   void UpdateQuadratureData(const Vector &S) const;
+   void UpdateQuadratureData(const OccaVector &S) const;
 
 public:
    LagrangianHydroOperator(Problem problem_,
@@ -127,10 +127,9 @@ public:
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const OccaVector &S, OccaVector &dS_dt) const;
-   virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
-   double GetTimeStepEstimate(const Vector &S) const;
+   double GetTimeStepEstimate(const OccaVector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { quad_data_is_current = false; }
 

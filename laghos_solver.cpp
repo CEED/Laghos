@@ -189,14 +189,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
 }
 
 void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
-  Vector h_S = S;
-  Vector h_dS_dt = dS_dt;
-  Mult(h_S, h_dS_dt);
-  dS_dt = h_dS_dt;
-}
-
-void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
-{
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -209,17 +201,18 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // - Position
    // - Velocity
    // - Specific Internal Energy
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1FESpace, (Vector&) S, 0);
-   v.MakeRef(&H1FESpace, (Vector&) S, Vsize_h1);
-   e.MakeRef(&L2FESpace, (Vector&) S, Vsize_h1*2);
+   OccaVector x = S.GetRange(0         , Vsize_h1);
+   OccaVector v = S.GetRange(Vsize_h1  , Vsize_h1);
+   OccaVector e = S.GetRange(2*Vsize_h1, Vsize_l2);
 
-   ParGridFunction dx, dv, de;
-   dx.MakeRef(&H1FESpace, dS_dt, 0);
-   dv.MakeRef(&H1FESpace, dS_dt, Vsize_h1);
-   de.MakeRef(&L2FESpace, dS_dt, Vsize_h1*2);
+   OccaVector dx = dS_dt.GetRange(0         , Vsize_h1);
+   OccaVector dv = dS_dt.GetRange(Vsize_h1  , Vsize_h1);
+   OccaVector de = dS_dt.GetRange(2*Vsize_h1, Vsize_l2);
 
-   o_H1FESpace.GetMesh()->NewNodes(x, false);
+   Vector h_x = x;
+   ParGridFunction h_px(&H1FESpace, h_x.GetData());
+
+   o_H1FESpace.GetMesh()->NewNodes(h_px, false);
    UpdateQuadratureData(S);
 
    // Set dx_dt = v (explicit).
@@ -238,13 +231,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    // Partial assembly solve for each velocity component.
    OccaMassOperator VMass(&quad_data, o_H1compFESpace);
-   const int size = H1compFESpace.GetVSize();
+   const int size = o_H1compFESpace.GetVSize();
    for (int c = 0; c < dim; c++)
    {
-      Vector dv_c(dv.GetData() + c*size, size);
-
-      OccaVector o_rhs_c = rhs.GetRange(c*size, size);
-      OccaVector o_dv_c(dv_c);
+      OccaVector rhs_c = rhs.GetRange(c*size, size);
+      OccaVector dv_c  = dv.GetRange(c*size, size);
 
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
       // we must enforce v_x/y/z = 0 for the velocity components.
@@ -252,9 +243,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       ess_bdr = 0;
       ess_bdr[c] = 1;
 
-      o_dv_c = 0.0;
-      o_H1compFESpace.GetProlongationOperator()->MultTranspose(o_rhs_c, B);
-      o_H1compFESpace.GetRestrictionOperator()->Mult(o_dv_c, X);
+      dv_c = 0.0;
+      o_H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
+      o_H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
 
       // True dofs as if there's only one component.
       Array<int> c_tdofs;
@@ -269,8 +260,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg_rel_tol,
          cg_abs_tol);
 
-      o_H1compFESpace.GetProlongationOperator()->Mult(X, o_dv_c);
-      dv_c = o_dv_c;
+      o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
 
    // Solve for energy, assemble the energy source if such exists.
@@ -286,35 +276,33 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
 
    OccaVector o_forceRHS(Vsize_l2);
-   OccaVector o_v = v;
-   Force.MultTranspose(o_v, o_forceRHS);
+   Force.MultTranspose(v, o_forceRHS);
 
    if (e_source) {
      o_forceRHS += *e_source;
    }
 
    OccaMassOperator EMass(&quad_data, o_L2FESpace);
-   OccaVector o_de = de;
 
    CG(L2FESpace.GetParMesh()->GetComm(),
-      EMass, o_forceRHS, o_de,
+      EMass, o_forceRHS, de,
       cg_print_level,
       cg_max_iters,
       cg_rel_tol,
       cg_abs_tol);
-   de = o_de;
 
    delete e_source;
 
    quad_data_is_current = false;
 }
 
-double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
+double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const
 {
-   Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   o_H1FESpace.GetMesh()->NewNodes(x, false);
+   OccaVector x = S.GetRange(0, H1FESpace.GetVSize());
+   Vector h_x = x;
+   ParGridFunction h_px(&H1FESpace, h_x.GetData());
+   o_H1FESpace.GetMesh()->NewNodes(h_px, false);
+
    UpdateQuadratureData(S);
 
    double glob_dt_est;
@@ -357,14 +345,19 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    delete tensors1D;
 }
 
-void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
+void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const
 {
-   if (quad_data_is_current) { return; }
+   if (quad_data_is_current) {
+     return;
+   }
 
+   Vector h_S = S;
+
+   const int dim = o_H1FESpace.GetMesh()->Dimension();
    const int nqp = integ_rule.GetNPoints();
 
    ParGridFunction e, v;
-   Vector* sptr = (Vector*) &S;
+   Vector* sptr = (Vector*) &h_S;
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
    Vector e_vals;
