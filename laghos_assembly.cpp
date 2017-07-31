@@ -39,9 +39,9 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
    // - Bernstein discontinuous thermodynamic basis.
 
    const double *quad1D_pos = poly1d.GetPoints(nqp1D - 1,
-                                               Quadrature1D::GaussLegendre);
+                                               BasisType::GaussLegendre);
    Poly_1D::Basis &basisH1 = poly1d.GetBasis(H1order,
-                                             Quadrature1D::GaussLobatto);
+                                             BasisType::GaussLobatto);
    Vector col, grad_col;
    for (int q = 0; q < nqp1D; q++)
    {
@@ -100,8 +100,8 @@ void OccaMassOperator::Setup(occa::device device_,
   quad_data = quad_data_;
   ess_tdofs_count = 0;
 
-  x_gf = (ParFiniteElementSpace*) fes.GetFESpace();
-  y_gf = (ParFiniteElementSpace*) fes.GetFESpace();
+  x_gf = ParGridFunction((ParFiniteElementSpace*) fes.GetFESpace());
+  y_gf = ParGridFunction((ParFiniteElementSpace*) fes.GetFESpace());
 }
 
 void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
