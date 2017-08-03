@@ -69,7 +69,7 @@ protected:
 
    Array<int> &ess_tdofs;
 
-   const int dim, zones_cnt, l2dofs_cnt, h1dofs_cnt;
+   const int dim, elements, l2dofs_cnt, h1dofs_cnt;
    const double cfl, gamma;
    const bool use_viscosity;
 

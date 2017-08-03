@@ -101,32 +101,30 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                    1),
      ess_tdofs(ess_tdofs_),
      dim(H1FESpace.GetMesh()->Dimension()),
-     zones_cnt(H1FESpace.GetMesh()->GetNE()),
+     elements(H1FESpace.GetMesh()->GetNE()),
      l2dofs_cnt(L2FESpace.GetFE(0)->GetDof()),
      h1dofs_cnt(H1FESpace.GetFE(0)->GetDof()),
      cfl(cfl_),
      gamma(gamma_),
      use_viscosity(use_viscosity_),
      Mv(&H1FESpace),
-     Me_inv(l2dofs_cnt, l2dofs_cnt, zones_cnt),
+     Me_inv(l2dofs_cnt, l2dofs_cnt, elements),
      integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
                              3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
-     quad_data(dim, zones_cnt, integ_rule.GetNPoints()),
+     quad_data(dim, elements, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     Force(&quad_data, o_H1FESpace, o_L2FESpace)
-{
+     Force(&quad_data, o_H1FESpace, o_L2FESpace) {
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
    DenseMatrix Me(l2dofs_cnt);
    DenseMatrixInverse inv(&Me);
    MassIntegrator mi(rho_coeff, &integ_rule);
-   for (int i = 0; i < nzones; i++)
-   {
-      mi.AssembleElementMatrix(*L2FESpace.GetFE(i),
-                               *L2FESpace.GetElementTransformation(i), Me);
+   for (int el = 0; el < elements; ++el) {
+      mi.AssembleElementMatrix(*L2FESpace.GetFE(el),
+                               *L2FESpace.GetElementTransformation(el), Me);
       inv.Factor();
-      inv.GetInverseMatrix(Me_inv(i));
+      inv.GetInverseMatrix(Me_inv(el));
    }
 
    // Standard assembly for the velocity mass matrix.
@@ -137,46 +135,47 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
    Vector rho_vals(nqp);
-   for (int i = 0; i < nzones; i++)
-   {
-      rho0.GetValues(i, integ_rule, rho_vals);
-      ElementTransformation *T = H1FESpace.GetElementTransformation(i);
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = integ_rule.IntPoint(q);
-         T->SetIntPoint(&ip);
+   for (int el = 0; el < elements; el++) {
+     rho0.GetValues(el, integ_rule, rho_vals);
+     ElementTransformation *T = H1FESpace.GetElementTransformation(el);
+     for (int q = 0; q < nqp; q++) {
+       const IntegrationPoint &ip = integ_rule.IntPoint(q);
+       T->SetIntPoint(&ip);
 
-         DenseMatrixInverse Jinv(T->Jacobian());
-         Jinv.GetInverseMatrix(quad_data.Jac0inv(i*nqp + q));
+       DenseMatrixInverse Jinv(T->Jacobian());
+       Jinv.GetInverseMatrix(quad_data.Jac0inv(el*nqp + q));
 
-         const double rho0DetJ0 = T->Weight() * rho_vals(q);
-         quad_data.rho0DetJ0w(i*nqp + q) = rho0DetJ0 *
-                                           integ_rule.IntPoint(q).weight;
-      }
+       const double rho0DetJ0 = T->Weight() * rho_vals(q);
+       quad_data.rhoDetJw(el*nqp + q)  = (rho0DetJ0 *
+                                          integ_rule.IntPoint(q).weight);
+     }
    }
 
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
    int glob_z_cnt;
    ParMesh *pm = H1FESpace.GetParMesh();
-   for (int i = 0; i < nzones; i++) { loc_area += pm->GetElementVolume(i); }
+   for (int el = 0; el < elements; el++) {
+     loc_area += pm->GetElementVolume(el);
+   }
    MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
-   MPI_Allreduce(&nzones, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
-   switch (pm->GetElementBaseGeometry(0))
-   {
-      case Geometry::SQUARE:
-         quad_data.h0 = sqrt(glob_area / glob_z_cnt); break;
-      case Geometry::TRIANGLE:
-         quad_data.h0 = sqrt(2.0 * glob_area / glob_z_cnt); break;
-      case Geometry::CUBE:
-         quad_data.h0 = pow(glob_area / glob_z_cnt, 1.0/3.0); break;
-      case Geometry::TETRAHEDRON:
-         quad_data.h0 = pow(6.0 * glob_area / glob_z_cnt, 1.0/3.0); break;
-      default: MFEM_ABORT("Unknown zone type!");
+   MPI_Allreduce(&elements, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
+   switch (pm->GetElementBaseGeometry(0)) {
+   case Geometry::SQUARE:
+     quad_data.h0 = sqrt(glob_area / glob_z_cnt);
+     break;
+   case Geometry::TRIANGLE:
+     quad_data.h0 = sqrt(2.0 * glob_area / glob_z_cnt);
+     break;
+   case Geometry::CUBE:
+     quad_data.h0 = pow(glob_area / glob_z_cnt, 1.0/3.0);
+     break;
+   case Geometry::TETRAHEDRON:
+     quad_data.h0 = pow(6.0 * glob_area / glob_z_cnt, 1.0/3.0);
+     break;
+   default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
-
-   // Make a dummy assembly to figure out the sparsity.
 
    tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                              L2FESpace.GetFE(0)->GetOrder(),
@@ -232,8 +231,7 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    // Partial assembly solve for each velocity component.
    OccaMassOperator VMass(&quad_data, o_H1compFESpace);
    const int size = o_H1compFESpace.GetVSize();
-   for (int c = 0; c < dim; c++)
-   {
+   for (int c = 0; c < dim; c++) {
       OccaVector rhs_c = rhs.GetRange(c*size, size);
       OccaVector dv_c  = dv.GetRange(c*size, size);
 
@@ -266,8 +264,7 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
    if ((problem == vortex) &&
-       (dim == 2))
-   {
+       (dim == 2)) {
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
@@ -296,8 +293,7 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    quad_data_is_current = false;
 }
 
-double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const
-{
+double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const {
    OccaVector x = S.GetRange(0, H1FESpace.GetVSize());
    Vector h_x = x;
    ParGridFunction h_px(&H1FESpace, h_x.GetData());
@@ -311,33 +307,30 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const
    return glob_dt_est;
 }
 
-void LagrangianHydroOperator::ResetTimeStepEstimate() const
-{
-   quad_data.dt_est = numeric_limits<double>::infinity();
+void LagrangianHydroOperator::ResetTimeStepEstimate() const {
+  quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
-{
-   rho.SetSpace(&L2FESpace);
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) {
+  rho.SetSpace(&L2FESpace);
 
-   DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
-   Array<int> dofs(l2dofs_cnt);
-   DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi(&integ_rule);
-   DensityIntegrator di(quad_data);
-   di.SetIntRule(&integ_rule);
-   for (int i = 0; i < nzones; i++)
-   {
-      di.AssembleRHSElementVect(*L2FESpace.GetFE(i),
-                                *L2FESpace.GetElementTransformation(i), rhs);
-      mi.AssembleElementMatrix(*L2FESpace.GetFE(i),
-                               *L2FESpace.GetElementTransformation(i), Mrho);
-      inv.Factor();
-      inv.Mult(rhs, rho_z);
-      L2FESpace.GetElementDofs(i, dofs);
-      rho.SetSubVector(dofs, rho_z);
-   }
+  DenseMatrix Mrho(l2dofs_cnt);
+  Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+  Array<int> dofs(l2dofs_cnt);
+  DenseMatrixInverse inv(&Mrho);
+  MassIntegrator mi(&integ_rule);
+  DensityIntegrator di(quad_data);
+  di.SetIntRule(&integ_rule);
+  for (int el = 0; el < elements; ++el) {
+    di.AssembleRHSElementVect(*L2FESpace.GetFE(el),
+                              *L2FESpace.GetElementTransformation(el), rhs);
+    mi.AssembleElementMatrix(*L2FESpace.GetFE(el),
+                             *L2FESpace.GetElementTransformation(el), Mrho);
+    inv.Factor();
+    inv.Mult(rhs, rho_z);
+    L2FESpace.GetElementDofs(el, dofs);
+    rho.SetSubVector(dofs, rho_z);
+  }
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
@@ -345,135 +338,86 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    delete tensors1D;
 }
 
-void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const
-{
-   if (quad_data_is_current) {
-     return;
-   }
+void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
+  if (quad_data_is_current) {
+    return;
+  }
 
-   Vector h_S = S;
+  Vector h_S = S;
 
-   const int dim = o_H1FESpace.GetMesh()->Dimension();
-   const int nqp = integ_rule.GetNPoints();
+  const int dim = o_H1FESpace.GetMesh()->Dimension();
+  const int nqp = integ_rule.GetNPoints();
 
-   ParGridFunction e, v;
-   Vector* sptr = (Vector*) &h_S;
-   v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-   e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-   Vector e_vals;
-   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
-   DenseMatrix v_vals;
+  ParGridFunction e, v;
+  Vector* sptr = (Vector*) &h_S;
+  v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
+  e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
+  Vector e_vals;
+  DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
+  DenseMatrix v_vals;
 
-   // Batched computations are needed, because hydrodynamic codes usually
-   // involve expensive computations of material properties. Although this
-   // miniapp uses simple EOS equations, we still want to represent the batched
-   // cycle structure.
-   int nzones_batch = 3;
-   const int nbatches =  nzones / nzones_batch + 1; // +1 for the remainder.
-   int nqp_batch = nqp * nzones_batch;
-   double *rho_b = new double[nqp_batch],
-          *e_b   = new double[nqp_batch],
-          *p_b   = new double[nqp_batch],
-          *cs_b  = new double[nqp_batch];
-   for (int b = 0; b < nbatches; b++)
-   {
-      int z_id = b * nzones_batch; // Global index over zones.
-      // The last batch might not be full.
-      if (z_id == nzones) { break; }
-      else if (z_id + nzones_batch > nzones)
-      {
-         nzones_batch = nzones - z_id;
-         nqp_batch    = nqp * nzones_batch;
+  for (int el = 0; el < elements; ++el) {
+    ElementTransformation *T = H1FESpace.GetElementTransformation(el);
+    e.GetValues(el, integ_rule, e_vals);
+    v.GetVectorValues(*T, integ_rule, v_vals);
+    for (int q = 0; q < nqp; q++) {
+      const IntegrationPoint &ip = integ_rule.IntPoint(q);
+      T->SetIntPoint(&ip);
+      const DenseMatrix &Jpr = T->Jacobian();
+
+      const double detJ = T->Weight();
+      MFEM_VERIFY(detJ > 0.0,
+                  "Bad Jacobian determinant: " << detJ);
+
+      stress = 0.0;
+      const double rho = quad_data.rho0DetJ0w(el*nqp + q) / detJ / ip.weight;
+      const double e   = max(0.0, e_vals(q));
+      for (int d = 0; d < dim; d++) {
+        s(d, d) = - MaterialPressure(rho, e);
       }
 
-      for (int z = 0; z < nzones_batch; z++)
-      {
-         ElementTransformation *T = H1FESpace.GetElementTransformation(z_id);
-         e.GetValues(z_id, integ_rule, e_vals);
-         for (int q = 0; q < nqp; q++)
-         {
-            const IntegrationPoint &ip = integ_rule.IntPoint(q);
-            T->SetIntPoint(&ip);
-            const double detJ = T->Weight();
-            MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
+      // Length scale at the point. The first eigenvector of the symmetric
+      // velocity gradient gives the direction of maximal compression. This
+      // is used to define the relative change of the initial length scale.
+      v.GetVectorGradient(*T, sgrad_v);
+      sgrad_v.Symmetrize();
+      double eig_val_data[3], eig_vec_data[9];
+      sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
+      Vector compr_dir(eig_vec_data, dim);
+      // Computes the initial->physical transformation Jacobian.
+      mfem::Mult(Jpr, quad_data.Jac0inv(el*nqp + q), Jpi);
+      Vector ph_dir(dim);
+      Jpi.Mult(compr_dir, ph_dir);
+      // Change of the initial mesh size in the compression direction.
+      const double h = quad_data.h0 * ph_dir.Norml2() / (compr_dir.Norml2());
 
-            const int idx = z * nqp + q;
-            rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-            e_b[idx]   = max(0.0, e_vals(q));
-         }
-         ++z_id;
+      // Time step estimate at the point.
+      const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
+      quad_data.dt_est = min(quad_data.dt_est, cfl * h / sound_speed);
+
+      if (use_viscosity) {
+        // Measure of maximal compression.
+        const double mu = eig_val_data[0];
+        double visc_coeff = 2.0 * rho * h * h * fabs(mu);
+        if (mu < 0.0) {
+          visc_coeff += 0.5 * rho * h * sound_speed;
+        }
+        stress.Add(visc_coeff, sgrad_v);
       }
 
-      // Batched computation of material properties.
-      ComputeMaterialProperties(nqp_batch, rho_b, e_b, p_b, cs_b);
-
-      z_id -= nzones_batch;
-      for (int z = 0; z < nzones_batch; z++)
-      {
-         ElementTransformation *T = H1FESpace.GetElementTransformation(z_id);
-         v.GetVectorValues(*T, integ_rule, v_vals);
-         for (int q = 0; q < nqp; q++)
-         {
-            const IntegrationPoint &ip = integ_rule.IntPoint(q);
-            T->SetIntPoint(&ip);
-            // Note that the Jacobian was already computed above. We've chosen
-            // not to store the Jacobians for all batched quadrature points.
-            const DenseMatrix &Jpr = T->Jacobian();
-            const double detJ = T->Weight(), rho = rho_b[z*nqp + q],
-                         p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
-
-            stress = 0.0;
-            for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-
-            // Length scale at the point. The first eigenvector of the symmetric
-            // velocity gradient gives the direction of maximal compression.
-            // This is used to define the relative change of the initial length
-            // scale.
-            v.GetVectorGradient(*T, sgrad_v);
-            sgrad_v.Symmetrize();
-            double eig_val_data[3], eig_vec_data[9];
-            sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-            Vector compr_dir(eig_vec_data, dim);
-            // Computes the initial->physical transformation Jacobian.
-            mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
-            Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-            // Change of the initial mesh size in the compression direction.
-            const double h = quad_data.h0 * ph_dir.Norml2() /
-                             compr_dir.Norml2();
-
-            // Time step estimate at the point.
-            quad_data.dt_est = min(quad_data.dt_est, cfl * h / sound_speed);
-
-            if (use_viscosity)
-            {
-               // Measure of maximal compression.
-               const double mu = eig_val_data[0];
-               double visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
-               stress.Add(visc_coeff, sgrad_v);
-            }
-
-            // Quadrature data for partial assembly of the force operator.
-            CalcInverse(Jpr, Jinv);
-            MultABt(stress, Jinv, stressJiT);
-            stressJiT *= integ_rule.IntPoint(q).weight * detJ;
-            for (int vd = 0 ; vd < dim; vd++)
-            {
-               for (int gd = 0; gd < dim; gd++)
-               {
-                  quad_data.stressJinvT(vd)(z_id*nqp + q, gd) =
-                     stressJiT(vd, gd);
-               }
-            }
-         }
-         ++z_id;
+      // Quadrature data for partial assembly of the force operator.
+      CalcInverse(Jpr, Jinv);
+      MultABt(s, Jinv, stressJiT);
+      stressJiT *= integ_rule.IntPoint(q).weight * detJ;
+      for (int vd = 0 ; vd < dim; vd++) {
+        for (int gd = 0; gd < dim; gd++) {
+          quad_data.stressJinvT(vd)(el*nqp + q, gd) = stressJiT(vd, gd);
+        }
       }
-   }
-   delete rho_b;
-   delete e_b;
-   delete p_b;
-   delete cs_b;
-   quad_data_is_current = true;
+    }
+  }
+
+  quad_data_is_current = true;
 }
 
 } // namespace hydrodynamics

@@ -45,7 +45,7 @@
 //    p = 2  --> Sedov blast.
 
 //  TODO
-//    - Tensorize Pos elements properly
+//    - UpdateQuadratureData
 //    - Mass
 //        - Mult
 //            - MultQuad
@@ -57,7 +57,6 @@
 //        - MultTranspose
 //            - MultTransposeQuad
 //            - MultTransposeHex
-//    - UpdateQuadratureData
 //    - OccaMesh for setting nodes quickly
 //    - OccaLinearForm
 //        - DomainLFIntegrator

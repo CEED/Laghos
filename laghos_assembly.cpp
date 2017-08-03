@@ -133,11 +133,9 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
 
   if (dim == 2) {
     MultQuad(x, y);
-  }
-  else if (dim == 3) {
+  } else if (dim == 3) {
     MultHex(x, y);
-  }
-  else {
+  } else {
     MFEM_ABORT("Unsupported dimension");
   }
 
@@ -154,7 +152,11 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
 
   // Are we working with the velocity or energy mass matrix?
   const FiniteElement *fe = fes.GetFE(0);
+  const TensorBasisElement *tfe = dynamic_cast<const TensorBasisElement*>(fe);
   const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
+
+  const Array<int> &dof_map = tfe->GetDofMap();
+
   const DenseMatrix &DQs = (fe_H1
                             ? tensors1D->HQshape1D
                             : tensors1D->LQshape1D);
@@ -180,16 +182,10 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
 
   for (int e = 0; e < elements; ++e) {
     fes.GetFESpace()->GetElementDofs(e, dofs);
-    if (fe_H1) {
-      // Transfer from the mfem's H1 local numbering to the tensor structure
-      // numbering.
-      const Array<int> &dof_map = fe_H1->GetDofMap();
-      for (int j = 0; j < xz.Size(); j++) {
-        xz[j] = x2[dofs[dof_map[j]]];
-      }
-    }
-    else {
-      x2.GetSubVector(dofs, xz);
+    // Transfer from the mfem's H1 local numbering to the tensor structure
+    // numbering.
+    for (int j = 0; j < xz.Size(); j++) {
+      xz[j] = x2[dofs[dof_map[j]]];
     }
 
     // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
@@ -208,14 +204,8 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
     mfem::Mult(DQs, QQ, DQ);
     MultABt(DQ, DQs, Y);
 
-    if (fe_H1) {
-      const Array<int> &dof_map = fe_H1->GetDofMap();
-      for (int j = 0; j < yz.Size(); j++) {
-        y2[dofs[dof_map[j]]] += yz[j];
-      }
-    }
-    else {
-      y2.SetSubVector(dofs, yz);
+    for (int j = 0; j < yz.Size(); j++) {
+      y2[dofs[dof_map[j]]] += yz[j];
     }
   }
 
@@ -228,7 +218,11 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
 
   // Are we working with the velocity or energy mass matrix?
   const FiniteElement *fe = fes.GetFE(0);
+  const TensorBasisElement *tfe = dynamic_cast<const TensorBasisElement*>(fe);
   const H1_HexahedronElement *fe_H1 = dynamic_cast<const H1_HexahedronElement*>(fe);
+
+  const Array<int> &dof_map = tfe->GetDofMap();
+
   const DenseMatrix &DQs = (fe_H1
                             ? tensors1D->HQshape1D
                             : tensors1D->LQshape1D);
@@ -250,16 +244,10 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
 
   for (int e = 0; e < elements; e++) {
     fes.GetFESpace()->GetElementDofs(e, dofs);
-    if (fe_H1) {
-      // Transfer from the mfem's H1 local numbering to the tensor structure
-      // numbering.
-      const Array<int> &dof_map = fe_H1->GetDofMap();
-      for (int j = 0; j < xz.Size(); j++) {
-        xz[j] = x2[dofs[dof_map[j]]];
-      }
-    }
-    else {
-      x2.GetSubVector(dofs, xz);
+    // Transfer from the mfem's H1 local numbering to the tensor structure
+    // numbering.
+    for (int j = 0; j < xz.Size(); j++) {
+      xz[j] = x2[dofs[dof_map[j]]];
     }
 
     // DDQ_i1_i2_k3  = X_i1_i2_i3 DQs_i3_k3   -- contract in z direction.
@@ -304,14 +292,8 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
     mfem::Mult(DQs, Q_DQ, D_DQ);
     MultABt(DD_Q, DQs, Y);
 
-    if (fe_H1) {
-      const Array<int> &dof_map = fe_H1->GetDofMap();
-      for (int j = 0; j < yz.Size(); j++) {
-        y2[dofs[dof_map[j]]] += yz[j];
-      }
-    }
-    else {
-      y2.SetSubVector(dofs, yz);
+    for (int j = 0; j < yz.Size(); j++) {
+      y2[dofs[dof_map[j]]] += yz[j];
     }
   }
 
@@ -356,11 +338,9 @@ void OccaForceOperator::Setup(occa::device device_,
 void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
   if (dim == 2) {
     MultQuad(vecL2, vecH1);
-  }
-  else if (dim == 3) {
+  } else if (dim == 3) {
     MultHex(vecL2, vecH1);
-  }
-  else {
+  } else {
     MFEM_ABORT("Unsupported dimension");
   }
 }
@@ -368,11 +348,9 @@ void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
 void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const {
   if (dim == 2) {
     MultTransposeQuad(vecH1, vecL2);
-  }
-  else if (dim == 3) {
+  } else if (dim == 3) {
     MultTransposeHex(vecH1, vecL2);
-  }
-  else {
+  } else {
     MFEM_ABORT("Unsupported dimension");
   }
 }
