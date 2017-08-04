@@ -194,7 +194,7 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
     MultAtB(DQs, DQ, QQ);
 
     // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-    double *d = quad_data->rhoDetJw.GetData() + e*nqp;
+    double *d = quad_data->rho0DetJ0w.GetData() + e*nqp;
     for (int q = 0; q < nqp; q++) {
       qq[q] *= d[q];
     }
@@ -269,7 +269,7 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
     }
 
     // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
-    double *d = quad_data->rhoDetJw.GetData() + e*nqp;
+    double *d = quad_data->rho0DetJ0w.GetData() + e*nqp;
     for (int q = 0; q < nqp; q++) {
       qqq[q] *= d[q];
     }

@@ -146,8 +146,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
        Jinv.GetInverseMatrix(quad_data.Jac0inv(el*nqp + q));
 
        const double rho0DetJ0 = T->Weight() * rho_vals(q);
-       quad_data.rhoDetJw(el*nqp + q)  = (rho0DetJ0 *
-                                          integ_rule.IntPoint(q).weight);
+       quad_data.rho0DetJ0w(el*nqp + q) = (rho0DetJ0 *
+                                           integ_rule.IntPoint(q).weight);
      }
    }
 
@@ -373,7 +373,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       const double rho = quad_data.rho0DetJ0w(el*nqp + q) / detJ / ip.weight;
       const double e   = max(0.0, e_vals(q));
       for (int d = 0; d < dim; d++) {
-        s(d, d) = - MaterialPressure(rho, e);
+        stress(d, d) = - MaterialPressure(rho, e);
       }
 
       // Length scale at the point. The first eigenvector of the symmetric
@@ -407,7 +407,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
 
       // Quadrature data for partial assembly of the force operator.
       CalcInverse(Jpr, Jinv);
-      MultABt(s, Jinv, stressJiT);
+      MultABt(stress, Jinv, stressJiT);
       stressJiT *= integ_rule.IntPoint(q).weight * detJ;
       for (int vd = 0 ; vd < dim; vd++) {
         for (int gd = 0; gd < dim; gd++) {
