@@ -28,6 +28,32 @@ namespace hydrodynamics
 
 const Tensors1D *tensors1D = NULL;
 
+QuadratureData::QuadratureData(int dim,
+                               int nzones,
+                               int quads_per_zone) {
+  Setup(occa::getDevice(), dim, nzones, quads_per_zone);
+}
+
+QuadratureData::QuadratureData(occa::device device_,
+                               int dim,
+                               int nzones,
+                               int quads_per_zone) {
+  Setup(device_, dim, nzones, quads_per_zone);
+}
+
+void QuadratureData::Setup(occa::device device_,
+                           int dim,
+                           int nzones,
+                           int quads_per_zone) {
+  device = device_;
+
+  Jac0inv.SetSize(dim, dim, nzones * quads_per_zone);
+  stressJinvT.SetSize(nzones * quads_per_zone, dim, dim);
+  rho0DetJ0w.SetSize(nzones * quads_per_zone);
+
+  o_stressJinvT.allocate(dim, dim, nzones * quads_per_zone);
+}
+
 Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
    : HQshape1D(H1order + 1, nqp1D),
      HQgrad1D(H1order + 1, nqp1D),

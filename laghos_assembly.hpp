@@ -32,40 +32,52 @@ namespace hydrodynamics
 {
 
 // Container for all data needed at quadrature points.
-struct QuadratureData
-{
-   // TODO: use QuadratureFunctions?
+  struct QuadratureData {
+    // TODO: use QuadratureFunctions?
+    occa::device device;
 
-   // Reference to physical Jacobian for the initial mesh. These are computed
-   // only at time zero and stored here.
-   DenseTensor Jac0inv;
+    // Reference to physical Jacobian for the initial mesh. These are computed
+    // only at time zero and stored here.
+    DenseTensor Jac0inv;
+    occa::array<double> o_Jac0inv;
 
-   // Quadrature data used for full/partial assembly of the force operator. At
-   // each quadrature point, it combines the stress, inverse Jacobian,
-   // determinant of the Jacobian and the integration weight. It must be
-   // recomputed in every time step.
-   DenseTensor stressJinvT;
+    // Quadrature data used for full/partial assembly of the force operator. At
+    // each quadrature point, it combines the stress, inverse Jacobian,
+    // determinant of the Jacobian and the integration weight. It must be
+    // recomputed in every time step.
+    DenseTensor stressJinvT;
+    occa::array<double> o_stressJinvT;
 
-   // Quadrature data used for full/partial assembly of the mass matrices. At
-   // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-   // quadrature point. Note the at any other time, we can compute
-   // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-   // conservation.
-   Vector rho0DetJ0w;
+    // Quadrature data used for full/partial assembly of the mass matrices. At
+    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+    // quadrature point. Note the at any other time, we can compute
+    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+    // conservation.
+    Vector rho0DetJ0w;
+    occa::array<double> o_rho0DetJ0w;
 
-   // Initial length scale. This represents a notion of local mesh size. We
-   // assume that all initial zones have similar size.
-   double h0;
+    // Initial length scale. This represents a notion of local mesh size. We
+    // assume that all initial zones have similar size.
+    double h0;
 
-   // Estimate of the minimum time step over all quadrature points. This is
-   // recomputed at every time step to achieve adaptive time stepping.
-   double dt_est;
+    // Estimate of the minimum time step over all quadrature points. This is
+    // recomputed at every time step to achieve adaptive time stepping.
+    double dt_est;
 
-   QuadratureData(int dim, int nzones, int quads_per_zone)
-      : Jac0inv(dim, dim, nzones * quads_per_zone),
-        stressJinvT(nzones * quads_per_zone, dim, dim),
-        rho0DetJ0w(nzones * quads_per_zone) { }
-};
+    QuadratureData(int dim,
+                   int nzones,
+                   int quads_per_zone);
+
+    QuadratureData(occa::device device_,
+                   int dim,
+                   int nzones,
+                   int quads_per_zone);
+
+    void Setup(occa::device device_,
+               int dim,
+               int nzones,
+               int quads_per_zone);
+  };
 
 // Stores values of the one-dimensional shape functions and gradients at all 1D
 // quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).

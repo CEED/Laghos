@@ -46,6 +46,8 @@ make style
 
 endef
 
+PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
 # Default installation location
 PREFIX = ./bin
 INSTALL = /usr/bin/install
@@ -112,7 +114,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
+.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec cache-kernels
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -121,10 +123,10 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
+laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE) cache-kernels
 	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
 
-all: laghos
+all: laghos cache-kernels
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -154,7 +156,7 @@ clean: clean-build clean-exec
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM Laghos_*
 clean-exec:
-        
+
 distclean: clean
 	rm -rf bin/
 
@@ -172,6 +174,30 @@ status info:
 	$(info LAGHOS_LIBS  = $(value LAGHOS_LIBS))
 	$(info PREFIX      = $(PREFIX))
 	@true
+
+#---[ OCCA ]----------------------------
+OCCA_CACHE_DIR     ?= ${HOME}/.occa
+OCCA_LIB_CACHE_DIR := $(OCCA_CACHE_DIR)/libraries
+
+OKL_KERNELS        := $(realpath $(shell find $(PROJ_DIR) -type f -name '*.okl'))
+OKL_CACHED_KERNELS := $(subst kernels/,,$(subst $(PROJ_DIR),$(OCCA_LIB_CACHE_DIR)/laghos/,$(OKL_KERNELS)))
+
+# Cache kernels in the OCCA cache directory
+.PHONY: cache-kernels
+cache-kernels: $(OKL_CACHED_KERNELS)
+
+.PHONY: clear-cache
+clear-kernels: clear-mfem-kernels
+
+.PHONY: clear-cache
+clear-mfem-kernels:
+	@echo y | occa clear -l mfem
+
+$(OCCA_LIB_CACHE_DIR)/laghos/%.okl: $(PROJ_DIR)/kernels/%.okl
+	@echo "Caching: $(subst $(PROJ_DIR)/,,$<)"
+	@occa cache laghos/$(subst $(OCCA_LIB_CACHE_DIR)/laghos/,,$(dir $@)) $<
+#=======================================
+
 
 ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)

@@ -135,15 +135,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
    Vector rho_vals(nqp);
-   for (int el = 0; el < elements; el++) {
+   for (int el = 0; el < elements; ++el) {
      rho0.GetValues(el, integ_rule, rho_vals);
      ElementTransformation *T = H1FESpace.GetElementTransformation(el);
      for (int q = 0; q < nqp; q++) {
        const IntegrationPoint &ip = integ_rule.IntPoint(q);
        T->SetIntPoint(&ip);
-
-       DenseMatrixInverse Jinv(T->Jacobian());
-       Jinv.GetInverseMatrix(quad_data.Jac0inv(el*nqp + q));
 
        const double rho0DetJ0 = T->Weight() * rho_vals(q);
        quad_data.rho0DetJ0w(el*nqp + q) = (rho0DetJ0 *
@@ -155,7 +152,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    double loc_area = 0.0, glob_area;
    int glob_z_cnt;
    ParMesh *pm = H1FESpace.GetParMesh();
-   for (int el = 0; el < elements; el++) {
+   for (int el = 0; el < elements; ++el) {
      loc_area += pm->GetElementVolume(el);
    }
    MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
@@ -176,6 +173,24 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
+
+   // Setup OCCA QuadratureData
+   OccaGeometry o_geom = OccaGeometry::Get(o_H1FESpace.GetDevice(),
+                                           o_H1FESpace,
+                                           integ_rule);
+   quad_data.o_Jac0inv = o_geom.invJ;
+   quad_data.o_Jac0inv.syncToHost();
+
+   for (int el = 0; el < elements; ++el) {
+     for (int q = 0; q < nqp; q++) {
+       for (int j = 0; j < dim; ++j) {
+         for (int i = 0; i < dim; ++i) {
+           quad_data.Jac0inv(i, j, q + el*nqp) =
+             quad_data.o_Jac0inv(i, j, q, el);
+         }
+       }
+     }
+   }
 
    tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                              L2FESpace.GetFE(0)->GetOrder(),

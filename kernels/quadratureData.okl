@@ -1,0 +1,142 @@
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
+//
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
+//
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
+
+// Defines:
+//   GAMMA
+//   CFL
+//   USE_VISCOSITY
+//   NUM_QUAD
+//   NUM_DIM
+
+typedef double* QLocal_t   @dim(NUM_QUAD, numElements);
+typedef double* QVLocal_t  @dim(NUM_DIM, NUM_QUAD, numElements);
+
+typedef double* Jacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+typedef double* Stress_t   @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+
+kernel void UpdateQuadratureData2D(const int numElements,
+                                   const QVLocal_t restrict v,
+                                   const QLocal_t restrict e,
+                                   const QLocal_t restrict rho0DetJ0,
+                                   const Jacobian2D_t restrict invJ0,
+                                   const Jacobian2D_t restrict J,
+                                   const Jacobian2D_t restrict invJ,
+                                   const QLocal_t restrict detJ,
+                                   const QLocal_t restrict rho,
+                                   Stress2D_t restrict stress,
+                                   Stress2D_t restrict stressJinvT,
+                                   QLocal_t restrict dtEst) {
+  for (int el = 0; el < elements; ++el; outer) {
+    for (int q = 0; q < NUM_QUAD; ++q; inner) {
+      double q_stress[4] @dim(2, 2);
+
+      const double q_rho = rho0DetJ0(q, el) / detJ(q, el);
+      const double q_e   = max(0.0, e(q, el));
+
+      const double s = - (GAMMA - 1.0) * q_rho * q_e;
+      q_stress(0, 0) = s; q_stress(0, 1) = 0;
+      q_stress(1, 0) = 0; q_stress(1, 1) = s;
+
+      // v.GetVectorGradient(*T, sgrad_v);
+
+      const double gradv00 = gradv(0, 0);
+      const double gradv11 = gradv(1, 1);
+      const double gradv10 = 0.5 * (gradv(1, 0) + gradv(0, 1));
+      gradv(1, 0) = gradv10;
+      gradv(0, 1) = gradv10;
+
+      // Compute eigenvalues using quadrature formula
+      const double eigB = - (gradv00 + gradv11);
+      const double eigC = (gradv00 * gradv11) - (gradv10 * gradv10);
+      const double eigDisc = sqrt((eigB * eigB) - (4.0 * eigC));
+
+      // Get largest eigenvalue and its eigenvector
+      const double eigVal1 = - 0.5 * (eigB + eigDisc);
+      const double eigVal2 = - 0.5 * (eigB - eigDisc);
+      const double maxEig = (eigVal1 > eigVal2) ? eigVal1 : eigVal2;
+
+      // Normalize eigenvector: [1.0, (maxEig - gradv00) / gradv10)]
+      const double comprDirY_ = (maxEig - gradv00) / gradv10;
+      const double comprDirX  = 1.0 / sqrt(1.0 + (comprDirY_ * comprDirY_));
+      const double comprDirY  = comprDirX * comprDirY_;
+
+      // Computes the initial->physical transformation Jacobian.
+      const double J_00 = J(0, 0, q, el), J_10 = J(1, 0, q, el);
+      const double J_01 = J(0, 1, q, el), J_11 = J(1, 1, q, el);
+
+      const double invJ0_00 = invJ0(0, 0, q, el), invJ0_10 = invJ0(1, 0, q, el);
+      const double invJ0_01 = invJ0(0, 1, q, el), invJ0_11 = invJ0(1, 1, q, el);
+
+      const double invJ_00 = invJ(0, 0, q, el), invJ_01 = invJ(0, 1, q, el);
+      const double invJ_10 = invJ(1, 0, q, el), invJ_01 = invJ(1, 1, q, el);
+
+      const double Jpi_00 = ((J_00 * invJ0_00) + (J_10 * invJ0_01));
+      const double Jpi_10 = ((J_00 * invJ0_10) + (J_10 * invJ0_11));
+      const double Jpi_01 = ((J_01 * invJ0_00) + (J_11 * invJ0_01));
+      const double Jpi_11 = ((J_01 * invJ0_10) + (J_11 * invJ0_11));
+
+      const double physDirX = (Jpi_00 * comprDirX) + (Jpi_10 * comprDirY);
+      const double physDirY = (Jpi_01 * comprDirX) + (Jpi_11 * comprDirY);
+
+      q_h = h0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
+
+      soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
+      dtEst(q, el) = CFL * q_h / soundSpeed
+
+      if (USE_VISCOSITY) {
+        const double mu = lambda[0];
+        double coeff = 2.0 * q_rho * q_h * q_h * abs(mu);
+        if (mu < 0) {
+          coeff += 0.5 * q_rho * q_h * soundSpeed;
+        }
+        for (int y = 0; y < 2; ++y) {
+          for (int x = 0; x < 2; ++x) {
+            q_stress(x, y) += coeff * vgradMat(x, y);
+          }
+        }
+      }
+
+      stressJinvT(0, 0, q, el) = ((q_stress(0, 0) * invJ_00) + (q_stress(0, 1) * invJ_01));
+      stressJinvT(1, 0, q, el) = ((q_stress(0, 0) * invJ_10) + (q_stress(0, 1) * invJ_11));
+      stressJinvT(0, 1, q, el) = ((q_stress(1, 0) * invJ_00) + (q_stress(1, 1) * invJ_01));
+      stressJinvT(1, 1, q, el) = ((q_stress(1, 0) * invJ_10) + (q_stress(1, 1) * invJ_11));
+
+      stress(0, 0, q, el) = q_stress(0, 0);
+      stress(1, 0, q, el) = q_stress(0, 0);
+      stress(0, 1, q, el) = q_stress(1, 0);
+      stress(1, 1, q, el) = q_stress(1, 0);
+    }
+  }
+}
+
+// geometry.okl
+//  - InitGeometryInfo*D
+//     - J, detJ
+// First time:
+//   J          -> quad_data.Jac0inv
+//   rho * detJ -> quad_data.rho0DetJ0
+// Each update:
+//   J               -> quad_data.Jac
+//   rho * qw * detJ -> quad_data.rhoDetJw (qw = quadratureWeight)
+
+// Constructor:
+//   quad_data.h0
+//   cfl
+//   gamma
+
+// h = h0 * (eigenvalue stuff)
+// sound_speed = sqrt(gamma * (gamme - 1.0) * max(0.0, h1_e(el, q)))
+// dt_est = Min(cfl * h(el, q) / sound_speed(el, q))
