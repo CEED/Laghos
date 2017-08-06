@@ -162,12 +162,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    // Setup OCCA QuadratureData
    occa::device device = o_H1FESpace.GetDevice();
 
-   OccaDofQuadMaps dqMaps = OccaDofQuadMaps::Get(device,
-                                                 o_H1FESpace,
-                                                 integ_rule);
-   OccaGeometry o_geom = OccaGeometry::Get(device,
-                                           o_H1FESpace,
-                                           integ_rule);
+   quad_data.device = device;
+
+   quad_data.o_dqMaps = OccaDofQuadMaps::Get(device,
+                                             o_H1FESpace,
+                                             integ_rule);
+   quad_data.o_geom = OccaGeometry::Get(device,
+                                        o_H1FESpace,
+                                        integ_rule);
 
    OccaVector o_rho0Values;
    o_rho0.ToQuad(device,
@@ -175,23 +177,22 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                  integ_rule,
                  o_rho0Values);
 
-   occa::properties props;
-   SetProperties(o_H1FESpace, integ_rule, props);
-   props["defines/H0"]            = quad_data.h0;
-   props["defines/GAMMA"]         = gamma;
-   props["defines/CFL"]           = cfl;
-   props["defines/USE_VISCOSITY"] = use_viscosity;
+   SetProperties(o_H1FESpace, integ_rule, quad_data.props);
+   quad_data.props["defines/H0"]            = quad_data.h0;
+   quad_data.props["defines/GAMMA"]         = gamma;
+   quad_data.props["defines/CFL"]           = cfl;
+   quad_data.props["defines/USE_VISCOSITY"] = use_viscosity;
 
    occa::kernel initKernel = device.buildKernel("occa://laghos/quadratureData.okl",
                                                 "InitQuadratureData",
-                                                props);
+                                                quad_data.props);
    initKernel(elements,
               o_rho0Values,
-              o_geom.detJ,
-              dqMaps.quadWeights,
+              quad_data.o_geom.detJ,
+              quad_data.o_dqMaps.quadWeights,
               quad_data.o_rho0DetJ0w);
 
-   quad_data.o_Jac0inv = o_geom.invJ;
+   quad_data.o_Jac0inv = quad_data.o_geom.invJ;
    quad_data.o_Jac0inv.syncToHost();
    quad_data.o_rho0DetJ0w.syncToHost();
 
@@ -375,7 +376,37 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
 
   Vector h_S = S;
 
-  const int dim = o_H1FESpace.GetMesh()->Dimension();
+  if ((dim == 2) && o_L2FESpace.hasTensorBasis()) {
+    const int vSize = 2 * o_L2FESpace.GetVSize();
+    const int eSize = o_H1FESpace.GetVSize();
+
+    OccaGridFunction o_v(&o_H1FESpace, S.GetRange(0, vSize));
+    OccaGridFunction o_e(&o_L2FESpace, S.GetRange(vSize, eSize));
+
+    occa::kernel updateKernel = quad_data.device.buildKernel("occa://laghos/quadratureData.okl",
+                                                             "UpdateQuadratureData2D",
+                                                             quad_data.props);
+
+    updateKernel(elements,
+                 quad_data.o_dqMaps.dofToQuad,
+                 quad_data.o_dqMaps.dofToQuadD,
+                 quad_data.o_dqMaps.quadWeights,
+                 o_v,
+                 o_e,
+                 quad_data.o_rho0DetJ0w,
+                 quad_data.o_Jac0inv,
+                 quad_data.o_geom.J,
+                 quad_data.o_geom.invJ,
+                 quad_data.o_geom.detJ,
+                 quad_data.o_stressJinvT,
+                 quad_data.o_dtEst);
+
+    // updateKernel is still not working, keep old dt_est
+    const double old_dt_est = quad_data.dt_est;
+    quad_data.dt_est = quad_data.o_dtEst.Min();
+    quad_data.dt_est = old_dt_est;
+  }
+
   const int nqp = integ_rule.GetNPoints();
 
   ParGridFunction e, v;

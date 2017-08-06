@@ -53,6 +53,7 @@ void QuadratureData::Setup(occa::device device_,
 
   o_rho0DetJ0w.allocate(nqp, elements);
   o_stressJinvT.allocate(dim, dim, nqp, elements);
+  o_dtEst.SetSize(device, nqp * elements);
 }
 
 Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)

@@ -260,8 +260,8 @@ int main(int argc, char *argv[])
            << glob_size_l2 << endl;
    }
 
-   int Vsize_l2 = o_L2FESpace.GetVSize();
-   int Vsize_h1 = o_H1FESpace.GetVSize();
+   const int Vsize_l2 = o_L2FESpace.GetVSize();
+   const int Vsize_h1 = o_H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position

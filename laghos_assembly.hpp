@@ -41,13 +41,6 @@ namespace hydrodynamics
     DenseTensor Jac0inv;
     occa::array<double> o_Jac0inv;
 
-    // Quadrature data used for full/partial assembly of the force operator. At
-    // each quadrature point, it combines the stress, inverse Jacobian,
-    // determinant of the Jacobian and the integration weight. It must be
-    // recomputed in every time step.
-    DenseTensor stressJinvT;
-    occa::array<double> o_stressJinvT;
-
     // Quadrature data used for full/partial assembly of the mass matrices. At
     // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
     // quadrature point. Note the at any other time, we can compute
@@ -55,6 +48,20 @@ namespace hydrodynamics
     // conservation.
     Vector rho0DetJ0w;
     occa::array<double> o_rho0DetJ0w;
+
+    // Quadrature data used for full/partial assembly of the force operator. At
+    // each quadrature point, it combines the stress, inverse Jacobian,
+    // determinant of the Jacobian and the integration weight. It must be
+    // recomputed in every time step.
+    DenseTensor stressJinvT;
+    occa::array<double> o_stressJinvT;
+
+    // Occa stuff
+    occa::properties props;
+
+    OccaDofQuadMaps o_dqMaps;
+    OccaGeometry o_geom;
+    OccaVector o_dtEst;
 
     // Initial length scale. This represents a notion of local mesh size. We
     // assume that all initial zones have similar size.
