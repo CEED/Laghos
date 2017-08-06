@@ -51,6 +51,7 @@ void QuadratureData::Setup(occa::device device_,
   stressJinvT.SetSize(nzones * quads_per_zone, dim, dim);
   rho0DetJ0w.SetSize(nzones * quads_per_zone);
 
+  o_rho0DetJ0w.allocate(dim, dim, nzones * quads_per_zone);
   o_stressJinvT.allocate(dim, dim, nzones * quads_per_zone);
 }
 

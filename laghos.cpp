@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
                   "         2 - Sedov blast");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
-   args.AddOption(&order_v, "-ov", "--order-kinematic",
+   args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
@@ -298,9 +298,10 @@ int main(int argc, char *argv[])
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    rho.ProjectCoefficient(rho_coeff);
 
-   // OccaGridFunction o_rho(&o_L2FESpace);
+   OccaGridFunction o_rho(&o_L2FESpace);
+   o_rho = rho;
    // o_rho.ProjectCoefficient(OccaCoefficient("rho0(q, e)");
-   //                          .IncludeSource("occa://laghos/init.okl"));
+   //                          .IncludeSource("occa://laghos/laghos.okl"));
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
@@ -355,6 +356,7 @@ int main(int argc, char *argv[])
    LagrangianHydroOperator oper(problem,
                                 o_H1FESpace, o_L2FESpace,
                                 ess_tdofs,
+                                o_rho,
                                 rho, cfl, gamma,
                                 use_viscosity);
 

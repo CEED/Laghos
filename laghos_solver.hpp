@@ -120,6 +120,7 @@ public:
                            OccaFiniteElementSpace &o_H1FESpace_,
                            OccaFiniteElementSpace &o_L1FESpace_,
                            Array<int> &ess_tdofs_,
+                           OccaGridFunction &o_rho0,
                            ParGridFunction &rho0,
                            double cfl_,
                            double gamma_,

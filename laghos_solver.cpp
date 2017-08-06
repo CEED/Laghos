@@ -83,6 +83,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                                                  OccaFiniteElementSpace &o_H1FESpace_,
                                                  OccaFiniteElementSpace &o_L2FESpace_,
                                                  Array<int> &ess_tdofs_,
+                                                 OccaGridFunction &o_rho0,
                                                  ParGridFunction &rho0,
                                                  double cfl_,
                                                  double gamma_,
@@ -175,9 +176,38 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
    // Setup OCCA QuadratureData
-   OccaGeometry o_geom = OccaGeometry::Get(o_H1FESpace.GetDevice(),
+   occa::device device = o_H1FESpace.GetDevice();
+
+   OccaDofQuadMaps dqMaps = OccaDofQuadMaps::Get(device,
+                                                 o_H1FESpace,
+                                                 integ_rule);
+   OccaGeometry o_geom = OccaGeometry::Get(device,
                                            o_H1FESpace,
                                            integ_rule);
+
+   OccaVector o_rho0Values;
+   o_rho0.ToQuad(device,
+                 o_L2FESpace,
+                 integ_rule,
+                 dqMaps,
+                 o_rho0Values);
+
+   occa::properties props;
+   SetProperties(o_H1FESpace, integ_rule, props);
+   props["defines/H0"]            = quad_data.h0;
+   props["defines/GAMMA"]         = gamma;
+   props["defines/CFL"]           = cfl;
+   props["defines/USE_VISCOSITY"] = use_viscosity;
+
+   occa::kernel initKernel = device.buildKernel("occa://laghos/quadratureData.okl",
+                                                "InitQuadratureData2D",
+                                                props);
+   initKernel(elements,
+              o_rho0Values,
+              o_geom.detJ,
+              dqMaps.quadWeights,
+              quad_data.o_rho0DetJ0w);
+
    quad_data.o_Jac0inv = o_geom.invJ;
    quad_data.o_Jac0inv.syncToHost();
 

@@ -14,49 +14,55 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-// Defines:
-//   GAMMA
-//   CFL
-//   USE_VISCOSITY
-//   NUM_QUAD
-//   NUM_DIM
-
 typedef double* QLocal_t   @dim(NUM_QUAD, numElements);
 typedef double* QVLocal_t  @dim(NUM_DIM, NUM_QUAD, numElements);
 
 typedef double* Jacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 typedef double* Stress_t   @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
+kernel void InitQuadratureData2D(const int numElements,
+                                 const QLocal_t restrict rho0Values,
+                                 const QLocal_t restrict detJ,
+                                 const QLocal_t restrict quadWeights,
+                                 QLocal_t restrict rho0DetJ0) {
+  for (int el = 0; el < numElements; ++el; outer) {
+    for (int q = 0; q < NUM_QUAD; ++q; inner) {
+      int i = 0;
+    }
+  }
+}
+
 kernel void UpdateQuadratureData2D(const int numElements,
                                    const QVLocal_t restrict v,
                                    const QLocal_t restrict e,
                                    const QLocal_t restrict rho0DetJ0,
-                                   const Jacobian2D_t restrict invJ0,
-                                   const Jacobian2D_t restrict J,
-                                   const Jacobian2D_t restrict invJ,
+                                   const Jacobian_t restrict invJ0,
+                                   const Jacobian_t restrict J,
+                                   const Jacobian_t restrict invJ,
                                    const QLocal_t restrict detJ,
                                    const QLocal_t restrict rho,
-                                   Stress2D_t restrict stress,
-                                   Stress2D_t restrict stressJinvT,
+                                   Stress_t restrict stress,
+                                   Stress_t restrict stressJinvT,
                                    QLocal_t restrict dtEst) {
-  for (int el = 0; el < elements; ++el; outer) {
+  for (int el = 0; el < numElements; ++el; outer) {
     for (int q = 0; q < NUM_QUAD; ++q; inner) {
       double q_stress[4] @dim(2, 2);
+      double q_gradv[4] @dim(2, 2);
 
       const double q_rho = rho0DetJ0(q, el) / detJ(q, el);
       const double q_e   = max(0.0, e(q, el));
 
-      const double s = - (GAMMA - 1.0) * q_rho * q_e;
+      const double s = -(GAMMA - 1.0) * q_rho * q_e;
       q_stress(0, 0) = s; q_stress(0, 1) = 0;
       q_stress(1, 0) = 0; q_stress(1, 1) = s;
 
       // v.GetVectorGradient(*T, sgrad_v);
 
-      const double gradv00 = gradv(0, 0);
-      const double gradv11 = gradv(1, 1);
-      const double gradv10 = 0.5 * (gradv(1, 0) + gradv(0, 1));
-      gradv(1, 0) = gradv10;
-      gradv(0, 1) = gradv10;
+      const double gradv00 = q_gradv(0, 0);
+      const double gradv11 = q_gradv(1, 1);
+      const double gradv10 = 0.5 * (q_gradv(1, 0) + q_gradv(0, 1));
+      q_gradv(1, 0) = gradv10;
+      q_gradv(0, 1) = gradv10;
 
       // Compute eigenvalues using quadrature formula
       const double eigB = - (gradv00 + gradv11);
@@ -81,7 +87,7 @@ kernel void UpdateQuadratureData2D(const int numElements,
       const double invJ0_01 = invJ0(0, 1, q, el), invJ0_11 = invJ0(1, 1, q, el);
 
       const double invJ_00 = invJ(0, 0, q, el), invJ_01 = invJ(0, 1, q, el);
-      const double invJ_10 = invJ(1, 0, q, el), invJ_01 = invJ(1, 1, q, el);
+      const double invJ_10 = invJ(1, 0, q, el), invJ_11 = invJ(1, 1, q, el);
 
       const double Jpi_00 = ((J_00 * invJ0_00) + (J_10 * invJ0_01));
       const double Jpi_10 = ((J_00 * invJ0_10) + (J_10 * invJ0_11));
@@ -91,20 +97,20 @@ kernel void UpdateQuadratureData2D(const int numElements,
       const double physDirX = (Jpi_00 * comprDirX) + (Jpi_10 * comprDirY);
       const double physDirY = (Jpi_01 * comprDirX) + (Jpi_11 * comprDirY);
 
-      q_h = h0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
+      const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
 
-      soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
-      dtEst(q, el) = CFL * q_h / soundSpeed
+      const double soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
+      dtEst(q, el) = CFL * q_h / soundSpeed;
 
       if (USE_VISCOSITY) {
-        const double mu = lambda[0];
-        double coeff = 2.0 * q_rho * q_h * q_h * abs(mu);
+        const double mu = maxEig;
+        double coeff = 2.0 * q_rho * q_h * q_h * fabs(mu);
         if (mu < 0) {
           coeff += 0.5 * q_rho * q_h * soundSpeed;
         }
         for (int y = 0; y < 2; ++y) {
           for (int x = 0; x < 2; ++x) {
-            q_stress(x, y) += coeff * vgradMat(x, y);
+            q_stress(x, y) += coeff * q_gradv(x, y);
           }
         }
       }
