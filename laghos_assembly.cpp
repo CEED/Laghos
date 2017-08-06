@@ -29,30 +29,30 @@ namespace hydrodynamics
 const Tensors1D *tensors1D = NULL;
 
 QuadratureData::QuadratureData(int dim,
-                               int nzones,
-                               int quads_per_zone) {
-  Setup(occa::getDevice(), dim, nzones, quads_per_zone);
+                               int elements,
+                               int nqp) {
+  Setup(occa::getDevice(), dim, elements, nqp);
 }
 
 QuadratureData::QuadratureData(occa::device device_,
                                int dim,
-                               int nzones,
-                               int quads_per_zone) {
-  Setup(device_, dim, nzones, quads_per_zone);
+                               int elements,
+                               int nqp) {
+  Setup(device_, dim, elements, nqp);
 }
 
 void QuadratureData::Setup(occa::device device_,
                            int dim,
-                           int nzones,
-                           int quads_per_zone) {
+                           int elements,
+                           int nqp) {
   device = device_;
 
-  Jac0inv.SetSize(dim, dim, nzones * quads_per_zone);
-  stressJinvT.SetSize(nzones * quads_per_zone, dim, dim);
-  rho0DetJ0w.SetSize(nzones * quads_per_zone);
+  Jac0inv.SetSize(dim, dim, elements * nqp);
+  stressJinvT.SetSize(elements * nqp, dim, dim);
+  rho0DetJ0w.SetSize(elements * nqp);
 
-  o_rho0DetJ0w.allocate(dim, dim, nzones * quads_per_zone);
-  o_stressJinvT.allocate(dim, dim, nzones * quads_per_zone);
+  o_rho0DetJ0w.allocate(nqp, elements);
+  o_stressJinvT.allocate(dim, dim, nqp, elements);
 }
 
 Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)

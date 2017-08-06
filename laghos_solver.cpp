@@ -133,22 +133,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
 
-   // Values of rho0DetJ0 and Jac0inv at all quadrature points.
-   const int nqp = integ_rule.GetNPoints();
-   Vector rho_vals(nqp);
-   for (int el = 0; el < elements; ++el) {
-     rho0.GetValues(el, integ_rule, rho_vals);
-     ElementTransformation *T = H1FESpace.GetElementTransformation(el);
-     for (int q = 0; q < nqp; q++) {
-       const IntegrationPoint &ip = integ_rule.IntPoint(q);
-       T->SetIntPoint(&ip);
-
-       const double rho0DetJ0 = T->Weight() * rho_vals(q);
-       quad_data.rho0DetJ0w(el*nqp + q) = (rho0DetJ0 *
-                                           integ_rule.IntPoint(q).weight);
-     }
-   }
-
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
    int glob_z_cnt;
@@ -189,7 +173,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    o_rho0.ToQuad(device,
                  o_L2FESpace,
                  integ_rule,
-                 dqMaps,
                  o_rho0Values);
 
    occa::properties props;
@@ -200,7 +183,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    props["defines/USE_VISCOSITY"] = use_viscosity;
 
    occa::kernel initKernel = device.buildKernel("occa://laghos/quadratureData.okl",
-                                                "InitQuadratureData2D",
+                                                "InitQuadratureData",
                                                 props);
    initKernel(elements,
               o_rho0Values,
@@ -210,13 +193,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
 
    quad_data.o_Jac0inv = o_geom.invJ;
    quad_data.o_Jac0inv.syncToHost();
+   quad_data.o_rho0DetJ0w.syncToHost();
 
+   const int nqp = integ_rule.GetNPoints();
    for (int el = 0; el < elements; ++el) {
      for (int q = 0; q < nqp; q++) {
+       quad_data.rho0DetJ0w(el*nqp + q) = quad_data.o_rho0DetJ0w(q, el);
        for (int j = 0; j < dim; ++j) {
          for (int i = 0; i < dim; ++i) {
-           quad_data.Jac0inv(i, j, q + el*nqp) =
-             quad_data.o_Jac0inv(i, j, q, el);
+           quad_data.Jac0inv(i, j, q + el*nqp) = quad_data.o_Jac0inv(i, j, q, el);
          }
        }
      }

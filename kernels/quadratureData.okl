@@ -20,14 +20,14 @@ typedef double* QVLocal_t  @dim(NUM_DIM, NUM_QUAD, numElements);
 typedef double* Jacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 typedef double* Stress_t   @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
-kernel void InitQuadratureData2D(const int numElements,
-                                 const QLocal_t restrict rho0Values,
-                                 const QLocal_t restrict detJ,
-                                 const QLocal_t restrict quadWeights,
-                                 QLocal_t restrict rho0DetJ0) {
+kernel void InitQuadratureData(const int numElements,
+                               const QLocal_t restrict rho0,
+                               const QLocal_t restrict detJ,
+                               const double * restrict quadWeights,
+                               QLocal_t restrict rho0DetJ0) {
   for (int el = 0; el < numElements; ++el; outer) {
     for (int q = 0; q < NUM_QUAD; ++q; inner) {
-      int i = 0;
+      rho0DetJ0(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
     }
   }
 }

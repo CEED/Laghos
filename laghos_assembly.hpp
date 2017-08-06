@@ -65,18 +65,18 @@ namespace hydrodynamics
     double dt_est;
 
     QuadratureData(int dim,
-                   int nzones,
-                   int quads_per_zone);
+                   int elements,
+                   int nqp);
 
     QuadratureData(occa::device device_,
                    int dim,
-                   int nzones,
-                   int quads_per_zone);
+                   int elements,
+                   int nqp);
 
     void Setup(occa::device device_,
                int dim,
-               int nzones,
-               int quads_per_zone);
+               int elements,
+               int nqp);
   };
 
 // Stores values of the one-dimensional shape functions and gradients at all 1D
