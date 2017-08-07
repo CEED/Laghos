@@ -59,6 +59,7 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    const Problem problem;
 
+   occa::device device;
    OccaFiniteElementSpace &o_H1FESpace;
    OccaFiniteElementSpace &o_L2FESpace;
    mutable OccaFiniteElementSpace o_H1compFESpace;

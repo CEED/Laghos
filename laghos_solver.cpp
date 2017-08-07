@@ -89,32 +89,34 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                                                  double gamma_,
                                                  bool use_viscosity_)
 : TimeDependentOperator(o_L2FESpace_.GetVSize() + 2*o_H1FESpace_.GetVSize()),
-     problem(problem_),
-     o_H1FESpace(o_H1FESpace_),
-     o_L2FESpace(o_L2FESpace_),
-     o_H1compFESpace(o_H1FESpace.GetMesh(),
-                     o_H1FESpace.FEColl(),
-                     1),
-     H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace_.GetFESpace())),
-     L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace_.GetFESpace())),
-     H1compFESpace(H1FESpace.GetParMesh(),
-                   H1FESpace.FEColl(),
-                   1),
-     ess_tdofs(ess_tdofs_),
-     dim(H1FESpace.GetMesh()->Dimension()),
-     elements(H1FESpace.GetMesh()->GetNE()),
-     l2dofs_cnt(L2FESpace.GetFE(0)->GetDof()),
-     h1dofs_cnt(H1FESpace.GetFE(0)->GetDof()),
-     cfl(cfl_),
-     gamma(gamma_),
-     use_viscosity(use_viscosity_),
-     Mv(&H1FESpace),
-     Me_inv(l2dofs_cnt, l2dofs_cnt, elements),
-     integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
-                             3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
-     quad_data(dim, elements, integ_rule.GetNPoints()),
-     quad_data_is_current(false),
-     Force(&quad_data, o_H1FESpace, o_L2FESpace) {
+  problem(problem_),
+  device(o_H1FESpace_.GetDevice()),
+  o_H1FESpace(o_H1FESpace_),
+  o_L2FESpace(o_L2FESpace_),
+  o_H1compFESpace(o_H1FESpace.GetMesh(),
+                  o_H1FESpace.FEColl(),
+                  1),
+  H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace_.GetFESpace())),
+  L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace_.GetFESpace())),
+  H1compFESpace(H1FESpace.GetParMesh(),
+                H1FESpace.FEColl(),
+                1),
+  ess_tdofs(ess_tdofs_),
+  dim(H1FESpace.GetMesh()->Dimension()),
+  elements(H1FESpace.GetMesh()->GetNE()),
+  l2dofs_cnt(L2FESpace.GetFE(0)->GetDof()),
+  h1dofs_cnt(H1FESpace.GetFE(0)->GetDof()),
+  cfl(cfl_),
+  gamma(gamma_),
+  use_viscosity(use_viscosity_),
+  Mv(&H1FESpace),
+  Me_inv(l2dofs_cnt, l2dofs_cnt, elements),
+  integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
+                          3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
+  quad_data(dim, elements, integ_rule.GetNPoints()),
+  quad_data_is_current(false),
+  Force(&quad_data, o_H1FESpace, o_L2FESpace) {
+
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
@@ -160,8 +162,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
    // Setup OCCA QuadratureData
-   occa::device device = o_H1FESpace.GetDevice();
-
    quad_data.device = device;
 
    quad_data.o_dqMaps = OccaDofQuadMaps::Get(device,
@@ -198,7 +198,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
 
    const int nqp = integ_rule.GetNPoints();
    for (int el = 0; el < elements; ++el) {
-     for (int q = 0; q < nqp; q++) {
+     for (int q = 0; q < nqp; ++q) {
        quad_data.rho0DetJ0w(el*nqp + q) = quad_data.o_rho0DetJ0w(q, el);
        for (int j = 0; j < dim; ++j) {
          for (int i = 0; i < dim; ++i) {
@@ -376,23 +376,41 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
 
   Vector h_S = S;
 
+  const int nqp = integ_rule.GetNPoints();
+
+  quad_data_is_current = true;
+
   if ((dim == 2) && o_L2FESpace.hasTensorBasis()) {
-    const int vSize = 2 * o_L2FESpace.GetVSize();
-    const int eSize = o_H1FESpace.GetVSize();
+    const int vSize = o_H1FESpace.GetVSize();
+    const int eSize = o_L2FESpace.GetVSize();
 
-    OccaGridFunction o_v(&o_H1FESpace, S.GetRange(0, vSize));
-    OccaGridFunction o_e(&o_L2FESpace, S.GetRange(vSize, eSize));
+    OccaGridFunction o_v(&o_H1FESpace, S.GetRange(vSize  , vSize));
+    OccaGridFunction o_e(&o_L2FESpace, S.GetRange(2*vSize, eSize));
 
-    occa::kernel updateKernel = quad_data.device.buildKernel("occa://laghos/quadratureData.okl",
-                                                             "UpdateQuadratureData2D",
-                                                             quad_data.props);
+    quad_data.o_geom = OccaGeometry::Get(device,
+                                         o_H1FESpace,
+                                         integ_rule);
+
+    OccaVector o_eValues;
+    o_e.ToQuad(device,
+               o_L2FESpace,
+               integ_rule,
+               o_eValues);
+
+    OccaVector o_v2(device,
+                    o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
+    o_H1FESpace.GlobalToLocal(o_v, o_v2);
+
+    occa::kernel updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
+                                                   "UpdateQuadratureData2D",
+                                                   quad_data.props);
 
     updateKernel(elements,
                  quad_data.o_dqMaps.dofToQuad,
                  quad_data.o_dqMaps.dofToQuadD,
                  quad_data.o_dqMaps.quadWeights,
-                 o_v,
-                 o_e,
+                 o_v2,
+                 o_eValues,
                  quad_data.o_rho0DetJ0w,
                  quad_data.o_Jac0inv,
                  quad_data.o_geom.J,
@@ -401,13 +419,21 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
                  quad_data.o_stressJinvT,
                  quad_data.o_dtEst);
 
-    // updateKernel is still not working, keep old dt_est
-    const double old_dt_est = quad_data.dt_est;
     quad_data.dt_est = quad_data.o_dtEst.Min();
-    quad_data.dt_est = old_dt_est;
-  }
 
-  const int nqp = integ_rule.GetNPoints();
+    quad_data.o_stressJinvT.syncToHost();
+    for (int el = 0; el < elements; ++el) {
+      for (int q = 0; q < nqp; ++q) {
+        for (int j = 0; j < dim; ++j) {
+          for (int i = 0; i < dim; ++i) {
+            quad_data.stressJinvT(q + el*nqp, j, i) =
+              quad_data.o_stressJinvT(i, j, q, el);
+          }
+        }
+      }
+    }
+    return;
+  }
 
   ParGridFunction e, v;
   Vector* sptr = (Vector*) &h_S;
@@ -415,13 +441,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
   e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
   Vector e_vals;
   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
-  DenseMatrix v_vals;
 
   for (int el = 0; el < elements; ++el) {
     ElementTransformation *T = H1FESpace.GetElementTransformation(el);
     e.GetValues(el, integ_rule, e_vals);
-    v.GetVectorValues(*T, integ_rule, v_vals);
-    for (int q = 0; q < nqp; q++) {
+    for (int q = 0; q < nqp; ++q) {
       const IntegrationPoint &ip = integ_rule.IntPoint(q);
       T->SetIntPoint(&ip);
       const DenseMatrix &Jpr = T->Jacobian();
@@ -441,6 +465,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       // velocity gradient gives the direction of maximal compression. This
       // is used to define the relative change of the initial length scale.
       v.GetVectorGradient(*T, sgrad_v);
+
       sgrad_v.Symmetrize();
       double eig_val_data[3], eig_vec_data[9];
       sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
@@ -477,8 +502,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       }
     }
   }
-
-  quad_data_is_current = true;
 }
 
 } // namespace hydrodynamics

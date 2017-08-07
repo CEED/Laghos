@@ -19,8 +19,8 @@
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 
-typedef double* Jacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
-typedef double* Stress_t   @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+typedef double* QJacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
 kernel void InitQuadratureData(const int numElements,
                                const QLocal_t restrict rho0,
@@ -39,11 +39,11 @@ kernel void UpdateQuadratureData2D(const int numElements,
                                    const DofToQuad_t restrict dofToQuadD,
                                    const double * restrict quadWeights,
                                    const V2D_t restrict v,
-                                   const DLocal_t restrict e,
+                                   const QLocal_t restrict e,
                                    const QLocal_t restrict rho0DetJ0w,
-                                   const Jacobian_t restrict invJ0,
-                                   const Jacobian_t restrict J,
-                                   const Jacobian_t restrict invJ,
+                                   const QJacobian_t restrict invJ0,
+                                   const QJacobian_t restrict J,
+                                   const QJacobian_t restrict invJ,
                                    const QLocal_t restrict detJ,
                                    Stress_t restrict stressJinvT,
                                    QLocal_t restrict dtEst) {
@@ -55,10 +55,10 @@ kernel void UpdateQuadratureData2D(const int numElements,
     // Store xy planes in shared memory
     shared double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D]  @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
     shared double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
-    shared double s_gradv[NUM_DIM * NUM_QUAD_2D]     @dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
 
-    exclusive double r_x[NUM_DIM * NUM_MAX_1D]  @dim(NUM_DIM, NUM_MAX_1D);
-    exclusive double r_y[NUM_DIM * NUM_QUAD_1D] @dim(NUM_DIM, NUM_QUAD_1D);
+    shared double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D] @dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
+
+    exclusive double r_v[NUM_DIM * NUM_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D);
 
     for (int x = 0; x < NUM_MAX_1D; ++x; inner) {
       for (int id = x; id < NUM_QUAD_DOFS_1D; id += NUM_MAX_1D) {
@@ -77,7 +77,7 @@ kernel void UpdateQuadratureData2D(const int numElements,
         }
         for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
           for (int vi = 0; vi < NUM_DIM; ++vi) {
-            r_x(vi, dy) = v(vi, dx, dy, el);
+            r_v(vi, dy) = v(vi, dx, dy, el);
           }
         }
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -89,8 +89,8 @@ kernel void UpdateQuadratureData2D(const int numElements,
           }
           for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
             for (int vi = 0; vi < NUM_DIM; ++vi) {
-              xy[vi]  += r_x(vi, dy) * s_dofToQuad(qy, dy);
-              xDy[vi] += r_x(vi, dy) * s_dofToQuadD(qy, dy);
+              xy[vi]  += r_v(vi, dy) * s_dofToQuad(qy, dy);
+              xDy[vi] += r_v(vi, dy) * s_dofToQuadD(qy, dy);
             }
           }
           for (int vi = 0; vi < NUM_DIM; ++vi) {
@@ -125,17 +125,21 @@ kernel void UpdateQuadratureData2D(const int numElements,
     }
 
     for (int qBlock = 0; qBlock < NUM_MAX_1D; ++qBlock; inner) {
-      for (int q = qBlock; q < NUM_QUAD; q += NUM_MAX_1D; inner) {
-        double q_gradv[4] @dim(2, 2);
-        double q_stress[4] @dim(2, 2);
+      for (int q = qBlock; q < NUM_QUAD; q += NUM_MAX_1D) {
+        double q_gradv[NUM_DIM * NUM_DIM]  @dim(NUM_DIM, NUM_DIM);
+        double q_stress[NUM_DIM * NUM_DIM] @dim(NUM_DIM, NUM_DIM);
 
-        for (int j = 0; j < NUM_DIM; ++j) {
-          for (int i = 0; i < NUM_DIM; ++i) {
-            q_gradv(i, j) = s_gradv(i, j, q);
-          }
-        }
+        const double invJ_00 = invJ(0, 0, q, el), invJ_01 = invJ(0, 1, q, el);
+        const double invJ_10 = invJ(1, 0, q, el), invJ_11 = invJ(1, 1, q, el);
 
-        const double q_rho = rho0DetJ0w(q, el) / (detJ(q, el) * quadWeights[q]);
+        q_gradv(0, 0) = ((s_gradv(0, 0, q) * invJ_00) + (s_gradv(0, 1, q) * invJ_01));
+        q_gradv(1, 0) = ((s_gradv(0, 0, q) * invJ_10) + (s_gradv(0, 1, q) * invJ_11));
+        q_gradv(0, 1) = ((s_gradv(1, 0, q) * invJ_00) + (s_gradv(1, 1, q) * invJ_01));
+        q_gradv(1, 1) = ((s_gradv(1, 0, q) * invJ_10) + (s_gradv(1, 1, q) * invJ_11));
+
+        const double q_Jw = detJ(q, el) * quadWeights[q];
+
+        const double q_rho = rho0DetJ0w(q, el) / q_Jw;
         const double q_e   = max(0.0, e(q, el));
 
         const double s = -(GAMMA - 1.0) * q_rho * q_e;
@@ -156,7 +160,7 @@ kernel void UpdateQuadratureData2D(const int numElements,
         // Get largest eigenvalue and its eigenvector
         const double eigVal1 = - 0.5 * (eigB + eigDisc);
         const double eigVal2 = - 0.5 * (eigB - eigDisc);
-        const double maxEig = (eigVal1 > eigVal2) ? eigVal1 : eigVal2;
+        const double maxEig = (eigVal1 < eigVal2) ? eigVal1 : eigVal2;
 
         // Normalize eigenvector: [1.0, (maxEig - gradv00) / gradv10)]
         const double comprDirY_ = (maxEig - gradv00) / gradv10;
@@ -170,12 +174,9 @@ kernel void UpdateQuadratureData2D(const int numElements,
         const double invJ0_00 = invJ0(0, 0, q, el), invJ0_10 = invJ0(1, 0, q, el);
         const double invJ0_01 = invJ0(0, 1, q, el), invJ0_11 = invJ0(1, 1, q, el);
 
-        const double invJ_00 = invJ(0, 0, q, el), invJ_01 = invJ(0, 1, q, el);
-        const double invJ_10 = invJ(1, 0, q, el), invJ_11 = invJ(1, 1, q, el);
-
         const double Jpi_00 = ((J_00 * invJ0_00) + (J_10 * invJ0_01));
-        const double Jpi_10 = ((J_00 * invJ0_10) + (J_10 * invJ0_11));
-        const double Jpi_01 = ((J_01 * invJ0_00) + (J_11 * invJ0_01));
+        const double Jpi_01 = ((J_00 * invJ0_10) + (J_10 * invJ0_11));
+        const double Jpi_10 = ((J_01 * invJ0_00) + (J_11 * invJ0_01));
         const double Jpi_11 = ((J_01 * invJ0_10) + (J_11 * invJ0_11));
 
         const double physDirX = (Jpi_00 * comprDirX) + (Jpi_10 * comprDirY);
@@ -199,10 +200,18 @@ kernel void UpdateQuadratureData2D(const int numElements,
           }
         }
 
-        stressJinvT(0, 0, q, el) = ((q_stress(0, 0) * invJ_00) + (q_stress(0, 1) * invJ_01));
-        stressJinvT(1, 0, q, el) = ((q_stress(0, 0) * invJ_10) + (q_stress(0, 1) * invJ_11));
-        stressJinvT(0, 1, q, el) = ((q_stress(1, 0) * invJ_00) + (q_stress(1, 1) * invJ_01));
-        stressJinvT(1, 1, q, el) = ((q_stress(1, 0) * invJ_10) + (q_stress(1, 1) * invJ_11));
+        stressJinvT(0, 0, q, el) = (q_Jw
+                                    * ((q_stress(0, 0) * invJ_00)
+                                       + (q_stress(1, 0) * invJ_10)));
+        stressJinvT(1, 0, q, el) = (q_Jw
+                                    * ((q_stress(0, 0) * invJ_01)
+                                       + (q_stress(1, 0) * invJ_11)));
+        stressJinvT(0, 1, q, el) = (q_Jw
+                                    * ((q_stress(0, 1) * invJ_00)
+                                       + (q_stress(1, 1) * invJ_10)));
+        stressJinvT(1, 1, q, el) = (q_Jw
+                                    * ((q_stress(0, 1) * invJ_01)
+                                       + (q_stress(1, 1) * invJ_11)));
       }
     }
   }
