@@ -51,8 +51,8 @@ void QuadratureData::Setup(occa::device device_,
   stressJinvT.SetSize(elements * nqp, dim, dim);
   rho0DetJ0w.SetSize(elements * nqp);
 
-  o_rho0DetJ0w.allocate(nqp, elements);
-  o_stressJinvT.allocate(dim, dim, nqp, elements);
+  o_rho0DetJ0w.SetSize(device, nqp * elements);
+  o_stressJinvT.SetSize(device, dim * dim * nqp * elements);
   o_dtEst.SetSize(device, nqp * elements);
 }
 
@@ -112,6 +112,7 @@ OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
   : Operator(fes_.GetTrueVSize()),
     device(occa::getDevice()),
     fes(fes_),
+    bilinearForm(&fes),
     x_gf(device, &fes),
     y_gf(device, &fes) {
   Setup(quad_data_);
@@ -123,6 +124,7 @@ OccaMassOperator::OccaMassOperator(occa::device device_,
   : Operator(fes_.GetTrueVSize()),
     device(device_),
     fes(fes_),
+    bilinearForm(&fes),
     x_gf(device, &fes),
     y_gf(device, &fes) {
   Setup(quad_data_);
@@ -134,6 +136,18 @@ void OccaMassOperator::Setup(QuadratureData *quad_data_) {
 
   quad_data = quad_data_;
   ess_tdofs_count = 0;
+
+  // OccaCoefficient coeff("rho0DetJ0w(q, e)");
+  // coeff.AddVector("rho0DetJ0w",
+  //                 quad_data->o_rho0DetJ0w,
+  //                 "@dim(NUM_QUAD, numElements)",
+  //                 true);
+
+  // bilinearForm.AddDomainIntegrator(new OccaMassIntegrator(coeff));
+  // bilinearForm.Assemble();
+
+  // bilinearForm.FormOperator(Array<int>(), massOperator);
+  massOperator = NULL;
 }
 
 void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
@@ -148,6 +162,11 @@ void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
     ess_tdofs.copyFrom(dofs.GetData(),
                        ess_tdofs_count * sizeof(int));
   }
+
+  if (massOperator) {
+    delete massOperator;
+  }
+  // bilinearForm.FormOperator(dofs, massOperator);
 }
 
 void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
@@ -160,9 +179,9 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
   }
 
   if (dim == 2) {
-    MultQuad(x, y);
+    MultQuad(x_gf, y_gf);
   } else if (dim == 3) {
-    MultHex(x, y);
+    MultHex(x_gf, y_gf);
   } else {
     MFEM_ABORT("Unsupported dimension");
   }
@@ -175,7 +194,10 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
 }
 
 void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
-  Vector x2 = x_gf;
+#if 0
+  //  massOperator->Mult(x, y);
+#else
+  Vector x2 = x;
   Vector y2;
 
   // Are we working with the velocity or energy mass matrix?
@@ -237,11 +259,12 @@ void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
     }
   }
 
-  y_gf = y2;
+  y = y2;
+#endif
 }
 
 void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
-  Vector x2 = x_gf;
+  Vector x2 = x;
   Vector y2;
 
   // Are we working with the velocity or energy mass matrix?
@@ -325,7 +348,7 @@ void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
     }
   }
 
-  y_gf = y2;
+  y = y2;
 }
 
 void OccaMassOperator::EliminateRHS(OccaVector &b) {

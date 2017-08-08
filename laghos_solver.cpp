@@ -192,21 +192,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
               quad_data.o_dqMaps.quadWeights,
               quad_data.o_rho0DetJ0w);
 
-   quad_data.o_Jac0inv = quad_data.o_geom.invJ;
-   quad_data.o_Jac0inv.syncToHost();
-   quad_data.o_rho0DetJ0w.syncToHost();
+   quad_data.rho0DetJ0w = quad_data.o_rho0DetJ0w;
+   quad_data.o_Jac0inv  = quad_data.o_geom.invJ;
+
+   Vector Jac0inv = quad_data.o_Jac0inv;
+   memcpy(quad_data.Jac0inv.Data(),
+          Jac0inv.GetData(),
+          Jac0inv.Size() * sizeof(double));
 
    const int nqp = integ_rule.GetNPoints();
-   for (int el = 0; el < elements; ++el) {
-     for (int q = 0; q < nqp; ++q) {
-       quad_data.rho0DetJ0w(el*nqp + q) = quad_data.o_rho0DetJ0w(q, el);
-       for (int j = 0; j < dim; ++j) {
-         for (int i = 0; i < dim; ++i) {
-           quad_data.Jac0inv(i, j, q + el*nqp) = quad_data.o_Jac0inv(i, j, q, el);
-         }
-       }
-     }
-   }
 
    tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                              L2FESpace.GetFE(0)->GetOrder(),
@@ -421,13 +415,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
 
     quad_data.dt_est = quad_data.o_dtEst.Min();
 
-    quad_data.o_stressJinvT.syncToHost();
+    Vector stressJinvT = quad_data.o_stressJinvT;
+    int o_idx = 0;
     for (int el = 0; el < elements; ++el) {
       for (int q = 0; q < nqp; ++q) {
         for (int j = 0; j < dim; ++j) {
           for (int i = 0; i < dim; ++i) {
-            quad_data.stressJinvT(q + el*nqp, j, i) =
-              quad_data.o_stressJinvT(i, j, q, el);
+            quad_data.stressJinvT(q + el*nqp, j, i) = stressJinvT[o_idx++];
           }
         }
       }
