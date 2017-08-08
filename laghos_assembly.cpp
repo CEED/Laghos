@@ -110,30 +110,30 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
 OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
                                    OccaFiniteElementSpace &fes_)
   : Operator(fes_.GetTrueVSize()),
-    fes(fes_) {
-  Setup(occa::getDevice(), quad_data_);
+    device(occa::getDevice()),
+    fes(fes_),
+    x_gf(device, &fes),
+    y_gf(device, &fes) {
+  Setup(quad_data_);
 }
 
 OccaMassOperator::OccaMassOperator(occa::device device_,
                                    QuadratureData *quad_data_,
                                    OccaFiniteElementSpace &fes_)
   : Operator(fes_.GetTrueVSize()),
-    fes(fes_) {
-  Setup(device_, quad_data_);
+    device(device_),
+    fes(fes_),
+    x_gf(device, &fes),
+    y_gf(device, &fes) {
+  Setup(quad_data_);
 }
 
-void OccaMassOperator::Setup(occa::device device_,
-                             QuadratureData *quad_data_) {
-  device = device_;
-
+void OccaMassOperator::Setup(QuadratureData *quad_data_) {
   dim = fes.GetMesh()->Dimension();
   elements = fes.GetMesh()->GetNE();
 
   quad_data = quad_data_;
   ess_tdofs_count = 0;
-
-  x_gf = ParGridFunction((ParFiniteElementSpace*) fes.GetFESpace());
-  y_gf = ParGridFunction((ParFiniteElementSpace*) fes.GetFESpace());
 }
 
 void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {

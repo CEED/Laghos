@@ -126,7 +126,7 @@ private:
 
   // For distributing X
   mutable OccaVector distX;
-  mutable ParGridFunction x_gf, y_gf;
+  mutable OccaGridFunction x_gf, y_gf;
 
    // Force matrix action on quadrilateral elements in 2D
    void MultQuad(const OccaVector &x, OccaVector &y) const;
@@ -138,7 +138,7 @@ public:
   OccaMassOperator(occa::device device_,
                    QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
 
-  void Setup(occa::device device_, QuadratureData *quad_data_);
+  void Setup(QuadratureData *quad_data_);
 
   void SetEssentialTrueDofs(Array<int> &dofs);
 
