@@ -107,11 +107,13 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    }
 }
 
-OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
-                                   OccaFiniteElementSpace &fes_)
+  OccaMassOperator::OccaMassOperator(OccaFiniteElementSpace &fes_,
+                                     const IntegrationRule &integ_rule_,
+                                     QuadratureData *quad_data_)
   : Operator(fes_.GetTrueVSize()),
     device(occa::getDevice()),
     fes(fes_),
+    integ_rule(integ_rule_),
     bilinearForm(&fes),
     x_gf(device, &fes),
     y_gf(device, &fes) {
@@ -119,11 +121,13 @@ OccaMassOperator::OccaMassOperator(QuadratureData *quad_data_,
 }
 
 OccaMassOperator::OccaMassOperator(occa::device device_,
-                                   QuadratureData *quad_data_,
-                                   OccaFiniteElementSpace &fes_)
+                                   OccaFiniteElementSpace &fes_,
+                                   const IntegrationRule &integ_rule_,
+                                   QuadratureData *quad_data_)
   : Operator(fes_.GetTrueVSize()),
     device(device_),
     fes(fes_),
+    integ_rule(integ_rule_),
     bilinearForm(&fes),
     x_gf(device, &fes),
     y_gf(device, &fes) {
@@ -137,17 +141,19 @@ void OccaMassOperator::Setup(QuadratureData *quad_data_) {
   quad_data = quad_data_;
   ess_tdofs_count = 0;
 
-  // OccaCoefficient coeff("rho0DetJ0w(q, e)");
-  // coeff.AddVector("rho0DetJ0w",
-  //                 quad_data->o_rho0DetJ0w,
-  //                 "@dim(NUM_QUAD, numElements)",
-  //                 true);
+  OccaCoefficient coeff("(rho0DetJ0w(q, e) / (quadWeights[q] * detJ))");
+  coeff.AddVector("rho0DetJ0w",
+                  quad_data->o_rho0DetJ0w,
+                  "@dim(NUM_QUAD, numElements)",
+                  true);
 
-  // bilinearForm.AddDomainIntegrator(new OccaMassIntegrator(coeff));
-  // bilinearForm.Assemble();
+  OccaMassIntegrator &massInteg = *(new OccaMassIntegrator(coeff));
+  massInteg.SetIntegrationRule(integ_rule);
 
-  // bilinearForm.FormOperator(Array<int>(), massOperator);
-  massOperator = NULL;
+  bilinearForm.AddDomainIntegrator(&massInteg);
+  bilinearForm.Assemble();
+
+  bilinearForm.FormOperator(Array<int>(), massOperator);
 }
 
 void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
@@ -162,11 +168,6 @@ void OccaMassOperator::SetEssentialTrueDofs(Array<int> &dofs) {
     ess_tdofs.copyFrom(dofs.GetData(),
                        ess_tdofs_count * sizeof(int));
   }
-
-  if (massOperator) {
-    delete massOperator;
-  }
-  // bilinearForm.FormOperator(dofs, massOperator);
 }
 
 void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
@@ -178,177 +179,13 @@ void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
     x_gf.Distribute(x);
   }
 
-  if (dim == 2) {
-    MultQuad(x_gf, y_gf);
-  } else if (dim == 3) {
-    MultHex(x_gf, y_gf);
-  } else {
-    MFEM_ABORT("Unsupported dimension");
-  }
+  massOperator->Mult(x_gf, y_gf);
 
   fes.GetProlongationOperator()->MultTranspose(y_gf, y);
 
   if (ess_tdofs_count) {
     y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
   }
-}
-
-void OccaMassOperator::MultQuad(const OccaVector &x, OccaVector &y) const {
-#if 0
-  //  massOperator->Mult(x, y);
-#else
-  Vector x2 = x;
-  Vector y2;
-
-  // Are we working with the velocity or energy mass matrix?
-  const FiniteElement *fe = fes.GetFE(0);
-  const TensorBasisElement *tfe = dynamic_cast<const TensorBasisElement*>(fe);
-  const H1_QuadrilateralElement *fe_H1 = dynamic_cast<const H1_QuadrilateralElement*>(fe);
-
-  const Array<int> &dof_map = tfe->GetDofMap();
-
-  const DenseMatrix &DQs = (fe_H1
-                            ? tensors1D->HQshape1D
-                            : tensors1D->LQshape1D);
-
-  const int ndof1D = DQs.Height();
-  const int nqp1D  = DQs.Width();
-
-  DenseMatrix DQ(ndof1D, nqp1D);
-  DenseMatrix QQ(nqp1D , nqp1D);
-
-  Vector xz(ndof1D * ndof1D);
-  Vector yz(ndof1D * ndof1D);
-
-  DenseMatrix X(xz.GetData(), ndof1D, ndof1D);
-  DenseMatrix Y(yz.GetData(), ndof1D, ndof1D);
-
-  Array<int> dofs;
-  double *qq = QQ.GetData();
-  const int nqp = nqp1D * nqp1D;
-
-  y2.SetSize(x2.Size());
-  y2 = 0.0;
-
-  for (int e = 0; e < elements; ++e) {
-    fes.GetFESpace()->GetElementDofs(e, dofs);
-    // Transfer from the mfem's H1 local numbering to the tensor structure
-    // numbering.
-    for (int j = 0; j < xz.Size(); j++) {
-      xz[j] = x2[dofs[dof_map[j]]];
-    }
-
-    // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
-    // QQ_k1_k2 = DQs_i1_k1 DQ_i1_k2 -- contract in x direction.
-    mfem::Mult(X, DQs, DQ);
-    MultAtB(DQs, DQ, QQ);
-
-    // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-    double *d = quad_data->rho0DetJ0w.GetData() + e*nqp;
-    for (int q = 0; q < nqp; q++) {
-      qq[q] *= d[q];
-    }
-
-    // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
-    // Y_i1_i2  = DQ_i1_k2 DQs_i2_k2 -- contract in y direction.
-    mfem::Mult(DQs, QQ, DQ);
-    MultABt(DQ, DQs, Y);
-
-    for (int j = 0; j < yz.Size(); j++) {
-      y2[dofs[dof_map[j]]] += yz[j];
-    }
-  }
-
-  y = y2;
-#endif
-}
-
-void OccaMassOperator::MultHex(const OccaVector &x, OccaVector &y) const {
-  Vector x2 = x;
-  Vector y2;
-
-  // Are we working with the velocity or energy mass matrix?
-  const FiniteElement *fe = fes.GetFE(0);
-  const TensorBasisElement *tfe = dynamic_cast<const TensorBasisElement*>(fe);
-  const H1_HexahedronElement *fe_H1 = dynamic_cast<const H1_HexahedronElement*>(fe);
-
-  const Array<int> &dof_map = tfe->GetDofMap();
-
-  const DenseMatrix &DQs = (fe_H1
-                            ? tensors1D->HQshape1D
-                            : tensors1D->LQshape1D);
-
-  const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
-  DenseMatrix DD_Q(ndof1D * ndof1D, nqp1D);
-  DenseMatrix D_DQ(DD_Q.GetData(), ndof1D, ndof1D*nqp1D);
-  DenseMatrix Q_DQ(nqp1D, ndof1D*nqp1D);
-  DenseMatrix QQ_Q(nqp1D*nqp1D, nqp1D);
-  double *qqq = QQ_Q.GetData();
-  Vector xz(ndof1D * ndof1D * ndof1D), yz(ndof1D * ndof1D * ndof1D);
-  DenseMatrix X(xz.GetData(), ndof1D*ndof1D, ndof1D),
-    Y(yz.GetData(), ndof1D*ndof1D, ndof1D);
-  const int nqp = nqp1D * nqp1D * nqp1D;
-  Array<int> dofs;
-
-  y2.SetSize(x2.Size());
-  y2 = 0.0;
-
-  for (int e = 0; e < elements; e++) {
-    fes.GetFESpace()->GetElementDofs(e, dofs);
-    // Transfer from the mfem's H1 local numbering to the tensor structure
-    // numbering.
-    for (int j = 0; j < xz.Size(); j++) {
-      xz[j] = x2[dofs[dof_map[j]]];
-    }
-
-    // DDQ_i1_i2_k3  = X_i1_i2_i3 DQs_i3_k3   -- contract in z direction.
-    // QDQ_k1_i2_k3  = DQs_i1_k1 DDQ_i1_i2_k3 -- contract in x direction.
-    // QQQ_k1_k2_k3  = QDQ_k1_i2_k3 DQs_i2_k2 -- contract in y direction.
-    // The last step does some reordering (it's not product of matrices).
-    mfem::Mult(X, DQs, DD_Q);
-    MultAtB(DQs, D_DQ, Q_DQ);
-    for (int k1 = 0; k1 < nqp1D; k1++) {
-      for (int k2 = 0; k2 < nqp1D; k2++) {
-        for (int k3 = 0; k3 < nqp1D; k3++) {
-          QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
-          for (int i2 = 0; i2 < ndof1D; i2++) {
-            QQ_Q(k1 + nqp1D*k2, k3) +=
-              Q_DQ(k1, i2 + k3*ndof1D) * DQs(i2, k2);
-          }
-        }
-      }
-    }
-
-    // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
-    double *d = quad_data->rho0DetJ0w.GetData() + e*nqp;
-    for (int q = 0; q < nqp; q++) {
-      qqq[q] *= d[q];
-    }
-
-    // QDQ_k1_i2_k3 = QQQ_k1_k2_k3 DQs_i2_k2 -- contract in y direction.
-    // This first step does some reordering (it's not product of matrices).
-    // DDQ_i1_i2_k3 = DQs_i1_k1 QDQ_k1_i2_k3 -- contract in x direction.
-    // Y_i1_i2_i3   = DDQ_i1_i2_k3 DQs_i3_k3 -- contract in z direction.
-    for (int k1 = 0; k1 < nqp1D; k1++) {
-      for (int i2 = 0; i2 < ndof1D; i2++) {
-        for (int k3 = 0; k3 < nqp1D; k3++) {
-          Q_DQ(k1, i2 + ndof1D*k3) = 0.0;
-          for (int k2 = 0; k2 < nqp1D; k2++) {
-            Q_DQ(k1, i2 + ndof1D*k3) +=
-              QQ_Q(k1 + nqp1D*k2, k3) * DQs(i2, k2);
-          }
-        }
-      }
-    }
-    mfem::Mult(DQs, Q_DQ, D_DQ);
-    MultABt(DD_Q, DQs, Y);
-
-    for (int j = 0; j < yz.Size(); j++) {
-      y2[dofs[dof_map[j]]] += yz[j];
-    }
-  }
-
-  y = y2;
 }
 
 void OccaMassOperator::EliminateRHS(OccaVector &b) {

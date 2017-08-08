@@ -254,7 +254,9 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    OccaVector X(H1compFESpace.TrueVSize());
 
    // Partial assembly solve for each velocity component.
-   OccaMassOperator VMass(&quad_data, o_H1compFESpace);
+   OccaMassOperator VMass(o_H1compFESpace,
+                          integ_rule,
+                          &quad_data);
    const int size = o_H1compFESpace.GetVSize();
    for (int c = 0; c < dim; c++) {
       OccaVector rhs_c = rhs.GetRange(c*size, size);
@@ -304,7 +306,9 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
      o_forceRHS += *e_source;
    }
 
-   OccaMassOperator EMass(&quad_data, o_L2FESpace);
+   OccaMassOperator EMass(o_L2FESpace,
+                          integ_rule,
+                          &quad_data);
 
    CG(L2FESpace.GetParMesh()->GetComm(),
       EMass, o_forceRHS, de,

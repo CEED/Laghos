@@ -121,6 +121,8 @@ private:
   QuadratureData *quad_data;
   OccaFiniteElementSpace &fes;
 
+  const IntegrationRule &integ_rule;
+
   int ess_tdofs_count;
   occa::memory ess_tdofs;
 
@@ -137,9 +139,14 @@ private:
    void MultHex(const OccaVector &x, OccaVector &y) const;
 
 public:
-  OccaMassOperator(QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
+  OccaMassOperator(OccaFiniteElementSpace &fes_,
+                   const IntegrationRule &integ_rule_,
+                   QuadratureData *quad_data_);
+
   OccaMassOperator(occa::device device_,
-                   QuadratureData *quad_data_, OccaFiniteElementSpace &fes_);
+                   OccaFiniteElementSpace &fes_,
+                   const IntegrationRule &integ_rule_,
+                   QuadratureData *quad_data_);
 
   void Setup(QuadratureData *quad_data_);
 

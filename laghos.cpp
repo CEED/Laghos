@@ -45,11 +45,6 @@
 //    p = 2  --> Sedov blast.
 
 //  TODO
-//    - UpdateQuadratureData
-//    - Mass
-//        - Mult
-//            - MultQuad
-//            - MultHex
 //    - Force
 //        - Mult
 //            - MultQuad
