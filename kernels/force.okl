@@ -43,10 +43,14 @@
 #endif
 
 typedef double* L2DofToQuad_t @dim(NUM_QUAD_1D, L2_DOFS_1D);
+typedef double* H1DofToQuad_t @dim(NUM_QUAD_1D, H1_DOFS_1D);
+
+typedef double* L2QuadToDof_t @dim(L2_DOFS_1D , NUM_QUAD_1D);
 typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
 
 typedef double* E2D_t    @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
 typedef double* V2D_t    @dim(NUM_DIM, H1_DOFS_1D, H1_DOFS_1D, numElements);
+typedef double* X_V2D_t  @dim(NUM_DIM, H1_DOFS_1D, H1_DOFS_1D, numElements);
 typedef double* Stress_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 
 kernel void Mult2D(const int numElements,
@@ -81,9 +85,6 @@ kernel void Mult2D(const int numElements,
           if (dx < L2_DOFS_1D) {
             double r_x[L2_DOFS_1D];
 
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-              s_xy(dx, qy) = 0;
-            }
             for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
               r_x[dy] = e(dx, dy, el);
             }
@@ -98,7 +99,7 @@ kernel void Mult2D(const int numElements,
         }
         for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
           if (qy < NUM_QUAD_1D) {
-            for (int qx = 0; qx < NUM_MAX_1D; ++qx) {
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
               double r_e = 0;
               for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
                 r_e += s_xy(dx, qy) * s_L2DofToQuad(qx, dx);
@@ -114,10 +115,6 @@ kernel void Mult2D(const int numElements,
               double r_x[H1_DOFS_1D];
               double r_y[NUM_QUAD_1D];
 
-              for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-                s_xy(dy, qx)  = 0;
-                s_xDy(dy, qx) = 0;
-              }
               for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
                 const double r_e = s_e(qx, qy);
                 r_x[qy] = stressJinvT(c, 0, qx, qy, el) * r_e;
@@ -145,6 +142,108 @@ kernel void Mult2D(const int numElements,
                 }
                 v(c, dx, dy, el) = r_v;
               }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+kernel void MultTranspose2D(const int numElements,
+                            const L2QuadToDof_t restrict L2QuadToDof,
+                            const H1DofToQuad_t restrict H1DofToQuad,
+                            const H1DofToQuad_t restrict H1DofToQuadD,
+                            const Stress_t restrict stressJinvT,
+                            const X_V2D_t restrict v,
+                            E2D_t restrict e) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
+    shared double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
+    shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+    shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+
+    shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, MAX_DOFS_1D);
+    shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+    shared double s_v[NUM_QUAD_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; inner) {
+      for (int id = idBlock; id < (L2_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {
+        s_L2QuadToDof[id] = L2QuadToDof[id];
+      }
+      for (int id = idBlock; id < (H1_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {
+        s_H1DofToQuad[id]  = H1DofToQuad[id];
+        s_H1DofToQuadD[id] = H1DofToQuadD[id];
+      }
+    }
+
+    for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
+      if (el < numElements) {
+        for (int qBlock = 0; qBlock < INNER_SIZE; ++qBlock; inner) {
+          for (int q = qBlock; q < NUM_QUAD; ++q) {
+            s_v[q] = 0;
+          }
+        }
+        for (int c = 0; c < 2; ++c) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+            if (dx < NUM_DOFS_1D) {
+              double r_x[H1_DOFS_1D];
+              double r_y[H1_DOFS_1D];
+
+              for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+                const double r_v = v(c, dx, dy, el);
+                r_x[dy] = r_v;
+                r_y[dy] = r_v;
+              }
+              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                double xy  = 0;
+                double xDy = 0;
+                for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+                  xy  += r_x[dy] * s_H1DofToQuad(qy, dy);
+                  xDy += r_y[dy] * s_H1DofToQuadD(qy, dy);
+                }
+                s_xy(qy, dx)  = xy;
+                s_xDy(qy, dx) = xDy;
+              }
+            }
+          }
+          for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+            if (qx < NUM_QUAD_1D) {
+              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                double Dxy = 0;
+                double xDy = 0;
+                for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+                  Dxy += (s_xy(qy, dx)  * s_H1DofToQuadD(qx, dx));
+                  xDy += (s_xDy(qy, dx) * s_H1DofToQuad(qx, dx));
+                }
+                s_v(qx, qy) += ((Dxy * stressJinvT(c, 0, qx, qy, el)) +
+                                (xDy * stressJinvT(c, 1, qx, qy, el)));
+              }
+            }
+          }
+        }
+        for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          if (qx < NUM_QUAD_1D) {
+            double r_x[NUM_QUAD_1D];
+
+            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+              r_x[qy] = s_v(qx, qy);
+            }
+            for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+              double xy = 0;
+              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                xy += r_x[qy] * s_L2QuadToDof(dy, qy);
+              }
+              s_xy(qx, dy) = xy;
+            }
+          }
+        }
+        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+          if (dy < L2_DOFS_1D) {
+            for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+              double r_e = 0;
+              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                r_e += s_xy(qx, dy) * s_L2QuadToDof(dx, qx);
+              }
+              e(dx, dy, el) = r_e;
             }
           }
         }

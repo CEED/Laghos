@@ -238,21 +238,29 @@ void OccaForceOperator::Setup() {
                                   "Mult2D",
                                   props);
 
+  multTransposeKernel = device.buildKernel("occa://laghos/force.okl",
+                                           "MultTranspose2D",
+                                           props);
+
   h1D2Q = OccaDofQuadMaps::Get(device, h1fes, integ_rule);
   l2D2Q = OccaDofQuadMaps::Get(device, l2fes, integ_rule);
 }
 
 void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
   if ((dim == 2) && l2fes.hasTensorBasis()) {
+    OccaVector gVecL2(device,
+                      l2fes.GetLocalDofs() * elements);
     OccaVector gVecH1(device,
                       h1fes.GetVDim() * h1fes.GetLocalDofs() * elements);
+
+    l2fes.GlobalToLocal(vecL2, gVecL2);
 
     multKernel(elements,
                l2D2Q.dofToQuad,
                h1D2Q.quadToDof,
                h1D2Q.quadToDofD,
                quad_data->o_stressJinvT,
-               vecL2,
+               gVecL2,
                gVecH1);
 
     h1fes.LocalToGlobal(gVecH1, vecH1);
@@ -266,7 +274,6 @@ void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
       }
     }
     vecH1 = v2;
-
     return;
   }
 
@@ -280,6 +287,37 @@ void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
 }
 
 void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const {
+  if ((dim == 2) && l2fes.hasTensorBasis()) {
+    OccaVector gVecH1(device,
+                      h1fes.GetVDim() * h1fes.GetLocalDofs() * elements);
+    OccaVector gVecL2(device,
+                      l2fes.GetLocalDofs() * elements);
+
+    Vector v1 = vecH1;
+    Vector v2(v1.Size());
+    const int h1GlobalDofs = h1fes.GetGlobalDofs();
+    for (int c = 0; c < 2; ++c) {
+      for (int d = 0; d < h1GlobalDofs; ++d) {
+        v2[c + d*2] = v1[d + c*h1GlobalDofs];
+      }
+    }
+    OccaVector vecH1_2(device, v1.Size());
+    vecH1_2 = v2;
+
+    h1fes.GlobalToLocal(vecH1_2, gVecH1);
+
+    multTransposeKernel(elements,
+                        l2D2Q.quadToDof,
+                        h1D2Q.dofToQuad,
+                        h1D2Q.dofToQuadD,
+                        quad_data->o_stressJinvT,
+                        gVecH1,
+                        gVecL2);
+
+    l2fes.LocalToGlobal(gVecL2, vecL2);
+    return;
+  }
+
   if (dim == 2) {
     MultTransposeQuad(vecH1, vecL2);
   } else if (dim == 3) {

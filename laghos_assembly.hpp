@@ -168,7 +168,7 @@ private:
 
   QuadratureData *quad_data;
 
-  occa::kernel multKernel;
+  occa::kernel multKernel, multTransposeKernel;
 
   OccaDofQuadMaps l2D2Q, h1D2Q;
 
