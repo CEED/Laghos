@@ -118,7 +118,6 @@ private:
   occa::device device;
 
   int dim, elements;
-  QuadratureData *quad_data;
   OccaFiniteElementSpace &fes;
 
   const IntegrationRule &integ_rule;
@@ -129,14 +128,11 @@ private:
   OccaBilinearForm bilinearForm;
   Operator *massOperator;
 
+  QuadratureData *quad_data;
+
   // For distributing X
   mutable OccaVector distX;
   mutable OccaGridFunction x_gf, y_gf;
-
-   // Force matrix action on quadrilateral elements in 2D
-   void MultQuad(const OccaVector &x, OccaVector &y) const;
-   // Force matrix action on hexahedral elements in 3D
-   void MultHex(const OccaVector &x, OccaVector &y) const;
 
 public:
   OccaMassOperator(OccaFiniteElementSpace &fes_,
@@ -148,7 +144,7 @@ public:
                    const IntegrationRule &integ_rule_,
                    QuadratureData *quad_data_);
 
-  void Setup(QuadratureData *quad_data_);
+  void Setup();
 
   void SetEssentialTrueDofs(Array<int> &dofs);
 
@@ -167,8 +163,12 @@ private:
   occa::device device;
   int dim, elements;
 
-  QuadratureData *quad_data;
   OccaFiniteElementSpace &h1fes, &l2fes;
+  const IntegrationRule &integ_rule;
+
+  QuadratureData *quad_data;
+
+  occa::kernel multKernel;
 
   // Force matrix action on quadrilateral elements in 2D
   void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
@@ -181,17 +181,18 @@ private:
   void MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const;
 
 public:
-  OccaForceOperator(QuadratureData *quad_data_,
-                    OccaFiniteElementSpace &h1fes_,
-                    OccaFiniteElementSpace &l2fes_);
+  OccaForceOperator(OccaFiniteElementSpace &h1fes_,
+                    OccaFiniteElementSpace &l2fes_,
+                    const IntegrationRule &integ_rule,
+                    QuadratureData *quad_data_);
 
   OccaForceOperator(occa::device device_,
-                    QuadratureData *quad_data_,
                     OccaFiniteElementSpace &h1fes_,
-                    OccaFiniteElementSpace &l2fes_);
+                    OccaFiniteElementSpace &l2fes_,
+                    const IntegrationRule &integ_rule,
+                    QuadratureData *quad_data_);
 
-  void Setup(occa::device device_,
-             QuadratureData *quad_data_);
+  void Setup();
 
   virtual void Mult(const OccaVector &vecL2, OccaVector &vecH1) const;
   virtual void MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const;

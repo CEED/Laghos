@@ -1,0 +1,152 @@
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
+//
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
+//
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
+
+#include "occa://mfem/fem/defines.okl"
+
+#define ELEMENT_BATCH 10
+
+#if L2_DOFS_1D > NUM_QUAD_1D
+#  define L2_MAX_1D L2_DOFS_1D
+#else
+#  define L2_MAX_1D NUM_QUAD_1D
+#endif
+
+#if H1_DOFS_1D > NUM_QUAD_1D
+#  define H1_MAX_1D H1_DOFS_1D
+#else
+#  define H1_MAX_1D NUM_QUAD_1D
+#endif
+
+#if L2_DOFS_1D > H1_DOFS_1D
+#  define MAX_DOFS_1D L2_DOFS_1D
+#else
+#  define MAX_DOFS_1D H1_DOFS_1D
+#endif
+
+#if H1_MAX_1D > L2_MAX_1D
+#  define INNER_SIZE H1_MAX_1D
+#else
+#  define INNER_SIZE L2_MAX_1D
+#endif
+
+typedef double* L2DofToQuad_t @dim(NUM_QUAD_1D, L2_DOFS_1D);
+typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
+
+typedef double* E2D_t    @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
+typedef double* V2D_t    @dim(NUM_DIM, H1_DOFS_1D, H1_DOFS_1D, numElements);
+typedef double* Stress_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
+
+kernel void Mult2D(const int numElements,
+                   const L2DofToQuad_t restrict L2DofToQuad,
+                   const H1QuadToDof_t restrict H1QuadToDof,
+                   const H1QuadToDof_t restrict H1QuadToDofD,
+                   const Stress_t restrict stressJinvT,
+                   const E2D_t restrict e,
+                   V2D_t restrict v) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
+    shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D]  @dim(NUM_QUAD_1D, L2_DOFS_1D);
+    shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+    shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+
+    // Store xy planes in shared memory
+    shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(MAX_DOFS_1D, NUM_QUAD_1D);
+    shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+    shared double s_e[NUM_QUAD_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+
+    exclusive double r_x[L2_MAX_1D];
+    exclusive double r_y[NUM_QUAD_1D];
+
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; inner) {
+      for (int id = idBlock; id < L2_MAX_1D; id += INNER_SIZE) {
+        s_L2DofToQuad[id] = L2DofToQuad[id];
+      }
+      for (int id = idBlock; id < H1_MAX_1D; id += INNER_SIZE) {
+        s_H1QuadToDof[id]  = H1QuadToDof[id];
+        s_H1QuadToDofD[id] = H1QuadToDofD[id];
+      }
+    }
+
+    for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
+      // e: Dof -> Quad
+      for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        if (dx < L2_DOFS_1D) {
+          for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+            s_xy(dx, qy) = 0;
+          }
+          for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+            r_x[dy] = e(dx, dy, el);
+          }
+          for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+            double xy = 0;
+            for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+              xy += r_x[dy] * s_L2DofToQuad(qy, dy);
+            }
+            s_xy(dx, qy) = xy;
+          }
+        }
+      }
+      for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
+        if (qy < NUM_QUAD_1D) {
+          for (int qx = 0; qx < NUM_MAX_1D; ++qx) {
+            double r_e = 0;
+            for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+              r_e += s_xy(dx, qy) * s_L2DofToQuad(qx, dx);
+            }
+            s_e(qx, qy) = r_e;
+          }
+        }
+      }
+
+      for (int c = 0; c < 2; ++c) {
+        for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          if (qx < NUM_QUAD_1D) {
+            for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+              s_xy(dy, qx)  = 0;
+              s_xDy(dy, qx) = 0;
+            }
+            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+              const double r_e = s_e(qx, qy);
+              r_x[qy] = stressJinvT(0, c, qx, qy, el) * r_e;
+              r_y[qy] = stressJinvT(1, c, qx, qy, el) * r_e;
+            }
+            for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+              double xy  = 0;
+              double xDy = 0;
+              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                xy  += r_x[qy] * s_H1QuadToDof(dy, qy);
+                xDy += r_y[qy] * s_H1QuadToDofD(dy, qy);
+              }
+              s_xy(dy, qx)  = xy;
+              s_xDy(dy, qx) = xDy;
+            }
+          }
+        }
+        for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          if (dx < H1_DOFS_1D) {
+            for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+              double r_v = 0;
+              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                r_v += ((s_xy(dy, qx) * s_H1QuadToDofD(dx, qx)) +
+                        (s_xDy(dy, qx) * s_H1QuadToDof(dx, qx)));
+              }
+              v(c, dx, dy, el) += r_v;
+            }
+          }
+        }
+      }
+    }
+  }
+}

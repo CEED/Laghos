@@ -115,9 +115,10 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
     fes(fes_),
     integ_rule(integ_rule_),
     bilinearForm(&fes),
+    quad_data(quad_data_),
     x_gf(device, &fes),
     y_gf(device, &fes) {
-  Setup(quad_data_);
+  Setup();
 }
 
 OccaMassOperator::OccaMassOperator(occa::device device_,
@@ -129,16 +130,16 @@ OccaMassOperator::OccaMassOperator(occa::device device_,
     fes(fes_),
     integ_rule(integ_rule_),
     bilinearForm(&fes),
+    quad_data(quad_data_),
     x_gf(device, &fes),
     y_gf(device, &fes) {
-  Setup(quad_data_);
+  Setup();
 }
 
-void OccaMassOperator::Setup(QuadratureData *quad_data_) {
+void OccaMassOperator::Setup() {
   dim = fes.GetMesh()->Dimension();
   elements = fes.GetMesh()->GetNE();
 
-  quad_data = quad_data_;
   ess_tdofs_count = 0;
 
   OccaCoefficient coeff("(rho0DetJ0w(q, e) / (quadWeights[q] * detJ))");
@@ -194,33 +195,48 @@ void OccaMassOperator::EliminateRHS(OccaVector &b) {
   }
 }
 
-OccaForceOperator::OccaForceOperator(QuadratureData *quad_data_,
-                                     OccaFiniteElementSpace &h1fes_,
-                                     OccaFiniteElementSpace &l2fes_)
+OccaForceOperator::OccaForceOperator(OccaFiniteElementSpace &h1fes_,
+                                     OccaFiniteElementSpace &l2fes_,
+                                     const IntegrationRule &integ_rule_,
+                                     QuadratureData *quad_data_)
   : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
+    device(occa::getDevice()),
     h1fes(h1fes_),
-    l2fes(l2fes_) {
-  Setup(occa::getDevice(), quad_data_);
+    l2fes(l2fes_),
+    integ_rule(integ_rule_),
+    quad_data(quad_data_) {
+  Setup();
 }
 
 OccaForceOperator::OccaForceOperator(occa::device device_,
-                                     QuadratureData *quad_data_,
                                      OccaFiniteElementSpace &h1fes_,
-                                     OccaFiniteElementSpace &l2fes_)
+                                     OccaFiniteElementSpace &l2fes_,
+                                     const IntegrationRule &integ_rule_,
+                                     QuadratureData *quad_data_)
   : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
+    device(device_),
     h1fes(h1fes_),
-    l2fes(l2fes_) {
-  Setup(device_, quad_data_);
+    l2fes(l2fes_),
+    integ_rule(integ_rule_),
+    quad_data(quad_data_) {
+  Setup();
 }
 
-void OccaForceOperator::Setup(occa::device device_,
-                              QuadratureData *quad_data_) {
-  device = device_;
-
+void OccaForceOperator::Setup() {
   dim = h1fes.GetMesh()->Dimension();
   elements = h1fes.GetMesh()->GetNE();
 
-  quad_data = quad_data_;
+  occa::properties h1Props, l2Props, props;
+  SetProperties(h1fes, integ_rule, h1Props);
+  SetProperties(l2fes, integ_rule, l2Props);
+
+  props = h1Props;
+  props["defines/L2_DOFS_1D"] = l2Props["defines/NUM_DOFS_1D"];
+  props["defines/H1_DOFS_1D"] = h1Props["defines/NUM_DOFS_1D"];
+
+  multKernel = device.buildKernel("occa://laghos/force.okl",
+                                  "Mult2D",
+                                  props);
 }
 
 void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {

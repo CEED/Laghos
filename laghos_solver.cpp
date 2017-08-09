@@ -115,7 +115,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                           3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
   quad_data(dim, elements, integ_rule.GetNPoints()),
   quad_data_is_current(false),
-  Force(&quad_data, o_H1FESpace, o_L2FESpace) {
+  Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data) {
 
    GridFunctionCoefficient rho_coeff(&rho0);
 
