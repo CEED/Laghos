@@ -378,7 +378,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
 
   quad_data_is_current = true;
 
-  if (false && (dim == 2) && o_L2FESpace.hasTensorBasis()) {
+  if ((dim == 2) && o_L2FESpace.hasTensorBasis()) {
     const int vSize = o_H1FESpace.GetVSize();
     const int eSize = o_L2FESpace.GetVSize();
 

@@ -237,9 +237,39 @@ void OccaForceOperator::Setup() {
   multKernel = device.buildKernel("occa://laghos/force.okl",
                                   "Mult2D",
                                   props);
+
+  h1D2Q = OccaDofQuadMaps::Get(device, h1fes, integ_rule);
+  l2D2Q = OccaDofQuadMaps::Get(device, l2fes, integ_rule);
 }
 
 void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
+  if ((dim == 2) && l2fes.hasTensorBasis()) {
+    OccaVector gVecH1(device,
+                      h1fes.GetVDim() * h1fes.GetLocalDofs() * elements);
+
+    multKernel(elements,
+               l2D2Q.dofToQuad,
+               h1D2Q.quadToDof,
+               h1D2Q.quadToDofD,
+               quad_data->o_stressJinvT,
+               vecL2,
+               gVecH1);
+
+    h1fes.LocalToGlobal(gVecH1, vecH1);
+
+    Vector v1 = vecH1;
+    Vector v2(v1.Size());
+    const int h1GlobalDofs = h1fes.GetGlobalDofs();
+    for (int c = 0; c < 2; ++c) {
+      for (int d = 0; d < h1GlobalDofs; ++d) {
+        v2[d + c*h1GlobalDofs] = v1[c + d*2];
+      }
+    }
+    vecH1 = v2;
+
+    return;
+  }
+
   if (dim == 2) {
     MultQuad(vecL2, vecH1);
   } else if (dim == 3) {

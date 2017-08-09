@@ -170,6 +170,8 @@ private:
 
   occa::kernel multKernel;
 
+  OccaDofQuadMaps l2D2Q, h1D2Q;
+
   // Force matrix action on quadrilateral elements in 2D
   void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
   // Force matrix action on hexahedral elements in 3D
