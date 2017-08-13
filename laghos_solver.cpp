@@ -171,11 +171,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                                         o_H1FESpace,
                                         integ_rule);
 
-   OccaVector o_rho0Values;
+   OccaVector o_rhoValues;
    o_rho0.ToQuad(device,
                  o_L2FESpace,
                  integ_rule,
-                 o_rho0Values);
+                 o_rhoValues);
 
    SetProperties(o_H1FESpace, integ_rule, quad_data.props);
    quad_data.props["defines/H0"]            = quad_data.h0;
@@ -187,7 +187,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
                                                 "InitQuadratureData",
                                                 quad_data.props);
    initKernel(elements,
-              o_rho0Values,
+              o_rhoValues,
               quad_data.o_geom.detJ,
               quad_data.o_dqMaps.quadWeights,
               quad_data.o_rho0DetJ0w);
@@ -389,15 +389,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
                                          o_H1FESpace,
                                          integ_rule);
 
+    OccaVector o_v2(device,
+                    o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
+    o_H1FESpace.GlobalToLocal(o_v, o_v2);
+
     OccaVector o_eValues;
     o_e.ToQuad(device,
                o_L2FESpace,
                integ_rule,
                o_eValues);
-
-    OccaVector o_v2(device,
-                    o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
-    o_H1FESpace.GlobalToLocal(o_v, o_v2);
 
     occa::kernel updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
                                                    "UpdateQuadratureData2D",

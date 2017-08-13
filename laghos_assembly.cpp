@@ -142,14 +142,9 @@ void OccaMassOperator::Setup() {
 
   ess_tdofs_count = 0;
 
-  OccaCoefficient coeff("(rho0DetJ0w(q, e) / (quadWeights[q] * detJ))");
-  coeff.AddVector("rho0DetJ0w",
-                  quad_data->o_rho0DetJ0w,
-                  "@dim(NUM_QUAD, numElements)",
-                  true);
-
-  OccaMassIntegrator &massInteg = *(new OccaMassIntegrator(coeff));
+  OccaMassIntegrator &massInteg = *(new OccaMassIntegrator());
   massInteg.SetIntegrationRule(integ_rule);
+  massInteg.SetOperator(quad_data->o_rho0DetJ0w);
 
   bilinearForm.AddDomainIntegrator(&massInteg);
   bilinearForm.Assemble();
@@ -247,7 +242,7 @@ void OccaForceOperator::Setup() {
 }
 
 void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
-  if ((dim == 2) && l2fes.hasTensorBasis()) {
+  if (dim == 2) {
     OccaVector gVecL2(device,
                       l2fes.GetLocalDofs() * elements);
     OccaVector gVecH1(device,
@@ -274,11 +269,6 @@ void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
       }
     }
     vecH1 = v2;
-    return;
-  }
-
-  if (dim == 2) {
-    MultQuad(vecL2, vecH1);
   } else if (dim == 3) {
     MultHex(vecL2, vecH1);
   } else {

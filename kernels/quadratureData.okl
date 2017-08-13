@@ -26,10 +26,10 @@ kernel void InitQuadratureData(const int numElements,
                                const QLocal_t restrict rho0,
                                const QLocal_t restrict detJ,
                                const double * restrict quadWeights,
-                               QLocal_t restrict rho0DetJ0) {
+                               QLocal_t restrict rho0DetJ0w) {
   for (int el = 0; el < numElements; ++el; outer) {
     for (int q = 0; q < NUM_QUAD; ++q; inner) {
-      rho0DetJ0(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
+      rho0DetJ0w(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
     }
   }
 }
@@ -162,10 +162,20 @@ kernel void UpdateQuadratureData2D(const int numElements,
         const double eigVal2 = - 0.5 * (eigB - eigDisc);
         const double maxEig = (eigVal1 < eigVal2) ? eigVal1 : eigVal2;
 
-        // Normalize eigenvector: [1.0, (maxEig - gradv00) / gradv10)]
-        const double comprDirY_ = (maxEig - gradv00) / gradv10;
-        const double comprDirX  = 1.0 / sqrt(1.0 + (comprDirY_ * comprDirY_));
-        const double comprDirY  = comprDirX * comprDirY_;
+        // Normalize eigenvector
+        double comprDirX = 1;
+        double comprDirY = 0;
+        if ((eigVal1*eigVal1 > 1e-12) &&
+            (eigVal2*eigVal2 > 1e-12)) {
+          double comprDirY_;
+          if ((gradv10 * gradv10) < ((maxEig - gradv11)*(maxEig - gradv11))) {
+            comprDirY_ = gradv10 / (maxEig - gradv11);
+          } else {
+            comprDirY_ = (maxEig - gradv00) / gradv10;
+          }
+          comprDirX = 1.0 / sqrt(1.0 + (comprDirY_ * comprDirY_));
+          comprDirY = comprDirX * comprDirY_;
+        }
 
         // Computes the initial->physical transformation Jacobian.
         const double J_00 = J(0, 0, q, el), J_10 = J(1, 0, q, el);
@@ -200,38 +210,15 @@ kernel void UpdateQuadratureData2D(const int numElements,
           }
         }
 
-        stressJinvT(0, 0, q, el) = (q_Jw
-                                    * ((q_stress(0, 0) * invJ_00)
-                                       + (q_stress(1, 0) * invJ_10)));
-        stressJinvT(1, 0, q, el) = (q_Jw
-                                    * ((q_stress(0, 0) * invJ_01)
-                                       + (q_stress(1, 0) * invJ_11)));
-        stressJinvT(0, 1, q, el) = (q_Jw
-                                    * ((q_stress(0, 1) * invJ_00)
-                                       + (q_stress(1, 1) * invJ_10)));
-        stressJinvT(1, 1, q, el) = (q_Jw
-                                    * ((q_stress(0, 1) * invJ_01)
-                                       + (q_stress(1, 1) * invJ_11)));
+        stressJinvT(0, 0, q, el) = (q_Jw * ((q_stress(0, 0) * invJ_00)
+                                            + (q_stress(1, 0) * invJ_10)));
+        stressJinvT(1, 0, q, el) = (q_Jw * ((q_stress(0, 0) * invJ_01)
+                                            + (q_stress(1, 0) * invJ_11)));
+        stressJinvT(0, 1, q, el) = (q_Jw * ((q_stress(0, 1) * invJ_00)
+                                            + (q_stress(1, 1) * invJ_10)));
+        stressJinvT(1, 1, q, el) = (q_Jw * ((q_stress(0, 1) * invJ_01)
+                                            + (q_stress(1, 1) * invJ_11)));
       }
     }
   }
 }
-
-// geometry.okl
-//  - InitGeometryInfo*D
-//     - J, detJ
-// First time:
-//   J          -> quad_data.Jac0inv
-//   rho * detJ -> quad_data.rho0DetJ0
-// Each update:
-//   J               -> quad_data.Jac
-//   rho * qw * detJ -> quad_data.rhoDetJw (qw = quadratureWeight)
-
-// Constructor:
-//   quad_data.h0
-//   cfl
-//   gamma
-
-// h = h0 * (eigenvalue stuff)
-// sound_speed = sqrt(gamma * (gamme - 1.0) * max(0.0, h1_e(el, q)))
-// dt_est = Min(cfl * h(el, q) / sound_speed(el, q))

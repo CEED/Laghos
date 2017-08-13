@@ -197,9 +197,9 @@ int main(int argc, char *argv[])
    }
    delete nxyz;
    delete mesh;
-
-   // Refine the mesh further in parallel to increase the resolution.
-   for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+   for (int lev = 0; lev < rp_levels; lev++) {
+     pmesh->UniformRefinement();
+   }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
