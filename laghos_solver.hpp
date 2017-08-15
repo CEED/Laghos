@@ -66,7 +66,6 @@ protected:
 
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
-   mutable ParFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 

@@ -96,11 +96,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
   o_H1compFESpace(o_H1FESpace.GetMesh(),
                   o_H1FESpace.FEColl(),
                   1),
-  H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace_.GetFESpace())),
-  L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace_.GetFESpace())),
-  H1compFESpace(H1FESpace.GetParMesh(),
-                H1FESpace.FEColl(),
-                1),
+  H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace.GetFESpace())),
+  L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace.GetFESpace())),
   ess_tdofs(ess_tdofs_),
   dim(H1FESpace.GetMesh()->Dimension()),
   elements(H1FESpace.GetMesh()->GetNE()),
@@ -218,8 +215,8 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
+   const int Vsize_l2 = L2FESpace.GetVSize();
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // - Position
@@ -250,14 +247,26 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
    Force.Mult(one, rhs);
    rhs.Neg();
 
-   OccaVector B(H1compFESpace.TrueVSize());
-   OccaVector X(H1compFESpace.TrueVSize());
+   OccaVector B(o_H1compFESpace.GetTrueVSize());
+   OccaVector X(o_H1compFESpace.GetTrueVSize());
 
    // Partial assembly solve for each velocity component.
    OccaMassOperator VMass(o_H1compFESpace,
                           integ_rule,
                           &quad_data);
    const int size = o_H1compFESpace.GetVSize();
+
+   Vector h_rhs1 = rhs;
+   Vector h_rhs(rhs.Size());
+   for (int i = 0; i < size; ++i) {
+     for (int c = 0; c < dim; ++c) {
+       h_rhs[i + c*size] = h_rhs1[c + dim*i];
+     }
+   }
+   rhs = h_rhs;
+
+   dv = 0.0;
+
    for (int c = 0; c < dim; c++) {
       OccaVector rhs_c = rhs.GetRange(c*size, size);
       OccaVector dv_c  = dv.GetRange(c*size, size);
@@ -268,7 +277,6 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
       ess_bdr = 0;
       ess_bdr[c] = 1;
 
-      dv_c = 0.0;
       o_H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
       o_H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
 
@@ -287,6 +295,15 @@ void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const
 
       o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
+
+   Vector h_dv1 = dv;
+   Vector h_dv(dv.Size());
+   for (int i = 0; i < size; ++i) {
+     for (int c = 0; c < dim; ++c) {
+       h_dv[c + dim*i] = h_dv1[i + c*size];
+     }
+   }
+   dv = h_dv;
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
@@ -437,6 +454,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
   Vector* sptr = (Vector*) &h_S;
   v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
   e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
+
   Vector e_vals;
   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
@@ -482,11 +500,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       if (use_viscosity) {
         // Measure of maximal compression.
         const double mu = eig_val_data[0];
-        double visc_coeff = 2.0 * rho * h * h * fabs(mu);
+        double coeff = 2.0 * rho * h * h * fabs(mu);
         if (mu < 0.0) {
-          visc_coeff += 0.5 * rho * h * sound_speed;
+          coeff += 0.5 * rho * h * sound_speed;
         }
-        stress.Add(visc_coeff, sgrad_v);
+        stress.Add(coeff, sgrad_v);
       }
 
       // Quadrature data for partial assembly of the force operator.
@@ -500,6 +518,21 @@ void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       }
     }
   }
+
+  Vector stressJinvT(quad_data.stressJinvT.SizeI() *
+              quad_data.stressJinvT.SizeJ() *
+              quad_data.stressJinvT.SizeK());
+  int o_idx = 0;
+  for (int el = 0; el < elements; ++el) {
+    for (int q = 0; q < nqp; ++q) {
+      for (int j = 0; j < dim; ++j) {
+        for (int i = 0; i < dim; ++i) {
+          stressJinvT[o_idx++] = quad_data.stressJinvT(q + el*nqp, j, i);
+        }
+      }
+    }
+  }
+  quad_data.o_stressJinvT = stressJinvT;
 }
 
 } // namespace hydrodynamics

@@ -161,7 +161,9 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
    const int dim = mesh->Dimension();
-   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   for (int lev = 0; lev < rs_levels; lev++) {
+     mesh->UniformRefinement();
+   }
 
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
@@ -259,16 +261,10 @@ int main(int argc, char *argv[])
    const int Vsize_h1 = o_H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores unknown fields as:
-   // - 0 -> position
-   // - 1 -> velocity
-   // - 2 -> specific internal energy
-
-   Array<int> true_offset(4);
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-   OccaVector o_S(true_offset[3]);
+   // - (H1) position
+   // - (H1) velocity
+   // - (L2) specific internal energy
+   OccaVector o_S(2*Vsize_h1 + Vsize_l2);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -278,9 +274,9 @@ int main(int argc, char *argv[])
    ParGridFunction v_gf((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
    ParGridFunction e_gf((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
 
-   OccaGridFunction o_x_gf(&o_H1FESpace, o_S.GetRange(true_offset[0], Vsize_h1));
-   OccaGridFunction o_v_gf(&o_H1FESpace, o_S.GetRange(true_offset[1], Vsize_h1));
-   OccaGridFunction o_e_gf(&o_L2FESpace, o_S.GetRange(true_offset[2], Vsize_l2));
+   OccaGridFunction o_x_gf(&o_H1FESpace, o_S.GetRange(0         , Vsize_h1));
+   OccaGridFunction o_v_gf(&o_H1FESpace, o_S.GetRange(Vsize_h1  , Vsize_h1));
+   OccaGridFunction o_e_gf(&o_L2FESpace, o_S.GetRange(2*Vsize_h1, Vsize_l2));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.

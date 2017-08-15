@@ -259,16 +259,6 @@ void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
                gVecH1);
 
     h1fes.LocalToGlobal(gVecH1, vecH1);
-
-    Vector v1 = vecH1;
-    Vector v2(v1.Size());
-    const int h1GlobalDofs = h1fes.GetGlobalDofs();
-    for (int c = 0; c < 2; ++c) {
-      for (int d = 0; d < h1GlobalDofs; ++d) {
-        v2[d + c*h1GlobalDofs] = v1[c + d*2];
-      }
-    }
-    vecH1 = v2;
   } else if (dim == 3) {
     MultHex(vecL2, vecH1);
   } else {
@@ -283,18 +273,7 @@ void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2
     OccaVector gVecL2(device,
                       l2fes.GetLocalDofs() * elements);
 
-    Vector v1 = vecH1;
-    Vector v2(v1.Size());
-    const int h1GlobalDofs = h1fes.GetGlobalDofs();
-    for (int c = 0; c < 2; ++c) {
-      for (int d = 0; d < h1GlobalDofs; ++d) {
-        v2[c + d*2] = v1[d + c*h1GlobalDofs];
-      }
-    }
-    OccaVector vecH1_2(device, v1.Size());
-    vecH1_2 = v2;
-
-    h1fes.GlobalToLocal(vecH1_2, gVecH1);
+    h1fes.GlobalToLocal(vecH1, gVecH1);
 
     multTransposeKernel(elements,
                         l2D2Q.quadToDof,
