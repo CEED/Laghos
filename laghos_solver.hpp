@@ -89,6 +89,8 @@ namespace mfem {
       // right-hand sides for momentum and specific internal energy.
       OccaForceOperator Force;
 
+      occa::kernel updateKernel;
+
       double MaterialPressure(double rho, double e) const {
         return (gamma - 1.0) * rho * e;
       }
@@ -100,8 +102,7 @@ namespace mfem {
                               OccaFiniteElementSpace &o_H1FESpace_,
                               OccaFiniteElementSpace &o_L1FESpace_,
                               Array<int> &ess_tdofs_,
-                              OccaGridFunction &o_rho0,
-                              ParGridFunction &rho0,
+                              OccaGridFunction &rho0,
                               double cfl_,
                               double gamma_,
                               bool use_viscosity_);

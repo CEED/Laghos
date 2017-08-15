@@ -25,185 +25,167 @@
 #include <memory>
 #include <iostream>
 
-namespace mfem
-{
+namespace mfem {
+  namespace hydrodynamics {
 
-namespace hydrodynamics
-{
+    // Container for all data needed at quadrature points.
+    struct QuadratureData {
+      // TODO: use QuadratureFunctions?
+      occa::device device;
 
-// Container for all data needed at quadrature points.
-  struct QuadratureData {
-    // TODO: use QuadratureFunctions?
-    occa::device device;
+      // Reference to physical Jacobian for the initial mesh. These are computed
+      // only at time zero and stored here.
+      OccaVector Jac0inv;
 
-    // Reference to physical Jacobian for the initial mesh. These are computed
-    // only at time zero and stored here.
-    DenseTensor Jac0inv;
-    OccaVector o_Jac0inv;
+      // Quadrature data used for full/partial assembly of the mass matrices. At
+      // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+      // quadrature point. Note the at any other time, we can compute
+      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+      // conservation.
+      OccaVector rho0DetJ0w;
 
-    // Quadrature data used for full/partial assembly of the mass matrices. At
-    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-    // quadrature point. Note the at any other time, we can compute
-    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-    // conservation.
-    Vector rho0DetJ0w;
-    OccaVector o_rho0DetJ0w;
+      // Quadrature data used for full/partial assembly of the force operator. At
+      // each quadrature point, it combines the stress, inverse Jacobian,
+      // determinant of the Jacobian and the integration weight. It must be
+      // recomputed in every time step.
+      OccaVector stressJinvT;
 
-    // Quadrature data used for full/partial assembly of the force operator. At
-    // each quadrature point, it combines the stress, inverse Jacobian,
-    // determinant of the Jacobian and the integration weight. It must be
-    // recomputed in every time step.
-    DenseTensor stressJinvT;
-    OccaVector o_stressJinvT;
+      // Occa stuff
+      occa::properties props;
 
-    // Occa stuff
-    occa::properties props;
+      OccaDofQuadMaps dqMaps;
+      OccaGeometry geom;
+      OccaVector dtEst;
 
-    OccaDofQuadMaps o_dqMaps;
-    OccaGeometry o_geom;
-    OccaVector o_dtEst;
+      // Initial length scale. This represents a notion of local mesh size. We
+      // assume that all initial zones have similar size.
+      double h0;
 
-    // Initial length scale. This represents a notion of local mesh size. We
-    // assume that all initial zones have similar size.
-    double h0;
+      // Estimate of the minimum time step over all quadrature points. This is
+      // recomputed at every time step to achieve adaptive time stepping.
+      double dt_est;
 
-    // Estimate of the minimum time step over all quadrature points. This is
-    // recomputed at every time step to achieve adaptive time stepping.
-    double dt_est;
+      QuadratureData(int dim,
+                     int elements,
+                     int nqp);
 
-    QuadratureData(int dim,
-                   int elements,
-                   int nqp);
+      QuadratureData(occa::device device_,
+                     int dim,
+                     int elements,
+                     int nqp);
 
-    QuadratureData(occa::device device_,
-                   int dim,
-                   int elements,
-                   int nqp);
+      void Setup(occa::device device_,
+                 int dim,
+                 int elements,
+                 int nqp);
+    };
 
-    void Setup(occa::device device_,
-               int dim,
-               int elements,
-               int nqp);
-  };
+    // This class is used only for visualization. It assembles (rho, phi) in each
+    // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
+    // projection of the density.
+    class DensityIntegrator {
+    private:
+      const QuadratureData &quad_data;
 
-// Stores values of the one-dimensional shape functions and gradients at all 1D
-// quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).
-struct Tensors1D
-{
-   // H1 shape functions and gradients, L2 shape functions.
-   DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
+    public:
+      DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
 
-   Tensors1D(int H1order, int L2order, int nqp1D);
-};
-extern const Tensors1D *tensors1D;
+      void AssembleRHSElementVect(const FiniteElement &fe,
+                                  ElementTransformation &Tr,
+                                  const IntegrationRule &integ_rule,
+                                  Vector &rho0DetJ0w,
+                                  Vector &elvect);
+    };
 
-// This class is used only for visualization. It assembles (rho, phi) in each
-// zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
-// projection of the density.
-class DensityIntegrator : public LinearFormIntegrator
-{
-private:
-   const QuadratureData &quad_data;
+    class OccaMassOperator : public Operator {
+    private:
+      occa::device device;
 
-public:
-   DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
+      int dim, elements;
+      OccaFiniteElementSpace &fes;
 
-   virtual void AssembleRHSElementVect(const FiniteElement &fe,
-                                       ElementTransformation &Tr,
-                                       Vector &elvect);
-};
+      const IntegrationRule &integ_rule;
 
-class OccaMassOperator : public Operator {
-private:
-  occa::device device;
+      int ess_tdofs_count;
+      occa::memory ess_tdofs;
 
-  int dim, elements;
-  OccaFiniteElementSpace &fes;
+      OccaBilinearForm bilinearForm;
+      Operator *massOperator;
 
-  const IntegrationRule &integ_rule;
+      QuadratureData *quad_data;
 
-  int ess_tdofs_count;
-  occa::memory ess_tdofs;
+      // For distributing X
+      mutable OccaVector distX;
+      mutable OccaGridFunction x_gf, y_gf;
 
-  OccaBilinearForm bilinearForm;
-  Operator *massOperator;
+    public:
+      OccaMassOperator(OccaFiniteElementSpace &fes_,
+                       const IntegrationRule &integ_rule_,
+                       QuadratureData *quad_data_);
 
-  QuadratureData *quad_data;
+      OccaMassOperator(occa::device device_,
+                       OccaFiniteElementSpace &fes_,
+                       const IntegrationRule &integ_rule_,
+                       QuadratureData *quad_data_);
 
-  // For distributing X
-  mutable OccaVector distX;
-  mutable OccaGridFunction x_gf, y_gf;
+      void Setup();
 
-public:
-  OccaMassOperator(OccaFiniteElementSpace &fes_,
-                   const IntegrationRule &integ_rule_,
-                   QuadratureData *quad_data_);
+      void SetEssentialTrueDofs(Array<int> &dofs);
 
-  OccaMassOperator(occa::device device_,
-                   OccaFiniteElementSpace &fes_,
-                   const IntegrationRule &integ_rule_,
-                   QuadratureData *quad_data_);
+      // Can be used for both velocity and specific internal energy. For the case
+      // of velocity, we only work with one component at a time.
+      virtual void Mult(const OccaVector &x, OccaVector &y) const;
 
-  void Setup();
+      void EliminateRHS(OccaVector &b);
+    };
 
-  void SetEssentialTrueDofs(Array<int> &dofs);
+    // Performs partial assembly, which corresponds to (and replaces) the use of the
+    // LagrangianHydroOperator::Force global matrix.
+    class OccaForceOperator : public Operator {
+    private:
+      occa::device device;
+      int dim, elements;
 
-  // Can be used for both velocity and specific internal energy. For the case
-  // of velocity, we only work with one component at a time.
-  virtual void Mult(const OccaVector &x, OccaVector &y) const;
+      OccaFiniteElementSpace &h1fes, &l2fes;
+      const IntegrationRule &integ_rule;
 
-  void EliminateRHS(OccaVector &b);
-};
+      QuadratureData *quad_data;
 
-// Performs partial assembly for the energy mass matrix on a single zone.
-// Used to perform local CG solves, thus avoiding unnecessary communication.
-class OccaForceOperator : public Operator
-{
-private:
-  occa::device device;
-  int dim, elements;
+      occa::kernel multKernel, multTransposeKernel;
 
-  OccaFiniteElementSpace &h1fes, &l2fes;
-  const IntegrationRule &integ_rule;
+      OccaDofQuadMaps l2D2Q, h1D2Q;
 
-  QuadratureData *quad_data;
+      // Force matrix action on quadrilateral elements in 2D
+      void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
+      // Force matrix action on hexahedral elements in 3D
+      void MultHex(const OccaVector &vecL2, OccaVector &vecH1) const;
 
-  occa::kernel multKernel, multTransposeKernel;
+      // Transpose force matrix action on quadrilateral elements in 2D
+      void MultTransposeQuad(const OccaVector &vecH1, OccaVector &vecL2) const;
+      // Transpose force matrix action on hexahedral elements in 3D
+      void MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const;
 
-  OccaDofQuadMaps l2D2Q, h1D2Q;
+    public:
+      OccaForceOperator(OccaFiniteElementSpace &h1fes_,
+                        OccaFiniteElementSpace &l2fes_,
+                        const IntegrationRule &integ_rule,
+                        QuadratureData *quad_data_);
 
-  // Force matrix action on quadrilateral elements in 2D
-  void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
-  // Force matrix action on hexahedral elements in 3D
-  void MultHex(const OccaVector &vecL2, OccaVector &vecH1) const;
+      OccaForceOperator(occa::device device_,
+                        OccaFiniteElementSpace &h1fes_,
+                        OccaFiniteElementSpace &l2fes_,
+                        const IntegrationRule &integ_rule,
+                        QuadratureData *quad_data_);
 
-  // Transpose force matrix action on quadrilateral elements in 2D
-  void MultTransposeQuad(const OccaVector &vecH1, OccaVector &vecL2) const;
-  // Transpose force matrix action on hexahedral elements in 3D
-  void MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const;
+      void Setup();
 
-public:
-  OccaForceOperator(OccaFiniteElementSpace &h1fes_,
-                    OccaFiniteElementSpace &l2fes_,
-                    const IntegrationRule &integ_rule,
-                    QuadratureData *quad_data_);
+      virtual void Mult(const OccaVector &vecL2, OccaVector &vecH1) const;
+      virtual void MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const;
 
-  OccaForceOperator(occa::device device_,
-                    OccaFiniteElementSpace &h1fes_,
-                    OccaFiniteElementSpace &l2fes_,
-                    const IntegrationRule &integ_rule,
-                    QuadratureData *quad_data_);
+      ~OccaForceOperator() { }
+    };
 
-  void Setup();
-
-  virtual void Mult(const OccaVector &vecL2, OccaVector &vecH1) const;
-  virtual void MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const;
-
-  ~OccaForceOperator() { }
-};
-
-} // namespace hydrodynamics
-
+  } // namespace hydrodynamics
 } // namespace mfem
 
 #endif // MFEM_USE_MPI

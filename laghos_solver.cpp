@@ -74,8 +74,7 @@ namespace mfem {
                                                      OccaFiniteElementSpace &o_H1FESpace_,
                                                      OccaFiniteElementSpace &o_L2FESpace_,
                                                      Array<int> &ess_tdofs_,
-                                                     OccaGridFunction &o_rho0,
-                                                     ParGridFunction &rho0,
+                                                     OccaGridFunction &rho0,
                                                      double cfl_,
                                                      double gamma_,
                                                      bool use_viscosity_)
@@ -105,7 +104,9 @@ namespace mfem {
       quad_data_is_current(false),
       Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data) {
 
-      GridFunctionCoefficient rho_coeff(&rho0);
+      Vector rho0_ = rho0;
+      GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
+      GridFunctionCoefficient rho_coeff(&rho0_gf);
 
       // Standard local assembly and inversion for energy mass matrices.
       DenseMatrix Me(l2dofs_cnt);
@@ -152,18 +153,18 @@ namespace mfem {
       // Setup OCCA QuadratureData
       quad_data.device = device;
 
-      quad_data.o_dqMaps = OccaDofQuadMaps::Get(device,
-                                                o_H1FESpace,
-                                                integ_rule);
-      quad_data.o_geom = OccaGeometry::Get(device,
-                                           o_H1FESpace,
-                                           integ_rule);
+      quad_data.dqMaps = OccaDofQuadMaps::Get(device,
+                                              o_H1FESpace,
+                                              integ_rule);
+      quad_data.geom = OccaGeometry::Get(device,
+                                         o_H1FESpace,
+                                         integ_rule);
 
-      OccaVector o_rhoValues;
-      o_rho0.ToQuad(device,
-                    o_L2FESpace,
-                    integ_rule,
-                    o_rhoValues);
+      OccaVector rhoValues;
+      rho0.ToQuad(device,
+                  o_L2FESpace,
+                  integ_rule,
+                  rhoValues);
 
       SetProperties(o_H1FESpace, integ_rule, quad_data.props);
       quad_data.props["defines/H0"]            = quad_data.h0;
@@ -174,25 +175,18 @@ namespace mfem {
       occa::kernel initKernel = device.buildKernel("occa://laghos/quadratureData.okl",
                                                    "InitQuadratureData",
                                                    quad_data.props);
+
+      updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
+                                        "UpdateQuadratureData2D",
+                                        quad_data.props);
+
       initKernel(elements,
-                 o_rhoValues,
-                 quad_data.o_geom.detJ,
-                 quad_data.o_dqMaps.quadWeights,
-                 quad_data.o_rho0DetJ0w);
+                 rhoValues,
+                 quad_data.geom.detJ,
+                 quad_data.dqMaps.quadWeights,
+                 quad_data.rho0DetJ0w);
 
-      quad_data.rho0DetJ0w = quad_data.o_rho0DetJ0w;
-      quad_data.o_Jac0inv  = quad_data.o_geom.invJ;
-
-      Vector Jac0inv = quad_data.o_Jac0inv;
-      memcpy(quad_data.Jac0inv.Data(),
-             Jac0inv.GetData(),
-             Jac0inv.Size() * sizeof(double));
-
-      const int nqp = integ_rule.GetNPoints();
-
-      tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
-                                L2FESpace.GetFE(0)->GetOrder(),
-                                int(floor(0.7 + pow(nqp, 1.0 / dim))));
+      quad_data.Jac0inv = quad_data.geom.invJ;
 
       cg_print_level = 0;
       cg_max_iters   = 200;
@@ -307,11 +301,11 @@ namespace mfem {
         e_source->Assemble();
       }
 
-      OccaVector o_forceRHS(Vsize_l2);
-      Force.MultTranspose(v, o_forceRHS);
+      OccaVector forceRHS(Vsize_l2);
+      Force.MultTranspose(v, forceRHS);
 
       if (e_source) {
-        o_forceRHS += *e_source;
+        forceRHS += *e_source;
       }
 
       OccaMassOperator EMass(o_L2FESpace,
@@ -319,7 +313,7 @@ namespace mfem {
                              &quad_data);
 
       CG(L2FESpace.GetParMesh()->GetComm(),
-         EMass, o_forceRHS, de,
+         EMass, forceRHS, de,
          cg_print_level,
          cg_max_iters,
          cg_rel_tol,
@@ -356,12 +350,18 @@ namespace mfem {
       DenseMatrixInverse inv(&Mrho);
       MassIntegrator mi(&integ_rule);
       DensityIntegrator di(quad_data);
-      di.SetIntRule(&integ_rule);
+
+      Vector rho0DetJ0w = quad_data.rho0DetJ0w;
+
       for (int el = 0; el < elements; ++el) {
         di.AssembleRHSElementVect(*L2FESpace.GetFE(el),
-                                  *L2FESpace.GetElementTransformation(el), rhs);
+                                  *L2FESpace.GetElementTransformation(el),
+                                  integ_rule,
+                                  rho0DetJ0w,
+                                  rhs);
         mi.AssembleElementMatrix(*L2FESpace.GetFE(el),
-                                 *L2FESpace.GetElementTransformation(el), Mrho);
+                                 *L2FESpace.GetElementTransformation(el),
+                                 Mrho);
         inv.Factor();
         inv.Mult(rhs, rho_z);
         L2FESpace.GetElementDofs(el, dofs);
@@ -369,160 +369,51 @@ namespace mfem {
       }
     }
 
-    LagrangianHydroOperator::~LagrangianHydroOperator()
-    {
-      delete tensors1D;
-    }
+    LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
     void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
       if (quad_data_is_current) {
         return;
       }
 
-      Vector h_S = S;
-
-      const int nqp = integ_rule.GetNPoints();
-
       quad_data_is_current = true;
 
-      if ((dim == 2) && o_L2FESpace.hasTensorBasis()) {
-        const int vSize = o_H1FESpace.GetVSize();
-        const int eSize = o_L2FESpace.GetVSize();
+      const int vSize = o_H1FESpace.GetVSize();
+      const int eSize = o_L2FESpace.GetVSize();
 
-        OccaGridFunction o_v(&o_H1FESpace, S.GetRange(vSize  , vSize));
-        OccaGridFunction o_e(&o_L2FESpace, S.GetRange(2*vSize, eSize));
+      OccaGridFunction v(&o_H1FESpace, S.GetRange(vSize  , vSize));
+      OccaGridFunction e(&o_L2FESpace, S.GetRange(2*vSize, eSize));
 
-        quad_data.o_geom = OccaGeometry::Get(device,
-                                             o_H1FESpace,
-                                             integ_rule);
+      quad_data.geom = OccaGeometry::Get(device,
+                                         o_H1FESpace,
+                                         integ_rule);
 
-        OccaVector o_v2(device,
-                        o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
-        o_H1FESpace.GlobalToLocal(o_v, o_v2);
+      OccaVector v2(device,
+                    o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
+      o_H1FESpace.GlobalToLocal(v, v2);
 
-        OccaVector o_eValues;
-        o_e.ToQuad(device,
-                   o_L2FESpace,
-                   integ_rule,
-                   o_eValues);
+      OccaVector eValues;
+      e.ToQuad(device,
+               o_L2FESpace,
+               integ_rule,
+               eValues);
 
-        occa::kernel updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
-                                                       "UpdateQuadratureData2D",
-                                                       quad_data.props);
+      updateKernel(elements,
+                   quad_data.dqMaps.dofToQuad,
+                   quad_data.dqMaps.dofToQuadD,
+                   quad_data.dqMaps.quadWeights,
+                   v2,
+                   eValues,
+                   quad_data.rho0DetJ0w,
+                   quad_data.Jac0inv,
+                   quad_data.geom.J,
+                   quad_data.geom.invJ,
+                   quad_data.geom.detJ,
+                   quad_data.stressJinvT,
+                   quad_data.dtEst);
 
-        updateKernel(elements,
-                     quad_data.o_dqMaps.dofToQuad,
-                     quad_data.o_dqMaps.dofToQuadD,
-                     quad_data.o_dqMaps.quadWeights,
-                     o_v2,
-                     o_eValues,
-                     quad_data.o_rho0DetJ0w,
-                     quad_data.o_Jac0inv,
-                     quad_data.o_geom.J,
-                     quad_data.o_geom.invJ,
-                     quad_data.o_geom.detJ,
-                     quad_data.o_stressJinvT,
-                     quad_data.o_dtEst);
-
-        quad_data.dt_est = quad_data.o_dtEst.Min();
-
-        Vector stressJinvT = quad_data.o_stressJinvT;
-        int o_idx = 0;
-        for (int el = 0; el < elements; ++el) {
-          for (int q = 0; q < nqp; ++q) {
-            for (int j = 0; j < dim; ++j) {
-              for (int i = 0; i < dim; ++i) {
-                quad_data.stressJinvT(q + el*nqp, j, i) = stressJinvT[o_idx++];
-              }
-            }
-          }
-        }
-        return;
-      }
-
-      ParGridFunction e, v;
-      Vector* sptr = (Vector*) &h_S;
-      v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-      e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-
-      Vector e_vals;
-      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
-
-      for (int el = 0; el < elements; ++el) {
-        ElementTransformation *T = H1FESpace.GetElementTransformation(el);
-        e.GetValues(el, integ_rule, e_vals);
-        for (int q = 0; q < nqp; ++q) {
-          const IntegrationPoint &ip = integ_rule.IntPoint(q);
-          T->SetIntPoint(&ip);
-          const DenseMatrix &Jpr = T->Jacobian();
-
-          const double detJ = T->Weight();
-          MFEM_VERIFY(detJ > 0.0,
-                      "Bad Jacobian determinant: " << detJ);
-
-          stress = 0.0;
-          const double rho = quad_data.rho0DetJ0w(el*nqp + q) / detJ / ip.weight;
-          const double e   = max(0.0, e_vals(q));
-          for (int d = 0; d < dim; d++) {
-            stress(d, d) = - MaterialPressure(rho, e);
-          }
-
-          // Length scale at the point. The first eigenvector of the symmetric
-          // velocity gradient gives the direction of maximal compression. This
-          // is used to define the relative change of the initial length scale.
-          v.GetVectorGradient(*T, sgrad_v);
-
-          sgrad_v.Symmetrize();
-          double eig_val_data[3], eig_vec_data[9];
-          sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-          Vector compr_dir(eig_vec_data, dim);
-          // Computes the initial->physical transformation Jacobian.
-          mfem::Mult(Jpr, quad_data.Jac0inv(el*nqp + q), Jpi);
-          Vector ph_dir(dim);
-          Jpi.Mult(compr_dir, ph_dir);
-          // Change of the initial mesh size in the compression direction.
-          const double h = quad_data.h0 * ph_dir.Norml2() / (compr_dir.Norml2());
-
-          // Time step estimate at the point.
-          const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-          quad_data.dt_est = min(quad_data.dt_est, cfl * h / sound_speed);
-
-          if (use_viscosity) {
-            // Measure of maximal compression.
-            const double mu = eig_val_data[0];
-            double coeff = 2.0 * rho * h * h * fabs(mu);
-            if (mu < 0.0) {
-              coeff += 0.5 * rho * h * sound_speed;
-            }
-            stress.Add(coeff, sgrad_v);
-          }
-
-          // Quadrature data for partial assembly of the force operator.
-          CalcInverse(Jpr, Jinv);
-          MultABt(stress, Jinv, stressJiT);
-          stressJiT *= integ_rule.IntPoint(q).weight * detJ;
-          for (int vd = 0 ; vd < dim; vd++) {
-            for (int gd = 0; gd < dim; gd++) {
-              quad_data.stressJinvT(vd)(el*nqp + q, gd) = stressJiT(vd, gd);
-            }
-          }
-        }
-      }
-
-      Vector stressJinvT(quad_data.stressJinvT.SizeI() *
-                         quad_data.stressJinvT.SizeJ() *
-                         quad_data.stressJinvT.SizeK());
-      int o_idx = 0;
-      for (int el = 0; el < elements; ++el) {
-        for (int q = 0; q < nqp; ++q) {
-          for (int j = 0; j < dim; ++j) {
-            for (int i = 0; i < dim; ++i) {
-              stressJinvT[o_idx++] = quad_data.stressJinvT(q + el*nqp, j, i);
-            }
-          }
-        }
-      }
-      quad_data.o_stressJinvT = stressJinvT;
+      quad_data.dt_est = quad_data.dtEst.Min();
+      return;
     }
   } // namespace hydrodynamics
 } // namespace mfem

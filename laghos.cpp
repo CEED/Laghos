@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
    // - (H1) position
    // - (H1) velocity
    // - (L2) specific internal energy
-   OccaVector o_S(2*Vsize_h1 + Vsize_l2);
+   OccaVector S(2*Vsize_h1 + Vsize_l2);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -274,9 +274,9 @@ int main(int argc, char *argv[])
    ParGridFunction v_gf((ParFiniteElementSpace*) o_H1FESpace.GetFESpace());
    ParGridFunction e_gf((ParFiniteElementSpace*) o_L2FESpace.GetFESpace());
 
-   OccaGridFunction o_x_gf(&o_H1FESpace, o_S.GetRange(0         , Vsize_h1));
-   OccaGridFunction o_v_gf(&o_H1FESpace, o_S.GetRange(Vsize_h1  , Vsize_h1));
-   OccaGridFunction o_e_gf(&o_L2FESpace, o_S.GetRange(2*Vsize_h1, Vsize_l2));
+   OccaGridFunction o_x_gf(&o_H1FESpace, S.GetRange(0         , Vsize_h1));
+   OccaGridFunction o_v_gf(&o_H1FESpace, S.GetRange(Vsize_h1  , Vsize_h1));
+   OccaGridFunction o_e_gf(&o_L2FESpace, S.GetRange(2*Vsize_h1, Vsize_l2));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
@@ -348,7 +348,7 @@ int main(int argc, char *argv[])
                                 o_H1FESpace, o_L2FESpace,
                                 ess_tdofs,
                                 o_rho,
-                                rho, cfl, gamma,
+                                cfl, gamma,
                                 use_viscosity);
 
    socketstream vis_rho, vis_v, vis_e;
@@ -399,9 +399,9 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   double t = 0.0, dt = oper.GetTimeStepEstimate(o_S), t_old;
+   double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
-   OccaVector o_S_old(o_S);
+   OccaVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -410,23 +410,23 @@ int main(int argc, char *argv[])
          last_step = true;
       }
 
-      o_S_old = o_S;
+      S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
-      ode_solver->Step(o_S, t, dt);
+      ode_solver->Step(S, t, dt);
 
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(o_S);
+      const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
          t = t_old;
-         o_S = o_S_old;
+         S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;
