@@ -160,6 +160,8 @@ namespace mfem {
                                          o_H1FESpace,
                                          integ_rule);
 
+      quad_data.Jac0inv = quad_data.geom.invJ;
+
       OccaVector rhoValues;
       rho0.ToQuad(device,
                   o_L2FESpace,
@@ -176,17 +178,15 @@ namespace mfem {
                                                    "InitQuadratureData",
                                                    quad_data.props);
 
-      updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
-                                        "UpdateQuadratureData2D",
-                                        quad_data.props);
-
       initKernel(elements,
                  rhoValues,
                  quad_data.geom.detJ,
                  quad_data.dqMaps.quadWeights,
                  quad_data.rho0DetJ0w);
 
-      quad_data.Jac0inv = quad_data.geom.invJ;
+      updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
+                                        "UpdateQuadratureData",
+                                        quad_data.props);
 
       cg_print_level = 0;
       cg_max_iters   = 200;

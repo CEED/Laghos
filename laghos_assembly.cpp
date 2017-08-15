@@ -189,11 +189,11 @@ namespace mfem {
       props["defines/H1_DOFS_1D"] = h1Props["defines/NUM_DOFS_1D"];
 
       multKernel = device.buildKernel("occa://laghos/force.okl",
-                                      "Mult2D",
+                                      stringWithDim("Mult", dim),
                                       props);
 
       multTransposeKernel = device.buildKernel("occa://laghos/force.okl",
-                                               "MultTranspose2D",
+                                               stringWithDim("MultTranspose", dim),
                                                props);
 
       h1D2Q = OccaDofQuadMaps::Get(device, h1fes, integ_rule);
