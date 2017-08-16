@@ -64,9 +64,9 @@ namespace mfem {
 
       Array<int> &ess_tdofs;
 
-      const int dim, elements, l2dofs_cnt, h1dofs_cnt;
-      const double cfl, gamma;
-      const bool use_viscosity;
+      int dim, elements, l2dofs_cnt, h1dofs_cnt;
+      double cfl, gamma;
+      bool use_viscosity;
 
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
