@@ -210,8 +210,8 @@ int main(int argc, char *argv[])
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
 
-   OccaFiniteElementSpace o_L2FESpace(pmesh, &L2FEC);
-   OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   OccaFiniteElementSpace o_L2FESpace(pmesh, &L2FEC, Ordering::byNODES);
+   OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension(), Ordering::byNODES);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
    // to the positive basis in which we actually compute. The goal of all this
    // is to get a high-order representation of the initial condition.
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec);
+   OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec, Ordering::byNODES);
 
    ParGridFunction l2_e((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
    if (problem == blast)

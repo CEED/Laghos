@@ -48,10 +48,16 @@ typedef double* H1DofToQuad_t @dim(NUM_QUAD_1D, H1_DOFS_1D);
 typedef double* L2QuadToDof_t @dim(L2_DOFS_1D , NUM_QUAD_1D);
 typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
 
+#if VDIM_ORDERING == ORDERING_BY_VDIM
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
+#else
+typedef double* V2D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(3,0,1,2));
+typedef double* V3D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(4,0,1,2,3));
+#endif
+
 typedef double* E2D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
-typedef double* V2D_t      @dim(NUM_DIM, H1_DOFS_1D, H1_DOFS_1D, numElements);
 typedef double* E3D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, L2_DOFS_1D, numElements);
-typedef double* V3D_t      @dim(NUM_DIM, H1_DOFS_1D, H1_DOFS_1D, H1_DOFS_1D, numElements);
 typedef double* Stress2D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 typedef double* Stress3D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 

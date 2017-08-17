@@ -239,20 +239,11 @@ namespace mfem {
       OccaMassOperator VMass(o_H1compFESpace,
                              integ_rule,
                              &quad_data);
-      const int size = o_H1compFESpace.GetVSize();
-
-      Vector h_rhs1 = rhs;
-      Vector h_rhs(rhs.Size());
-      for (int i = 0; i < size; ++i) {
-        for (int c = 0; c < dim; ++c) {
-          h_rhs[i + c*size] = h_rhs1[c + dim*i];
-        }
-      }
-      rhs = h_rhs;
 
       dv = 0.0;
 
       for (int c = 0; c < dim; c++) {
+        const int size = o_H1compFESpace.GetVSize();
         OccaVector rhs_c = rhs.GetRange(c*size, size);
         OccaVector dv_c  = dv.GetRange(c*size, size);
 
@@ -280,15 +271,6 @@ namespace mfem {
 
         o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
       }
-
-      Vector h_dv1 = dv;
-      Vector h_dv(dv.Size());
-      for (int i = 0; i < size; ++i) {
-        for (int c = 0; c < dim; ++c) {
-          h_dv[c + dim*i] = h_dv1[i + c*size];
-        }
-      }
-      dv = h_dv;
 
       // Solve for energy, assemble the energy source if such exists.
       LinearForm *e_source = NULL;
