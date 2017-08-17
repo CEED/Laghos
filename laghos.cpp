@@ -149,6 +149,7 @@ int main(int argc, char *argv[])
    // Load cached kernels
    occa::loadKernels();
    occa::loadKernels("mfem");
+   occa::loadKernels("laghos");
 
    // Set as the background device
    occa::settings()["verboseCompilation"] = occa_verbose;
