@@ -162,14 +162,13 @@ kernel void UpdateQuadratureData(const int numElements,
         const double eigDisc = sqrt((eigB * eigB) - (4.0 * eigC));
 
         // Get smallest eigenvalue and its eigenvector
-        const double eigVal1 = 0.5 * (-eigB - eigDisc);
-        const double eigVal2 = 0.5 * (-eigB + eigDisc);
-        const double minEig = (eigVal1 < eigVal2) ? eigVal1 : eigVal2;
+        const double minEig = 0.5 * (-eigB - eigDisc);
 
         // Normalize eigenvector
         double comprDirX = 1;
         double comprDirY = 0;
         if (minEig*minEig > 0) {
+          // Use the best-conditioned option
           if ((gradv10 * gradv10) < ((minEig - gradv11)*(minEig - gradv11))) {
             comprDirY = gradv10 / (minEig - gradv11);
           } else {
