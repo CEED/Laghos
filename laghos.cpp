@@ -61,14 +61,14 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   // 1. Initialize MPI.
+   // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
 
-   // print the cool banner
+   // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
 
-   // 2. Parse command-line options.
+   // Parse command-line options.
    const char *mesh_file = "data/square01_quad.mesh";
    int rs_levels = 0;
    int rp_levels = 0;
@@ -122,16 +122,41 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   // 3. Read the serial mesh from the given mesh file on all processors.
-   //    Refine the mesh in serial to increase the resolution.
+   // Read the serial mesh from the given mesh file on all processors.
+   // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
-   // Define a parallel mesh by a partitioning of the serial mesh.
-   // Refine this mesh further in parallel to increase the resolution.
-   ParMesh *pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
+   // Parallel partitioning of the mesh.
+   ParMesh *pmesh = NULL;
+   const int num_tasks = mpi.WorldSize();
+   const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+   int *nxyz = new int[dim];
+   int product = 1;
+   for (int d = 0; d < dim; d++)
+   {
+      nxyz[d] = partitions;
+      product *= partitions;
+   }
+   if (product == num_tasks)
+   {
+      int *partitioning = mesh->CartesianPartitioning(nxyz);
+      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
+      delete partitioning;
+   }
+   else
+   {
+      if (myid == 0)
+      {
+         cout << "Non-Cartesian partitioning through METIS will be used.\n";
+      }
+      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
+   }
+   delete nxyz;
    delete mesh;
+
+   // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    // Define the parallel finite element spaces. We use:
