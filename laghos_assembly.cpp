@@ -23,7 +23,6 @@ using namespace std;
 namespace mfem
 {
 
-
 namespace hydrodynamics
 {
 
@@ -266,7 +265,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQs_i2_k2 -- contract  in y direction.
-         // This first step does some reordering (it's not product of matrices).
+         // The first step does some reordering (it's not product of matrices).
          // HHQ_i1_i2_k3  = HQg_i1_k1 QHQ_k1_i2_k3  -- gradients in x direction.
          // HHHx_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- contract  in z direction.
          for (int k1 = 0; k1 < nqp1D; k1++)
@@ -292,7 +291,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- gradients in y direction.
-         // This first step does some reordering (it's not product of matrices).
+         // The first step does some reordering (it's not product of matrices).
          // HHQ_i1_i2_k3  = HQs_i1_k1 QHQ_k1_i2_k3  -- contract  in x direction.
          // HHHy_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- contract  in z direction.
          for (int k1 = 0; k1 < nqp1D; k1++)
@@ -318,7 +317,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- contract  in y direction.
-         // This first step does some reordering (it's not product of matrices).
+         // The first step does some reordering (it's not product of matrices).
          // HHQ_i1_i2_k3  = HQs_i1_k1 QHQ_k1_i2_k3  -- contract  in x direction.
          // HHHz_i1_i2_i3 = HHQ_i1_i2_k3 HQs_i3_k3  -- gradients in z direction.
          for (int k1 = 0; k1 < nqp1D; k1++)
@@ -555,7 +554,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
       }
 
       // QLQ_k1_j2_k3 = QQQ_k1_k2_k3 LQs_j2_k2 -- contract in y direction.
-      // This first step does some reordering (it's not product of matrices).
+      // The first step does some reordering (it's not product of matrices).
       // LLQ_j1_j2_k3 = LQs_j1_k1 QLQ_k1_j2_k3 -- contract in x direction.
       // E_j1_j2_i3   = LLQ_j1_j2_k3 LQs_j3_k3 -- contract in z direction.
       for (int k1 = 0; k1 < nqp1D; k1++)
@@ -738,7 +737,7 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
       for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
 
       // QDQ_k1_i2_k3 = QQQ_k1_k2_k3 DQs_i2_k2 -- contract in y direction.
-      // This first step does some reordering (it's not product of matrices).
+      // The first step does some reordering (it's not product of matrices).
       // DDQ_i1_i2_k3 = DQs_i1_k1 QDQ_k1_i2_k3 -- contract in x direction.
       // Y_i1_i2_i3   = DDQ_i1_i2_k3 DQs_i3_k3 -- contract in z direction.
       for (int k1 = 0; k1 < nqp1D; k1++)

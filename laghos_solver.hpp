@@ -62,7 +62,7 @@ protected:
 
    Array<int> &ess_tdofs;
 
-   const int dim, zones_cnt, l2dofs_cnt, h1dofs_cnt, source_type;
+   const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl, gamma;
    const bool use_viscosity, p_assembly;
 
@@ -87,8 +87,16 @@ protected:
    // Same as above, but done through partial assembly.
    ForcePAOperator ForcePA;
 
-   double MaterialPressure(double rho, double e) const
-   { return (gamma - 1.0) * rho * e; }
+   void ComputeMaterialProperties(int nvalues,
+                                  const double rho[], const double e[],
+                                  double p[], double cs[]) const
+   {
+      for (int v = 0; v < nvalues; v++)
+      {
+         p[v]  = (gamma - 1.0) * rho[v] * e[v];
+         cs[v] = sqrt(gamma * (gamma-1.0) * e[v]);
+      }
+   }
 
    void UpdateQuadratureData(const Vector &S) const;
 
