@@ -87,6 +87,14 @@ protected:
    // Same as above, but done through partial assembly.
    ForcePAOperator ForcePA;
 
+   // Mass matrices done through partial assembly:
+   // velocity (coupled H1 assembly) and energy (local L2 assemblies).
+   mutable MassPAOperator VMassPA;
+   mutable LocalMassPAOperator locEMassPA;
+
+   // Linear solver for energy.
+   CGSolver locCG;
+
    void ComputeMaterialProperties(int nvalues,
                                   const double rho[], const double e[],
                                   double p[], double cs[]) const

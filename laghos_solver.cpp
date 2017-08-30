@@ -103,7 +103,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes)
+     Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
+     VMassPA(&quad_data, H1compFESpace), locEMassPA(&quad_data, l2_fes),
+     locCG()
 {
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -179,6 +181,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                 L2FESpace.GetFE(0)->GetOrder(),
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))));
    }
+
+   locCG.SetOperator(locEMassPA);
+   locCG.iterative_mode = false;
+   locCG.SetRelTol(1e-8);
+   locCG.SetAbsTol(0.0);
+   locCG.SetMaxIter(200);
+   locCG.SetPrintLevel(0);
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
@@ -228,7 +237,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       ForcePA.Mult(one, rhs); rhs.Neg();
 
       // Partial assembly solve for each velocity component.
-      MassPAOperator VMassPA(&quad_data, H1compFESpace);
       const int size = H1compFESpace.GetVSize();
       for (int c = 0; c < dim; c++)
       {
@@ -285,46 +293,35 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
    }
+   Array<int> l2dofs;
+   Vector e_rhs(Vsize_l2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    if (p_assembly)
    {
-      Vector rhs(Vsize_l2);
-      ForcePA.MultTranspose(v, rhs);
-
-      if (e_source) { rhs += *e_source; }
-
-      MassPAOperator EMassPA(&quad_data, L2FESpace);
-      CGSolver cg(L2FESpace.GetParMesh()->GetComm());
-      cg.SetOperator(EMassPA);
-      cg.SetRelTol(1e-8);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(200);
-      cg.SetPrintLevel(0);
-      cg.Mult(rhs, de);
+      ForcePA.MultTranspose(v, e_rhs);
+      if (e_source) { e_rhs += *e_source; }
+      for (int z = 0; z < nzones; z++)
+      {
+         L2FESpace.GetElementDofs(z, l2dofs);
+         e_rhs.GetSubVector(l2dofs, loc_rhs);
+         locEMassPA.SetZoneId(z);
+         locCG.Mult(loc_rhs, loc_de);
+         de.SetSubVector(l2dofs, loc_de);
+      }
    }
    else
    {
-      Array<int> l2dofs, h1dofs;
-      DenseMatrix loc_Force(h1dofs_cnt * dim, l2dofs_cnt);
-      Vector v_vals(h1dofs_cnt * dim), e_rhs(l2dofs_cnt), de_loc(l2dofs_cnt);
-      for (int i = 0; i < nzones; i++)
+      Force.MultTranspose(v, e_rhs);
+      if (e_source) { e_rhs += *e_source; }
+      for (int z = 0; z < nzones; z++)
       {
-         H1FESpace.GetElementVDofs(i, h1dofs);
-         L2FESpace.GetElementDofs(i, l2dofs);
-         Force.SpMat().GetSubMatrix(h1dofs, l2dofs, loc_Force);
-         v.GetSubVector(h1dofs, v_vals);
-
-         loc_Force.MultTranspose(v_vals, e_rhs);
-         if (e_source)
-         {
-            e_source->GetSubVector(l2dofs, de_loc); // Use de_loc as temporary.
-            e_rhs += de_loc;
-         }
-         Me_inv(i).Mult(e_rhs, de_loc);
-         de.SetSubVector(l2dofs, de_loc);
+         L2FESpace.GetElementDofs(z, l2dofs);
+         e_rhs.GetSubVector(l2dofs, loc_rhs);
+         Me_inv(z).Mult(loc_rhs, loc_de);
+         de.SetSubVector(l2dofs, loc_de);
       }
    }
-
    delete e_source;
+
    quad_data_is_current = false;
 }
 

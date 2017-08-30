@@ -179,6 +179,32 @@ public:
    }
 };
 
+// Performs partial assembly for the energy mass matrix on a single zone.
+// Used to perform local CG solves, thus avoiding unnecessary communication.
+class LocalMassPAOperator : public Operator
+{
+private:
+   const int dim;
+   int zone_id;
+
+   QuadratureData *quad_data;
+
+   // Mass matrix action on a quadrilateral element in 2D.
+   void MultQuad(const Vector &x, Vector &y) const;
+   // Mass matrix action on a hexahedral element in 3D.
+   void MultHex(const Vector &x, Vector &y) const;
+
+public:
+   LocalMassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+      : Operator(fes.GetFE(0)->GetDof()),
+        dim(fes.GetMesh()->Dimension()), zone_id(0),
+        quad_data(quad_data_)
+   { }
+   void SetZoneId(int zid) { zone_id = zid; }
+
+   virtual void Mult(const Vector &x, Vector &y) const;
+};
+
 } // namespace hydrodynamics
 
 } // namespace mfem

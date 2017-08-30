@@ -671,7 +671,7 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
    }
 }
 
-// Mass matrix action on hexahedral elements in 3D
+// Mass matrix action on hexahedral elements in 3D.
 void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
    // Are we working with the velocity or energy mass matrix?
@@ -768,6 +768,109 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
       }
       else { y.SetSubVector(dofs, yz); }
    }
+}
+
+void LocalMassPAOperator::Mult(const Vector &x, Vector &y) const
+{
+   if      (dim == 2) { MultQuad(x, y); }
+   else if (dim == 3) { MultHex(x, y); }
+   else { MFEM_ABORT("Unsupported dimension"); }
+}
+
+// L2 mass matrix action on a single quadrilateral element in 2D.
+void LocalMassPAOperator::MultQuad(const Vector &x, Vector &y) const
+{
+   const DenseMatrix &LQs = tensors1D->LQshape1D;
+
+   y.SetSize(x.Size());
+   y = 0.0;
+
+   const int ndof1D = LQs.Height(), nqp1D = LQs.Width();
+   DenseMatrix LQ(ndof1D, nqp1D), QQ(nqp1D, nqp1D);
+   DenseMatrix X(x.GetData(), ndof1D, ndof1D), Y(y.GetData(), ndof1D, ndof1D);
+   double *qq = QQ.GetData();
+   const int nqp = nqp1D * nqp1D;
+
+   // LQ_i1_k2 = X_i1_i2 LQs_i2_k2  -- contract in y direction.
+   // QQ_k1_k2 = LQs_i1_k1 LQ_i1_k2 -- contract in x direction.
+   mfem::Mult(X, LQs, LQ);
+   MultAtB(LQs, LQ, QQ);
+
+   // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
+   const double *d = quad_data->rho0DetJ0w.GetData() + zone_id*nqp;
+   for (int q = 0; q < nqp; q++) { qq[q] *= d[q]; }
+
+   // LQ_i1_k2 = LQs_i1_k1 QQ_k1_k2 -- contract in x direction.
+   // Y_i1_i2  = LQ_i1_k2 LQs_i2_k2 -- contract in y direction.
+   mfem::Mult(LQs, QQ, LQ);
+   MultABt(LQ, LQs, Y);
+}
+
+// L2 mass matrix action on a single hexahedral element in 3D.
+void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
+{
+   const DenseMatrix &LQs = tensors1D->LQshape1D;
+
+   y.SetSize(x.Size());
+   y = 0.0;
+
+   const int ndof1D = LQs.Height(), nqp1D = LQs.Width();
+   DenseMatrix LL_Q(ndof1D * ndof1D, nqp1D);
+   DenseMatrix L_LQ(LL_Q.GetData(), ndof1D, ndof1D*nqp1D);
+   DenseMatrix Q_LQ(nqp1D, ndof1D*nqp1D);
+   DenseMatrix QQ_Q(nqp1D*nqp1D, nqp1D);
+   double *qqq = QQ_Q.GetData();
+   DenseMatrix X(x.GetData(), ndof1D*ndof1D, ndof1D),
+               Y(y.GetData(), ndof1D*ndof1D, ndof1D);
+   const int nqp = nqp1D * nqp1D * nqp1D;
+
+   // LLQ_i1_i2_k3  = X_i1_i2_i3 LQs_i3_k3   -- contract in z direction.
+   // QLQ_k1_i2_k3  = LQs_i1_k1 LLQ_i1_i2_k3 -- contract in x direction.
+   // QQQ_k1_k2_k3  = QLQ_k1_i2_k3 LQs_i2_k2 -- contract in y direction.
+   // The last step does some reordering (it's not product of matrices).
+   mfem::Mult(X, LQs, LL_Q);
+   MultAtB(LQs, L_LQ, Q_LQ);
+   for (int k1 = 0; k1 < nqp1D; k1++)
+   {
+      for (int k2 = 0; k2 < nqp1D; k2++)
+      {
+         for (int k3 = 0; k3 < nqp1D; k3++)
+         {
+            QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+            for (int i2 = 0; i2 < ndof1D; i2++)
+            {
+               QQ_Q(k1 + nqp1D*k2, k3) +=
+                     Q_LQ(k1, i2 + k3*ndof1D) * LQs(i2, k2);
+            }
+         }
+      }
+   }
+
+   // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
+   double *d = quad_data->rho0DetJ0w.GetData() + zone_id*nqp;
+   for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
+
+   // QLQ_k1_i2_k3 = QQQ_k1_k2_k3 LQs_i2_k2 -- contract in y direction.
+   // The first step does some reordering (it's not product of matrices).
+   // LLQ_i1_i2_k3 = LQs_i1_k1 QLQ_k1_i2_k3 -- contract in x direction.
+   // Y_i1_i2_i3   = LLQ_i1_i2_k3 DQs_i3_k3 -- contract in z direction.
+   for (int k1 = 0; k1 < nqp1D; k1++)
+   {
+      for (int i2 = 0; i2 < ndof1D; i2++)
+      {
+         for (int k3 = 0; k3 < nqp1D; k3++)
+         {
+            Q_LQ(k1, i2 + ndof1D*k3) = 0.0;
+            for (int k2 = 0; k2 < nqp1D; k2++)
+            {
+               Q_LQ(k1, i2 + ndof1D*k3) +=
+               QQ_Q(k1 + nqp1D*k2, k3) * LQs(i2, k2);
+            }
+         }
+      }
+   }
+   mfem::Mult(LQs, Q_LQ, L_LQ);
+   MultABt(LL_Q, LQs, Y);
 }
 
 } // namespace hydrodynamics
