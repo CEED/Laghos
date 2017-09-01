@@ -11,7 +11,7 @@
 ## Purpose
 
 **Laghos** (LAGrangian High-Order Solver) is a miniapp that solves the
-time-dependent Euler equation of compressible gas dynamics in a moving
+time-dependent Euler equations of compressible gas dynamics in a moving
 Lagrangian frame using unstructured high-order finite element spatial
 discretization and explicit high-order time-stepping.
 
@@ -24,7 +24,7 @@ Laghos is based on the discretization method described in the following article:
 Laghos captures the basic structure of many other compressible shock
 hydrocodes, including the [BLAST code](http://llnl.gov/casc/blast) at
 [Lawrence Livermore National Laboratory](http://llnl.gov). The miniapp
-is build on top of a general discretization library, [MFEM](http://mfem.org),
+is built on top of a general discretization library, [MFEM](http://mfem.org),
 thus separating the pointwise physics from finite element and meshing concerns.
 
 The Laghos miniapp is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
