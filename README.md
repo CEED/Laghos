@@ -124,14 +124,14 @@ Laghos has the following external dependencies:
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
    http://glaros.dtc.umn.edu/gkhome/metis/metis/download
 
-- MFEM, used for (high-order) finite element discretization, we recommend version 3.4 <br>
-  http://mfem.org/download
+- MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
+  https://github.com/mfem/mfem
 
-To build the miniapp, first download *hypre*, METIS and MFEM from the links above
+To build the miniapp, first download *hypre* and METIS from the links above
 and put everything on the same level as Laghos:
 ```sh
 ~> ls
-Laghos/ hypre-2.10.0b.tar.gz   metis-4.0.tar.gz   mfem-3.4.tgz
+Laghos/ hypre-2.10.0b.tar.gz   metis-4.0.tar.gz
 ```
 
 Build *hypre*:
@@ -152,13 +152,12 @@ Build METIS:
 ~> ln -s metis-4.0.3 metis-4.0
 ```
 
-Build the parallel version of MFEM:
+Clone and build the parallel version of MFEM:
 ```sh
-~> tar -zxvf mfem-3.4.tgz
-~> cd mfem-3.4/
-~/mfem-3.4> make parallel -j
-~> cd ..
-~> ln -s mfem-3.4 mfem
+~> git clone git@github.com:mfem/mfem.git ./mfem
+~> cd mfem/
+~/mfem> make parallel -j
+~/mfem> cd ..
 ```
 
 Build Laghos
