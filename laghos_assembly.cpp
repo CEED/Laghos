@@ -612,14 +612,12 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 // Mass matrix action on quadrilateral elements in 2D
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
-   // Are we working with the velocity or energy mass matrix?
    const H1_QuadrilateralElement *fe_H1 =
       dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
-   const DenseMatrix &DQs = (fe_H1) ? tensors1D->HQshape1D
-                            : tensors1D->LQshape1D;
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
 
-   const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
-   DenseMatrix DQ(ndof1D, nqp1D), QQ(nqp1D, nqp1D);
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
+   DenseMatrix HQ(ndof1D, nqp1D), QQ(nqp1D, nqp1D);
    Vector xz(ndof1D * ndof1D), yz(ndof1D * ndof1D);
    DenseMatrix X(xz.GetData(), ndof1D, ndof1D),
                Y(yz.GetData(), ndof1D, ndof1D);
@@ -633,57 +631,46 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
    for (int z = 0; z < nzones; z++)
    {
       FESpace.GetElementDofs(z, dofs);
-      if (fe_H1)
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < xz.Size(); j++)
       {
-         // Transfer from the mfem's H1 local numbering to the tensor structure
-         // numbering.
-         const Array<int> &dof_map = fe_H1->GetDofMap();
-         for (int j = 0; j < xz.Size(); j++)
-         {
-            xz[j] = x[dofs[dof_map[j]]];
-         }
+         xz[j] = x[dofs[dof_map[j]]];
       }
-      else { x.GetSubVector(dofs, xz); }
 
-      // DQ_i1_k2 = X_i1_i2 DQs_i2_k2  -- contract in y direction.
-      // QQ_k1_k2 = DQs_i1_k1 DQ_i1_k2 -- contract in x direction.
-      mfem::Mult(X, DQs, DQ);
-      MultAtB(DQs, DQ, QQ);
+      // HQ_i1_k2 = X_i1_i2 HQs_i2_k2  -- contract in y direction.
+      // QQ_k1_k2 = HQs_i1_k1 HQ_i1_k2 -- contract in x direction.
+      mfem::Mult(X, HQs, HQ);
+      MultAtB(HQs, HQ, QQ);
 
       // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
       double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qq[q] *= d[q]; }
 
-      // DQ_i1_k2 = DQs_i1_k1 QQ_k1_k2 -- contract in x direction.
-      // Y_i1_i2  = DQ_i1_k2 DQs_i2_k2 -- contract in y direction.
-      mfem::Mult(DQs, QQ, DQ);
-      MultABt(DQ, DQs, Y);
+      // HQ_i1_k2 = HQs_i1_k1 QQ_k1_k2 -- contract in x direction.
+      // Y_i1_i2  = HQ_i1_k2 HQs_i2_k2 -- contract in y direction.
+      mfem::Mult(HQs, QQ, HQ);
+      MultABt(HQ, HQs, Y);
 
-      if (fe_H1)
+      for (int j = 0; j < yz.Size(); j++)
       {
-         const Array<int> &dof_map = fe_H1->GetDofMap();
-         for (int j = 0; j < yz.Size(); j++)
-         {
-            y[dofs[dof_map[j]]] += yz[j];
-         }
+         y[dofs[dof_map[j]]] += yz[j];
       }
-      else { y.SetSubVector(dofs, yz); }
    }
 }
 
 // Mass matrix action on hexahedral elements in 3D.
 void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
-   // Are we working with the velocity or energy mass matrix?
    const H1_HexahedronElement *fe_H1 =
       dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
-   const DenseMatrix &DQs = (fe_H1) ? tensors1D->HQshape1D
-                            : tensors1D->LQshape1D;
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
 
-   const int ndof1D = DQs.Height(), nqp1D = DQs.Width();
-   DenseMatrix DD_Q(ndof1D * ndof1D, nqp1D);
-   DenseMatrix D_DQ(DD_Q.GetData(), ndof1D, ndof1D*nqp1D);
-   DenseMatrix Q_DQ(nqp1D, ndof1D*nqp1D);
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
+   DenseMatrix HH_Q(ndof1D * ndof1D, nqp1D);
+   DenseMatrix H_HQ(HH_Q.GetData(), ndof1D, ndof1D*nqp1D);
+   DenseMatrix Q_HQ(nqp1D, ndof1D*nqp1D);
    DenseMatrix QQ_Q(nqp1D*nqp1D, nqp1D);
    double *qqq = QQ_Q.GetData();
    Vector xz(ndof1D * ndof1D * ndof1D), yz(ndof1D * ndof1D * ndof1D);
@@ -698,24 +685,20 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
    for (int z = 0; z < nzones; z++)
    {
       FESpace.GetElementDofs(z, dofs);
-      if (fe_H1)
+      // Transfer from the mfem's H1 local numbering to the tensor structure
+      // numbering.
+      const Array<int> &dof_map = fe_H1->GetDofMap();
+      for (int j = 0; j < xz.Size(); j++)
       {
-         // Transfer from the mfem's H1 local numbering to the tensor structure
-         // numbering.
-         const Array<int> &dof_map = fe_H1->GetDofMap();
-         for (int j = 0; j < xz.Size(); j++)
-         {
-            xz[j] = x[dofs[dof_map[j]]];
-         }
+         xz[j] = x[dofs[dof_map[j]]];
       }
-      else { x.GetSubVector(dofs, xz); }
 
-      // DDQ_i1_i2_k3  = X_i1_i2_i3 DQs_i3_k3   -- contract in z direction.
-      // QDQ_k1_i2_k3  = DQs_i1_k1 DDQ_i1_i2_k3 -- contract in x direction.
-      // QQQ_k1_k2_k3  = QDQ_k1_i2_k3 DQs_i2_k2 -- contract in y direction.
+      // HHQ_i1_i2_k3  = X_i1_i2_i3 HQs_i3_k3   -- contract in z direction.
+      // QHQ_k1_i2_k3  = HQs_i1_k1 HHQ_i1_i2_k3 -- contract in x direction.
+      // QQQ_k1_k2_k3  = QHQ_k1_i2_k3 HQs_i2_k2 -- contract in y direction.
       // The last step does some reordering (it's not product of matrices).
-      mfem::Mult(X, DQs, DD_Q);
-      MultAtB(DQs, D_DQ, Q_DQ);
+      mfem::Mult(X, HQs, HH_Q);
+      MultAtB(HQs, H_HQ, Q_HQ);
       for (int k1 = 0; k1 < nqp1D; k1++)
       {
          for (int k2 = 0; k2 < nqp1D; k2++)
@@ -726,7 +709,7 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
                for (int i2 = 0; i2 < ndof1D; i2++)
                {
                   QQ_Q(k1 + nqp1D*k2, k3) +=
-                     Q_DQ(k1, i2 + k3*ndof1D) * DQs(i2, k2);
+                     Q_HQ(k1, i2 + k3*ndof1D) * HQs(i2, k2);
                }
             }
          }
@@ -736,37 +719,32 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
       double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
 
-      // QDQ_k1_i2_k3 = QQQ_k1_k2_k3 DQs_i2_k2 -- contract in y direction.
+      // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2 -- contract in y direction.
       // The first step does some reordering (it's not product of matrices).
-      // DDQ_i1_i2_k3 = DQs_i1_k1 QDQ_k1_i2_k3 -- contract in x direction.
-      // Y_i1_i2_i3   = DDQ_i1_i2_k3 DQs_i3_k3 -- contract in z direction.
+      // HHQ_i1_i2_k3 = HQs_i1_k1 QHQ_k1_i2_k3 -- contract in x direction.
+      // Y_i1_i2_i3   = HHQ_i1_i2_k3 HQs_i3_k3 -- contract in z direction.
       for (int k1 = 0; k1 < nqp1D; k1++)
       {
          for (int i2 = 0; i2 < ndof1D; i2++)
          {
             for (int k3 = 0; k3 < nqp1D; k3++)
             {
-               Q_DQ(k1, i2 + ndof1D*k3) = 0.0;
+               Q_HQ(k1, i2 + ndof1D*k3) = 0.0;
                for (int k2 = 0; k2 < nqp1D; k2++)
                {
-                  Q_DQ(k1, i2 + ndof1D*k3) +=
-                     QQ_Q(k1 + nqp1D*k2, k3) * DQs(i2, k2);
+                  Q_HQ(k1, i2 + ndof1D*k3) +=
+                     QQ_Q(k1 + nqp1D*k2, k3) * HQs(i2, k2);
                }
             }
          }
       }
-      mfem::Mult(DQs, Q_DQ, D_DQ);
-      MultABt(DD_Q, DQs, Y);
+      mfem::Mult(HQs, Q_HQ, H_HQ);
+      MultABt(HH_Q, HQs, Y);
 
-      if (fe_H1)
+      for (int j = 0; j < yz.Size(); j++)
       {
-         const Array<int> &dof_map = fe_H1->GetDofMap();
-         for (int j = 0; j < yz.Size(); j++)
-         {
-            y[dofs[dof_map[j]]] += yz[j];
-         }
+         y[dofs[dof_map[j]]] += yz[j];
       }
-      else { y.SetSubVector(dofs, yz); }
    }
 }
 

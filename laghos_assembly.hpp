@@ -142,7 +142,7 @@ public:
    ~ForcePAOperator() { }
 };
 
-// Performs partial assembly for the velocity and energy mass matrices.
+// Performs partial assembly for the velocity mass matrix.
 class MassPAOperator : public Operator
 {
 private:
@@ -168,8 +168,7 @@ public:
         x_gf(&fes), y_gf(&fes)
    { }
 
-   // Can be used for both velocity and specific internal energy. For the case
-   // of velocity, we only work with one component at a time.
+   // Mass matrix action. We work with one velocity component at a time.
    virtual void Mult(const Vector &x, Vector &y) const;
 
    void EliminateRHS(Array<int> &dofs, Vector &b)
