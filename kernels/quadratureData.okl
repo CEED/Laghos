@@ -16,6 +16,8 @@
 
 #include "occa://mfem/fem/defines.okl"
 
+#define PRINT_DEBUG 0
+
 #if VDIM_ORDERING == ORDERING_BY_VDIM
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
@@ -146,6 +148,7 @@ kernel void UpdateQuadratureData(const int numElements,
         const double q_rho = rho0DetJ0w(q, el) / q_Jw;
         const double q_e   = max(0.0, e(q, el));
 
+        // TODO: Input OccaVector eos(q,e) -> (stress, soundSpeed)
         const double s = -(GAMMA - 1.0) * q_rho * q_e;
         q_stress(0, 0) = s; q_stress(1, 0) = 0;
         q_stress(0, 1) = 0; q_stress(1, 1) = s;
@@ -156,26 +159,33 @@ kernel void UpdateQuadratureData(const int numElements,
         q_gradv(1, 0) = gradv10;
         q_gradv(0, 1) = gradv10;
 
-        // Compute eigenvalues using quadrature formula
-        const double eigB = - (gradv00 + gradv11);
-        const double eigC = (gradv00 * gradv11) - (gradv10 * gradv10);
-        const double eigDisc = sqrt((eigB * eigB) - (4.0 * eigC));
-
-        // Get smallest eigenvalue and its eigenvector
-        const double minEig = 0.5 * (-eigB - eigDisc);
-
-        // Normalize eigenvector
         double comprDirX = 1;
         double comprDirY = 0;
-        if (minEig*minEig > 0) {
-          // Use the best-conditioned option
-          if ((gradv10 * gradv10) < ((minEig - gradv11)*(minEig - gradv11))) {
-            comprDirY = gradv10 / (minEig - gradv11);
-          } else {
-            comprDirY = (minEig - gradv00) / gradv10;
+        double minEig = 0;
+        // linalg/densemat.cpp: Eigensystem2S()
+        if (gradv10 == 0) {
+          minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
+        } else {
+          const double zeta  = (gradv11 - gradv00) / (2.0 * gradv10);
+          const double azeta = fabs(zeta);
+          double t = 1.0 / (azeta + sqrt(1.0 + zeta*zeta));
+          if ((t < 0) != (zeta < 0)) {
+            t = -t;
           }
-          comprDirX = 1.0 / sqrt(1.0 + (comprDirY * comprDirY));
-          comprDirY *= comprDirX;
+
+          const double c = sqrt(1.0 / (1.0 + t*t));
+          const double s = c * t;
+          t *= gradv10;
+
+          if ((gradv00 - t) <= (gradv11 + t)) {
+            minEig = gradv00 - t;
+            comprDirX = c;
+            comprDirY = -s;
+          } else {
+            minEig = gradv11 + t;
+            comprDirX = s;
+            comprDirY = c;
+          }
         }
 
         // Computes the initial->physical transformation Jacobian.
@@ -195,10 +205,17 @@ kernel void UpdateQuadratureData(const int numElements,
 
         const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
 
+        // TODO: soundSpeed will be an input as well (function call or values per q)
         const double soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
         dtEst(q, el) = CFL * q_h / soundSpeed;
-
+#if PRINT_DEBUG
+        if ((el == 101) && (q == 3)) {
+          printf("rho(%.14g), h(%.14g), eigVal(%.14g), comprDir(%.14g,%.14g), physDir(%.14g,%.14g)\n",
+                 q_rho, q_h, minEig, comprDirX, comprDirY, physDirX, physDirY);
+        }
+#endif
         if (USE_VISCOSITY) {
+          // TODO: Check how we can extract outside of kernel
           const double mu = minEig;
           double coeff = 2.0 * q_rho * q_h * q_h * fabs(mu);
           if (mu < 0) {
@@ -209,15 +226,40 @@ kernel void UpdateQuadratureData(const int numElements,
               q_stress(x, y) += coeff * q_gradv(x, y);
             }
           }
+#if PRINT_DEBUG
+          if ((el == 101) && (q == 3)) {
+            printf("coeff(%.14g), q_gradv(%.14g, %.14g, %.14g, %.14g)\n",
+                   coeff,
+                   q_gradv(0, 0), q_gradv(1, 0), q_gradv(0, 1), q_gradv(1, 1));
+          }
+#endif
         }
-
         const double S00 = q_stress(0, 0), S10 = q_stress(1, 0);
         const double S01 = q_stress(0, 1), S11 = q_stress(1, 1);
-
+#if PRINT_DEBUG
+        if ((el == 101) && (q == 3)) {
+          printf("stressJiT(%.14g, %.14g, %.14g, %.14g)\n",
+                 ((S00 * invJ_00) + (S10 * invJ_01)),
+                 ((S00 * invJ_10) + (S10 * invJ_11)),
+                 ((S01 * invJ_00) + (S11 * invJ_01)),
+                 ((S01 * invJ_10) + (S11 * invJ_11)));
+          printf("w(%.14g), detJ(%.14g)\n",
+                 quadWeights[q], detJ(q, el));
+        }
+#endif
         stressJinvT(0, 0, q, el) = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01));
         stressJinvT(1, 0, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11));
         stressJinvT(0, 1, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01));
         stressJinvT(1, 1, q, el) = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11));
+#if PRINT_DEBUG
+        if ((el == 101) && (q == 3)) {
+          printf("stressJinvT(%.14g, %.14g, %.14g, %.14g)\n",
+                 stressJinvT(0, 0, q, el),
+                 stressJinvT(1, 0, q, el),
+                 stressJinvT(0, 1, q, el),
+                 stressJinvT(1, 1, q, el));
+        }
+#endif
       }
     }
   }
@@ -296,6 +338,19 @@ kernel void UpdateQuadratureData(const int numElements,
         q_gradv(0, 2) = gradv20; q_gradv(1, 2) = gradv21;
 
         // Compute eigenvalues using quadrature formula
+        const double avgTrace   = (gradv00 + gradv11 + gradv22) / 3.0;
+        const double traceDiff1 = (gradv00 - trace);
+        const double traceDiff2 = (gradv11 - trace);
+        const double traceDiff3 = (gradv22 - trace);
+        const double p1 = ((gradv01*gradv01)
+                           + (gradv02*gradv02)
+                           + (gradv12*gradv12));
+        const double p2 = ((traceDiff1*traceDiff1)
+                           * (traceDiff2*traceDiff2)
+                           * (traceDiff3*traceDiff3)
+                           + (2.0 * p1));
+        const double p3 = sqrt(p2 / 6.0);
+        const double r  = 0.5 * ;
 
         // Get smallest eigenvalue and its eigenvector
         double minEig = 0;

@@ -163,10 +163,7 @@ namespace mfem {
       quad_data.Jac0inv = quad_data.geom.invJ;
 
       OccaVector rhoValues;
-      rho0.ToQuad(device,
-                  o_L2FESpace,
-                  integ_rule,
-                  rhoValues);
+      rho0.ToQuad(integ_rule, rhoValues);
 
       SetProperties(o_H1FESpace, integ_rule, quad_data.props);
       quad_data.props["defines/H0"]            = quad_data.h0;
@@ -236,6 +233,7 @@ namespace mfem {
       OccaVector X(o_H1compFESpace.GetTrueVSize());
 
       // Partial assembly solve for each velocity component.
+      // TODO: Move in constructor
       OccaMassOperator VMass(o_H1compFESpace,
                              integ_rule,
                              &quad_data);
@@ -294,6 +292,7 @@ namespace mfem {
                              integ_rule,
                              &quad_data);
 
+      // TODO: Talk to Veselin on non-MPI CG
       CG(L2FESpace.GetParMesh()->GetComm(),
          EMass, forceRHS, de,
          cg_print_level,
@@ -375,10 +374,7 @@ namespace mfem {
       o_H1FESpace.GlobalToLocal(v, v2);
 
       OccaVector eValues;
-      e.ToQuad(device,
-               o_L2FESpace,
-               integ_rule,
-               eValues);
+      e.ToQuad(integ_rule, eValues);
 
       updateKernel(elements,
                    quad_data.dqMaps.dofToQuad,

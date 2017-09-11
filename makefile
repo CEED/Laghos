@@ -151,7 +151,7 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-clean: clean-build clean-exec
+clean: clean-build clean-exec clear-kernels
 
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM Laghos_*
@@ -186,12 +186,11 @@ OKL_CACHED_KERNELS := $(subst kernels/,,$(subst $(PROJ_DIR),$(OCCA_LIB_CACHE_DIR
 .PHONY: cache-kernels
 cache-kernels: $(OKL_CACHED_KERNELS)
 
-.PHONY: clear-cache
+.PHONY: clear-kernels
 clear-kernels: clear-mfem-kernels
 
-.PHONY: clear-cache
 clear-mfem-kernels:
-	@echo y | occa clear -l mfem
+	@occa clear -y -l laghos
 
 $(OCCA_LIB_CACHE_DIR)/laghos/%.okl: $(PROJ_DIR)/kernels/%.okl
 	@echo "Caching: $(subst $(PROJ_DIR)/,,$<)"

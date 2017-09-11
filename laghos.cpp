@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
    OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec, Ordering::byNODES);
 
    ParGridFunction l2_e((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
-   if (problem == blast)
+   if (problem == sedov)
    {
       // For the Sedov test, we use a delta function at the origin.
       DeltaCoefficient e_coeff(0, 0, 0.25);
@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
        gamma = 5.0 / 3.0;
        break;
      }
-     case blast: {
+     case sedov: {
        use_viscosity = true;
        gamma = 1.4;
        break;
@@ -403,6 +403,19 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    OccaVector S_old(S);
+   if (mpi.Root())
+     {
+       double loc_norm = o_e_gf * o_e_gf;
+       double tot_norm;
+       MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
+                     pmesh->GetComm());
+       cout << fixed;
+       cout << "step " << setw(5) << 0
+            << ",\tt = " << setw(5) << setprecision(4) << t
+            << ",\tdt = " << setw(5) << setprecision(6) << dt
+            << ",\t|e| = " << setprecision(14)
+            << sqrt(tot_norm) << endl;
+     }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -476,7 +489,7 @@ int main(int argc, char *argv[])
             cout << "step " << setw(5) << ti
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
-                 << ",\t|e| = " << setprecision(10)
+                 << ",\t|e| = " << setprecision(14)
                  << sqrt(tot_norm) << endl;
          }
 
@@ -534,7 +547,7 @@ double rho0(const Vector &x)
    switch (problem)
    {
       case vortex: return 1.0;
-      case blast:  return 1.0;
+      case sedov:  return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -555,7 +568,7 @@ void v0(const Vector &x, Vector &v)
          }
          break;
       }
-      case blast:
+      case sedov:
       {
          v = 0.0;
          break;
@@ -583,7 +596,7 @@ double e0(const Vector &x)
          }
          return val/denom;
       }
-      case blast:
+      case sedov:
       {
         return 0.0; // This case in initialized in main().
       }
