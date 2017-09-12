@@ -28,6 +28,16 @@
 namespace mfem {
   namespace hydrodynamics {
 
+    // Stores values of the one-dimensional shape functions and gradients at all 1D
+    // quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).
+    struct Tensors1D {
+      // H1 shape functions and gradients, L2 shape functions.
+      DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
+
+      Tensors1D(int H1order, int L2order, int nqp1D);
+    };
+    extern const Tensors1D *tensors1D;
+
     // Container for all data needed at quadrature points.
     struct QuadratureData {
       // TODO: use QuadratureFunctions?
@@ -155,15 +165,8 @@ namespace mfem {
 
       OccaDofQuadMaps l2D2Q, h1D2Q;
 
-      // Force matrix action on quadrilateral elements in 2D
-      void MultQuad(const OccaVector &vecL2, OccaVector &vecH1) const;
-      // Force matrix action on hexahedral elements in 3D
-      void MultHex(const OccaVector &vecL2, OccaVector &vecH1) const;
-
-      // Transpose force matrix action on quadrilateral elements in 2D
-      void MultTransposeQuad(const OccaVector &vecH1, OccaVector &vecL2) const;
-      // Transpose force matrix action on hexahedral elements in 3D
-      void MultTransposeHex(const OccaVector &vecH1, OccaVector &vecL2) const;
+      void MultHex(const Vector &vecL2, Vector &vecH1) const;
+      void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
     public:
       OccaForceOperator(OccaFiniteElementSpace &h1fes_,
