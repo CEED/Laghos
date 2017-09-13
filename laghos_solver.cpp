@@ -352,135 +352,38 @@ namespace mfem {
 
       quad_data_is_current = true;
 
-      if (true || dim == 2) {
-        const int vSize = o_H1FESpace.GetVSize();
-        const int eSize = o_L2FESpace.GetVSize();
+      const int vSize = o_H1FESpace.GetVSize();
+      const int eSize = o_L2FESpace.GetVSize();
 
-        OccaGridFunction v(&o_H1FESpace, S.GetRange(vSize  , vSize));
-        OccaGridFunction e(&o_L2FESpace, S.GetRange(2*vSize, eSize));
+      OccaGridFunction v(&o_H1FESpace, S.GetRange(vSize  , vSize));
+      OccaGridFunction e(&o_L2FESpace, S.GetRange(2*vSize, eSize));
 
-        quad_data.geom = OccaGeometry::Get(device,
-                                           o_H1FESpace,
-                                           integ_rule);
+      quad_data.geom = OccaGeometry::Get(device,
+                                         o_H1FESpace,
+                                         integ_rule);
 
-        OccaVector v2(device,
-                      o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
-        o_H1FESpace.GlobalToLocal(v, v2);
+      OccaVector v2(device,
+                    o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
+      o_H1FESpace.GlobalToLocal(v, v2);
 
-        OccaVector eValues;
-        e.ToQuad(integ_rule, eValues);
+      OccaVector eValues;
+      e.ToQuad(integ_rule, eValues);
 
-        updateKernel(elements,
-                     quad_data.dqMaps.dofToQuad,
-                     quad_data.dqMaps.dofToQuadD,
-                     quad_data.dqMaps.quadWeights,
-                     v2,
-                     eValues,
-                     quad_data.rho0DetJ0w,
-                     quad_data.Jac0inv,
-                     quad_data.geom.J,
-                     quad_data.geom.invJ,
-                     quad_data.geom.detJ,
-                     quad_data.stressJinvT,
-                     quad_data.dtEst);
+      updateKernel(elements,
+                   quad_data.dqMaps.dofToQuad,
+                   quad_data.dqMaps.dofToQuadD,
+                   quad_data.dqMaps.quadWeights,
+                   v2,
+                   eValues,
+                   quad_data.rho0DetJ0w,
+                   quad_data.Jac0inv,
+                   quad_data.geom.J,
+                   quad_data.geom.invJ,
+                   quad_data.geom.detJ,
+                   quad_data.stressJinvT,
+                   quad_data.dtEst);
 
-        quad_data.dt_est = quad_data.dtEst.Min();
-      } else {
-        const int dim = H1FESpace.GetParMesh()->Dimension();
-        const int nqp = integ_rule.GetNPoints();
-
-        Vector h_S = S;
-        DenseTensor stressJinvT(elements * nqp, dim, dim);
-
-        Vector rho0DetJ0w = quad_data.rho0DetJ0w;
-        DenseTensor Jac0inv(dim, dim, elements * nqp);
-        occa::memcpy(Jac0inv.GetData(0),
-                     quad_data.Jac0inv.GetData());
-
-        double dt_est = 1e100;
-
-        ParGridFunction e, v;
-        Vector* sptr = (Vector*) &h_S;
-        v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-        e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-
-        Vector e_vals;
-        DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
-        DenseMatrix v_vals;
-
-        for (int i = 0; i < elements; i++) {
-          ElementTransformation *T = H1FESpace.GetElementTransformation(i);
-          e.GetValues(i, integ_rule, e_vals);
-          v.GetVectorValues(*T, integ_rule, v_vals);
-          for (int q = 0; q < nqp; q++) {
-            const IntegrationPoint &ip = integ_rule.IntPoint(q);
-            T->SetIntPoint(&ip);
-            const DenseMatrix &Jpr = T->Jacobian();
-
-            const double detJ = T->Weight();
-            MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
-
-            stress = 0.0;
-            const double rho = rho0DetJ0w(i*nqp + q) / detJ / ip.weight;
-            const double e   = max(0.0, e_vals(q));
-            for (int d = 0; d < dim; d++) {
-              stress(d, d) = - MaterialPressure(rho, e);
-            }
-
-            // Length scale at the point. The first eigenvector of the symmetric
-            // velocity gradient gives the direction of maximal compression. This
-            // is used to define the relative change of the initial length scale.
-            v.GetVectorGradient(*T, sgrad_v);
-            sgrad_v.Symmetrize();
-            double eig_val_data[3], eig_vec_data[9];
-            sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-            Vector compr_dir(eig_vec_data, dim);
-            // Computes the initial->physical transformation Jacobian.
-            mfem::Mult(Jpr, Jac0inv(i*nqp + q), Jpi);
-            Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-            // Change of the initial mesh size in the compression direction.
-            const double h = quad_data.h0 * ph_dir.Norml2() / (compr_dir.Norml2());
-
-            // Time step estimate at the point.
-            const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            dt_est = min(dt_est, cfl * h / sound_speed);
-
-            if (use_viscosity) {
-              // Measure of maximal compression.
-              const double mu = eig_val_data[0];
-              double coeff = 2.0 * rho * h * h * fabs(mu);
-              if (mu < 0.0) { coeff += 0.5 * rho * h * sound_speed; }
-              stress.Add(coeff, sgrad_v);
-            }
-
-            // Quadrature data for partial assembly of the force operator.
-            CalcInverse(Jpr, Jinv);
-
-            MultABt(stress, Jinv, stressJiT);
-            stressJiT *= integ_rule.IntPoint(q).weight * detJ;
-            for (int vd = 0 ; vd < dim; vd++) {
-              for (int gd = 0; gd < dim; gd++) {
-                stressJinvT(vd)(i*nqp + q, gd) = stressJiT(vd, gd);
-              }
-            }
-          }
-        }
-
-        Vector stressJinvT_ = quad_data.stressJinvT;
-        int o_idx = 0;
-        for (int el = 0; el < elements; ++el) {
-          for (int q = 0; q < nqp; ++q) {
-            for (int j = 0; j < dim; ++j) {
-              for (int i = 0; i < dim; ++i) {
-                stressJinvT_[o_idx++] = stressJinvT(q + el*nqp, j, i);
-              }
-            }
-          }
-        }
-
-        quad_data.dt_est = dt_est;
-        quad_data.stressJinvT = stressJinvT_;
-      }
+      quad_data.dt_est = quad_data.dtEst.Min();
     }
   } // namespace hydrodynamics
 } // namespace mfem

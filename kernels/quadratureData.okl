@@ -16,8 +16,6 @@
 
 #include "occa://mfem/fem/defines.okl"
 
-#define PRINT_DEBUG 0
-
 #if VDIM_ORDERING == ORDERING_BY_VDIM
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
@@ -208,12 +206,7 @@ kernel void UpdateQuadratureData(const int numElements,
         // TODO: soundSpeed will be an input as well (function call or values per q)
         const double soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
         dtEst(q, el) = CFL * q_h / soundSpeed;
-#if PRINT_DEBUG
-        if ((el == 101) && (q == 3)) {
-          printf("rho(%.14g), h(%.14g), eigVal(%.14g), comprDir(%.14g,%.14g), physDir(%.14g,%.14g)\n",
-                 q_rho, q_h, minEig, comprDirX, comprDirY, physDirX, physDirY);
-        }
-#endif
+
         if (USE_VISCOSITY) {
           // TODO: Check how we can extract outside of kernel
           const double mu = minEig;
@@ -226,41 +219,15 @@ kernel void UpdateQuadratureData(const int numElements,
               q_stress(x, y) += coeff * q_gradv(x, y);
             }
           }
-#if PRINT_DEBUG
-          if ((el == 101) && (q == 3)) {
-            printf("coeff(%.14g), q_gradv(%.14g, %.14g, %.14g, %.14g)\n",
-                   coeff,
-                   q_gradv(0, 0), q_gradv(1, 0), q_gradv(0, 1), q_gradv(1, 1));
-          }
-#endif
         }
         const double S00 = q_stress(0, 0), S10 = q_stress(1, 0);
         const double S01 = q_stress(0, 1), S11 = q_stress(1, 1);
-#if PRINT_DEBUG
-        if ((el == 101) && (q == 3)) {
-          printf("stressJiT(%.14g, %.14g, %.14g, %.14g)\n",
-                 ((S00 * invJ_00) + (S10 * invJ_01)),
-                 ((S00 * invJ_10) + (S10 * invJ_11)),
-                 ((S01 * invJ_00) + (S11 * invJ_01)),
-                 ((S01 * invJ_10) + (S11 * invJ_11)));
-          printf("w(%.14g), detJ(%.14g)\n",
-                 quadWeights[q], detJ(q, el));
-        }
-#endif
+
         stressJinvT(0, 0, q, el) = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01));
         stressJinvT(1, 0, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11));
 
         stressJinvT(0, 1, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01));
         stressJinvT(1, 1, q, el) = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11));
-#if PRINT_DEBUG
-        if ((el == 101) && (q == 3)) {
-          printf("stressJinvT(%.14g, %.14g, %.14g, %.14g)\n",
-                 stressJinvT(0, 0, q, el),
-                 stressJinvT(1, 0, q, el),
-                 stressJinvT(0, 1, q, el),
-                 stressJinvT(1, 1, q, el));
-        }
-#endif
       }
     }
   }
@@ -435,17 +402,19 @@ kernel void UpdateQuadratureData(const int numElements,
                                  (y * gradv21) +
                                  (z * (gradv22 - eig2)));
               const double cNorm = (cx*cx + cy*cy + cz*cz);
-              if (maxNorm < cNorm) {
+              if ((cNorm > 1e-16) && (maxNorm < cNorm)) {
                 comprDirX = cx;
                 comprDirY = cy;
                 comprDirZ = cz;
                 maxNorm = cNorm;
               }
             }
-            const double maxNormInv = 1.0 / sqrt(maxNorm);
-            comprDirX *= maxNormInv;
-            comprDirY *= maxNormInv;
-            comprDirZ *= maxNormInv;
+            if (maxNorm > 1e-16) {
+              const double maxNormInv = 1.0 / sqrt(maxNorm);
+              comprDirX *= maxNormInv;
+              comprDirY *= maxNormInv;
+              comprDirZ *= maxNormInv;
+            }
           }
 
           // Computes the initial->physical transformation Jacobian.
