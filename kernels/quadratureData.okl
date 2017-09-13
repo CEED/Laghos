@@ -378,14 +378,6 @@ kernel void UpdateQuadratureData(const int numElements,
           q_gradv(1, 0) = gradv10; q_gradv(2, 0) = gradv20;
           q_gradv(0, 1) = gradv10; q_gradv(2, 1) = gradv21;
           q_gradv(0, 2) = gradv20; q_gradv(1, 2) = gradv21;
-#if PRINT_DEBUG
-          if ((el == 10) && (q == 1)) {
-            printf("gradv\n--%.14g, %.14g, %.14g\n--%.14g, %.14g, %.14g\n--%.14g, %.14g, %.14g\n\n",
-                   q_gradv(0, 0), q_gradv(1, 0), q_gradv(2, 0),
-                   q_gradv(0, 1), q_gradv(1, 1), q_gradv(2, 1),
-                   q_gradv(0, 2), q_gradv(1, 2), q_gradv(2, 2));
-          }
-#endif
 
           double minEig = 0;
           double comprDirX = 1;
@@ -398,20 +390,20 @@ kernel void UpdateQuadratureData(const int numElements,
             const double gradv_q00 = (gradv00 - q_);
             const double gradv_q11 = (gradv11 - q_);
             const double gradv_q22 = (gradv22 - q_);
+
             const double p1 = ((gradv10 * gradv10) +
                                (gradv20 * gradv20) +
                                (gradv21 * gradv21));
-            const double p2 = ((gradv_q00 * gradv_q00) *
-                               (gradv_q11 * gradv_q11) *
-                               (gradv_q22 * gradv_q22)
-                               + (2.0 * p1));
+            const double p2 = ((gradv_q00 * gradv_q00) +
+                               (gradv_q11 * gradv_q11) +
+                               (gradv_q22 * gradv_q22) +
+                               (2.0 * p1));
             const double p    = sqrt(p2 / 6.0);
             const double pinv = 1.0 / p;
             // det(pinv * (gradv - q*I))
             const double r = (0.5 * pinv * pinv * pinv *
                               ((gradv_q00 * gradv_q11 * gradv_q22) +
-                               (gradv10 * gradv21 * gradv20) +
-                               (gradv20 * gradv10 * gradv21) -
+                               (2.0 * gradv10 * gradv21 * gradv20) -
                                (gradv_q11 * gradv20 * gradv20) -
                                (gradv_q22 * gradv10 * gradv10) -
                                (gradv_q00 * gradv21 * gradv21)));
@@ -429,9 +421,9 @@ kernel void UpdateQuadratureData(const int numElements,
             double maxNorm = 0;
 
             for (int i = 0; i < 3; ++i) {
-              const double x = q_gradv(0,i) - (i == 0)*eig3;
-              const double y = q_gradv(1,i) - (i == 1)*eig3;
-              const double z = q_gradv(2,i) - (i == 2)*eig3;
+              const double x = q_gradv[i + 3*0] - (i == 0)*eig3;
+              const double y = q_gradv[i + 3*1] - (i == 1)*eig3;
+              const double z = q_gradv[i + 3*2] - (i == 2)*eig3;
               const double cx = ((x * (gradv00 - eig2)) +
                                  (y * gradv10) +
                                  (z * gradv20));
@@ -440,7 +432,7 @@ kernel void UpdateQuadratureData(const int numElements,
                                  (z * gradv21));
               const double cz = ((x * gradv20) +
                                  (y * gradv21) +
-                                 (z * (gradv22 - eig2) * z));
+                                 (z * (gradv22 - eig2)));
               const double cNorm = (cx*cx + cy*cy + cz*cz);
               if (maxNorm < cNorm) {
                 comprDirX = cx;
@@ -453,13 +445,12 @@ kernel void UpdateQuadratureData(const int numElements,
             comprDirX *= maxNormInv;
             comprDirY *= maxNormInv;
             comprDirZ *= maxNormInv;
-#if PRINT_DEBUG
+
             if ((el == 10) && (q == 0)) {
               printf("val(%.14g, %.14g, %.14g), vec(%.14g, %.14g, %.14g)\n",
                      minEig, eig2, eig3,
                      comprDirX, comprDirY, comprDirZ);
             }
-#endif
           }
 
           // Computes the initial->physical transformation Jacobian.
