@@ -305,27 +305,41 @@ kernel void UpdateQuadratureData(const int numElements,
             gradv[i] = 0;
           }
           for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-            const double wz  = s_dofToQuad(qz, dz);
-            const double wDz = s_dofToQuadD(qz, dz);
+            double xy[NUM_DIM];
+            double Dxy[NUM_DIM];
+            double xDy[NUM_DIM];
+            for (int vi = 0; vi < NUM_DIM; ++vi) {
+              xy[vi] = Dxy[vi] = xDy[vi] = 0;
+            }
             for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-              const double wy  = s_dofToQuad(qy, dy);
-              const double wDy = s_dofToQuadD(qy, dy);
+              double x[NUM_DIM];
+              double Dx[NUM_DIM];
+              for (int vi = 0; vi < NUM_DIM; ++vi) {
+                x[vi] = Dx[vi] = 0;
+              }
               for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
                 const double wx  = s_dofToQuad(qx, dx);
                 const double wDx = s_dofToQuadD(qx, dx);
-                const double w[3] = { wDx * wy  * wz,
-                                      wx  * wDy * wz,
-                                      wx  * wy  * wDz };
-                const double v[3] = { v(0, dx, dy, dz, el),
-                                      v(1, dx, dy, dz, el),
-                                      v(2, dx, dy, dz, el) };
-                for (int d = 0; d < NUM_DIM; ++d) {
-                  const double wd = w[d];
-                  for (int vi = 0; vi < NUM_DIM; ++vi) {
-                    gradv(vi, d) += wd * v[vi];
-                  }
+                for (int vi = 0; vi < NUM_DIM; ++vi) {
+                  const double r_v = v(vi, dx, dy, dz, el);
+                  x[vi]  += wx  * r_v;
+                  Dx[vi] += wDx * r_v;
                 }
               }
+              const double wy  = s_dofToQuad(qy, dy);
+              const double wDy = s_dofToQuadD(qy, dy);
+              for (int vi = 0; vi < NUM_DIM; ++vi) {
+                xy[vi]  += wy  * x[vi];
+                Dxy[vi] += wy  * Dx[vi];
+                xDy[vi] += wDy * x[vi];
+              }
+            }
+            const double wz  = s_dofToQuad(qz, dz);
+            const double wDz = s_dofToQuadD(qz, dz);
+            for (int vi = 0; vi < NUM_DIM; ++vi) {
+              gradv(vi, 0) += wz  * Dxy[vi];
+              gradv(vi, 1) += wz  * xDy[vi];
+              gradv(vi, 2) += wDz * xy[vi];
             }
           }
 
@@ -364,6 +378,14 @@ kernel void UpdateQuadratureData(const int numElements,
           q_gradv(1, 0) = gradv10; q_gradv(2, 0) = gradv20;
           q_gradv(0, 1) = gradv10; q_gradv(2, 1) = gradv21;
           q_gradv(0, 2) = gradv20; q_gradv(1, 2) = gradv21;
+#if PRINT_DEBUG
+          if ((el == 10) && (q == 1)) {
+            printf("gradv\n--%.14g, %.14g, %.14g\n--%.14g, %.14g, %.14g\n--%.14g, %.14g, %.14g\n\n",
+                   q_gradv(0, 0), q_gradv(1, 0), q_gradv(2, 0),
+                   q_gradv(0, 1), q_gradv(1, 1), q_gradv(2, 1),
+                   q_gradv(0, 2), q_gradv(1, 2), q_gradv(2, 2));
+          }
+#endif
 
           double minEig = 0;
           double comprDirX = 1;

@@ -352,7 +352,7 @@ namespace mfem {
 
       quad_data_is_current = true;
 
-      if (dim == 2) {
+      if (true || dim == 2) {
         const int vSize = o_H1FESpace.GetVSize();
         const int eSize = o_L2FESpace.GetVSize();
 
