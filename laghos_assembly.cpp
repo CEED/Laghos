@@ -237,7 +237,6 @@ namespace mfem {
     }
 
     void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
-      if (dim == 2) {
       OccaVector gVecL2(device,
                         l2fes.GetLocalDofs() * elements);
       OccaVector gVecH1(device,
@@ -254,12 +253,6 @@ namespace mfem {
                  gVecH1);
 
       h1fes.LocalToGlobal(gVecH1, vecH1);
-      } else {
-        Vector vecL2_ = vecL2;
-        Vector vecH1_ = vecH1;
-        MultHex(vecL2_, vecH1_);
-        vecH1 = vecH1_;
-      }
     }
 
     void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const {

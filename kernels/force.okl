@@ -351,9 +351,9 @@ kernel void Mult3D(const int numElements,
                     const double r_e = r_z[qz];
                     const double wz  = s_H1QuadToDof(dz, qz);
                     const double wDz = s_H1QuadToDofD(dz, qz);
-                    r_Dxyz += r_e * wz  * stressJinvT(0, c, qx, qy, qz, el);
-                    r_xDyz += r_e * wz  * stressJinvT(1, c, qx, qy, qz, el);
-                    r_xyDz += r_e * wDz * stressJinvT(2, c, qx, qy, qz, el);
+                    r_Dxyz += r_e * wz  * stressJinvT(c, 0, qx, qy, qz, el);
+                    r_xDyz += r_e * wz  * stressJinvT(c, 1, qx, qy, qz, el);
+                    r_xyDz += r_e * wDz * stressJinvT(c, 2, qx, qy, qz, el);
                   }
                   s_Dxyz(qx, qy) = r_Dxyz;
                   s_xDyz(qx, qy) = r_xDyz;
