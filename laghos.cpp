@@ -447,6 +447,9 @@ int main(int argc, char *argv[])
          }
       }
    }
+
+   oper.PrintTimingData(mpi.Root());
+
    if (visualization)
    {
       vis_v.close();
