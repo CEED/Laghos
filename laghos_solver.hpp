@@ -53,13 +53,18 @@ double e0(const Vector &);
 
 struct TimingData
 {
-   // Total time for all CG solves (H1 and L2) and force RHS assemblies.
-   StopWatch sw_cgH1, sw_cgL2, sw_forces;
+   // Total times for all major computations:
+   // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
+   StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
-   // Stores #dofs * #CG_iterations, for the whole simulation.
-   int dofs_iters_H1, dofs_iters_L2, dofs_tsteps;
+   // These accumulate the total processed dofs or quad points:
+   // #dofs  * #(CG iterations) for the CG solves (H1 and L2).
+   // #dofs  * #(RK sub steps) for the Force application and assembly.
+   // #quads * #(RK sub steps) for the quadrature data computations.
+   int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
 
-   TimingData() : dofs_iters_H1(0), dofs_iters_L2(0), dofs_tsteps(0) { }
+   TimingData()
+      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) { }
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -140,33 +145,7 @@ public:
    // projected as a ParGridFunction.
    void ComputeDensity(ParGridFunction &rho);
 
-   void PrintTimingData(bool IamRoot) // I am Groot.
-   {
-      double my_rt[3], rt_max[3];
-      my_rt[0] = timer.sw_cgH1.RealTime();
-      my_rt[1] = timer.sw_cgL2.RealTime();
-      my_rt[2] = timer.sw_forces.RealTime();
-      MPI_Reduce(my_rt, rt_max, 3, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
-      double my_L2dof_iter = timer.dofs_iters_L2, L2tot_dof_iter;
-      MPI_Reduce(&my_L2dof_iter, &L2tot_dof_iter, 1, MPI_DOUBLE,
-                 MPI_SUM, 0, H1FESpace.GetComm());
-      if (IamRoot)
-      {
-         using namespace std;
-         cout << endl;
-         cout << "CG (H1) total time: " << rt_max[0] << endl;
-         cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-              << 1e-6 * timer.dofs_iters_H1 / rt_max[0] << endl;
-         cout << endl;
-         cout << "CG (L2) total time: " << rt_max[1] << endl;
-         cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-              << 1e-6 * L2tot_dof_iter / rt_max[1] << endl;
-         cout << endl;
-         cout << "Forces total time: " << rt_max[2] << endl;
-         cout << "Forces rate (megadofs x timesteps / second): "
-              << 1e-6 * timer.dofs_tsteps / rt_max[2] << endl;
-      }
-   }
+   void PrintTimingData(bool IamRoot);
 
    ~LagrangianHydroOperator();
 };
