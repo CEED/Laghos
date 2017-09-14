@@ -150,12 +150,12 @@ int main(int argc, char *argv[])
       if (myid == 0)
       {
          cout << "Non-Cartesian partitioning through METIS will be used.\n";
-#ifdef MFEM_DROP_METIS
+#ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;
 #endif
       }
-#ifdef MFEM_DROP_METIS
+#ifndef MFEM_USE_METIS
       return 1;
 #endif
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);

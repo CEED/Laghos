@@ -185,7 +185,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    locCG.SetOperator(locEMassPA);
    locCG.iterative_mode = false;
    locCG.SetRelTol(1e-8);
-   locCG.SetAbsTol(0.0);
+   locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    locCG.SetMaxIter(200);
    locCG.SetPrintLevel(0);
 }
