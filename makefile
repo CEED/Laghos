@@ -187,9 +187,9 @@ OKL_CACHED_KERNELS := $(subst kernels/,,$(subst $(PROJ_DIR),$(OCCA_LIB_CACHE_DIR
 cache-kernels: $(OKL_CACHED_KERNELS)
 
 .PHONY: clear-kernels
-clear-kernels: clear-mfem-kernels
+clear-kernels: clear-laghos-kernels
 
-clear-mfem-kernels:
+clear-laghos-kernels:
 	@occa clear -y -l laghos
 
 $(OCCA_LIB_CACHE_DIR)/laghos/%.okl: $(PROJ_DIR)/kernels/%.okl

@@ -27,17 +27,6 @@
 
 namespace mfem {
   namespace hydrodynamics {
-
-    // Stores values of the one-dimensional shape functions and gradients at all 1D
-    // quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).
-    struct Tensors1D {
-      // H1 shape functions and gradients, L2 shape functions.
-      DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-
-      Tensors1D(int H1order, int L2order, int nqp1D);
-    };
-    extern const Tensors1D *tensors1D;
-
     // Container for all data needed at quadrature points.
     struct QuadratureData {
       // TODO: use QuadratureFunctions?

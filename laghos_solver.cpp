@@ -182,7 +182,7 @@ namespace mfem {
                  quad_data.rho0DetJ0w);
 
       updateKernel = device.buildKernel("occa://laghos/quadratureData.okl",
-                                        "UpdateQuadratureData",
+                                        stringWithDim("UpdateQuadratureData", dim),
                                         quad_data.props);
 
       cg_print_level = 0;
