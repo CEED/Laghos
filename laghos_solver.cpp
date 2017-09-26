@@ -492,10 +492,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
-   delete rho_b;
-   delete e_b;
-   delete p_b;
-   delete cs_b;
+   delete [] rho_b;
+   delete [] e_b;
+   delete [] p_b;
+   delete [] cs_b;
    quad_data_is_current = true;
 }
 
