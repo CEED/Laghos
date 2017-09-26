@@ -498,6 +498,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       // Batched computation of material properties.
       ComputeMaterialProperties(nqp_batch, rho_b, e_b, p_b, cs_b);
 
+      double eig_val_data[3], eig_vec_data[9];
+      Vector compr_dir(eig_vec_data, dim);
+      Vector ph_dir(dim);
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
       {
@@ -522,12 +525,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             // scale.
             v.GetVectorGradient(*T, sgrad_v);
             sgrad_v.Symmetrize();
-            double eig_val_data[3], eig_vec_data[9];
             sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-            Vector compr_dir(eig_vec_data, dim);
             // Computes the initial->physical transformation Jacobian.
             mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
-            Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+            Jpi.Mult(compr_dir, ph_dir);
             // Change of the initial mesh size in the compression direction.
             const double h = quad_data.h0 * ph_dir.Norml2() /
                              compr_dir.Norml2();
