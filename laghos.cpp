@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 #endif
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
    }
-   delete nxyz;
+   delete [] nxyz;
    delete mesh;
 
    // Refine the mesh further in parallel to increase the resolution.
