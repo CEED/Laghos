@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
 #endif
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
    }
-   delete nxyz;
+   delete [] nxyz;
    delete mesh;
    for (int lev = 0; lev < rp_levels; lev++) {
      pmesh->UniformRefinement();
