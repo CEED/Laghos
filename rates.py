@@ -28,7 +28,7 @@ def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
     for k in range(txt.shape[0]):
       o = txt[k,0]
       if o == p:
-        dofs.append(txt[k, 2])
+        dofs.append(txt[k, 3])
         data.append(1e3*txt[k, column])
     ax.plot(dofs, data, line_style, label=label_prefix + str(p),
             color=colors[i], linewidth=2)
