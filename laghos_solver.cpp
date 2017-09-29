@@ -402,12 +402,13 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot) // I am Groot.
 {
-   double my_rt[4], rt_max[4];
+   double my_rt[5], rt_max[5];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
    my_rt[2] = timer.sw_force.RealTime();
    my_rt[3] = timer.sw_qdata.RealTime();
-   MPI_Reduce(my_rt, rt_max, 4, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
+   my_rt[4] = my_rt[0] + my_rt[1] + my_rt[2] + my_rt[3];
+   MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
    double mydata[2], alldata[2];
    mydata[0] = timer.L2dof_iter;
@@ -433,6 +434,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot) // I am Groot.
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
            << 1e-6 * alldata[1] / rt_max[3] << endl;
+      cout << endl;
+      cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
    }
 }
 

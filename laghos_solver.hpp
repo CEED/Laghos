@@ -61,7 +61,7 @@ struct TimingData
    // #dofs  * #(CG iterations) for the CG solves (H1 and L2).
    // #dofs  * #(RK sub steps) for the Force application and assembly.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
+   long long int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
 
    TimingData()
       : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) { }
