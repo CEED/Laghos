@@ -50,6 +50,7 @@ namespace hydrodynamics
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
+double gamma(const Vector &);
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -63,8 +64,9 @@ protected:
    Array<int> &ess_tdofs;
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
-   const double cfl, gamma;
+   const double cfl;
    const bool use_viscosity, p_assembly;
+   Coefficient *material_pcf;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -95,14 +97,14 @@ protected:
    // Linear solver for energy.
    CGSolver locCG;
 
-   void ComputeMaterialProperties(int nvalues,
+   void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
                                   double p[], double cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
-         p[v]  = (gamma - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma * (gamma-1.0) * e[v]);
+         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
+         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
       }
    }
 
@@ -112,8 +114,8 @@ public:
    LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            Array<int> &essential_tdofs, ParGridFunction &rho0,
-                           int source_type_, double cfl_,
-                           double gamma_, bool visc, bool pa);
+                           int source_type_, double cfl_, 
+						   Coefficient *material_, bool visc, bool pa);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;

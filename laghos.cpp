@@ -277,19 +277,22 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
+   // Material distribution over the Lagrangian mesh.
+   Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
+
    // Additional details, depending on the problem.
-   int source = 0; bool visc; double gamma;
+   int source = 0; bool visc;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
-         visc = false; gamma = 5.0 / 3.0; break;
-      case 1: visc = true; gamma = 1.4; break;
+         visc = false; break;
+      case 1: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, gamma,
-                                visc, p_assembly);
+                                ess_tdofs, rho, source, cfl, material_pcf, 
+								visc, p_assembly);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -456,6 +459,7 @@ int main(int argc, char *argv[])
    // Free the used memory.
    delete ode_solver;
    delete pmesh;
+   delete material_pcf;
 
    return 0;
 }
@@ -473,6 +477,16 @@ double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   }
+}
+
+double gamma(const Vector &x)
+{
+   switch (problem)
+   {
+      case 0: return 5./3.;
+      case 1: return 1.4;
+	  default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
