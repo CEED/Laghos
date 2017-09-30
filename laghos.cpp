@@ -403,19 +403,6 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    OccaVector S_old(S);
-   if (mpi.Root())
-     {
-       double loc_norm = o_e_gf * o_e_gf;
-       double tot_norm;
-       MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                     pmesh->GetComm());
-       cout << fixed;
-       cout << "step " << setw(5) << 0
-            << ",\tt = " << setw(5) << setprecision(4) << t
-            << ",\tdt = " << setw(5) << setprecision(6) << dt
-            << ",\t|e| = " << setprecision(14)
-            << sqrt(tot_norm) << endl;
-     }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)

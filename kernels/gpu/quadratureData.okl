@@ -465,15 +465,15 @@ kernel void UpdateQuadratureData3D(const int numElements,
           const double S02 = q_stress(0, 2), S12 = q_stress(1, 2), S22 = q_stress(2, 2);
 
           stressJinvT(0, 0, q, el) = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01) + (S20 * invJ_02));
-          stressJinvT(1, 0, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01) + (S21 * invJ_02));
-          stressJinvT(2, 0, q, el) = q_Jw * ((S02 * invJ_00) + (S12 * invJ_01) + (S22 * invJ_02));
+          stressJinvT(1, 0, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11) + (S20 * invJ_12));
+          stressJinvT(2, 0, q, el) = q_Jw * ((S00 * invJ_20) + (S10 * invJ_21) + (S20 * invJ_22));
 
-          stressJinvT(0, 1, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11) + (S20 * invJ_12));
+          stressJinvT(0, 1, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01) + (S21 * invJ_02));
           stressJinvT(1, 1, q, el) = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11) + (S21 * invJ_12));
-          stressJinvT(2, 1, q, el) = q_Jw * ((S02 * invJ_10) + (S12 * invJ_11) + (S22 * invJ_12));
+          stressJinvT(2, 1, q, el) = q_Jw * ((S01 * invJ_20) + (S11 * invJ_21) + (S21 * invJ_22));
 
-          stressJinvT(0, 2, q, el) = q_Jw * ((S00 * invJ_20) + (S10 * invJ_21) + (S20 * invJ_22));
-          stressJinvT(1, 2, q, el) = q_Jw * ((S01 * invJ_20) + (S11 * invJ_21) + (S21 * invJ_22));
+          stressJinvT(0, 2, q, el) = q_Jw * ((S02 * invJ_00) + (S12 * invJ_01) + (S22 * invJ_02));
+          stressJinvT(1, 2, q, el) = q_Jw * ((S02 * invJ_10) + (S12 * invJ_11) + (S22 * invJ_12));
           stressJinvT(2, 2, q, el) = q_Jw * ((S02 * invJ_20) + (S12 * invJ_21) + (S22 * invJ_22));
         }
       }
