@@ -102,6 +102,8 @@ namespace mfem {
                               3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
       quad_data(dim, elements, integ_rule.GetNPoints()),
       quad_data_is_current(false),
+      VMass(o_H1compFESpace, integ_rule, &quad_data),
+      EMass(o_L2FESpace, integ_rule, &quad_data),
       Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data) {
 
       Vector rho0_ = rho0;
@@ -185,6 +187,10 @@ namespace mfem {
                                         stringWithDim("UpdateQuadratureData", dim),
                                         quad_data.props);
 
+      // Needs quad_data.rho0DetJ0w
+      VMass.Setup();
+      EMass.Setup();
+
       cg_print_level = 0;
       cg_max_iters   = 200;
       cg_rel_tol     = 1e-16;
@@ -253,7 +259,6 @@ namespace mfem {
         Array<int> c_tdofs;
         o_H1compFESpace.GetFESpace()->GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
-        OccaMassOperator VMass(o_H1compFESpace, integ_rule, &quad_data);
         VMass.SetEssentialTrueDofs(c_tdofs);
         VMass.EliminateRHS(B);
 
@@ -285,7 +290,6 @@ namespace mfem {
         forceRHS += *e_source;
       }
 
-      OccaMassOperator EMass(o_L2FESpace, integ_rule, &quad_data);
       CG(L2FESpace.GetParMesh()->GetComm(),
          EMass, forceRHS, de,
          cg_print_level,

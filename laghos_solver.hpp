@@ -87,6 +87,7 @@ namespace mfem {
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it's used to compute the final
       // right-hand sides for momentum and specific internal energy.
+      mutable OccaMassOperator VMass, EMass;
       mutable OccaForceOperator Force;
 
       occa::kernel updateKernel;
