@@ -76,9 +76,7 @@ namespace mfem {
         bilinearForm(&fes),
         quad_data(quad_data_),
         x_gf(device, &fes),
-        y_gf(device, &fes) {
-      Setup();
-    }
+        y_gf(device, &fes) {}
 
     OccaMassOperator::OccaMassOperator(occa::device device_,
                                        OccaFiniteElementSpace &fes_,
@@ -91,9 +89,7 @@ namespace mfem {
         bilinearForm(&fes),
         quad_data(quad_data_),
         x_gf(device, &fes),
-        y_gf(device, &fes) {
-      Setup();
-    }
+        y_gf(device, &fes) {}
 
     void OccaMassOperator::Setup() {
       dim = fes.GetMesh()->Dimension();
@@ -155,12 +151,14 @@ namespace mfem {
                                          QuadratureData *quad_data_)
       : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
         device(occa::getDevice()),
+        dim(h1fes_.GetMesh()->Dimension()),
+        elements(h1fes_.GetMesh()->GetNE()),
         h1fes(h1fes_),
         l2fes(l2fes_),
         integ_rule(integ_rule_),
-        quad_data(quad_data_) {
-      Setup();
-    }
+        quad_data(quad_data_),
+        gVecL2(device, l2fes.GetLocalDofs() * elements),
+        gVecH1(device, h1fes.GetVDim() * h1fes.GetLocalDofs() * elements) {}
 
     OccaForceOperator::OccaForceOperator(occa::device device_,
                                          OccaFiniteElementSpace &h1fes_,
@@ -169,17 +167,16 @@ namespace mfem {
                                          QuadratureData *quad_data_)
       : Operator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
         device(device_),
+        dim(h1fes_.GetMesh()->Dimension()),
+        elements(h1fes_.GetMesh()->GetNE()),
         h1fes(h1fes_),
         l2fes(l2fes_),
         integ_rule(integ_rule_),
-        quad_data(quad_data_) {
-      Setup();
-    }
+        quad_data(quad_data_),
+        gVecL2(device, l2fes.GetLocalDofs() * elements),
+        gVecH1(device, h1fes.GetVDim() * h1fes.GetLocalDofs() * elements) {}
 
     void OccaForceOperator::Setup() {
-      dim = h1fes.GetMesh()->Dimension();
-      elements = h1fes.GetMesh()->GetNE();
-
       occa::properties h1Props, l2Props, props;
       SetProperties(h1fes, integ_rule, h1Props);
       SetProperties(l2fes, integ_rule, l2Props);
@@ -201,11 +198,6 @@ namespace mfem {
     }
 
     void OccaForceOperator::Mult(const OccaVector &vecL2, OccaVector &vecH1) const {
-      OccaVector gVecL2(device,
-                        l2fes.GetLocalDofs() * elements);
-      OccaVector gVecH1(device,
-                        h1fes.GetVDim() * h1fes.GetLocalDofs() * elements);
-
       l2fes.GlobalToLocal(vecL2, gVecL2);
 
       multKernel(elements,
@@ -220,11 +212,6 @@ namespace mfem {
     }
 
     void OccaForceOperator::MultTranspose(const OccaVector &vecH1, OccaVector &vecL2) const {
-      OccaVector gVecH1(device,
-                        h1fes.GetVDim() * h1fes.GetLocalDofs() * elements);
-      OccaVector gVecL2(device,
-                        l2fes.GetLocalDofs() * elements);
-
       h1fes.GlobalToLocal(vecH1, gVecH1);
 
       multTransposeKernel(elements,

@@ -196,17 +196,17 @@ kernel void MultTranspose2D(const int numElements,
         for (int c = 0; c < NUM_DIM; ++c) {
           for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
             if (dx < H1_DOFS_1D) {
-              double r_y[H1_DOFS_1D];
+              double r_v[H1_DOFS_1D];
 
               for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-                r_y[dy] = v(c, dx, dy, el);
+                r_v[dy] = v(c, dx, dy, el);
               }
               for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
                 double xy  = 0;
                 double xDy = 0;
                 for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-                  xy  += r_y[dy] * s_H1DofToQuad(qy, dy);
-                  xDy += r_y[dy] * s_H1DofToQuadD(qy, dy);
+                  xy  += r_v[dy] * s_H1DofToQuad(qy, dy);
+                  xDy += r_v[dy] * s_H1DofToQuadD(qy, dy);
                 }
                 s_xy(qy, dx)  = xy;
                 s_xDy(qy, dx) = xDy;
@@ -351,9 +351,9 @@ kernel void Mult3D(const int numElements,
                     const double r_e = r_z[qz];
                     const double wz  = s_H1QuadToDof(dz, qz);
                     const double wDz = s_H1QuadToDofD(dz, qz);
-                    r_Dxyz += r_e * wz  * stressJinvT(c, 0, qx, qy, qz, el);
-                    r_xDyz += r_e * wz  * stressJinvT(c, 1, qx, qy, qz, el);
-                    r_xyDz += r_e * wDz * stressJinvT(c, 2, qx, qy, qz, el);
+                    r_Dxyz += r_e * wz  * stressJinvT(0, c, qx, qy, qz, el);
+                    r_xDyz += r_e * wz  * stressJinvT(1, c, qx, qy, qz, el);
+                    r_xyDz += r_e * wDz * stressJinvT(2, c, qx, qy, qz, el);
                   }
                   s_Dxyz(qx, qy) = r_Dxyz;
                   s_xDyz(qx, qy) = r_xDyz;
@@ -396,7 +396,7 @@ kernel void MultTranspose3D(const int numElements,
                             const V3D_t restrict v,
                             E3D_t restrict e) {
   for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
+    shared double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
     shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
     shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
 
@@ -404,7 +404,7 @@ kernel void MultTranspose3D(const int numElements,
     shared double s_xyDz[NUM_QUAD_2D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
     shared double s_v[NUM_QUAD_2D]              @dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
-    exclusive double r_xyz[INNER_SIZE * NUM_DIM]   @dim(NUM_DIM, INNER_SIZE);
+    exclusive double r_xyz[NUM_QUAD_1D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D);
     exclusive double r_xyDz[NUM_QUAD_1D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D);
 
     for (int y = 0; y < INNER_SIZE; ++y; inner) {
@@ -483,12 +483,9 @@ kernel void MultTranspose3D(const int numElements,
                     xDyz += wDy * xz;
                     xyDz += wy  * xDz;
                   }
-                  const double sx = stressJinvT(0, c, qx, qy, qz, el);
-                  const double sy = stressJinvT(1, c, qx, qy, qz, el);
-                  const double sz = stressJinvT(2, c, qx, qy, qz, el);
-                  r_qv += ((Dxyz * sx) +
-                           (xDyz * sy) +
-                           (xyDz * sz));
+                  r_qv += ((Dxyz * stressJinvT(0, c, qx, qy, qz, el)) +
+                           (xDyz * stressJinvT(1, c, qx, qy, qz, el)) +
+                           (xyDz * stressJinvT(2, c, qx, qy, qz, el)));
                 }
                 s_v(qx, qy) = r_qv;
               }

@@ -21,9 +21,7 @@
 using namespace std;
 
 namespace mfem {
-
   namespace miniapps {
-
     void VisualizeField(socketstream &sock, const char *vishost, int visport,
                         ParGridFunction &gf, const char *title,
                         int x, int y, int w, int h, bool vec) {
@@ -188,6 +186,7 @@ namespace mfem {
                                         quad_data.props);
 
       // Needs quad_data.rho0DetJ0w
+      Force.Setup();
       VMass.Setup();
       EMass.Setup();
 

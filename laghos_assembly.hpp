@@ -153,6 +153,7 @@ namespace mfem {
       occa::kernel multKernel, multTransposeKernel;
 
       OccaDofQuadMaps l2D2Q, h1D2Q;
+      mutable OccaVector gVecL2, gVecH1;
 
       void MultHex(const Vector &vecL2, Vector &vecH1) const;
       void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
