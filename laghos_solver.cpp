@@ -86,8 +86,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  Array<int> &essential_tdofs,
                                                  ParGridFunction &rho0,
                                                  int source_type_, double cfl_, 
-												                         Coefficient *material_,
-												                         bool visc, bool pa)
+                                                 Coefficient *material_,
+                                                 bool visc, bool pa)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
@@ -96,8 +96,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      nzones(h1_fes.GetMesh()->GetNE()),
      l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
-     source_type(source_type_), cfl(cfl_), 
-	 material_pcf(material_),
+     source_type(source_type_), cfl(cfl_),
+     material_pcf(material_),
      use_viscosity(visc), p_assembly(pa),
      Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
      integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
@@ -445,12 +445,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
 
             const int idx = z * nqp + q;
-			if (material_pcf==NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
-			else
-			{ 
-			   gamma_b[idx] = material_pcf->Eval(*T, ip);
-			}
-			rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
+            if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
+            else { gamma_b[idx] = material_pcf->Eval(*T, ip); }
+            rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx]   = max(0.0, e_vals(q));
          }
          ++z_id;

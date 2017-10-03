@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
-   // Material distribution over the Lagrangian mesh.
+   // Space-dependent ideal gas coefficient over the Lagrangian mesh.
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
    // Additional details, depending on the problem.
@@ -291,8 +291,8 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, material_pcf, 
-								visc, p_assembly);
+                                ess_tdofs, rho, source, cfl, material_pcf,
+                                visc, p_assembly);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
