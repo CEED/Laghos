@@ -78,6 +78,23 @@ struct Tensors1D
 };
 extern const Tensors1D *tensors1D;
 
+class FastEvaluator
+{
+   const int dim;
+   ParFiniteElementSpace &H1FESpace;
+
+public:
+
+   FastEvaluator(ParFiniteElementSpace &h1fes)
+      : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
+
+   void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
+   // The input vec is an H1 function with dim components, over a zone.
+   // The output is J_ij = d(vec_i) / d(x_j) with ij = 1 .. dim.
+   void GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const;
+};
+extern const FastEvaluator *evaluator;
+
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.

@@ -154,7 +154,7 @@ clean: clean-build clean-exec
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM Laghos_*
 clean-exec:
-        
+
 distclean: clean
 	rm -rf bin/
 
