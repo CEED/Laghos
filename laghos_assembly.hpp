@@ -171,9 +171,9 @@ private:
 
    mutable ParGridFunction x_gf, y_gf;
 
-   // Mass matrix action on quadrilateral elements in 2D
+   // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on hexahedral elements in 3D
+   // Mass matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &x, Vector &y) const;
 
 public:

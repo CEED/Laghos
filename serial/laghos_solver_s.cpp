@@ -222,14 +222,14 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          Vector rhs_c(rhs.GetData() + c*size, size),
                 dv_c(dv.GetData() + c*size, size);
 
-         Array<int> c_vdofs, ess_vdofs;
+         Array<int> vdofs_marker, ess_vdofs;
          Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
          // we must enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[c] = 1;
          // Essential vdofs as if there's only one component.
-         H1compFESpace.GetEssentialVDofs(ess_bdr, c_vdofs);
-         FiniteElementSpace::MarkerToList(c_vdofs, ess_vdofs);
+         H1compFESpace.GetEssentialVDofs(ess_bdr, vdofs_marker);
+         FiniteElementSpace::MarkerToList(vdofs_marker, ess_vdofs);
 
          dv_c = 0.0;
          VMassPA.EliminateRHS(ess_vdofs, rhs_c);
