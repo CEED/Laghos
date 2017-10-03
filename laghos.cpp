@@ -247,23 +247,23 @@ int main(int argc, char *argv[])
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
 
-   // Initial density values. Note that this is a temporary function and it will
-   // not be updated during the time evolution.
-   ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
-   rho.ProjectCoefficient(rho_coeff);
-
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize the specific internal energy. We interpolate in a non-positive
-   // basis to get the correct values at the dofs. Then we do an L2 projection
-   // to the positive basis in which we actually compute. The goal of all this
-   // is to get a high-order representation of the initial condition.
+   // Initialize density and  specific internal energy values. We interpolate
+   // in a non-positive basis to get the correct values at the dofs.
+   // Then we do an L2 projection to the positive basis in which we actually
+   // compute. The goal of all this is to get a high-order representation of
+   // the initial condition. Note that this density is a temporary function
+   // and it will not be updated during the time evolution.
+   ParGridFunction rho(&L2FESpace);
+   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-   ParGridFunction l2_e(&l2_fes);
+   ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+   l2_rho.ProjectCoefficient(rho_coeff);
+   rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -480,8 +480,8 @@ double rho0(const Vector &x)
       case 1: return 1.0;
       case 2: if (x(0) < 0.5) { return 1.0; }
          else return 0.1;
-      case 3: if (x(0) > 1 & x(1) > 1.5) { return 0.125; }
-         else return 1.0;
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
+         else return 0.125;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -493,7 +493,7 @@ double gamma(const Vector &x)
       case 0: return 5./3.;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: if (x(0) > 1 & x(1) < 1.5) { return 1.4; }
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
          else return 1.5;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -540,10 +540,10 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) + 1.0); }
-         else return 0.1 / rho0(x) / (gamma(x) + 1.0);
-      case 3: if (x(0) < 1) { return 1.0 / rho0(x) / (gamma(x) + 1.0); }
-         else return 0.1 / rho0(x) / (gamma(x) + 1.0);
+      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+         else return 0.1 / rho0(x) / (gamma(x) - 1.0);
+      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
+         else return 1.0 / rho0(x) / (gamma(x) - 1.0);
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
