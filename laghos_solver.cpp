@@ -157,6 +157,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    MPI_Allreduce(&nzones, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
    switch (pm->GetElementBaseGeometry(0))
    {
+      case Geometry::SEGMENT:
+         quad_data.h0 = glob_area / glob_z_cnt; break;
       case Geometry::SQUARE:
          quad_data.h0 = sqrt(glob_area / glob_z_cnt); break;
       case Geometry::TRIANGLE:
@@ -423,11 +425,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
 
             const int idx = z * nqp + q;
-			if (material_pcf==NULL) { gamma_b[idx] = 5./3.; }
-			else
-			{ 
-			   gamma_b[idx] = material_pcf->Eval(*T, ip);
-			}
+            if (material_pcf==NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
+            else { gamma_b[idx] = material_pcf->Eval(*T, ip); }
 			rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx]   = max(0.0, e_vals(q));
          }
@@ -462,7 +461,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             v.GetVectorGradient(*T, sgrad_v);
             sgrad_v.Symmetrize();
             double eig_val_data[3], eig_vec_data[9];
-            sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
+            // In 1D the only eigen value corresponds to the magnitude of
+            // the velocity gradient and eigen vector direction is unique.
+            if (dim==1)
+            {
+               eig_val_data[0] = sgrad_v(0, 0);
+               eig_vec_data[0] = 1.;
+            }
+            else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
             Vector compr_dir(eig_vec_data, dim);
             // Computes the initial->physical transformation Jacobian.
             mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
