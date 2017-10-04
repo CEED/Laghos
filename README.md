@@ -212,8 +212,8 @@ To make sure the results are correct, we tabulate reference final iterations
 4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
 5. `mpirun -np 8 laghos -p 2 -m data/square01_quad.mesh -rs 3 -tf 0.2 -no-vis -pa`
 6. `mpirun -np 8 laghos -p 2 -m data/cube01_hex.mesh -rs 2 -tf 0.2 -no-vis -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/square02_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -no-vis -pa`
-8. `mpirun -np 8 laghos -p 3 -m data/cube02_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -no-vis -pa`
+8. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa`
 9. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
 
 | run | `step` | `dt` | `e` |
