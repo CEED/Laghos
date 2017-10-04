@@ -201,6 +201,21 @@ The latter produces the following velocity magnitude plot (when run with `-vis` 
 
 ![Taylor-Green image](data/tg.png)
 
+#### Triple-point problem
+
+Well known three-material problem combines shock waves and vorticity,
+thus examining the complex computational abilities of Laghos.
+
+Some sample runs in 2D and 3D respectively are:
+```sh
+mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -no-vis -pa
+mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa
+```
+
+The latter produces the following specific internal energy plot (when run with `-vis` instead of `-no-vis`)
+
+![Triple-point image](data/tp.png)
+
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
