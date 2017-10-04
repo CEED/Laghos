@@ -266,7 +266,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg.SetOperator(VMassPA);
          cg.SetRelTol(1e-8);
          cg.SetAbsTol(0.0);
-         cg.SetMaxIter(200);
+         cg.SetMaxIter(300);
          cg.SetPrintLevel(0);
          cg.Mult(B, X);
          H1compFESpace.Dof_TrueDof_Matrix()->Mult(X, dv_c);

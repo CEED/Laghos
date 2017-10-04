@@ -452,6 +452,37 @@ int main(int argc, char *argv[])
          }
       }
    }
+   double rho_max, rho_min;
+   if (visualization || visit)
+   {
+      double rho_locmax = rho_gf.Max(), rho_locmin = rho_gf.Min();
+      MPI_Allreduce(&rho_locmin, &rho_min, 1, MPI_DOUBLE, MPI_MIN,
+         pmesh->GetComm());
+      MPI_Allreduce(&rho_locmax, &rho_max, 1, MPI_DOUBLE, MPI_MAX,
+         pmesh->GetComm());
+   }
+   double e_locmax = e_gf.Max(), e_locmin = e_gf.Min(), e_max, e_min;
+   MPI_Allreduce(&e_locmin, &e_min, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+   MPI_Allreduce(&e_locmax, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+   double v_locmax = v_gf.Max(), v_locmin = v_gf.Min(), v_max, v_min;
+   MPI_Allreduce(&v_locmin, &v_min, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+   MPI_Allreduce(&v_locmax, &v_max, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+   if (mpi.Root())
+   {
+      cout << fixed;
+      if (visualization || visit)
+      {
+         cout << "min(rho) = " << setprecision(10) << rho_min
+            << ",\tmax(rho) = " << setprecision(10) << rho_max
+            << endl;
+      }
+      cout << "min(v)   = " << setprecision(10) << v_min
+         << ",\tmax(v)   = " << setprecision(10) << v_max
+         << endl;
+      cout << "min(e)   = " << setprecision(10) << e_min
+         << ",\tmax(e)   = " << setprecision(10) << e_max
+         << endl;
+   }
    if (visualization)
    {
       vis_v.close();
