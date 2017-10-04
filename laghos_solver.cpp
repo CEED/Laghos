@@ -80,7 +80,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  ParFiniteElementSpace &l2_fes,
                                                  Array<int> &essential_tdofs,
                                                  ParGridFunction &rho0,
-                                                 int source_type_, double cfl_, 
+                                                 int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa)
    : TimeDependentOperator(size),
@@ -395,10 +395,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    const int nbatches =  nzones / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
    double *gamma_b = new double[nqp_batch],
-          *rho_b = new double[nqp_batch],
-          *e_b   = new double[nqp_batch],
-          *p_b   = new double[nqp_batch],
-          *cs_b  = new double[nqp_batch];
+   *rho_b = new double[nqp_batch],
+   *e_b   = new double[nqp_batch],
+   *p_b   = new double[nqp_batch],
+   *cs_b  = new double[nqp_batch];
    // Jacobians of reference->physical transformations for all quadrature
    // points in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nqp_batch];

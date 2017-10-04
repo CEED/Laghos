@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
-              visc = false; break;
+         visc = false; break;
       case 1: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
@@ -486,7 +486,7 @@ double gamma(const Vector &x)
    {
       case 0: return 5./3.;
       case 1: return 1.4;
-	  default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
