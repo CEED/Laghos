@@ -14,9 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_assembly.hpp"
-
-#ifdef MFEM_USE_MPI
+#include "laghos_assembly_s.hpp"
 
 using namespace std;
 
@@ -814,20 +812,19 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    if (ess_tdofs)
    {
-      Vector xx = x;
+      x_gf = x;
       for (int i = 0; i < ess_tdofs->Size(); i++)
       {
          const int idx = (*ess_tdofs)[i];
-         xx(idx) = 0.0;
+         x_gf(idx) = 0.0;
       }
-      x_gf.Distribute(xx);
    }
-   else { x_gf.Distribute(x); }
+   else { x_gf = x; }
 
    if      (dim == 2) { MultQuad(x_gf, y_gf); }
    else if (dim == 3) { MultHex(x_gf, y_gf); }
    else { MFEM_ABORT("Unsupported dimension"); }
-   FESpace.Dof_TrueDof_Matrix()->MultTranspose(y_gf, y);
+   y = y_gf;
 
    if (ess_tdofs)
    {
@@ -1048,7 +1045,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
             for (int i2 = 0; i2 < ndof1D; i2++)
             {
                QQ_Q(k1 + nqp1D*k2, k3) +=
-                  Q_LQ(k1, i2 + k3*ndof1D) * LQs(i2, k2);
+                     Q_LQ(k1, i2 + k3*ndof1D) * LQs(i2, k2);
             }
          }
       }
@@ -1072,7 +1069,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
             for (int k2 = 0; k2 < nqp1D; k2++)
             {
                Q_LQ(k1, i2 + ndof1D*k3) +=
-                  QQ_Q(k1 + nqp1D*k2, k3) * LQs(i2, k2);
+               QQ_Q(k1 + nqp1D*k2, k3) * LQs(i2, k2);
             }
          }
       }
@@ -1084,5 +1081,3 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI

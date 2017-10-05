@@ -18,9 +18,7 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "laghos_assembly.hpp"
-
-#ifdef MFEM_USE_MPI
+#include "laghos_assembly_s.hpp"
 
 #include <memory>
 #include <iostream>
@@ -36,10 +34,9 @@ namespace hydrodynamics
 /// specified host and port. Set the visualization window title, and optionally,
 /// its geometry.
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    ParGridFunction &gf, const char *title,
+                    GridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
-
 
 // These are defined in laghos.cpp
 double rho0(const Vector &);
@@ -52,9 +49,8 @@ double gamma(const Vector &);
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
-   ParFiniteElementSpace &H1FESpace;
-   ParFiniteElementSpace &L2FESpace;
-   mutable ParFiniteElementSpace H1compFESpace;
+   FiniteElementSpace &H1FESpace, &L2FESpace;
+   mutable FiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
@@ -65,7 +61,7 @@ protected:
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
-   mutable ParBilinearForm Mv;
+   mutable BilinearForm Mv;
    DenseTensor Me_inv;
 
    // Integration rule for all assemblies.
@@ -106,10 +102,10 @@ protected:
    void UpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
-                           ParFiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, ParGridFunction &rho0,
-                           int source_type_, double cfl_,
+   LagrangianHydroOperator(int size, FiniteElementSpace &h1_fes,
+                           FiniteElementSpace &l2_fes,
+                           Array<int> &essential_tdofs, GridFunction &rho0,
+                           int source_type_, double cfl_, 
                            Coefficient *material_, bool visc, bool pa);
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -122,7 +118,7 @@ public:
 
    // The density values, which are stored only at some quadrature points, are
    // projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho);
+   void ComputeDensity(GridFunction &rho);
 
    ~LagrangianHydroOperator();
 };
@@ -142,7 +138,5 @@ class TaylorCoefficient : public Coefficient
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS
