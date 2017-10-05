@@ -326,128 +326,93 @@ kernel void MultTranspose3D(const int numElements,
                             const Stress3D_t restrict stressJinvT,
                             const V3D_t restrict v,
                             E3D_t restrict e) {
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
-    shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
-    shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+  for (int el = 0; el < numElements; ++el; outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+      double vStress[NUM_QUAD_3D] @dim(NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D);
+      for (int i = 0; i < NUM_QUAD_3D; ++i) {
+        vStress[i] = 0;
+      }
+      for (int c = 0; c < NUM_DIM; ++c) {
+        for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
+          double Dxy_x[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+          double xDy_y[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+          double xy_z[NUM_QUAD_2D]  @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+          for (int i = 0; i < NUM_QUAD_2D; ++i) {
+            Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
+          }
+          for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+            double Dx_x[NUM_QUAD_1D];
+            double x_y[NUM_QUAD_1D];
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              Dx_x[qx] = x_y[qx] = 0;
+            }
 
-    shared double s_xyz[NUM_QUAD_2D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
-    shared double s_xyDz[NUM_QUAD_2D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
-    shared double s_v[NUM_QUAD_2D]              @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+            for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+              const double r_v = v(c, dx, dy, dz, el);
+              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                Dx_x[qx] += r_v * H1DofToQuadD(qx, dx);
+                x_y[qx]  += r_v * H1DofToQuad(qx, dx);
+              }
+            }
 
-    exclusive double r_xyz[NUM_QUAD_1D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D);
-    exclusive double r_xyDz[NUM_QUAD_1D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D);
-
-    for (int y = 0; y < INNER_SIZE; ++y; inner) {
-      for (int x = 0; x < INNER_SIZE; ++x; inner) {
-        const int id = (y * INNER_SIZE) + x;
-        for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
-          s_L2QuadToDof[i] = L2QuadToDof[i];
-        }
-        for (int i = id; i < (H1_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
-          s_H1DofToQuad[i]  = H1DofToQuad[i];
-          s_H1DofToQuadD[i] = H1DofToQuadD[i];
+            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+              const double wy  = H1DofToQuad(qy, dy);
+              const double wDy = H1DofToQuadD(qy, dy);
+              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                Dxy_x(qx, qy) += Dx_x[qx] * wy;
+                xDy_y(qx, qy) += x_y[qx]  * wDy;
+                xy_z(qx, qy)  += x_y[qx]  * wy;
+              }
+            }
+          }
+          for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+            const double wz  = H1DofToQuad(qz, dz);
+            const double wDz = H1DofToQuadD(qz, dz);
+            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                vStress(qx, qy, qz) += ((Dxy_x(qx, qy) * wz  * stressJinvT(0, c, qx, qy, qz, el)) +
+                                        (xDy_y(qx, qy) * wz  * stressJinvT(1, c, qx, qy, qz, el)) +
+                                        (xy_z(qx, qy)  * wDz * stressJinvT(2, c, qx, qy, qz, el)));
+              }
+            }
+          }
         }
       }
-    }
-    for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
-      if (el < numElements) {
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
-            if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
-              double r_v[NUM_DIM][H1_DOFS_1D];
-              for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
-                for (int c = 0; c < NUM_DIM; ++c) {
-                  r_v[c][dz] = v(c, dx, dy, dz, el);
-                }
-              }
-              for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                for (int c = 0; c < NUM_DIM; ++c) {
-                  double xyz  = 0;
-                  double xyDz = 0;
-                  for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
-                    xyz  += r_v[c][dz] * s_H1DofToQuad(qz, dz);
-                    xyDz += r_v[c][dz] * s_H1DofToQuadD(qz, dz);
-                  }
-                  r_xyz(c, qz)  = xyz;
-                  r_xyDz(c, qz) = xyDz;
-                }
-              }
+      for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
+        for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+          for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+            e(dx, dy, dz, el) = 0;
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        double e_xy[L2_DOFS_1D * L2_DOFS_1D] @dim(L2_DOFS_1D, L2_DOFS_1D);
+        for (int d = 0; d < (L2_DOFS_1D * L2_DOFS_1D); ++d) {
+          e_xy[d] = 0;
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          double e_x[L2_DOFS_1D];
+          for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+            e_x[dx] = 0;
+          }
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            const double r_v = vStress(qx, qy, qz);
+            for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+              e_x[dx] += r_v * L2QuadToDof(dx, qx);
+            }
+          }
+          for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+            const double w = L2QuadToDof(dy, qy);
+            for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+              e_xy(dx, dy) += e_x[dx] * w;
             }
           }
         }
-        for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-          // Finalize solution in xy plane
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
-              if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
-                for (int c = 0; c < NUM_DIM; ++c) {
-                  s_xyz(c, dx, dy)  = r_xyz(c, qz);
-                  s_xyDz(c, dx, dy) = r_xyDz(c, qz);
-                }
-              }
-            }
-          }
-          // Finalize solution in xy plane
-          for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
-            for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
-              if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
-                double r_qv = 0;
-                for (int c = 0; c < NUM_DIM; ++c) {
-                  double Dxyz = 0;
-                  double xDyz = 0;
-                  double xyDz = 0;
-                  for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-                    const double wy  = s_H1DofToQuad(qy, dy);
-                    const double wDy = s_H1DofToQuadD(qy, dy);
-                    double Dxz = 0;
-                    double xz  = 0;
-                    double xDz = 0;
-                    for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
-                      const double wx  = s_H1DofToQuad(qx, dx);
-                      const double wDx = s_H1DofToQuadD(qx, dx);
-                      Dxz += wDx * s_xyz(c, dx, dy);
-                      xz  += wx  * s_xyz(c, dx, dy);
-                      xDz += wx  * s_xyDz(c, dx, dy);
-                    }
-                    Dxyz += wy  * Dxz;
-                    xDyz += wDy * xz;
-                    xyDz += wy  * xDz;
-                  }
-                  r_qv += ((Dxyz * stressJinvT(0, c, qx, qy, qz, el)) +
-                           (xDyz * stressJinvT(1, c, qx, qy, qz, el)) +
-                           (xyDz * stressJinvT(2, c, qx, qy, qz, el)));
-                }
-                s_v(qx, qy) = r_qv;
-              }
-            }
-          }
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
-              if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
-                double r_e = 0;
-                for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-                  double r_ex = 0;
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-                    r_ex += s_v(qx, qy) * s_L2QuadToDof(dx, qx);
-                  }
-                  r_e += r_ex * s_L2QuadToDof(dy, qy);
-                }
-                r_xyz[qz] = r_e;
-              }
-            }
-          }
-        }
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
-            if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
-              for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
-                double r_e = 0;
-                for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                  r_e += r_xyz[qz] * s_L2QuadToDof(dz, qz);
-                }
-                e(dx, dy, dz, el) = r_e;
-              }
+        for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
+          const double w = L2QuadToDof(dz, qz);
+          for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+            for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+              e(dx, dy, dz, el) += w * e_xy(dx, dy);
             }
           }
         }
