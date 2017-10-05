@@ -152,8 +152,9 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM Laghos_*
+	rm -rf laghos *.o *~ *.dSYM
 clean-exec:
+	rm -rf ./results
 
 distclean: clean
 	rm -rf bin/

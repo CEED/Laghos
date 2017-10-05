@@ -79,10 +79,10 @@ int main(int argc, char *argv[])
    double cfl = 0.1;
    bool p_assembly = true;
    bool visualization = false;
-   bool visit = false;
    int vis_steps = 5;
-   int gfprint = 0;
-   const char *basename = "Laghos";
+   bool visit = false;
+   bool gfprint = false;
+   const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -92,10 +92,10 @@ int main(int argc, char *argv[])
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
+   args.AddOption(&order_v, "-ok", "--order-kinematic",
+                  "Order (degree) of the kinematic finite element space.");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
-   args.AddOption(&order_v, "-ov", "--order-kinematic",
-                  "Order (degree) of the kinematic finite element space.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6.");
@@ -108,10 +108,12 @@ int main(int argc, char *argv[])
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
-   args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
-                  "Enable or disable VisIt visualization.");
    args.AddOption(&vis_steps, "-vs", "--visualization-steps",
                   "Visualize every n-th timestep.");
+   args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
+                  "Enable or disable VisIt visualization.");
+   args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
+                  "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
    args.Parse();
@@ -379,32 +381,6 @@ int main(int argc, char *argv[])
       // Make sure that the mesh corresponds to the new solution state.
       pmesh->NewNodes(x_gf, false);
 
-      if (gfprint == 1)
-      {
-         ostringstream v_name, e_name, mesh_name;
-         v_name << basename << "_" << setfill('0') << setw(6) << t << "_"
-                << "v." << setfill('0') << setw(6) << myid;
-         e_name << basename << "_" << setfill('0') << setw(6) << t << "_"
-                << "e." << setfill('0') << setw(6) << myid;
-         mesh_name << basename << "_" << setfill('0') << setw(6) << t << "_"
-                   << "mesh." << setfill('0') << setw(6) << myid;
-
-         ofstream mesh_ofs(mesh_name.str().c_str());
-         mesh_ofs.precision(8);
-         pmesh->Print(mesh_ofs);
-         mesh_ofs.close();
-
-         ofstream v_ofs(v_name.str().c_str());
-         v_ofs.precision(8);
-         v_gf.Save(v_ofs);
-         v_ofs.close();
-
-         ofstream e_ofs(e_name.str().c_str());
-         e_ofs.precision(8);
-         e_gf.Save(e_ofs);
-         e_ofs.close();
-      }
-
       if (last_step || (ti % vis_steps) == 0)
       {
          double loc_norm = e_gf * e_gf, tot_norm;
@@ -424,7 +400,7 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
-         if (visualization || visit) { oper.ComputeDensity(rho_gf); }
+         if (visualization || visit || gfprint) { oper.ComputeDensity(rho_gf); }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -447,6 +423,39 @@ int main(int argc, char *argv[])
             visit_dc.SetCycle(ti);
             visit_dc.SetTime(t);
             visit_dc.Save();
+         }
+
+         if (gfprint)
+         {
+            ostringstream mesh_name, rho_name, v_name, e_name;
+            mesh_name << basename << "_" << ti << "_"
+                      << "mesh." << setfill('0') << setw(6) << myid;
+            rho_name  << basename << "_" << ti << "_"
+                      << "rho." << setfill('0') << setw(6) << myid;
+            v_name << basename << "_" << ti << "_"
+                   << "v." << setfill('0') << setw(6) << myid;
+            e_name << basename << "_" << ti << "_"
+                   << "e." << setfill('0') << setw(6) << myid;
+
+            ofstream rho_ofs(rho_name.str().c_str());
+            rho_ofs.precision(8);
+            rho_gf.Save(rho_ofs);
+            rho_ofs.close();
+
+            ofstream mesh_ofs(mesh_name.str().c_str());
+            mesh_ofs.precision(8);
+            pmesh->Print(mesh_ofs);
+            mesh_ofs.close();
+
+            ofstream v_ofs(v_name.str().c_str());
+            v_ofs.precision(8);
+            v_gf.Save(v_ofs);
+            v_ofs.close();
+
+            ofstream e_ofs(e_name.str().c_str());
+            e_ofs.precision(8);
+            e_gf.Save(e_ofs);
+            e_ofs.close();
          }
       }
    }
