@@ -18,10 +18,6 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-
-
-#ifdef MFEM_USE_MPI
-
 #include <memory>
 #include <iostream>
 
@@ -81,10 +77,11 @@ extern const Tensors1D *tensors1D;
 class FastEvaluator
 {
    const int dim;
-   ParFiniteElementSpace &H1FESpace;
+   FiniteElementSpace &H1FESpace;
 
 public:
-   FastEvaluator(ParFiniteElementSpace &h1fes)
+
+   FastEvaluator(FiniteElementSpace &h1fes)
       : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
 
    void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
@@ -134,7 +131,7 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &H1FESpace, &L2FESpace;
+   FiniteElementSpace &H1FESpace, &L2FESpace;
 
    // Force matrix action on quadrilateral elements in 2D
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
@@ -148,7 +145,7 @@ private:
 
 public:
    ForcePAOperator(QuadratureData *quad_data_,
-                   ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes)
+                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes)
       : dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
         quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
 
@@ -165,20 +162,20 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &FESpace;
+   FiniteElementSpace &FESpace;
 
    Array<int> *ess_tdofs;
 
-   mutable ParGridFunction x_gf, y_gf;
+   mutable GridFunction x_gf, y_gf;
 
-   // Mass matrix action on quadrilateral elements in 2D.
+   // Mass matrix action on quadrilateral elements in 2D
    void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on hexahedral elements in 3D.
+   // Mass matrix action on hexahedral elements in 3D
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : Operator(fes.TrueVSize()),
+   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
+      : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
         quad_data(quad_data_), FESpace(fes), ess_tdofs(NULL),
         x_gf(&fes), y_gf(&fes)
@@ -190,7 +187,10 @@ public:
    void EliminateRHS(Array<int> &dofs, Vector &b)
    {
       ess_tdofs = &dofs;
-      for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
+      for (int i = 0; i < dofs.Size(); i++)
+      {
+         b(dofs[i]) = 0.0;
+      }
    }
 };
 
@@ -210,7 +210,7 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
       : Operator(fes.GetFE(0)->GetDof()),
         dim(fes.GetMesh()->Dimension()), zone_id(0),
         quad_data(quad_data_)
@@ -223,7 +223,5 @@ public:
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS_ASSEMBLY

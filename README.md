@@ -221,8 +221,8 @@ The latter produces the following specific internal energy plot (when run with `
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the nine runs listed above:
 
-1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -no-vis -pa`
-2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -no-vis -pa`
+1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -no-vis -pa`
+2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -no-vis -pa`
 3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
 4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
 5. `mpirun -np 8 laghos -p 2 -m data/square01_quad.mesh -rs 3 -tf 0.2 -no-vis -pa`
@@ -233,15 +233,15 @@ To make sure the results are correct, we tabulate reference final iterations
 
 | run | `step` | `dt` | `e` |
 | --- | ------ | ---- | --- |
-|  1. |  669 | 0.000165 | 49.5731419667 |
-|  2. |  457 | 0.000152 | 3389.9229830873 |
-|  3. |  858 | 0.001490 | 46.5170240752 |
-|  4. |  444 | 0.001282 | 134.0791900734 |
-|  5. |  189 | 0.000828 | 90.5693239297 |
-|  6. |   88 | 0.001330 | 180.3322076124 |
-|  7. | 4838 | 0.000082 | 147.2702831937 |
-|  8. |  963 | 0.002288 | 149.6924808167 |
-|  9. |  786 | 0.000063 | 32.0119747315 |
+|  1. |  339 | 0.000702 | 49.6955373474   |
+|  2. | 1041 | 0.000121 | 3390.9635545472 |
+|  3. | 1150 | 0.002271 | 46.3055694447   |
+|  4. |  561 | 0.000360 | 134.0937837800  |
+|  5. |  189 | 0.000828 | 90.5693239297   |
+|  6. |   88 | 0.001330 | 180.3322076124  |
+|  7. | 4838 | 0.000082 | 147.2702831937  |
+|  8. |  963 | 0.002288 | 149.6924808167  |
+|  9. |  786 | 0.000063 | 32.0119747315   |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
