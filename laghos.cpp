@@ -128,6 +128,12 @@ int main(int argc, char *argv[])
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
+   if (p_assembly && dim == 1)
+   {
+      p_assembly = false;
+      cout << "Full assembly will be used (equivalent to PA in 1D)." << endl;
+   }
+
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
