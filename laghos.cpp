@@ -34,10 +34,11 @@
 //    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
-//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
-//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.5
-//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
+//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
+//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.75
+//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -tf 2.0
 //    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
+//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
 //    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
 //
 // Test problems:
@@ -76,7 +77,7 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
-   double cfl = 0.1;
+   double cfl = 0.5;
    bool p_assembly = true;
    bool visualization = false;
    int vis_steps = 5;

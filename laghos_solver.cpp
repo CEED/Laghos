@@ -61,7 +61,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
               << x << " " << y << " " << w << " " << h << "\n"
-              << "keys maaAc";
+              << "keys maaAcl";
          if ( vec ) { sock << "vvv"; }
          sock << endl;
       }
@@ -92,8 +92,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
      source_type(source_type_), cfl(cfl_),
-     material_pcf(material_),
      use_viscosity(visc), p_assembly(pa),
+     material_pcf(material_),
      Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
      integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
@@ -476,40 +476,48 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
-            // Length scale at the point. The first eigenvector of the symmetric
-            // velocity gradient gives the direction of maximal compression.
-            // This is used to define the relative change of the initial length
-            // scale.
-            if (p_assembly)
-            {
-               mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
-            }
-            else
-            {
-               v.GetVectorGradient(*T, sgrad_v);
-            }
-            sgrad_v.Symmetrize();
-            double eig_val_data[3], eig_vec_data[9];
-            sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-            Vector compr_dir(eig_vec_data, dim);
-            // Computes the initial->physical transformation Jacobian.
-            mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
-            Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-            // Change of the initial mesh size in the compression direction.
-            const double h = quad_data.h0 * ph_dir.Norml2() /
-                             compr_dir.Norml2();
-
-            // Time step estimate at the point.
-            quad_data.dt_est = min(quad_data.dt_est, cfl * h / sound_speed);
-
+            double visc_coeff = 0.0;
             if (use_viscosity)
             {
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity gradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.
+               if (p_assembly)
+               {
+                  mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
+               }
+               else
+               {
+                  v.GetVectorGradient(*T, sgrad_v);
+               }
+               sgrad_v.Symmetrize();
+               double eig_val_data[3], eig_vec_data[9];
+               sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
+               Vector compr_dir(eig_vec_data, dim);
+               // Computes the initial->physical transformation Jacobian.
+               mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
+               Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = quad_data.h0 * ph_dir.Norml2() /
+                                compr_dir.Norml2();
+
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
-               double visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               visc_coeff = 2.0 * rho * h * h * fabs(mu);
                if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
                stress.Add(visc_coeff, sgrad_v);
             }
+
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const double h_min =
+                  Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
+            const double inv_dt = sound_speed / h_min +
+                                  2.5 * visc_coeff / rho / h_min / h_min;
+            quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
 
             // Quadrature data for partial assembly of the force operator.
             MultABt(stress, Jinv, stressJiT);
