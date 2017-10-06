@@ -516,6 +516,8 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
+   oper.printTimers();
+
    // Free the used memory.
    delete ode_solver;
    delete pmesh;

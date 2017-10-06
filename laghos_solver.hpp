@@ -28,6 +28,25 @@
 #include <fstream>
 
 namespace mfem {
+  class Timer {
+  private:
+    std::string name;
+    double startTime;
+    double timeTaken;
+    int iterations;
+    long dofs;
+
+  public:
+    Timer(const std::string &name_);
+
+    void tic();
+    void toc();
+    void toc(occa::device &device);
+    void addDofs(const long dofs_);
+
+    void print();
+  };
+
   namespace miniapps {
 
     /// Visualize the given parallel grid function, using a GLVis server on the
@@ -39,7 +58,6 @@ namespace mfem {
                         bool vec = false);
 
   } // namespace miniapps
-
 
   namespace hydrodynamics {
 
@@ -92,6 +110,8 @@ namespace mfem {
 
       occa::kernel updateKernel;
 
+      mutable Timer cgH1Timer, cgL2Timer, forceTimer, forceTTimer, quadratureDataTimer;
+
       double MaterialPressure(double rho, double e) const {
         return (gamma - 1.0) * rho * e;
       }
@@ -121,6 +141,8 @@ namespace mfem {
       // The density values, which are stored only at some quadrature points, are
       // projected as a ParGridFunction.
       void ComputeDensity(ParGridFunction &rho);
+
+      void printTimers();
 
       ~LagrangianHydroOperator();
     };

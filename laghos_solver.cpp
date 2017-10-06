@@ -21,6 +21,40 @@
 using namespace std;
 
 namespace mfem {
+  Timer::Timer(const std::string &name_) :
+    name(name_),
+    startTime(0),
+    timeTaken(0),
+    iterations(0),
+    dofs(0) {}
+
+  void Timer::tic() {
+    startTime = occa::sys::currentTime();
+  }
+
+  void Timer::toc() {
+    toc(occa::getDevice());
+  }
+
+  void Timer::toc(occa::device &device) {
+    device.finish();
+    const double endTime = occa::sys::currentTime();
+    timeTaken += (endTime - startTime);
+    ++iterations;
+  }
+
+  void Timer::addDofs(const long dofs_) {
+    dofs += dofs_;
+  }
+
+  void Timer::print() {
+    std::cout << name << ":\n"
+              << "  Time Taken       : " << timeTaken << '\n'
+              << "  Iterations       : " << iterations << '\n'
+              << "  Time / Iteration : " << (timeTaken / iterations) << '\n'
+              << "  Time / Dofs      : " << (timeTaken / dofs) << '\n';
+  }
+
   namespace miniapps {
     void VisualizeField(socketstream &sock, const char *vishost, int visport,
                         ParGridFunction &gf, const char *title,
@@ -102,7 +136,12 @@ namespace mfem {
       quad_data_is_current(false),
       VMass(o_H1compFESpace, integ_rule, &quad_data),
       EMass(o_L2FESpace, integ_rule, &quad_data),
-      Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data) {
+      Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data),
+      cgH1Timer("CG(H1)"),
+      cgL2Timer("CG(L2)"),
+      forceTimer("Force Mult"),
+      forceTTimer("Force Mult Transpose"),
+      quadratureDataTimer("Update Quadrature Data") {
 
       Vector rho0_ = rho0;
       GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
@@ -231,7 +270,10 @@ namespace mfem {
       OccaVector rhs(Vsize_h1);
       one = 1.0;
 
+      forceTimer.tic();
       Force.Mult(one, rhs);
+      forceTimer.toc();
+      forceTimer.addDofs(o_H1FESpace.GetGlobalTrueVSize());
       rhs.Neg();
 
       OccaVector B(o_H1compFESpace.GetTrueVSize());
@@ -261,12 +303,15 @@ namespace mfem {
         VMass.SetEssentialTrueDofs(c_tdofs);
         VMass.EliminateRHS(B);
 
+        cgH1Timer.tic();
         CG(H1FESpace.GetParMesh()->GetComm(),
            VMass, B, X,
            cg_print_level,
            cg_max_iters,
            cg_rel_tol,
            cg_abs_tol);
+        cgH1Timer.toc();
+        cgH1Timer.addDofs(1);
 
         o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
       }
@@ -283,18 +328,24 @@ namespace mfem {
       }
 
       OccaVector forceRHS(Vsize_l2);
+      forceTTimer.tic();
       Force.MultTranspose(v, forceRHS);
+      forceTTimer.toc();
+      forceTTimer.addDofs(o_L2FESpace.GetGlobalTrueVSize());
 
       if (e_source) {
         forceRHS += *e_source;
       }
 
+      cgL2Timer.tic();
       CG(L2FESpace.GetParMesh()->GetComm(),
          EMass, forceRHS, de,
          cg_print_level,
          cg_max_iters,
          cg_rel_tol,
          cg_abs_tol);
+      cgL2Timer.toc();
+      cgL2Timer.addDofs(1);
 
       delete e_source;
       quad_data_is_current = false;
@@ -346,6 +397,14 @@ namespace mfem {
       }
     }
 
+    void LagrangianHydroOperator::printTimers() {
+      cgH1Timer.print();
+      cgL2Timer.print();
+      forceTimer.print();
+      forceTTimer.print();
+      quadratureDataTimer.print();
+    }
+
     LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
     void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
@@ -365,6 +424,7 @@ namespace mfem {
                                          o_H1FESpace,
                                          integ_rule);
 
+      quadratureDataTimer.tic();
       OccaVector v2(device,
                     o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
       o_H1FESpace.GlobalToLocal(v, v2);
@@ -385,6 +445,9 @@ namespace mfem {
                    quad_data.geom.detJ,
                    quad_data.stressJinvT,
                    quad_data.dtEst);
+      quadratureDataTimer.toc();
+      quadratureDataTimer.addDofs(o_H1FESpace.GetMesh()->GetNE() *
+                                  integ_rule.GetNPoints());
 
       quad_data.dt_est = quad_data.dtEst.Min();
     }
