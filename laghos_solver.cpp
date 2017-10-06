@@ -58,12 +58,30 @@ namespace mfem {
 
   void Timer::print(const int nameFieldLength) {
     if (!disabled) {
-      std::string tab(nameFieldLength - (int) name.size(), ' ');
-      std::cout << '\n'
-                << name << tab << " | Time Taken       | " << timeTaken << '\n'
-                << name << tab << " | Iterations       | " << iterations << '\n'
-                << name << tab << " | Iteration / Time | " << (iterations / timeTaken) << '\n'
-                << name << tab << " | MDofs / Time     | " << (1e-6 * dofs / timeTaken) << '\n';
+      int mpi_rank, num_procs;
+      MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+      MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+      double maxTimeTaken;
+      double totalIterations;
+      double totalDofs;
+      if (num_procs > 1) {
+        MPI_Reduce(&timeTaken , &maxTimeTaken   , 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&iterations, &totalIterations, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&dofs      , &totalDofs      , 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+      } else {
+        maxTimeTaken = timeTaken;
+        totalIterations = iterations;
+        totalDofs = dofs;
+      }
+      if (mpi_rank == 0) {
+        std::string tab(nameFieldLength - (int) name.size(), ' ');
+        std::cout << '\n'
+                  << name << tab << " | Time Taken       | " << maxTimeTaken << '\n'
+                  << name << tab << " | Iterations       | " << totalIterations << '\n'
+                  << name << tab << " | Iteration / Time | " << (totalIterations / maxTimeTaken) << '\n'
+                  << name << tab << " | MDofs / Time     | " << (1e-6 * totalDofs / maxTimeTaken) << '\n';
+      }
     }
   }
 
