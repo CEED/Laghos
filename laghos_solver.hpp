@@ -30,19 +30,41 @@
 namespace mfem {
   class Timer {
   private:
-    std::string name;
+    bool disabled;
+
     double startTime;
     double timeTaken;
+
     int iterations;
     long dofs;
 
   public:
+    std::string name;
+
     Timer(const std::string &name_);
+
+    void disable();
+    void enable();
 
     void tic();
     void toc();
     void toc(occa::device &device);
     void addDofs(const long dofs_);
+
+    void print(const int nameFieldLength);
+  };
+
+  class HydroTimers {
+  public:
+    Timer mult;
+    Timer cgH1, cgL2;
+    Timer force, forceT;
+    Timer quadratureData;
+
+    HydroTimers();
+
+    void disable();
+    void enable();
 
     void print();
   };
@@ -110,8 +132,6 @@ namespace mfem {
 
       occa::kernel updateKernel;
 
-      mutable Timer cgH1Timer, cgL2Timer, forceTimer, forceTTimer, quadratureDataTimer;
-
       double MaterialPressure(double rho, double e) const {
         return (gamma - 1.0) * rho * e;
       }
@@ -119,6 +139,8 @@ namespace mfem {
       void UpdateQuadratureData(const OccaVector &S) const;
 
     public:
+      mutable HydroTimers timers;
+
       LagrangianHydroOperator(Problem problem_,
                               OccaFiniteElementSpace &o_H1FESpace_,
                               OccaFiniteElementSpace &o_L1FESpace_,
@@ -141,8 +163,6 @@ namespace mfem {
       // The density values, which are stored only at some quadrature points, are
       // projected as a ParGridFunction.
       void ComputeDensity(ParGridFunction &rho);
-
-      void printTimers();
 
       ~LagrangianHydroOperator();
     };

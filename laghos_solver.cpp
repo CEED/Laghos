@@ -23,10 +23,19 @@ using namespace std;
 namespace mfem {
   Timer::Timer(const std::string &name_) :
     name(name_),
+    disabled(false),
     startTime(0),
     timeTaken(0),
     iterations(0),
     dofs(0) {}
+
+  void Timer::disable() {
+    disabled = true;
+  }
+
+  void Timer::enable() {
+    disabled = false;
+  }
 
   void Timer::tic() {
     startTime = occa::sys::currentTime();
@@ -47,13 +56,62 @@ namespace mfem {
     dofs += dofs_;
   }
 
-  void Timer::print() {
-    std::cout << name << ":\n"
-              << "  Time Taken       : " << timeTaken << '\n'
-              << "  Iterations       : " << iterations << '\n'
-              << "  Time / Iteration : " << (timeTaken / iterations) << '\n'
-              << "  Time / Dofs      : " << (timeTaken / dofs) << '\n';
+  void Timer::print(const int nameFieldLength) {
+    if (!disabled) {
+      std::string tab(nameFieldLength - (int) name.size(), ' ');
+      std::cout << '\n'
+                << name << tab << " | Time Taken       | " << timeTaken << '\n'
+                << name << tab << " | Iterations       | " << iterations << '\n'
+                << name << tab << " | Iteration / Time | " << (iterations / timeTaken) << '\n'
+                << name << tab << " | MDofs / Time     | " << (1e-6 * dofs / timeTaken) << '\n';
+    }
   }
+
+
+  HydroTimers::HydroTimers() :
+    mult("LagrangianHydroOperator Mult"),
+    cgH1("CG(H1)"),
+    cgL2("CG(L2)"),
+    force("Force Mult"),
+    forceT("Force Mult Transpose"),
+    quadratureData("Update Quadrature Data") {}
+
+  void HydroTimers::disable() {
+    mult.disable();
+    cgH1.disable();
+    cgL2.disable();
+    force.disable();
+    forceT.disable();
+    quadratureData.disable();
+  }
+
+  void HydroTimers::enable() {
+    mult.enable();
+    cgH1.enable();
+    cgL2.enable();
+    force.enable();
+    forceT.enable();
+    quadratureData.enable();
+  }
+
+  void HydroTimers::print() {
+    int maxNameLength = 0;
+    std::string names[6] = {mult.name,
+                           cgH1.name, cgL2.name,
+                           force.name, forceT.name,
+                           quadratureData.name};
+    for (int i = 0; i < 6; ++i) {
+      maxNameLength = std::max<int>(maxNameLength, names[i].size());
+    }
+
+    mult.print(maxNameLength);
+    cgH1.print(maxNameLength);
+    cgL2.print(maxNameLength);
+    force.print(maxNameLength);
+    forceT.print(maxNameLength);
+    quadratureData.print(maxNameLength);
+  }
+
 
   namespace miniapps {
     void VisualizeField(socketstream &sock, const char *vishost, int visport,
@@ -137,11 +195,7 @@ namespace mfem {
       VMass(o_H1compFESpace, integ_rule, &quad_data),
       EMass(o_L2FESpace, integ_rule, &quad_data),
       Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data),
-      cgH1Timer("CG(H1)"),
-      cgL2Timer("CG(L2)"),
-      forceTimer("Force Mult"),
-      forceTTimer("Force Mult Transpose"),
-      quadratureDataTimer("Update Quadrature Data") {
+      timers() {
 
       Vector rho0_ = rho0;
       GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
@@ -236,6 +290,7 @@ namespace mfem {
     }
 
     void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
+      timers.mult.tic();
       dS_dt = 0.0;
 
       // Make sure that the mesh positions correspond to the ones in S. This is
@@ -270,10 +325,10 @@ namespace mfem {
       OccaVector rhs(Vsize_h1);
       one = 1.0;
 
-      forceTimer.tic();
+      timers.force.tic();
       Force.Mult(one, rhs);
-      forceTimer.toc();
-      forceTimer.addDofs(o_H1FESpace.GetGlobalTrueVSize());
+      timers.force.toc();
+      timers.force.addDofs(o_H1FESpace.GetGlobalTrueVSize());
       rhs.Neg();
 
       OccaVector B(o_H1compFESpace.GetTrueVSize());
@@ -303,15 +358,20 @@ namespace mfem {
         VMass.SetEssentialTrueDofs(c_tdofs);
         VMass.EliminateRHS(B);
 
-        cgH1Timer.tic();
-        CG(H1FESpace.GetParMesh()->GetComm(),
-           VMass, B, X,
-           cg_print_level,
-           cg_max_iters,
-           cg_rel_tol,
-           cg_abs_tol);
-        cgH1Timer.toc();
-        cgH1Timer.addDofs(1);
+        {
+          TCGSolver<OccaVector> cg(H1FESpace.GetParMesh()->GetComm());
+          cg.SetOperator(VMass);
+          cg.SetRelTol(sqrt(cg_rel_tol));
+          cg.SetAbsTol(sqrt(cg_abs_tol));
+          cg.SetMaxIter(cg_max_iters);
+          cg.SetPrintLevel(cg_print_level);
+
+          timers.cgH1.tic();
+          cg.Mult(B, X);
+          timers.cgH1.toc();
+          timers.cgH1.addDofs(cg.GetNumIterations()
+                              * o_H1compFESpace.GetGlobalTrueVSize());
+        }
 
         o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
       }
@@ -328,27 +388,33 @@ namespace mfem {
       }
 
       OccaVector forceRHS(Vsize_l2);
-      forceTTimer.tic();
+      timers.forceT.tic();
       Force.MultTranspose(v, forceRHS);
-      forceTTimer.toc();
-      forceTTimer.addDofs(o_L2FESpace.GetGlobalTrueVSize());
+      timers.forceT.toc();
+      timers.forceT.addDofs(o_L2FESpace.GetGlobalTrueVSize());
 
       if (e_source) {
         forceRHS += *e_source;
       }
 
-      cgL2Timer.tic();
-      CG(L2FESpace.GetParMesh()->GetComm(),
-         EMass, forceRHS, de,
-         cg_print_level,
-         cg_max_iters,
-         cg_rel_tol,
-         cg_abs_tol);
-      cgL2Timer.toc();
-      cgL2Timer.addDofs(1);
+      {
+        TCGSolver<OccaVector> cg(L2FESpace.GetParMesh()->GetComm());
+        cg.SetOperator(EMass);
+        cg.SetRelTol(sqrt(cg_rel_tol));
+        cg.SetAbsTol(sqrt(cg_abs_tol));
+        cg.SetMaxIter(cg_max_iters);
+        cg.SetPrintLevel(cg_print_level);
+
+        timers.cgL2.tic();
+        cg.Mult(forceRHS, de);
+        timers.cgL2.toc();
+        timers.cgL2.addDofs(cg.GetNumIterations()
+                            * L2FESpace.GlobalTrueVSize());
+      }
 
       delete e_source;
       quad_data_is_current = false;
+      timers.mult.toc();
     }
 
     double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const {
@@ -397,14 +463,6 @@ namespace mfem {
       }
     }
 
-    void LagrangianHydroOperator::printTimers() {
-      cgH1Timer.print();
-      cgL2Timer.print();
-      forceTimer.print();
-      forceTTimer.print();
-      quadratureDataTimer.print();
-    }
-
     LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
     void LagrangianHydroOperator::UpdateQuadratureData(const OccaVector &S) const {
@@ -424,7 +482,7 @@ namespace mfem {
                                          o_H1FESpace,
                                          integ_rule);
 
-      quadratureDataTimer.tic();
+      timers.quadratureData.tic();
       OccaVector v2(device,
                     o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
       o_H1FESpace.GlobalToLocal(v, v2);
@@ -445,9 +503,9 @@ namespace mfem {
                    quad_data.geom.detJ,
                    quad_data.stressJinvT,
                    quad_data.dtEst);
-      quadratureDataTimer.toc();
-      quadratureDataTimer.addDofs(o_H1FESpace.GetMesh()->GetNE() *
-                                  integ_rule.GetNPoints());
+      timers.quadratureData.toc();
+      timers.quadratureData.addDofs(o_H1FESpace.GetMesh()->GetNE() *
+                                    integ_rule.GetNPoints());
 
       quad_data.dt_est = quad_data.dtEst.Min();
     }

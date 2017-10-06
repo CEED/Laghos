@@ -98,6 +98,7 @@ int main(int argc, char *argv[])
    const char *basename = "Laghos";
    const char *device_info = "mode: 'Serial'";
    bool occa_verbose = false;
+   bool timing = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -134,6 +135,10 @@ int main(int argc, char *argv[])
                  "-ov", "--occa-verbose",
                  "--no-ov", "--no-occa-verbose",
                  "Print verbose information about OCCA kernel compilation.");
+  args.AddOption(&timing,
+                 "-t", "--timing",
+                 "--no-t", "--no-timings",
+                 "Time solver parts.");
    args.Parse();
    if (!args.Good())
    {
@@ -351,6 +356,9 @@ int main(int argc, char *argv[])
                                 o_rho,
                                 cfl, gamma,
                                 use_viscosity);
+   if (!timing) {
+     oper.timers.disable();
+   }
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -516,7 +524,7 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
-   oper.printTimers();
+   oper.timers.print();
 
    // Free the used memory.
    delete ode_solver;
