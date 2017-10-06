@@ -379,6 +379,7 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
+         if (dt < 1e-14) { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
          oper.ResetQuadratureData();

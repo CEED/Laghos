@@ -415,6 +415,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          nqp_batch    = nqp * nzones_batch;
       }
 
+      double min_detJ = numeric_limits<double>::infinity();
       for (int z = 0; z < nzones_batch; z++)
       {
          ElementTransformation *T = H1FESpace.GetElementTransformation(z_id);
@@ -439,7 +440,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             T->SetIntPoint(&ip);
             if (!p_assembly) { Jpr_b[z](q) = T->Jacobian(); }
             const double detJ = Jpr_b[z](q).Det();
-            MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
+            min_detJ = min(min_detJ, detJ);
 
             const int idx = z * nqp + q;
             if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
@@ -524,7 +525,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                   Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
             const double inv_dt = sound_speed / h_min +
                                   2.5 * visc_coeff / rho / h_min / h_min;
-            quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
+            if (min_detJ < 0.0)
+            {
+               // This will force repetition of the step with smaller dt.
+               quad_data.dt_est = 0.0;
+            }
+            else
+            {
+               quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
+            }
 
             // Quadrature data for partial assembly of the force operator.
             MultABt(stress, Jinv, stressJiT);
