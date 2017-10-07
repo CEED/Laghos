@@ -225,23 +225,20 @@ To make sure the results are correct, we tabulate reference final iterations
 2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -no-vis -pa`
 3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
 4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
-5. `mpirun -np 8 laghos -p 2 -m data/square01_quad.mesh -rs 3 -tf 0.2 -no-vis -pa`
-6. `mpirun -np 8 laghos -p 2 -m data/cube01_hex.mesh -rs 2 -tf 0.2 -no-vis -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
-8. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
-9. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
+5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
+6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
 
 | run | `step` | `dt` | `e` |
 | --- | ------ | ---- | --- |
 |  1. |  339 | 0.000702 | 49.6955373474   |
-|  2. | 1041 | 0.000121 | 3390.9635545472 |
+|  2. | 1041 | 0.000121 | 3390.9635545471 |
 |  3. | 1150 | 0.002271 | 46.3055694447   |
 |  4. |  561 | 0.000360 | 134.0937837800  |
-|  5. |  140 | 0.000438 | 90.5653661362   |
-|  6. |   62 | 0.002497 | 180.3292356129  |
-|  7. | 4968 | 0.000048 | 147.2685142131  |
-|  8. |  882 | 0.002225 | 149.6915209641  |
-|  9. |  414 | 0.000339 | 32.0120759651   |
+|  5. |  414 | 0.000339 | 32.0120759651   |
+|  6. | 4968 | 0.000048 | 147.2685142131  |
+|  7. |  882 | 0.002225 | 149.6915209641  |
+
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.

@@ -40,6 +40,9 @@
 //    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
 //    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
 //    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
+//    mpirun -np 8 laghos -p 2 -m data/segment01.mesh     -rs 5 -tf 0.2
+//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5
+//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 2.5
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
@@ -379,7 +382,8 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
-         if (dt < 1e-14) { MFEM_ABORT("The time step crashed!"); }
+         if (dt < numeric_limits<double>::epsilon())
+         { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
          oper.ResetQuadratureData();
@@ -468,37 +472,6 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
-   }
-   double rho_max, rho_min;
-   if (visualization || visit)
-   {
-      double rho_locmax = rho_gf.Max(), rho_locmin = rho_gf.Min();
-      MPI_Allreduce(&rho_locmin, &rho_min, 1, MPI_DOUBLE, MPI_MIN,
-         pmesh->GetComm());
-      MPI_Allreduce(&rho_locmax, &rho_max, 1, MPI_DOUBLE, MPI_MAX,
-         pmesh->GetComm());
-   }
-   double e_locmax = e_gf.Max(), e_locmin = e_gf.Min(), e_max, e_min;
-   MPI_Allreduce(&e_locmin, &e_min, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
-   MPI_Allreduce(&e_locmax, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   double v_locmax = v_gf.Max(), v_locmin = v_gf.Min(), v_max, v_min;
-   MPI_Allreduce(&v_locmin, &v_min, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
-   MPI_Allreduce(&v_locmax, &v_max, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   if (mpi.Root())
-   {
-      cout << fixed;
-      if (visualization || visit)
-      {
-         cout << "min(rho) = " << setprecision(10) << rho_min
-            << ",\tmax(rho) = " << setprecision(10) << rho_max
-            << endl;
-      }
-      cout << "min(v)   = " << setprecision(10) << v_min
-         << ",\tmax(v)   = " << setprecision(10) << v_max
-         << endl;
-      cout << "min(e)   = " << setprecision(10) << e_min
-         << ",\tmax(e)   = " << setprecision(10) << e_max
-         << endl;
    }
    if (visualization)
    {
