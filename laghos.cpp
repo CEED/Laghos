@@ -47,6 +47,8 @@
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
+//    p = 2  --> 1D Sod shock tube.
+//    p = 3  --> Triple point.
 
 
 #include "laghos_solver.hpp"
@@ -137,7 +139,10 @@ int main(int argc, char *argv[])
    if (p_assembly && dim == 1)
    {
       p_assembly = false;
-      cout << "Full assembly will be used (equivalent to PA in 1D)." << endl;
+      if (mpi.Root())
+      {
+         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+      }
    }
 
    // Parallel partitioning of the mesh.
@@ -442,24 +447,24 @@ int main(int argc, char *argv[])
          if (gfprint)
          {
             ostringstream mesh_name, rho_name, v_name, e_name;
-            mesh_name << basename << "_" << ti << "_"
-                      << "mesh." << setfill('0') << setw(6) << myid;
-            rho_name  << basename << "_" << ti << "_"
-                      << "rho." << setfill('0') << setw(6) << myid;
-            v_name << basename << "_" << ti << "_"
-                   << "v." << setfill('0') << setw(6) << myid;
-            e_name << basename << "_" << ti << "_"
-                   << "e." << setfill('0') << setw(6) << myid;
-
-            ofstream rho_ofs(rho_name.str().c_str());
-            rho_ofs.precision(8);
-            rho_gf.Save(rho_ofs);
-            rho_ofs.close();
+            mesh_name << basename << "_" << ti
+                      << "_mesh." << setfill('0') << setw(6) << myid;
+            rho_name  << basename << "_" << ti
+                      << "_rho." << setfill('0') << setw(6) << myid;
+            v_name << basename << "_" << ti
+                   << "_v." << setfill('0') << setw(6) << myid;
+            e_name << basename << "_" << ti
+                   << "_e." << setfill('0') << setw(6) << myid;
 
             ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
             pmesh->Print(mesh_ofs);
             mesh_ofs.close();
+
+            ofstream rho_ofs(rho_name.str().c_str());
+            rho_ofs.precision(8);
+            rho_gf.Save(rho_ofs);
+            rho_ofs.close();
 
             ofstream v_ofs(v_name.str().c_str());
             v_ofs.precision(8);

@@ -34,15 +34,21 @@
 //    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
-//    ./laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.5
-//    ./laghos -p 0 -m ../data/square01_tri.mesh  -rs 1 -tf 0.5
-//    ./laghos -p 0 -m ../data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
+//    ./laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75
+//    ./laghos -p 0 -m ../data/square01_tri.mesh  -rs 1 -tf 0.75
+//    ./laghos -p 0 -m ../data/cube01_hex.mesh    -rs 1 -tf 2.0
 //    ./laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8
+//    ./laghos -p 1 -m ../data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
 //    ./laghos -p 1 -m ../data/cube01_hex.mesh    -rs 2 -tf 0.6
+//    ./laghos -p 2 -m ../data/segment01.mesh     -rs 5 -tf 0.2
+//    ./laghos -p 3 -m ../data/rectangle01_quad.mesh -rs 2 -tf 2.5
+//    ./laghos -p 3 -m ../data/box01_hex.mesh        -rs 1 -tf 2.5
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
+//    p = 2  --> 1D Sod shock tube.
+//    p = 3  --> Triple point.
 
 
 #include "laghos_solver_s.hpp"
@@ -71,13 +77,13 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
-   double cfl = 0.1;
+   double cfl = 0.5;
    bool p_assembly = true;
    bool visualization = false;
-   bool visit = false;
    int vis_steps = 5;
-   int gfprint = 0;
-   const char *basename = "Laghos";
+   bool visit = false;
+   bool gfprint = false;
+   const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -85,10 +91,10 @@ int main(int argc, char *argv[])
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
+   args.AddOption(&order_v, "-ok", "--order-kinematic",
+                  "Order (degree) of the kinematic finite element space.");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
-   args.AddOption(&order_v, "-ov", "--order-kinematic",
-                  "Order (degree) of the kinematic finite element space.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6.");
@@ -101,10 +107,12 @@ int main(int argc, char *argv[])
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
-   args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
-                  "Enable or disable VisIt visualization.");
    args.AddOption(&vis_steps, "-vs", "--visualization-steps",
                   "Visualize every n-th timestep.");
+   args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
+                  "Enable or disable VisIt visualization.");
+   args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
+                  "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
    args.Parse();
@@ -120,6 +128,12 @@ int main(int argc, char *argv[])
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+
+   if (p_assembly && dim == 1)
+   {
+      p_assembly = false;
+      cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+   }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -193,23 +207,23 @@ int main(int argc, char *argv[])
    // mesh positions to the values in x_gf.
    mesh->SetNodalGridFunction(&x_gf);
 
-   // Initial density values. Note that this is a temporary function and it will
-   // not be updated during the time evolution.
-   GridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
-   rho.ProjectCoefficient(rho_coeff);
-
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(mesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize the specific internal energy. We interpolate in a non-positive
-   // basis to get the correct values at the dofs. Then we do an L2 projection
-   // to the positive basis in which we actually compute. The goal of all this
-   // is to get a high-order representation of the initial condition.
+   // Initialize density and  specific internal energy values. We interpolate
+   // in a non-positive basis to get the correct values at the dofs.
+   // Then we do an L2 projection to the positive basis in which we actually
+   // compute. The goal of all this is to get a high-order representation of
+   // the initial condition. Note that this density is a temporary function
+   // and it will not be updated during the time evolution.
+   GridFunction rho(&L2FESpace);
+   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, mesh->Dimension());
    FiniteElementSpace l2_fes(mesh, &l2_fec);
-   GridFunction l2_e(&l2_fes);
+   GridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+   l2_rho.ProjectCoefficient(rho_coeff);
+   rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -233,6 +247,8 @@ int main(int argc, char *argv[])
       case 0: if (mesh->Dimension() == 2) { source = 1; }
          visc = false; break;
       case 1: visc = true; break;
+      case 2: visc = true; break;
+      case 3: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
@@ -310,6 +326,8 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
+         if (dt < numeric_limits<double>::epsilon())
+         { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
          oper.ResetQuadratureData();
@@ -320,29 +338,6 @@ int main(int argc, char *argv[])
 
       // Make sure that the mesh corresponds to the new solution state.
       mesh->NewNodes(x_gf, false);
-
-      if (gfprint == 1)
-      {
-         ostringstream v_name, e_name, m_name;
-         v_name << basename << "_" << setfill('0') << setw(6) << t << "_v";
-         e_name << basename << "_" << setfill('0') << setw(6) << t << "_e";
-         m_name << basename << "_" << setfill('0') << setw(6) << t << "_mesh";
-
-         ofstream mesh_ofs(m_name.str().c_str());
-         mesh_ofs.precision(8);
-         mesh->Print(mesh_ofs);
-         mesh_ofs.close();
-
-         ofstream v_ofs(v_name.str().c_str());
-         v_ofs.precision(8);
-         v_gf.Save(v_ofs);
-         v_ofs.close();
-
-         ofstream e_ofs(e_name.str().c_str());
-         e_ofs.precision(8);
-         e_gf.Save(e_ofs);
-         e_ofs.close();
-      }
 
       if (last_step || (ti % vis_steps) == 0)
       {
@@ -378,6 +373,35 @@ int main(int argc, char *argv[])
             visit_dc.SetTime(t);
             visit_dc.Save();
          }
+
+         if (gfprint)
+         {
+            ostringstream v_name, rho_name, e_name, m_name;
+            m_name << basename << "_" << ti << "_mesh";
+            rho_name  << basename << "_" << ti << "_rho";
+            v_name << basename << "_" << ti << "_v";
+            e_name << basename << "_" << ti << "_e";
+
+            ofstream mesh_ofs(m_name.str().c_str());
+            mesh_ofs.precision(8);
+            mesh->Print(mesh_ofs);
+            mesh_ofs.close();
+
+            ofstream rho_ofs(rho_name.str().c_str());
+            rho_ofs.precision(8);
+            rho_gf.Save(rho_ofs);
+            rho_ofs.close();
+
+            ofstream v_ofs(v_name.str().c_str());
+            v_ofs.precision(8);
+            v_gf.Save(v_ofs);
+            v_ofs.close();
+
+            ofstream e_ofs(e_name.str().c_str());
+            e_ofs.precision(8);
+            e_gf.Save(e_ofs);
+            e_ofs.close();
+         }
       }
    }
    if (visualization)
@@ -389,6 +413,7 @@ int main(int argc, char *argv[])
    // Free the used memory.
    delete ode_solver;
    delete mesh;
+   delete material_pcf;
 
    return 0;
 }
@@ -405,6 +430,10 @@ double rho0(const Vector &x)
    {
       case 0: return 1.0;
       case 1: return 1.0;
+      case 2: if (x(0) < 0.5) { return 1.0; }
+         else return 0.1;
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
+         else return 0.125;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -415,10 +444,12 @@ double gamma(const Vector &x)
    {
       case 0: return 5./3.;
       case 1: return 1.4;
-     default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      case 2: return 1.4;
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
+         else { return 1.5; }
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-
 
 void v0(const Vector &x, Vector &v)
 {
@@ -435,6 +466,8 @@ void v0(const Vector &x, Vector &v)
          }
          break;
       case 1: v = 0.0; break;
+      case 2: v = 0.0; break;
+      case 3: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -459,6 +492,10 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
+      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+         else return 0.1 / rho0(x) / (gamma(x) - 1.0);
+      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
+         else return 1.0 / rho0(x) / (gamma(x) - 1.0);
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
