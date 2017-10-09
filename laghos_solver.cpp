@@ -152,6 +152,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    MPI_Allreduce(&nzones, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
    switch (pm->GetElementBaseGeometry(0))
    {
+      case Geometry::SEGMENT:
+         quad_data.h0 = glob_area / glob_z_cnt; break;
       case Geometry::SQUARE:
          quad_data.h0 = sqrt(glob_area / glob_z_cnt); break;
       case Geometry::TRIANGLE:
@@ -259,7 +261,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg.SetOperator(VMassPA);
          cg.SetRelTol(1e-8);
          cg.SetAbsTol(0.0);
-         cg.SetMaxIter(200);
+         cg.SetMaxIter(300);
          cg.SetPrintLevel(0);
          cg.Mult(B, X);
          H1compFESpace.Dof_TrueDof_Matrix()->Mult(X, dv_c);
@@ -413,6 +415,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          nqp_batch    = nqp * nzones_batch;
       }
 
+      double min_detJ = numeric_limits<double>::infinity();
       for (int z = 0; z < nzones_batch; z++)
       {
          ElementTransformation *T = H1FESpace.GetElementTransformation(z_id);
@@ -437,7 +440,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             T->SetIntPoint(&ip);
             if (!p_assembly) { Jpr_b[z](q) = T->Jacobian(); }
             const double detJ = Jpr_b[z](q).Det();
-            MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
+            min_detJ = min(min_detJ, detJ);
 
             const int idx = z * nqp + q;
             if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
@@ -493,7 +496,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                }
                sgrad_v.Symmetrize();
                double eig_val_data[3], eig_vec_data[9];
-               sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
+               if (dim==1)
+               {
+                  eig_val_data[0] = sgrad_v(0, 0);
+                  eig_vec_data[0] = 1.;
+               }
+               else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
                Vector compr_dir(eig_vec_data, dim);
                // Computes the initial->physical transformation Jacobian.
                mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
@@ -517,7 +525,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                   Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
             const double inv_dt = sound_speed / h_min +
                                   2.5 * visc_coeff / rho / h_min / h_min;
-            quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
+            if (min_detJ < 0.0)
+            {
+               // This will force repetition of the step with smaller dt.
+               quad_data.dt_est = 0.0;
+            }
+            else
+            {
+               quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
+            }
 
             // Quadrature data for partial assembly of the force operator.
             MultABt(stress, Jinv, stressJiT);

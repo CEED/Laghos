@@ -201,22 +201,44 @@ The latter produces the following velocity magnitude plot (when run with `-vis` 
 
 ![Taylor-Green image](data/tg.png)
 
+#### Triple-point problem
+
+Well known three-material problem combines shock waves and vorticity,
+thus examining the complex computational abilities of Laghos.
+
+Some sample runs in 2D and 3D respectively are:
+```sh
+mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -no-vis -pa
+mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa
+```
+
+The latter produces the following specific internal energy plot (when run with `-vis` instead of `-no-vis`)
+
+![Triple-point image](data/tp.png)
+
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
-(`step`), time steps (`dt`) and energies (`|e|`) for the four runs listed above:
+(`step`), time steps (`dt`) and energies (`|e|`) for the nine runs listed above:
 
-1. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
-2. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
-3. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -no-vis -pa`
-4. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -no-vis -pa`
+1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -no-vis -pa`
+2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -no-vis -pa`
+3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
+4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
+5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
+6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
 
 | run | `step` | `dt` | `e` |
 | --- | ------ | ---- | --- |
-|  1. | 1150 | 0.002271 | 46.3055694447   |
-|  2. | 561  | 0.000360 | 134.0937837800  |
-|  3. | 339  | 0.000702 | 49.6955373474   |
-|  4. | 1041 | 0.000121 | 3390.9635545472 |
+|  1. |  339 | 0.000702 | 49.6955373474   |
+|  2. | 1041 | 0.000121 | 3390.9635545471 |
+|  3. | 1150 | 0.002271 | 46.3055694447   |
+|  4. |  561 | 0.000360 | 134.0937837800  |
+|  5. |  414 | 0.000339 | 32.0120759651   |
+|  6. | 4968 | 0.000048 | 147.2685142131  |
+|  7. |  882 | 0.002225 | 149.6915209641  |
+
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
