@@ -34,15 +34,15 @@
 //    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
-//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -tf 2.0
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
-//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
-//    mpirun -np 8 laghos -p 2 -m data/segment01.mesh     -rs 5 -tf 0.2
-//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5
-//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 2.5
+//    ./laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75
+//    ./laghos -p 0 -m ../data/square01_tri.mesh  -rs 1 -tf 0.75
+//    ./laghos -p 0 -m ../data/cube01_hex.mesh    -rs 1 -tf 2.0
+//    ./laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8
+//    ./laghos -p 1 -m ../data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
+//    ./laghos -p 1 -m ../data/cube01_hex.mesh    -rs 2 -tf 0.6
+//    ./laghos -p 2 -m ../data/segment01.mesh     -rs 5 -tf 0.2
+//    ./laghos -p 3 -m ../data/rectangle01_quad.mesh -rs 2 -tf 2.5
+//    ./laghos -p 3 -m ../data/box01_hex.mesh        -rs 1 -tf 2.5
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
@@ -51,7 +51,7 @@
 //    p = 3  --> Triple point.
 
 
-#include "laghos_solver.hpp"
+#include "laghos_solver_s.hpp"
 #include <memory>
 #include <iostream>
 #include <fstream>
@@ -67,23 +67,17 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   // Initialize MPI.
-   MPI_Session mpi(argc, argv);
-   int myid = mpi.WorldRank();
-
    // Print the banner.
-   if (mpi.Root()) { display_banner(cout); }
+   display_banner(cout);
 
    // Parse command-line options.
-   const char *mesh_file = "data/square01_quad.mesh";
+   const char *mesh_file = "../data/square01_quad.mesh";
    int rs_levels = 0;
-   int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.5;
-   int max_tsteps = -1;
    bool p_assembly = true;
    bool visualization = false;
    int vis_steps = 5;
@@ -96,8 +90,6 @@ int main(int argc, char *argv[])
                   "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
-   args.AddOption(&rp_levels, "-rp", "--refine-parallel",
-                  "Number of times to refine the mesh uniformly in parallel.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
@@ -109,8 +101,6 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
-   args.AddOption(&max_tsteps, "-ms", "--max_steps",
-                  "Maximum number of steps (negative means no restriction).");
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
@@ -128,10 +118,10 @@ int main(int argc, char *argv[])
    args.Parse();
    if (!args.Good())
    {
-      if (mpi.Root()) { args.PrintUsage(cout); }
+      args.PrintUsage(cout);
       return 1;
    }
-   if (mpi.Root()) { args.PrintOptions(cout); }
+   args.PrintOptions(cout);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -142,70 +132,30 @@ int main(int argc, char *argv[])
    if (p_assembly && dim == 1)
    {
       p_assembly = false;
-      if (mpi.Root())
-      {
-         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
-      }
+      cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
    }
-
-   // Parallel partitioning of the mesh.
-   ParMesh *pmesh = NULL;
-   const int num_tasks = mpi.WorldSize();
-   const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
-   int *nxyz = new int[dim];
-   int product = 1;
-   for (int d = 0; d < dim; d++)
-   {
-      nxyz[d] = partitions;
-      product *= partitions;
-   }
-   if (product == num_tasks)
-   {
-      int *partitioning = mesh->CartesianPartitioning(nxyz);
-      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
-   }
-   else
-   {
-      if (myid == 0)
-      {
-         cout << "Non-Cartesian partitioning through METIS will be used.\n";
-#ifndef MFEM_USE_METIS
-         cout << "MFEM was built without METIS. "
-              << "Adjust the number of tasks to use a Cartesian split." << endl;
-#endif
-      }
-#ifndef MFEM_USE_METIS
-      return 1;
-#endif
-      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
-   }
-   delete [] nxyz;
-   delete mesh;
-
-   // Refine the mesh further in parallel to increase the resolution.
-   for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   FiniteElementSpace L2FESpace(mesh, &L2FEC);
+   FiniteElementSpace H1FESpace(mesh, &H1FEC, mesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   Array<int> ess_tdofs;
+   Array<int> vdofs_marker, ess_vdofs;
    {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
-      for (int d = 0; d < pmesh->Dimension(); d++)
+      Array<int> ess_bdr(mesh->bdr_attributes.Max()), vdofs1d;
+      for (int d = 0; d < mesh->Dimension(); d++)
       {
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
          // enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-         ess_tdofs.Append(tdofs1d);
+         H1FESpace.GetEssentialVDofs(ess_bdr, vdofs_marker, d);
+         FiniteElementSpace::MarkerToList(vdofs_marker, vdofs1d);
+         ess_vdofs.Append(vdofs1d);
       }
    }
 
@@ -219,28 +169,18 @@ int main(int argc, char *argv[])
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
       default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
+         cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+         delete mesh;
          return 3;
-   }
-
-   HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-
-   if (mpi.Root())
-   {
-      cout << "Number of kinematic (position, velocity) dofs: "
-           << glob_size_h1 << endl;
-      cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
    }
 
    int Vsize_l2 = L2FESpace.GetVSize();
    int Vsize_h1 = H1FESpace.GetVSize();
+
+   cout << "Number of kinematic (position, velocity) dofs: "
+        << Vsize_h1 << endl;
+   cout << "Number of specific internal energy dofs: "
+        << Vsize_l2 << endl;
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
@@ -258,17 +198,17 @@ int main(int argc, char *argv[])
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
+   GridFunction x_gf, v_gf, e_gf;
    x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
-   pmesh->SetNodalGridFunction(&x_gf);
+   mesh->SetNodalGridFunction(&x_gf);
 
    // Initialize the velocity.
-   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
+   VectorFunctionCoefficient v_coeff(mesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
    // Initialize density and  specific internal energy values. We interpolate
@@ -277,11 +217,11 @@ int main(int argc, char *argv[])
    // compute. The goal of all this is to get a high-order representation of
    // the initial condition. Note that this density is a temporary function
    // and it will not be updated during the time evolution.
-   ParGridFunction rho(&L2FESpace);
+   GridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
-   L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-   ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+   L2_FECollection l2_fec(order_e, mesh->Dimension());
+   FiniteElementSpace l2_fes(mesh, &l2_fec);
+   GridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
@@ -304,7 +244,7 @@ int main(int argc, char *argv[])
    int source = 0; bool visc;
    switch (problem)
    {
-      case 0: if (pmesh->Dimension() == 2) { source = 1; }
+      case 0: if (mesh->Dimension() == 2) { source = 1; }
          visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
@@ -313,22 +253,18 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, material_pcf,
+                                ess_vdofs, rho, source, cfl, material_pcf,
                                 visc, p_assembly);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
+   GridFunction rho_gf;
    if (visualization || visit) { oper.ComputeDensity(rho_gf); }
 
    if (visualization)
    {
-      // Make sure all MPI ranks have sent their 'v' solution before initiating
-      // another set of GLVis connections (one from each rank):
-      MPI_Barrier(pmesh->GetComm());
-
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
@@ -348,7 +284,7 @@ int main(int argc, char *argv[])
    }
 
    // Save data for VisIt visualization
-   VisItDataCollection visit_dc(basename, pmesh);
+   VisItDataCollection visit_dc(basename, mesh);
    if (visit)
    {
       visit_dc.RegisterField("Density",  &rho_gf);
@@ -374,7 +310,6 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
-      if (ti == max_tsteps) { last_step = true; }
 
       S_old = S;
       t_old = t;
@@ -396,34 +331,25 @@ int main(int argc, char *argv[])
          t = t_old;
          S = S_old;
          oper.ResetQuadratureData();
-         if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
+         cout << "Repeating step " << ti << endl;
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       // Make sure that the mesh corresponds to the new solution state.
-      pmesh->NewNodes(x_gf, false);
+      mesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double loc_norm = e_gf * e_gf, tot_norm;
-         MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                       pmesh->GetComm());
-         if (mpi.Root())
-         {
-            cout << fixed;
-            cout << "step " << setw(5) << ti
-                 << ",\tt = " << setw(5) << setprecision(4) << t
-                 << ",\tdt = " << setw(5) << setprecision(6) << dt
-                 << ",\t|e| = " << setprecision(10)
-                 << sqrt(tot_norm) << endl;
-         }
+         const double loc_norm = e_gf * e_gf;
+         cout << fixed;
+         cout << "step " << setw(5) << ti
+              << ",\tt = " << setw(5) << setprecision(4) << t
+              << ",\tdt = " << setw(5) << setprecision(6) << dt
+              << ",\t|e| = " << setprecision(10)
+              << sqrt(loc_norm) << endl;
 
-         // Make sure all ranks have sent their 'v' solution before initiating
-         // another set of GLVis connections (one from each rank):
-         MPI_Barrier(pmesh->GetComm());
-
-         if (visualization || visit || gfprint) { oper.ComputeDensity(rho_gf); }
+         if (visualization || visit) { oper.ComputeDensity(rho_gf); }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -450,19 +376,15 @@ int main(int argc, char *argv[])
 
          if (gfprint)
          {
-            ostringstream mesh_name, rho_name, v_name, e_name;
-            mesh_name << basename << "_" << ti
-                      << "_mesh." << setfill('0') << setw(6) << myid;
-            rho_name  << basename << "_" << ti
-                      << "_rho." << setfill('0') << setw(6) << myid;
-            v_name << basename << "_" << ti
-                   << "_v." << setfill('0') << setw(6) << myid;
-            e_name << basename << "_" << ti
-                   << "_e." << setfill('0') << setw(6) << myid;
+            ostringstream v_name, rho_name, e_name, m_name;
+            m_name << basename << "_" << ti << "_mesh";
+            rho_name  << basename << "_" << ti << "_rho";
+            v_name << basename << "_" << ti << "_v";
+            e_name << basename << "_" << ti << "_e";
 
-            ofstream mesh_ofs(mesh_name.str().c_str());
+            ofstream mesh_ofs(m_name.str().c_str());
             mesh_ofs.precision(8);
-            pmesh->Print(mesh_ofs);
+            mesh->Print(mesh_ofs);
             mesh_ofs.close();
 
             ofstream rho_ofs(rho_name.str().c_str());
@@ -482,9 +404,6 @@ int main(int argc, char *argv[])
          }
       }
    }
-
-   oper.PrintTimingData(mpi.Root());
-
    if (visualization)
    {
       vis_v.close();
@@ -493,7 +412,7 @@ int main(int argc, char *argv[])
 
    // Free the used memory.
    delete ode_solver;
-   delete pmesh;
+   delete mesh;
    delete material_pcf;
 
    return 0;
