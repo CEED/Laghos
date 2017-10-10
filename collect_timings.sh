@@ -3,7 +3,7 @@
 options=( 'pa' 'fa' )
 
 parallel_refs=0
-mesh_dim=3
+mesh_dim=2
 maxL2dof=1000000
 
 outfile=timings_${mesh_dim}d
@@ -34,7 +34,7 @@ BEGIN { ref = 0 }
 /CG \(L2\) rate/ { l2_cg_rate = $9 }
 /Forces rate/ { forces_rate = $8 }
 /UpdateQuadData rate/ { update_quad_rate = $8 }
-/Major kernels/ { total_time = $6 }
+/Major kernels total rate/ { total_time = $11 }
 END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f\n", order, ref, h1_dofs, l2_dofs, h1_cg_rate, l2_cg_rate, forces_rate, update_quad_rate, total_time) }'
 }
 
@@ -47,10 +47,9 @@ for method in "${options[@]}"; do
        nzones=$(( (2**mesh_dim)**(sref+1) ))
        nL2dof=$(( nzones*(torder+1)**mesh_dim ))
        if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
-         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method
-         echo $(run_case mpirun -np $nproc ./laghos -$method \
-                       -p 0 -tf 0.5 -cfl 0.05 -vs 1 \
-                       --max_steps 1 \
+         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method $outfile"_"${options[0]}
+         echo $(run_case mpirun -np $nproc ./laghos -$method -p 1 -tf 0.8 \
+                       --max_steps 10 \
                        --mesh $mesh_file \
                        --refine-serial $sref \
                        --refine-parallel $parallel_refs \

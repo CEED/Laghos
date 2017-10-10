@@ -142,7 +142,7 @@ public:
    // projected as a ParGridFunction.
    void ComputeDensity(ParGridFunction &rho);
 
-   void PrintTimingData(bool IamRoot);
+   void PrintTimingData(bool IamRoot, int steps);
 
    ~LagrangianHydroOperator();
 };

@@ -366,6 +366,7 @@ int main(int argc, char *argv[])
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
+   int steps = 0;
    BlockVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
@@ -374,7 +375,7 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
-      if (ti == max_tsteps) { last_step = true; }
+      if (steps == max_tsteps) { last_step = true; }
 
       S_old = S;
       t_old = t;
@@ -383,6 +384,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
+      steps++;
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
@@ -483,7 +485,14 @@ int main(int argc, char *argv[])
       }
    }
 
-   oper.PrintTimingData(mpi.Root());
+   switch (ode_solver_type)
+   {
+      case 2: steps *= 2; break;
+      case 3: steps *= 3; break;
+      case 4: steps *= 4; break;
+      case 6: steps *= 6;
+   }
+   oper.PrintTimingData(mpi.Root(), steps);
 
    if (visualization)
    {
