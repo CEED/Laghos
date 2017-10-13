@@ -77,6 +77,8 @@ protected:
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, p_assembly;
+   const double cg_rel_tol;
+   const int cg_max_iter;
    Coefficient *material_pcf;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
@@ -128,7 +130,8 @@ public:
                            ParFiniteElementSpace &l2_fes,
                            Array<int> &essential_tdofs, ParGridFunction &rho0,
                            int source_type_, double cfl_,
-                           Coefficient *material_, bool visc, bool pa);
+                           Coefficient *material_, bool visc, bool pa,
+                           double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;

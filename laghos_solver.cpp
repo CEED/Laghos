@@ -82,7 +82,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  ParGridFunction &rho0,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
-                                                 bool visc, bool pa)
+                                                 bool visc, bool pa,
+                                                 double cgt, int cgiter)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
@@ -92,7 +93,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
      source_type(source_type_), cfl(cfl_),
-     use_viscosity(visc), p_assembly(pa),
+     use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
      material_pcf(material_),
      Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
      integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
@@ -265,10 +266,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
          cg.SetOperator(VMassPA);
-         //cg.SetRelTol(1e-8);
-         cg.SetRelTol(0.0);
+         cg.SetRelTol(cg_rel_tol);
          cg.SetAbsTol(0.0);
-         cg.SetMaxIter(300);
+         cg.SetMaxIter(cg_max_iter);
          cg.SetPrintLevel(-1);
          timer.sw_cgH1.Start();
          cg.Mult(B, X);
@@ -528,9 +528,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       // Batched computation of material properties.
       ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
 
-      double eig_val_data[3], eig_vec_data[9];
-      Vector compr_dir(eig_vec_data, dim);
-      Vector ph_dir(dim);
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
       {

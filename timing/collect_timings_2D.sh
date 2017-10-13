@@ -2,20 +2,12 @@
 
 options=( 'pa' 'fa' )
 
-problem=0
 parallel_refs=0
 maxL2dof=1000000
-mesh_dim=3
+nproc=4
 
-outfile=timings_${mesh_dim}d
-
-if (( mesh_dim == 2 )); then
-  nproc=16
-  mesh_file=data/square01_quad.mesh
-else
-  nproc=64
-  mesh_file=data/cube01_hex.mesh
-fi
+outfile=timings_2d
+mesh_file=data/square01_quad.mesh
 
 calc() { awk "BEGIN{print $*}"; }
 
@@ -24,8 +16,8 @@ run_case()
     # Pass command as all inputs
     # Outputs: order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate
 
-    "$@" | awk '
-BEGIN { refu= 0 }
+    "$@" | tee run.log | awk '
+BEGIN { ref = 0 }
 /--refine-serial/ { ref += $2 }
 /--refine-parallel/ { ref += $2 }
 /--order/ { order = $2 }
@@ -35,23 +27,23 @@ BEGIN { refu= 0 }
 /CG \(L2\) rate/ { l2_cg_rate = $9 }
 /Forces rate/ { forces_rate = $8 }
 /UpdateQuadData rate/ { update_quad_rate = $8 }
-/Major kernels/ { total_time = $6 }
+/Major kernels total rate/ { total_time = $11 }
 END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f\n", order, ref, h1_dofs, l2_dofs, h1_cg_rate, l2_cg_rate, forces_rate, update_quad_rate, total_time) }'
 }
 
 [ -r $outfile ] && cp $outfile $outfile.bak
-echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[0]}
-echo "# H1order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[1]}
+echo "# order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[0]}
+echo "# order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[1]}
 for method in "${options[@]}"; do
   for torder in {0..4}; do
     for sref in {0..10}; do
-       nzones=$(( (2**mesh_dim)**(sref+1) ))
-       nL2dof=$(( nzones*(torder+1)**mesh_dim ))
+       nzones=$(( 4**(sref+1) ))
+       nL2dof=$(( nzones*(torder+1)**2 ))
        if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
-         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method
-         echo $(run_case mpirun -np $nproc ./bind_ray.sh ./laghos -$method \
-                       -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
-                       --max_steps 1 \
+         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method $outfile"_"${options[0]}
+         echo $(run_case mpirun -np $nproc ./laghos -$method -p 1 -tf 0.8 \
+                       --cg-tol 0 --cg-max-steps 50 \
+                       --max-steps 10 \
                        --mesh $mesh_file \
                        --refine-serial $sref \
                        --refine-parallel $parallel_refs \

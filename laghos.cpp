@@ -83,6 +83,8 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.5;
+   double cg_tol = 1e-8;
+   int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
    bool visualization = false;
@@ -109,7 +111,11 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
-   args.AddOption(&max_tsteps, "-ms", "--max_steps",
+   args.AddOption(&cg_tol, "-cgt", "--cg-tol",
+                  "Relative CG tolerance (velocity linear solve).");
+   args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
+                  "Maximum number of CG iterations (velocity linear solve).");
+   args.AddOption(&max_tsteps, "-ms", "--max-steps",
                   "Maximum number of steps (negative means no restriction).");
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
@@ -314,7 +320,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, material_pcf,
-                                visc, p_assembly);
+                                visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
