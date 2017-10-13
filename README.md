@@ -243,7 +243,16 @@ To make sure the results are correct, we tabulate reference final iterations
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
+## Versions
+
+In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
+the miniapp has the following versions
+
+- A serial version in the [serial](./serial) sub-directory
+- [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on [OCCA](http://libocca.org/)
+
 ## Contact
+
 You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
 comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
 
