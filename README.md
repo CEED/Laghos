@@ -246,10 +246,10 @@ round-off distance from the above reference values.
 ## Versions
 
 In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
-the miniapp has the following versions
+the following versions of Laghos have been developed
 
-- A serial version in the [serial](./serial) sub-directory
-- [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on [OCCA](http://libocca.org/)
+- A serial version in the [serial](./serial) sub-directory.
+- [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on [OCCA](http://libocca.org/).
 
 ## Contact
 
