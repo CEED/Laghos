@@ -1045,7 +1045,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
             for (int i2 = 0; i2 < ndof1D; i2++)
             {
                QQ_Q(k1 + nqp1D*k2, k3) +=
-                     Q_LQ(k1, i2 + k3*ndof1D) * LQs(i2, k2);
+                  Q_LQ(k1, i2 + k3*ndof1D) * LQs(i2, k2);
             }
          }
       }
@@ -1069,7 +1069,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
             for (int k2 = 0; k2 < nqp1D; k2++)
             {
                Q_LQ(k1, i2 + ndof1D*k3) +=
-               QQ_Q(k1 + nqp1D*k2, k3) * LQs(i2, k2);
+                  QQ_Q(k1 + nqp1D*k2, k3) * LQs(i2, k2);
             }
          }
       }
