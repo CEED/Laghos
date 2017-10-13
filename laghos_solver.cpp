@@ -522,7 +522,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             // singular value of the ref->physical Jacobian. In addition, the
             // time step estimate should be aware of the presence of shocks.
             const double h_min =
-                  Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
+               Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
             const double inv_dt = sound_speed / h_min +
                                   2.5 * visc_coeff / rho / h_min / h_min;
             if (min_detJ < 0.0)
