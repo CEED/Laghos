@@ -229,7 +229,7 @@ To make sure the results are correct, we tabulate reference final iterations
 6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
 7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
 
-| run | `step` | `dt` | `e` |
+| `run` | `step` | `dt` | `e` |
 | --- | ------ | ---- | --- |
 |  1. |  339 | 0.000702 | 49.6955373474   |
 |  2. | 1041 | 0.000121 | 3390.9635545471 |
