@@ -145,11 +145,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
-   int glob_z_cnt;
+   int loc_z_cnt = nzones, glob_z_cnt;
    ParMesh *pm = H1FESpace.GetParMesh();
    for (int i = 0; i < nzones; i++) { loc_area += pm->GetElementVolume(i); }
    MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
-   MPI_Allreduce(&nzones, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
+   MPI_Allreduce(&loc_z_cnt, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
    switch (pm->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT:
