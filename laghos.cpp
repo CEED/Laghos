@@ -277,12 +277,12 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize density and  specific internal energy values. We interpolate
-   // in a non-positive basis to get the correct values at the dofs.
-   // Then we do an L2 projection to the positive basis in which we actually
-   // compute. The goal of all this is to get a high-order representation of
-   // the initial condition. Note that this density is a temporary function
-   // and it will not be updated during the time evolution.
+   // Initialize density and specific internal energy values. We interpolate in
+   // a non-positive basis to get the correct values at the dofs.  Then we do an
+   // L2 projection to the positive basis in which we actually compute. The goal
+   // is to get a high-order representation of the initial condition. Note that
+   // this density is a temporary function and it will not be updated during the
+   // time evolution.
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
