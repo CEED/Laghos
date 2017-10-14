@@ -112,7 +112,7 @@ Other computational motives in Laghos include the following:
   versions for quadrilateral and hexahedral elements.
 - The orders of the velocity and position (continuous kinematic space)
   and the internal energy (discontinuous thermodynamic space) are given
-  by the `-ov` and `-ot` input parameters, respectively.
+  by the `-ok` and `-ot` input parameters, respectively.
 
 ## Building
 
@@ -243,12 +243,31 @@ To make sure the results are correct, we tabulate reference final iterations
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
+## Performance Timing and FOM
+
+Each time step in Laghos contains 4 major distinct computations:
+
+1. The inversion of the global kinematic mass matrix (CG H1).
+2. The inversion of the local thermodynamic mass matrices (CG L2).
+3. The force operator evaluation from degrees of freedom to quadrature points (Forces).
+4. The physics kernel in quadrature points (UpdateQuadData).
+
+By default Laghos is instrumented to report the total execution times and rates,
+in terms of millions of degrees of freedom (megadofs), for each of these
+computational phases.
+
+Laghos also reports the total rate for these major kernels, which is a proposed
+**Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
+allocation, the FOM should be reported for different problem sizes and finite
+element orders, as illustrated in the sample scripts in the [timing](./timing)
+directory.
+
 ## Versions
 
 In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
 the following versions of Laghos have been developed
 
-- A serial version in the [serial](./serial) sub-directory.
+- A serial version in the [serial](./serial) directory.
 - [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on [OCCA](http://libocca.org/).
 
 ## Contact

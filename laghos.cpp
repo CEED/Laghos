@@ -83,6 +83,9 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.5;
+   double cg_tol = 1e-8;
+   int cg_max_iter = 300;
+   int max_tsteps = -1;
    bool p_assembly = true;
    bool visualization = false;
    int vis_steps = 5;
@@ -108,6 +111,12 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
+   args.AddOption(&cg_tol, "-cgt", "--cg-tol",
+                  "Relative CG tolerance (velocity linear solve).");
+   args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
+                  "Maximum number of CG iterations (velocity linear solve).");
+   args.AddOption(&max_tsteps, "-ms", "--max-steps",
+                  "Maximum number of steps (negative means no restriction).");
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
@@ -268,12 +277,12 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize density and  specific internal energy values. We interpolate
-   // in a non-positive basis to get the correct values at the dofs.
-   // Then we do an L2 projection to the positive basis in which we actually
-   // compute. The goal of all this is to get a high-order representation of
-   // the initial condition. Note that this density is a temporary function
-   // and it will not be updated during the time evolution.
+   // Initialize density and specific internal energy values. We interpolate in
+   // a non-positive basis to get the correct values at the dofs.  Then we do an
+   // L2 projection to the positive basis in which we actually compute. The goal
+   // is to get a high-order representation of the initial condition. Note that
+   // this density is a temporary function and it will not be updated during the
+   // time evolution.
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -311,7 +320,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, material_pcf,
-                                visc, p_assembly);
+                                visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -363,6 +372,7 @@ int main(int argc, char *argv[])
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
+   int steps = 0;
    BlockVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
@@ -371,6 +381,7 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
+      if (steps == max_tsteps) { last_step = true; }
 
       S_old = S;
       t_old = t;
@@ -379,6 +390,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
+      steps++;
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
@@ -478,6 +490,16 @@ int main(int argc, char *argv[])
          }
       }
    }
+
+   switch (ode_solver_type)
+   {
+      case 2: steps *= 2; break;
+      case 3: steps *= 3; break;
+      case 4: steps *= 4; break;
+      case 6: steps *= 6;
+   }
+   oper.PrintTimingData(mpi.Root(), steps);
+
    if (visualization)
    {
       vis_v.close();
