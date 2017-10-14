@@ -226,7 +226,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    if (!p_assembly)
    {
-      Force = 0.0;      
+      Force = 0.0;
       timer.sw_force.Start();
       Force.Assemble();
       timer.sw_force.Stop();

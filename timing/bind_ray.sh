@@ -21,7 +21,7 @@ fi
 if [ -z "$OMP_NUM_THREADS" ]; then
 
   if [ "$OMPI_COMM_WORLD_RANK" == "0" ]; then
-    echo bind.sh: OMP_NUM_THREADS is not set ... assuming one thread 
+    echo bind.sh: OMP_NUM_THREADS is not set ... assuming one thread
   fi
 
   if [ -z "$BIND_CPU_LIST" ]; then
@@ -41,7 +41,7 @@ if [ -z "$OMP_NUM_THREADS" ]; then
     let stop_cpu=$start_cpu+$cpus_per_rank-1
 
     if [ "${BIND_ALL}" == "yes" ]; then
-      printf -v command "exec taskset -c %d-%d"  $start_cpu  $stop_cpu 
+      printf -v command "exec taskset -c %d-%d"  $start_cpu  $stop_cpu
     else
       printf -v command "exec taskset -c %d"  $start_cpu
     fi
@@ -85,7 +85,7 @@ else
   export OMP_PROC_BIND=true
 
   if [ "${BIND_ALL}" == "yes" ]; then
-    printf -v command "exec taskset -c %d-%d"  $start_cpu  $stop_cpu 
+    printf -v command "exec taskset -c %d-%d"  $start_cpu  $stop_cpu
     $command "$@"
   else
     exec "$@"
