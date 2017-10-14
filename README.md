@@ -249,19 +249,18 @@ Each time step in Laghos contains 4 major distinct computations:
 
 1. The inversion of the global kinematic mass matrix (CG H1).
 2. The inversion of the local thermodynamic mass matrices (CG L2).
-3. The force operator evaluation from degrees of freedom to quadrature points.
-4. The physics kernel in quadrature points.
+3. The force operator evaluation from degrees of freedom to quadrature points (Forces).
+4. The physics kernel in quadrature points (UpdateQuadData).
 
 By default Laghos is instrumented to report the total execution times and rates,
 in terms of millions of degrees of freedom (megadofs), for each of these
 computational phases.
 
 Laghos also reports the total rate for these major kernels, which is a proposed
-**Figure of Merit (FOM)** for benchmarking purposes.
-
-Given a computational allocation, the FOM should be reported for different
-problem sizes and finite element orders, as illustrated in the sample scripts in
-the [timing](./timing) directory.
+**Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
+allocation, the FOM should be reported for different problem sizes and finite
+element orders, as illustrated in the sample scripts in the [timing](./timing)
+directory.
 
 ## Versions
 
