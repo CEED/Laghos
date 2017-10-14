@@ -8,7 +8,7 @@ maxL2dof=1000000
 nproc=16
 
 outfile=timings_2d
-mesh_file=data/square01_quad.mesh
+mesh_file=../data/square01_quad.mesh
 
 calc() { awk "BEGIN{print $*}"; }
 
@@ -42,7 +42,7 @@ for method in "${options[@]}"; do
        nL2dof=$(( nzones*(torder+1)**2 ))
        if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
          echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method
-         echo $(run_case mpirun -np $nproc ./bind_ray.sh ./laghos -$method \
+         echo $(run_case mpirun -np $nproc ./bind_ray.sh ../laghos -$method \
                        -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                        --cg-tol 0 --cg-max-steps 50 \
                        --max-steps 1 \

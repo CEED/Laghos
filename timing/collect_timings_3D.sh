@@ -7,7 +7,7 @@ maxL2dof=1000000
 nproc=8
 
 outfile=timings_3d
-mesh_file=data/cube01_hex.mesh
+mesh_file=../data/cube01_hex.mesh
 
 calc() { awk "BEGIN{print $*}"; }
 
@@ -41,7 +41,7 @@ for method in "${options[@]}"; do
        nL2dof=$(( nzones*(torder+1)**3 ))
        if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
          echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method $outfile"_"${options[0]}
-         echo $(run_case mpirun -np $nproc ./laghos -$method -p 1 -tf 0.8 \
+         echo $(run_case mpirun -np $nproc ../laghos -$method -p 1 -tf 0.8 \
                        --cg-tol 0 --cg-max-steps 50 \
                        --max-steps 10 \
                        --mesh $mesh_file \
