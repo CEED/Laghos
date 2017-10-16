@@ -35,7 +35,7 @@ namespace mfem {
     double startTime;
     double timeTaken;
 
-    int iterations;
+    long iterations;
     long dofs;
 
   public:

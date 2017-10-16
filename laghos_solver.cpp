@@ -42,14 +42,18 @@ namespace mfem {
   }
 
   void Timer::toc() {
-    toc(occa::getDevice());
+    if (!disabled) {
+      toc(occa::getDevice());
+    }
   }
 
   void Timer::toc(occa::device &device) {
-    device.finish();
-    const double endTime = occa::sys::currentTime();
-    timeTaken += (endTime - startTime);
-    ++iterations;
+    if (!disabled) {
+      device.finish();
+      const double endTime = occa::sys::currentTime();
+      timeTaken += (endTime - startTime);
+      ++iterations;
+    }
   }
 
   void Timer::addDofs(const long dofs_) {
@@ -63,24 +67,22 @@ namespace mfem {
       MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
       double maxTimeTaken;
-      double totalIterations;
-      double totalDofs;
+      long totalDofs;
       if (num_procs > 1) {
         MPI_Reduce(&timeTaken , &maxTimeTaken   , 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&iterations, &totalIterations, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&dofs      , &totalDofs      , 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&dofs      , &totalDofs      , 1, MPI_LONG  , MPI_SUM, 0, MPI_COMM_WORLD);
       } else {
         maxTimeTaken = timeTaken;
-        totalIterations = iterations;
         totalDofs = dofs;
       }
       if (mpi_rank == 0) {
         std::string tab(nameFieldLength - (int) name.size(), ' ');
         std::cout << '\n'
-                  << name << tab << " | Time Taken       | " << maxTimeTaken << '\n'
-                  << name << tab << " | Iterations       | " << totalIterations << '\n'
-                  << name << tab << " | Iteration / Time | " << (totalIterations / maxTimeTaken) << '\n'
-                  << name << tab << " | MDofs / Time     | " << (1e-6 * totalDofs / maxTimeTaken) << '\n';
+                  << name << tab << " | Time Taken  | " << maxTimeTaken << '\n'
+                  << name << tab << " | Calls       | " << iterations << '\n'
+                  << name << tab << " | Calls / Sec | " << (iterations / maxTimeTaken) << '\n'
+                  << name << tab << " | MDofs       | " << (1e-6 * totalDofs) << '\n'
+                  << name << tab << " | MDofs / Sec | " << (1e-6 * totalDofs / maxTimeTaken) << '\n';
       }
     }
   }
@@ -346,7 +348,7 @@ namespace mfem {
       timers.force.tic();
       Force.Mult(one, rhs);
       timers.force.toc();
-      timers.force.addDofs(o_H1FESpace.GetGlobalTrueVSize());
+      timers.force.addDofs(o_H1FESpace.GetTrueVSize());
       rhs.Neg();
 
       OccaVector B(o_H1compFESpace.GetTrueVSize());
@@ -388,7 +390,7 @@ namespace mfem {
           cg.Mult(B, X);
           timers.cgH1.toc();
           timers.cgH1.addDofs(cg.GetNumIterations()
-                              * o_H1compFESpace.GetGlobalTrueVSize());
+                              * o_H1compFESpace.GetTrueVSize());
         }
 
         o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
@@ -409,7 +411,7 @@ namespace mfem {
       timers.forceT.tic();
       Force.MultTranspose(v, forceRHS);
       timers.forceT.toc();
-      timers.forceT.addDofs(o_L2FESpace.GetGlobalTrueVSize());
+      timers.forceT.addDofs(o_L2FESpace.GetTrueVSize());
 
       if (e_source) {
         forceRHS += *e_source;
@@ -427,7 +429,7 @@ namespace mfem {
         cg.Mult(forceRHS, de);
         timers.cgL2.toc();
         timers.cgL2.addDofs(cg.GetNumIterations()
-                            * L2FESpace.GlobalTrueVSize());
+                            * L2FESpace.TrueVSize());
       }
 
       delete e_source;

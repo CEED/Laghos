@@ -20,6 +20,8 @@
 
 using namespace std;
 
+MpiOstream mpiout;
+
 namespace mfem {
   namespace hydrodynamics {
     QuadratureData::QuadratureData(int dim,
@@ -122,17 +124,12 @@ namespace mfem {
     }
 
     void OccaMassOperator::Mult(const OccaVector &x, OccaVector &y) const {
+      distX = x;
       if (ess_tdofs_count) {
-        distX = x;
         distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-        x_gf.Distribute(distX);
-      } else {
-        x_gf.Distribute(x);
       }
 
-      massOperator->Mult(x_gf, y_gf);
-
-      fes.GetProlongationOperator()->MultTranspose(y_gf, y);
+      massOperator->Mult(distX, y);
 
       if (ess_tdofs_count) {
         y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);

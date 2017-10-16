@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <iostream>
+#include "mpi_utils.hpp"
 
 namespace mfem {
   namespace hydrodynamics {

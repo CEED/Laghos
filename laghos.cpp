@@ -78,6 +78,8 @@ int main(int argc, char *argv[])
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
 
+   mpiout.setup();
+
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
 
@@ -96,7 +98,10 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    int gfprint = 0;
    const char *basename = "Laghos";
-   const char *device_info = "mode: 'Serial'";
+
+   std::string device_info_str = "mode: 'Serial'";
+   const char *device_info = "";
+   const char *occa_config = "";
    bool occa_verbose = false;
    bool timing = false;
 
@@ -131,6 +136,9 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
   args.AddOption(&device_info, "-d", "--device-info",
                  "Device information to run example on (default: \"mode: 'Serial'\").");
+  args.AddOption(&occa_config,
+                 "-oc", "--occa-config",
+                 "Load OCCA information from the .json config file. --device-info overrides the config");
   args.AddOption(&occa_verbose,
                  "-ov", "--occa-verbose",
                  "--no-ov", "--no-occa-verbose",
@@ -147,6 +155,31 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
    problem = (Problem) intProblem;
+
+   if (strlen(occa_config)) {
+     occa::json config = occa::json::loads(occa_config);
+     if (!config.has("devices")) {
+       std::cout << "Config file \"" << occa_config << "\" does not have 'devices'.\n";
+       return 1;
+     }
+
+     occa::json devices = config["devices"];
+     occa::json specificDevices = config["specificDevices"];
+
+     const std::string mpiRankStr = occa::toString(myid);
+
+     if (specificDevices.has(mpiRankStr)) {
+       device_info_str = specificDevices[mpiRankStr].toString();
+     } else {
+       const int procsPerNode = devices.size();
+       const int deviceID = (myid % procsPerNode);
+       device_info_str = devices[deviceID].toString();
+     }
+
+     device_info = device_info_str.c_str();
+   } else if (!strlen(device_info)) {
+     device_info = device_info_str.c_str();
+   }
 
    // Set the OCCA device to run example in
    occa::setDevice(device_info);
@@ -317,16 +350,14 @@ int main(int argc, char *argv[])
    OccaFiniteElementSpace o_l2_fes(pmesh, &l2_fec, Ordering::byNODES);
 
    ParGridFunction l2_e((ParFiniteElementSpace*) o_l2_fes.GetFESpace());
-   if (problem == sedov)
-   {
-      // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(0, 0, 0.25);
-      l2_e.ProjectCoefficient(e_coeff);
+   if (problem == sedov) {
+     // For the Sedov test, we use a delta function at the origin.
+     DeltaCoefficient e_coeff(0, 0, 0.25);
+     l2_e.ProjectCoefficient(e_coeff);
    }
-   else
-   {
-      FunctionCoefficient e_coeff(e0);
-      l2_e.ProjectCoefficient(e_coeff);
+   else {
+     FunctionCoefficient e_coeff(e0);
+     l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
    o_e_gf = e_gf;
@@ -411,7 +442,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    OccaVector S_old(S);
-   for (int ti = 1; !last_step; ti++)
+   for (int ti = 1; ti <= 10 && !last_step; ti++)
    {
       if (t + dt >= t_final)
       {
