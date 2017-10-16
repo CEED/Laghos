@@ -47,6 +47,8 @@
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
+//    p = 2  --> 1D Sod shock tube.
+//    p = 3  --> Triple point.
 
 
 #include "laghos_solver.hpp"
@@ -81,6 +83,9 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.5;
+   double cg_tol = 1e-8;
+   int cg_max_iter = 300;
+   int max_tsteps = -1;
    bool p_assembly = true;
    bool visualization = false;
    int vis_steps = 5;
@@ -106,6 +111,12 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
+   args.AddOption(&cg_tol, "-cgt", "--cg-tol",
+                  "Relative CG tolerance (velocity linear solve).");
+   args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
+                  "Maximum number of CG iterations (velocity linear solve).");
+   args.AddOption(&max_tsteps, "-ms", "--max-steps",
+                  "Maximum number of steps (negative means no restriction).");
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
@@ -137,7 +148,10 @@ int main(int argc, char *argv[])
    if (p_assembly && dim == 1)
    {
       p_assembly = false;
-      cout << "Full assembly will be used (equivalent to PA in 1D)." << endl;
+      if (mpi.Root())
+      {
+         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+      }
    }
 
    // Parallel partitioning of the mesh.
@@ -263,12 +277,12 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize density and  specific internal energy values. We interpolate
-   // in a non-positive basis to get the correct values at the dofs.
-   // Then we do an L2 projection to the positive basis in which we actually
-   // compute. The goal of all this is to get a high-order representation of
-   // the initial condition. Note that this density is a temporary function
-   // and it will not be updated during the time evolution.
+   // Initialize density and specific internal energy values. We interpolate in
+   // a non-positive basis to get the correct values at the dofs.  Then we do an
+   // L2 projection to the positive basis in which we actually compute. The goal
+   // is to get a high-order representation of the initial condition. Note that
+   // this density is a temporary function and it will not be updated during the
+   // time evolution.
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -306,7 +320,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, material_pcf,
-                                visc, p_assembly);
+                                visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -358,6 +372,7 @@ int main(int argc, char *argv[])
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
+   int steps = 0;
    BlockVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
@@ -366,6 +381,7 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
+      if (steps == max_tsteps) { last_step = true; }
 
       S_old = S;
       t_old = t;
@@ -374,6 +390,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
+      steps++;
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
@@ -442,24 +459,24 @@ int main(int argc, char *argv[])
          if (gfprint)
          {
             ostringstream mesh_name, rho_name, v_name, e_name;
-            mesh_name << basename << "_" << ti << "_"
-                      << "mesh." << setfill('0') << setw(6) << myid;
-            rho_name  << basename << "_" << ti << "_"
-                      << "rho." << setfill('0') << setw(6) << myid;
-            v_name << basename << "_" << ti << "_"
-                   << "v." << setfill('0') << setw(6) << myid;
-            e_name << basename << "_" << ti << "_"
-                   << "e." << setfill('0') << setw(6) << myid;
-
-            ofstream rho_ofs(rho_name.str().c_str());
-            rho_ofs.precision(8);
-            rho_gf.Save(rho_ofs);
-            rho_ofs.close();
+            mesh_name << basename << "_" << ti
+                      << "_mesh." << setfill('0') << setw(6) << myid;
+            rho_name  << basename << "_" << ti
+                      << "_rho." << setfill('0') << setw(6) << myid;
+            v_name << basename << "_" << ti
+                   << "_v." << setfill('0') << setw(6) << myid;
+            e_name << basename << "_" << ti
+                   << "_e." << setfill('0') << setw(6) << myid;
 
             ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
             pmesh->Print(mesh_ofs);
             mesh_ofs.close();
+
+            ofstream rho_ofs(rho_name.str().c_str());
+            rho_ofs.precision(8);
+            rho_gf.Save(rho_ofs);
+            rho_ofs.close();
 
             ofstream v_ofs(v_name.str().c_str());
             v_ofs.precision(8);
@@ -473,6 +490,16 @@ int main(int argc, char *argv[])
          }
       }
    }
+
+   switch (ode_solver_type)
+   {
+      case 2: steps *= 2; break;
+      case 3: steps *= 3; break;
+      case 4: steps *= 4; break;
+      case 6: steps *= 6;
+   }
+   oper.PrintTimingData(mpi.Root(), steps);
+
    if (visualization)
    {
       vis_v.close();
@@ -500,9 +527,9 @@ double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: if (x(0) < 0.5) { return 1.0; }
-         else return 0.1;
+         else { return 0.1; }
       case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-         else return 0.125;
+         else { return 0.125; }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -562,9 +589,9 @@ double e0(const Vector &x)
       }
       case 1: return 0.0; // This case in initialized in main().
       case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-         else return 0.1 / rho0(x) / (gamma(x) - 1.0);
+         else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
       case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-         else return 1.0 / rho0(x) / (gamma(x) - 1.0);
+         else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }

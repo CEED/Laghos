@@ -65,7 +65,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  FiniteElementSpace &l2_fes,
                                                  Array<int> &essential_tdofs,
                                                  GridFunction &rho0,
-                                                 int source_type_, double cfl_, 
+                                                 int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa)
    : TimeDependentOperator(size),
@@ -134,6 +134,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    for (int i = 0; i < nzones; i++) { area += m->GetElementVolume(i); }
    switch (m->GetElementBaseGeometry(0))
    {
+      case Geometry::SEGMENT:
+         quad_data.h0 = area / nzones; break;
       case Geometry::SQUARE:
          quad_data.h0 = sqrt(area / nzones); break;
       case Geometry::TRIANGLE:
@@ -238,7 +240,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg.SetOperator(VMassPA);
          cg.SetRelTol(1e-8);
          cg.SetAbsTol(0.0);
-         cg.SetMaxIter(200);
+         cg.SetMaxIter(300);
          cg.SetPrintLevel(0);
          cg.Mult(rhs_c, dv_c);
       }
@@ -372,10 +374,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    const int nbatches =  nzones / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
    double *gamma_b = new double[nqp_batch],
-          *rho_b = new double[nqp_batch],
-          *e_b   = new double[nqp_batch],
-          *p_b   = new double[nqp_batch],
-          *cs_b  = new double[nqp_batch];
+   *rho_b = new double[nqp_batch],
+   *e_b   = new double[nqp_batch],
+   *p_b   = new double[nqp_batch],
+   *cs_b  = new double[nqp_batch];
    // Jacobians of reference->physical transformations for all quadrature
    // points in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nqp_batch];
@@ -390,6 +392,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          nqp_batch    = nqp * nzones_batch;
       }
 
+      double min_detJ = numeric_limits<double>::infinity();
       for (int z = 0; z < nzones_batch; z++)
       {
          ElementTransformation *T = H1FESpace.GetElementTransformation(z_id);
@@ -414,7 +417,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             T->SetIntPoint(&ip);
             if (!p_assembly) { Jpr_b[z](q) = T->Jacobian(); }
             const double detJ = Jpr_b[z](q).Det();
-            MFEM_VERIFY(detJ > 0.0, "Bad Jacobian determinant: " << detJ);
+            min_detJ = min(min_detJ, detJ);
 
             const int idx = z * nqp + q;
             if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
@@ -453,39 +456,60 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
-            // Length scale at the point. The first eigenvector of the symmetric
-            // velocity gradient gives the direction of maximal compression.
-            // This is used to define the relative change of the initial length
-            // scale.
-            if (p_assembly)
+            double visc_coeff = 0.0;
+            if (use_viscosity)
             {
-               mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity gradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.
+               if (p_assembly)
+               {
+                  mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
+               }
+               else
+               {
+                  v.GetVectorGradient(*T, sgrad_v);
+               }
+               sgrad_v.Symmetrize();
+               double eig_val_data[3], eig_vec_data[9];
+               if (dim==1)
+               {
+                  eig_val_data[0] = sgrad_v(0, 0);
+                  eig_vec_data[0] = 1.;
+               }
+               else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+               Vector compr_dir(eig_vec_data, dim);
+               // Computes the initial->physical transformation Jacobian.
+               mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
+               Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = quad_data.h0 * ph_dir.Norml2() /
+                                compr_dir.Norml2();
+
+               // Measure of maximal compression.
+               const double mu = eig_val_data[0];
+               visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               stress.Add(visc_coeff, sgrad_v);
+            }
+
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const double h_min =
+               Jpr.CalcSingularvalue(dim-1) / (double) H1FESpace.GetOrder(0);
+            const double inv_dt = sound_speed / h_min +
+                                  2.5 * visc_coeff / rho / h_min / h_min;
+            if (min_detJ < 0.0)
+            {
+               // This will force repetition of the step with smaller dt.
+               quad_data.dt_est = 0.0;
             }
             else
             {
-               v.GetVectorGradient(*T, sgrad_v);
-            }
-            sgrad_v.Symmetrize();
-            double eig_val_data[3], eig_vec_data[9];
-            sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data);
-            Vector compr_dir(eig_vec_data, dim);
-            // Computes the initial->physical transformation Jacobian.
-            mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
-            Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-            // Change of the initial mesh size in the compression direction.
-            const double h = quad_data.h0 * ph_dir.Norml2() /
-                             compr_dir.Norml2();
-
-            // Time step estimate at the point.
-            quad_data.dt_est = min(quad_data.dt_est, cfl * h / sound_speed);
-
-            if (use_viscosity)
-            {
-               // Measure of maximal compression.
-               const double mu = eig_val_data[0];
-               double visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
-               stress.Add(visc_coeff, sgrad_v);
+               quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
             }
 
             // Quadrature data for partial assembly of the force operator.

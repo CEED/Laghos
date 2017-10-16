@@ -21,11 +21,11 @@ Laghos is based on the discretization method described in the following article:
 > [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672), <br>
 > *SIAM Journal on Scientific Computing*, (34) 2012, pp.B606–B641.
 
-Laghos captures the basic structure of many other compressible shock
-hydrocodes, including the [BLAST code](http://llnl.gov/casc/blast) at
-[Lawrence Livermore National Laboratory](http://llnl.gov). The miniapp
-is built on top of a general discretization library, [MFEM](http://mfem.org),
-thus separating the pointwise physics from finite element and meshing concerns.
+Laghos captures the basic structure of many compressible shock hydrocodes,
+including the [BLAST code](http://llnl.gov/casc/blast) at [Lawrence Livermore
+National Laboratory](http://llnl.gov). The miniapp is built on top of a general
+discretization library, [MFEM](http://mfem.org), thus separating the pointwise
+physics from finite element and meshing concerns.
 
 The Laghos miniapp is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
 a collection of software benchmarks, miniapps, libraries and APIs for
@@ -43,11 +43,11 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 
 ## Characteristics
 
-In each time step, the problem is ultimately formulated as solving a big system
-of ordinary differential equations (ODE) for the unknown (high-order) velocity,
-internal energy and mesh nodes (position). The left-hand side of this ODE is
-controlled by *mass matrices* (one for velocity and one for energy), while the
-right-hand side is constructed from a *force matrix*.
+The problem that Laghos is solving is formulated as a big (block) system of
+ordinary differential equations (ODEs) for the unknown (high-order) velocity,
+internal energy and mesh nodes (position). The left-hand side of this system of
+ODEs is controlled by *mass matrices* (one for velocity and one for energy),
+while the right-hand side is constructed from a *force matrix*.
 
 Laghos supports two options for deriving and solving the ODE system, namely the
 *full assembly* and the *partial assembly* methods. Partial assembly is the main
@@ -91,9 +91,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 310.
+  starting around line 370.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 258 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 312 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -112,7 +112,7 @@ Other computational motives in Laghos include the following:
   versions for quadrilateral and hexahedral elements.
 - The orders of the velocity and position (continuous kinematic space)
   and the internal energy (discontinuous thermodynamic space) are given
-  by the `-ov` and `-ot` input parameters, respectively.
+  by the `-ok` and `-ot` input parameters, respectively.
 
 ## Building
 
@@ -229,8 +229,8 @@ To make sure the results are correct, we tabulate reference final iterations
 6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
 7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
 
-| run | `step` | `dt` | `e` |
-| --- | ------ | ---- | --- |
+| `run` | `step` | `dt` | `e` |
+| ----- | ------ | ---- | --- |
 |  1. |  339 | 0.000702 | 49.6955373474   |
 |  2. | 1041 | 0.000121 | 3390.9635545471 |
 |  3. | 1150 | 0.002271 | 46.3055694447   |
@@ -243,7 +243,35 @@ To make sure the results are correct, we tabulate reference final iterations
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
+## Performance Timing and FOM
+
+Each time step in Laghos contains 4 major distinct computations:
+
+1. The inversion of the global kinematic mass matrix (CG H1).
+2. The inversion of the local thermodynamic mass matrices (CG L2).
+3. The force operator evaluation from degrees of freedom to quadrature points (Forces).
+4. The physics kernel in quadrature points (UpdateQuadData).
+
+By default Laghos is instrumented to report the total execution times and rates,
+in terms of millions of degrees of freedom (megadofs), for each of these
+computational phases.
+
+Laghos also reports the total rate for these major kernels, which is a proposed
+**Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
+allocation, the FOM should be reported for different problem sizes and finite
+element orders, as illustrated in the sample scripts in the [timing](./timing)
+directory.
+
+## Versions
+
+In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
+the following versions of Laghos have been developed
+
+- A serial version in the [serial](./serial) directory.
+- [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on [OCCA](http://libocca.org/).
+
 ## Contact
+
 You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
 comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
 

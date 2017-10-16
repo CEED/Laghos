@@ -105,7 +105,7 @@ public:
    LagrangianHydroOperator(int size, FiniteElementSpace &h1_fes,
                            FiniteElementSpace &l2_fes,
                            Array<int> &essential_tdofs, GridFunction &rho0,
-                           int source_type_, double cfl_, 
+                           int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa);
 
    // Solve for dx_dt, dv_dt and de_dt.
