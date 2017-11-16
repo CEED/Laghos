@@ -812,31 +812,11 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   if (ess_tdofs)
-   {
-      Vector xx = x;
-      for (int i = 0; i < ess_tdofs->Size(); i++)
-      {
-         const int idx = (*ess_tdofs)[i];
-         xx(idx) = 0.0;
-      }
-      x_gf.Distribute(xx);
-   }
-   else { x_gf.Distribute(x); }
-
+   x_gf.Distribute(x);
    if      (dim == 2) { MultQuad(x_gf, y_gf); }
    else if (dim == 3) { MultHex(x_gf, y_gf); }
    else { MFEM_ABORT("Unsupported dimension"); }
    FESpace.Dof_TrueDof_Matrix()->MultTranspose(y_gf, y);
-
-   if (ess_tdofs)
-   {
-      for (int i = 0; i < ess_tdofs->Size(); i++)
-      {
-         const int idx = (*ess_tdofs)[i];
-         y(idx) = 0.0;
-      }
-   }
 }
 
 // Mass matrix action on quadrilateral elements in 2D

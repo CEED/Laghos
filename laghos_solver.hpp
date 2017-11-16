@@ -107,6 +107,9 @@ protected:
    mutable MassPAOperator VMassPA;
    mutable LocalMassPAOperator locEMassPA;
 
+   // Precomputed Arrays of essential true dofs (one per velocity component).
+   Array<int> *ess_v_tdofs;
+
    // Linear solver for energy.
    CGSolver locCG;
 
