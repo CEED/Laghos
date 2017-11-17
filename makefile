@@ -46,6 +46,9 @@ make style
 
 endef
 
+# print name of current/working directory
+PCWD = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+
 # Default installation location
 PREFIX = ./bin
 INSTALL = /usr/bin/install
@@ -107,20 +110,9 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
-SOURCE_FILES += raja/rbilinearform.cpp raja/rbilininteg.cpp \
-					 raja/rfespace.cpp raja/rgridfunc.cpp raja/rvector.cpp
-SOURCE_FILES += raja/kernels/kForce.c raja/kernels/kMass.c \
-	raja/kernels/vector_map_dofs.c raja/kernels/vector_vec_add.c \
-	raja/kernels/kGlobalToLocal.c raja/kernels/kQuadratureData.c \
-	raja/kernels/vector_min.c raja/kernels/vector_vec_sub.c \
-	raja/kernels/kGridFuncToQuad.c raja/kernels/vector_axpy.c \
-	raja/kernels/vector_neg.c raja/kernels/vector_xpay.c \
-	raja/kernels/kInitGeometryInfo3D.c raja/kernels/vector_clear_dofs.c \
-	raja/kernels/vector_op_eq.c raja/kernels/vector_xsy.c \
-	raja/kernels/kLocalToGlobal.c raja/kernels/vector_dot.c \
-	raja/kernels/vector_set_subvector.c raja/kernels/kMapping.c \
-	raja/kernels/vector_get_subvector.c \
-	raja/kernels/vector_set_subvector_const.c
+SOURCE_FILES += $(wildcard $(PCWD)/raja/*.cpp)
+SOURCE_FILES += $(wildcard $(PCWD)/raja/kernels/*.c)
+
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
