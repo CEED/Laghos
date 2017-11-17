@@ -13,27 +13,27 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_GRIDFUNCTION
-#define MFEM_RAJA_GRIDFUNCTION
+#include "defines.h"
 
-namespace mfem {
-
-class RajaGridFunction : public RajaVector {
- public:
-  const RajaFiniteElementSpace& fes;
- public:
-  RajaGridFunction(const RajaFiniteElementSpace& f):
-    RajaVector(f.GetVSize()),fes(f) {}
-  RajaGridFunction(const RajaFiniteElementSpace& f,const RajaVectorRef ref):
-    RajaVector(ref), fes(f) {}
-  void ToQuad(const IntegrationRule&,RajaVector&);
-
-  RajaGridFunction& operator=(const RajaVector& v) {
-    RajaVector::operator=(v);
-    return *this;
+// *****************************************************************************
+void kGlobalToLocal(const int NUM_VDIM,
+                    const bool VDIM_ORDERING,
+                    const int globalEntries,
+                    const int localEntries,
+                    const int* offsets,
+                    const int* indices,
+                    const double* globalX,
+                    double* __restrict localX) {
+  for (int i = 0; i < globalEntries; ++i) {
+    const int offset = offsets[i];
+    const int nextOffset = offsets[i + 1];
+    for (int v = 0; v < NUM_VDIM; ++v) {
+      const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
+      const double dofValue = globalX[g_offset];
+      for (int j = offset; j < nextOffset; ++j) {
+        const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
+        localX[l_offset] = dofValue;
+      }
+    }
   }
-};
-
-} // mfem
-
-#endif
+}

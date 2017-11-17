@@ -77,13 +77,14 @@ void RajaBilinearForm::FormOperator(const Array<int>& constraintList,
   const Operator* trialP = trialFes->GetProlongationOperator();
   const Operator* testP  = testFes->GetProlongationOperator();
   Operator* rap = this;
-  if (trialP) { rap = new RajaRAPOperator(*testP, *this, *trialP); }
-  Aout = new RajaConstrainedOperator(rap, constraintList, rap!=this);
+//  Vector 
+  if (trialP) { rap = new /*Raja*/RAPOperator(*testP, *this, *trialP); }
+  Aout = new /*Raja*/ConstrainedOperator(rap, constraintList, rap!=this);
 }
 
 // ***************************************************************************
 void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
-                               RajaVector& x, RajaVector& b,
+                               const RajaVector& x, const RajaVector& b,
                                Operator* A,
                                RajaVector& X, RajaVector& B,
                                int copy_interior) {
@@ -92,9 +93,11 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
   if (P) {
     // Variational restriction with P
     B.SetSize(P->Width());
-    P->MultTranspose(b, B);
+    Vector _B(B);
+    P->MultTranspose(b, _B);
     X.SetSize(R->Height());
-    R->Mult(x, X);
+    Vector _X(X);
+    R->Mult(x, _X);
   } else {
     // rap, X and B point to the same data as this, x and b
     X.SetSize(x.Size(),x);
@@ -132,9 +135,9 @@ void RajaBilinearForm::MultTranspose(const RajaVector& x, RajaVector& y) const {
 
 // ***************************************************************************
 void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
-    const RajaVector& b,
-    RajaVector& x) {
-  TRecoverFEMSolution<RajaVector>(X, b, x);
+                                          const RajaVector& b,
+                                          RajaVector& x) {
+  TRecoverFEMSolution<RajaVector> (X, b, x);
 }
 
 
@@ -142,8 +145,8 @@ void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
 // * RajaConstrainedOperator
 // ***************************************************************************
 RajaConstrainedOperator::RajaConstrainedOperator(Operator* A_,
-    const Array<int>& constraintList_,
-    bool own_A_) :
+                                                 const Array<int>& constraintList_,
+                                                 bool own_A_) :
   Operator(A_->Height(), A_->Width()) {
   Setup(A_, constraintList_, own_A_);
 }
@@ -162,7 +165,7 @@ void RajaConstrainedOperator::Setup(Operator* A_,
 }
 
 void RajaConstrainedOperator::EliminateRHS(const RajaVector& x,
-    RajaVector& b) const {
+                                           RajaVector& b) const {
   w = 0.0;
   A->Mult(w, z);
   b -= z;

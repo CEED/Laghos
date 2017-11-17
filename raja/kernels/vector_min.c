@@ -13,27 +13,11 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_GRIDFUNCTION
-#define MFEM_RAJA_GRIDFUNCTION
-
-namespace mfem {
-
-class RajaGridFunction : public RajaVector {
- public:
-  const RajaFiniteElementSpace& fes;
- public:
-  RajaGridFunction(const RajaFiniteElementSpace& f):
-    RajaVector(f.GetVSize()),fes(f) {}
-  RajaGridFunction(const RajaFiniteElementSpace& f,const RajaVectorRef ref):
-    RajaVector(ref), fes(f) {}
-  void ToQuad(const IntegrationRule&,RajaVector&);
-
-  RajaGridFunction& operator=(const RajaVector& v) {
-    RajaVector::operator=(v);
-    return *this;
+double vector_min(const int entries,
+                  const double* vec) {
+  double r_red = vec[0];
+  for (int i=0; i<entries; ++i) {
+    r_red = (r_red<vec[i]) ? r_red : vec[i];
   }
-};
-
-} // mfem
-
-#endif
+  return r_red;
+}

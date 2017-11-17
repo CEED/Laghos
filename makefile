@@ -52,6 +52,7 @@ INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
 MFEM_DIR = ../mfem
+MFEM_DIR = /home/camier1/home/mfem/mfem-okina
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -106,6 +107,20 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
+SOURCE_FILES += raja/rbilinearform.cpp raja/rbilininteg.cpp \
+					 raja/rfespace.cpp raja/rgridfunc.cpp raja/rvector.cpp
+SOURCE_FILES += raja/kernels/kForce.c raja/kernels/kMass.c \
+	raja/kernels/vector_map_dofs.c raja/kernels/vector_vec_add.c \
+	raja/kernels/kGlobalToLocal.c raja/kernels/kQuadratureData.c \
+	raja/kernels/vector_min.c raja/kernels/vector_vec_sub.c \
+	raja/kernels/kGridFuncToQuad.c raja/kernels/vector_axpy.c \
+	raja/kernels/vector_neg.c raja/kernels/vector_xpay.c \
+	raja/kernels/kInitGeometryInfo3D.c raja/kernels/vector_clear_dofs.c \
+	raja/kernels/vector_op_eq.c raja/kernels/vector_xsy.c \
+	raja/kernels/kLocalToGlobal.c raja/kernels/vector_dot.c \
+	raja/kernels/vector_set_subvector.c raja/kernels/kMapping.c \
+	raja/kernels/vector_get_subvector.c \
+	raja/kernels/vector_set_subvector_const.c
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
@@ -149,10 +164,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-clean: clean-build clean-exec
+clean cln: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM
+	rm -rf laghos *.o *~ *.dSYM raja/*.o raja/kernels/*.o
 clean-exec:
 	rm -rf ./results
 

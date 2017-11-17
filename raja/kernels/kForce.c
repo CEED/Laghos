@@ -16,19 +16,19 @@
 #include "defines.h"
 
 // *****************************************************************************
-extern "C" void kForceMult2D(const int NUM_DIM,
-                             const int NUM_DOFS_1D,
-                             const int NUM_QUAD_1D,
-                             const int NUM_QUAD_2D,
-                             const int L2_DOFS_1D,
-                             const int H1_DOFS_1D,
-                             const int numElements,
-                             const double* L2DofToQuad,
-                             const double* H1QuadToDof,
-                             const double* H1QuadToDofD,
-                             const double* stressJinvT,
-                             const double* e,
-                             double* __restrict v) {
+void kForceMult2D(const int NUM_DIM,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int NUM_QUAD_2D,
+                  const int L2_DOFS_1D,
+                  const int H1_DOFS_1D,
+                  const int numElements,
+                  const double* L2DofToQuad,
+                  const double* H1QuadToDof,
+                  const double* H1QuadToDofD,
+                  const double* stressJinvT,
+                  const double* e,
+                  double* __restrict v) {
   for (int el = 0; el < numElements; ++el) {
     double e_xy[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
@@ -86,19 +86,19 @@ extern "C" void kForceMult2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-extern "C" void kForceMultTranspose2D(const int NUM_DIM,
-                                      const int NUM_DOFS_1D,
-                                      const int NUM_QUAD_1D,
-                                      const int NUM_QUAD_2D,
-                                      const int L2_DOFS_1D,
-                                      const int H1_DOFS_1D,
-                                      const int numElements,
-                                      const double* L2QuadToDof,
-                                      const double* H1DofToQuad,
-                                      const double* H1DofToQuadD,
-                                      const double* stressJinvT,
-                                      const double* v,
-                                      double* __restrict e) {
+void kForceMultTranspose2D(const int NUM_DIM,
+                           const int NUM_DOFS_1D,
+                           const int NUM_QUAD_1D,
+                           const int NUM_QUAD_2D,
+                           const int L2_DOFS_1D,
+                           const int H1_DOFS_1D,
+                           const int numElements,
+                           const double* L2QuadToDof,
+                           const double* H1DofToQuad,
+                           const double* H1DofToQuadD,
+                           const double* stressJinvT,
+                           const double* v,
+                           double* __restrict e) {
   for (int el = 0; el < numElements; ++el) {
     double vStress[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
@@ -168,20 +168,20 @@ extern "C" void kForceMultTranspose2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-extern "C" void kForceMult3D(const int NUM_DIM,
-                             const int NUM_DOFS_1D,
-                             const int NUM_QUAD_1D,
-                             const int NUM_QUAD_2D,
-                             const int NUM_QUAD_3D,
-                             const int L2_DOFS_1D,
-                             const int H1_DOFS_1D,
-                             const int numElements,
-                             const double* L2DofToQuad,
-                             const double* H1QuadToDof,
-                             const double* H1QuadToDofD,
-                             const double* stressJinvT,
-                             const double* e,
-                             double* __restrict v) {
+void kForceMult3D(const int NUM_DIM,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int NUM_QUAD_2D,
+                  const int NUM_QUAD_3D,
+                  const int L2_DOFS_1D,
+                  const int H1_DOFS_1D,
+                  const int numElements,
+                  const double* L2DofToQuad,
+                  const double* H1QuadToDof,
+                  const double* H1QuadToDofD,
+                  const double* stressJinvT,
+                  const double* e,
+                  double* __restrict v) {
   for (int el = 0; el < numElements; ++el) {
     double e_xyz[NUM_QUAD_3D];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
@@ -280,20 +280,20 @@ extern "C" void kForceMult3D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-extern "C" void kForceMultTranspose3D(const int NUM_DIM,
-                                      const int NUM_DOFS_1D,
-                                      const int NUM_QUAD_1D,
-                                      const int NUM_QUAD_2D,
-                                      const int NUM_QUAD_3D,
-                                      const int L2_DOFS_1D,
-                                      const int H1_DOFS_1D,
-                                      const int numElements,
-                                      const double* L2QuadToDof,
-                                      const double* H1DofToQuad,
-                                      const double* H1DofToQuadD,
-                                      const double* stressJinvT,
-                                      const double* v,
-                                      double* __restrict e) {
+void kForceMultTranspose3D(const int NUM_DIM,
+                           const int NUM_DOFS_1D,
+                           const int NUM_QUAD_1D,
+                           const int NUM_QUAD_2D,
+                           const int NUM_QUAD_3D,
+                           const int L2_DOFS_1D,
+                           const int H1_DOFS_1D,
+                           const int numElements,
+                           const double* L2QuadToDof,
+                           const double* H1DofToQuad,
+                           const double* H1DofToQuadD,
+                           const double* stressJinvT,
+                           const double* v,
+                           double* __restrict e) {
   for (int el = 0; el < numElements; ++el) {
     double vStress[NUM_QUAD_3D];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
