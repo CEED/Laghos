@@ -48,6 +48,7 @@ endef
 
 # print name of current/working directory
 PCWD = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # Default installation location
 PREFIX = ./bin
@@ -82,7 +83,7 @@ CXXFLAGS = $(MFEM_CXXFLAGS)
 
 # MFEM config does not define C compiler
 CC     = gcc
-CFLAGS = -O3
+CFLAGS = -O3 -Wall
 
 # Optional link flags
 LDFLAGS =
@@ -97,6 +98,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
+CXXFLAGS += -g -Wall -fno-omit-frame-pointer
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 LAGHOS_LIBS = $(MFEM_LIBS)
@@ -110,8 +112,8 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
-SOURCE_FILES += $(wildcard $(PCWD)/raja/*.cpp)
 SOURCE_FILES += $(wildcard $(PCWD)/raja/kernels/*.c)
+SOURCE_FILES += $(wildcard $(PCWD)/raja/*.cpp)
 
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
@@ -127,11 +129,13 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
+
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(CCC) -Wall -o laghos $(OBJECT_FILES) $(LIBS)
 
 all: laghos
+#	@$(MAKE) -j $(CPU) laghos
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"

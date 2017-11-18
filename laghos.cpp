@@ -197,8 +197,8 @@ int main(int argc, char *argv[])
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+   RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -219,11 +219,11 @@ int main(int argc, char *argv[])
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
-      case 1: ode_solver = new ForwardEulerSolver; break;
-      case 2: ode_solver = new RK2Solver(0.5); break;
-      case 3: ode_solver = new RK3SSPSolver; break;
-      case 4: ode_solver = new RK4Solver; break;
-      case 6: ode_solver = new RK6Solver; break;
+      case 1: ode_solver = new RajaForwardEulerSolver; break;
+      case 2: ode_solver = new RajaRK2Solver(0.5); break;
+      case 3: ode_solver = new RajaRK3SSPSolver; break;
+      case 4: ode_solver = new RajaRK4Solver; break;
+      case 6: ode_solver = new RajaRK6Solver; break;
       default:
          if (myid == 0)
          {
@@ -258,24 +258,29 @@ int main(int argc, char *argv[])
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   BlockVector S(true_offset);
+   RajaVector S(true_offset[3]);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
-   x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
+   ParGridFunction x_gf(&H1FESpace);
+   ParGridFunction v_gf(&H1FESpace);
+   ParGridFunction e_gf(&L2FESpace);
+
+   RajaGridFunction o_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
+   RajaGridFunction o_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
+   RajaGridFunction o_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
+   o_x_gf = x_gf;
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   o_v_gf = v_gf;
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -286,10 +291,12 @@ int main(int argc, char *argv[])
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+   RajaFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
+   RajaGridFunction o_rho(L2FESpace);
+   o_rho = rho;
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -302,12 +309,13 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   o_e_gf = e_gf;
 
    // Space-dependent ideal gas coefficient over the Lagrangian mesh.
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc;
+   int source = 0; bool visc=false;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
@@ -319,7 +327,7 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, material_pcf,
+                                ess_tdofs, o_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
@@ -373,7 +381,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   BlockVector S_old(S);
+   RajaVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -410,11 +418,12 @@ int main(int argc, char *argv[])
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       // Make sure that the mesh corresponds to the new solution state.
+      x_gf = o_x_gf;
       pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double loc_norm = e_gf * e_gf, tot_norm;
+         double loc_norm = o_e_gf * o_e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
          if (mpi.Root())

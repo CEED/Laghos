@@ -77,9 +77,8 @@ void RajaBilinearForm::FormOperator(const Array<int>& constraintList,
   const Operator* trialP = trialFes->GetProlongationOperator();
   const Operator* testP  = testFes->GetProlongationOperator();
   Operator* rap = this;
-//  Vector 
-  if (trialP) { rap = new /*Raja*/RAPOperator(*testP, *this, *trialP); }
-  Aout = new /*Raja*/ConstrainedOperator(rap, constraintList, rap!=this);
+  if (trialP) { rap = new RajaRAPOperator(*testP, *this, *trialP); }
+  Aout = new RajaConstrainedOperator(rap, constraintList, rap!=this);
 }
 
 // ***************************************************************************
@@ -93,11 +92,9 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
   if (P) {
     // Variational restriction with P
     B.SetSize(P->Width());
-    Vector _B(B);
-    P->MultTranspose(b, _B);
+    P->MultTranspose(b, B);
     X.SetSize(R->Height());
-    Vector _X(X);
-    R->Mult(x, _X);
+    R->Mult(x, X);
   } else {
     // rap, X and B point to the same data as this, x and b
     X.SetSize(x.Size(),x);

@@ -18,6 +18,8 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
+#include "raja/raja.hpp"
+
 #include "laghos_assembly.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -68,9 +70,9 @@ struct TimingData
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
-   ParFiniteElementSpace &H1FESpace;
-   ParFiniteElementSpace &L2FESpace;
-   mutable ParFiniteElementSpace H1compFESpace;
+   RajaFiniteElementSpace &H1FESpace;
+   RajaFiniteElementSpace &L2FESpace;
+   mutable RajaFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
@@ -80,11 +82,6 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    Coefficient *material_pcf;
-
-   // Velocity mass matrix and local inverses of the energy mass matrices. These
-   // are constant in time, due to the pointwise mass conservation property.
-   mutable ParBilinearForm Mv;
-   DenseTensor Me_inv;
 
    // Integration rule for all assemblies.
    const IntegrationRule &integ_rule;
@@ -97,18 +94,8 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it's used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force;
-
-   // Same as above, but done through partial assembly.
-   ForcePAOperator ForcePA;
-
-   // Mass matrices done through partial assembly:
-   // velocity (coupled H1 assembly) and energy (local L2 assemblies).
-   mutable MassPAOperator VMassPA;
-   mutable LocalMassPAOperator locEMassPA;
-
-   // Precomputed Arrays of essential true dofs (one per velocity component).
-   Array<int> *ess_v_tdofs;
+   mutable RajaMassOperator VMassPA, EMassPA;
+   mutable RajaForceOperator ForcePA;
 
    // Linear solver for energy.
    CGSolver locCG;
@@ -126,21 +113,21 @@ protected:
       }
    }
 
-   void UpdateQuadratureData(const Vector &S) const;
+  void UpdateQuadratureData(const RajaVector &S) const;
 
 public:
-   LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
-                           ParFiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, ParGridFunction &rho0,
+   LagrangianHydroOperator(int size, RajaFiniteElementSpace &h1_fes,
+                           RajaFiniteElementSpace &l2_fes,
+                           Array<int> &essential_tdofs, RajaGridFunction &rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
                            double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
-   virtual void Mult(const Vector &S, Vector &dS_dt) const;
+   virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
-   double GetTimeStepEstimate(const Vector &S) const;
+   double GetTimeStepEstimate(const RajaVector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { quad_data_is_current = false; }
 
@@ -150,7 +137,7 @@ public:
 
    void PrintTimingData(bool IamRoot, int steps);
 
-   ~LagrangianHydroOperator();
+   ~LagrangianHydroOperator() {}
 };
 
 class TaylorCoefficient : public Coefficient
