@@ -129,13 +129,12 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
+all: 
+	@$(MAKE) -j $(CPU) laghos
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(CCC) -Wall -o laghos $(OBJECT_FILES) $(LIBS)
-
-all: laghos
-#	@$(MAKE) -j $(CPU) laghos
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
