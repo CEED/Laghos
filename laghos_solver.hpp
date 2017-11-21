@@ -70,7 +70,6 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
-   mutable ParFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
@@ -106,9 +105,6 @@ protected:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    mutable MassPAOperator VMassPA;
    mutable LocalMassPAOperator locEMassPA;
-
-   // Precomputed Arrays of essential true dofs (one per velocity component).
-   Array<int> *ess_v_tdofs;
 
    // Linear solver for energy.
    CGSolver locCG;

@@ -167,8 +167,6 @@ private:
    QuadratureData *quad_data;
    ParFiniteElementSpace &FESpace;
 
-   mutable ParGridFunction x_gf, y_gf;
-
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
    // Mass matrix action on hexahedral elements in 3D.
@@ -176,14 +174,18 @@ private:
 
 public:
    MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : Operator(fes.TrueVSize()),
+      : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes),
-        x_gf(&fes), y_gf(&fes)
+        quad_data(quad_data_), FESpace(fes)
    { }
 
-   // Mass matrix action. We work with one velocity component at a time.
+   // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
+
+   virtual const Operator *GetProlongation() const
+   { return FESpace.GetProlongationMatrix(); }
+   virtual const Operator *GetRestriction() const
+   { return FESpace.GetRestrictionMatrix(); }
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.
