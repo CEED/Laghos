@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
+   int partition_type = 222;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -131,6 +132,8 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&partition_type, "-pt", "--partition",
+                  "Customized x/y/z partition of the initial mesh.");
    args.Parse();
    if (!args.Good())
    {
@@ -157,13 +160,47 @@ int main(int argc, char *argv[])
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
-   const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
    int *nxyz = new int[dim];
-   int product = 1;
-   for (int d = 0; d < dim; d++)
+   switch (partition_type)
    {
-      nxyz[d] = partitions;
-      product *= partitions;
+      case 22:
+      case 222:
+      {
+         const int part = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+         for (int d = 0; d < dim; d++) { nxyz[d] = part; }
+         break;
+      }
+      case 322: // 3D.
+      {
+         const int min_part = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 3 * min_part / 2;
+         nxyz[1] = min_part;
+         nxyz[2] = min_part;
+         break;
+      }
+      case 432: // 3D.
+      {
+         const int min_part = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 2 * min_part;
+         nxyz[1] = 3 * min_part / 2;
+         nxyz[2] = min_part;
+         break;
+      }
+      default:
+         if (myid == 0)
+         {
+            cout << "Unknown partition type: " << partition_type << '\n';
+         }
+         delete mesh;
+         MPI_Finalize();
+         return 3;
+   }
+   int product = 1;
+   for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
+   if (my_id == 0)
+   {
+      cout << nxyz[0] << " " << nxyz[1] << " " << nxyz[2] << " "
+           << product << " " << num_tasks << endl;
    }
    if (product == num_tasks)
    {
