@@ -29,12 +29,10 @@ vertices
 
 nodes
 FiniteElementSpace
-FiniteElementCollection: H1_1D_P2
+FiniteElementCollection: Linear
 VDim: 1
-Ordering: 1
+Ordering: 0
 
 0
 0.5
 1
-0.25
-0.75
