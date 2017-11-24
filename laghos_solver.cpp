@@ -408,7 +408,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << 1e-6 * alldata[1] / rt_max[3] << endl;
+           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
@@ -609,7 +609,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    quad_data_is_current = true;
 
    timer.sw_qdata.Stop();
-   timer.quad_tstep += nzones * nqp;
+   timer.quad_tstep += nzones;
 }
 
 } // namespace hydrodynamics
