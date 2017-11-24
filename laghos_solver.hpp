@@ -54,13 +54,13 @@ struct TimingData
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
    // These accumulate the total processed dofs or quad points:
-   // #dofs  * #(CG iterations) for the CG solves (H1 and L2).
-   // #dofs  * #(RK sub steps) for the Force application and assembly.
+   // #(CG iterations) for the H1 CG solve.
+   // #dofs  * #(CG iterations) for the L2 CG solve.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   long long int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
+   int H1cg_iter, L2dof_iter, quad_tstep;
 
    TimingData()
-      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) { }
+      : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary

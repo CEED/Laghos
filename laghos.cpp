@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
    }
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   if (my_id == 0)
+   if (myid == 0)
    {
       cout << nxyz[0] << " " << nxyz[1] << " " << nxyz[2] << " "
            << product << " " << num_tasks << endl;
