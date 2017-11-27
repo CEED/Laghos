@@ -168,6 +168,7 @@ int main(int argc, char *argv[])
       {
          const int part = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
          for (int d = 0; d < dim; d++) { nxyz[d] = part; }
+         if (dim == 2) { nxyz[2] = 0; }
          break;
       }
       case 322: // 3D.
@@ -228,6 +229,13 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+
+   int nzones = pmesh->GetNE(), nzones_min, nzones_max;
+   MPI_Reduce(&nzones, &nzones_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
+   MPI_Reduce(&nzones, &nzones_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
+   if (myid == 0)
+   { cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl; }
+
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
