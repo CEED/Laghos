@@ -381,15 +381,16 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
-   int mydata[2], alldata[2];
+   HYPRE_Int mydata[2], alldata[2];
    mydata[0] = timer.L2dof_iter;
    mydata[1] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 2, MPI_INT, MPI_SUM, 0, H1FESpace.GetComm());
+   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0,
+              H1FESpace.GetComm());
 
    if (IamRoot)
    {
-      const int H1gsize = H1FESpace.GlobalTrueVSize(),
-                L2gsize = L2FESpace.GlobalTrueVSize();
+      const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
+                      L2gsize = L2FESpace.GlobalTrueVSize();
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;

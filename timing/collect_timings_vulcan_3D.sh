@@ -7,7 +7,7 @@
 #   with the 322 partition, use 6/48/384/3072/24576(full machine) nodes.
 part_type=432
 nodes=6144
-minL2dof_node=100
+minL2dof_node=50
 maxL2dof_node=200000
 # End of user input.
 
@@ -34,7 +34,8 @@ echo "sref: "$sref "serial_nzones: "$(( nzones0 * 8**(sref) )) "nproc: "$nproc
 minL2dof=$(( minL2dof_node * nodes ))
 maxL2dof=$(( maxL2dof_node * nodes ))
 
-options=( 'pa' 'fa' )
+#options=( 'pa' 'fa' )
+options=( 'pa' )
 outfile=timings_3d
 
 run_case()
