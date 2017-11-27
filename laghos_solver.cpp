@@ -103,6 +103,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      VMassPA(&quad_data, H1FESpace), locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
+   cout << nzones << endl;
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
