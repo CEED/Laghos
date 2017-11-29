@@ -45,6 +45,7 @@ class RajaVector {
   RajaVector& operator = (double value);
   RajaVector& operator -= (const RajaVector& v);
   RajaVector& operator += (const RajaVector& v);
+  RajaVector& operator *=(const double d);
   RajaVector& Add(const double a, const RajaVector& Va);
   void Neg();
   RajaVectorRef GetRange(const size_t, const size_t) const;

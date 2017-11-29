@@ -91,6 +91,13 @@ RajaVector& RajaVector::operator+=(const RajaVector& v) {
 }
 
 // ***************************************************************************
+RajaVector& RajaVector::operator*=(const double d) {
+  for (size_t i=0; i<size; i+=1)
+    data[i]*=d;
+  return *this;
+}
+
+// ***************************************************************************
 RajaVector& RajaVector::Add(const double a, const RajaVector& Va) {
   vector_axpy(Size(),a, data, Va);
   return *this;
