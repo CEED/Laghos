@@ -13,8 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef OKINA_RAJA_ARRAY_HEADER
-#define OKINA_RAJA_ARRAY_HEADER
+#ifndef MFEM_RAJA_ARRAY
+#define MFEM_RAJA_ARRAY
 
 namespace mfem {
 
@@ -91,5 +91,5 @@ template <class T> class RajaArray<T,false> {
 
 } // mfem
 
-#endif // OKINA_RAJA_ARRAY_HEADER
+#endif // MFEM_RAJA_ARRAY
 

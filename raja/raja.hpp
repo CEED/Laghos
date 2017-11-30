@@ -13,14 +13,14 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_RAJA_H
-#define LAGHOS_RAJA_H
+#ifndef MFEM_RAJA
+#define MFEM_RAJA
 
 // Debug & Assert **************************************************************
 #undef NDEBUG
 #include "assert.h"
 
-// OKINA Kernels ***************************************************************
+// External Kernels ************************************************************
 #include "kernels/kernels.h"
 
 // MFEM/fem  *******************************************************************
@@ -35,5 +35,5 @@
 #include "rgridfunc.hpp"
 #include "rbilininteg.hpp"
 
-#endif // LAGHOS_RAJA_H
+#endif // MFEM_RAJA
 
