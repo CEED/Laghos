@@ -61,11 +61,7 @@ extern "C" {
                          double* restrict out);
 
   // kQuadratureData ***********************************************************
-  void kInitQuadratureData(const double GAMMA,
-                           const double H0,
-                           const double CFL,
-                           const bool USE_VISCOSITY,
-                           const int NUM_QUAD,
+  void kInitQuadratureData(const int NUM_QUAD,
                            const int numElements,
                            const double* rho0,
                            const double* detJ,

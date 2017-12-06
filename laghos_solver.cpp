@@ -144,11 +144,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
 
-   kInitQuadratureData(5./3.,//gamma,
-                       quad_data.h0,
-                       cfl,
-                       use_viscosity,
-                       NUM_QUAD,
+   kInitQuadratureData(NUM_QUAD,
                        nzones,
                        (const double*)rhoValues.ptr(),
                        (const double*)quad_data.geom.detJ.ptr(),
