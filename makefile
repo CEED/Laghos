@@ -56,6 +56,7 @@ INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
 MFEM_DIR = ../mfem
+MFEM_DIR = ../mfem-raja
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
