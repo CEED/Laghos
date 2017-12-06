@@ -13,9 +13,10 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.h"
+#include "defines.hpp"
 
 // *****************************************************************************
+extern "C"
 void kMassAssemble2D(const int NUM_QUAD_2D,
                      const int numElements,
                      const double* quadWeights,
@@ -35,6 +36,7 @@ void kMassAssemble2D(const int NUM_QUAD_2D,
 }
 
 // *****************************************************************************
+extern "C"
 void kMassMultAdd2D(const int NUM_DOFS_1D,
                     const int NUM_QUAD_1D,
                     const int numElements,
@@ -98,6 +100,7 @@ void kMassMultAdd2D(const int NUM_DOFS_1D,
 
 
 // *****************************************************************************
+extern "C"
 void kMassAssemble3D(const int NUM_QUAD_3D,
                      const double COEFF,
                      const int numElements,
@@ -124,6 +127,7 @@ void kMassAssemble3D(const int NUM_QUAD_3D,
 }
 
 // *****************************************************************************
+extern "C"
 void kMassMultAdd3D(const int NUM_QUAD_1D,
                     const int NUM_DOFS_1D,
                     const int numElements,

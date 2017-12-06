@@ -16,12 +16,17 @@
 #ifndef MFEM_RAJA
 #define MFEM_RAJA
 
+// RAJA ************************************************************************
+#include "RAJA/RAJA.hpp"
+#include "RAJA/index/RangeSegment.hpp"
+#include "RAJA/util/defines.hpp"
+
 // Debug & Assert **************************************************************
 #undef NDEBUG
 #include "assert.h"
 
 // External Kernels ************************************************************
-#include "kernels/kernels.h"
+#include "kernels/kernels.hpp"
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"

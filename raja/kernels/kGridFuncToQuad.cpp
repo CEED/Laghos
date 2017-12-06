@@ -13,9 +13,10 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.h"
+#include "defines.hpp"
 
 // *****************************************************************************
+extern "C"
 void kGridFuncToQuad1D(const int NUM_VDIM,
                        const int NUM_DOFS_1D,
                        const int NUM_QUAD_1D,
@@ -50,6 +51,7 @@ void kGridFuncToQuad1D(const int NUM_VDIM,
 }
 
 // *****************************************************************************
+extern "C"
 void kGridFuncToQuad2D(const int NUM_VDIM,
                        const int NUM_DOFS_1D,
                        const int NUM_QUAD_1D,
@@ -107,6 +109,7 @@ void kGridFuncToQuad2D(const int NUM_VDIM,
 }
 
 // *****************************************************************************
+extern "C"
 void kGridFuncToQuad3D(const int NUM_VDIM,
                        const int NUM_DOFS_1D,
                        const int NUM_QUAD_1D,

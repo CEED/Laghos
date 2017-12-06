@@ -20,26 +20,6 @@
 
 extern "C" {
 
-  // **** linalg ***************************************************************
-  void vector_neg(const int, double* restrict);
-  void vector_op_eq(const int, const double, double* restrict);
-  void vector_xpay(const int, const double, double* restrict, const double*,
-                   const double*);
-  void vector_xsy(const int, double* restrict, const double*, const double*);
-  void vector_axpy(const int, const double, double* restrict, const double*);
-  void vector_map_dofs(const int, double* restrict, const double*, const int*);
-  void vector_clear_dofs(const int, double* restrict, const int*);
-  void vector_vec_sub(const int, double* restrict, const double*);
-  void vector_vec_add(const int, double* restrict, const double*);
-  void vector_set_subvector(const int, double* restrict, const double*,
-                            const int*);
-  void vector_get_subvector(const int, double* restrict, const double*,
-                            const int*);
-  void vector_set_subvector_const(const int, const double, double* restrict,
-                                  const int*);
-  double vector_dot(const int, const double*, const double*);
-  double vector_min(const int, const double*);
-
   // ***************************************************************************
   void kGridFuncToQuad1D(const int NUM_VDIM,
                          const int NUM_DOFS_1D,

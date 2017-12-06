@@ -112,7 +112,7 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
-SOURCE_FILES += $(wildcard $(PCWD)/raja/kernels/*.c)
+SOURCE_FILES += $(wildcard $(PCWD)/raja/kernels/*.cpp)
 SOURCE_FILES += $(wildcard $(PCWD)/raja/*.cpp)
 
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)

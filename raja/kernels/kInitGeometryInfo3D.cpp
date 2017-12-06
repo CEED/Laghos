@@ -13,9 +13,10 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.h"
+#include "defines.hpp"
 
 // *****************************************************************************
+extern "C"
 void kInitGeometryInfo1D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,
@@ -46,6 +47,7 @@ void kInitGeometryInfo1D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
+extern "C"
 void kInitGeometryInfo2D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,
@@ -90,6 +92,7 @@ void kInitGeometryInfo2D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
+extern "C"
 void kInitGeometryInfo3D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,

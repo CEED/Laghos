@@ -69,24 +69,38 @@ RajaVector& RajaVector::operator=(const RajaVector& v) {
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(double value) {
-  vector_op_eq(size, value, data);
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      data[i] = value;
+    });
   return *this;
 }
 
 // ***************************************************************************
 double RajaVector::operator*(const RajaVector& v) const {
-  return vector_dot(size, data, v.data);
+  RAJA::ReduceSum<RAJA::seq_reduce, RAJA::Real_type> dot(0.0);
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      dot += data[i] * v[i];
+    });
+  return dot;
 }
 
 // *****************************************************************************
 RajaVector& RajaVector::operator-=(const RajaVector& v) {
-  vector_vec_sub(size, data, v.data);
-  return *this;
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      data[i] -= v[i];
+    });
+ return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
-  vector_vec_add(size, data, v);
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      data[i] += v[i];
+    });
   return *this;
 }
 
@@ -98,35 +112,62 @@ RajaVector& RajaVector::operator*=(const double d) {
 }
 
 // ***************************************************************************
-RajaVector& RajaVector::Add(const double a, const RajaVector& Va) {
-  vector_axpy(Size(),a, data, Va);
+RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      data[i] += alpha * v[i];
+    });
   return *this;
 }
 
 
 // ***************************************************************************
 void RajaVector::Neg() {
-  vector_neg(Size(),ptr());
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      data[i] *= -1.0;
+    });
 }
 
 // *****************************************************************************
-void RajaVector::SetSubVector(const void* dofs,
+void RajaVector::SetSubVector(const void* pdofs,
                               const double value,
-                              const int entries) {
-  vector_set_subvector_const(entries, value,ptr(),(const int*)dofs);
+                              const int N) {
+  const RAJA::RangeSegment range(0, N);
+  const int* dofs =(const int*)pdofs;
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      const int dof_i = dofs[i];
+      data[dof_i] = value;
+      if (dof_i >= 0) {
+        data[dof_i] = value;
+      } else {
+        data[-dof_i-1] = -value;
+      }
+    });
 }
 
 
 // ***************************************************************************
 double RajaVector::Min() const {
-  return vector_min(Size(),(double*)data);
+  RAJA::ReduceMin<RAJA::seq_reduce, RAJA::Real_type> min(data[0]);
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      min.min(data[i]);
+    });
+  return min;
 }
 
 // ***************************************************************************
 // from mfem::TCGSolver<mfem::RajaVector>::Mult in linalg/solvers.hpp:224
 void add(const RajaVector& v1, const double alpha,
          const RajaVector& v2, RajaVector& out) {
-  vector_xpay(out.Size(),alpha,out.ptr(),v1.ptr(),v2.ptr());
+  const RAJA::RangeSegment range(0, out.Size());
+  const RAJA::Real_type* x1 = v1.ptr();
+  const RAJA::Real_type* x2 = v2.ptr();
+  RAJA::Real_type* y=out.ptr();
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      y[i] = x1[i] + (alpha * x2[i]);
+    });
 }
 
 // *****************************************************************************
@@ -140,7 +181,13 @@ void add(const double alpha,
 void subtract(const RajaVector& v1,
               const RajaVector& v2,
               RajaVector& out) {
-  vector_xsy(out.Size(),out.ptr(),v1.ptr(),v2.ptr());
+  const RAJA::RangeSegment range(0, out.Size());
+  const RAJA::Real_type* x1 = v1.ptr();
+  const RAJA::Real_type* x2 = v2.ptr();
+  RAJA::Real_type* y=out.ptr();
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+      y[i] = x1[i]-x2[i];
+    });
 }
 
 } // mfem

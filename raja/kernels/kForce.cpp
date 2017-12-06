@@ -13,9 +13,10 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.h"
+#include "defines.hpp"
 
 // *****************************************************************************
+extern "C"
 void kForceMult2D(const int NUM_DIM,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
@@ -86,6 +87,7 @@ void kForceMult2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
+extern "C"
 void kForceMultTranspose2D(const int NUM_DIM,
                            const int NUM_DOFS_1D,
                            const int NUM_QUAD_1D,
@@ -168,6 +170,7 @@ void kForceMultTranspose2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
+extern "C"
 void kForceMult3D(const int NUM_DIM,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
@@ -280,6 +283,7 @@ void kForceMult3D(const int NUM_DIM,
 }
 
 // *****************************************************************************
+extern "C"
 void kForceMultTranspose3D(const int NUM_DIM,
                            const int NUM_DOFS_1D,
                            const int NUM_QUAD_1D,
