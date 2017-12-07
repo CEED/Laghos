@@ -16,8 +16,7 @@
 #include "defines.hpp"
 
 // *****************************************************************************
-extern "C"
-void kGlobalToLocal(const int NUM_VDIM,
+void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
                     const int localEntries,
@@ -25,16 +24,16 @@ void kGlobalToLocal(const int NUM_VDIM,
                     const int* indices,
                     const double* globalX,
                     double* __restrict localX) {
-  for (int i = 0; i < globalEntries; ++i) {
+  forall(globalEntries,[=](int i){
     const int offset = offsets[i];
     const int nextOffset = offsets[i + 1];
-    for (int v = 0; v < NUM_VDIM; ++v) {
+    forall(NUM_VDIM,[=](int v){
       const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
       const double dofValue = globalX[g_offset];
-      for (int j = offset; j < nextOffset; ++j) {
+      forall(offset,nextOffset,[&](int j){
         const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
         localX[l_offset] = dofValue;
-      }
-    }
-  }
+        });
+      });
+    });
 }

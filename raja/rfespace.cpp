@@ -106,7 +106,7 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
-  kGlobalToLocal(vdim,
+  rGlobalToLocal(vdim,
                  vdim_ordering,
                  globalDofs,
                  localEntries,
@@ -123,7 +123,7 @@ void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
-  kLocalToGlobal(vdim,
+  rLocalToGlobal(vdim,
                  vdim_ordering,
                  globalDofs,
                  localEntries,

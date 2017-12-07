@@ -16,7 +16,6 @@
 #include "defines.hpp"
 
 // *****************************************************************************
-extern "C"
 void kInitGeometryInfo1D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,
@@ -47,7 +46,6 @@ void kInitGeometryInfo1D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
-extern "C"
 void kInitGeometryInfo2D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,
@@ -92,7 +90,6 @@ void kInitGeometryInfo2D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
-extern "C"
 void kInitGeometryInfo3D(const int NUM_DOFS,
                          const int NUM_QUAD,
                          const int numElements,

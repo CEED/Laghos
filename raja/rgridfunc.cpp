@@ -28,7 +28,7 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
 
   if (dim==1) { assert(false); }
   if (dim==2)
-    kGridFuncToQuad2D(vdim,
+    rGridFuncToQuad2D(vdim,
                       dofs1D,
                       quad1D,
                       elements,
@@ -37,7 +37,7 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
                       ptr(),
                       quadValues);
   if (dim==3)
-    kGridFuncToQuad3D(vdim,
+    rGridFuncToQuad3D(vdim,
                       dofs1D,
                       quad1D,
                       elements,

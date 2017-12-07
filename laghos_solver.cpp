@@ -144,7 +144,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
 
-   kInitQuadratureData(NUM_QUAD,
+   rInitQuadratureData(NUM_QUAD,
                        nzones,
                        (const double*)rhoValues.ptr(),
                        (const double*)quad_data.geom.detJ.ptr(),
@@ -390,7 +390,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    
    if (dim==1) { assert(false); }
    if (dim==2)
-     kUpdateQuadratureData2D(gamma,
+     rUpdateQuadratureData2D(gamma,
                              quad_data.h0,
                              cfl,
                              use_viscosity,
@@ -413,7 +413,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                              quad_data.stressJinvT,
                              quad_data.dtEst);
    if (dim==3)
-     kUpdateQuadratureData3D(gamma,
+     rUpdateQuadratureData3D(gamma,
                              quad_data.h0,
                              cfl,
                              use_viscosity,

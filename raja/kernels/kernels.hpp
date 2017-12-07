@@ -13,15 +13,14 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_C_KERNELS
-#define LAGHOS_C_KERNELS
+#ifndef LAGHOS_RAJA_KERNELS
+#define LAGHOS_RAJA_KERNELS
 
 #define restrict __restrict
 
-extern "C" {
 
   // ***************************************************************************
-  void kGridFuncToQuad1D(const int NUM_VDIM,
+  void rGridFuncToQuad1D(const int NUM_VDIM,
                          const int NUM_DOFS_1D,
                          const int NUM_QUAD_1D,
                          const int numElements,
@@ -29,7 +28,7 @@ extern "C" {
                          const int* l2gMap,
                          const double* gf,
                          double* restrict out);
-  void kGridFuncToQuad2D(const int NUM_VDIM,
+  void rGridFuncToQuad2D(const int NUM_VDIM,
                          const int NUM_DOFS_1D,
                          const int NUM_QUAD_1D,
                          const int numElements,
@@ -37,7 +36,7 @@ extern "C" {
                          const int* l2gMap,
                          const double* gf,
                          double* restrict out);
-  void kGridFuncToQuad3D(const int NUM_VDIM,
+  void rGridFuncToQuad3D(const int NUM_VDIM,
                          const int NUM_DOFS_1D,
                          const int NUM_QUAD_1D,
                          const int numElements,
@@ -61,14 +60,14 @@ extern "C" {
                          double* restrict out);
 
   // kQuadratureData ***********************************************************
-  void kInitQuadratureData(const int NUM_QUAD,
+  void rInitQuadratureData(const int NUM_QUAD,
                            const int numElements,
                            const double* rho0,
                            const double* detJ,
                            const double* quadWeights,
                            double* restrict rho0DetJ0w);
 
-  void kUpdateQuadratureData2D(const double GAMMA,
+  void rUpdateQuadratureData2D(const double GAMMA,
                                const double H0,
                                const double CFL,
                                const bool USE_VISCOSITY,
@@ -91,7 +90,7 @@ extern "C" {
                                double* restrict stressJinvT,
                                double* restrict dtEst);
 
-  void kUpdateQuadratureData3D(const double GAMMA,
+  void rUpdateQuadratureData3D(const double GAMMA,
                                const double H0,
                                const double CFL,
                                const bool USE_VISCOSITY,
@@ -116,7 +115,7 @@ extern "C" {
                                double* restrict dtEst);
 
   // kForce ********************************************************************
-  void kForceMult2D(const int NUM_DIM,
+  void rForceMult2D(const int NUM_DIM,
                     const int NUM_DOFS_1D,
                     const int NUM_QUAD_1D,
                     const int NUM_QUAD_2D,
@@ -130,7 +129,7 @@ extern "C" {
                     const double* e,
                     double* restrict v);
 
-  void kForceMultTranspose2D(const int NUM_DIM,
+  void rForceMultTranspose2D(const int NUM_DIM,
                              const int NUM_DOFS_1D,
                              const int NUM_QUAD_1D,
                              const int NUM_QUAD_2D,
@@ -144,7 +143,7 @@ extern "C" {
                              const double* v,
                              double* restrict e);
 
-  void kForceMult3D(const int NUM_DIM,
+  void rForceMult3D(const int NUM_DIM,
                     const int NUM_DOFS_1D,
                     const int NUM_QUAD_1D,
                     const int NUM_QUAD_2D,
@@ -159,7 +158,7 @@ extern "C" {
                     const double* e,
                     double* restrict v);
 
-  void kForceMultTranspose3D(const int NUM_DIM,
+  void rForceMultTranspose3D(const int NUM_DIM,
                              const int NUM_DOFS_1D,
                              const int NUM_QUAD_1D,
                              const int NUM_QUAD_2D,
@@ -194,7 +193,7 @@ extern "C" {
                            double* restrict detJ);
 
   // ***************************************************************************
-  void kGlobalToLocal(const int NUM_VDIM,
+  void rGlobalToLocal(const int NUM_VDIM,
                       const bool VDIM_ORDERING,
                       const int globalEntries,
                       const int localEntries,
@@ -203,7 +202,7 @@ extern "C" {
                       const double* globalX,
                       double* restrict localX);
 
-  void kLocalToGlobal(const int NUM_VDIM,
+  void rLocalToGlobal(const int NUM_VDIM,
                       const bool VDIM_ORDERING,
                       const int globalEntries,
                       const int localEntries,
@@ -249,6 +248,5 @@ extern "C" {
                       const double* oper,
                       const double* solIn,
                       double* restrict solOut);
-} // extern "C"
 
-#endif // LAGHOS_C_KERNELS
+#endif // LAGHOS_RAJAC_KERNELS

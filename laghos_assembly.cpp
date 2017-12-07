@@ -160,7 +160,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    if (dim==1) { assert(false); }
    if (dim==2)
-      kForceMult2D(dim,
+      rForceMult2D(dim,
                    NUM_DOFS_1D,
                    NUM_QUAD_1D,
                    NUM_QUAD_2D,
@@ -174,7 +174,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2, RajaVector &vecH1) const
                    gVecL2,
                    gVecH1);
    if (dim==3)
-      kForceMult3D(dim,
+      rForceMult3D(dim,
                    NUM_DOFS_1D,
                    NUM_QUAD_1D,
                    NUM_QUAD_2D,
@@ -205,7 +205,7 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    if (dim==1) { assert(false); }
    if (dim==2)
-      kForceMultTranspose2D(dim,
+      rForceMultTranspose2D(dim,
                             NUM_DOFS_1D,
                             NUM_QUAD_1D,
                             NUM_QUAD_2D,
@@ -219,7 +219,7 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                             gVecH1,
                             gVecL2);
    if (dim==3)
-      kForceMultTranspose3D(dim,
+      rForceMultTranspose3D(dim,
                             NUM_DOFS_1D,
                             NUM_QUAD_1D,
                             NUM_QUAD_2D,

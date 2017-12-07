@@ -14,7 +14,6 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-extern "C"
 void kExtractSubVector(const int entries,
                        const int* indices,
                        const double* in,
@@ -24,7 +23,6 @@ void kExtractSubVector(const int entries,
   }
 }
 
-extern "C"
 void kSetSubVector(const int entries,
                    const int* indices,
                    const double*  in,
@@ -34,7 +32,6 @@ void kSetSubVector(const int entries,
   }
 }
 
-extern "C"
 void kMapSubVector(const int entries,
                    const int* indices,
                    const double* in,

@@ -13,14 +13,10 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "RAJA/RAJA.hpp"
-#include "RAJA/index/RangeSegment.hpp"
-#include "RAJA/util/defines.hpp"
 #include "defines.hpp"
 
 // *****************************************************************************
-extern "C"
-void kInitQuadratureData(const int NUM_QUAD,
+void rInitQuadratureData(const int NUM_QUAD,
                          const int numElements,
                          const double* rho0,
                          const double* detJ,
@@ -37,8 +33,7 @@ void kInitQuadratureData(const int NUM_QUAD,
 }
 
 // *****************************************************************************
-extern "C"
-void kUpdateQuadratureData2D(const double GAMMA,
+void rUpdateQuadratureData2D(const double GAMMA,
                              const double H0,
                              const double CFL,
                              const bool USE_VISCOSITY,
@@ -196,8 +191,7 @@ void kUpdateQuadratureData2D(const double GAMMA,
 }
 
 // *****************************************************************************
-extern "C"
-void kUpdateQuadratureData3D(const double GAMMA,
+void rUpdateQuadratureData3D(const double GAMMA,
                              const double H0,
                              const double CFL,
                              const bool USE_VISCOSITY,
