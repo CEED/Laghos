@@ -136,14 +136,14 @@ private:
    QuadratureData *quad_data;
    ParFiniteElementSpace &H1FESpace, &L2FESpace;
 
-   // Force matrix action on quadrilateral elements in 2D
+   // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
-   // Force matrix action on hexahedral elements in 3D
+   // Force matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &vecL2, Vector &vecH1) const;
 
-   // Transpose force matrix action on quadrilateral elements in 2D
+   // Transpose force matrix action on quadrilateral elements in 2D.
    void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
-   // Transpose force matrix action on hexahedral elements in 3D
+   // Transpose force matrix action on hexahedral elements in 3D.
    void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
 public:

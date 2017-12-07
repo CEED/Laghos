@@ -358,7 +358,7 @@ void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
    else { MFEM_ABORT("Unsupported dimension"); }
 }
 
-// Force matrix action on quadrilateral elements in 2D
+// Force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -427,7 +427,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Force matrix action on hexahedral elements in 3D
+// Force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -588,7 +588,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Transpose force matrix action on quadrilateral elements in 2D
+// Transpose force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                                         Vector &vecL2) const
 {
@@ -656,7 +656,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
    }
 }
 
-// Transpose force matrix action on hexahedral elements in 3D
+// Transpose force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -836,7 +836,7 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
    }
 }
 
-// Mass matrix action on quadrilateral elements in 2D
+// Mass matrix action on quadrilateral elements in 2D.
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
    const H1_QuadrilateralElement *fe_H1 =

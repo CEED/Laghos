@@ -31,7 +31,7 @@
 //
 //    V. Dobrev, Tz. Kolev and R. Rieben, "High-order curvilinear finite element
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
-//    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
+//    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
 //    ./laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
                      "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
-   // Save data for VisIt visualization
+   // Save data for VisIt visualization.
    VisItDataCollection visit_dc(basename, mesh);
    if (visit)
    {
