@@ -31,7 +31,7 @@
 //
 //    V. Dobrev, Tz. Kolev and R. Rieben, "High-order curvilinear finite element
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
-//    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
+//    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
 //    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
@@ -133,14 +133,14 @@ int main(int argc, char *argv[])
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
    args.AddOption(&partition_type, "-pt", "--partition",
-      "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
-      "Here x,y,z are relative task ratios in each direction.\n\t"
-      "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
-      "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
-      "NOTE: the serially refined mesh must have the appropriate number\n\t"
-      "of zones in each direction, e.g., the number of zones in direction x\n\t"
-      "must be divisible by the number of MPI tasks in direction x.\n\t"
-      "Available options: 11, 21, 111, 211, 321, 322, 432.");
+                  "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
+                  "Here x,y,z are relative task ratios in each direction.\n\t"
+                  "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
+                  "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
+                  "NOTE: the serially refined mesh must have the appropriate number\n\t"
+                  "of zones in each direction, e.g., the number of zones in direction x\n\t"
+                  "must be divisible by the number of MPI tasks in direction x.\n\t"
+                  "Available options: 11, 21, 111, 211, 321, 322, 432.");
    args.Parse();
    if (!args.Good())
    {
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = 0;
          break;
-     case 211: // 3D.
+      case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
                      "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
-   // Save data for VisIt visualization
+   // Save data for VisIt visualization.
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {

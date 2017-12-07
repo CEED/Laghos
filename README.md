@@ -90,9 +90,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 422.
+  starting around line 431.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 366 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 375 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -118,7 +118,7 @@ Other computational motives in Laghos include the following:
 Laghos has the following external dependencies:
 
 - *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
-   https://computation.llnl.gov/casc/hypre/software.html,
+   https://computation.llnl.gov/casc/hypre/software.html
 
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
    http://glaros.dtc.umn.edu/gkhome/metis/metis/download
@@ -163,14 +163,15 @@ Clone and build the parallel version of MFEM starting from the `laghos-v1.0` tag
 ~/mfem> make parallel -j
 ~/mfem> cd ..
 ```
+For more details, see the [MFEM building page](http://mfem.org/building/).
 
 Build Laghos
 ```sh
 ~> cd Laghos/
-~> make
+~/Laghos> make
 ```
-
-For more details, see the [MFEM building page](http://mfem.org/building/).
+This can be followed by `make test` and `make install` to check and install the
+build respectively. See `make help` for additional options.
 
 ## Running
 
