@@ -37,18 +37,18 @@
 #include "RAJA/RAJA.hpp"
 
 template <typename T>
-void forall(RAJA::Index_type max, T&& body){
-  RAJA::forall<RAJA::seq_exec>(0,max,[&](RAJA::Index_type i){
+void forall(RAJA::Index_type max, T&& body) {
+  RAJA::forall<RAJA::seq_exec>(0,max,[&](RAJA::Index_type i) {
     body(i);
-    });
+  });
 }
 template <typename T>
-void forall(RAJA::Index_type min, RAJA::Index_type max, T&& body){
-  RAJA::forall<RAJA::seq_exec>(min,max,[&](RAJA::Index_type i){
+void forall(RAJA::Index_type min, RAJA::Index_type max, T&& body) {
+  RAJA::forall<RAJA::seq_exec>(min,max,[&](RAJA::Index_type i) {
     body(i);
-    });
+  });
 }
 
-// forall(,[&](int ){//
+// forall(numElements,[&](int el){//
 
 #endif // LAGHOS_KERNEL_OFFSETS

@@ -33,6 +33,7 @@
 #include "fem/pfespace.hpp"
 
 // RAJA ************************************************************************
+#include "memoryManager.hpp"
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rfespace.hpp"

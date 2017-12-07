@@ -132,8 +132,8 @@ void RajaBilinearForm::MultTranspose(const RajaVector& x, RajaVector& y) const {
 
 // ***************************************************************************
 void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
-                                          const RajaVector& b,
-                                          RajaVector& x) {
+    const RajaVector& b,
+    RajaVector& x) {
   TRecoverFEMSolution<RajaVector> (X, b, x);
 }
 
@@ -142,8 +142,8 @@ void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
 // * RajaConstrainedOperator
 // ***************************************************************************
 RajaConstrainedOperator::RajaConstrainedOperator(Operator* A_,
-                                                 const Array<int>& constraintList_,
-                                                 bool own_A_) :
+    const Array<int>& constraintList_,
+    bool own_A_) :
   Operator(A_->Height(), A_->Width()) {
   Setup(A_, constraintList_, own_A_);
 }
@@ -162,7 +162,7 @@ void RajaConstrainedOperator::Setup(Operator* A_,
 }
 
 void RajaConstrainedOperator::EliminateRHS(const RajaVector& x,
-                                           RajaVector& b) const {
+    RajaVector& b) const {
   w = 0.0;
   A->Mult(w, z);
   b -= z;

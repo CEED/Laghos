@@ -31,7 +31,7 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
       const double detJ = ((J11 * J22)-(J21 * J12));
       oper[ijN(q,e,NUM_QUAD_2D)] = quadWeights[q] * COEFF * detJ;
     }
-    });
+  });
 }
 
 // *****************************************************************************
@@ -57,7 +57,7 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                            (J12*J21*J33)-(J11*J23*J32));
       oper[ijN(q,e,NUM_QUAD_3D)] = quadWeights[q]*COEFF*detJ;
     }
-    });
+  });
 }
 
 // *****************************************************************************
@@ -67,7 +67,7 @@ void rMassAssemble(const int dim,
                    const double* quadWeights,
                    const double* J,
                    const double COEFF,
-                   double* __restrict oper){
+                   double* __restrict oper) {
   if (dim==1) assert(false);
   if (dim==2) rMassAssemble2D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
   if (dim==3) rMassAssemble3D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
@@ -132,7 +132,7 @@ static void rMassMultAdd2D(const int NUM_DOFS_1D,
         }
       }
     }
-    });
+  });
 }
 
 // *****************************************************************************
@@ -230,7 +230,7 @@ static void rMassMultAdd3D(const int NUM_DOFS_1D,
         }
       }
     }
-    });
+  });
 }
 
 // *****************************************************************************
@@ -244,9 +244,9 @@ void rMassMultAdd(const int dim,
                   const double* quadToDofD,
                   const double* op,
                   const double* x,
-                  double* __restrict y){
+                  double* __restrict y) {
   if (dim==1) assert(false);
-  if (dim==2) 
+  if (dim==2)
     rMassMultAdd2D(NUM_DOFS_1D,
                    NUM_QUAD_1D,
                    numElements,
@@ -256,7 +256,7 @@ void rMassMultAdd(const int dim,
                    quadToDofD,
                    op,x,y);
 
-  if (dim==3) 
+  if (dim==3)
     rMassMultAdd3D(NUM_DOFS_1D,
                    NUM_QUAD_1D,
                    numElements,

@@ -104,7 +104,7 @@ endif
 CXXFLAGS += -g -Wall -fno-omit-frame-pointer
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS)
+LAGHOS_LIBS = $(MFEM_LIBS) /usr/local/cuda/lib64/libcudart_static.a -ldl
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -135,7 +135,10 @@ $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp
 	$(CCC) -c -o $@ $<
 
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp
-	$(CCC) -c -o $@ $<
+#	$(CCC) -c -o $@ $<
+	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC -I/usr/local/cuda/include -I/home/camier1/home/raja/raja/include -I/home/camier1/home/raja/raja/build-gcc-release/include
+
+#/home/camier1/usr/local/gcc/5.5.0/bin/g++    -Wall -Wextra  -fopenmp -O3 -DNDEBUG  -rdynamic -fopenmp  CMakeFiles/example-add-vectors.dir/example-add-vectors_generated_example-add-vectors.cpp.o  -o bin/example-add-vectors /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so ../lib/libRAJA.a /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so 
 
 all: 
 	@$(MAKE) -j $(CPU) laghos

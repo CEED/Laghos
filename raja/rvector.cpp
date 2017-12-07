@@ -14,7 +14,9 @@ namespace mfem {
 
 // ***************************************************************************
 static double* rmalloc(const size_t sz) {
-  return (double*)::malloc(sz*sizeof(double));
+  //printf("\033[31m.\033[m");fflush(stdout);
+  //return (double*)::malloc(sz*sizeof(double));
+  return memoryManager::allocate<double>(sz);
 }
 
 // ***************************************************************************
@@ -71,8 +73,8 @@ RajaVector& RajaVector::operator=(const RajaVector& v) {
 RajaVector& RajaVector::operator=(double value) {
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      data[i] = value;
-    });
+    data[i] = value;
+  });
   return *this;
 }
 
@@ -81,8 +83,8 @@ double RajaVector::operator*(const RajaVector& v) const {
   RAJA::ReduceSum<RAJA::seq_reduce, RAJA::Real_type> dot(0.0);
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      dot += data[i] * v[i];
-    });
+    dot += data[i] * v[i];
+  });
   return dot;
 }
 
@@ -90,17 +92,17 @@ double RajaVector::operator*(const RajaVector& v) const {
 RajaVector& RajaVector::operator-=(const RajaVector& v) {
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      data[i] -= v[i];
-    });
- return *this;
+    data[i] -= v[i];
+  });
+  return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      data[i] += v[i];
-    });
+    data[i] += v[i];
+  });
   return *this;
 }
 
@@ -115,8 +117,8 @@ RajaVector& RajaVector::operator*=(const double d) {
 RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      data[i] += alpha * v[i];
-    });
+    data[i] += alpha * v[i];
+  });
   return *this;
 }
 
@@ -125,8 +127,8 @@ RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
 void RajaVector::Neg() {
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      data[i] *= -1.0;
-    });
+    data[i] *= -1.0;
+  });
 }
 
 // *****************************************************************************
@@ -136,14 +138,14 @@ void RajaVector::SetSubVector(const void* pdofs,
   const RAJA::RangeSegment range(0, N);
   const int* dofs =(const int*)pdofs;
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      const int dof_i = dofs[i];
+    const int dof_i = dofs[i];
+    data[dof_i] = value;
+    if (dof_i >= 0) {
       data[dof_i] = value;
-      if (dof_i >= 0) {
-        data[dof_i] = value;
-      } else {
-        data[-dof_i-1] = -value;
-      }
-    });
+    } else {
+      data[-dof_i-1] = -value;
+    }
+  });
 }
 
 
@@ -152,8 +154,8 @@ double RajaVector::Min() const {
   RAJA::ReduceMin<RAJA::seq_reduce, RAJA::Real_type> min(data[0]);
   const RAJA::RangeSegment range(0, size);
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      min.min(data[i]);
-    });
+    min.min(data[i]);
+  });
   return min;
 }
 
@@ -166,8 +168,8 @@ void add(const RajaVector& v1, const double alpha,
   const RAJA::Real_type* x2 = v2.ptr();
   RAJA::Real_type* y=out.ptr();
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      y[i] = x1[i] + (alpha * x2[i]);
-    });
+    y[i] = x1[i] + (alpha * x2[i]);
+  });
 }
 
 // *****************************************************************************
@@ -189,8 +191,8 @@ void subtract(const RajaVector& v1,
   const RAJA::Real_type* x2 = v2.ptr();
   RAJA::Real_type* y=out.ptr();
   RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-      y[i] = x1[i]-x2[i];
-    });
+    y[i] = x1[i]-x2[i];
+  });
 }
 
 } // mfem
