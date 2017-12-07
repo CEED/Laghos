@@ -32,7 +32,7 @@ class RajaRestrictionOperator : public Operator {
     indices = i;
   }
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
-    kExtractSubVector(entries, indices.ptr(), x, y);
+    rExtractSubVector(entries, indices.ptr(), x, y);
   }
 };
 

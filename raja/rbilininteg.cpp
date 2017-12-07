@@ -55,21 +55,13 @@ RajaGeometry RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
   geom.invJ.allocate(dims, dims, numQuad, elements);
   geom.detJ.allocate(numQuad, elements);
   RajaDofQuadMaps& maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
-  if (dims==1) { assert(false); }
-  if (dims==2) {
-    kInitGeometryInfo2D(numDofs,numQuad,
-                        elements,
-                        maps.dofToQuadD.ptr(),
-                        geom.meshNodes.ptr(),
-                        geom.J.ptr(), geom.invJ.ptr(), geom.detJ.ptr());
-  }
-  if (dims==3) {
-    kInitGeometryInfo3D(numDofs,numQuad,
-                        elements,
-                        maps.dofToQuadD.ptr(),
-                        geom.meshNodes.ptr(),
-                        geom.J.ptr(),geom.invJ.ptr(),geom.detJ.ptr());
-  }
+  rIniGeom(dims,numDofs,numQuad,elements,
+           maps.dofToQuadD.ptr(),
+           geom.meshNodes.ptr(),
+           geom.J.ptr(),
+           geom.invJ.ptr(),
+           geom.detJ.ptr());
+
   return geom;
 }
 
@@ -311,31 +303,18 @@ void RajaMassIntegrator::SetOperator(RajaVector& v) { op = v; }
 
 // ***************************************************************************
 void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
-  const int dims = mesh->Dimension();
+  const int dim = mesh->Dimension();
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
   const int dofs1D =trialFESpace->GetFE(0)->GetOrder() + 1;
-  if (dims==1) { assert(false); }
-  if (dims==2) {
-    kMassMultAdd2D(dofs1D,
-                   quad1D,
-                   mesh->GetNE(),
-                   maps.dofToQuad,
-                   maps.dofToQuadD,
-                   maps.quadToDof,
-                   maps.quadToDofD,
-                   op,x,y);
-  }
-  if (dims==3) {
-    kMassMultAdd3D(quad1D,
-                   dofs1D,
-                   mesh->GetNE(),
-                   maps.dofToQuad,
-                   maps.dofToQuadD,
-                   maps.quadToDof,
-                   maps.quadToDofD,
-                   op, x,y);
-
-  }
+  rMassMultAdd(dim,
+               dofs1D,
+               quad1D,
+               mesh->GetNE(),
+               maps.dofToQuad,
+               maps.dofToQuadD,
+               maps.quadToDof,
+               maps.quadToDofD,
+               op,x,y);
 }
 }
 

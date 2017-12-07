@@ -16,14 +16,14 @@
 #include "defines.hpp"
 
 // *****************************************************************************
-void rGridFuncToQuad1D(const int NUM_VDIM,
-                       const int NUM_DOFS_1D,
-                       const int NUM_QUAD_1D,
-                       const int numElements,
-                       const double* dofToQuad,
-                       const int* l2gMap,
-                       const double* gf,
-                       double* __restrict out) {
+static void rGridFuncToQuad1D(const int NUM_VDIM,
+                              const int NUM_DOFS_1D,
+                              const int NUM_QUAD_1D,
+                              const int numElements,
+                              const double* dofToQuad,
+                              const int* l2gMap,
+                              const double* gf,
+                              double* __restrict out) {
 
   forall(numElements,[&](int e){
     double r_out[NUM_VDIM*NUM_QUAD_1D];
@@ -50,14 +50,14 @@ void rGridFuncToQuad1D(const int NUM_VDIM,
 }
 
 // *****************************************************************************
-void rGridFuncToQuad2D(const int NUM_VDIM,
-                       const int NUM_DOFS_1D,
-                       const int NUM_QUAD_1D,
-                       const int numElements,
-                       const double* __restrict dofToQuad,
-                       const int* __restrict l2gMap,
-                       const double* __restrict gf,
-                       double* __restrict out) {
+static void rGridFuncToQuad2D(const int NUM_VDIM,
+                              const int NUM_DOFS_1D,
+                              const int NUM_QUAD_1D,
+                              const int numElements,
+                              const double* __restrict dofToQuad,
+                              const int* __restrict l2gMap,
+                              const double* __restrict gf,
+                              double* __restrict out) {
   forall(numElements,[=](int e){
       double out_xy[NUM_VDIM*NUM_QUAD_1D*NUM_QUAD_1D];
       forall(NUM_VDIM,[&](int v){
@@ -103,14 +103,14 @@ void rGridFuncToQuad2D(const int NUM_VDIM,
 }
 
 // *****************************************************************************
-void rGridFuncToQuad3D(const int NUM_VDIM,
-                       const int NUM_DOFS_1D,
-                       const int NUM_QUAD_1D,
-                       const int numElements,
-                       const double*__restrict dofToQuad,
-                       const int* __restrict l2gMap,
-                       const double* gf,
-                       double* __restrict out) {
+static void rGridFuncToQuad3D(const int NUM_VDIM,
+                              const int NUM_DOFS_1D,
+                              const int NUM_QUAD_1D,
+                              const int numElements,
+                              const double*__restrict dofToQuad,
+                              const int* __restrict l2gMap,
+                              const double* gf,
+                              double* __restrict out) {
   forall(numElements,[&](int e){
       double out_xyz[NUM_VDIM*NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D];
       forall(NUM_VDIM,[&](int v){
@@ -183,4 +183,22 @@ void rGridFuncToQuad3D(const int NUM_VDIM,
             });
         });
     });
+}
+
+// *****************************************************************************
+void rGridFuncToQuad(const int dim,
+                     const int NUM_VDIM,
+                     const int NUM_DOFS_1D,
+                     const int NUM_QUAD_1D,
+                     const int numElements,
+                     const double* dofToQuad,
+                     const int* l2gMap,
+                     const double* gf,
+                     double* __restrict out){
+  switch(dim){
+  case 1: rGridFuncToQuad1D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out);break;
+  case 2: rGridFuncToQuad2D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out);break;
+  case 3: rGridFuncToQuad3D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out);break;
+  default:assert(false);
+  }
 }

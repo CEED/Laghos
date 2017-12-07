@@ -13,32 +13,33 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
+#include "defines.hpp"
 
-void kExtractSubVector(const int entries,
-                       const int* indices,
-                       const double* in,
-                       double* __restrict out) {
-  for (int i = 0; i < entries; ++i) {
-    out[i] = in[indices[i]];
-  }
-}
-
-void kSetSubVector(const int entries,
-                   const int* indices,
-                   const double*  in,
-                   double* __restrict out) {
-  for (int i = 0; i < entries; ++i) {
-    out[indices[i]] = in[i];
-  }
-}
-
-void kMapSubVector(const int entries,
+void rSetSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
-  for (int i = 0; i < entries; ++i) {
+  forall(N,[&](int i){
+    out[indices[i]] = in[i];
+    });
+}
+
+void rMapSubVector(const int N,
+                   const int* indices,
+                   const double* in,
+                   double* __restrict out) {
+  forall(N,[&](int i){
     const int fromIdx = indices[2*i + 0];
     const int toIdx   = indices[2*i + 1];
     out[toIdx] = in[fromIdx];
-  }
+    });
+}
+
+void rExtractSubVector(const int N,
+                       const int* indices,
+                       const double* in,
+                       double* __restrict out) {
+  forall(N,[&](int i){
+    out[i] = in[indices[i]];
+    });
 }

@@ -16,15 +16,15 @@
 #include "defines.hpp"
 
 // *****************************************************************************
-void kInitGeometryInfo1D(const int NUM_DOFS,
-                         const int NUM_QUAD,
-                         const int numElements,
-                         const double* dofToQuadD,
-                         const double* nodes,
-                         double* __restrict J,
-                         double* __restrict invJ,
-                         double* __restrict detJ) {
-  for (int e = 0; e < numElements; ++e) {
+static void rIniGeom1D(const int NUM_DOFS,
+                       const int NUM_QUAD,
+                       const int numElements,
+                       const double* dofToQuadD,
+                       const double* nodes,
+                       double* __restrict J,
+                       double* __restrict invJ,
+                       double* __restrict detJ) {
+  forall(numElements,[=](int e) {//for (int e = 0; e < numElements; ++e) {
     double s_nodes[NUM_DOFS];
 
     for (int q = 0; q < NUM_QUAD; ++q) {
@@ -42,19 +42,19 @@ void kInitGeometryInfo1D(const int NUM_DOFS,
       invJ[ijN(q, e,NUM_QUAD)] = 1.0 / J11;
       detJ[ijN(q, e,NUM_QUAD)] = J11;
     }
-  }
+    });
 }
 
 // *****************************************************************************
-void kInitGeometryInfo2D(const int NUM_DOFS,
-                         const int NUM_QUAD,
-                         const int numElements,
-                         const double* dofToQuadD,
-                         const double* nodes,
-                         double* __restrict J,
-                         double* __restrict invJ,
-                         double* __restrict detJ) {
-  for (int e = 0; e < numElements; ++e) {
+static void rIniGeom2D(const int NUM_DOFS,
+                       const int NUM_QUAD,
+                       const int numElements,
+                       const double* dofToQuadD,
+                       const double* nodes,
+                       double* __restrict J,
+                       double* __restrict invJ,
+                       double* __restrict detJ) {
+  forall(numElements,[=](int e) {//for (int e = 0; e < numElements; ++e) {
     double s_nodes[2 * NUM_DOFS] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
@@ -86,19 +86,19 @@ void kInitGeometryInfo2D(const int NUM_DOFS,
       invJ[ijklNM(1, 1, q, e,2,NUM_QUAD)] =  J11 * r_idetJ;
       detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
     }
-  }
+    });
 }
 
 // *****************************************************************************
-void kInitGeometryInfo3D(const int NUM_DOFS,
-                         const int NUM_QUAD,
-                         const int numElements,
-                         const double* dofToQuadD,
-                         const double* nodes,
-                         double* __restrict J,
-                         double* __restrict invJ,
-                         double* __restrict detJ) {
-  for (int e = 0; e < numElements; ++e) {
+static void rIniGeom3D(const int NUM_DOFS,
+                       const int NUM_QUAD,
+                       const int numElements,
+                       const double* dofToQuadD,
+                       const double* nodes,
+                       double* __restrict J,
+                       double* __restrict invJ,
+                       double* __restrict detJ) {
+  forall(numElements,[=](int e) {//for (int e = 0; e < numElements; ++e) {
     double s_nodes[3 * NUM_DOFS] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
@@ -149,5 +149,23 @@ void kInitGeometryInfo3D(const int NUM_DOFS,
       invJ[ijklNM(2, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J11 * J22)-(J12 * J21));
       detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
     }
+    });
+}
+
+// *****************************************************************************
+void rIniGeom(const int dim,
+              const int NUM_DOFS,
+              const int NUM_QUAD,
+              const int numElements,
+              const double* dofToQuadD,
+              const double* nodes,
+              double* __restrict J,
+              double* __restrict invJ,
+              double* __restrict detJ){
+  switch (dim){
+  case 1: {rIniGeom1D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ);break;}
+  case 2: {rIniGeom2D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ);break;}
+  case 3: {rIniGeom3D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ);break;}
+  default:assert(false);
   }
 }

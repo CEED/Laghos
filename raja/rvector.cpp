@@ -175,7 +175,10 @@ void add(const double alpha,
          const RajaVector& v1,
          const double beta,
          const RajaVector& v2,
-         RajaVector& out) {assert(false);}
+         RajaVector& out) {
+  /* used in templated TRK3SSPSolver, but not here */
+  assert(false);
+}
 
 // ***************************************************************************
 void subtract(const RajaVector& v1,

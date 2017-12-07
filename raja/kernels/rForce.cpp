@@ -16,21 +16,21 @@
 #include "defines.hpp"
 
 // *****************************************************************************
-void rForceMult2D(const int NUM_DIM,
-                  const int NUM_DOFS_1D,
-                  const int NUM_QUAD_1D,
-                  const int NUM_QUAD_2D,
-                  const int L2_DOFS_1D,
-                  const int H1_DOFS_1D,
-                  const int numElements,
-                  const double* L2DofToQuad,
-                  const double* H1QuadToDof,
-                  const double* H1QuadToDofD,
-                  const double* stressJinvT,
-                  const double* e,
-                  double* __restrict v) {
+static void rForceMult2D(const int NUM_DIM,
+                         const int NUM_DOFS_1D,
+                         const int NUM_QUAD_1D,
+                         const int NUM_QUAD_2D,
+                         const int L2_DOFS_1D,
+                         const int H1_DOFS_1D,
+                         const int numElements,
+                         const double* L2DofToQuad,
+                         const double* H1QuadToDof,
+                         const double* H1QuadToDofD,
+                         const double* stressJinvT,
+                         const double* e,
+                         double* __restrict v) {
   forall(numElements,[=](int el) {
-    double e_xy[NUM_QUAD_2D];
+      double e_xy[NUM_QUAD_2D];
     forall(NUM_QUAD_2D,[&](int i) {
       e_xy[i] = 0;
     });
@@ -86,21 +86,21 @@ void rForceMult2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-void rForceMultTranspose2D(const int NUM_DIM,
-                           const int NUM_DOFS_1D,
-                           const int NUM_QUAD_1D,
-                           const int NUM_QUAD_2D,
-                           const int L2_DOFS_1D,
-                           const int H1_DOFS_1D,
-                           const int numElements,
-                           const double* L2QuadToDof,
-                           const double* H1DofToQuad,
-                           const double* H1DofToQuadD,
-                           const double* stressJinvT,
-                           const double* v,
-                           double* __restrict e) {
+static void rForceMultTranspose2D(const int NUM_DIM,
+                                  const int NUM_DOFS_1D,
+                                  const int NUM_QUAD_1D,
+                                  const int NUM_QUAD_2D,
+                                  const int L2_DOFS_1D,
+                                  const int H1_DOFS_1D,
+                                  const int numElements,
+                                  const double* L2QuadToDof,
+                                  const double* H1DofToQuad,
+                                  const double* H1DofToQuadD,
+                                  const double* stressJinvT,
+                                  const double* v,
+                                  double* __restrict e) {
   forall(numElements,[&](int el) {
-    double vStress[NUM_QUAD_2D];
+      double vStress[NUM_QUAD_2D];
     forall(NUM_QUAD_2D,[&](int i) {
       vStress[i] = 0;
     });
@@ -168,22 +168,22 @@ void rForceMultTranspose2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-void rForceMult3D(const int NUM_DIM,
-                  const int NUM_DOFS_1D,
-                  const int NUM_QUAD_1D,
-                  const int NUM_QUAD_2D,
-                  const int NUM_QUAD_3D,
-                  const int L2_DOFS_1D,
-                  const int H1_DOFS_1D,
-                  const int numElements,
-                  const double* L2DofToQuad,
-                  const double* H1QuadToDof,
-                  const double* H1QuadToDofD,
-                  const double* stressJinvT,
-                  const double* e,
-                  double* __restrict v) {
+static void rForceMult3D(const int NUM_DIM,
+                         const int NUM_DOFS_1D,
+                         const int NUM_QUAD_1D,
+                         const int NUM_QUAD_2D,
+                         const int NUM_QUAD_3D,
+                         const int L2_DOFS_1D,
+                         const int H1_DOFS_1D,
+                         const int numElements,
+                         const double* L2DofToQuad,
+                         const double* H1QuadToDof,
+                         const double* H1QuadToDofD,
+                         const double* stressJinvT,
+                         const double* e,
+                         double* __restrict v) {
   forall(numElements,[&](int el) {
-    double e_xyz[NUM_QUAD_3D];
+      double e_xyz[NUM_QUAD_3D];
     forall(NUM_QUAD_3D,[&](int i) {
       e_xyz[i] = 0;
     });
@@ -280,61 +280,61 @@ void rForceMult3D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-void rForceMultTranspose3D(const int NUM_DIM,
-                           const int NUM_DOFS_1D,
-                           const int NUM_QUAD_1D,
-                           const int NUM_QUAD_2D,
-                           const int NUM_QUAD_3D,
-                           const int L2_DOFS_1D,
-                           const int H1_DOFS_1D,
-                           const int numElements,
-                           const double* L2QuadToDof,
-                           const double* H1DofToQuad,
-                           const double* H1DofToQuadD,
-                           const double* stressJinvT,
-                           const double* v,
-                           double* __restrict e) {
-  forall(numElements,[&](int el) { //for (int el = 0; el < numElements; ++el) {
+static void rForceMultTranspose3D(const int NUM_DIM,
+                                  const int NUM_DOFS_1D,
+                                  const int NUM_QUAD_1D,
+                                  const int NUM_QUAD_2D,
+                                  const int NUM_QUAD_3D,
+                                  const int L2_DOFS_1D,
+                                  const int H1_DOFS_1D,
+                                  const int numElements,
+                                  const double* L2QuadToDof,
+                                  const double* H1DofToQuad,
+                                  const double* H1DofToQuadD,
+                                  const double* stressJinvT,
+                                  const double* v,
+                                  double* __restrict e) {
+  forall(numElements,[&](int el) {
     double vStress[NUM_QUAD_3D];
-    forall(NUM_QUAD_3D,[&](int i) { //for (int i = 0; i < NUM_QUAD_3D; ++i) {
+    forall(NUM_QUAD_3D,[&](int i) {
       vStress[i] = 0;
     });
-    forall(NUM_DIM,[&](int c) { //for (int c = 0; c < NUM_DIM; ++c) {
-      forall(H1_DOFS_1D,[&](int dz) { //for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
+    forall(NUM_DIM,[&](int c) { 
+      forall(H1_DOFS_1D,[&](int dz) {
         double Dxy_x[NUM_QUAD_2D];
         double xDy_y[NUM_QUAD_2D];
         double xy_z[NUM_QUAD_2D] ;
-        forall(NUM_QUAD_2D,[&](int i) { //for (int i = 0; i < NUM_QUAD_2D; ++i) {
+        forall(NUM_QUAD_2D,[&](int i) {
           Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
         });
-        forall(H1_DOFS_1D,[&](int dy) { //for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+        forall(H1_DOFS_1D,[&](int dy) { 
           double Dx_x[NUM_QUAD_1D];
           double x_y[NUM_QUAD_1D];
-          forall(NUM_QUAD_1D,[&](int qx) { // for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          forall(NUM_QUAD_1D,[&](int qx) {
             Dx_x[qx] = x_y[qx] = 0;
           });
-          forall(H1_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+          forall(H1_DOFS_1D,[&](int dx) { 
             const double r_v = v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)];
-            forall(NUM_QUAD_1D,[&](int qx) { //for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            forall(NUM_QUAD_1D,[&](int qx) {
               Dx_x[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
               x_y[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
             });
           });
-          forall(NUM_QUAD_1D,[&](int qy) { //for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          forall(NUM_QUAD_1D,[&](int qy) {
             const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
             const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-            forall(NUM_QUAD_1D,[&](int qx) { //for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            forall(NUM_QUAD_1D,[&](int qx) {
               Dxy_x[ijN(qx,qy,NUM_QUAD_1D)] += Dx_x[qx] * wy;
               xDy_y[ijN(qx,qy,NUM_QUAD_1D)] += x_y[qx]  * wDy;
               xy_z[ijN(qx,qy,NUM_QUAD_1D)]  += x_y[qx]  * wy;
             });
           });
         });
-        forall(NUM_QUAD_1D,[&](int qz) { //for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        forall(NUM_QUAD_1D,[&](int qz) { 
           const double wz  = H1DofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
           const double wDz = H1DofToQuadD[ijN(qz,dz,NUM_QUAD_1D)];
-          forall(NUM_QUAD_1D,[&](int qy) { //for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-            forall(NUM_QUAD_1D,[&](int qx) { //for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          forall(NUM_QUAD_1D,[&](int qy) { 
+            forall(NUM_QUAD_1D,[&](int qx) {
               vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)] +=
                 ((Dxy_x[ijN(qx,qy,NUM_QUAD_1D)]*wz *stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)]) +
                  (xDy_y[ijN(qx,qy,NUM_QUAD_1D)]*wz *stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)]) +
@@ -344,44 +344,132 @@ void rForceMultTranspose3D(const int NUM_DIM,
         });
       });
     });
-    forall(L2_DOFS_1D,[&](int dz) { //for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
-      forall(L2_DOFS_1D,[&](int dy) { //for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-        forall(L2_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+    forall(L2_DOFS_1D,[&](int dz) {
+      forall(L2_DOFS_1D,[&](int dy) { 
+        forall(L2_DOFS_1D,[&](int dx) { 
           e[ijklN(dx,dy,dz,el,L2_DOFS_1D)] = 0;
         });
       });
     });
-    forall(NUM_QUAD_1D,[&](int qz) { //for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+    forall(NUM_QUAD_1D,[&](int qz) { 
       double e_xy[L2_DOFS_1D * L2_DOFS_1D];
-      forall(L2_DOFS_1D*L2_DOFS_1D,[&](int d) { //for (int d = 0; d < (L2_DOFS_1D * L2_DOFS_1D); ++d) {
+      forall(L2_DOFS_1D*L2_DOFS_1D,[&](int d) { 
         e_xy[d] = 0;
       });
-      forall(NUM_QUAD_1D,[&](int qy) { //for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+      forall(NUM_QUAD_1D,[&](int qy) {
         double e_x[L2_DOFS_1D];
-        forall(L2_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        forall(L2_DOFS_1D,[&](int dx) { 
           e_x[dx] = 0;
         });
-        forall(NUM_QUAD_1D,[&](int qx) { //for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+        forall(NUM_QUAD_1D,[&](int qx) { 
           const double r_v = vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)];
-          forall(L2_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          forall(L2_DOFS_1D,[&](int dx) { 
             e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
           });
         });
-        forall(L2_DOFS_1D,[&](int dy) { //for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+        forall(L2_DOFS_1D,[&](int dy) { 
           const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
-          forall(L2_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          forall(L2_DOFS_1D,[&](int dx) {
             e_xy[ijN(dx,dy,L2_DOFS_1D)] += e_x[dx] * w;
           });
         });
       });
-      forall(L2_DOFS_1D,[&](int dz) { //for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
+      forall(L2_DOFS_1D,[&](int dz) { 
         const double w = L2QuadToDof[ijN(dz,qz,L2_DOFS_1D)];
-        forall(L2_DOFS_1D,[&](int dy) { //for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-          forall(L2_DOFS_1D,[&](int dx) { //for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        forall(L2_DOFS_1D,[&](int dy) { 
+          forall(L2_DOFS_1D,[&](int dx) {
             e[ijklN(dx,dy,dz,el,L2_DOFS_1D)] += w * e_xy[ijN(dx,dy,L2_DOFS_1D)];
           });
         });
       });
     });
   });
+}
+
+// *****************************************************************************
+void rForceMult(const int NUM_DIM,
+                const int NUM_DOFS_1D,
+                const int NUM_QUAD_1D,
+                const int L2_DOFS_1D,
+                const int H1_DOFS_1D,
+                const int nzones,
+                const double* L2QuadToDof,
+                const double* H1DofToQuad,
+                const double* H1DofToQuadD,
+                const double* stressJinvT,
+                const double* e,
+                double* __restrict v){
+   if (NUM_DIM==1) assert(false);
+   if (NUM_DIM==2)
+      rForceMult2D(NUM_DIM,
+                   NUM_DOFS_1D,
+                   NUM_QUAD_1D,
+                   NUM_QUAD_1D*NUM_QUAD_1D,
+                   L2_DOFS_1D,
+                   H1_DOFS_1D,
+                   nzones,
+                   L2QuadToDof,
+                   H1DofToQuad,
+                   H1DofToQuadD,
+                   stressJinvT,
+                   e,v);
+   
+   if (NUM_DIM==3)
+      rForceMult3D(NUM_DIM,
+                   NUM_DOFS_1D,
+                   NUM_QUAD_1D,
+                   NUM_QUAD_1D*NUM_QUAD_1D,
+                   NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D,
+                   L2_DOFS_1D,
+                   H1_DOFS_1D,
+                   nzones,
+                   L2QuadToDof,
+                   H1DofToQuad,
+                   H1DofToQuadD,
+                   stressJinvT,
+                   e,v);
+}
+
+// *****************************************************************************
+void rForceMultTranspose(const int NUM_DIM,
+                         const int NUM_DOFS_1D,
+                         const int NUM_QUAD_1D,
+                         const int L2_DOFS_1D,
+                         const int H1_DOFS_1D,
+                         const int nzones,
+                         const double* L2QuadToDof,
+                         const double* H1DofToQuad,
+                         const double* H1DofToQuadD,
+                         const double* stressJinvT,
+                         const double* v,
+                         double* __restrict e){
+  if (NUM_DIM==1) assert(false);
+  
+  if (NUM_DIM==2)
+    rForceMultTranspose2D(NUM_DIM,
+                          NUM_DOFS_1D,
+                          NUM_QUAD_1D,
+                          NUM_QUAD_1D*NUM_QUAD_1D,
+                          L2_DOFS_1D,
+                          H1_DOFS_1D,
+                          nzones,
+                          L2QuadToDof,
+                           H1DofToQuad,
+                           H1DofToQuadD,
+                           stressJinvT,
+                           v,e);
+   if (NUM_DIM==3)
+     rForceMultTranspose3D(NUM_DIM,
+                           NUM_DOFS_1D,
+                           NUM_QUAD_1D,
+                           NUM_QUAD_1D*NUM_QUAD_1D,
+                           NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D,
+                           L2_DOFS_1D,
+                           H1_DOFS_1D,
+                           nzones,
+                           L2QuadToDof,
+                           H1DofToQuad,
+                           H1DofToQuadD,
+                           stressJinvT,
+                           v,e);
 }

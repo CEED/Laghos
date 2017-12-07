@@ -46,8 +46,11 @@ make style
 
 endef
 
-# print name of current/working directory
-PCWD = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+# fetch current/working directory
+pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+raja = $(pwd)/raja
+kernels = $(raja)/kernels
+
 CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # Default installation location
@@ -112,11 +115,12 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
-SOURCE_FILES += $(wildcard $(PCWD)/raja/kernels/*.cpp)
-SOURCE_FILES += $(wildcard $(PCWD)/raja/*.cpp)
+KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
+  RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
-OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
-OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
+OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
+OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
+OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 # Targets
@@ -126,8 +130,12 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 .SUFFIXES: .c .cpp .o
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
-.c.o:
-	cd $(<D); $(Ccc) -c $(<F)
+
+$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp
+	$(CCC) -c -o $@ $<
+
+$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp
+	$(CCC) -c -o $@ $<
 
 all: 
 	@$(MAKE) -j $(CPU) laghos

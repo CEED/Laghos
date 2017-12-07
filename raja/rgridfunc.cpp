@@ -23,29 +23,12 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
   const RajaDofQuadMaps& maps = RajaDofQuadMaps::Get(fes, ir);
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
   const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
-
   quadValues.SetSize(numQuad * elements);
-
-  if (dim==1) { assert(false); }
-  if (dim==2)
-    rGridFuncToQuad2D(vdim,
-                      dofs1D,
-                      quad1D,
-                      elements,
-                      maps.dofToQuad,
-                      fes.GetLocalToGlobalMap(),
-                      ptr(),
-                      quadValues);
-  if (dim==3)
-    rGridFuncToQuad3D(vdim,
-                      dofs1D,
-                      quad1D,
-                      elements,
-                      maps.dofToQuad,
-                      fes.GetLocalToGlobalMap(),
-                      ptr(),
-                      quadValues);
-
+  rGridFuncToQuad(dim,vdim,dofs1D,quad1D,elements,
+                  maps.dofToQuad,
+                  fes.GetLocalToGlobalMap(),
+                  ptr(),
+                  quadValues);
 }
 
 } // mfem
