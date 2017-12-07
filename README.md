@@ -127,7 +127,7 @@ Laghos has the following external dependencies:
   https://github.com/mfem/mfem
 
 To build the miniapp, first download *hypre* and METIS from the links above
-and put everything on the same level as Laghos:
+and put everything on the same level as the `Laghos` directory:
 ```sh
 ~> ls
 Laghos/  hypre-2.10.0b.tar.gz  metis-4.0.tar.gz
@@ -155,7 +155,7 @@ Build METIS:
 This build is optional, as MFEM can be build without METIS by specifying
 `MFEM_USE_METIS = NO` below.
 
-Clone and build the parallel version of MFEM starting from the `laghos-v1.0` tag:
+Clone and build the parallel version of MFEM:
 ```sh
 ~> git clone git@github.com:mfem/mfem.git ./mfem
 ~> cd mfem/
@@ -163,7 +163,10 @@ Clone and build the parallel version of MFEM starting from the `laghos-v1.0` tag
 ~/mfem> make parallel -j
 ~/mfem> cd ..
 ```
-For more details, see the [MFEM building page](http://mfem.org/building/).
+The above uses the `laghos-v1.0` tag of MFEM, which is guaranteed to work with
+Laghos v1.0. Alternatively, one can use the latest versions of the MFEM and
+Laghos `master` branches (provided there are no conflicts. See the [MFEM
+building page](http://mfem.org/building/) for additional details.
 
 Build Laghos
 ```sh
@@ -186,7 +189,8 @@ mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
 mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa
 ```
 
-The latter produces the following density plot (when run with `-vis` instead of `-no-vis`)
+The latter produces the following density plot (when run with the `-vis` instead
+of the `-no-vis` option)
 
 ![Sedov blast image](data/sedov.png)
 
@@ -202,7 +206,8 @@ mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -no-vis -pa
 mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -no-vis -pa
 ```
 
-The latter produces the following velocity magnitude plot (when run with `-vis` instead of `-no-vis`)
+The latter produces the following velocity magnitude plot (when run with the
+`-vis` instead of the `-no-vis` option)
 
 ![Taylor-Green image](data/tg.png)
 
@@ -217,7 +222,8 @@ mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 
 mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa
 ```
 
-The latter produces the following specific internal energy plot (when run with `-vis` instead of `-no-vis`)
+The latter produces the following specific internal energy plot (when run with
+the `-vis` instead of the `-no-vis` option)
 
 ![Triple-point image](data/tp.png)
 
@@ -279,7 +285,7 @@ srun -n 393216 laghos -pa -p 1 -tf 0.6 -no-vis
 ```
 This is Q3-Q2 3D computation on 393,216 MPI ranks (24,576 nodes) that produces
 rates of approximately 168497, 74221, and 16696 megadofs, and a total FOM of
-about 2073.
+about 2073 megadofs.
 
 To make the above run 8 times bigger, one can either weak scale by using 8 times
 as many MPI tasks and increasing the number of serial refinements: `srun -n
