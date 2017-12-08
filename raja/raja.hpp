@@ -16,10 +16,17 @@
 #ifndef MFEM_RAJA
 #define MFEM_RAJA
 
+// *****************************************************************************
+#ifdef USE_RAJA
+#include "cuda.h"
+#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+
 // RAJA ************************************************************************
 #include "RAJA/RAJA.hpp"
 #include "RAJA/index/RangeSegment.hpp"
 #include "RAJA/util/defines.hpp"
+#endif // USE_RAJA
+#include "memoryManager.hpp"
 
 // Debug & Assert **************************************************************
 #undef NDEBUG
@@ -33,7 +40,6 @@
 #include "fem/pfespace.hpp"
 
 // RAJA ************************************************************************
-#include "memoryManager.hpp"
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rfespace.hpp"

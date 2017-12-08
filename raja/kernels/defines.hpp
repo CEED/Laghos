@@ -35,16 +35,24 @@
 
 // *****************************************************************************
 #include "RAJA/RAJA.hpp"
+#ifdef USE_RAJA
+const int CUDA_BLOCK_SIZE = 256;
+#  define policy RAJA::cuda_exec<CUDA_BLOCK_SIZE>
+#  define device __device__
+#else
+#  define policy RAJA::seq_exec
+#  define device
+#endif // USE_RAJA
 
 template <typename T>
 void forall(RAJA::Index_type max, T&& body) {
-  RAJA::forall<RAJA::seq_exec>(0,max,[&](RAJA::Index_type i) {
+  RAJA::forall<policy>(0,max,[=]device(RAJA::Index_type i) {
     body(i);
   });
 }
 template <typename T>
 void forall(RAJA::Index_type min, RAJA::Index_type max, T&& body) {
-  RAJA::forall<RAJA::seq_exec>(min,max,[&](RAJA::Index_type i) {
+  RAJA::forall<policy>(min,max,[=]device(RAJA::Index_type i) {
     body(i);
   });
 }

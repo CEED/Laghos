@@ -101,10 +101,19 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -g -Wall -fno-omit-frame-pointer
+CXXFLAGS += -g -Wall -fno-omit-frame-pointer -std=c++11 -fopenmp
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS) /usr/local/cuda/lib64/libcudart_static.a -ldl
+MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
+HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include
+METIS_INCLUDES = -I/home/camier1/usr/local/metis/5.1.0/include
+CUDA_INCLUDES = -I/usr/local/cuda/include
+RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
+
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+LAGHOS_LIBS = $(MFEM_LIBS) \
+					/home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a \
+					/usr/local/cuda/lib64/libcudart_static.a \
+					-ldl -lrt
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -132,13 +141,12 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 	cd $(<D); $(CCC) -c $(<F)
 
 $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp
-	$(CCC) -c -o $@ $<
+#	$(CCC) -c -o $@ $<
+	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp
 #	$(CCC) -c -o $@ $<
-	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC -I/usr/local/cuda/include -I/home/camier1/home/raja/raja/include -I/home/camier1/home/raja/raja/build-gcc-release/include
-
-#/home/camier1/usr/local/gcc/5.5.0/bin/g++    -Wall -Wextra  -fopenmp -O3 -DNDEBUG  -rdynamic -fopenmp  CMakeFiles/example-add-vectors.dir/example-add-vectors_generated_example-add-vectors.cpp.o  -o bin/example-add-vectors /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so ../lib/libRAJA.a /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so /usr/local/cuda/lib64/libcudart_static.a -lpthread -ldl /usr/lib64/librt.so 
+	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
 all: 
 	@$(MAKE) -j $(CPU) laghos

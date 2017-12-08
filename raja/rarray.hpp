@@ -43,7 +43,6 @@ template <class T> class RajaArray<T,true> {
     //printf("\033[32m.\033[m");fflush(stdout);
     //data=(T*)::malloc(bytes());
     data=(T*)memoryManager::allocate<T>(size());
-
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -74,7 +73,8 @@ template <class T> class RajaArray<T,false> {
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    data=(T*)::malloc(bytes());
+    //data=(T*)::malloc(bytes());
+    data=(T*)memoryManager::allocate<T>(size());
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }
     for (size_t i=1,b=d[0]; i<DIM; xsw(d[i],b),++i) {

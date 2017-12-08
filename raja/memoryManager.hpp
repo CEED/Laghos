@@ -16,8 +16,14 @@
 #ifndef EXAMPLES_MEMORYMANAGER_HPP
 #define EXAMPLES_MEMORYMANAGER_HPP
 
-#include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
+//#include "RAJA/RAJA.hpp"
+//#include "RAJA/util/defines.hpp"
+#if not defined(RAJA_ENABLE_CUDA)
+#warning RAJA_ENABLE_CUDA
+#define RAJA_ENABLE_CUDA 1
+#include "cuda.h"
+#include "cuda_runtime.h"
+#endif // RAJA_ENABLE_CUDA
 
 /*
   As RAJA does not manage memory the user must allocate and deallocate memory. 
@@ -30,7 +36,7 @@
 namespace memoryManager{
 
   template <typename T>
-  T *allocate(RAJA::Index_type size)
+  T *allocate(int size)
   {
     T *ptr;
 #if defined(RAJA_ENABLE_CUDA)

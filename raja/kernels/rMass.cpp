@@ -22,7 +22,7 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  forall(numElements,[=](int e) {
+  forall(numElements,[=]device(int e) {
     for (int q = 0; q < NUM_QUAD_2D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,2,NUM_QUAD_2D)];
       const double J12 = J[ijklNM(1,0,q,e,2,NUM_QUAD_2D)];
@@ -41,7 +41,7 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  forall(numElements,[=](int e) {
+  forall(numElements,[=]device(int e) {
     for (int q = 0; q < NUM_QUAD_3D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,3,NUM_QUAD_3D)];
       const double J12 = J[ijklNM(1,0,q,e,3,NUM_QUAD_3D)];
@@ -74,6 +74,7 @@ void rMassAssemble(const int dim,
 }
 
 // *****************************************************************************
+template<int q1, int d1>
 static void rMassMultAdd2D(const int NUM_DOFS_1D,
                            const int NUM_QUAD_1D,
                            const int numElements,
@@ -83,16 +84,16 @@ static void rMassMultAdd2D(const int NUM_DOFS_1D,
                            const double* quadToDofD,
                            const double* oper,
                            const double* solIn,
-                           double* __restrict solOut) {
-  forall(numElements,[=](int e) {//for (int e = 0; e < numElements; ++e) {
-    double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+                           double* __restrict solOut) {  
+  forall(numElements,[=]device(int e) {
+      double sol_xy[q1][q1];
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
         sol_xy[qy][qx] = 0.0;
       }
     }
     for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-      double sol_x[NUM_QUAD_1D];
+      double sol_x[q1];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         sol_x[qy] = 0.0;
       }
@@ -115,7 +116,7 @@ static void rMassMultAdd2D(const int NUM_DOFS_1D,
       }
     }
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-      double sol_x[NUM_DOFS_1D];
+      double sol_x[d1];
       for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
         sol_x[dx] = 0.0;
       }
@@ -134,6 +135,38 @@ static void rMassMultAdd2D(const int NUM_DOFS_1D,
     }
   });
 }
+static void rMassMultAdd2D(const int NUM_DOFS_1D,
+                           const int NUM_QUAD_1D,
+                           const int numElements,
+                           const double* dofToQuad,
+                           const double* dofToQuadD,
+                           const double* quadToDof,
+                           const double* quadToDofD,
+                           const double* oper,
+                           const double* solIn,
+                           double* __restrict solOut) {
+  //printf("\033[31m[rMassMultAdd2D] %d\033[m\n",NUM_QUAD_1D);
+  //printf("\033[31m[rMassMultAdd2D] %d\033[m\n",NUM_DOFS_1D);
+  if (NUM_QUAD_1D==4 && NUM_DOFS_1D==2) {
+    rMassMultAdd2D<4,2>(NUM_DOFS_1D,NUM_QUAD_1D,numElements,
+                        dofToQuad,dofToQuadD,quadToDof,quadToDofD,
+                        oper,solIn,solOut);
+    return;
+  }
+  if (NUM_QUAD_1D==4 && NUM_DOFS_1D==3) {
+    rMassMultAdd2D<4,3>(NUM_DOFS_1D,NUM_QUAD_1D,numElements,
+                        dofToQuad,dofToQuadD,quadToDof,quadToDofD,
+                        oper,solIn,solOut);
+    return;
+  }
+  if (NUM_QUAD_1D==16 && NUM_DOFS_1D==3) {
+    rMassMultAdd2D<16,3>(NUM_DOFS_1D,NUM_QUAD_1D,numElements,
+                        dofToQuad,dofToQuadD,quadToDof,quadToDofD,
+                        oper,solIn,solOut);
+    return;
+  }
+  assert(false);  
+}
 
 // *****************************************************************************
 static void rMassMultAdd3D(const int NUM_DOFS_1D,
@@ -146,8 +179,12 @@ static void rMassMultAdd3D(const int NUM_DOFS_1D,
                            const double* oper,
                            const double* solIn,
                            double* __restrict solOut) {
-  forall(numElements,[=](int e) {//for (int e = 0; e < numElements; ++e) {
-    double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
+  assert(NUM_QUAD_1D==4);
+  assert(NUM_DOFS_1D==4);
+  const int q1 = 4;
+  const int d1 = 4;
+  forall(numElements,[=]device(int e) {
+    double sol_xyz[q1][q1][q1];
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -156,14 +193,14 @@ static void rMassMultAdd3D(const int NUM_DOFS_1D,
       }
     }
     for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-      double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
+      double sol_xy[q1][q1];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           sol_xy[qy][qx] = 0;
         }
       }
       for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-        double sol_x[NUM_QUAD_1D];
+        double sol_x[q1];
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           sol_x[qx] = 0;
         }
@@ -197,14 +234,14 @@ static void rMassMultAdd3D(const int NUM_DOFS_1D,
       }
     }
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-      double sol_xy[NUM_DOFS_1D][NUM_DOFS_1D];
+      double sol_xy[d1][d1];
       for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
         for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
           sol_xy[dy][dx] = 0;
         }
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        double sol_x[NUM_DOFS_1D];
+        double sol_x[d1];
         for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
           sol_x[dx] = 0;
         }

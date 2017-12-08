@@ -22,7 +22,7 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* detJ,
                          const double* quadWeights,
                          double* __restrict rho0DetJ0w) {
-  forall(numElements,[=](int el) {//for (int el = 0; el < numElements; ++el) {
+  forall(numElements,[=]device(int el) {
     for (int q = 0; q < NUM_QUAD; ++q) {
       rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
         rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
@@ -53,15 +53,22 @@ void rUpdateQuadratureData2D(const double GAMMA,
                              const double* detJ,
                              double* __restrict stressJinvT,
                              double* __restrict dtEst) {
-  forall(numElements,[=](int el){//for (int el = 0; el < numElements; ++el) {
-    double s_gradv[4*NUM_QUAD_2D] ;
+//  printf("\033[31m[%d]\033[m\n",NUM_DIM);
+//  printf("\033[31m[%d]\033[m\n",NUM_QUAD_1D);
+//  printf("\033[31m[%d]\033[m\n",NUM_QUAD_2D);
+  assert(NUM_DIM==2); const int nd = 2;
+  assert(NUM_QUAD_1D==4); const int q1 = 4;
+  assert(NUM_QUAD_2D==16); const int q2 = 16;
+  
+  forall(numElements,[=]device(int el){
+    double s_gradv[4*q2] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
       s_gradv[i] = 0;
     }
 
     for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-      double vDx[2*NUM_QUAD_1D] ;
-      double vx[2*NUM_QUAD_1D]  ;
+      double vDx[2*q1] ;
+      double vx[2*q1]  ;
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
         for (int vi = 0; vi < 2; ++vi) {
           vDx[ijN(vi,qx,2)] = 0;
@@ -92,8 +99,8 @@ void rUpdateQuadratureData2D(const double GAMMA,
     }
 
     for (int q = 0; q < NUM_QUAD; ++q) {
-      double q_gradv[NUM_DIM*NUM_DIM]  ;
-      double q_stress[NUM_DIM*NUM_DIM] ;
+      double q_gradv[nd*nd];
+      double q_stress[nd*nd];
 
       const double invJ_00 = invJ[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
       const double invJ_10 = invJ[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
@@ -216,17 +223,22 @@ void rUpdateQuadratureData3D(const double GAMMA,
                              const double* detJ,
                              double* __restrict stressJinvT,
                              double* __restrict dtEst) {
-  forall(numElements,[=](int el){//for (int el = 0; el < numElements; ++el) {
-    double s_gradv[9*NUM_QUAD_3D] ;
+  //assert(NUM_DIM==2); const int nd = 2;
+  assert(NUM_QUAD_1D==2); const int q1 = 2;
+  assert(NUM_QUAD_2D==4); const int q2 = 4;
+  assert(NUM_QUAD_3D==8); const int q3 = 8;
+  
+  forall(numElements,[=]device(int el){
+    double s_gradv[9*q3] ;
 
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
       s_gradv[i] = 0;
     }
 
     for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-      double vDxy[3*NUM_QUAD_2D] ;
-      double vxDy[3*NUM_QUAD_2D] ;
-      double vxy[3*NUM_QUAD_2D]  ;
+      double vDxy[3*q2] ;
+      double vxDy[3*q2] ;
+      double vxy[3*q2]  ;
       for (int i = 0; i < (3*NUM_QUAD_2D); ++i) {
         vDxy[i] = 0;
         vxDy[i] = 0;
@@ -234,8 +246,8 @@ void rUpdateQuadratureData3D(const double GAMMA,
       }
 
       for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-        double vDx[3*NUM_QUAD_1D] ;
-        double vx[3*NUM_QUAD_1D]  ;
+        double vDx[3*q1] ;
+        double vx[3*q1]  ;
         for (int i = 0; i < (3*NUM_QUAD_1D); ++i) {
           vDx[i] = 0;
           vx[i]  = 0;

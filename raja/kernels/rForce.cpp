@@ -29,13 +29,21 @@ static void rForceMult2D(const int NUM_DIM,
                          const double* stressJinvT,
                          const double* e,
                          double* __restrict v) {
-  forall(numElements,[&](int el){//for (int el = 0; el < numElements; ++el) {
-    double e_xy[NUM_QUAD_2D];
+  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_1D);
+  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_2D);
+  //printf("\033[31m[%d]\033[m\n",H1_DOFS_1D);
+
+  assert(NUM_QUAD_1D==4); const int q1 = 4;
+  assert(NUM_QUAD_2D==16); const int q2 = 16;
+  assert(H1_DOFS_1D==3);  const int h1 = 3;
+  
+  forall(numElements,[=]device(int el){
+    double e_xy[q2];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       e_xy[i] = 0;
     }
     for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-      double e_x[NUM_QUAD_1D];
+      double e_x[q1];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         e_x[qy] = 0;
       }
@@ -59,8 +67,8 @@ static void rForceMult2D(const int NUM_DIM,
         }
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        double Dxy[H1_DOFS_1D];
-        double xy[H1_DOFS_1D];
+        double Dxy[h1];
+        double xy[h1];
         for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
           Dxy[dx] = 0.0;
           xy[dx]  = 0.0;
@@ -99,20 +107,28 @@ static void rForceMultTranspose2D(const int NUM_DIM,
                                   const double* stressJinvT,
                                   const double* v,
                                   double* __restrict e) {
-  forall(numElements,[&](int el){//for (int el = 0; el < numElements; ++el) {
-    double vStress[NUM_QUAD_2D];
+  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_1D);
+  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_2D);
+  //printf("\033[31m[%d]\033[m\n",L2_DOFS_1D);
+
+  assert(NUM_QUAD_1D==4); const int q1 = 4;
+  assert(NUM_QUAD_2D==16); const int q2 = 16;
+  assert(L2_DOFS_1D==2);  const int l1 = 2;
+
+  forall(numElements,[=]device(int el){
+    double vStress[q2];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       vStress[i] = 0;
     }
     for (int c = 0; c < NUM_DIM; ++c) {
-      double v_Dxy[NUM_QUAD_2D];
-      double v_xDy[NUM_QUAD_2D];
+      double v_Dxy[q2];
+      double v_xDy[q2];
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         v_Dxy[i] = v_xDy[i] = 0;
       }
       for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-        double v_x[NUM_QUAD_1D];
-        double v_Dx[NUM_QUAD_1D];
+        double v_x[q1];
+        double v_Dx[q1];
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           v_x[qx] = v_Dx[qx] = 0;
         }
@@ -147,7 +163,7 @@ static void rForceMultTranspose2D(const int NUM_DIM,
       }
     }
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-      double e_x[L2_DOFS_1D];
+      double e_x[l1];
       for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
         e_x[dx] = 0;
       }
@@ -182,18 +198,24 @@ static void rForceMult3D(const int NUM_DIM,
                          const double* stressJinvT,
                          const double* e,
                          double* __restrict v) {
-  forall(numElements,[&](int el){//for (int el = 0; el < numElements; ++el) {
-    double e_xyz[NUM_QUAD_3D];
+  
+  assert(NUM_QUAD_1D==2); const int q1 = 2;
+  assert(NUM_QUAD_2D==4); const int q2 = 4;
+  assert(NUM_QUAD_3D==8); const int q3 = 8;
+  assert(H1_DOFS_1D==2);  const int h1 = 2;
+  
+  forall(numElements,[=]device(int el){
+    double e_xyz[q3];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       e_xyz[i] = 0;
     }
     for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
-      double e_xy[NUM_QUAD_2D];
+      double e_xy[q2];
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         e_xy[i] = 0;
       }
       for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-        double e_x[NUM_QUAD_1D];
+        double e_x[q1];
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
           e_x[qy] = 0;
         }
@@ -228,16 +250,16 @@ static void rForceMult3D(const int NUM_DIM,
         }
       }
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-        double Dxy_x[H1_DOFS_1D * H1_DOFS_1D];
-        double xDy_y[H1_DOFS_1D * H1_DOFS_1D];
-        double xy_z[H1_DOFS_1D * H1_DOFS_1D] ;
+        double Dxy_x[h1 * h1];
+        double xDy_y[h1 * h1];
+        double xy_z[h1 * h1] ;
         for (int d = 0; d < (H1_DOFS_1D * H1_DOFS_1D); ++d) {
           Dxy_x[d] = xDy_y[d] = xy_z[d] = 0;
         }
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-          double Dx_x[H1_DOFS_1D];
-          double x_y[H1_DOFS_1D];
-          double x_z[H1_DOFS_1D];
+          double Dx_x[h1];
+          double x_y[h1];
+          double x_z[h1];
           for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
             Dx_x[dx] = x_y[dx] = x_z[dx] = 0;
           }
@@ -294,22 +316,27 @@ static void rForceMultTranspose3D(const int NUM_DIM,
                                   const double* stressJinvT,
                                   const double* v,
                                   double* __restrict e) {
-  forall(numElements,[&](int el){//for (int el = 0; el < numElements; ++el) {
-    double vStress[NUM_QUAD_3D];
+  assert(NUM_QUAD_1D==2); const int q1 = 2;
+  assert(NUM_QUAD_2D==4); const int q2 = 4;
+  assert(NUM_QUAD_3D==8); const int q3 = 8;
+  assert(L2_DOFS_1D==2);  const int l1 = 2;
+
+  forall(numElements,[=]device(int el){
+    double vStress[q3];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       vStress[i] = 0;
     }
     for (int c = 0; c < NUM_DIM; ++c) {
       for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
-        double Dxy_x[NUM_QUAD_2D];
-        double xDy_y[NUM_QUAD_2D];
-        double xy_z[NUM_QUAD_2D] ;
+        double Dxy_x[q2];
+        double xDy_y[q2];
+        double xy_z[q2] ;
         for (int i = 0; i < NUM_QUAD_2D; ++i) {
           Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
         }
         for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-          double Dx_x[NUM_QUAD_1D];
-          double x_y[NUM_QUAD_1D];
+          double Dx_x[q1];
+          double x_y[q1];
           for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
             Dx_x[qx] = x_y[qx] = 0;
           }
@@ -352,12 +379,12 @@ static void rForceMultTranspose3D(const int NUM_DIM,
       }
     }
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-      double e_xy[L2_DOFS_1D * L2_DOFS_1D];
+      double e_xy[l1 * l1];
       for (int d = 0; d < (L2_DOFS_1D * L2_DOFS_1D); ++d) {
         e_xy[d] = 0;
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        double e_x[L2_DOFS_1D];
+        double e_x[l1];
         for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
           e_x[dx] = 0;
         }
