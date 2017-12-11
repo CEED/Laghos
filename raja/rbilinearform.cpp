@@ -16,7 +16,7 @@ namespace mfem {
 // * RajaBilinearForm
 // ***************************************************************************
 RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
-  Operator(fes->GetVSize(),fes->GetVSize()),
+  RajaOperator(fes->GetVSize(),fes->GetVSize()),
   mesh(fes->GetMesh()),
   trialFes(fes),
   testFes(fes),
@@ -64,7 +64,7 @@ void RajaBilinearForm::Assemble() {
 // ***************************************************************************
 void RajaBilinearForm::FormLinearSystem(const Array<int>& constraintList,
                                         RajaVector& x, RajaVector& b,
-                                        Operator*& Aout,
+                                        RajaOperator*& Aout,
                                         RajaVector& X, RajaVector& B,
                                         int copy_interior) {
   FormOperator(constraintList, Aout);
@@ -73,10 +73,10 @@ void RajaBilinearForm::FormLinearSystem(const Array<int>& constraintList,
 
 // ***************************************************************************
 void RajaBilinearForm::FormOperator(const Array<int>& constraintList,
-                                    Operator*& Aout) {
-  const Operator* trialP = trialFes->GetProlongationOperator();
-  const Operator* testP  = testFes->GetProlongationOperator();
-  Operator* rap = this;
+                                    RajaOperator*& Aout) {
+  const RajaOperator* trialP = trialFes->GetProlongationOperator();
+  const RajaOperator* testP  = testFes->GetProlongationOperator();
+  RajaOperator* rap = this;
   if (trialP) { rap = new RajaRAPOperator(*testP, *this, *trialP); }
   Aout = new RajaConstrainedOperator(rap, constraintList, rap!=this);
 }
@@ -84,11 +84,11 @@ void RajaBilinearForm::FormOperator(const Array<int>& constraintList,
 // ***************************************************************************
 void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
                                const RajaVector& x, const RajaVector& b,
-                               Operator* A,
+                               RajaOperator* A,
                                RajaVector& X, RajaVector& B,
                                int copy_interior) {
-  const Operator* P = trialFes->GetProlongationOperator();
-  const Operator* R = trialFes->GetRestrictionOperator();
+  const RajaOperator* P = trialFes->GetProlongationOperator();
+  const RajaOperator* R = trialFes->GetRestrictionOperator();
   if (P) {
     // Variational restriction with P
     B.SetSize(P->Width());
@@ -132,23 +132,32 @@ void RajaBilinearForm::MultTranspose(const RajaVector& x, RajaVector& y) const {
 
 // ***************************************************************************
 void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
-    const RajaVector& b,
-    RajaVector& x) {
-  TRecoverFEMSolution<RajaVector> (X, b, x);
+                                          const RajaVector& b,
+                                          RajaVector& x) {
+//#warning TRecoverFEMSolution
+//  TRecoverFEMSolution<RajaVector> (X, b, x);
+   const RajaOperator *P = this->GetProlongation();
+   if (P)
+   {
+      // Apply conforming prolongation
+      x.SetSize(P->Height());
+      P->Mult(X, x);
+   }
+   // Otherwise X and x point to the same data
 }
 
 
 // ***************************************************************************
 // * RajaConstrainedOperator
 // ***************************************************************************
-RajaConstrainedOperator::RajaConstrainedOperator(Operator* A_,
-    const Array<int>& constraintList_,
-    bool own_A_) :
-  Operator(A_->Height(), A_->Width()) {
+RajaConstrainedOperator::RajaConstrainedOperator(RajaOperator* A_,
+                                                 const Array<int>& constraintList_,
+                                                 bool own_A_) :
+  RajaOperator(A_->Height(), A_->Width()) {
   Setup(A_, constraintList_, own_A_);
 }
 
-void RajaConstrainedOperator::Setup(Operator* A_,
+void RajaConstrainedOperator::Setup(RajaOperator* A_,
                                     const Array<int>& constraintList_,
                                     bool own_A_) {
   A = A_;

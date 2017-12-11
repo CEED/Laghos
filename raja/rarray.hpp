@@ -21,7 +21,7 @@ namespace mfem {
 template <class T, bool xyz = true> class RajaArray;
 
 // Partial Specializations for xyz==TRUE *************************************
-template <class T> class RajaArray<T,true> {
+  template <class T> class RajaArray<T,true> : public rmanaged<T,mng>{
  private:
   T* data = NULL;
   size_t sz,d[4];
@@ -40,9 +40,9 @@ template <class T> class RajaArray<T,true> {
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    //printf("\033[32m.\033[m");fflush(stdout);
-    //data=(T*)::malloc(bytes());
-    data=(T*)memoryManager::allocate<T>(size());
+    printf("\033[32mi\033[m");fflush(stdout);
+    data=(T*) operator new(sz*sizeof(T));
+
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -54,7 +54,7 @@ template <class T> class RajaArray<T,true> {
 };
 
 // Partial Specializations for xyz==FALSE ************************************
-template <class T> class RajaArray<T,false> {
+  template <class T> class RajaArray<T,false> : public rmanaged<T,mng>{
  private:
   static const int DIM = 4;
   T* data = NULL;

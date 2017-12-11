@@ -16,21 +16,28 @@
 #ifndef MFEM_RAJA
 #define MFEM_RAJA
 
-// *****************************************************************************
-#ifdef USE_RAJA
-#include "cuda.h"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
-
-// RAJA ************************************************************************
-#include "RAJA/RAJA.hpp"
-#include "RAJA/index/RangeSegment.hpp"
-#include "RAJA/util/defines.hpp"
-#endif // USE_RAJA
-#include "memoryManager.hpp"
-
 // Debug & Assert **************************************************************
 #undef NDEBUG
 #include "assert.h"
+
+// RAJA ************************************************************************
+static const bool mem_manager_uvm  = true;
+static const bool mem_manager_std  = false;
+
+#ifdef USE_RAJA
+#include "cuda.h"
+#include "RAJA/RAJA.hpp"
+#include "RAJA/util/defines.hpp"
+#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+#include "RAJA/index/RangeSegment.hpp"
+#ifdef USE_CUDA
+static const bool mng = mem_manager_uvm;
+#else
+static const bool mng = mem_manager_std;
+#endif // USE_CUDA
+#else
+static const bool mng = mem_manager_std;
+#endif // USE_RAJA
 
 // External Kernels ************************************************************
 #include "kernels/kernels.hpp"
@@ -40,12 +47,15 @@
 #include "fem/pfespace.hpp"
 
 // RAJA ************************************************************************
+#include "rmanaged.hpp"
+#include "memoryManager.hpp"
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rfespace.hpp"
 #include "rbilinearform.hpp"
 #include "rgridfunc.hpp"
 #include "rbilininteg.hpp"
+
 
 #endif // MFEM_RAJA
 

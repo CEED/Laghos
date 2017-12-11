@@ -20,11 +20,11 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
                     const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* globalX,
+                    const int* __restrict offsets,
+                    const int* __restrict indices,
+                    const double* __restrict globalX,
                     double* __restrict localX) {
-  forall(globalEntries,[=]device(int i) {
+  forall(globalEntries,[=]_device_(int i) {
       const int offset = offsets[i];
       const int nextOffset = offsets[i + 1];
       for (int v = 0; v < NUM_VDIM; ++v) {

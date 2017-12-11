@@ -27,7 +27,7 @@ static void rGridFuncToQuad1D(const int NUM_VDIM,
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==1); const int q1 = 1;
   
-  forall(numElements,[=]device(int e){
+  forall(numElements,[=]_device_(int e){
     double r_out[v1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -65,7 +65,7 @@ static void rGridFuncToQuad2D(const int NUM_VDIM,
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==4); const int q1 = 4;
 
-  forall(numElements,[=]device(int e){//for (int e = 0; e < numElements; ++e) {
+  forall(numElements,[=]_device_(int e){//for (int e = 0; e < numElements; ++e) {
     double out_xy[v1][q1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -125,7 +125,7 @@ static void rGridFuncToQuad3D(const int NUM_VDIM,
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==1); const int q1 = 1;
 
-  forall(numElements,[=]device(int e){//for (int e = 0; e < numElements; ++e) {
+  forall(numElements,[=]_device_(int e){//for (int e = 0; e < numElements; ++e) {
     double out_xyz[v1][q1][q1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {

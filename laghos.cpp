@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
-   ODESolver *ode_solver = NULL;
+   RajaODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
       case 1: ode_solver = new RajaForwardEulerSolver; break;

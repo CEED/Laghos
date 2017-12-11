@@ -33,7 +33,7 @@ class RajaIntegrator;
 // ***************************************************************************
 // * RajaBilinearForm
 // ***************************************************************************
-class RajaBilinearForm : public Operator {
+class RajaBilinearForm : public RajaOperator {
   friend class RajaIntegrator;
  protected:
   typedef std::vector<RajaIntegrator*> IntegratorVector;
@@ -57,15 +57,15 @@ class RajaBilinearForm : public Operator {
   virtual void Assemble();
   void FormLinearSystem(const Array<int>& constraintList,
                         RajaVector& x, RajaVector& b,
-                        Operator*& Aout,
+                        RajaOperator*& Aout,
                         RajaVector& X, RajaVector& B,
                         int copy_interior = 0);
 
-  void FormOperator(const Array<int>& constraintList, Operator*& Aout);
+  void FormOperator(const Array<int>& constraintList, RajaOperator*& Aout);
 
   void InitRHS(const Array<int>& constraintList,
                const RajaVector& x, const RajaVector& b,
-               Operator* Aout,
+               RajaOperator* Aout,
                RajaVector& X, RajaVector& B,
                int copy_interior = 0);
 
@@ -78,18 +78,18 @@ class RajaBilinearForm : public Operator {
 // ***************************************************************************
 // * Constrained Operator
 // ***************************************************************************
-class RajaConstrainedOperator : public Operator {
+class RajaConstrainedOperator : public RajaOperator {
  protected:
-  Operator* A;
+  RajaOperator* A;
   bool own_A;
   RajaArray<int> constraintList;
   int constraintIndices;
   mutable RajaVector z, w;
  public:
-  RajaConstrainedOperator(Operator* A_,
+  RajaConstrainedOperator(RajaOperator* A_,
                           const Array<int>& constraintList_,
                           bool own_A_ = false);
-  void Setup(Operator* A_,
+  void Setup(RajaOperator* A_,
              const Array<int>& constraintList_,
              bool own_A_ = false);
   void EliminateRHS(const RajaVector& x, RajaVector& b) const;

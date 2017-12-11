@@ -13,13 +13,14 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_KERNEL_OFFSETS
-#define LAGHOS_KERNEL_OFFSETS
+#ifndef LAGHOS_KERNEL_DEFINITIONS
+#define LAGHOS_KERNEL_DEFINITIONS
 
 #include <math.h>
 #include <stdbool.h>
+#include <assert.h>
 
-// *****************************************************************************
+// Offsets *********************************************************************
 #define   ijN(i,j,N) (i)+(N)*(j)
 #define  ijkN(i,j,k,N) (i)+(N)*((j)+(N)*(k))
 #define ijklN(i,j,k,l,N) (i)+(N)*((j)+(N)*((k)+(N)*(l)))
@@ -33,17 +34,19 @@
 #define _ijklmNM(i,j,k,l,m,N,M) (j)+(N)*((k)+(N)*((l)+(N)*((m)+(M)*(i))))
 #define ijklmnNM(i,j,k,l,m,n,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*((m)+(M)*(n)))))
 
-// *****************************************************************************
-#include "RAJA/RAJA.hpp"
+// RAJA ************************************************************************
 #ifdef USE_RAJA
-const int CUDA_BLOCK_SIZE = 256;
-#  define policy RAJA::cuda_exec<CUDA_BLOCK_SIZE>
-#  define device __device__
+#include "RAJA/RAJA.hpp"
+#ifdef USE_CUDA
+#  define _device_ //__device__
+   const int CUDA_BLOCK_SIZE = 512;
+#  define policy RAJA::seq_exec //RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #else
+#  define _device_
 #  define policy RAJA::seq_exec
-#  define device
-#endif // USE_RAJA
+#endif // USE_CUDA
 
+// RAJA forall *****************************************************************
 template <typename T>
 void forall(RAJA::Index_type max, T&& body) {
   RAJA::forall<policy>(0,max,[=]device(RAJA::Index_type i) {
@@ -56,7 +59,14 @@ void forall(RAJA::Index_type min, RAJA::Index_type max, T&& body) {
     body(i);
   });
 }
+#else
+#define _device_
+template <typename T>
+void forall(int max, T&& body) {
+  for(int i=0;i<max;i++){
+      body(i);
+  }
+}
+#endif // USE_RAJA
 
-// forall(numElements,[&](int el){//
-
-#endif // LAGHOS_KERNEL_OFFSETS
+#endif // LAGHOS_KERNEL_DEFINITIONS

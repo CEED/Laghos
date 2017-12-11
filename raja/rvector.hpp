@@ -20,7 +20,7 @@ namespace mfem {
 
 struct RajaVectorRef;
 
-class RajaVector {
+class RajaVector : public rmanaged<double,mng>{
  private:
   size_t size;
   double* data;
@@ -33,6 +33,7 @@ class RajaVector {
   RajaVector(RajaArray<double>& v);
   operator Vector();
   operator Vector() const;
+  double* rmalloc(const size_t);
   inline double* ptr() const { return data;}
   inline operator double* () { return data; }
   inline operator const double* () const { return data; }

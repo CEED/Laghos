@@ -91,7 +91,7 @@ public:
 // *****************************************************************************
 // * RajaMassOperator
 // *****************************************************************************
-class RajaMassOperator : public Operator
+class RajaMassOperator : public RajaOperator
 {
 private:
    int dim, nzones;
@@ -100,7 +100,7 @@ private:
    int ess_tdofs_count;
    Array<int> *ess_tdofs;
    RajaBilinearForm bilinearForm;
-   Operator *massOperator;
+   RajaOperator *massOperator;
    QuadratureData *quad_data;
    // For distributing X
    mutable RajaVector distX;
@@ -119,7 +119,7 @@ public:
 
 // Performs partial assembly, which corresponds to (and replaces) the use of the
 // LagrangianHydroOperator::Force global matrix.
-class RajaForceOperator : public Operator
+class RajaForceOperator : public RajaOperator
 {
 private:
    int dim, nzones;

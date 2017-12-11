@@ -87,7 +87,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
                                                  double cgt, int cgiter)
-   : TimeDependentOperator(size),
+   : RajaTimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
      ess_tdofs(essential_tdofs),

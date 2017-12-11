@@ -67,7 +67,7 @@ struct TimingData
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
-class LagrangianHydroOperator : public TimeDependentOperator
+class LagrangianHydroOperator : public RajaTimeDependentOperator
 {
 protected:
    RajaFiniteElementSpace &H1FESpace;
@@ -98,7 +98,7 @@ protected:
    mutable RajaForceOperator ForcePA;
 
    // Linear solver for energy.
-   CGSolver locCG;
+   RajaCGSolver locCG;
 
    mutable TimingData timer;
 

@@ -101,7 +101,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -g -Wall -fno-omit-frame-pointer -std=c++11 -fopenmp
+CXXFLAGS += -g -std=c++11 -fopenmp #-Wall -fno-omit-frame-pointer
 
 MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
 HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include
@@ -140,13 +140,13 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
 
-$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp
-#	$(CCC) -c -o $@ $<
-	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/rmanaged.hpp
+	$(CCC) -c -o $@ $<
+#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
-$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp
-#	$(CCC) -c -o $@ $<
-	/usr/local/cuda/bin/nvcc $< -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
+	$(CCC) -c -o $@ $<
+#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
 all: 
 	@$(MAKE) -j $(CPU) laghos

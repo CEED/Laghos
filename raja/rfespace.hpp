@@ -17,21 +17,24 @@
 #define MFEM_RAJA_FESPACE
 
 namespace mfem {
+  typedef TOperator<RajaVector> RajaOperator;
 
+  
 // ***************************************************************************
 // * RajaRestrictionOperator
 // ***************************************************************************
-class RajaRestrictionOperator : public Operator {
+class RajaRestrictionOperator : public RajaOperator {
  protected:
   int entries;
   RajaArray<int> indices;
  public:
-  RajaRestrictionOperator(const int h, const int w, RajaArray<int> i):
-    Operator(h,w) {
+  RajaRestrictionOperator(const int h,
+                          const int w, RajaArray<int> i):
+    RajaOperator(h,w) {
     entries = i.size()>>1;
     indices = i;
   }
-  virtual void Mult(const RajaVector& x, RajaVector& y) const {
+  void Mult(const RajaVector& x, RajaVector& y) const {
     rExtractSubVector(entries, indices.ptr(), x, y);
   }
 };
@@ -39,12 +42,12 @@ class RajaRestrictionOperator : public Operator {
 // ***************************************************************************
 // * RajaProlongationOperator
 // ***************************************************************************
-class RajaProlongationOperator : public Operator {
+class RajaProlongationOperator : public RajaOperator {
  protected:
   const Operator* pmat = NULL;
  public:
   RajaProlongationOperator(const Operator* Op):
-    Operator(Op->Height(), Op->Width()), pmat(Op) {}
+    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
     const Vector hostX(x.ptr(), x.Size());
     Vector hostY(y.ptr(), y.Size());
@@ -53,10 +56,10 @@ class RajaProlongationOperator : public Operator {
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
     const Vector hostX(x.ptr(), x.Size());
     Vector hostY(y.ptr(), y.Size());
-    //mfem::ConformingProlongationOperator::MultTranspose
     pmat->MultTranspose(hostX, hostY);
   }
 };
+
 
 // ***************************************************************************
 // * RajaFiniteElementSpace
@@ -67,7 +70,7 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   RajaArray<int> offsets;
   RajaArray<int> indices;
   RajaArray<int> map;
-  Operator* restrictionOp, *prolongationOp;
+  RajaOperator* restrictionOp, *prolongationOp;
  public:
   RajaFiniteElementSpace(Mesh* mesh,
                          const FiniteElementCollection* fec,
@@ -77,13 +80,14 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   // *************************************************************************
   bool hasTensorBasis() const;
   int GetLocalDofs() const { return localDofs; }
-  const Operator* GetRestrictionOperator() { return restrictionOp; }
-  const Operator* GetProlongationOperator() { return prolongationOp; }
+  const RajaOperator* GetRestrictionOperator() { return restrictionOp; }
+  const RajaOperator* GetProlongationOperator() { return prolongationOp; }
   const RajaArray<int> GetLocalToGlobalMap() const { return map; }
   // *************************************************************************
   void GlobalToLocal(const RajaVector&, RajaVector&) const;
   void LocalToGlobal(const RajaVector&, RajaVector&) const;
 };
+
 }
 
 #endif

@@ -16,9 +16,9 @@ namespace mfem {
 // * RajaFiniteElementSpace
 // ***************************************************************************
 RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
-    const FiniteElementCollection* fec,
-    const int vdim_,
-    Ordering::Type ordering_)
+                                               const FiniteElementCollection* fec,
+                                               const int vdim_,
+                                               Ordering::Type ordering_)
   :ParFiniteElementSpace(dynamic_cast<ParMesh*>(mesh),fec,vdim_,ordering_),
    globalDofs(GetNDofs()),
    localDofs(GetFE(0)->GetDof()),
@@ -69,6 +69,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
 
   const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
   const Operator* P = GetProlongationMatrix(); assert(P);
+  
   const int mHeight = R->Height();
   const int* I = R->GetI();
   const int* J = R->GetJ();
@@ -83,8 +84,9 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
       reorderIndices[trueIdx++] = i;
     }
   }
-  restrictionOp = new RajaRestrictionOperator(R->Height(),R->Width(),
-      reorderIndices);
+  restrictionOp = new RajaRestrictionOperator(R->Height(),
+                                              R->Width(),
+                                              reorderIndices);
   prolongationOp = new RajaProlongationOperator(P);
 }
 
@@ -132,4 +134,5 @@ void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                  localVec,
                  globalVec);
 }
-}
+  
+} // namespace mfem

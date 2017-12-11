@@ -18,6 +18,27 @@
 
 #define restrict __restrict
 
+// **** BLAS1 ****************************************************************
+void vector_neg(const int, double* restrict);
+void vector_op_eq(const int, const double, double* restrict);
+void vector_xpay(const int, const double, double* restrict, const double* restrict,
+                 const double* restrict);
+void vector_xsy(const int, double* restrict, const double* restrict, const double* restrict);
+void vector_axpy(const int, const double, double* restrict, const double* restrict);
+void vector_map_dofs(const int, double* restrict, const double* restrict, const int* restrict);
+void vector_clear_dofs(const int, double* restrict, const int* restrict);
+void vector_vec_sub(const int, double* restrict, const double* restrict);
+void vector_vec_add(const int, double* restrict, const double* restrict);
+void vector_vec_mul(const int, double* restrict, const double);
+void vector_set_subvector(const int, double* restrict, const double* restrict,
+                          const int* restrict);
+void vector_get_subvector(const int, double* restrict, const double* restrict,
+                          const int* restrict);
+void vector_set_subvector_const(const int, const double, double* restrict,
+                                const int* restrict);
+double vector_dot(const int, const double* restrict, const double* restrict);
+double vector_min(const int, const double* restrict);
+
 
 // ***************************************************************************
 void rGridFuncToQuad(const int dim,
@@ -25,33 +46,33 @@ void rGridFuncToQuad(const int dim,
                      const int NUM_DOFS_1D,
                      const int NUM_QUAD_1D,
                      const int numElements,
-                     const double* dofToQuad,
+                     const double* restrict dofToQuad,
                      const int* l2gMap,
-                     const double* gf,
+                     const double* restrict gf,
                      double* restrict out);
 
 // mapping *******************************************************************
 void rSetSubVector(const int entries,
-                   const int* indices,
-                   const double* in,
+                   const int* restrict indices,
+                   const double* restrict in,
                    double* restrict out);
 
 void rMapSubVector(const int entries,
-                   const int* indices,
-                   const double* in,
+                   const int* restrict indices,
+                   const double* restrict in,
                    double* restrict out);
 
 void rExtractSubVector(const int entries,
-                       const int* indices,
-                       const double* in,
+                       const int* restrict indices,
+                       const double* restrict in,
                        double* restrict out);
 
 // kQuadratureData ***********************************************************
 void rInitQuadratureData(const int NUM_QUAD,
                          const int numElements,
-                         const double* rho0,
-                         const double* detJ,
-                         const double* quadWeights,
+                         const double* restrict rho0,
+                         const double* restrict detJ,
+                         const double* restrict quadWeights,
                          double* restrict rho0DetJ0w);
 
 void rUpdateQuadratureData(const double GAMMA,
@@ -63,16 +84,16 @@ void rUpdateQuadratureData(const double GAMMA,
                            const int NUM_QUAD_1D,
                            const int NUM_DOFS_1D,
                            const int numElements,
-                           const double* dofToQuad,
-                           const double* dofToQuadD,
-                           const double* quadWeights,
-                           const double* v,
-                           const double* e,
-                           const double* rho0DetJ0w,
-                           const double* invJ0,
-                           const double* J,
-                           const double* invJ,
-                           const double* detJ,
+                           const double* restrict dofToQuad,
+                           const double* restrict dofToQuadD,
+                           const double* restrict quadWeights,
+                           const double* restrict v,
+                           const double* restrict e,
+                           const double* restrict rho0DetJ0w,
+                           const double* restrict invJ0,
+                           const double* restrict J,
+                           const double* restrict invJ,
+                           const double* restrict detJ,
                            double* restrict stressJinvT,
                            double* restrict dtEst);
 
@@ -83,11 +104,11 @@ void rForceMult(const int NUM_DIM,
                 const int L2_DOFS_1D,
                 const int H1_DOFS_1D,
                 const int nzones,
-                const double* L2DofToQuad,
-                const double* H1QuadToDof,
-                const double* H1QuadToDofD,
-                const double* stressJinvT,
-                const double* e,
+                const double* restrict L2DofToQuad,
+                const double* restrict H1QuadToDof,
+                const double* restrict H1QuadToDofD,
+                const double* restrict stressJinvT,
+                const double* restrict e,
                 double* restrict v);
 
 void rForceMultTranspose(const int NUM_DIM,
@@ -96,11 +117,11 @@ void rForceMultTranspose(const int NUM_DIM,
                          const int L2_DOFS_1D,
                          const int H1_DOFS_1D,
                          const int nzones,
-                         const double* L2QuadToDof,
-                         const double* H1DofToQuad,
-                         const double* H1DofToQuadD,
-                         const double* stressJinvT,
-                         const double* v,
+                         const double* restrict L2QuadToDof,
+                         const double* restrict H1DofToQuad,
+                         const double* restrict H1DofToQuadD,
+                         const double* restrict stressJinvT,
+                         const double* restrict v,
                          double* restrict e);
 
 // ***************************************************************************
@@ -108,8 +129,8 @@ void rIniGeom(const int dim,
               const int nDofs,
               const int nQuads,
               const int nzones,
-              const double* dofToQuadD,
-              const double* nodes,
+              const double* restrict dofToQuadD,
+              const double* restrict nodes,
               double* restrict J,
               double* restrict invJ,
               double* restrict detJ);
@@ -119,18 +140,18 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
                     const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* globalX,
+                    const int* restrict offsets,
+                    const int* restrict indices,
+                    const double* restrict globalX,
                     double* restrict localX);
 
 void rLocalToGlobal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
                     const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* localX,
+                    const int* restrict offsets,
+                    const int* restrict indices,
+                    const double* restrict localX,
                     double* restrict globalX);
 
 // ***************************************************************************
@@ -138,8 +159,8 @@ void rMassAssemble(const int dim,
                    const int NUM_QUAD,
                    const int numElements,
                    const double COEFF,
-                   const double* quadWeights,
-                   const double* J,
+                   const double* restrict quadWeights,
+                   const double* restrict J,
                    double* restrict oper);
 
 // ***************************************************************************
@@ -147,12 +168,12 @@ void rMassMultAdd(const int dim,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
                   const int numElements,
-                  const double* dofToQuad,
-                  const double* dofToQuadD,
-                  const double* quadToDof,
-                  const double* quadToDofD,
-                  const double* op,
-                  const double* x,
+                  const double* restrict dofToQuad,
+                  const double* restrict dofToQuadD,
+                  const double* restrict quadToDof,
+                  const double* restrict quadToDofD,
+                  const double* restrict op,
+                  const double* restrict x,
                   double* restrict y);
 
 #endif // LAGHOS_RAJAC_KERNELS

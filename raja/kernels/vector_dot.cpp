@@ -14,27 +14,19 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "defines.hpp"
-
-// *****************************************************************************
-void rLocalToGlobal(const int NUM_VDIM,
-                    const bool VDIM_ORDERING,
-                    const int globalEntries,
-                    const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* localX,
-                    double* __restrict globalX) {
-  forall(globalEntries,[=]_device_(int i) {
-    const int offset = offsets[i];
-    const int nextOffset = offsets[i + 1];
-    for (int v = 0; v < NUM_VDIM; ++v) {
-      double dofValue = 0;
-      for (int j = offset; j < nextOffset; ++j) {
-        const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
-        dofValue += localX[l_offset];
-      }
-      const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
-      globalX[g_offset] = dofValue;
-    }
+double vector_dot(const int N,
+                  const double* __restrict vec1,
+                  const double* __restrict vec2) {
+  /*RAJA::ReduceSum<RAJA::seq_reduce, RAJA::Real_type> dot(0.0);
+  const RAJA::RangeSegment range(0, size);
+  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
+    dot += data[i] * v[i];
   });
+  return dot;*/
+  #warning dot
+  double r_red = 0.0;
+  forall(N,[&]_device_(int i){
+    r_red += vec1[i] * vec2[i];
+    });
+  return r_red;
 }

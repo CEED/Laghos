@@ -22,7 +22,7 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* detJ,
                          const double* quadWeights,
                          double* __restrict rho0DetJ0w) {
-  forall(numElements,[=]device(int el) {
+  forall(numElements,[=]_device_(int el) {
     for (int q = 0; q < NUM_QUAD; ++q) {
       rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
         rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
@@ -60,7 +60,7 @@ void rUpdateQuadratureData2D(const double GAMMA,
   assert(NUM_QUAD_1D==4); const int q1 = 4;
   assert(NUM_QUAD_2D==16); const int q2 = 16;
   
-  forall(numElements,[=]device(int el){
+  forall(numElements,[=]_device_(int el){
     double s_gradv[4*q2] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
       s_gradv[i] = 0;
@@ -228,7 +228,7 @@ void rUpdateQuadratureData3D(const double GAMMA,
   assert(NUM_QUAD_2D==4); const int q2 = 4;
   assert(NUM_QUAD_3D==8); const int q3 = 8;
   
-  forall(numElements,[=]device(int el){
+  forall(numElements,[=]_device_(int el){
     double s_gradv[9*q3] ;
 
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
