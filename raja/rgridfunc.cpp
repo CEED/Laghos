@@ -20,12 +20,12 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
   const int vdim = fes.GetVDim();
   const int elements = fes.GetNE();
   const int numQuad  = ir.GetNPoints();
-  const RajaDofQuadMaps& maps = RajaDofQuadMaps::Get(fes, ir);
+  const RajaDofQuadMaps* maps = RajaDofQuadMaps::Get(fes, ir);
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
   const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
   quadValues.SetSize(numQuad * elements);
   rGridFuncToQuad(dim,vdim,dofs1D,quad1D,elements,
-                  maps.dofToQuad,
+                  maps->dofToQuad,
                   fes.GetLocalToGlobalMap(),
                   ptr(),
                   quadValues);

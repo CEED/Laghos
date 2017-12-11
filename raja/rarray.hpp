@@ -29,6 +29,8 @@ template <class T, bool xyz = true> class RajaArray;
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t x) {allocate(x);}
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
+  RajaArray(const RajaArray<T,true> &r) {assert(false);}
+ ~RajaArray(){printf("\033[32mx\033[m");fflush(stdout);this->operator delete(data);}
   inline T* ptr() { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
@@ -41,8 +43,7 @@ template <class T, bool xyz = true> class RajaArray;
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     printf("\033[32mi\033[m");fflush(stdout);
-    data=(T*) operator new(sz*sizeof(T));
-
+    data=(T*) this->operator new(sz*sizeof(T));
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -62,6 +63,8 @@ template <class T, bool xyz = true> class RajaArray;
  public:
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
+  RajaArray(const RajaArray<T,false> &r) {assert(false);}
+ ~RajaArray(){this->operator delete(data);}
   inline T* ptr() { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
@@ -73,8 +76,8 @@ template <class T, bool xyz = true> class RajaArray;
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    //data=(T*)::malloc(bytes());
-    data=(T*)memoryManager::allocate<T>(size());
+    printf("\033[32mI\033[m");fflush(stdout);
+    data=(T*) this->operator new(sz*sizeof(T));
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }
     for (size_t i=1,b=d[0]; i<DIM; xsw(d[i],b),++i) {

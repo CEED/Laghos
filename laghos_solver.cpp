@@ -136,7 +136,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    quad_data.dqMaps = RajaDofQuadMaps::Get(H1FESpace,integ_rule);
    quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule);
-   quad_data.Jac0inv = quad_data.geom.invJ;
+   quad_data.Jac0inv = quad_data.geom->invJ;
 
    RajaVector rhoValues;
    rho0.ToQuad(integ_rule, rhoValues);
@@ -147,8 +147,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    rInitQuadratureData(NUM_QUAD,
                        nzones,
                        (const double*)rhoValues.ptr(),
-                       (const double*)quad_data.geom.detJ.ptr(),
-                       (const double*)quad_data.dqMaps.quadWeights.ptr(),
+                       (const double*)quad_data.geom->detJ.ptr(),
+                       (const double*)quad_data.dqMaps->quadWeights.ptr(),
                        (double*)quad_data.rho0DetJ0w.ptr());
 
    // Needs quad_data.rho0DetJ0w
@@ -397,16 +397,16 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                          NUM_QUAD_1D,
                          NUM_DOFS_1D,
                          nzones,
-                         quad_data.dqMaps.dofToQuad,
-                         quad_data.dqMaps.dofToQuadD,
-                         quad_data.dqMaps.quadWeights,
+                         quad_data.dqMaps->dofToQuad,
+                         quad_data.dqMaps->dofToQuadD,
+                         quad_data.dqMaps->quadWeights,
                          v2,
                          eValues,
                          quad_data.rho0DetJ0w,
                          quad_data.Jac0inv,
-                         quad_data.geom.J,
-                         quad_data.geom.invJ,
-                         quad_data.geom.detJ,
+                         quad_data.geom->J,
+                         quad_data.geom->invJ,
+                         quad_data.geom->detJ,
                          quad_data.stressJinvT,
                          quad_data.dtEst);
    

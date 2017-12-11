@@ -13,14 +13,14 @@
 namespace mfem {
 
 // ***************************************************************************
-std::map<std::string, RajaDofQuadMaps> RajaDofQuadMaps::AllDofQuadMaps;
+std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 
 // ***************************************************************************
 // * RajaGeometry
 // ***************************************************************************
-RajaGeometry RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
+RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
                                const IntegrationRule& ir) {
-  RajaGeometry geom;
+  RajaGeometry *geom=new RajaGeometry();
   Mesh& mesh = *(ofespace.GetMesh());
   if (!mesh.GetNodes()) {
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
@@ -36,32 +36,33 @@ RajaGeometry RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
   if (originalOrdering == Ordering::byNODES) {
     nodes.ReorderByVDim(true);
   }
-  geom.meshNodes.allocate(dims, numDofs, elements);
+  geom->meshNodes.allocate(dims, numDofs, elements);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
   for (int e = 0; e < elements; ++e) {
     for (int dof = 0; dof < numDofs; ++dof) {
       const int gid = elementMap[dof + numDofs*e];
       for (int dim = 0; dim < dims; ++dim) {
-        geom.meshNodes(dim, dof, e) = nodes[dim + gid*dims];
+        geom->meshNodes(dim, dof, e) = nodes[dim + gid*dims];
       }
     }
   }
   // Reorder the original gf back
-  if (originalOrdering == Ordering::byNODES) {
+  if (originalOrdering == Ordering::byNODES) 
     nodes.ReorderByNodes(true);
-  }
-  geom.J.allocate(dims, dims, numQuad, elements);
-  geom.invJ.allocate(dims, dims, numQuad, elements);
-  geom.detJ.allocate(numQuad, elements);
-  RajaDofQuadMaps& maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
-  rIniGeom(dims,numDofs,numQuad,elements,
-           maps.dofToQuadD.ptr(),
-           geom.meshNodes.ptr(),
-           geom.J.ptr(),
-           geom.invJ.ptr(),
-           geom.detJ.ptr());
 
+  geom->J.allocate(dims, dims, numQuad, elements);
+  geom->invJ.allocate(dims, dims, numQuad, elements);
+  geom->detJ.allocate(numQuad, elements);
+  #warning GetSimplexMaps
+  const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
+  assert(maps);
+  rIniGeom(dims,numDofs,numQuad,elements,
+           maps->dofToQuadD.ptr(),
+           geom->meshNodes.ptr(),
+           geom->J.ptr(),
+           geom->invJ.ptr(),
+           geom->detJ.ptr());
   return geom;
 }
 
@@ -70,13 +71,13 @@ RajaGeometry RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
 // * RajaDofQuadMaps
 // ***************************************************************************
 
-RajaDofQuadMaps& RajaDofQuadMaps::Get(const RajaFiniteElementSpace& fespace,
+RajaDofQuadMaps* RajaDofQuadMaps::Get(const RajaFiniteElementSpace& fespace,
                                       const IntegrationRule& ir,
                                       const bool transpose) {
   return Get(*fespace.GetFE(0),*fespace.GetFE(0),ir,transpose);
 }
 
-RajaDofQuadMaps& RajaDofQuadMaps::Get(const RajaFiniteElementSpace&
+RajaDofQuadMaps* RajaDofQuadMaps::Get(const RajaFiniteElementSpace&
                                       trialFESpace,
                                       const RajaFiniteElementSpace& testFESpace,
                                       const IntegrationRule& ir,
@@ -84,20 +85,22 @@ RajaDofQuadMaps& RajaDofQuadMaps::Get(const RajaFiniteElementSpace&
   return Get(*trialFESpace.GetFE(0),*testFESpace.GetFE(0),ir,transpose);
 }
 
-RajaDofQuadMaps& RajaDofQuadMaps::Get(const FiniteElement& trialFE,
+RajaDofQuadMaps* RajaDofQuadMaps::Get(const FiniteElement& trialFE,
                                       const FiniteElement& testFE,
                                       const IntegrationRule& ir,
                                       const bool transpose) {
+  #warning RajaDofQuadMaps
+//  return GetTensorMaps(trialFE, testFE, ir, transpose);
   return (dynamic_cast<const TensorBasisElement*>(&trialFE)
           ? GetTensorMaps(trialFE, testFE, ir, transpose)
           : GetSimplexMaps(trialFE, testFE, ir, transpose));
 }
 
 // ***************************************************************************
-RajaDofQuadMaps& RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
-    const FiniteElement& testFE,
-    const IntegrationRule& ir,
-    const bool transpose) {
+RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
+                                                  const FiniteElement& testFE,
+                                                  const IntegrationRule& ir,
+                                                const bool transpose) {
   const TensorBasisElement& trialTFE =
     dynamic_cast<const TensorBasisElement&>(trialFE);
   const TensorBasisElement& testTFE =
@@ -110,25 +113,28 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
      << "BT2:" << testTFE.GetBasisType()
      << "Q:"   << ir.GetNPoints();
   std::string hash = ss.str();
+  
   // If we've already made the dof-quad maps, reuse them
-  RajaDofQuadMaps& maps = AllDofQuadMaps[hash];
-  if (!maps.hash.size()) {
-    maps.hash = hash;
-    RajaDofQuadMaps trialMaps = GetD2QTensorMaps(trialFE, ir);
-    RajaDofQuadMaps testMaps  = GetD2QTensorMaps(testFE, ir, true);
-    maps.dofToQuad   = trialMaps.dofToQuad;
-    maps.dofToQuadD  = trialMaps.dofToQuadD;
-    maps.quadToDof   = testMaps.dofToQuad;
-    maps.quadToDofD  = testMaps.dofToQuadD;
-    maps.quadWeights = testMaps.quadWeights;
-  }
+  if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
+    return AllDofQuadMaps[hash];
+  // Otherwise, build them
+  RajaDofQuadMaps *maps = new RajaDofQuadMaps();
+  AllDofQuadMaps[hash]=maps;
+  maps->hash = hash;
+  const RajaDofQuadMaps* trialMaps = GetD2QTensorMaps(trialFE, ir);
+  const RajaDofQuadMaps* testMaps  = GetD2QTensorMaps(testFE, ir, true);
+  maps->dofToQuad   = trialMaps->dofToQuad;
+  maps->dofToQuadD  = trialMaps->dofToQuadD;
+  maps->quadToDof   = testMaps->dofToQuad;
+  maps->quadToDofD  = testMaps->dofToQuadD;
+  maps->quadWeights = testMaps->quadWeights;
   return maps;
 }
 
 // ***************************************************************************
-RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
-    const IntegrationRule& ir,
-    const bool transpose) {
+RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
+                                                   const IntegrationRule& ir,
+                                                   const bool transpose) {
   const TensorBasisElement& tfe = dynamic_cast<const TensorBasisElement&>(fe);
   const Poly_1D::Basis& basis = tfe.GetBasis1D();
   const int order = fe.GetOrder();
@@ -140,13 +146,13 @@ RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   const int quadPoints3D = quadPoints2D*quadPoints;
   const int quadPointsND = ((dims == 1) ? quadPoints :
                             ((dims == 2) ? quadPoints2D : quadPoints3D));
-  RajaDofQuadMaps maps;
-  maps.dofToQuad.allocate(quadPoints, dofs,1,1,transpose);
-  maps.dofToQuadD.allocate(quadPoints, dofs,1,1,transpose);
+  RajaDofQuadMaps *maps = new RajaDofQuadMaps();
+  maps->dofToQuad.allocate(quadPoints, dofs,1,1,transpose);
+  maps->dofToQuadD.allocate(quadPoints, dofs,1,1,transpose);
   double* quadWeights1DData = NULL;
   if (transpose) {
     // Initialize quad weights only for transpose
-    maps.quadWeights.allocate(quadPointsND);
+    maps->quadWeights.allocate(quadPointsND);
     quadWeights1DData = new double[quadPoints];
   }
   mfem::Vector d2q(dofs);
@@ -158,8 +164,8 @@ RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       quadWeights1DData[q] = ip.weight;
     }
     for (int d = 0; d < dofs; ++d) {
-      maps.dofToQuad(q, d)  = d2q[d];
-      maps.dofToQuadD(q, d) = d2qD[d];
+      maps->dofToQuad(q, d)  = d2q[d];
+      maps->dofToQuadD(q, d) = d2qD[d];
     }
   }
   if (transpose) {
@@ -174,25 +180,26 @@ RajaDofQuadMaps RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       if (dims > 2) {
         w *= quadWeights1DData[qz];
       }
-      maps.quadWeights[q] = w;
+      maps->quadWeights[q] = w;
     }
     delete [] quadWeights1DData;
   }
+  assert(maps);
   return maps;
 }
 
 // ***************************************************************************
-RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& fe,
-    const IntegrationRule& ir,
-    const bool transpose) {
+RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& fe,
+                                                 const IntegrationRule& ir,
+                                                 const bool transpose) {
   return GetSimplexMaps(fe, fe, ir, transpose);
 }
 
-// ***************************************************************************
-RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
-    const FiniteElement& testFE,
-    const IntegrationRule& ir,
-    const bool transpose) {
+// *****************************************************************************
+RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
+                                                 const FiniteElement& testFE,
+                                                 const IntegrationRule& ir,
+                                                 const bool transpose) {
   std::stringstream ss;
   ss << "Simplex"
      << "O1:" << trialFE.GetOrder()
@@ -200,53 +207,56 @@ RajaDofQuadMaps& RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
      << "Q:"  << ir.GetNPoints();
   std::string hash = ss.str();
   // If we've already made the dof-quad maps, reuse them
-  RajaDofQuadMaps& maps = AllDofQuadMaps[hash];
-  if (!maps.hash.size()) {
-    maps.hash = hash;
-    RajaDofQuadMaps trialMaps = GetD2QSimplexMaps(trialFE, ir);
-    RajaDofQuadMaps testMaps  = GetD2QSimplexMaps(testFE, ir, true);
-    maps.dofToQuad   = trialMaps.dofToQuad;
-    maps.dofToQuadD  = trialMaps.dofToQuadD;
-    maps.quadToDof   = testMaps.dofToQuad;
-    maps.quadToDofD  = testMaps.dofToQuadD;
-    maps.quadWeights = testMaps.quadWeights;
-  }
+  if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
+    return AllDofQuadMaps[hash];
+  RajaDofQuadMaps *maps = new RajaDofQuadMaps();
+  AllDofQuadMaps[hash]=maps;
+  maps->hash = hash;
+  const RajaDofQuadMaps* trialMaps = GetD2QSimplexMaps(trialFE, ir);
+  const RajaDofQuadMaps* testMaps  = GetD2QSimplexMaps(testFE, ir, true);
+  maps->dofToQuad   = trialMaps->dofToQuad;
+  maps->dofToQuadD  = trialMaps->dofToQuadD;
+  maps->quadToDof   = testMaps->dofToQuad;
+  maps->quadToDofD  = testMaps->dofToQuadD;
+  maps->quadWeights = testMaps->quadWeights;
+  assert(maps);
   return maps;
 }
 
 // ***************************************************************************
-RajaDofQuadMaps RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
-    const IntegrationRule& ir,
-    const bool transpose) {
+RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
+                                                   const IntegrationRule& ir,
+                                                   const bool transpose) {
   const int dims = fe.GetDim();
   const int numDofs = fe.GetDof();
   const int numQuad = ir.GetNPoints();
-  RajaDofQuadMaps maps;
+  RajaDofQuadMaps* maps = new RajaDofQuadMaps();
   // Initialize the dof -> quad mapping
-  maps.dofToQuad.allocate(numQuad, numDofs,1,1,transpose);
-  maps.dofToQuadD.allocate(dims, numQuad, numDofs,1,transpose);
+  maps->dofToQuad.allocate(numQuad, numDofs,1,1,transpose);
+  maps->dofToQuadD.allocate(dims, numQuad, numDofs,1,transpose);
   if (transpose) {
     // Initialize quad weights only for transpose
-    maps.quadWeights.allocate(numQuad);
+    maps->quadWeights.allocate(numQuad);
   }
   Vector d2q(numDofs);
   DenseMatrix d2qD(numDofs, dims);
   for (int q = 0; q < numQuad; ++q) {
     const IntegrationPoint& ip = ir.IntPoint(q);
     if (transpose) {
-      maps.quadWeights[q] = ip.weight;
+      maps->quadWeights[q] = ip.weight;
     }
     fe.CalcShape(ip, d2q);
     fe.CalcDShape(ip, d2qD);
     for (int d = 0; d < numDofs; ++d) {
       const double w = d2q[d];
-      maps.dofToQuad(q, d) = w;
+      maps->dofToQuad(q, d) = w;
       for (int dim = 0; dim < dims; ++dim) {
         const double wD = d2qD(d, dim);
-        maps.dofToQuadD(dim, q, d) = wD;
+        maps->dofToQuadD(dim, q, d) = wD;
       }
     }
   }
+  assert(maps);
   return maps;
 }
 
@@ -278,7 +288,7 @@ void RajaIntegrator::SetupIntegrator(RajaBilinearForm& bform_,
   Setup();
 }
 
-RajaGeometry RajaIntegrator::GetGeometry() {
+RajaGeometry* RajaIntegrator::GetGeometry() {
   return RajaGeometry::Get(*trialFESpace, *ir);
 }
 
@@ -310,10 +320,10 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
                dofs1D,
                quad1D,
                mesh->GetNE(),
-               maps.dofToQuad,
-               maps.dofToQuadD,
-               maps.quadToDof,
-               maps.quadToDofD,
+               maps->dofToQuad,
+               maps->dofToQuadD,
+               maps->quadToDof,
+               maps->quadToDofD,
                op,x,y);
 }
 }

@@ -101,7 +101,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -g -std=c++11 -fopenmp #-Wall -fno-omit-frame-pointer
+CXXFLAGS += -g -std=c++11 #-fsanitize=address #-fopenmp #-Wall -fno-omit-frame-pointer
 
 MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
 HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include

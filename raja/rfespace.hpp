@@ -26,16 +26,15 @@ namespace mfem {
 class RajaRestrictionOperator : public RajaOperator {
  protected:
   int entries;
-  RajaArray<int> indices;
+  const RajaArray<int> *indices;
  public:
-  RajaRestrictionOperator(const int h,
-                          const int w, RajaArray<int> i):
-    RajaOperator(h,w) {
-    entries = i.size()>>1;
-    indices = i;
-  }
+  RajaRestrictionOperator(const int h, const int w,
+                          const RajaArray<int> *idx):
+    RajaOperator(h,w),
+    entries(idx->size()>>1),
+    indices(idx){}
   void Mult(const RajaVector& x, RajaVector& y) const {
-    rExtractSubVector(entries, indices.ptr(), x, y);
+    rExtractSubVector(entries, indices->ptr(), x, y);
   }
 };
 
@@ -82,7 +81,7 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   int GetLocalDofs() const { return localDofs; }
   const RajaOperator* GetRestrictionOperator() { return restrictionOp; }
   const RajaOperator* GetProlongationOperator() { return prolongationOp; }
-  const RajaArray<int> GetLocalToGlobalMap() const { return map; }
+  const RajaArray<int>& GetLocalToGlobalMap() const { return map; }
   // *************************************************************************
   void GlobalToLocal(const RajaVector&, RajaVector&) const;
   void LocalToGlobal(const RajaVector&, RajaVector&) const;

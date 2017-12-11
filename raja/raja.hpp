@@ -48,7 +48,6 @@ static const bool mng = mem_manager_std;
 
 // RAJA ************************************************************************
 #include "rmanaged.hpp"
-#include "memoryManager.hpp"
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rfespace.hpp"

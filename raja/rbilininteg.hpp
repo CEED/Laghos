@@ -25,7 +25,7 @@ class RajaGeometry {
  public:
   RajaArray<double> meshNodes;
   RajaArray<double> J, invJ, detJ;
-  static RajaGeometry Get(RajaFiniteElementSpace&,const IntegrationRule&);
+  static RajaGeometry* Get(RajaFiniteElementSpace&,const IntegrationRule&);
 };
 
 // ***************************************************************************
@@ -33,41 +33,41 @@ class RajaGeometry {
 // ***************************************************************************
 class RajaDofQuadMaps {
  private:
-  static std::map<std::string, RajaDofQuadMaps> AllDofQuadMaps;
+  static std::map<std::string, RajaDofQuadMaps*> AllDofQuadMaps;
   std::string hash;
  public:
   RajaArray<double, false> dofToQuad, dofToQuadD; // B
   RajaArray<double, false> quadToDof, quadToDofD; // B^T
   RajaArray<double> quadWeights;
- public:
-  static RajaDofQuadMaps& Get(const RajaFiniteElementSpace&,
+public:
+  static RajaDofQuadMaps* Get(const RajaFiniteElementSpace&,
                               const IntegrationRule&,
                               const bool = false);
-  static RajaDofQuadMaps& Get(const RajaFiniteElementSpace&,
+  static RajaDofQuadMaps* Get(const RajaFiniteElementSpace&,
                               const RajaFiniteElementSpace&,
                               const IntegrationRule&,
                               const bool = false);
-  static RajaDofQuadMaps& Get(const FiniteElement&,
+  static RajaDofQuadMaps* Get(const FiniteElement&,
                               const FiniteElement&,
                               const IntegrationRule&,
                               const bool = false);
-  static RajaDofQuadMaps& GetTensorMaps(const FiniteElement&,
+  static RajaDofQuadMaps* GetTensorMaps(const FiniteElement&,
                                         const FiniteElement&,
                                         const IntegrationRule&,
                                         const bool = false);
-  static RajaDofQuadMaps GetD2QTensorMaps(const FiniteElement&,
-                                          const IntegrationRule&,
-                                          const bool = false);
-  static RajaDofQuadMaps& GetSimplexMaps(const FiniteElement&,
+  static RajaDofQuadMaps* GetD2QTensorMaps(const FiniteElement&,
+                                           const IntegrationRule&,
+                                           const bool = false);
+  static RajaDofQuadMaps* GetSimplexMaps(const FiniteElement&,
                                          const IntegrationRule&,
                                          const bool = false);
-  static RajaDofQuadMaps& GetSimplexMaps(const FiniteElement&,
+  static RajaDofQuadMaps* GetSimplexMaps(const FiniteElement&,
                                          const FiniteElement&,
                                          const IntegrationRule&,
                                          const bool = false);
-  static RajaDofQuadMaps GetD2QSimplexMaps(const FiniteElement&,
-      const IntegrationRule&,
-      const bool = false);
+  static RajaDofQuadMaps* GetD2QSimplexMaps(const FiniteElement&,
+                                            const IntegrationRule&,
+                                            const bool = false);
 };
 
 // ***************************************************************************
@@ -80,8 +80,8 @@ class RajaIntegrator {
   RajaFiniteElementSpace* testFESpace = NULL;
   RajaIntegratorType itype;
   const IntegrationRule* ir = NULL;
-  RajaDofQuadMaps maps;
-  RajaDofQuadMaps mapsTranspose;
+  RajaDofQuadMaps* maps;
+  RajaDofQuadMaps* mapsTranspose;
  private:
  public:
   virtual std::string GetName() = 0;
@@ -94,7 +94,7 @@ class RajaIntegrator {
   virtual void Assemble() = 0;
   virtual void MultAdd(RajaVector& x, RajaVector& y) = 0;
   virtual void MultTransposeAdd(RajaVector&, RajaVector&) {assert(false);}
-  RajaGeometry GetGeometry();
+  RajaGeometry* GetGeometry();
 };
 
 // ***************************************************************************

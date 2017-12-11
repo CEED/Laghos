@@ -77,11 +77,11 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   for (int i = 0; i < mHeight; ++i) {
     trueCount += ((I[i + 1] - I[i]) == 1);
   }
-  RajaArray<int> reorderIndices(2 * trueCount);
+  RajaArray<int> *reorderIndices= new RajaArray<int>(2*trueCount);
   for (int i = 0, trueIdx=0; i < mHeight; ++i) {
     if ((I[i + 1] - I[i]) == 1) {
-      reorderIndices[trueIdx++] = J[I[i]];
-      reorderIndices[trueIdx++] = i;
+      reorderIndices->operator[](trueIdx++) = J[I[i]];
+      reorderIndices->operator[](trueIdx++) = i;
     }
   }
   restrictionOp = new RajaRestrictionOperator(R->Height(),

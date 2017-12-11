@@ -22,10 +22,11 @@ struct RajaVectorRef;
 
 class RajaVector : public rmanaged<double,mng>{
  private:
-  size_t size;
-  double* data;
+  size_t size = 0;
+  double* data = NULL;
+  bool own = false;
  public:
-  RajaVector(): size(0),data(NULL) {}
+  RajaVector(): size(0),data(NULL),own(false) {}
   RajaVector(const RajaVector&);
   RajaVector(const RajaVectorRef&);
   RajaVector(const size_t);
@@ -52,7 +53,7 @@ class RajaVector : public rmanaged<double,mng>{
   RajaVectorRef GetRange(const size_t, const size_t) const;
   void SetSubVector(const void*, const double, const int);
   double Min() const;
-  inline virtual ~RajaVector() {}
+  ~RajaVector();
 };
 
 struct RajaVectorRef { RajaVector v; };

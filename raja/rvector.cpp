@@ -11,11 +11,17 @@
 #include "raja.hpp"
 
 namespace mfem {
+  
+RajaVector::~RajaVector(){
+  if (own)
+    this->operator delete(data);
+}
 
 // ***************************************************************************
 double* RajaVector::rmalloc(const size_t sz) {
+  own = true;
   printf("\033[33mv\033[m");fflush(stdout);
-  return (double*) operator new(sz*sizeof(double));
+  return (double*) this->operator new(sz*sizeof(double));
 }
 
 // ***************************************************************************

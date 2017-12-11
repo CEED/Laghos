@@ -45,8 +45,8 @@ struct QuadratureData
    // determinant of the Jacobian and the integration weight. It must be
    // recomputed in every time step.
    RajaVector stressJinvT;
-   RajaDofQuadMaps dqMaps;
-   RajaGeometry geom;
+   RajaDofQuadMaps *dqMaps;
+   RajaGeometry *geom;
 
    // Quadrature data used for full/partial assembly of the mass matrices. At
    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
@@ -126,7 +126,7 @@ private:
    RajaFiniteElementSpace &h1fes, &l2fes;
    const IntegrationRule &integ_rule;
    QuadratureData *quad_data;
-   RajaDofQuadMaps l2D2Q, h1D2Q;
+   RajaDofQuadMaps *l2D2Q, *h1D2Q;
    mutable RajaVector gVecL2, gVecH1;
 public:
    RajaForceOperator(RajaFiniteElementSpace &h1fes_,
