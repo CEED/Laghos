@@ -23,6 +23,7 @@ namespace mfem {
 // ***************************************************************************
 class RajaGeometry {
  public:
+  ~RajaGeometry();
   RajaArray<double> meshNodes;
   RajaArray<double> J, invJ, detJ;
   static RajaGeometry* Get(RajaFiniteElementSpace&,const IntegrationRule&);
@@ -40,6 +41,12 @@ class RajaDofQuadMaps {
   RajaArray<double, false> quadToDof, quadToDofD; // B^T
   RajaArray<double> quadWeights;
 public:
+  static void delDofQuadMaps(){
+    printf("\033[31m[~delDofQuadMaps]");fflush(stdout);
+    for(std::map<std::string, RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
+        itr != AllDofQuadMaps.end(); itr++) delete (itr->second);
+    AllDofQuadMaps.clear();
+  }
   static RajaDofQuadMaps* Get(const RajaFiniteElementSpace&,
                               const IntegrationRule&,
                               const bool = false);

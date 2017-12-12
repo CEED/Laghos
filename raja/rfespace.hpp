@@ -67,7 +67,7 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
  private:
   int globalDofs, localDofs;
   RajaArray<int> offsets;
-  RajaArray<int> indices;
+  RajaArray<int> indices, *reorderIndices;
   RajaArray<int> map;
   RajaOperator* restrictionOp, *prolongationOp;
  public:

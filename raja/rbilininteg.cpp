@@ -18,6 +18,11 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 // ***************************************************************************
 // * RajaGeometry
 // ***************************************************************************
+RajaGeometry::~RajaGeometry(){
+  printf("\033[32m[~RajaGeometry]");fflush(stdout);
+}
+
+// *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
                                const IntegrationRule& ir) {
   RajaGeometry *geom=new RajaGeometry();
@@ -153,7 +158,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   if (transpose) {
     // Initialize quad weights only for transpose
     maps->quadWeights.allocate(quadPointsND);
-    quadWeights1DData = new double[quadPoints];
+    quadWeights1DData = ::new double[quadPoints];
   }
   mfem::Vector d2q(dofs);
   mfem::Vector d2qD(dofs);
@@ -182,7 +187,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       }
       maps->quadWeights[q] = w;
     }
-    delete [] quadWeights1DData;
+    ::delete [] quadWeights1DData;
   }
   assert(maps);
   return maps;

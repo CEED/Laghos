@@ -23,15 +23,15 @@ template<typename T> class rmanaged<T,false> {
 public:
   void* operator new(size_t n) {
     //assert(false);
-    printf("\033[31m!\033[m");fflush(stdout);
+    printf("+]\033[m");fflush(stdout);
     return new T[n];
   }
   void operator delete(void *ptr) {
     //assert(false);
-    if (!ptr) return;
-    if (ptr==NULL) return;
-    printf("\033[31mx\033[m");fflush(stdout);
-    delete static_cast<T*>(ptr);
+    //if (!ptr) return;
+    //if (ptr==NULL) return;
+    printf("-]\033[m");fflush(stdout);
+    delete[] static_cast<T*>(ptr);
     ptr = nullptr;
   }
 };

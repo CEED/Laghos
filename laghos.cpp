@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete[] partitioning;
    }
    else
    {
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   Array<int> ess_tdofs;
+   Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
       for (int d = 0; d < pmesh->Dimension(); d++)
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
          // enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
          H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-         ess_tdofs.Append(tdofs1d);
+         essential_tdofs.Append(tdofs1d);
       }
    }
 
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, o_rho, source, cfl, material_pcf,
+                                essential_tdofs, o_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;

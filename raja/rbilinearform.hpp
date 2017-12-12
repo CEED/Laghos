@@ -44,6 +44,7 @@ class RajaBilinearForm : public RajaOperator {
   mutable RajaVector localX, localY;
  public:
   RajaBilinearForm(RajaFiniteElementSpace*);
+  ~RajaBilinearForm();
   Mesh& GetMesh() const { return *mesh; }
   RajaFiniteElementSpace& GetTrialFESpace() const { return *trialFes;}
   RajaFiniteElementSpace& GetTestFESpace() const { return *testFes;}

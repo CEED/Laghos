@@ -23,7 +23,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
    globalDofs(GetNDofs()),
    localDofs(GetFE(0)->GetDof()),
    offsets(globalDofs+1),
-   indices(localDofs, GetNE()),
+   indices(localDofs, GetNE()),  
    map(localDofs, GetNE()) {
   const FiniteElement& fe = *GetFE(0);
   const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(&fe);
@@ -58,7 +58,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
       map[lid] = gid;
     }
   }
-  delete [] elementDofMap;
+  ::delete [] elementDofMap;
 
   // We shifted the offsets vector by 1 by using it as a counter
   // Now we shift it back.
@@ -77,7 +77,8 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   for (int i = 0; i < mHeight; ++i) {
     trueCount += ((I[i + 1] - I[i]) == 1);
   }
-  RajaArray<int> *reorderIndices= new RajaArray<int>(2*trueCount);
+  
+  reorderIndices = ::new RajaArray<int>(2*trueCount);
   for (int i = 0, trueIdx=0; i < mHeight; ++i) {
     if ((I[i + 1] - I[i]) == 1) {
       reorderIndices->operator[](trueIdx++) = J[I[i]];
@@ -92,8 +93,9 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
 
 // ***************************************************************************
 RajaFiniteElementSpace::~RajaFiniteElementSpace() {
-  delete restrictionOp;
-  delete prolongationOp;
+  ::delete restrictionOp;
+  ::delete prolongationOp;
+  ::delete reorderIndices;
 }
 
 // ***************************************************************************

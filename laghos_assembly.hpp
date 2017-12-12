@@ -109,6 +109,7 @@ public:
    RajaMassOperator(RajaFiniteElementSpace &fes_,
                     const IntegrationRule &integ_rule_,
                     QuadratureData *quad_data_);
+  ~RajaMassOperator();
    void Setup();
    void SetEssentialTrueDofs(Array<int> &dofs);
    // Can be used for both velocity and specific internal energy. For the case
@@ -122,21 +123,22 @@ public:
 class RajaForceOperator : public RajaOperator
 {
 private:
-   int dim, nzones;
-   RajaFiniteElementSpace &h1fes, &l2fes;
-   const IntegrationRule &integ_rule;
-   QuadratureData *quad_data;
-   RajaDofQuadMaps *l2D2Q, *h1D2Q;
-   mutable RajaVector gVecL2, gVecH1;
+  const int dim;
+  const int nzones;
+  const RajaFiniteElementSpace &h1fes, &l2fes;
+  const IntegrationRule &integ_rule;
+  const QuadratureData *quad_data;
+  const RajaDofQuadMaps *l2D2Q, *h1D2Q;
+  mutable RajaVector gVecL2, gVecH1;
 public:
    RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                      RajaFiniteElementSpace &l2fes_,
                      const IntegrationRule &integ_rule,
-                     QuadratureData *quad_data_);
+                     const QuadratureData *quad_data_);
    void Setup();
    virtual void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
    virtual void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
-   ~RajaForceOperator() { }
+  ~RajaForceOperator();
 };
 
 } // namespace hydrodynamics

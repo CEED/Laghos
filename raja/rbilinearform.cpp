@@ -24,6 +24,13 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
   localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim())
 { }
 
+// *****************************************************************************
+RajaBilinearForm::~RajaBilinearForm(){
+  printf("\033[31m[~RajaBilinearForm]");fflush(stdout);
+  //if (rap) delete rap;
+  //delete  Aout;
+}
+
 // ***************************************************************************
 // Adds new Domain Integrator.
 void RajaBilinearForm::AddDomainIntegrator(RajaIntegrator* i) {

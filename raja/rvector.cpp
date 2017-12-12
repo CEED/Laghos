@@ -13,38 +13,40 @@
 namespace mfem {
   
 RajaVector::~RajaVector(){
-  if (own)
+  if (!own) return;
+  printf("\033[33m[~v:");fflush(stdout);
     this->operator delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::rmalloc(const size_t sz) {
-  own = true;
-  printf("\033[33mv\033[m");fflush(stdout);
+  printf("\033[33m[v");fflush(stdout);
   return (double*) this->operator new(sz*sizeof(double));
 }
 
 // ***************************************************************************
 void RajaVector::SetSize(const size_t sz, const void* ptr) {
+  //printf("\033[33m[size=%d, new sz=%d]\033[m",size,sz);fflush(stdout);
   size = sz;
   if (!data) { data = rmalloc(size); }
-  if (ptr) { ::memcpy(data,ptr,bytes()); }
+  if (ptr) { ::memcpy(data,ptr,bytes());}
 }
 
 // ***************************************************************************
-RajaVector::RajaVector(const size_t sz):size(sz),data(rmalloc(sz)) {}
+RajaVector::RajaVector(const size_t sz):size(sz),data(rmalloc(sz)),own(true) {}
 
 RajaVector::RajaVector(const RajaVector& v):
-  size(0),data(NULL) { SetSize(v.Size(), v); }
+  size(0),data(NULL),own(true) { SetSize(v.Size(), v); }
 
 RajaVector::RajaVector(const RajaVectorRef& ref):
-  size(ref.v.size),data(ref.v.data) { }
+  size(ref.v.size),data(ref.v.data),own(false) { }
 
 RajaVector::RajaVector(const Vector& v):
-  size(0),data(NULL) { SetSize(v.Size(), v.GetData()); }
+//  size(0),data(NULL),own(false) { SetSize(v.Size(), v.GetData()); }
+  size(v.Size()),data(v.GetData()),own(false) {}
 
 RajaVector::RajaVector(RajaArray<double>& v):
-  size(0),data(NULL) { SetSize(v.size(),v.ptr()); }
+  size(v.size()),data(v.ptr()),own(false) { /*SetSize(v.size(),v.ptr()); */}
 
 // ***************************************************************************
 RajaVector::operator Vector() { return Vector(data,size); }
@@ -65,12 +67,14 @@ RajaVectorRef RajaVector::GetRange(const size_t offset,
   RajaVector& v = ret.v;
   v.data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
   v.size = entries;
+  v.own = false;
   return ret;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(const RajaVector& v) {
   SetSize(v.Size(),v.data);
+  own = false;
   return *this;
 }
 

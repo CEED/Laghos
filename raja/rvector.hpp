@@ -24,9 +24,9 @@ class RajaVector : public rmanaged<double,mng>{
  private:
   size_t size = 0;
   double* data = NULL;
-  bool own = false;
+  bool own = true;
  public:
-  RajaVector(): size(0),data(NULL),own(false) {}
+  RajaVector(): size(0),data(NULL),own(true) {}
   RajaVector(const RajaVector&);
   RajaVector(const RajaVectorRef&);
   RajaVector(const size_t);
@@ -56,7 +56,7 @@ class RajaVector : public rmanaged<double,mng>{
   ~RajaVector();
 };
 
-struct RajaVectorRef { RajaVector v; };
+struct RajaVectorRef { RajaVector v; ~RajaVectorRef(){}};
 
 // ***************************************************************************
 void add(const RajaVector&,const double,const RajaVector&,RajaVector&);

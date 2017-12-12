@@ -73,7 +73,15 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
      quad_data(quad_data_),
      x_gf(fes),
      y_gf(fes) { }
-  
+
+// *****************************************************************************
+RajaMassOperator::~RajaMassOperator(){
+  printf("\033[31m[~RajaMassOperator]");fflush(stdout);
+  delete massOperator;
+  RajaDofQuadMaps::delDofQuadMaps();
+  //delete quad_data;
+}
+
 // *****************************************************************************
 void RajaMassOperator::Setup()
 {
@@ -92,8 +100,9 @@ void RajaMassOperator::Setup()
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
   ess_tdofs_count = dofs.Size();
-  if (ess_tdofs_count == 0) return;
-  ess_tdofs = new Array<int>(dofs.GetData(),ess_tdofs_count * sizeof(int));
+  //if (ess_tdofs_count == 0) return;
+  //ess_tdofs = new Array<int>(dofs.GetData(),ess_tdofs_count * sizeof(int));
+  ess_tdofs = &dofs;
 }
 
 // *************************************************************************
@@ -129,7 +138,7 @@ void RajaMassOperator::EliminateRHS(RajaVector &b)
 RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                                      RajaFiniteElementSpace &l2fes_,
                                      const IntegrationRule &integ_rule_,
-                                     QuadratureData *quad_data_)
+                                     const QuadratureData *quad_data_)
    : RajaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
      dim(h1fes_.GetMesh()->Dimension()),
      nzones(h1fes_.GetMesh()->GetNE()),
@@ -139,6 +148,11 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
      quad_data(quad_data_),
      gVecL2(l2fes.GetLocalDofs() * nzones),
      gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) { }
+  
+// *****************************************************************************
+RajaForceOperator::~RajaForceOperator(){
+  printf("\033[31m[~RajaForceOperator]");fflush(stdout);
+}
 
 // *************************************************************************
 void RajaForceOperator::Setup()
