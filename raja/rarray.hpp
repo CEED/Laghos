@@ -30,7 +30,7 @@ template <class T, bool xyz = true> class RajaArray;
   RajaArray(const size_t x) {allocate(x);}
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
- ~RajaArray(){printf("\033[32m[~i");fflush(stdout);this->operator delete(data);}
+ ~RajaArray(){dbg("\033[32m[~i");this->operator delete(data);}
   inline T* ptr() { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
@@ -42,7 +42,7 @@ template <class T, bool xyz = true> class RajaArray;
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    printf("\033[32m[i");fflush(stdout);
+    dbg("\033[32m[i");
     data=(T*) this->operator new(sz*sizeof(T));
   }
   inline T& operator[](const size_t x) { return data[x]; }
@@ -64,7 +64,7 @@ template <class T, bool xyz = true> class RajaArray;
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
- ~RajaArray(){printf("\033[32m[~I");fflush(stdout);this->operator delete(data);}
+ ~RajaArray(){dbg("\033[32m[~I");this->operator delete(data);}
   inline T* ptr() { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
@@ -76,7 +76,7 @@ template <class T, bool xyz = true> class RajaArray;
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    printf("\033[32m[I");fflush(stdout);
+    dbg("\033[32m[I");
     data=(T*) this->operator new(sz*sizeof(T));
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }

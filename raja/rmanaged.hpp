@@ -13,7 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-//#include "cuda.h"
+#ifndef LAGHOS_RAJA_MANAGED
+#define LAGHOS_RAJA_MANAGED
 
 // *****************************************************************************
 template <typename T,bool = false> class rmanaged;
@@ -22,15 +23,11 @@ template <typename T,bool = false> class rmanaged;
 template<typename T> class rmanaged<T,false> {
 public:
   void* operator new(size_t n) {
-    //assert(false);
-    printf("+]\033[m");fflush(stdout);
+    dbg("+]\033[m");
     return new T[n];
   }
   void operator delete(void *ptr) {
-    //assert(false);
-    //if (!ptr) return;
-    //if (ptr==NULL) return;
-    printf("-]\033[m");fflush(stdout);
+    dbg("-]\033[m");
     delete[] static_cast<T*>(ptr);
     ptr = nullptr;
   }
@@ -42,15 +39,19 @@ template<typename T> class rmanaged<T,true> {
 public:
   void* operator new(size_t n) {
     void *ptr;
-    cudaMallocManaged(&ptr, n*zsizeof(T),cudaMemAttachSingle);
+    dbg("+]\033[m");
+    cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
     cudaDeviceSynchronize();
     return ptr;
   }
 
   void operator delete(void *ptr) {
+    dbg("-]\033[m");
     cudaDeviceSynchronize();
     cudaFree(ptr);
     ptr = nullptr;
   }
 };
 #endif
+
+#endif // LAGHOS_RAJA_MANAGED

@@ -16,10 +16,9 @@
 #include "defines.hpp"
 double vector_min(const int N,
                   const double* __restrict vec) {
-  #warning reduction
-  double r_red = vec[0];
+  ReduceDecl(Min,red,vec[0]);
   forall(N,[&]_device_(int i){
-    r_red = (r_red<vec[i]) ? r_red : vec[i];
+      red.min(vec[i]);
     });
-  return r_red;
+  return red;
 }

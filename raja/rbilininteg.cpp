@@ -19,7 +19,7 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 // * RajaGeometry
 // ***************************************************************************
 RajaGeometry::~RajaGeometry(){
-  printf("\033[32m[~RajaGeometry]");fflush(stdout);
+  dbg("\033[32m[~RajaGeometry]");
 }
 
 // *****************************************************************************

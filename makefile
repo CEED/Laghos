@@ -81,8 +81,8 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
 endif
 
 CXX = $(MFEM_CXX)
-CPPFLAGS = #$(MFEM_CPPFLAGS)
-CXXFLAGS = #$(MFEM_CXXFLAGS)
+CPPFLAGS = $(MFEM_CPPFLAGS)
+CXXFLAGS = $(MFEM_CXXFLAGS)
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -101,17 +101,17 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -g -O1 -std=c++11 -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer #-fopenmp #-Wall 
+CXXFLAGS += -std=c++11 -fopenmp #-Wall #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
 HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include
 METIS_INCLUDES = -I/home/camier1/usr/local/metis/5.1.0/include
 
-#CUDA_INCLUDES = -I/usr/local/cuda/include
-#CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
-
-#RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
-#RAJA_LIBS = /home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a
+CUDA_INCLUDES = -I/usr/local/cuda/include
+CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
+CUDA_FLAGS = #-DUSE_RAJA # -DUSE_CUDA
+RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
+RAJA_LIBS = /home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a
 
 #OS_LIBS = -lrt
 
@@ -145,11 +145,11 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/rmanaged.hpp
 	$(CCC) -c -o $@ $<
-#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP $(CUDA_FLAGS) -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
 	$(CCC) -c -o $@ $<
-#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP -DUSE_RAJA -DUSE_CUDA -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP $(CUDA_FLAGS) -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
 all: 
 	@$(MAKE) -j $(CPU) laghos

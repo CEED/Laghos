@@ -38,35 +38,48 @@
 #ifdef USE_RAJA
 #include "RAJA/RAJA.hpp"
 #ifdef USE_CUDA
-#  define _device_ //__device__
+#  define _device_ __device__
    const int CUDA_BLOCK_SIZE = 512;
-#  define policy RAJA::seq_exec //RAJA::cuda_exec<CUDA_BLOCK_SIZE>
+#  define exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
+#  define reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
 #else
 #  define _device_
-#  define policy RAJA::seq_exec
+#  define exec RAJA::seq_exec
+#  define reduce RAJA::seq_reduce
 #endif // USE_CUDA
 
+// Reduce **********************************************************************
+#define ReduceDecl(type,var,ini) \
+  RAJA::Reduce ## type<reduce, RAJA::Real_type> var(ini);
 // RAJA forall *****************************************************************
 template <typename T>
 void forall(RAJA::Index_type max, T&& body) {
-  RAJA::forall<policy>(0,max,[=]device(RAJA::Index_type i) {
+  RAJA::forall<exec>(0,max,[=]_device_(RAJA::Index_type i) {
     body(i);
   });
 }
-template <typename T>
-void forall(RAJA::Index_type min, RAJA::Index_type max, T&& body) {
-  RAJA::forall<policy>(min,max,[=]device(RAJA::Index_type i) {
-    body(i);
-  });
-}
-#else
+#else // USE_RAJA
+#define reduce
 #define _device_
 template <typename T>
-void forall(int max, T&& body) {
-  for(int i=0;i<max;i++){
-      body(i);
-  }
-}
+void forall(int max, T&& body) { for(int i=0;i<max;i++) body(i); }
+class ReduceSum{
+private:
+  double s;
+public:
+  inline ReduceSum(double d):s(d){}
+  inline operator double() { return s; }
+  inline ReduceSum& operator +=(const double d) { return *this = (s+d); }
+};
+class ReduceMin{
+private:
+  double m;
+public:
+  inline ReduceMin(double d):m(d){}
+  inline operator double() { return m; }
+  inline ReduceMin& min(const double d){ return *this=(m<d)?m:d; }
+};
+#define ReduceDecl(type,var,ini) Reduce##type var(ini);
 #endif // USE_RAJA
 
 #endif // LAGHOS_KERNEL_DEFINITIONS

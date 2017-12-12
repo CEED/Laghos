@@ -17,16 +17,9 @@
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-  /*RAJA::ReduceSum<RAJA::seq_reduce, RAJA::Real_type> dot(0.0);
-  const RAJA::RangeSegment range(0, size);
-  RAJA::forall<RAJA::seq_exec>(range,[=](RAJA::Index_type i) {
-    dot += data[i] * v[i];
-  });
-  return dot;*/
-  #warning dot
-  double r_red = 0.0;
+  ReduceDecl(Sum,dot,0.0);
   forall(N,[&]_device_(int i){
-    r_red += vec1[i] * vec2[i];
-    });
-  return r_red;
+    dot += vec1[i] * vec2[i];
+  });
+  return dot;
 }

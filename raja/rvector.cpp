@@ -14,13 +14,13 @@ namespace mfem {
   
 RajaVector::~RajaVector(){
   if (!own) return;
-  printf("\033[33m[~v:");fflush(stdout);
-    this->operator delete(data);
+  dbg("\033[33m[~v");
+  this->operator delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::rmalloc(const size_t sz) {
-  printf("\033[33m[v");fflush(stdout);
+  dbg("\033[33m[v");
   return (double*) this->operator new(sz*sizeof(double));
 }
 
@@ -54,10 +54,8 @@ RajaVector::operator Vector() const { return Vector(data,size); }
 
 // ***************************************************************************
 void RajaVector::Print(std::ostream& out, int width) const {
-  for (size_t i=0; i<size; i+=1) {
+  for (size_t i=0; i<size; i+=1) 
     printf("\n\t[%ld] %.15e",i,data[i]);
-  }
-  //Vector(data,size).Print(out, width);
 }
 
 // ***************************************************************************

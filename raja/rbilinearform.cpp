@@ -26,7 +26,7 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
 
 // *****************************************************************************
 RajaBilinearForm::~RajaBilinearForm(){
-  printf("\033[31m[~RajaBilinearForm]");fflush(stdout);
+  dbg("\033[31m[~RajaBilinearForm]");
   //if (rap) delete rap;
   //delete  Aout;
 }
