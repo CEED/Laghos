@@ -81,12 +81,12 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
 endif
 
 CXX = $(MFEM_CXX)
-CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = $(MFEM_CXXFLAGS)
+CPPFLAGS = #$(MFEM_CPPFLAGS)
+CXXFLAGS = #$(MFEM_CXXFLAGS)
 
 # MFEM config does not define C compiler
 CC     = gcc
-CFLAGS = -O3 -Wall
+CFLAGS = -O1 -Wall
 
 # Optional link flags
 LDFLAGS =
@@ -101,19 +101,22 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -g -std=c++11 -fsanitize=address #-fopenmp #-Wall -fno-omit-frame-pointer
+CXXFLAGS += -g -O1 -std=c++11 -fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer #-fopenmp #-Wall 
 
 MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
 HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include
 METIS_INCLUDES = -I/home/camier1/usr/local/metis/5.1.0/include
-CUDA_INCLUDES = -I/usr/local/cuda/include
-RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
+
+#CUDA_INCLUDES = -I/usr/local/cuda/include
+#CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
+
+#RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
+#RAJA_LIBS = /home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a
+
+#OS_LIBS = -lrt
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
-LAGHOS_LIBS = $(MFEM_LIBS) \
-					/home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a \
-					/usr/local/cuda/lib64/libcudart_static.a \
-					-ldl -lrt
+LAGHOS_LIBS = $(MFEM_LIBS) $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
