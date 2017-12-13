@@ -99,10 +99,24 @@ void RajaMassOperator::Setup()
 // *************************************************************************
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
+  //dbg("\n[SetEssentialTrueDofs]");
   ess_tdofs_count = dofs.Size();
-  //if (ess_tdofs_count == 0) return;
-  //ess_tdofs = new Array<int>(dofs.GetData(),ess_tdofs_count * sizeof(int));
-  ess_tdofs = &dofs;
+  if (ess_tdofs_count == 0) return;
+  //ess_tdofs = new RajaArray<int>(dofs.GetData(),ess_tdofs_count*sizeof(int));
+  ess_tdofs.allocate(ess_tdofs_count);
+  /*for(int i=0;i<ess_tdofs_count;i++){
+    //printf("\n\t[SetEssentialTrueDofs] i=%d:%d",i,dofs.GetData()[i]);
+    ess_tdofs[i]=dofs.GetData()[i];
+    }*/
+  ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+}
+
+// *****************************************************************************
+void RajaMassOperator::EliminateRHS(RajaVector &b)
+{
+  //dbg("\n[EliminateRHS] size=%d",b.Size());
+  if (ess_tdofs_count > 0)
+    b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
 }
 
 // *************************************************************************
@@ -111,23 +125,14 @@ void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
    distX = x;
    if (ess_tdofs_count)
    {
-      distX.SetSubVector(ess_tdofs->GetData(), 0.0, ess_tdofs_count);
+      distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    
    massOperator->Mult(distX, y);
    
    if (ess_tdofs_count)
    {
-      y.SetSubVector(ess_tdofs->GetData(), 0.0, ess_tdofs_count);
-   }
-}
-
-// *****************************************************************************
-void RajaMassOperator::EliminateRHS(RajaVector &b)
-{
-   if (ess_tdofs_count)
-   {
-      b.SetSubVector(ess_tdofs->GetData(), 0.0, ess_tdofs_count);
+      y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
 }
 

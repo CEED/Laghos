@@ -84,8 +84,13 @@ public:
                                                  integ_rule(ir) { }
 
   virtual void AssembleRHSElementVect(const FiniteElement &fe,
-                              ElementTransformation &Tr,
-                              Vector &elvect);
+                                      ElementTransformation &Tr,
+                                      Vector &elvect);
+  
+  virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       FaceElementTransformations &Tr,
+                                      Vector &elvect){assert(false);}
+
 };
 
 // *****************************************************************************
@@ -98,7 +103,7 @@ private:
    RajaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
    int ess_tdofs_count;
-   Array<int> *ess_tdofs;
+   RajaArray<int> ess_tdofs;
    RajaBilinearForm bilinearForm;
    RajaOperator *massOperator;
    QuadratureData *quad_data;

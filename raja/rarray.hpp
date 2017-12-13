@@ -30,12 +30,14 @@ template <class T, bool xyz = true> class RajaArray;
   RajaArray(const size_t x) {allocate(x);}
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
- ~RajaArray(){dbg("\033[32m[~i");this->operator delete(data);}
+    ~RajaArray(){dbg("\033[32m[~i");this->rUnManage(data);}
   inline T* ptr() { return data; }
+  inline const T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
   inline operator const T* () const { return data; }
   inline size_t size() const { return sz; }
+  inline size_t Size() const { return sz; }
   inline size_t bytes() const { return size()*sizeof(T); }
   void allocate(const size_t X, const size_t Y =1,
                 const size_t Z =1, const size_t D =1,
@@ -43,7 +45,7 @@ template <class T, bool xyz = true> class RajaArray;
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     dbg("\033[32m[i");
-    data=(T*) this->operator new(sz*sizeof(T));
+    data=(T*) this->rManage(sz);
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -64,12 +66,14 @@ template <class T, bool xyz = true> class RajaArray;
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
- ~RajaArray(){dbg("\033[32m[~I");this->operator delete(data);}
+    ~RajaArray(){dbg("\033[32m[~I");this->rUnManage(data);}
   inline T* ptr() { return data; }
+  inline T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
   inline operator const T* () const { return data; }
   inline size_t size() const { return sz; }
+  inline size_t Size() const { return sz; }
   inline size_t bytes() const { return size()*sizeof(T); }
   void allocate(const size_t X, const size_t Y =1,
                 const size_t Z =1, const size_t D =1,
@@ -77,7 +81,7 @@ template <class T, bool xyz = true> class RajaArray;
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     dbg("\033[32m[I");
-    data=(T*) this->operator new(sz*sizeof(T));
+    data=(T*) this->rManage(sz);
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }
     for (size_t i=1,b=d[0]; i<DIM; xsw(d[i],b),++i) {

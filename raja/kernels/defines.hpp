@@ -37,6 +37,7 @@
 // RAJA ************************************************************************
 #ifdef USE_RAJA
 #include "RAJA/RAJA.hpp"
+#define capture =
 #ifdef USE_CUDA
 #  define _device_ __device__
    const int CUDA_BLOCK_SIZE = 512;
@@ -59,6 +60,7 @@ void forall(RAJA::Index_type max, T&& body) {
   });
 }
 #else // USE_RAJA
+#define capture &
 #define reduce
 #define _device_
 template <typename T>
@@ -77,7 +79,7 @@ private:
 public:
   inline ReduceMin(double d):m(d){}
   inline operator double() { return m; }
-  inline ReduceMin& min(const double d){ return *this=(m<d)?m:d; }
+  inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
 };
 #define ReduceDecl(type,var,ini) Reduce##type var(ini);
 #endif // USE_RAJA

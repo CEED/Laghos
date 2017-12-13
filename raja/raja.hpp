@@ -23,15 +23,15 @@
 #include <assert.h>
 
 // DBG *************************************************************************
-#undef MFEM_DEBUG
+//#undef LAGHOS_DEBUG
 inline void dbg(const char *format,...){
-#ifdef MFEM_DEBUG
+#ifdef LAGHOS_DEBUG
   va_list args;
   va_start(args, format);
   vfprintf(stdout,format,args);
   fflush(stdout);
   va_end(args);
-#endif // MFEM_DEBUG
+#endif // LAGHOS_DEBUG
 }
 
 // RAJA ************************************************************************

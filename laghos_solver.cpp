@@ -164,6 +164,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    locCG.SetPrintLevel(0);
 }
 
+// *****************************************************************************
+LagrangianHydroOperator::~LagrangianHydroOperator() {}
+
+// *****************************************************************************
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
    dS_dt = 0.0;
@@ -261,7 +265,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    timer.sw_force.Stop();
    timer.dof_tstep += L2FESpace.GlobalTrueVSize();
 
-   if (e_source) { e_rhs += *e_source; }
+   if (e_source) e_rhs += RajaVector(*e_source);
+   
    {
      TCGSolver<RajaVector> cg(L2FESpace.GetParMesh()->GetComm());
      cg.SetOperator(EMassPA);

@@ -15,16 +15,16 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "defines.hpp"
 void vector_set_subvector_const(const int N,
-                                const double c0,
-                                double* __restrict v0,
-                                const int* __restrict v1) {
+                                const double value,
+                                double* __restrict data,
+                                const int* __restrict tdofs) {
   forall(N,[=]_device_(int i){
-      const int dof_i = v1[i];
-      v0[dof_i] = c0;
+      const int dof_i = tdofs[i];
+      data[dof_i] = value;
       if (dof_i >= 0) {
-        v0[dof_i] = c0;
+        data[dof_i] = value;
       } else {
-        v0[-dof_i-1] = -c0;
+        data[-dof_i-1] = -value;
       }
     });
 }

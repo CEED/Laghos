@@ -48,6 +48,7 @@ endef
 
 # fetch current/working directory
 pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+home = $(HOME)
 raja = $(pwd)/raja
 kernels = $(raja)/kernels
 
@@ -58,7 +59,6 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../mfem
 MFEM_DIR = ../mfem-raja
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
@@ -80,13 +80,18 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
 endif
 
+#################
+# MFEM compiler #
+#################
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
+CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
+#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 # MFEM config does not define C compiler
 CC     = gcc
-CFLAGS = -O1 -Wall
+CFLAGS = -O3 -Wall
 
 # Optional link flags
 LDFLAGS =
@@ -101,68 +106,105 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
-CXXFLAGS += -std=c++11 -fopenmp #-Wall #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
-MFEM_INCLUDES = -I/home/camier1/home/mfem/mfem-raja
-HYPRE_INCLUDES = -I/home/camier1/usr/local/hypre/2.11.2/include
-METIS_INCLUDES = -I/home/camier1/usr/local/metis/5.1.0/include
+#################
+# CUDA compiler #
+# comment these lines to use MFEM's compiler
+#################
+ifeq ($(LAGHOS_NVCC),YES)
+	CXX = /usr/local/cuda/bin/nvcc
+	CXXFLAGS = -std=c++11 -O2 -g -x=cu -m64 \
+		-Xcompiler -fopenmp \
+		--restrict --expt-extended-lambda \
+		--gpu-architecture sm_60 \
+		-DUSE_RAJA -DUSE_CUDA \
+		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+endif
 
-CUDA_INCLUDES = -I/usr/local/cuda/include
+#######################
+# TPL INCLUDES & LIBS #
+#######################
+MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
+
+CUDA_INC = -I/usr/local/cuda/include
 CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
-CUDA_FLAGS = #-DUSE_RAJA # -DUSE_CUDA
-RAJA_INCLUDES = -I/home/camier1/usr/local/raja/0.4.1/include
-RAJA_LIBS = /home/camier1/usr/local/raja/0.4.1/lib/libRAJA.a
 
-#OS_LIBS = -lrt
+RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
+RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
-LAGHOS_LIBS = $(MFEM_LIBS) $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC)
+LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
 endif
 
+#########################
+# FINAL LIBS, CCC & Ccc #
+#########################
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
+################
+# SOURCE FILES #
+################
+SOURCE_FILES  = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
   RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
+################
+# OBJECT FILES #
+################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
 OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
-# Targets
+################
+# OUTPUT rules #
+################
+COLOR_OFFSET = 16
+COLOR = $(shell echo $(rule_path)|cksum|cut -b1-2)
+rule_path = $(notdir $(patsubst %/,%,$(dir $<)))
+rule_file = $(basename $(notdir $@))
+rule_dumb = @echo -e $(rule_path)/$(rule_file)
+rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
+             $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
+output = $(rule_${TERM})
+quiet := --quiet -S
 
+###########
+# Targets #
+###########
 .PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
 
 .SUFFIXES: .c .cpp .o
-.cpp.o:
-	cd $(<D); $(CCC) -c $(<F)
 
-$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/rmanaged.hpp
+$(pwd)/%.o:$(pwd)/%.cpp;$(output)
 	$(CCC) -c -o $@ $<
-#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP $(CUDA_FLAGS) -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(MFEM_INCFLAGS) -I/home/camier1/usr/local/openmpi/3.0.0/include $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
 
-$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
+$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp;$(output)
 	$(CCC) -c -o $@ $<
-#	/usr/local/cuda/bin/nvcc $< -g -x=cu -c -o $@ -m64 -DUSE_OPENMP $(CUDA_FLAGS) -Xcompiler -fopenmp -restrict -arch sm_35 -std c++11 --expt-extended-lambda -ccbin /home/camier1/usr/local/gcc/5.5.0/bin/g++ -O2 -DNVCC $(RAJA_INCLUDES) $(CUDA_INCLUDES) 
+
+$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp;$(output)
+	$(CCC) -c -o $@ $<
 
 all: 
-	@$(MAKE) -j $(CPU) laghos
+	@$(MAKE) $(quiet) -j $(CPU) laghos
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -Wall -o laghos $(OBJECT_FILES) $(LIBS)
+	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(LIBS)
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
 
 debug:
 	$(MAKE) "LAGHOS_DEBUG=YES"
+
+nv nvcc:
+	$(MAKE) "LAGHOS_NVCC=YES"
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)

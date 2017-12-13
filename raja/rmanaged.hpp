@@ -22,11 +22,11 @@ template <typename T,bool = false> class rmanaged;
 // CPU *************************************************************************
 template<typename T> class rmanaged<T,false> {
 public:
-  void* operator new(size_t n) {
+  void* rManage(size_t n) {
     dbg("+]\033[m");
     return new T[n];
   }
-  void operator delete(void *ptr) {
+  void rUnManage(T *&ptr) {
     dbg("-]\033[m");
     delete[] static_cast<T*>(ptr);
     ptr = nullptr;
@@ -37,7 +37,7 @@ public:
 #ifdef USE_CUDA
 template<typename T> class rmanaged<T,true> {
 public:
-  void* operator new(size_t n) {
+  void* rManage(size_t n) {
     void *ptr;
     dbg("+]\033[m");
     cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
@@ -45,7 +45,7 @@ public:
     return ptr;
   }
 
-  void operator delete(void *ptr) {
+  void rUnManage(T *&ptr) {
     dbg("-]\033[m");
     cudaDeviceSynchronize();
     cudaFree(ptr);

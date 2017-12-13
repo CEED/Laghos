@@ -15,18 +15,19 @@ namespace mfem {
 RajaVector::~RajaVector(){
   if (!own) return;
   dbg("\033[33m[~v");
-  this->operator delete(data);
+  rUnManage(data);
 }
 
 // ***************************************************************************
 double* RajaVector::rmalloc(const size_t sz) {
   dbg("\033[33m[v");
-  return (double*) this->operator new(sz*sizeof(double));
+  return (double*) rManage(sz/**sizeof(double)*/);
 }
 
 // ***************************************************************************
 void RajaVector::SetSize(const size_t sz, const void* ptr) {
-  //printf("\033[33m[size=%d, new sz=%d]\033[m",size,sz);fflush(stdout);
+  //dbg("\033[33m[size=%d, new sz=%d]\033[m",size,sz);
+  own=true;
   size = sz;
   if (!data) { data = rmalloc(size); }
   if (ptr) { ::memcpy(data,ptr,bytes());}
@@ -42,8 +43,8 @@ RajaVector::RajaVector(const RajaVectorRef& ref):
   size(ref.v.size),data(ref.v.data),own(false) { }
 
 RajaVector::RajaVector(const Vector& v):
-//  size(0),data(NULL),own(false) { SetSize(v.Size(), v.GetData()); }
-  size(v.Size()),data(v.GetData()),own(false) {}
+  size(0),data(NULL),own(false) { SetSize(v.Size(), v.GetData()); }
+//  size(v.Size()),data(v.GetData()),own(false) {}
 
 RajaVector::RajaVector(RajaArray<double>& v):
   size(v.size()),data(v.ptr()),own(false) { /*SetSize(v.size(),v.ptr()); */}
@@ -95,7 +96,7 @@ RajaVector& RajaVector::operator-=(const RajaVector& v) {
 
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
-  vector_vec_add(size, data, v);
+  vector_vec_add(size, data, v.data);
   return *this;
 }
 
@@ -107,7 +108,7 @@ RajaVector& RajaVector::operator*=(const double d) {
 
 // ***************************************************************************
 RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
-  vector_axpy(Size(),alpha, data, v);
+  vector_axpy(Size(),alpha, data, v.data);
   return *this;
 }
 
@@ -118,10 +119,10 @@ void RajaVector::Neg() {
 }
 
 // *****************************************************************************
-void RajaVector::SetSubVector(const void* dofs,
+void RajaVector::SetSubVector(const RajaArray<int> &ess_tdofs,
                               const double value,
                               const int N) {
-  vector_set_subvector_const(N, value,ptr(),(const int*)dofs);
+  vector_set_subvector_const(N, value, data, ess_tdofs.ptr());
 }
 
 

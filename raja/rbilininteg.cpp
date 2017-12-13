@@ -18,14 +18,21 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 // ***************************************************************************
 // * RajaGeometry
 // ***************************************************************************
+static RajaGeometry *geom=NULL;
+
 RajaGeometry::~RajaGeometry(){
   dbg("\033[32m[~RajaGeometry]");
+  free(geom->meshNodes);
+  free(geom->J);
+  free(geom->invJ);
+  free(geom->detJ);
+  delete[] geom;
 }
 
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
                                const IntegrationRule& ir) {
-  RajaGeometry *geom=new RajaGeometry();
+  geom=new RajaGeometry();
   Mesh& mesh = *(ofespace.GetMesh());
   if (!mesh.GetNodes()) {
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
@@ -59,7 +66,6 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
   geom->J.allocate(dims, dims, numQuad, elements);
   geom->invJ.allocate(dims, dims, numQuad, elements);
   geom->detJ.allocate(numQuad, elements);
-  #warning GetSimplexMaps
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   assert(maps);
   rIniGeom(dims,numDofs,numQuad,elements,
@@ -94,17 +100,13 @@ RajaDofQuadMaps* RajaDofQuadMaps::Get(const FiniteElement& trialFE,
                                       const FiniteElement& testFE,
                                       const IntegrationRule& ir,
                                       const bool transpose) {
-  #warning RajaDofQuadMaps
-//  return GetTensorMaps(trialFE, testFE, ir, transpose);
-  return (dynamic_cast<const TensorBasisElement*>(&trialFE)
-          ? GetTensorMaps(trialFE, testFE, ir, transpose)
-          : GetSimplexMaps(trialFE, testFE, ir, transpose));
+  return GetTensorMaps(trialFE, testFE, ir, transpose);
 }
 
 // ***************************************************************************
 RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
-                                                  const FiniteElement& testFE,
-                                                  const IntegrationRule& ir,
+                                                const FiniteElement& testFE,
+                                                const IntegrationRule& ir,
                                                 const bool transpose) {
   const TensorBasisElement& trialTFE =
     dynamic_cast<const TensorBasisElement&>(trialFE);

@@ -51,7 +51,7 @@ class RajaVector : public rmanaged<double,mng>{
   RajaVector& Add(const double a, const RajaVector& Va);
   void Neg();
   RajaVectorRef GetRange(const size_t, const size_t) const;
-  void SetSubVector(const void*, const double, const int);
+  void SetSubVector(const RajaArray<int> &, const double, const int);
   double Min() const;
   ~RajaVector();
 };
