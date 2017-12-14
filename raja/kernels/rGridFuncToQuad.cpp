@@ -52,6 +52,7 @@ static void rGridFuncToQuad1D(const int NUM_VDIM,
 }
 
 // *****************************************************************************
+template<int v1,int q1>
 static void rGridFuncToQuad2D(const int NUM_VDIM,
                               const int NUM_DOFS_1D,
                               const int NUM_QUAD_1D,
@@ -60,14 +61,12 @@ static void rGridFuncToQuad2D(const int NUM_VDIM,
                               const int* __restrict l2gMap,
                               const double* __restrict gf,
                               double* __restrict out) {
-  //printf("\033[31m[NUM_VDIM=%d]\033[m\n",NUM_VDIM);
-  //printf("\033[31m[NUM_QUAD_1D=%d]\033[m\n",NUM_QUAD_1D);
-#warning asserts
-  assert(NUM_VDIM==1); const int v1 = 1;
-  assert(NUM_QUAD_1D==4); const int q1 = 4;
+  assert(NUM_VDIM==v1); 
+  assert(NUM_QUAD_1D==q1);
 
   forall(numElements,[=]device(int e){
-    double out_xy[v1][q1][q1];
+      double out_xy[v1][q1][q1];
+      //double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -113,6 +112,7 @@ static void rGridFuncToQuad2D(const int NUM_VDIM,
     }
     });
 }
+template void rGridFuncToQuad2D<1,4>(const int,const int,const int,const int,const double*,const int*,const double*,double*);
 
 // *****************************************************************************
 static void rGridFuncToQuad3D(const int NUM_VDIM,
@@ -210,9 +210,12 @@ void rGridFuncToQuad(const int dim,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
+  //printf("\033[31m[NUM_VDIM=%d]\033[m\n",NUM_VDIM);
+  //printf("\033[31m[NUM_QUAD_1D=%d]\033[m\n",NUM_QUAD_1D);
+#warning generalize <>
   switch (dim) {
     case 1: rGridFuncToQuad1D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out); break;
-    case 2: rGridFuncToQuad2D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out); break;
+  case 2: rGridFuncToQuad2D<1,4>(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out); break;
     case 3: rGridFuncToQuad3D(NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,numElements,dofToQuad,l2gMap,gf,out); break;
     default:assert(false);
   }

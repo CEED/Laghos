@@ -24,9 +24,9 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const int* __restrict indices,
                     const double* __restrict globalX,
                     double* __restrict localX) {
-  forall(globalEntries,[=]device(int i) {
+  FORALL(i,globalEntries,{
       const int offset = offsets[i];
-      const int nextOffset = offsets[i + 1];
+      const int nextOffset = offsets[i+1];
       for (int v = 0; v < NUM_VDIM; ++v) {
         const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
         const double dofValue = globalX[g_offset];

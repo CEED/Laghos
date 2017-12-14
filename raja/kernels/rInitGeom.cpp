@@ -48,6 +48,7 @@ static void rIniGeom1D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
+template<int tnum_dofs>
 static void rIniGeom2D(const int NUM_DOFS,
                        const int NUM_QUAD,
                        const int numElements,
@@ -56,11 +57,9 @@ static void rIniGeom2D(const int NUM_DOFS,
                        double* __restrict J,
                        double* __restrict invJ,
                        double* __restrict detJ) {
-  //printf("\033[31m[NUM_DOFS=%d]\033[m\n",NUM_DOFS);
-  assert(NUM_DOFS==9); const int nd = 9;
-  
+  assert(tnum_dofs==NUM_DOFS);  
   forall(numElements,[=]device(int e) {
-    double s_nodes[2 * nd] ;
+    double s_nodes[2 * tnum_dofs] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
         s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,e,2,NUM_DOFS)];
@@ -93,6 +92,9 @@ static void rIniGeom2D(const int NUM_DOFS,
     }
   });
 }
+template void rIniGeom2D<4>(const int,const int,const int,const double*,const double*,double*,double*,double*);
+template void rIniGeom2D<9>(const int,const int,const int,const double*,const double*,double*,double*,double*);
+template void rIniGeom2D<16>(const int,const int,const int,const double*,const double*,double*,double*,double*);
 
 // *****************************************************************************
 static void rIniGeom3D(const int NUM_DOFS,
@@ -105,7 +107,7 @@ static void rIniGeom3D(const int NUM_DOFS,
                        double* __restrict detJ) {
   assert(NUM_DOFS==4); const int nd = 4;
   forall(numElements,[=]device(int e) {
-    double s_nodes[3 * nd] ;
+    double s_nodes[3*nd] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
         s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
@@ -169,9 +171,16 @@ void rIniGeom(const int dim,
               double* __restrict invJ,
               double* __restrict detJ) {
   switch (dim) {
-    case 1: {rIniGeom1D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;}
-    case 2: {rIniGeom2D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;}
-    case 3: {rIniGeom3D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;}
+  case 1: rIniGeom1D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
+  case 2:
+    switch(NUM_DOFS){
+    case 4:  rIniGeom2D<4>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
+    case 9:  rIniGeom2D<9>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
+    case 16: rIniGeom2D<16>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
     default:assert(false);
+    }
+    break;
+  case 3: rIniGeom3D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
+  default:assert(false);
   }
 }

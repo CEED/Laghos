@@ -29,10 +29,11 @@
    const int CUDA_BLOCK_SIZE = 512;
 #  define device __device__
 #  define exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
+#  define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #  define reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
 #else
 #warning RAJA SEQ
-#  define device
+#  define device __host__
 #  define exec RAJA::seq_exec
 #  define reduce RAJA::seq_reduce
 #endif // USE_CUDA
@@ -44,10 +45,20 @@
 // RAJA forall *****************************************************************
 template <typename T>
 void forall(RAJA::Index_type max, T&& body) {
-  RAJA::forall<exec>(0,max,[=]device(RAJA::Index_type i){
-      body(i);
-    });
+  RAJA::forall<exec>(0,max,[=]device(RAJA::Index_type i) {body(i);});
 }
+
+#define FORALL(i,end,body)                                              \
+  RAJA::forall<RAJA::seq_exec>(0,end,[=](RAJA::Index_type i) {body});   \
+  RAJA::forall<cu_exec>(0,end,[=]__device__(RAJA::Index_type i) {body});
+
+/*
+// https://stackoverflow.com/questions/44868369/how-to-immediately-invoke-a-c-lambda
+template<class Callable>
+auto operator+(decltype(invoke) const&, Callable c) -> decltype(c()) {
+    return c();
+}
+*/
 
 #else // __NVCC__
 
@@ -76,6 +87,7 @@ public:
 // STD forall ******************************************************************
 template <typename T>
 void forall(int max, T&& body) { for(int i=0;i<max;i++) body(i); }
+#define FORALL(i,max,body) for(int i=0;i<max;i++){body(i);}
 
 #endif // __NVCC__
 
