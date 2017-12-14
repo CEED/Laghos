@@ -13,8 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_FESPACE
-#define MFEM_RAJA_FESPACE
+#ifndef LAGHOS_RAJA_FESPACE
+#define LAGHOS_RAJA_FESPACE
 
 namespace mfem {
   typedef TOperator<RajaVector> RajaOperator;
@@ -89,4 +89,4 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
 
 }
 
-#endif
+#endif // LAGHOS_RAJA_FESPACE

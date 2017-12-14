@@ -13,7 +13,7 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "kernels.hpp"
 
 // *****************************************************************************
 static void rIniGeom1D(const int NUM_DOFS,
@@ -26,7 +26,7 @@ static void rIniGeom1D(const int NUM_DOFS,
                        double* __restrict detJ) {
   assert(NUM_DOFS==4); const int nd = 4;
   
-  forall(numElements,[=]_device_(int e) {
+  forall(numElements,[=]device(int e) {
     double s_nodes[nd];
 
     for (int q = 0; q < NUM_QUAD; ++q) {
@@ -59,7 +59,7 @@ static void rIniGeom2D(const int NUM_DOFS,
   //printf("\033[31m[NUM_DOFS=%d]\033[m\n",NUM_DOFS);
   assert(NUM_DOFS==9); const int nd = 9;
   
-  forall(numElements,[=]_device_(int e) {
+  forall(numElements,[=]device(int e) {
     double s_nodes[2 * nd] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
@@ -104,7 +104,7 @@ static void rIniGeom3D(const int NUM_DOFS,
                        double* __restrict invJ,
                        double* __restrict detJ) {
   assert(NUM_DOFS==4); const int nd = 4;
-  forall(numElements,[=]_device_(int e) {
+  forall(numElements,[=]device(int e) {
     double s_nodes[3 * nd] ;
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {

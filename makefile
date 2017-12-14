@@ -117,7 +117,6 @@ ifeq ($(LAGHOS_NVCC),YES)
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
-		-DUSE_RAJA -DUSE_CUDA \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
 endif
 

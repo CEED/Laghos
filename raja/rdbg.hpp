@@ -13,11 +13,19 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "kernels.hpp"
-void vector_vec_mul(const int N,
-                    double* __restrict v0,
-                    const double d) {
-  forall(N,[=]device(int i){
-    v0[i] *= d;
-    });
+#ifndef LAGHOS_RAJA_DBG
+#define LAGHOS_RAJA_DBG
+
+// DBG *************************************************************************
+//#undef LAGHOS_DEBUG
+inline void dbg(const char *format,...){
+#ifdef LAGHOS_DEBUG
+  va_list args;
+  va_start(args, format);
+  vfprintf(stdout,format,args);
+  fflush(stdout);
+  va_end(args);
+#endif // LAGHOS_DEBUG
 }
+
+#endif // LAGHOS_RAJA_DBG

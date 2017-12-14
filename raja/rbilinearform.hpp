@@ -13,8 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_BILINEARFORM
-#define MFEM_RAJA_BILINEARFORM
+#ifndef LAGHOS_RAJA_BILINEARFORM
+#define LAGHOS_RAJA_BILINEARFORM
 
 namespace mfem {
 
@@ -100,4 +100,4 @@ class RajaConstrainedOperator : public RajaOperator {
 
 } // mfem
 
-#endif // MFEM_RAJA_BILINEARFORM
+#endif // LAGHOS_RAJA_BILINEARFORM

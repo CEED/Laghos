@@ -13,12 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_KERNEL_DEFINITIONS
-#define LAGHOS_KERNEL_DEFINITIONS
-
-#include <math.h>
-#include <stdbool.h>
-#include <assert.h>
+#ifndef LAGHOS_RAJA_KERNEL_OFFSETS
+#define LAGHOS_RAJA_KERNEL_OFFSETS
 
 // Offsets *********************************************************************
 #define   ijN(i,j,N) (i)+(N)*(j)
@@ -34,54 +30,4 @@
 #define _ijklmNM(i,j,k,l,m,N,M) (j)+(N)*((k)+(N)*((l)+(N)*((m)+(M)*(i))))
 #define ijklmnNM(i,j,k,l,m,n,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*((m)+(M)*(n)))))
 
-// RAJA ************************************************************************
-#ifdef USE_RAJA
-#include "RAJA/RAJA.hpp"
-#define capture =
-#ifdef USE_CUDA
-#  define _device_ __device__
-   const int CUDA_BLOCK_SIZE = 512;
-#  define exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
-#  define reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-#else
-#  define _device_
-#  define exec RAJA::seq_exec
-#  define reduce RAJA::seq_reduce
-#endif // USE_CUDA
-
-// Reduce **********************************************************************
-#define ReduceDecl(type,var,ini) \
-  RAJA::Reduce ## type<reduce, RAJA::Real_type> var(ini);
-// RAJA forall *****************************************************************
-template <typename T>
-void forall(RAJA::Index_type max, T&& body) {
-  RAJA::forall<exec>(0,max,[=]_device_(RAJA::Index_type i) {
-    body(i);
-  });
-}
-#else // USE_RAJA
-#define capture &
-#define reduce
-#define _device_
-template <typename T>
-void forall(int max, T&& body) { for(int i=0;i<max;i++) body(i); }
-class ReduceSum{
-private:
-  double s;
-public:
-  inline ReduceSum(double d):s(d){}
-  inline operator double() { return s; }
-  inline ReduceSum& operator +=(const double d) { return *this = (s+d); }
-};
-class ReduceMin{
-private:
-  double m;
-public:
-  inline ReduceMin(double d):m(d){}
-  inline operator double() { return m; }
-  inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
-};
-#define ReduceDecl(type,var,ini) Reduce##type var(ini);
-#endif // USE_RAJA
-
-#endif // LAGHOS_KERNEL_DEFINITIONS
+#endif // LAGHOS_RAJA_KERNEL_OFFSETS

@@ -13,13 +13,13 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "kernels.hpp"
 void vector_xpay(const int N,
                  const double c0,
                  double* __restrict v0,
                  const double* __restrict v1,
                  const double* __restrict v2) {
-  forall(N,[=]_device_(int i){
+  forall(N,[=]device(int i){
     v0[i] = v1[i] + (c0 * v2[i]);
     });
 }

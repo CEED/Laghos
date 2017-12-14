@@ -13,14 +13,14 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_RAJA_VECTOR
-#define MFEM_RAJA_VECTOR
+#ifndef LAGHOS_RAJA_VECTOR
+#define LAGHOS_RAJA_VECTOR
 
 namespace mfem {
 
 struct RajaVectorRef;
 
-class RajaVector : public rmanaged<double,mng>{
+class RajaVector : public rmalloc<double,mng>{
  private:
   size_t size = 0;
   double* data = NULL;
@@ -34,7 +34,7 @@ class RajaVector : public rmanaged<double,mng>{
   RajaVector(RajaArray<double>& v);
   operator Vector();
   operator Vector() const;
-  double* rmalloc(const size_t);
+  double* alloc(const size_t);
   inline double* ptr() const { return data;}
   inline operator double* () { return data; }
   inline operator const double* () const { return data; }
@@ -56,7 +56,7 @@ class RajaVector : public rmanaged<double,mng>{
   ~RajaVector();
 };
 
-struct RajaVectorRef { RajaVector v; ~RajaVectorRef(){}};
+struct RajaVectorRef { RajaVector v; };
 
 // ***************************************************************************
 void add(const RajaVector&,const double,const RajaVector&,RajaVector&);
@@ -67,4 +67,4 @@ void subtract(const RajaVector&,const RajaVector&,RajaVector&);
 
 }
 
-#endif // MFEM_RAJA_VECTOR
+#endif // LAGHOS_RAJA_VECTOR

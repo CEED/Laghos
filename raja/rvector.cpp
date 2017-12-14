@@ -15,13 +15,13 @@ namespace mfem {
 RajaVector::~RajaVector(){
   if (!own) return;
   dbg("\033[33m[~v");
-  rUnManage(data);
+  this->operator delete(data);
 }
 
 // ***************************************************************************
-double* RajaVector::rmalloc(const size_t sz) {
+double* RajaVector::alloc(const size_t sz) {
   dbg("\033[33m[v");
-  return (double*) rManage(sz/**sizeof(double)*/);
+  return (double*) this->operator new(sz);
 }
 
 // ***************************************************************************
@@ -29,25 +29,24 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   //dbg("\033[33m[size=%d, new sz=%d]\033[m",size,sz);
   own=true;
   size = sz;
-  if (!data) { data = rmalloc(size); }
+  if (!data) { data = (double*) this->operator new(size); }
   if (ptr) { ::memcpy(data,ptr,bytes());}
 }
 
 // ***************************************************************************
-RajaVector::RajaVector(const size_t sz):size(sz),data(rmalloc(sz)),own(true) {}
+RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
 
 RajaVector::RajaVector(const RajaVector& v):
   size(0),data(NULL),own(true) { SetSize(v.Size(), v); }
 
 RajaVector::RajaVector(const RajaVectorRef& ref):
-  size(ref.v.size),data(ref.v.data),own(false) { }
+  size(ref.v.size),data(ref.v.data),own(false) {}
 
 RajaVector::RajaVector(const Vector& v):
   size(0),data(NULL),own(false) { SetSize(v.Size(), v.GetData()); }
-//  size(v.Size()),data(v.GetData()),own(false) {}
 
 RajaVector::RajaVector(RajaArray<double>& v):
-  size(v.size()),data(v.ptr()),own(false) { /*SetSize(v.size(),v.ptr()); */}
+  size(v.size()),data(v.ptr()),own(false) {}
 
 // ***************************************************************************
 RajaVector::operator Vector() { return Vector(data,size); }

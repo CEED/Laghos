@@ -16,9 +16,17 @@
 #ifndef LAGHOS_RAJA_KERNELS
 #define LAGHOS_RAJA_KERNELS
 
+#include <math.h>
+#include <assert.h>
+
+// *****************************************************************************
+#include "forall.hpp"
+#include "offsets.hpp"
+
+// *****************************************************************************
 #define restrict __restrict
 
-// **** BLAS1 ****************************************************************
+// **** BLAS1 ******************************************************************
 void vector_neg(const int, double* restrict);
 void vector_op_eq(const int, const double, double* restrict);
 void vector_xpay(const int, const double, double* restrict, const double* restrict,
@@ -40,7 +48,7 @@ double vector_dot(const int, const double* restrict, const double* restrict);
 double vector_min(const int, const double* restrict);
 
 
-// ***************************************************************************
+// *****************************************************************************
 void rGridFuncToQuad(const int dim,
                      const int NUM_VDIM,
                      const int NUM_DOFS_1D,
@@ -51,7 +59,7 @@ void rGridFuncToQuad(const int dim,
                      const double* restrict gf,
                      double* restrict out);
 
-// mapping *******************************************************************
+// mapping *********************************************************************
 void rSetSubVector(const int entries,
                    const int* restrict indices,
                    const double* restrict in,
@@ -67,7 +75,7 @@ void rExtractSubVector(const int entries,
                        const double* restrict in,
                        double* restrict out);
 
-// kQuadratureData ***********************************************************
+// kQuadratureData *************************************************************
 void rInitQuadratureData(const int NUM_QUAD,
                          const int numElements,
                          const double* restrict rho0,
@@ -97,7 +105,7 @@ void rUpdateQuadratureData(const double GAMMA,
                            double* restrict stressJinvT,
                            double* restrict dtEst);
 
-// kForce ********************************************************************
+// kForce **********************************************************************
 void rForceMult(const int NUM_DIM,
                 const int NUM_DOFS_1D,
                 const int NUM_QUAD_1D,
@@ -124,7 +132,7 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict v,
                          double* restrict e);
 
-// ***************************************************************************
+// *****************************************************************************
 void rIniGeom(const int dim,
               const int nDofs,
               const int nQuads,
@@ -135,7 +143,7 @@ void rIniGeom(const int dim,
               double* restrict invJ,
               double* restrict detJ);
 
-// ***************************************************************************
+// *****************************************************************************
 void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
@@ -154,7 +162,7 @@ void rLocalToGlobal(const int NUM_VDIM,
                     const double* restrict localX,
                     double* restrict globalX);
 
-// ***************************************************************************
+// *****************************************************************************
 void rMassAssemble(const int dim,
                    const int NUM_QUAD,
                    const int numElements,
@@ -163,7 +171,7 @@ void rMassAssemble(const int dim,
                    const double* restrict J,
                    double* restrict oper);
 
-// ***************************************************************************
+// *****************************************************************************
 void rMassMultAdd(const int dim,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
@@ -176,4 +184,4 @@ void rMassMultAdd(const int dim,
                   const double* restrict x,
                   double* restrict y);
 
-#endif // LAGHOS_RAJAC_KERNELS
+#endif // LAGHOS_RAJA_KERNELS

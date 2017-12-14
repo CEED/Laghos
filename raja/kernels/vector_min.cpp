@@ -13,11 +13,11 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "kernels.hpp"
 double vector_min(const int N,
                   const double* __restrict vec) {
   ReduceDecl(Min,red,vec[0]);
-  forall(N,[capture]_device_(int i){
+  forall(N,[ReduceCapture]device(int i){
       red.min(vec[i]);
     });
   return red;

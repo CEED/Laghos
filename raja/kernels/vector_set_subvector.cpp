@@ -13,12 +13,12 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "kernels.hpp"
 void vector_set_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
-  forall(N,[=]_device_(int i){
+  forall(N,[=]device(int i){
       const int dof_i = v2[i];
       const bool tst = dof_i >= 0;
       const int idx = tst?dof_i:-dof_i-1;

@@ -13,7 +13,7 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "defines.hpp"
+#include "kernels.hpp"
 
 // *****************************************************************************
 static void rGridFuncToQuad1D(const int NUM_VDIM,
@@ -27,7 +27,7 @@ static void rGridFuncToQuad1D(const int NUM_VDIM,
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==1); const int q1 = 1;
   
-  forall(numElements,[=]_device_(int e){
+  forall(numElements,[=]device(int e){
     double r_out[v1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -62,10 +62,11 @@ static void rGridFuncToQuad2D(const int NUM_VDIM,
                               double* __restrict out) {
   //printf("\033[31m[NUM_VDIM=%d]\033[m\n",NUM_VDIM);
   //printf("\033[31m[NUM_QUAD_1D=%d]\033[m\n",NUM_QUAD_1D);
+#warning asserts
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==4); const int q1 = 4;
 
-  forall(numElements,[=]_device_(int e){//for (int e = 0; e < numElements; ++e) {
+  forall(numElements,[=]device(int e){
     double out_xy[v1][q1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -125,7 +126,7 @@ static void rGridFuncToQuad3D(const int NUM_VDIM,
   assert(NUM_VDIM==1); const int v1 = 1;
   assert(NUM_QUAD_1D==1); const int q1 = 1;
 
-  forall(numElements,[=]_device_(int e){//for (int e = 0; e < numElements; ++e) {
+  forall(numElements,[=]device(int e){
     double out_xyz[v1][q1][q1][q1];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {

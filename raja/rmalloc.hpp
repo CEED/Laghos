@@ -13,20 +13,32 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_RAJA_MANAGED
-#define LAGHOS_RAJA_MANAGED
+#ifndef LAGHOS_RAJA_MALLOC
+#define LAGHOS_RAJA_MALLOC
+
+namespace mfem {
 
 // *****************************************************************************
-template <typename T,bool = false> class rmanaged;
+static const bool mem_manager_uvm  = true;
+static const bool mem_manager_std  = false;
+  
+#ifdef __NVCC__
+static const bool mng = mem_manager_uvm;
+#else
+static const bool mng = mem_manager_std;
+#endif
+
+// *****************************************************************************
+template <typename T, bool = mem_manager_std> class rmalloc;
 
 // CPU *************************************************************************
-template<typename T> class rmanaged<T,false> {
+template<typename T> class rmalloc<T,false> {
 public:
-  void* rManage(size_t n) {
+  void* operator new(size_t n) {
     dbg("+]\033[m");
     return new T[n];
   }
-  void rUnManage(T *&ptr) {
+  void operator delete(void *ptr) {
     dbg("-]\033[m");
     delete[] static_cast<T*>(ptr);
     ptr = nullptr;
@@ -34,10 +46,10 @@ public:
 };
 
 // GPU *************************************************************************
-#ifdef USE_CUDA
-template<typename T> class rmanaged<T,true> {
+#ifdef __NVCC__
+template<typename T> class rmalloc<T,mem_manager_uvm> {
 public:
-  void* rManage(size_t n) {
+  void* operator new(size_t n) {
     void *ptr;
     dbg("+]\033[m");
     cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
@@ -45,13 +57,15 @@ public:
     return ptr;
   }
 
-  void rUnManage(T *&ptr) {
+  void operator delete(void *ptr) {
     dbg("-]\033[m");
     cudaDeviceSynchronize();
     cudaFree(ptr);
     ptr = nullptr;
   }
 };
-#endif
+#endif // __NVCC__
+  
+} // mfem
 
-#endif // LAGHOS_RAJA_MANAGED
+#endif // LAGHOS_RAJA_MALLOC
