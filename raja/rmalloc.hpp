@@ -19,17 +19,7 @@
 namespace mfem {
 
 // *****************************************************************************
-static const bool mem_manager_uvm  = true;
-static const bool mem_manager_std  = false;
-  
-#ifdef __NVCC__
-static const bool mng = mem_manager_uvm;
-#else
-static const bool mng = mem_manager_std;
-#endif
-
-// *****************************************************************************
-template <typename T, bool = mem_manager_std> class rmalloc;
+template <typename T, bool = false> class rmalloc;
 
 // CPU *************************************************************************
 template<typename T> class rmalloc<T,false> {
@@ -47,7 +37,7 @@ public:
 
 // GPU *************************************************************************
 #ifdef __NVCC__
-template<typename T> class rmalloc<T,mem_manager_uvm> {
+template<typename T> class rmalloc<T,true> {
 public:
   void* operator new(size_t n) {
     void *ptr;
@@ -65,7 +55,7 @@ public:
   }
 };
 #endif // __NVCC__
-  
+
 } // mfem
 
 #endif // LAGHOS_RAJA_MALLOC

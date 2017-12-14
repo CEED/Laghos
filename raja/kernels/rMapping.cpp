@@ -19,7 +19,7 @@ void rSetSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
-  forall(N,[=]device(int i) {
+  forall(i,N,{
     out[indices[i]] = in[i];
   });
 }
@@ -28,7 +28,7 @@ void rMapSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
-  forall(N,[=]device(int i) {
+  forall(i,N,{
     const int fromIdx = indices[2*i + 0];
     const int toIdx   = indices[2*i + 1];
     out[toIdx] = in[fromIdx];
@@ -39,7 +39,5 @@ void rExtractSubVector(const int N,
                        const int* indices,
                        const double* in,
                        double* __restrict out) {
-  forall(N,[=]device(int i) {
-    out[i] = in[indices[i]];
-  });
+  forall(i,N,out[i] = in[indices[i]];);
 }

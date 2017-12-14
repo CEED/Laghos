@@ -16,8 +16,16 @@
 #ifndef LAGHOS_RAJA_KERNELS
 #define LAGHOS_RAJA_KERNELS
 
+// *****************************************************************************
 #include <math.h>
 #include <assert.h>
+
+// ***************************************************************************** 
+#ifdef USE_CUDA
+static const bool mng = true;
+#else
+static const bool mng = false;
+#endif
 
 // *****************************************************************************
 #include "forall.hpp"
@@ -46,7 +54,6 @@ void vector_set_subvector_const(const int, const double, double* restrict,
                                 const int* restrict);
 double vector_dot(const int, const double* restrict, const double* restrict);
 double vector_min(const int, const double* restrict);
-
 
 // *****************************************************************************
 void rGridFuncToQuad(const int dim,

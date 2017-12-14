@@ -22,7 +22,7 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  forall(numElements,[=]device(int e) {
+  forall(e,numElements,{
     for (int q = 0; q < NUM_QUAD_2D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,2,NUM_QUAD_2D)];
       const double J12 = J[ijklNM(1,0,q,e,2,NUM_QUAD_2D)];
@@ -41,7 +41,7 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  forall(numElements,[=]device(int e) {
+  forall(e,numElements,{
     for (int q = 0; q < NUM_QUAD_3D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,3,NUM_QUAD_3D)];
       const double J12 = J[ijklNM(1,0,q,e,3,NUM_QUAD_3D)];
@@ -85,7 +85,7 @@ static void rMassMultAdd2D(const int NUM_DOFS_1D,
                            const double* oper,
                            const double* solIn,
                            double* __restrict solOut) {  
-  forall(numElements,[=]device(int e) {
+  forall(e,numElements,{
       double sol_xy[q1][q1];
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -183,7 +183,7 @@ static void rMassMultAdd3D(const int NUM_DOFS_1D,
   assert(NUM_DOFS_1D==4);
   const int q1 = 4;
   const int d1 = 4;
-  forall(numElements,[=]device(int e) {
+  forall(e,numElements,{
     double sol_xyz[q1][q1][q1];
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {

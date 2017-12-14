@@ -22,11 +22,11 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* detJ,
                          const double* quadWeights,
                          double* __restrict rho0DetJ0w) {
-  forall(numElements,[=]device(int el) {
-    for (int q = 0; q < NUM_QUAD; ++q) {
-      rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
-        rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
-    }
+  forall(el,numElements,{
+      for (int q = 0; q < NUM_QUAD; ++q){
+        rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
+          rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
+      }
     });
 }
 
@@ -59,8 +59,7 @@ void rUpdateQuadratureData2D(const double GAMMA,
   assert(NUM_DIM==2); const int nd = 2;
   assert(NUM_QUAD_1D==4); const int q1 = 4;
   assert(NUM_QUAD_2D==16); const int q2 = 16;
-  
-  forall(numElements,[=]device(int el){
+  forall(el,numElements,{
     double s_gradv[4*q2] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
       s_gradv[i] = 0;
@@ -189,14 +188,13 @@ void rUpdateQuadratureData2D(const double GAMMA,
           }
         }
       }
-      const double S00 = q_stress[ijN(0,0,2)],S10 = q_stress[ijN(1,0,2)];
-      const double S01 = q_stress[ijN(0,1,2)],S11 = q_stress[ijN(1,1,2)];
+      const double S00 = q_stress[ijN(0,0,2)]; const double S10 = q_stress[ijN(1,0,2)];
+      const double S01 = q_stress[ijN(0,1,2)]; const double S11 = q_stress[ijN(1,1,2)];
       stressJinvT[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_00)+(S10*invJ_01));
       stressJinvT[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_10)+(S10*invJ_11));
       stressJinvT[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_00)+(S11*invJ_01));
       stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
-    }
-  });
+    }});
 }
 
 // *****************************************************************************
@@ -228,9 +226,9 @@ void rUpdateQuadratureData3D(const double GAMMA,
   assert(NUM_QUAD_2D==4); const int q2 = 4;
   assert(NUM_QUAD_3D==8); const int q3 = 8;
   
-  forall(numElements,[=]device(int el){
-    double s_gradv[9*q3] ;
-
+  forall(el,numElements,{
+    double s_gradv[9*q3];
+    
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
       s_gradv[i] = 0;
     }
@@ -505,7 +503,6 @@ void rUpdateQuadratureData3D(const double GAMMA,
       stressJinvT[ijklNM(0,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_00)+(S12*invJ_01)+(S22*invJ_02));
       stressJinvT[ijklNM(1,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_10)+(S12*invJ_11)+(S22*invJ_12));
       stressJinvT[ijklNM(2,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_20)+(S12*invJ_21)+(S22*invJ_22));
-
     }
     });
 }

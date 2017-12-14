@@ -113,8 +113,7 @@ endif
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = /usr/local/cuda/bin/nvcc
-	CXXFLAGS = \
-		-DUSE_CUDA \
+	CXXFLAGS = -DUSE_CUDA \
 		-std=c++11 -O2 -g -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
@@ -173,7 +172,7 @@ rule_dumb = @echo -e $(rule_path)/$(rule_file)
 rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
              $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
 output = $(rule_${TERM})
-#quiet := --quiet -S
+quiet := --quiet -S
 
 ###########
 # Targets #

@@ -17,8 +17,6 @@
 double vector_min(const int N,
                   const double* __restrict vec) {
   ReduceDecl(Min,red,vec[0]);
-  forall(N,[ReduceCapture]device(int i){
-      red.min(vec[i]);
-    });
+  forall(i,N,red.min(vec[i]););
   return red;
 }

@@ -16,7 +16,7 @@
 #include "kernels.hpp"
 
 // *****************************************************************************
-static void rIniGeom1D(const int NUM_DOFS,
+void rIniGeom1D(const int NUM_DOFS,
                        const int NUM_QUAD,
                        const int numElements,
                        const double* __restrict dofToQuadD,
@@ -25,10 +25,8 @@ static void rIniGeom1D(const int NUM_DOFS,
                        double* __restrict invJ,
                        double* __restrict detJ) {
   assert(NUM_DOFS==4); const int nd = 4;
-  
-  forall(numElements,[=]device(int e) {
+  forall(e,numElements,{
     double s_nodes[nd];
-
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
         s_nodes[d] = nodes[ijkN(0,d,e,NUM_QUAD)];
@@ -57,18 +55,19 @@ static void rIniGeom2D(const int NUM_DOFS,
                        double* __restrict J,
                        double* __restrict invJ,
                        double* __restrict detJ) {
-  assert(tnum_dofs==NUM_DOFS);  
-  forall(numElements,[=]device(int e) {
-    double s_nodes[2 * tnum_dofs] ;
+  //const int tnum_dofs=4;
+  assert(tnum_dofs==NUM_DOFS);
+  forall(el,numElements,
+    double s_nodes[2 * tnum_dofs];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
-        s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,e,2,NUM_DOFS)];
-        s_nodes[ijN(1,d,2)] = nodes[ijkNM(1,d,e,2,NUM_DOFS)];
+        s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,el,2,NUM_DOFS)];
+        s_nodes[ijN(1,d,2)] = nodes[ijkNM(1,d,el,2,NUM_DOFS)];
       }
     }
     for (int q = 0; q < NUM_QUAD; ++q) {
-      double J11 = 0, J12 = 0;
-      double J21 = 0, J22 = 0;
+      double J11 = 0; double J12 = 0;
+      double J21 = 0; double J22 = 0;
       for (int d = 0; d < NUM_DOFS; ++d) {
         const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
         const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
@@ -78,19 +77,17 @@ static void rIniGeom2D(const int NUM_DOFS,
         J21 += (wy * x); J22 += (wy * y);
       }
       const double r_detJ = (J11 * J22)-(J12 * J21);
-      J[ijklNM(0, 0, q, e,2,NUM_QUAD)] = J11;
-      J[ijklNM(1, 0, q, e,2,NUM_QUAD)] = J12;
-      J[ijklNM(0, 1, q, e,2,NUM_QUAD)] = J21;
-      J[ijklNM(1, 1, q, e,2,NUM_QUAD)] = J22;
+      J[ijklNM(0, 0, q, el,2,NUM_QUAD)] = J11;
+      J[ijklNM(1, 0, q, el,2,NUM_QUAD)] = J12;
+      J[ijklNM(0, 1, q, el,2,NUM_QUAD)] = J21;
+      J[ijklNM(1, 1, q, el,2,NUM_QUAD)] = J22;
       const double r_idetJ = 1.0 / r_detJ;
-      invJ[ijklNM(0, 0, q, e,2,NUM_QUAD)] =  J22 * r_idetJ;
-      invJ[ijklNM(1, 0, q, e,2,NUM_QUAD)] = -J12 * r_idetJ;
-
-      invJ[ijklNM(0, 1, q, e,2,NUM_QUAD)] = -J21 * r_idetJ;
-      invJ[ijklNM(1, 1, q, e,2,NUM_QUAD)] =  J11 * r_idetJ;
-      detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
-    }
-  });
+      invJ[ijklNM(0, 0, q, el,2,NUM_QUAD)] =  J22 * r_idetJ;
+      invJ[ijklNM(1, 0, q, el,2,NUM_QUAD)] = -J12 * r_idetJ;
+      invJ[ijklNM(0, 1, q, el,2,NUM_QUAD)] = -J21 * r_idetJ;
+      invJ[ijklNM(1, 1, q, el,2,NUM_QUAD)] =  J11 * r_idetJ;
+      detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
+    });
 }
 template void rIniGeom2D<4>(const int,const int,const int,const double*,const double*,double*,double*,double*);
 template void rIniGeom2D<9>(const int,const int,const int,const double*,const double*,double*,double*,double*);
@@ -106,8 +103,8 @@ static void rIniGeom3D(const int NUM_DOFS,
                        double* __restrict invJ,
                        double* __restrict detJ) {
   assert(NUM_DOFS==4); const int nd = 4;
-  forall(numElements,[=]device(int e) {
-    double s_nodes[3*nd] ;
+  forall(e,numElements,{
+    double s_nodes[3*nd];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
         s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
@@ -116,9 +113,9 @@ static void rIniGeom3D(const int NUM_DOFS,
       }
     }
     for (int q = 0; q < NUM_QUAD; ++q) {
-      double J11 = 0, J12 = 0, J13 = 0;
-      double J21 = 0, J22 = 0, J23 = 0;
-      double J31 = 0, J32 = 0, J33 = 0;
+      double J11 = 0; double J12 = 0; double J13 = 0;
+      double J21 = 0; double J22 = 0; double J23 = 0;
+      double J31 = 0; double J32 = 0; double J33 = 0;
       for (int d = 0; d < NUM_DOFS; ++d) {
         const double wx = dofToQuadD[ijkNM(0, q, d,3,NUM_QUAD)];
         const double wy = dofToQuadD[ijkNM(1, q, d,3,NUM_QUAD)];
@@ -157,7 +154,7 @@ static void rIniGeom3D(const int NUM_DOFS,
       invJ[ijklNM(2, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J11 * J22)-(J12 * J21));
       detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
     }
-  });
+    });
 }
 
 // *****************************************************************************

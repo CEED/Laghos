@@ -18,7 +18,7 @@ void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs) {
-  forall(N,[=]device(int i){
+  forall(i,N,{
       const int dof_i = tdofs[i];
       data[dof_i] = value;
       if (dof_i >= 0) {

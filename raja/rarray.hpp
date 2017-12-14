@@ -57,7 +57,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T,mng>{
 };
 
 // Partial Specializations for xyz==FALSE ************************************
-  template <class T> class RajaArray<T,false> : public rmalloc<T,mng>{
+template <class T> class RajaArray<T,false> : public rmalloc<T,mng>{
  private:
   static const int DIM = 4;
   T* data = NULL;

@@ -18,7 +18,7 @@ void vector_set_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
-  forall(N,[=]device(int i){
+  forall(i,N,{
       const int dof_i = v2[i];
       const bool tst = dof_i >= 0;
       const int idx = tst?dof_i:-dof_i-1;

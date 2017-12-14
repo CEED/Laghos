@@ -16,7 +16,5 @@
 #include "kernels.hpp"
 void vector_neg(const int N,
                 double* __restrict vec) {
-  forall(N,[=]device(int i){
-    vec[i] *= -1.0;
-    });
+  forall(i,N,vec[i] *= -1.0;);
 }

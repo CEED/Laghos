@@ -37,7 +37,8 @@ static void rForceMult2D(const int NUM_DIM,
   assert(NUM_QUAD_2D==16); const int q2 = 16;
   assert(H1_DOFS_1D==3);  const int h1 = 3;
   
-  forall(numElements,[=]device(int el){
+  //forall(numElements,[=]device(int el){
+  forall(el,numElements,{
     double e_xy[q2];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       e_xy[i] = 0;
@@ -115,7 +116,7 @@ static void rForceMultTranspose2D(const int NUM_DIM,
   assert(NUM_QUAD_2D==16); const int q2 = 16;
   assert(L2_DOFS_1D==2);  const int l1 = 2;
 
-  forall(numElements,[=]device(int el){
+  forall(el,numElements,{
     double vStress[q2];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       vStress[i] = 0;
@@ -204,7 +205,7 @@ static void rForceMult3D(const int NUM_DIM,
   assert(NUM_QUAD_3D==8); const int q3 = 8;
   assert(H1_DOFS_1D==2);  const int h1 = 2;
   
-  forall(numElements,[=]device(int el){
+  forall(el,numElements,{
     double e_xyz[q3];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       e_xyz[i] = 0;
@@ -321,7 +322,7 @@ static void rForceMultTranspose3D(const int NUM_DIM,
   assert(NUM_QUAD_3D==8); const int q3 = 8;
   assert(L2_DOFS_1D==2);  const int l1 = 2;
 
-  forall(numElements,[=]device(int el){
+  forall(el,numElements,{
     double vStress[q3];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       vStress[i] = 0;
