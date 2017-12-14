@@ -20,7 +20,7 @@ namespace mfem {
 
 struct RajaVectorRef;
 
-class RajaVector : public rmalloc<double,mng>{
+class RajaVector : public rmalloc<double>{
  private:
   size_t size = 0;
   double* data = NULL;

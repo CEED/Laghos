@@ -21,7 +21,7 @@ namespace mfem {
 template <class T, bool xyz = true> class RajaArray;
 
 // Partial Specializations for xyz==TRUE *************************************
-template <class T> class RajaArray<T,true> : public rmalloc<T,mng>{
+template <class T> class RajaArray<T,true> : public rmalloc<T>{
  private:
   T* data = NULL;
   size_t sz,d[4];
@@ -30,7 +30,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T,mng>{
   RajaArray(const size_t x) {allocate(x);}
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
-    ~RajaArray(){dbg("\033[32m[~i");this->operator delete(data);}
+    ~RajaArray(){dbg("\033[32m[~i");rmalloc<T>::_delete(data);}
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
@@ -45,7 +45,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T,mng>{
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     dbg("\033[32m[i");
-    data=(T*) this->operator new(sz);
+    data=(T*) rmalloc<T>::_new(sz);
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -57,7 +57,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T,mng>{
 };
 
 // Partial Specializations for xyz==FALSE ************************************
-template <class T> class RajaArray<T,false> : public rmalloc<T,mng>{
+template <class T> class RajaArray<T,false> : public rmalloc<T>{
  private:
   static const int DIM = 4;
   T* data = NULL;
@@ -66,7 +66,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T,mng>{
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
-    ~RajaArray(){dbg("\033[32m[~I");this->operator delete(data);}
+    ~RajaArray(){dbg("\033[32m[~I");rmalloc<T>::_delete(data);}
   inline T* ptr() { return data; }
   inline T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
@@ -81,7 +81,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T,mng>{
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     dbg("\033[32m[I");
-    data=(T*) this->operator new(sz);
+    data=(T*) rmalloc<T>::_new(sz);
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }
     for (size_t i=1,b=d[0]; i<DIM; xsw(d[i],b),++i) {

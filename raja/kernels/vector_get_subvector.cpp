@@ -13,7 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "kernels.hpp"
+#include "raja.hpp"
+
 void vector_get_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,

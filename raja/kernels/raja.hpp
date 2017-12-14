@@ -13,10 +13,25 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "raja.hpp"
+#ifndef LAGHOS_RAJA_KERNELS_RAJA
+#define LAGHOS_RAJA_KERNELS_RAJA
 
-void vector_op_eq(const int N,
-                  const double c0,
-                  double* __restrict v0) {
-  forall(i,N,v0[i] = c0;);
-}
+// *****************************************************************************
+#undef NDEBUG
+#include <math.h>
+#include <assert.h>
+
+// *****************************************************************************
+#ifdef __NVCC__
+#include <cuda.h>
+#include "RAJA/RAJA.hpp"
+#include "RAJA/util/defines.hpp"
+#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+#endif
+
+// *****************************************************************************
+#include "forall.hpp"
+#include "offsets.hpp"
+#include "kernels.hpp"
+
+#endif // LAGHOS_RAJA_KERNELS_RAJA

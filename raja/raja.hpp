@@ -26,15 +26,17 @@
 #include "fem/gridfunc.hpp"
 #include "fem/pfespace.hpp"
 
-// LAGHOS/raja/kernels *********************************************************
-#include "kernels/kernels.hpp"
-
 // LAGHOS/raja *****************************************************************
 #include "rdbg.hpp"
 #include "rmalloc.hpp"
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rtypedef.hpp"
+
+// LAGHOS/raja/kernels *********************************************************
+#include "kernels/kernels.hpp"
+
+// LAGHOS/raja *****************************************************************
 #include "rfespace.hpp"
 #include "rbilinearform.hpp"
 #include "rgridfunc.hpp"

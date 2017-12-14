@@ -13,7 +13,7 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "kernels.hpp"
+#include "raja.hpp"
 
 // *****************************************************************************
 static void rForceMult2D(const int NUM_DIM,
@@ -37,7 +37,6 @@ static void rForceMult2D(const int NUM_DIM,
   assert(NUM_QUAD_2D==16); const int q2 = 16;
   assert(H1_DOFS_1D==3);  const int h1 = 3;
   
-  //forall(numElements,[=]device(int el){
   forall(el,numElements,{
     double e_xy[q2];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {

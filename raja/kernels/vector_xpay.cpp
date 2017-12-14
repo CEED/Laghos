@@ -13,7 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "kernels.hpp"
+#include "raja.hpp"
+
 void vector_xpay(const int N,
                  const double c0,
                  double* __restrict v0,

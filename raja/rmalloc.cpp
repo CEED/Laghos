@@ -13,10 +13,5 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#include "raja.hpp"
 
-void vector_op_eq(const int N,
-                  const double c0,
-                  double* __restrict v0) {
-  forall(i,N,v0[i] = c0;);
-}
+bool is_managed = false;

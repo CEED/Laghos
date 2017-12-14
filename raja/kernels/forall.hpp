@@ -18,13 +18,6 @@
 
 // RAJA ************************************************************************
 #ifdef __NVCC__
-
-#include "cuda.h"
-#include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
-#include "RAJA/index/RangeSegment.hpp"
-
 const int CUDA_BLOCK_SIZE = 512;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -39,19 +32,12 @@ const int CUDA_BLOCK_SIZE = 512;
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
 
 // RAJA forall *****************************************************************
+extern "C" bool is_managed;
 #define forall(i,max,body)                                              \
-  if (mng)                                                              \
+  if (is_managed)                                              \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-
-/*
-// https://stackoverflow.com/questions/44868369/how-to-immediately-invoke-a-c-lambda
-template<class Callable>
-auto operator+(decltype(invoke) const&, Callable c) -> decltype(c()) {
-    return c();
-}
-*/
 
 #else // __NVCC__
 

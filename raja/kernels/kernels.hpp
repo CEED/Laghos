@@ -16,23 +16,7 @@
 #ifndef LAGHOS_RAJA_KERNELS
 #define LAGHOS_RAJA_KERNELS
 
-// *****************************************************************************
-#include <math.h>
-#include <assert.h>
-
-// ***************************************************************************** 
-#ifdef USE_CUDA
-static const bool mng = true;
-#else
-static const bool mng = false;
-#endif
-
-// *****************************************************************************
-#include "forall.hpp"
-#include "offsets.hpp"
-
-// *****************************************************************************
-#define restrict __restrict
+#define restrict __restrict__
 
 // **** BLAS1 ******************************************************************
 void vector_neg(const int, double* restrict);

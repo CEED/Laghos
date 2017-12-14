@@ -16,45 +16,40 @@
 #ifndef LAGHOS_RAJA_MALLOC
 #define LAGHOS_RAJA_MALLOC
 
+// ***************************************************************************
+extern bool is_managed;
+
 namespace mfem {
 
 // *****************************************************************************
-template <typename T, bool = false> class rmalloc;
-
-// CPU *************************************************************************
-template<typename T> class rmalloc<T,false> {
-public:
-  void* operator new(size_t n) {
+template<class T> struct rmalloc{
+  // ***************************************************************************
+  void* _new(size_t n) {
     dbg("+]\033[m");
-    return new T[n];
-  }
-  void operator delete(void *ptr) {
-    dbg("-]\033[m");
-    delete[] static_cast<T*>(ptr);
-    ptr = nullptr;
-  }
-};
-
-// GPU *************************************************************************
+    if (!is_managed) return new T[n];
 #ifdef __NVCC__
-template<typename T> class rmalloc<T,true> {
-public:
-  void* operator new(size_t n) {
     void *ptr;
-    dbg("+]\033[m");
     cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
     cudaDeviceSynchronize();
     return ptr;
+#endif // __NVCC__
+    // We come here when the user requests a manager,
+    // but has compiled the code without NVCC
+    assert(false);
   }
-
-  void operator delete(void *ptr) {
-    dbg("-]\033[m");
-    cudaDeviceSynchronize();
-    cudaFree(ptr);
-    ptr = nullptr;
+  // ***************************************************************************
+  void _delete(void *ptr) {
+     dbg("-]\033[m");
+     if (!is_managed) delete[] static_cast<T*>(ptr);
+#ifdef __NVCC__
+     else {
+       cudaDeviceSynchronize();
+       cudaFree(ptr);
+     }     
+#endif // __NVCC__
+     ptr = nullptr;
   }
 };
-#endif // __NVCC__
 
 } // mfem
 
