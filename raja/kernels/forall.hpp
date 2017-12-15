@@ -18,7 +18,7 @@
 
 // RAJA ************************************************************************
 #ifdef __NVCC__
-const int CUDA_BLOCK_SIZE = 512;
+const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
@@ -34,7 +34,7 @@ const int CUDA_BLOCK_SIZE = 512;
 // RAJA forall *****************************************************************
 extern "C" bool is_managed;
 #define forall(i,max,body)                                              \
-  if (is_managed)                                              \
+  if (is_managed)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});

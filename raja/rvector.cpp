@@ -29,7 +29,7 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   //dbg("\033[33m[size=%d, new sz=%d]\033[m",size,sz);
   own=true;
   size = sz;
-  if (!data) { data = (double*) rmalloc<double>::_new(size); }
+  if (!data) { data = alloc(sz); }
   if (ptr) { ::memcpy(data,ptr,bytes());}
 }
 

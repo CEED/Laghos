@@ -86,8 +86,6 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
-CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
-#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -106,6 +104,9 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
       CXXFLAGS = $(OPTIM_OPTS)
    endif
 endif
+
+CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
+#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 #################
 # CUDA compiler #
@@ -200,7 +201,7 @@ laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
 
-debug:
+dbg debug:
 	$(MAKE) "LAGHOS_DEBUG=YES"
 
 nv nvcc:
