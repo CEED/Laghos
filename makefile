@@ -106,16 +106,17 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
 endif
 
 CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
+#CXXFLAGS = -g -O1 -fno-inline -fno-omit-frame-pointer
 #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 #################
 # CUDA compiler #
-# comment these lines to use MFEM's compiler
+# use 'make nvidia'
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = /usr/local/cuda/bin/nvcc
 	CXXFLAGS = -DUSE_CUDA \
-		-std=c++11 -O2 -g -x=cu -m64 \
+		-std=c++11 -O3 -g -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
@@ -127,14 +128,18 @@ endif
 #######################
 MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
 
+#DBG_INC = -I/home/camier1/home/dbg
+#DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
+#BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
+
 CUDA_INC = -I/usr/local/cuda/include
 CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
+LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -173,7 +178,7 @@ rule_dumb = @echo -e $(rule_path)/$(rule_file)
 rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
              $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
 output = $(rule_${TERM})
-quiet := --quiet -S
+#quiet := --quiet -S
 
 ###########
 # Targets #

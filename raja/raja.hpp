@@ -16,6 +16,10 @@
 #ifndef LAGHOS_RAJA
 #define LAGHOS_RAJA
 
+// DBG *************************************************************************
+//#include "dbg.hpp"
+//#define __dbg__ dbg();
+
 // stdincs *********************************************************************
 #undef NDEBUG
 #include <stdio.h>

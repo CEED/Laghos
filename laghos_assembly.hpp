@@ -81,7 +81,7 @@ private:
 public:
   DensityIntegrator(const QuadratureData &qd,
                     const IntegrationRule &ir) : quad_data(qd),
-                                                 integ_rule(ir) { }
+                                                 integ_rule(ir) {}
 
   virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                       ElementTransformation &Tr,

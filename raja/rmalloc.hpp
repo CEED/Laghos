@@ -25,7 +25,7 @@ namespace mfem {
 template<class T> struct rmalloc{
   // ***************************************************************************
   void* _new(size_t n) {
-    dbg("+]\033[m");
+    rdbg("+]\033[m");
     if (!is_managed) return new T[n];
 #ifdef __NVCC__
     void *ptr;
@@ -39,7 +39,7 @@ template<class T> struct rmalloc{
   }
   // ***************************************************************************
   void _delete(void *ptr) {
-     dbg("-]\033[m");
+     rdbg("-]\033[m");
      if (!is_managed) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__
      else {

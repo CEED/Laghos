@@ -18,7 +18,7 @@
 
 // DBG *************************************************************************
 //#undef LAGHOS_DEBUG
-inline void dbg(const char *format,...){
+inline void rdbg(const char *format,...){
 #ifdef LAGHOS_DEBUG
   va_list args;
   va_start(args, format);

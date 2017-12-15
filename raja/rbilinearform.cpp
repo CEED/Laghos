@@ -26,7 +26,7 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
 
 // *****************************************************************************
 RajaBilinearForm::~RajaBilinearForm(){
-  dbg("\033[31m[~RajaBilinearForm]");
+  rdbg("\033[31m[~RajaBilinearForm]");
   //if (rap) delete rap;
   //delete  Aout;
 }
@@ -178,7 +178,7 @@ void RajaConstrainedOperator::Setup(RajaOperator* A_,
 }
 
 void RajaConstrainedOperator::EliminateRHS(const RajaVector& x,
-    RajaVector& b) const {
+                                           RajaVector& b) const {
   w = 0.0;
   A->Mult(w, z);
   b -= z;

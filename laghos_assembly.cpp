@@ -29,9 +29,7 @@ namespace hydrodynamics
 QuadratureData::QuadratureData(int dim,
                                int nzones,
                                int nqp)
-{
-   Setup(dim, nzones, nqp);
-}
+{ Setup(dim, nzones, nqp); }
 
 
 void QuadratureData::Setup(int dim,
@@ -72,14 +70,13 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
      bilinearForm(&fes),
      quad_data(quad_data_),
      x_gf(fes),
-     y_gf(fes) { }
+     y_gf(fes) {}
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  dbg("\033[31m[~RajaMassOperator]");
+  rdbg("\033[31m[~RajaMassOperator]");
   delete massOperator;
   RajaDofQuadMaps::delDofQuadMaps();
-  //delete quad_data;
 }
 
 // *****************************************************************************
@@ -99,22 +96,15 @@ void RajaMassOperator::Setup()
 // *************************************************************************
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
-  //dbg("\n[SetEssentialTrueDofs]");
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) return;
-  //ess_tdofs = new RajaArray<int>(dofs.GetData(),ess_tdofs_count*sizeof(int));
   ess_tdofs.allocate(ess_tdofs_count);
-  /*for(int i=0;i<ess_tdofs_count;i++){
-    //printf("\n\t[SetEssentialTrueDofs] i=%d:%d",i,dofs.GetData()[i]);
-    ess_tdofs[i]=dofs.GetData()[i];
-    }*/
   ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
 }
 
 // *****************************************************************************
 void RajaMassOperator::EliminateRHS(RajaVector &b)
 {
-  //dbg("\n[EliminateRHS] size=%d",b.Size());
   if (ess_tdofs_count > 0)
     b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
 }
@@ -156,7 +146,7 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
   
 // *****************************************************************************
 RajaForceOperator::~RajaForceOperator(){
-  dbg("\033[31m[~RajaForceOperator]");
+  rdbg("\033[31m[~RajaForceOperator]");
 }
 
 // *************************************************************************

@@ -67,6 +67,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
+   //dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -275,7 +276,7 @@ int main(int argc, char *argv[])
    ParGridFunction e_gf(&L2FESpace);
 
    RajaGridFunction o_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
-   //RajaGridFunction o_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
+   RajaGridFunction o_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
    RajaGridFunction o_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
@@ -286,7 +287,7 @@ int main(int argc, char *argv[])
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   //o_v_gf = v_gf;
+   o_v_gf = v_gf;
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
