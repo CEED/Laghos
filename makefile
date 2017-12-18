@@ -69,8 +69,8 @@ TEST_MK = $(MFEM_DIR)/config/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
-MFEM_DIR1 := $(MFEM_DIR)
-MFEM_DIR2 := $(realpath $(MFEM_DIR))
+MFEM_DIR1 := $(MFEM_DIR)/build/mfem/lib #$(MFEM_DIR)
+MFEM_DIR2 := $(MFEM_DIR)/build/mfem/include/mfem #$(realpath $(MFEM_DIR))
 
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
@@ -116,7 +116,7 @@ CXXFLAGS += -std=c++11 #-fopenmp #-Wall
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = /usr/local/cuda/bin/nvcc
 	CXXFLAGS = -DUSE_CUDA \
-		-std=c++11 -O3 -g -x=cu -m64 \
+		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
