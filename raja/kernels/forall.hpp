@@ -16,6 +16,9 @@
 #ifndef LAGHOS_RAJA_KERNELS_FORALL
 #define LAGHOS_RAJA_KERNELS_FORALL
 
+// *****************************************************************************
+extern "C" bool is_managed;
+
 // RAJA ************************************************************************
 #ifdef __NVCC__
 const int CUDA_BLOCK_SIZE = 256;
@@ -32,7 +35,6 @@ const int CUDA_BLOCK_SIZE = 256;
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
 
 // RAJA forall *****************************************************************
-extern "C" bool is_managed;
 #define forall(i,max,body)                                              \
   if (is_managed)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \

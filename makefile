@@ -105,7 +105,9 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-CXXFLAGS += -std=c++11 #-fopenmp #-Wall 
+CXXFLAGS += -std=c++11
+# -DRAJA_USE_SIMPOOL
+#-fopenmp #-Wall 
 #CXXFLAGS = -g -O1 -fno-inline -fno-omit-frame-pointer
 #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
@@ -121,6 +123,7 @@ ifeq ($(LAGHOS_NVCC),YES)
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+#		-DRAJA_USE_SIMPOOL
 endif
 
 #######################
@@ -178,7 +181,7 @@ rule_dumb = @echo -e $(rule_path)/$(rule_file)
 rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
              $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
 output = $(rule_${TERM})
-#quiet := --quiet -S
+quiet := --quiet -S
 
 ###########
 # Targets #

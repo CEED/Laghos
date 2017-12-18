@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+
 // *****************************************************************************
 static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const int numElements,
@@ -32,7 +33,7 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
       oper[ijN(q,e,NUM_QUAD_2D)] = quadWeights[q] * COEFF * detJ;
     }
   });
-} 
+}
 
 // *****************************************************************************
 static void rMassAssemble3D(const int NUM_QUAD_3D,

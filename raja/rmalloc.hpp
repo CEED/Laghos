@@ -16,6 +16,15 @@
 #ifndef LAGHOS_RAJA_MALLOC
 #define LAGHOS_RAJA_MALLOC
 
+// *****************************************************************************
+#ifdef RAJA_USE_SIMPOOL
+#ifdef __NVCC__
+#define MFEM_USE_CUDAUM __NVCC__
+#endif // __NVCC__
+#include "simpool.hpp"
+typedef DynamicPoolAllocator<Allocator> PoolType;
+#endif // RAJA_USE_SIMPOOL
+
 // ***************************************************************************
 extern bool is_managed;
 
@@ -26,28 +35,32 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void* _new(size_t n) {
     rdbg("+]\033[m");
+#ifdef RAJA_USE_SIMPOOL
+    return PoolType::getInstance().allocate(n*sizeof(T));
+#else
     if (!is_managed) return new T[n];
 #ifdef __NVCC__
     void *ptr;
     cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
-    cudaDeviceSynchronize();
     return ptr;
 #endif // __NVCC__
     // We come here when the user requests a manager,
     // but has compiled the code without NVCC
     assert(false);
+#endif // RAJA_USE_SIMPOOL
   }
   // ***************************************************************************
   void _delete(void *ptr) {
-     rdbg("-]\033[m");
-     if (!is_managed) delete[] static_cast<T*>(ptr);
+    rdbg("-]\033[m");
+#ifdef RAJA_USE_SIMPOOL
+    if (ptr) PoolType::getInstance().deallocate(ptr);
+#else
+    if (!is_managed) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__
-     else {
-       cudaDeviceSynchronize();
-       cudaFree(ptr);
-     }     
+    else cudaFree(ptr);
 #endif // __NVCC__
-     ptr = nullptr;
+    ptr = nullptr;
+#endif // RAJA_USE_SIMPOOL
   }
 };
 

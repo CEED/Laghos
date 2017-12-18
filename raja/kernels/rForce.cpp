@@ -29,10 +29,9 @@ static void rForceMult2D(const int NUM_DIM,
                          const double* stressJinvT,
                          const double* e,
                          double* __restrict v) {
-  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_1D);
-  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_2D);
-  //printf("\033[31m[%d]\033[m\n",H1_DOFS_1D);
-
+  //printf("\033[31m[NUM_QUAD_1D=%d]\033[m\n",NUM_QUAD_1D);
+  //printf("\033[31m[NUM_QUAD_2D=%d]\033[m\n",NUM_QUAD_2D);
+  //printf("\033[31m[H1_DOFS_1D=%d]\033[m\n",H1_DOFS_1D);
   assert(NUM_QUAD_1D==4); const int q1 = 4;
   assert(NUM_QUAD_2D==16); const int q2 = 16;
   assert(H1_DOFS_1D==3);  const int h1 = 3;

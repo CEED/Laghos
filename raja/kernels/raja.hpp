@@ -20,6 +20,8 @@
 #undef NDEBUG
 #include <math.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // *****************************************************************************
 #ifdef __NVCC__
