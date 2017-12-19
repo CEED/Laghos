@@ -16,17 +16,16 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-void rIniGeom1D(const int NUM_DOFS,
-                       const int NUM_QUAD,
-                       const int numElements,
-                       const double* __restrict dofToQuadD,
-                       const double* __restrict nodes,
-                       double* __restrict J,
-                       double* __restrict invJ,
-                       double* __restrict detJ) {
-  assert(NUM_DOFS==4); const int nd = 4;
+template<const int NUM_DOFS,
+         const int NUM_QUAD>
+void rIniGeom1D(const int numElements,
+                const double* restrict dofToQuadD,
+                const double* restrict nodes,
+                double* restrict J,
+                double* restrict invJ,
+                double* restrict detJ) {
   forall(e,numElements,{
-    double s_nodes[nd];
+    double s_nodes[NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
         s_nodes[d] = nodes[ijkN(0,d,e,NUM_QUAD)];
@@ -46,19 +45,16 @@ void rIniGeom1D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
-template<int tnum_dofs>
-static void rIniGeom2D(const int NUM_DOFS,
-                       const int NUM_QUAD,
-                       const int numElements,
-                       const double* __restrict dofToQuadD,
-                       const double* __restrict nodes,
-                       double* __restrict J,
-                       double* __restrict invJ,
-                       double* __restrict detJ) {
-  //const int tnum_dofs=4;
-  assert(tnum_dofs==NUM_DOFS);
+template<const int NUM_DOFS,
+         const int NUM_QUAD>
+static void rIniGeom2D(const int numElements,
+                       const double* restrict dofToQuadD,
+                       const double* restrict nodes,
+                       double* restrict J,
+                       double* restrict invJ,
+                       double* restrict detJ) {
   forall(el,numElements,
-    double s_nodes[2 * tnum_dofs];
+    double s_nodes[2 * NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
         s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,el,2,NUM_DOFS)];
@@ -89,22 +85,18 @@ static void rIniGeom2D(const int NUM_DOFS,
       detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
     });
 }
-template void rIniGeom2D<4>(const int,const int,const int,const double*,const double*,double*,double*,double*);
-template void rIniGeom2D<9>(const int,const int,const int,const double*,const double*,double*,double*,double*);
-template void rIniGeom2D<16>(const int,const int,const int,const double*,const double*,double*,double*,double*);
 
 // *****************************************************************************
-static void rIniGeom3D(const int NUM_DOFS,
-                       const int NUM_QUAD,
-                       const int numElements,
-                       const double* __restrict dofToQuadD,
-                       const double* __restrict nodes,
-                       double* __restrict J,
-                       double* __restrict invJ,
-                       double* __restrict detJ) {
-  assert(NUM_DOFS==4); const int nd = 4;
+template<const int NUM_DOFS,
+         const int NUM_QUAD>
+static void rIniGeom3D(const int numElements,
+                       const double* restrict dofToQuadD,
+                       const double* restrict nodes,
+                       double* restrict J,
+                       double* restrict invJ,
+                       double* restrict detJ) {
   forall(e,numElements,{
-    double s_nodes[3*nd];
+    double s_nodes[3*NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
         s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
@@ -158,26 +150,32 @@ static void rIniGeom3D(const int NUM_DOFS,
 }
 
 // *****************************************************************************
-void rIniGeom(const int dim,
+typedef void (*fIniGeom)(const int numElements,
+                         const double* restrict dofToQuadD,
+                         const double* restrict nodes,
+                         double* restrict J,
+                         double* restrict invJ,
+                         double* restrict detJ);
+
+// *****************************************************************************
+void rIniGeom(const int DIM,
               const int NUM_DOFS,
               const int NUM_QUAD,
               const int numElements,
               const double* dofToQuadD,
               const double* nodes,
-              double* __restrict J,
-              double* __restrict invJ,
-              double* __restrict detJ) {
-  switch (dim) {
-  case 1: rIniGeom1D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
-  case 2:
-    switch(NUM_DOFS){
-    case 4:  rIniGeom2D<4>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
-    case 9:  rIniGeom2D<9>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
-    case 16: rIniGeom2D<16>(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
-    default:assert(false);
-    }
-    break;
-  case 3: rIniGeom3D(NUM_DOFS,NUM_QUAD,numElements,dofToQuadD,nodes,J,invJ,detJ); break;
-  default:assert(false);
-  }
+              double* restrict J,
+              double* restrict invJ,
+              double* restrict detJ) {
+  const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
+  //printf("0x%X",id);
+  assert(LOG2(DIM)<8);
+  assert(LOG2(NUM_DOFS)<8);
+  assert(LOG2(NUM_QUAD)<8);
+  static std::unordered_map<unsigned int, fIniGeom> call = {
+    {0x20910,&rIniGeom2D<9,16>},
+  };
+  assert(id==0x20910);
+  assert(call[id]);
+  call[id](numElements,dofToQuadD,nodes,J,invJ,detJ);
 }

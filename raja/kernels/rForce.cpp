@@ -16,33 +16,27 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-static void rForceMult2D(const int NUM_DIM,
-                         const int NUM_DOFS_1D,
-                         const int NUM_QUAD_1D,
-                         const int NUM_QUAD_2D,
-                         const int L2_DOFS_1D,
-                         const int H1_DOFS_1D,
-                         const int numElements,
-                         const double* L2DofToQuad,
-                         const double* H1QuadToDof,
-                         const double* H1QuadToDofD,
-                         const double* stressJinvT,
-                         const double* e,
-                         double* __restrict v) {
-  //printf("\033[31m[NUM_QUAD_1D=%d]\033[m\n",NUM_QUAD_1D);
-  //printf("\033[31m[NUM_QUAD_2D=%d]\033[m\n",NUM_QUAD_2D);
-  //printf("\033[31m[H1_DOFS_1D=%d]\033[m\n",H1_DOFS_1D);
-  assert(NUM_QUAD_1D==4); const int q1 = 4;
-  assert(NUM_QUAD_2D==16); const int q2 = 16;
-  assert(H1_DOFS_1D==3);  const int h1 = 3;
-  
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int NUM_QUAD_2D,
+         const int NUM_QUAD_3D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D>
+static void rForceMult2D(const int numElements,
+                         const double* restrict L2DofToQuad,
+                         const double* restrict H1QuadToDof,
+                         const double* restrict H1QuadToDofD,
+                         const double* restrict stressJinvT,
+                         const double* restrict e,
+                         double* restrict v) {  
   forall(el,numElements,{
-    double e_xy[q2];
+    double e_xy[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       e_xy[i] = 0;
     }
     for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-      double e_x[q1];
+      double e_x[NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         e_x[qy] = 0;
       }
@@ -66,8 +60,8 @@ static void rForceMult2D(const int NUM_DIM,
         }
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        double Dxy[h1];
-        double xy[h1];
+        double Dxy[H1_DOFS_1D];
+        double xy[H1_DOFS_1D];
         for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
           Dxy[dx] = 0.0;
           xy[dx]  = 0.0;
@@ -93,41 +87,39 @@ static void rForceMult2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-static void rForceMultTranspose2D(const int NUM_DIM,
-                                  const int NUM_DOFS_1D,
-                                  const int NUM_QUAD_1D,
-                                  const int NUM_QUAD_2D,
-                                  const int L2_DOFS_1D,
-                                  const int H1_DOFS_1D,
-                                  const int numElements,
-                                  const double* L2QuadToDof,
-                                  const double* H1DofToQuad,
-                                  const double* H1DofToQuadD,
-                                  const double* stressJinvT,
-                                  const double* v,
-                                  double* __restrict e) {
-  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_1D);
-  //printf("\033[31m[%d]\033[m\n",NUM_QUAD_2D);
-  //printf("\033[31m[%d]\033[m\n",L2_DOFS_1D);
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int NUM_QUAD_2D,
+         const int NUM_QUAD_3D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D>
+static void rForceMultTranspose2D(const int numElements,
+                                  const double* restrict L2QuadToDof,
+                                  const double* restrict H1DofToQuad,
+                                  const double* restrict H1DofToQuadD,
+                                  const double* restrict stressJinvT,
+                                  const double* restrict v,
+                                  double* restrict e) {
 
-  assert(NUM_QUAD_1D==4); const int q1 = 4;
-  assert(NUM_QUAD_2D==16); const int q2 = 16;
-  assert(L2_DOFS_1D==2);  const int l1 = 2;
+  //assert(NUM_QUAD_1D==4); const int NUM_QUAD_1D = 4;
+  //assert(NUM_QUAD_2D==16); const int NUM_QUAD_2D = 16;
+  //assert(L2_DOFS_1D==2);  const int l1 = 2;
 
   forall(el,numElements,{
-    double vStress[q2];
+    double vStress[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       vStress[i] = 0;
     }
     for (int c = 0; c < NUM_DIM; ++c) {
-      double v_Dxy[q2];
-      double v_xDy[q2];
+      double v_Dxy[NUM_QUAD_2D];
+      double v_xDy[NUM_QUAD_2D];
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         v_Dxy[i] = v_xDy[i] = 0;
       }
       for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-        double v_x[q1];
-        double v_Dx[q1];
+        double v_x[NUM_QUAD_1D];
+        double v_Dx[NUM_QUAD_1D];
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           v_x[qx] = v_Dx[qx] = 0;
         }
@@ -162,7 +154,7 @@ static void rForceMultTranspose2D(const int NUM_DIM,
       }
     }
     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-      double e_x[l1];
+      double e_x[L2_DOFS_1D];
       for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
         e_x[dx] = 0;
       }
@@ -183,38 +175,32 @@ static void rForceMultTranspose2D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-static void rForceMult3D(const int NUM_DIM,
-                         const int NUM_DOFS_1D,
-                         const int NUM_QUAD_1D,
-                         const int NUM_QUAD_2D,
-                         const int NUM_QUAD_3D,
-                         const int L2_DOFS_1D,
-                         const int H1_DOFS_1D,
-                         const int numElements,
-                         const double* L2DofToQuad,
-                         const double* H1QuadToDof,
-                         const double* H1QuadToDofD,
-                         const double* stressJinvT,
-                         const double* e,
-                         double* __restrict v) {
-  
-  assert(NUM_QUAD_1D==2); const int q1 = 2;
-  assert(NUM_QUAD_2D==4); const int q2 = 4;
-  assert(NUM_QUAD_3D==8); const int q3 = 8;
-  assert(H1_DOFS_1D==2);  const int h1 = 2;
-  
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int NUM_QUAD_2D,
+         const int NUM_QUAD_3D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D>
+static void rForceMult3D(const int numElements,
+                         const double* restrict L2DofToQuad,
+                         const double* restrict H1QuadToDof,
+                         const double* restrict H1QuadToDofD,
+                         const double* restrict stressJinvT,
+                         const double* restrict e,
+                         double* restrict v) {  
   forall(el,numElements,{
-    double e_xyz[q3];
+    double e_xyz[NUM_QUAD_3D];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       e_xyz[i] = 0;
     }
     for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
-      double e_xy[q2];
+      double e_xy[NUM_QUAD_2D];
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         e_xy[i] = 0;
       }
       for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-        double e_x[q1];
+        double e_x[NUM_QUAD_1D];
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
           e_x[qy] = 0;
         }
@@ -249,16 +235,16 @@ static void rForceMult3D(const int NUM_DIM,
         }
       }
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-        double Dxy_x[h1 * h1];
-        double xDy_y[h1 * h1];
-        double xy_z[h1 * h1] ;
+        double Dxy_x[H1_DOFS_1D * H1_DOFS_1D];
+        double xDy_y[H1_DOFS_1D * H1_DOFS_1D];
+        double xy_z[H1_DOFS_1D * H1_DOFS_1D] ;
         for (int d = 0; d < (H1_DOFS_1D * H1_DOFS_1D); ++d) {
           Dxy_x[d] = xDy_y[d] = xy_z[d] = 0;
         }
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-          double Dx_x[h1];
-          double x_y[h1];
-          double x_z[h1];
+          double Dx_x[H1_DOFS_1D];
+          double x_y[H1_DOFS_1D];
+          double x_z[H1_DOFS_1D];
           for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
             Dx_x[dx] = x_y[dx] = x_z[dx] = 0;
           }
@@ -301,41 +287,36 @@ static void rForceMult3D(const int NUM_DIM,
 }
 
 // *****************************************************************************
-static void rForceMultTranspose3D(const int NUM_DIM,
-                                  const int NUM_DOFS_1D,
-                                  const int NUM_QUAD_1D,
-                                  const int NUM_QUAD_2D,
-                                  const int NUM_QUAD_3D,
-                                  const int L2_DOFS_1D,
-                                  const int H1_DOFS_1D,
-                                  const int numElements,
-                                  const double* L2QuadToDof,
-                                  const double* H1DofToQuad,
-                                  const double* H1DofToQuadD,
-                                  const double* stressJinvT,
-                                  const double* v,
-                                  double* __restrict e) {
-  assert(NUM_QUAD_1D==2); const int q1 = 2;
-  assert(NUM_QUAD_2D==4); const int q2 = 4;
-  assert(NUM_QUAD_3D==8); const int q3 = 8;
-  assert(L2_DOFS_1D==2);  const int l1 = 2;
-
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int NUM_QUAD_2D,
+         const int NUM_QUAD_3D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D>
+static void rForceMultTranspose3D(const int numElements,
+                                  const double* restrict L2QuadToDof,
+                                  const double* restrict H1DofToQuad,
+                                  const double* restrict H1DofToQuadD,
+                                  const double* restrict stressJinvT,
+                                  const double* restrict v,
+                                  double* restrict e) {
   forall(el,numElements,{
-    double vStress[q3];
+    double vStress[NUM_QUAD_3D];
     for (int i = 0; i < NUM_QUAD_3D; ++i) {
       vStress[i] = 0;
     }
     for (int c = 0; c < NUM_DIM; ++c) {
       for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
-        double Dxy_x[q2];
-        double xDy_y[q2];
-        double xy_z[q2] ;
+        double Dxy_x[NUM_QUAD_2D];
+        double xDy_y[NUM_QUAD_2D];
+        double xy_z[NUM_QUAD_2D] ;
         for (int i = 0; i < NUM_QUAD_2D; ++i) {
           Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
         }
         for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-          double Dx_x[q1];
-          double x_y[q1];
+          double Dx_x[NUM_QUAD_1D];
+          double x_y[NUM_QUAD_1D];
           for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
             Dx_x[qx] = x_y[qx] = 0;
           }
@@ -378,12 +359,12 @@ static void rForceMultTranspose3D(const int NUM_DIM,
       }
     }
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-      double e_xy[l1 * l1];
+      double e_xy[L2_DOFS_1D * L2_DOFS_1D];
       for (int d = 0; d < (L2_DOFS_1D * L2_DOFS_1D); ++d) {
         e_xy[d] = 0;
       }
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        double e_x[l1];
+        double e_x[L2_DOFS_1D];
         for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
           e_x[dx] = 0;
         }
@@ -413,48 +394,50 @@ static void rForceMultTranspose3D(const int NUM_DIM,
 }
 
 // *****************************************************************************
+typedef void (*fForceMult)(const int numElements,
+                           const double* restrict L2QuadToDof,
+                           const double* restrict H1DofToQuad,
+                           const double* restrict H1DofToQuadD,
+                           const double* restrict stressJinvT,
+                           const double* restrict e,
+                           double* restrict v);
+
+// *****************************************************************************
 void rForceMult(const int NUM_DIM,
                 const int NUM_DOFS_1D,
                 const int NUM_QUAD_1D,
                 const int L2_DOFS_1D,
                 const int H1_DOFS_1D,
                 const int nzones,
-                const double* L2QuadToDof,
-                const double* H1DofToQuad,
-                const double* H1DofToQuadD,
-                const double* stressJinvT,
-                const double* e,
-                double* __restrict v) {
-  if (NUM_DIM==1) assert(false);
-  if (NUM_DIM==2)
-    rForceMult2D(NUM_DIM,
-                 NUM_DOFS_1D,
-                 NUM_QUAD_1D,
-                 NUM_QUAD_1D*NUM_QUAD_1D,
-                 L2_DOFS_1D,
-                 H1_DOFS_1D,
-                 nzones,
-                 L2QuadToDof,
-                 H1DofToQuad,
-                 H1DofToQuadD,
-                 stressJinvT,
-                 e,v);
-
-  if (NUM_DIM==3)
-    rForceMult3D(NUM_DIM,
-                 NUM_DOFS_1D,
-                 NUM_QUAD_1D,
-                 NUM_QUAD_1D*NUM_QUAD_1D,
-                 NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D,
-                 L2_DOFS_1D,
-                 H1_DOFS_1D,
-                 nzones,
-                 L2QuadToDof,
-                 H1DofToQuad,
-                 H1DofToQuadD,
-                 stressJinvT,
-                 e,v);
+                const double* restrict L2QuadToDof,
+                const double* restrict H1DofToQuad,
+                const double* restrict H1DofToQuadD,
+                const double* restrict stressJinvT,
+                const double* restrict e,
+                double* restrict v) {
+  const unsigned int id = (NUM_DIM<<16)|(NUM_DOFS_1D<<12)|(NUM_QUAD_1D<<8)|(L2_DOFS_1D<<4)|(H1_DOFS_1D);
+  //printf("rForceMult size=%d,0x%X ",sizeof(unsigned int),id);
+  assert(LOG2(NUM_DIM)<4);//printf("NUM_DIM:%d ",(NUM_DIM));
+  assert(LOG2(NUM_DOFS_1D)<4);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
+  assert(LOG2(NUM_QUAD_1D)<4);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
+  assert(LOG2(L2_DOFS_1D)<4);//printf("L2_DOFS_1D:%d ",(L2_DOFS_1D));
+  assert(LOG2(H1_DOFS_1D)<4);//printf("H1_DOFS_1D:%d\n",(H1_DOFS_1D));
+  static std::unordered_map<unsigned int, fForceMult> call = {
+    {0x23423,&rForceMult2D<2,3,4,4*4,4*4*4,2,3>},
+  };
+  assert((id==0x23423));
+  assert(call[id]);
+  call[id](nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 }
+
+// *****************************************************************************
+typedef void (*fForceMultTranspose)(const int numElements,
+                                    const double* restrict L2QuadToDof,
+                                    const double* restrict H1DofToQuad,
+                                    const double* restrict H1DofToQuadD,
+                                    const double* restrict stressJinvT,
+                                    const double* restrict v,
+                                    double* restrict e);
 
 // *****************************************************************************
 void rForceMultTranspose(const int NUM_DIM,
@@ -463,39 +446,18 @@ void rForceMultTranspose(const int NUM_DIM,
                          const int L2_DOFS_1D,
                          const int H1_DOFS_1D,
                          const int nzones,
-                         const double* L2QuadToDof,
-                         const double* H1DofToQuad,
-                         const double* H1DofToQuadD,
-                         const double* stressJinvT,
-                         const double* v,
-                         double* __restrict e) {
-  if (NUM_DIM==1) assert(false);
-
-  if (NUM_DIM==2)
-    rForceMultTranspose2D(NUM_DIM,
-                          NUM_DOFS_1D,
-                          NUM_QUAD_1D,
-                          NUM_QUAD_1D*NUM_QUAD_1D,
-                          L2_DOFS_1D,
-                          H1_DOFS_1D,
-                          nzones,
-                          L2QuadToDof,
-                          H1DofToQuad,
-                          H1DofToQuadD,
-                          stressJinvT,
-                          v,e);
-  if (NUM_DIM==3)
-    rForceMultTranspose3D(NUM_DIM,
-                          NUM_DOFS_1D,
-                          NUM_QUAD_1D,
-                          NUM_QUAD_1D*NUM_QUAD_1D,
-                          NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D,
-                          L2_DOFS_1D,
-                          H1_DOFS_1D,
-                          nzones,
-                          L2QuadToDof,
-                          H1DofToQuad,
-                          H1DofToQuadD,
-                          stressJinvT,
-                          v,e);
+                         const double* restrict L2QuadToDof,
+                         const double* restrict H1DofToQuad,
+                         const double* restrict H1DofToQuadD,
+                         const double* restrict stressJinvT,
+                         const double* restrict v,
+                         double* restrict e) {
+  const unsigned int id = (NUM_DIM<<16)|(NUM_DOFS_1D<<12)|(NUM_QUAD_1D<<8)|(L2_DOFS_1D<<4)|(H1_DOFS_1D);
+  //printf("rForceMultTranspose size=%d,0x%X",sizeof(unsigned int),id);
+  static std::unordered_map<unsigned int, fForceMultTranspose> call = {
+    {0x23423,&rForceMultTranspose2D<2,3,4,4*4,4*4*4,2,3>},
+  };
+  assert((id==0x23423));
+  assert(call[id]);
+  call[id](nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 }

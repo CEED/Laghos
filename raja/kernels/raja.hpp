@@ -22,6 +22,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <functional>
+#include <unordered_map>
+
+// *****************************************************************************
+#define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
 
 // *****************************************************************************
 #ifdef __NVCC__
