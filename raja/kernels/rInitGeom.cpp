@@ -160,7 +160,7 @@ typedef void (*fIniGeom)(const int numElements,
 // *****************************************************************************
 void rIniGeom(const int DIM,
               const int NUM_DOFS,
-              const int NUM_QUAD,
+              const int NUM_QUAD, // order-thermo
               const int numElements,
               const double* dofToQuadD,
               const double* nodes,
@@ -168,14 +168,51 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ) {
   const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
-  //printf("0x%X",id);
-  assert(LOG2(DIM)<8);
-  assert(LOG2(NUM_DOFS)<8);
-  assert(LOG2(NUM_QUAD)<8);
+  assert(LOG2(DIM)<8);//printf("DIM:%d ",DIM);
+  assert(LOG2(NUM_DOFS)<8);//printf("NUM_DOFS:%d ",NUM_DOFS);
+  assert(LOG2(NUM_QUAD)<8);//printf("NUM_QUAD:%d ",NUM_QUAD);
   static std::unordered_map<unsigned int, fIniGeom> call = {
+    // 2D
+    {0x20410,&rIniGeom2D<4,16>},
+    {0x20419,&rIniGeom2D<4,25>},
+    {0x20424,&rIniGeom2D<4,36>},
+    {0x20431,&rIniGeom2D<4,49>},
+    {0x20440,&rIniGeom2D<4,64>},
+    
     {0x20910,&rIniGeom2D<9,16>},
+    {0x20919,&rIniGeom2D<9,25>},
+    {0x20924,&rIniGeom2D<9,36>},
+    {0x20931,&rIniGeom2D<9,49>},
+    {0x20940,&rIniGeom2D<9,64>},
+    
+    {0x20910,&rIniGeom2D<9,16>},
+    {0x20919,&rIniGeom2D<9,25>},
+    {0x20924,&rIniGeom2D<9,36>},
+    {0x20931,&rIniGeom2D<9,49>},
+    {0x20940,&rIniGeom2D<9,64>},
+    
+    {0x21010,&rIniGeom2D<16,16>},
+    {0x21019,&rIniGeom2D<16,25>},
+    {0x21024,&rIniGeom2D<16,36>},
+    {0x21031,&rIniGeom2D<16,49>},
+    {0x21040,&rIniGeom2D<16,64>},
+    
+    {0x21910,&rIniGeom2D<25,16>},
+    {0x21919,&rIniGeom2D<25,25>},
+    {0x21924,&rIniGeom2D<25,36>},
+    {0x21931,&rIniGeom2D<25,49>},
+    {0x21940,&rIniGeom2D<25,64>},
+    {0x21951,&rIniGeom2D<25,81>},
+    
+    {0x22464,&rIniGeom2D<36,100>},
+
+    // 3D
+    {0x31B40,&rIniGeom3D<27,64>},
   };
-  assert(id==0x20910);
+  if (!call[id]){
+    printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);
+    fflush(stdout);
+  }
   assert(call[id]);
   call[id](numElements,dofToQuadD,nodes,J,invJ,detJ);
 }

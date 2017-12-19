@@ -19,10 +19,10 @@
 // *****************************************************************************
 template<const int NUM_QUAD>
 static void rInitQuadratureData(const int nzones,
-                                const double* rho0,
-                                const double* detJ,
-                                const double* quadWeights,
-                                double* __restrict rho0DetJ0w) {
+                                const double* restrict rho0,
+                                const double* restrict detJ,
+                                const double* restrict quadWeights,
+                                double* restrict rho0DetJ0w) {
   forall(el,nzones,{
       for (int q = 0; q < NUM_QUAD; ++q){
         rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
@@ -33,14 +33,25 @@ static void rInitQuadratureData(const int nzones,
 typedef void (*fInitQuadratureData)(const int,const double*,const double*,const double*,double*);
 void rInitQuadratureData(const int NUM_QUAD,
                          const int numElements,
-                         const double* rho0,
-                         const double* detJ,
-                         const double* quadWeights,
-                         double* __restrict rho0DetJ0w) {
+                         const double* restrict rho0,
+                         const double* restrict detJ,
+                         const double* restrict quadWeights,
+                         double* restrict rho0DetJ0w) {
+  const unsigned int id = NUM_QUAD;
   static std::unordered_map<unsigned int, fInitQuadratureData> call = {
     {8,&rInitQuadratureData<8>},
     {16,&rInitQuadratureData<16>},
+    {25,&rInitQuadratureData<25>},
+    {36,&rInitQuadratureData<36>},
+    {49,&rInitQuadratureData<49>},
+    {64,&rInitQuadratureData<64>},
+    {81,&rInitQuadratureData<81>},
+    {100,&rInitQuadratureData<100>},
   };
+  if (!call[id]){
+    printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
+    fflush(stdout);
+  }
   assert(call[NUM_QUAD]);
   call[NUM_QUAD](numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 }
@@ -50,8 +61,6 @@ void rInitQuadratureData(const int NUM_QUAD,
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_QUAD_2D,
-         const int NUM_QUAD_3D,
          const int NUM_DOFS_1D>
 static void rUpdateQuadratureData2D(const double GAMMA,
                                     const double H0,
@@ -70,6 +79,8 @@ static void rUpdateQuadratureData2D(const double GAMMA,
                                     const double* restrict detJ,
                                     double* restrict stressJinvT,
                                     double* restrict dtEst) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  
   forall(el,numElements,{
     double s_gradv[4*NUM_QUAD_2D] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
@@ -208,8 +219,6 @@ static void rUpdateQuadratureData2D(const double GAMMA,
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_QUAD_2D,
-         const int NUM_QUAD_3D,
          const int NUM_DOFS_1D>
 static void rUpdateQuadratureData3D(const double GAMMA,
                                     const double H0,
@@ -227,23 +236,20 @@ static void rUpdateQuadratureData3D(const double GAMMA,
                                     const double* restrict invJ,
                                     const double* restrict detJ,
                                     double* restrict stressJinvT,
-                                    double* restrict dtEst) {
-  //assert(NUM_DIM==2); const int nd = 2;
-  assert(NUM_QUAD_1D==2); const int q1 = 2;
-  assert(NUM_QUAD_2D==4); const int q2 = 4;
-  assert(NUM_QUAD_3D==8); const int q3 = 8;
-  
+                                    double* restrict dtEst) {  
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   forall(el,numElements,{
-    double s_gradv[9*q3];
+    double s_gradv[9*NUM_QUAD_3D];
     
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
       s_gradv[i] = 0;
     }
 
     for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-      double vDxy[3*q2] ;
-      double vxDy[3*q2] ;
-      double vxy[3*q2]  ;
+      double vDxy[3*NUM_QUAD_2D] ;
+      double vxDy[3*NUM_QUAD_2D] ;
+      double vxy[3*NUM_QUAD_2D]  ;
       for (int i = 0; i < (3*NUM_QUAD_2D); ++i) {
         vDxy[i] = 0;
         vxDy[i] = 0;
@@ -251,8 +257,8 @@ static void rUpdateQuadratureData3D(const double GAMMA,
       }
 
       for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-        double vDx[3*q1] ;
-        double vx[3*q1]  ;
+        double vDx[3*NUM_QUAD_1D] ;
+        double vx[3*NUM_QUAD_1D]  ;
         for (int i = 0; i < (3*NUM_QUAD_1D); ++i) {
           vDx[i] = 0;
           vx[i]  = 0;
@@ -520,18 +526,18 @@ typedef void (*fUpdateQuadratureData)(const double GAMMA,
                                       const double CFL,
                                       const bool USE_VISCOSITY,
                                       const int numElements,
-                                      const double* dofToQuad,
-                                      const double* dofToQuadD,
-                                      const double* quadWeights,
-                                      const double* v,
-                                      const double* e,
-                                      const double* rho0DetJ0w,
-                                      const double* invJ0,
-                                      const double* J,
-                                      const double* invJ,
-                                      const double* detJ,
-                                      double* __restrict stressJinvT,
-                                      double* __restrict dtEst);
+                                      const double* restrict dofToQuad,
+                                      const double* restrict dofToQuadD,
+                                      const double* restrict quadWeights,
+                                      const double* restrict v,
+                                      const double* restrict e,
+                                      const double* restrict rho0DetJ0w,
+                                      const double* restrict invJ0,
+                                      const double* restrict J,
+                                      const double* restrict invJ,
+                                      const double* restrict detJ,
+                                      double* restrict stressJinvT,
+                                      double* restrict dtEst);
 
 // *****************************************************************************
 void rUpdateQuadratureData(const double GAMMA,
@@ -543,34 +549,51 @@ void rUpdateQuadratureData(const double GAMMA,
                            const int NUM_QUAD_1D,
                            const int NUM_DOFS_1D,
                            const int nzones,
-                           const double* dofToQuad,
-                           const double* dofToQuadD,
-                           const double* quadWeights,
-                           const double* v,
-                           const double* e,
-                           const double* rho0DetJ0w,
-                           const double* invJ0,
-                           const double* J,
-                           const double* invJ,
-                           const double* detJ,
-                           double* __restrict stressJinvT,
-                           double* __restrict dtEst){
-  //printf("\n%d,%d,%d,%d:",NUM_DIM,NUM_QUAD,NUM_QUAD_1D,NUM_DOFS_1D);
-  //assert(false);
+                           const double* restrict dofToQuad,
+                           const double* restrict dofToQuadD,
+                           const double* restrict quadWeights,
+                           const double* restrict v,
+                           const double* restrict e,
+                           const double* restrict rho0DetJ0w,
+                           const double* restrict invJ0,
+                           const double* restrict J,
+                           const double* restrict invJ,
+                           const double* restrict detJ,
+                           double* restrict stressJinvT,
+                           double* restrict dtEst){
   const unsigned int id = (NUM_DIM<<24)|(NUM_QUAD<<16)|(NUM_QUAD_1D<<8)|(NUM_DOFS_1D);
-
-  assert(LOG2(NUM_DIM)<8);//printf("NUM_DIM:%d ",LOG2(NUM_DIM));
-  assert(LOG2(NUM_QUAD)<8);//printf("NUM_QUAD:%d ",LOG2(NUM_QUAD));
-  assert(LOG2(NUM_QUAD_1D)<8);//printf("NUM_QUAD_1D:%d ",LOG2(NUM_QUAD_1D));
-  assert(LOG2(NUM_DOFS_1D)<8);//printf("NUM_DOFS_1D:%d ",LOG2(NUM_DOFS_1D));
-  //printf(", 0x%X",id);
-
+  assert(LOG2(NUM_DIM)<8);//printf("NUM_DIM:%d ",(NUM_DIM));
+  assert(LOG2(NUM_QUAD)<8);//printf("NUM_QUAD:%d ",(NUM_QUAD));
+  assert(LOG2(NUM_QUAD_1D)<8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
+  assert(LOG2(NUM_DOFS_1D)<8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
   static std::unordered_map<unsigned int, fUpdateQuadratureData> call = {
-    {0x02100403,&rUpdateQuadratureData2D<2,16,4,4*4,4*4*4,3>},
-    {0x03100403,&rUpdateQuadratureData3D<3,16,4,4*4,4*4*4,3>},
+    // 2D
+    {0x2100403,&rUpdateQuadratureData2D<2,16,4,3>},
+    {0x2100404,&rUpdateQuadratureData2D<2,16,4,4>},
+    
+    {0x2190503,&rUpdateQuadratureData2D<2,25,5,3>},
+    {0x2190504,&rUpdateQuadratureData2D<2,25,5,4>},
+    
+    {0x2240603,&rUpdateQuadratureData2D<2,36,6,3>},
+    {0x2240604,&rUpdateQuadratureData2D<2,36,6,4>},
+    
+    {0x2310704,&rUpdateQuadratureData2D<2,49,7,4>},
+    
+    {0x2400805,&rUpdateQuadratureData2D<2,64,8,5>},
+    
+    {0x2510905,&rUpdateQuadratureData2D<2,81,9,5>},
+    
+    {0x2640A06,&rUpdateQuadratureData2D<2,100,10,6>},
+
+    // 3D
+    {0x3100403,&rUpdateQuadratureData3D<3,16,4,3>},
+    {0x3400403,&rUpdateQuadratureData3D<3,64,4,3>},
   };
+  if (!call[id]){
+    printf("\n[rUpdateQuadratureData] id \033[33m0x%X\033[m ",id);
+    fflush(stdout);
+  }
   assert(call[id]);
-  
   call[id](GAMMA,H0,CFL,USE_VISCOSITY,
            nzones,
            dofToQuad,
