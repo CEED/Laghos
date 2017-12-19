@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
                   "NOTE: the serially refined mesh must have the appropriate number\n\t"
                   "of zones in each direction, e.g., the number of zones in direction x\n\t"
                   "must be divisible by the number of MPI tasks in direction x.\n\t"
-                  "Available options: 11, 21, 111, 211, 321, 322, 432.");
+                  "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.Parse();
    if (!args.Good())
    {
@@ -183,6 +183,14 @@ int main(int argc, char *argv[])
       case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 221: // 3D.
+         unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
+         nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 311: // 3D.
+         unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 3 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 321: // 3D.
          unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
