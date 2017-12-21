@@ -15,48 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-
-// *****************************************************************************
-template<const int NUM_QUAD>
-static void rInitQuadratureData(const int nzones,
-                                const double* restrict rho0,
-                                const double* restrict detJ,
-                                const double* restrict quadWeights,
-                                double* restrict rho0DetJ0w) {
-  forall(el,nzones,{
-      for (int q = 0; q < NUM_QUAD; ++q){
-        rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
-          rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
-      }
-    });
-}
-typedef void (*fInitQuadratureData)(const int,const double*,const double*,const double*,double*);
-void rInitQuadratureData(const int NUM_QUAD,
-                         const int numElements,
-                         const double* restrict rho0,
-                         const double* restrict detJ,
-                         const double* restrict quadWeights,
-                         double* restrict rho0DetJ0w) {
-  const unsigned int id = NUM_QUAD;
-  static std::unordered_map<unsigned int, fInitQuadratureData> call = {
-    {8,&rInitQuadratureData<8>},
-    {16,&rInitQuadratureData<16>},
-    {25,&rInitQuadratureData<25>},
-    {36,&rInitQuadratureData<36>},
-    {49,&rInitQuadratureData<49>},
-    {64,&rInitQuadratureData<64>},
-    {81,&rInitQuadratureData<81>},
-    {100,&rInitQuadratureData<100>},
-  };
-  if (!call[id]){
-    printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
-    fflush(stdout);
-  }
-  assert(call[NUM_QUAD]);
-  call[NUM_QUAD](numElements,rho0,detJ,quadWeights,rho0DetJ0w);
-}
-
-
 // *****************************************************************************
 template<const int NUM_DIM,
          const int NUM_QUAD,
@@ -562,12 +520,13 @@ void rUpdateQuadratureData(const double GAMMA,
                            double* restrict stressJinvT,
                            double* restrict dtEst){
   const unsigned int id = (NUM_DIM<<24)|(NUM_QUAD<<16)|(NUM_QUAD_1D<<8)|(NUM_DOFS_1D);
-  assert(LOG2(NUM_DIM)<8);//printf("NUM_DIM:%d ",(NUM_DIM));
-  assert(LOG2(NUM_QUAD)<8);//printf("NUM_QUAD:%d ",(NUM_QUAD));
-  assert(LOG2(NUM_QUAD_1D)<8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
-  assert(LOG2(NUM_DOFS_1D)<8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
+  assert(LOG2(NUM_DIM)<=8);//printf("NUM_DIM:%d ",(NUM_DIM));
+  assert(LOG2(NUM_QUAD)<=8);//printf("NUM_QUAD:%d ",(NUM_QUAD));
+  assert(LOG2(NUM_QUAD_1D)<=8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
+  assert(LOG2(NUM_DOFS_1D)<=8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
   static std::unordered_map<unsigned int, fUpdateQuadratureData> call = {
     // 2D
+    {0x2040202,&rUpdateQuadratureData2D<2,4,2,2>},
     {0x2100403,&rUpdateQuadratureData2D<2,16,4,3>},
     {0x2100404,&rUpdateQuadratureData2D<2,16,4,4>},
     
@@ -584,6 +543,7 @@ void rUpdateQuadratureData(const double GAMMA,
     {0x2510905,&rUpdateQuadratureData2D<2,81,9,5>},
     
     {0x2640A06,&rUpdateQuadratureData2D<2,100,10,6>},
+    {0x2900C07,&rUpdateQuadratureData2D<2,144,12,7>},
 
     // 3D
     {0x3100403,&rUpdateQuadratureData3D<3,16,4,3>},

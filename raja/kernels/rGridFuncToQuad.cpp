@@ -206,12 +206,13 @@ void rGridFuncToQuad(const int DIM,
                      const double* gf,
                      double* __restrict out) {
   const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
-  assert(LOG2(DIM)<8);//printf("DIM:%d ",DIM);
-  assert(LOG2(NUM_VDIM)<8);//printf("NUM_VDIM:%d ",NUM_VDIM);
-  assert(LOG2(NUM_DOFS_1D)<8);//printf("NUM_DOFS_1D:%d ",NUM_DOFS_1D);
-  assert(LOG2(NUM_QUAD_1D)<8);//printf("NUM_QUAD_1D:%d ",NUM_QUAD_1D);
+  assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
+  assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);
+  assert(LOG2(NUM_DOFS_1D)<=8);//printf("NUM_DOFS_1D:%d ",NUM_DOFS_1D);
+  assert(LOG2(NUM_QUAD_1D)<=8);//printf("NUM_QUAD_1D:%d ",NUM_QUAD_1D);
   static std::unordered_map<unsigned int, fGridFuncToQuad> call = {
     // 2D
+    {0x2010102,&rGridFuncToQuad2D<1,1,2>},
     {0x2010202,&rGridFuncToQuad2D<1,2,2>},
     {0x2010203,&rGridFuncToQuad2D<1,2,3>},
     {0x2010204,&rGridFuncToQuad2D<1,2,4>},
@@ -220,6 +221,7 @@ void rGridFuncToQuad(const int DIM,
     {0x2010207,&rGridFuncToQuad2D<1,2,7>},
     {0x2010208,&rGridFuncToQuad2D<1,2,8>},
     {0x2010209,&rGridFuncToQuad2D<1,2,9>},
+    {0x201020A,&rGridFuncToQuad2D<1,2,10>},
     
     {0x2010302,&rGridFuncToQuad2D<1,3,2>},
     {0x2010303,&rGridFuncToQuad2D<1,3,3>},
@@ -229,6 +231,7 @@ void rGridFuncToQuad(const int DIM,
     {0x2010307,&rGridFuncToQuad2D<1,3,7>},
     {0x2010308,&rGridFuncToQuad2D<1,3,8>},
     {0x2010309,&rGridFuncToQuad2D<1,3,9>},
+    {0x201030A,&rGridFuncToQuad2D<1,3,10>},
 
     {0x2010402,&rGridFuncToQuad2D<1,4,2>},
     {0x2010403,&rGridFuncToQuad2D<1,4,3>},
@@ -258,6 +261,8 @@ void rGridFuncToQuad(const int DIM,
     {0x2010607,&rGridFuncToQuad2D<1,6,7>},
     {0x2010608,&rGridFuncToQuad2D<1,6,8>},
     {0x2010609,&rGridFuncToQuad2D<1,6,9>},
+    {0x201060A,&rGridFuncToQuad2D<1,6,10>},
+    {0x201060C,&rGridFuncToQuad2D<1,6,12>},
     
     {0x2010702,&rGridFuncToQuad2D<1,7,2>},
     {0x2010703,&rGridFuncToQuad2D<1,7,3>},
@@ -267,6 +272,7 @@ void rGridFuncToQuad(const int DIM,
     {0x2010707,&rGridFuncToQuad2D<1,7,7>},
     {0x2010708,&rGridFuncToQuad2D<1,7,8>},
     {0x2010709,&rGridFuncToQuad2D<1,7,9>},
+    {0x201070A,&rGridFuncToQuad2D<1,7,10>},
 
     // 3D
     {0x3010202,&rGridFuncToQuad3D<1,2,2>},

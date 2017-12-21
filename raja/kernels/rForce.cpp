@@ -411,12 +411,14 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict e,
                 double* restrict v) {
   const unsigned long long id = (((unsigned long long)NUM_DIM)<<32)|(NUM_DOFS_1D<<24)|(NUM_QUAD_1D<<16)|(L2_DOFS_1D<<8)|(H1_DOFS_1D);
-  assert(LOG2(NUM_DIM)<8);//printf("NUM_DIM:%d ",(NUM_DIM));
-  assert(LOG2(NUM_DOFS_1D)<8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
-  assert(LOG2(NUM_QUAD_1D)<8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
-  assert(LOG2(L2_DOFS_1D)<8);//printf("L2_DOFS_1D:%d ",(L2_DOFS_1D));
-  assert(LOG2(H1_DOFS_1D)<8);//printf("H1_DOFS_1D:%d\n",(H1_DOFS_1D));
+  assert(LOG2(NUM_DIM)<=8);//printf("NUM_DIM:%d ",(NUM_DIM));
+  assert(LOG2(NUM_DOFS_1D)<=8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
+  assert(LOG2(NUM_QUAD_1D)<=8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
+  assert(LOG2(L2_DOFS_1D)<=8);//printf("L2_DOFS_1D:%d ",(L2_DOFS_1D));
+  assert(LOG2(H1_DOFS_1D)<=8);//printf("H1_DOFS_1D:%d\n",(H1_DOFS_1D));
   static std::unordered_map<unsigned long long, fForceMult> call = {
+
+    {0x202020102ull,&rForceMult2D<2,2,2,1,2>},
     {0x203040203ull,&rForceMult2D<2,3,4,2,3>},
     {0x203040303ull,&rForceMult2D<2,3,4,3,3>},
     
@@ -436,6 +438,7 @@ void rForceMult(const int NUM_DIM,
     {0x205090605ull,&rForceMult2D<2,5,9,6,5>},
     
     {0x2060A0506ull,&rForceMult2D<2,6,10,5,6>},
+    {0x2070C0607ull,&rForceMult2D<2,7,12,6,7>},
 
     // 3D
     {0x3003040203ull,&rForceMult3D<3,3,4,2,3>},
@@ -473,6 +476,7 @@ void rForceMultTranspose(const int NUM_DIM,
   const unsigned long long id = (((unsigned long long)NUM_DIM)<<32)|(NUM_DOFS_1D<<24)|(NUM_QUAD_1D<<16)|(L2_DOFS_1D<<8)|(H1_DOFS_1D);
   static std::unordered_map<unsigned long long, fForceMultTranspose> call = {
     // 2D
+    {0x202020102ull,&rForceMultTranspose2D<2,2,2,1,2>},
     {0x203040203ull,&rForceMultTranspose2D<2,3,4,2,3>},
     {0x203040303ull,&rForceMultTranspose2D<2,3,4,3,3>},
     
@@ -492,6 +496,7 @@ void rForceMultTranspose(const int NUM_DIM,
     {0x205090605ull,&rForceMultTranspose2D<2,5,9,6,5>},
     
     {0x2060A0506ull,&rForceMultTranspose2D<2,6,10,5,6>},
+    {0x2070C0607ull,&rForceMultTranspose2D<2,7,12,6,7>},
 
     // 3D
     {0x303040203ull,&rForceMultTranspose3D<3,3,4,2,3>},
