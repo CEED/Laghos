@@ -274,7 +274,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      cg.SetRelTol(1e-8);
      cg.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
      cg.SetMaxIter(200);
-     cg.SetPrintLevel(0);
+     cg.SetPrintLevel(-1);
      timer.sw_cgL2.Start();
      cg.Mult(e_rhs, de);
      timer.sw_cgL2.Stop();
