@@ -1,0 +1,5 @@
+{
+  devices: [
+    { mode: 'CUDA', deviceID: 0 },
+  ],
+}

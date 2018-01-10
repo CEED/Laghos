@@ -116,7 +116,7 @@ CXXFLAGS += -std=c++11
 # use 'make nvidia'
 #################
 ifeq ($(LAGHOS_NVCC),YES)
-	CXX = /usr/local/cuda/bin/nvcc
+	CXX = nvcc
 	CXXFLAGS = -DUSE_CUDA \
 		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
@@ -204,7 +204,7 @@ all:
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(MFEM_CXX) -o laghos-$(CXX) $(OBJECT_FILES) $(LIBS)
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -235,7 +235,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean cln: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM raja/*.o raja/kernels/*.o
+	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM raja/*.o raja/kernels/*.o
 clean-exec:
 	rm -rf ./results
 
