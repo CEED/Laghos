@@ -214,6 +214,7 @@ void rIniGeom(const int DIM,
 
     // 3D
     {0x31B40,&rIniGeom3D<27,64>},
+    {0x340D8,&rIniGeom3D<64,216>},
   };
   if (!call[id]){
     printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);

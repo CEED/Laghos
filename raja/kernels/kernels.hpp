@@ -109,6 +109,18 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict stressJinvT,
                 const double* restrict e,
                 double* restrict v);
+void rForceMultS(const int NUM_DIM,
+                 const int NUM_DOFS_1D,
+                 const int NUM_QUAD_1D,
+                 const int L2_DOFS_1D,
+                 const int H1_DOFS_1D,
+                 const int nzones,
+                 const double* restrict L2DofToQuad,
+                 const double* restrict H1QuadToDof,
+                 const double* restrict H1QuadToDofD,
+                 const double* restrict stressJinvT,
+                 const double* restrict e,
+                 double* restrict v);
 
 void rForceMultTranspose(const int NUM_DIM,
                          const int NUM_DOFS_1D,
@@ -122,6 +134,18 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict stressJinvT,
                          const double* restrict v,
                          double* restrict e);
+void rForceMultTransposeS(const int NUM_DIM,
+                          const int NUM_DOFS_1D,
+                          const int NUM_QUAD_1D,
+                          const int L2_DOFS_1D,
+                          const int H1_DOFS_1D,
+                          const int nzones,
+                          const double* restrict L2QuadToDof,
+                          const double* restrict H1DofToQuad,
+                          const double* restrict H1DofToQuadD,
+                          const double* restrict stressJinvT,
+                          const double* restrict v,
+                          double* restrict e);
 
 // *****************************************************************************
 void rIniGeom(const int dim,

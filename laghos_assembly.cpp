@@ -165,18 +165,33 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   rForceMult(dim,
-              NUM_DOFS_1D,
-              NUM_QUAD_1D,
-              L2_DOFS_1D,
-              H1_DOFS_1D,
-              nzones,
-              l2D2Q->dofToQuad,
-              h1D2Q->quadToDof,
-              h1D2Q->quadToDofD,
-              quad_data->stressJinvT,
-              gVecL2,
-              gVecH1);
+   #warning rForceMult vs rForceMultS
+   if (getenv("SK"))
+     rForceMultS(dim,
+                 NUM_DOFS_1D,
+                 NUM_QUAD_1D,
+                 L2_DOFS_1D,
+                 H1_DOFS_1D,
+                 nzones,
+                 l2D2Q->dofToQuad,
+                 h1D2Q->quadToDof,
+                 h1D2Q->quadToDofD,
+                 quad_data->stressJinvT,
+                 gVecL2,
+                 gVecH1);
+   else
+     rForceMult(dim,
+                NUM_DOFS_1D,
+                NUM_QUAD_1D,
+                L2_DOFS_1D,
+                H1_DOFS_1D,
+                nzones,
+                l2D2Q->dofToQuad,
+                h1D2Q->quadToDof,
+                h1D2Q->quadToDofD,
+                quad_data->stressJinvT,
+                gVecL2,
+                gVecH1);
    h1fes.LocalToGlobal(gVecH1, vecH1);
 }
 
@@ -189,18 +204,33 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   rForceMultTranspose(dim,
-                       NUM_DOFS_1D,
-                       NUM_QUAD_1D,
-                       L2_DOFS_1D,
-                       H1_DOFS_1D,
-                       nzones,
-                       l2D2Q->quadToDof,
-                       h1D2Q->dofToQuad,
-                       h1D2Q->dofToQuadD,
-                       quad_data->stressJinvT,
-                       gVecH1,
-                       gVecL2);
+#warning rForceMult vs rForceMultS
+   if (getenv("SK"))
+     rForceMultTransposeS(dim,
+                          NUM_DOFS_1D,
+                          NUM_QUAD_1D,
+                          L2_DOFS_1D,
+                          H1_DOFS_1D,
+                          nzones,
+                          l2D2Q->quadToDof,
+                          h1D2Q->dofToQuad,
+                          h1D2Q->dofToQuadD,
+                          quad_data->stressJinvT,
+                          gVecH1,
+                          gVecL2);
+   else
+     rForceMultTranspose(dim,
+                         NUM_DOFS_1D,
+                         NUM_QUAD_1D,
+                         L2_DOFS_1D,
+                         H1_DOFS_1D,
+                         nzones,
+                         l2D2Q->quadToDof,
+                         h1D2Q->dofToQuad,
+                         h1D2Q->dofToQuadD,
+                         quad_data->stressJinvT,
+                         gVecH1,
+                         gVecL2);
    l2fes.LocalToGlobal(gVecL2, vecL2);
 }
 

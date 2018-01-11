@@ -51,6 +51,7 @@ void rInitQuadratureData(const int NUM_QUAD,
     {100,&rInitQuadratureData<100>},
     {121,&rInitQuadratureData<121>},
     {144,&rInitQuadratureData<144>},
+    {0xD8,&rInitQuadratureData<0xD8>},
   };
   if (!call[id]){
     printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
