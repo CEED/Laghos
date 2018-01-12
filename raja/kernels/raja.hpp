@@ -29,7 +29,7 @@
 #define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
 
 // *****************************************************************************
-#ifdef __NVCC__
+#ifdef __RAJA__
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
 #include "RAJA/util/defines.hpp"

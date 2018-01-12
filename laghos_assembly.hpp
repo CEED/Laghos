@@ -99,7 +99,9 @@ public:
 class RajaMassOperator : public RajaOperator
 {
 private:
-   int dim, nzones;
+   int dim;
+   int nzones;
+   const bool use_share;
    RajaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
    int ess_tdofs_count;
@@ -113,7 +115,8 @@ private:
 public:
    RajaMassOperator(RajaFiniteElementSpace &fes_,
                     const IntegrationRule &integ_rule_,
-                    QuadratureData *quad_data_);
+                    QuadratureData *quad_data_,
+                    const bool share);
   ~RajaMassOperator();
    void Setup();
    void SetEssentialTrueDofs(Array<int> &dofs);
@@ -130,6 +133,7 @@ class RajaForceOperator : public RajaOperator
 private:
   const int dim;
   const int nzones;
+  const bool use_share;
   const RajaFiniteElementSpace &h1fes, &l2fes;
   const IntegrationRule &integ_rule;
   const QuadratureData *quad_data;
@@ -139,7 +143,8 @@ public:
    RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                      RajaFiniteElementSpace &l2fes_,
                      const IntegrationRule &integ_rule,
-                     const QuadratureData *quad_data_);
+                     const QuadratureData *quad_data_,
+                     const bool share);
    void Setup();
    virtual void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
    virtual void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;

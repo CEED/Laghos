@@ -50,6 +50,16 @@ void rGridFuncToQuad(const int dim,
                      const double* restrict gf,
                      double* restrict out);
 
+void rGridFuncToQuadS(const int dim,
+                      const int NUM_VDIM,
+                      const int NUM_DOFS_1D,
+                      const int NUM_QUAD_1D,
+                      const int numElements,
+                      const double* restrict dofToQuad,
+                      const int* l2gMap,
+                      const double* restrict gf,
+                      double* restrict out);
+
 // mapping *********************************************************************
 void rSetSubVector(const int entries,
                    const int* restrict indices,
@@ -95,6 +105,27 @@ void rUpdateQuadratureData(const double GAMMA,
                            const double* restrict detJ,
                            double* restrict stressJinvT,
                            double* restrict dtEst);
+void rUpdateQuadratureDataS(const double GAMMA,
+                            const double H0,
+                            const double CFL,
+                            const bool USE_VISCOSITY,
+                            const int NUM_DIM,
+                            const int NUM_QUAD,
+                            const int NUM_QUAD_1D,
+                            const int NUM_DOFS_1D,
+                            const int numElements,
+                            const double* restrict dofToQuad,
+                            const double* restrict dofToQuadD,
+                            const double* restrict quadWeights,
+                            const double* restrict v,
+                            const double* restrict e,
+                            const double* restrict rho0DetJ0w,
+                            const double* restrict invJ0,
+                            const double* restrict J,
+                            const double* restrict invJ,
+                            const double* restrict detJ,
+                            double* restrict stressJinvT,
+                            double* restrict dtEst);
 
 // kForce **********************************************************************
 void rForceMult(const int NUM_DIM,
@@ -178,16 +209,34 @@ void rLocalToGlobal(const int NUM_VDIM,
                     double* restrict globalX);
 
 // *****************************************************************************
-void rMassAssemble(const int dim,
+/*void rMassAssemble(const int dim,
                    const int NUM_QUAD,
                    const int numElements,
                    const double COEFF,
                    const double* restrict quadWeights,
                    const double* restrict J,
                    double* restrict oper);
-
+void rMassAssembleS(const int dim,
+                    const int NUM_QUAD,
+                    const int numElements,
+                    const double COEFF,
+                    const double* restrict quadWeights,
+                    const double* restrict J,
+                    double* restrict oper);
+*/
 // *****************************************************************************
 void rMassMultAdd(const int dim,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int numElements,
+                  const double* restrict dofToQuad,
+                  const double* restrict dofToQuadD,
+                  const double* restrict quadToDof,
+                  const double* restrict quadToDofD,
+                  const double* restrict op,
+                  const double* restrict x,
+                  double* restrict y);
+void rMassMultAddS(const int dim,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
                   const int numElements,

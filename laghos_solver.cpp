@@ -86,7 +86,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
-                                                 double cgt, int cgiter)
+                                                 double cgt, int cgiter,
+                                                 bool cuda,
+                                                 bool share)
    : RajaTimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
@@ -102,10 +104,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     VMassPA(H1compFESpace, integ_rule, &quad_data),
-     EMassPA(L2FESpace, integ_rule, &quad_data),
-     ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data),
-     locCG(), timer()
+     VMassPA(H1compFESpace, integ_rule, &quad_data, share),
+     EMassPA(L2FESpace, integ_rule, &quad_data, share),
+     ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data, share),
+     locCG(), timer(),
+     use_cuda(cuda), use_share(share)
 {
    Vector rho0_ = rho0;
    GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
@@ -139,7 +142,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    quad_data.Jac0inv = quad_data.geom->invJ;
 
    RajaVector rhoValues;
-   rho0.ToQuad(integ_rule, rhoValues);
+   rho0.ToQuad(use_share,integ_rule, rhoValues);
 
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
@@ -382,7 +385,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs() * nzones);
    H1FESpace.GlobalToLocal(v, v2);
    RajaVector eValues;
-   e.ToQuad(integ_rule, eValues);
+   e.ToQuad(use_share,integ_rule, eValues);
    
    const int NUM_QUAD = integ_rule.GetNPoints();
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -392,28 +395,50 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    ElementTransformation *T = H1FESpace.GetElementTransformation(0);
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
-   
-   rUpdateQuadratureData(gamma,
-                         quad_data.h0,
-                         cfl,
-                         use_viscosity,
-                         dim,
-                         NUM_QUAD,
-                         NUM_QUAD_1D,
-                         NUM_DOFS_1D,
-                         nzones,
-                         quad_data.dqMaps->dofToQuad,
-                         quad_data.dqMaps->dofToQuadD,
-                         quad_data.dqMaps->quadWeights,
-                         v2,
-                         eValues,
-                         quad_data.rho0DetJ0w,
-                         quad_data.Jac0inv,
-                         quad_data.geom->J,
-                         quad_data.geom->invJ,
-                         quad_data.geom->detJ,
-                         quad_data.stressJinvT,
-                         quad_data.dtEst);
+   if (use_share)
+     rUpdateQuadratureDataS(gamma,
+                            quad_data.h0,
+                            cfl,
+                            use_viscosity,
+                            dim,
+                            NUM_QUAD,
+                            NUM_QUAD_1D,
+                            NUM_DOFS_1D,
+                            nzones,
+                            quad_data.dqMaps->dofToQuad,
+                            quad_data.dqMaps->dofToQuadD,
+                            quad_data.dqMaps->quadWeights,
+                            v2,
+                            eValues,
+                            quad_data.rho0DetJ0w,
+                            quad_data.Jac0inv,
+                            quad_data.geom->J,
+                            quad_data.geom->invJ,
+                            quad_data.geom->detJ,
+                            quad_data.stressJinvT,
+                            quad_data.dtEst);     
+   else
+     rUpdateQuadratureData(gamma,
+                           quad_data.h0,
+                           cfl,
+                           use_viscosity,
+                           dim,
+                           NUM_QUAD,
+                           NUM_QUAD_1D,
+                           NUM_DOFS_1D,
+                           nzones,
+                           quad_data.dqMaps->dofToQuad,
+                           quad_data.dqMaps->dofToQuadD,
+                           quad_data.dqMaps->quadWeights,
+                           v2,
+                           eValues,
+                           quad_data.rho0DetJ0w,
+                           quad_data.Jac0inv,
+                           quad_data.geom->J,
+                           quad_data.geom->invJ,
+                           quad_data.geom->detJ,
+                           quad_data.stressJinvT,
+                           quad_data.dtEst);
    
    quad_data.dt_est = quad_data.dtEst.Min();
    

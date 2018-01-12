@@ -14,11 +14,23 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-
+void reduceSum(int size, int threads, int numBlocks,
+               const double *d_i1data,
+               const double *d_i2data,
+               double *d_odata);
+ 
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
+#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
   ReduceDecl(Sum,dot,0.0);
   forall(i,N,dot += vec1[i] * vec2[i];);
+#else
+#warning pure CUDA dot
+  const int threads = 1024;
+  const int numBlocks = 256;
+  double dot=0.0;
+  reduceSum(N,threads,numBlocks,vec1,vec2,&dot);
+#endif
   return dot;
 }

@@ -19,8 +19,9 @@
 // *****************************************************************************
 extern "C" bool is_managed;
 
-// RAJA ************************************************************************
-#ifdef __NVCC__
+// RAJA build ******************************************************************
+#ifdef __RAJA__
+#warning RAJA
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -41,9 +42,17 @@ const int CUDA_BLOCK_SIZE = 256;
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 
+#else // __RAJA__
+//#warning KERNELS
+// Kernels forall **************************************************************
+#ifdef __NVCC__
+#define forall(i,max,body) \
+  if (is_managed)                                                     \
+    for(int i=0;i<max;[=]__device__(int i) {body});                   \
+  else                                                                \
+    for(int i=0;i<max;i++){body}
 #else // __NVCC__
-
-// STD reduce ******************************************************************
+// Kernels reduce **************************************************************
 class ReduceSum{
 private:
   double s;
@@ -61,10 +70,9 @@ public:
   inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
 };
 #define ReduceDecl(type,var,ini) Reduce##type var(ini);
-
-// STD forall ******************************************************************
 #define forall(i,max,body) for(int i=0;i<max;i++){body}
+#endif //__NVCC__
 
-#endif // __NVCC__
+#endif // __RAJA__
 
 #endif // LAGHOS_RAJA_KERNELS_FORALL

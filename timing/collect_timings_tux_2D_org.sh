@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 #           10      20        30     40          50     60
-versions=( 'master' 'kernels' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
+#versions=( 'master' 'kernels' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
 #versions=( 'master' 'kernels' 'raja' 'occa')
-#versions=( 'master' 'kernels' 'occa')
+versions=('kernels' 'kernels-share' 'kernels-cuda' 'kernels-cuda-share')
 #versions=( 'master' 'raja-cuda' 'occa-cuda')
 
 problem=0
 parallel_refs=0
-maxL2dof=1000000
 
-maxsteps=10
+maxsteps=1
 
-outfile=timings_tux_2d_$maxsteps.org
+outfile=timings_tux_2d_share_$maxsteps.org
 mesh_file=../data/square01_quad.mesh
 
 calc() { awk "BEGIN{print $*}"; }
@@ -41,9 +40,9 @@ END { printf("%d|%d|%d|%d|%.8f|%.8f|%.8f|%.8f|%.8f|%.8f|\n",
 [ -r $outfile ] && cp $outfile $outfile.bak
 echo -ne "|H1order|refs|h1_dofs|l2_dofs|h1_cg_rate|l2_cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
 
-rmax=7
+rmax=1
 for torder in {0..5}; do
-    for sref in {0..7}; do
+    for sref in {1..1}; do
         nzones=$(( 4**(sref+1) ))
         for version in "${versions[@]}"; do
             #echo \#$version >> $outfile
@@ -51,31 +50,38 @@ for torder in {0..5}; do
             #echo version is $version
             version_name=$version
             additional_options=
+            if [ $version == 'kernels-share' ]; then
+                version_name=kernels
+                additional_options=-share
+            fi
+            if [ $version == 'kernels-cuda' ]; then
+                version_name=kernels
+                additional_options=-cuda
+            fi
+            if [ $version == 'kernels-cuda-share' ]; then
+                version_name=kernels
+                additional_options="-cuda -share"
+            fi
             if [ $version == 'raja-cuda' ]; then
-                #echo RAJA CUDA
-                #version=raja
                 version_name=raja
                 additional_options=-cuda
             fi
             if [ $version == 'occa-cuda' ]; then
-                #echo OCCA CUDA
-                #version=occa
-                #version_extra="-cuda"
                 version_name=occa
                 #additional_options="--device-info \"mode:'CUDA',deviceID:0\""
                 additional_options="--occa-config cuda.json"
             fi
             echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
-            #../laghos-$version_name \
-            #    -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
-            #    --cg-tol 0 --cg-max-steps 50 \
-            #    --max-steps $maxsteps \
-            #    --mesh $mesh_file \
-            #    --refine-serial $sref \
-            #    --refine-parallel $parallel_refs \
-            #    --order-thermo $torder \
-            #    --order-kinematic $((torder+1)) \
-            #    $additional_options
+            echo ../laghos-$version_name \
+                -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
+                --cg-tol 0 --cg-max-steps 50 \
+                --max-steps $maxsteps \
+                --mesh $mesh_file \
+                --refine-serial $sref \
+                --refine-parallel $parallel_refs \
+                --order-thermo $torder \
+                --order-kinematic $((torder+1)) \
+                $additional_options
             echo -n $(run_case ../laghos-$version_name \
                 -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                 --cg-tol 0 --cg-max-steps 50 \

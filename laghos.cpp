@@ -83,7 +83,8 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
-   double cfl = 0.5;
+   #warning CFL @ 0.1
+   double cfl = 0.1;//0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
    int max_tsteps = -1;
@@ -93,6 +94,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    bool cuda = false;
+   bool share = false;
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -135,6 +137,8 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels.");
+   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
+                  "Enable or disable SHARE kernels.");
    args.Parse();
    if (!args.Good())
    {
@@ -335,7 +339,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, o_rho, source, cfl, material_pcf,
-                                visc, p_assembly, cg_tol, cg_max_iter);
+                                visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

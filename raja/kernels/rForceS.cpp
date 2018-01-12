@@ -38,7 +38,7 @@ void rForceMult2S(const int numElements,
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
-  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  //const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int MAX_DOFS_1D = (L2_DOFS_1D > H1_DOFS_1D)?L2_DOFS_1D:H1_DOFS_1D;
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
@@ -150,7 +150,7 @@ void rForceMultTranspose2S(const int numElements,
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
-  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  //const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int MAX_DOFS_1D = (L2_DOFS_1D > H1_DOFS_1D)?L2_DOFS_1D:H1_DOFS_1D;
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
@@ -283,7 +283,27 @@ void rForceMultS(const int NUM_DIM,
   assert(LOG2(L2_DOFS_1D)<=8);//printf("L2_DOFS_1D:%d ",(L2_DOFS_1D));
   assert(LOG2(H1_DOFS_1D)<=8);//printf("H1_DOFS_1D:%d\n",(H1_DOFS_1D));
   static std::unordered_map<unsigned long long, fForceMult2S> call = {
+    {0x202020102ull,&rForceMult2S<2,2,2,1,2>},
     {0x203040203ull,&rForceMult2S<2,3,4,2,3>},// default 2D
+    {0x203040303ull,&rForceMult2S<2,3,4,3,3>},
+    
+    {0x203050403ull,&rForceMult2S<2,3,5,4,3>},
+    {0x203050503ull,&rForceMult2S<2,3,5,5,3>},
+    
+    {0x203060603ull,&rForceMult2S<2,3,6,6,3>},
+    {0x203060703ull,&rForceMult2S<2,3,6,7,3>},
+    
+    {0x204060304ull,&rForceMult2S<2,4,6,3,4>},
+    {0x204060404ull,&rForceMult2S<2,4,6,4,4>},
+    {0x204070504ull,&rForceMult2S<2,4,7,5,4>},
+    {0x204070604ull,&rForceMult2S<2,4,7,6,4>},
+    
+    {0x205080405ull,&rForceMult2S<2,5,8,4,5>},
+    {0x205080505ull,&rForceMult2S<2,5,8,5,5>},
+    {0x205090605ull,&rForceMult2S<2,5,9,6,5>},
+    
+    {0x2060A0506ull,&rForceMult2S<2,6,10,5,6>},
+    {0x2070C0607ull,&rForceMult2S<2,7,12,6,7>},
   };
   if (!call[id]){
     printf("\n[rForceMult] id \033[33m0x%lX\033[m ",id);
@@ -324,9 +344,9 @@ void rForceMultTransposeS(const int NUM_DIM,
     (H1_DOFS_1D);
   static std::unordered_map<unsigned long long, fForceMultTransposeS> call = {
     // 2D
-    //{0x202020102ull,&rForceMultTranspose2S<2,2,2,1,2>},
+    {0x202020102ull,&rForceMultTranspose2S<2,2,2,1,2>},
     {0x203040203ull,&rForceMultTranspose2S<2,3,4,2,3>},
-/*    {0x203040303ull,&rForceMultTranspose2S<2,3,4,3,3>},
+    {0x203040303ull,&rForceMultTranspose2S<2,3,4,3,3>},
     
     {0x203050403ull,&rForceMultTranspose2S<2,3,5,4,3>},
     {0x203050503ull,&rForceMultTranspose2S<2,3,5,5,3>},
@@ -345,7 +365,7 @@ void rForceMultTransposeS(const int NUM_DIM,
     
     {0x2060A0506ull,&rForceMultTranspose2S<2,6,10,5,6>},
     {0x2070C0607ull,&rForceMultTranspose2S<2,7,12,6,7>},
-*/  };
+  };
   if (!call[id]) {
     printf("\n[rForceMultTranspose] id \033[33m0x%lX\033[m ",id);
     fflush(stdout);

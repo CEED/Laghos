@@ -319,19 +319,30 @@ void RajaMassIntegrator::Assemble() {
 void RajaMassIntegrator::SetOperator(RajaVector& v) { op = v; }
 
 // ***************************************************************************
-void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
+  void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
   const int dim = mesh->Dimension();
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
   const int dofs1D =trialFESpace->GetFE(0)->GetOrder() + 1;
-  rMassMultAdd(dim,
-               dofs1D,
-               quad1D,
-               mesh->GetNE(),
-               maps->dofToQuad,
-               maps->dofToQuadD,
-               maps->quadToDof,
-               maps->quadToDofD,
-               op,x,y);
+  if (use_share)
+    rMassMultAddS(dim,
+                  dofs1D,
+                  quad1D,
+                  mesh->GetNE(),
+                  maps->dofToQuad,
+                  maps->dofToQuadD,
+                  maps->quadToDof,
+                  maps->quadToDofD,
+                  op,x,y);
+  else
+    rMassMultAdd(dim,
+                 dofs1D,
+                 quad1D,
+                 mesh->GetNE(),
+                 maps->dofToQuad,
+                 maps->dofToQuadD,
+                 maps->quadToDof,
+                 maps->quadToDofD,
+                 op,x,y);
 }
 }
 

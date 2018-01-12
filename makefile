@@ -105,19 +105,18 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-CXXFLAGS += -std=c++11
+CXXFLAGS += -std=c++11 #-ftrapv
 # -DRAJA_USE_SIMPOOL
 #-fopenmp #-Wall 
 #CXXFLAGS = -g -O1 -fno-inline -fno-omit-frame-pointer
 #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
-#################
-# CUDA compiler #
-# use 'make nvidia'
-#################
-ifeq ($(LAGHOS_NVCC),YES)
+####################
+# RAJA compilation #
+####################
+ifeq ($(LAGHOS_RAJA),YES)
 	CXX = nvcc
-	CXXFLAGS = -DUSE_CUDA \
+	CXXFLAGS = -D__RAJA__ -DUSE_CUDA \
 		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
@@ -125,6 +124,21 @@ ifeq ($(LAGHOS_NVCC),YES)
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
 #		-DRAJA_USE_SIMPOOL
 endif
+
+#################
+# CUDA compiler #
+# use 'make nvidia'
+#################
+ifeq ($(LAGHOS_NVCC),YES)
+	CXX = nvcc
+	CXXFLAGS = -std=c++11 -O3 -g -G -x=cu -m64 \
+		-Xcompiler -fopenmp \
+		--restrict --expt-extended-lambda \
+		--gpu-architecture sm_60 \
+		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+#		-DRAJA_USE_SIMPOOL
+endif
+
 
 #######################
 # TPL INCLUDES & LIBS #
@@ -136,13 +150,15 @@ MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include
 #BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
 CUDA_INC = -I/usr/local/cuda/include
-CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a
+CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcudart -lcudadevrt 
+#CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a 
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
+#LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
+LAGHOS_LIBS = $(MFEM_LIBS) $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -160,12 +176,15 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 ################
 SOURCE_FILES  = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
+  CUDA_FILES += $(wildcard $(kernels)/*.cu)
   RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
 ################
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
+OBJECT_FILES += $(CUDA_FILES:.cu=.o)
+OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
 OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
@@ -199,12 +218,23 @@ $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp;$
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp;$(output)
 	$(CCC) -c -o $@ $<
 
+$(kernels)/%.o: $(kernels)/%.cu;$(output)
+	nvcc -m64 -arch=sm_60 -rdc=true \
+	-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++ \
+	-I/usr/local/cuda/samples/common/inc \
+	-o $@ -c $<
+
+$(kernels)/%.lo: $(kernels)/%.o;$(output)
+	nvcc -m64 -arch=sm_60 -dlink \
+	-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++ \
+	-o $@ $< -lcudadevrt -lcudart
+
 all: 
 	@$(MAKE) $(quiet) -j $(CPU) laghos
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) -o laghos-$(CXX) $(OBJECT_FILES) $(LIBS)
+	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(LIBS)
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -212,6 +242,11 @@ opt:
 dbg debug:
 	$(MAKE) "LAGHOS_DEBUG=YES"
 
+# To build for RAJA, just 'make raja' and play with the -cuda laghos flag
+rj raja:
+	$(MAKE) "LAGHOS_RAJA=YES"
+
+# To build for Kernels, just 'make nvcc' and play with the -cuda laghos flag
 nv nvcc:
 	$(MAKE) "LAGHOS_NVCC=YES"
 
@@ -235,7 +270,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean cln: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM raja/*.o raja/kernels/*.o
+	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM raja/*.o raja/kernels/*.o raja/kernels/*.lo
 clean-exec:
 	rm -rf ./results
 

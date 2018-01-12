@@ -101,6 +101,8 @@ protected:
    RajaCGSolver locCG;
 
    mutable TimingData timer;
+  const bool use_cuda = false;
+  const bool use_share = false;
 
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
@@ -121,7 +123,7 @@ public:
                            Array<int> &essential_tdofs, RajaGridFunction &rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
-                           double cgt, int cgiter);
+                           double cgt, int cgiter,bool cuda,bool share);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;
