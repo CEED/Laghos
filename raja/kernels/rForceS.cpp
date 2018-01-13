@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 #define ELEMENT_BATCH 10
-#define sync //__syncthreads()
+#define sync __syncthreads()
 
 // *****************************************************************************
 // * /home/camier1/.occa/libraries/laghos/19ef990e7ee5e602/deviceSource.cpp
@@ -27,6 +27,7 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D>
+__global__
 void rForceMult2S(const int numElements,
                   const double* restrict L2DofToQuad,
                   const double* restrict H1QuadToDof,
@@ -34,7 +35,6 @@ void rForceMult2S(const int numElements,
                   const double* restrict stressJinvT,
                   const double* restrict e,
                   double* restrict v) {
-  
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
@@ -139,6 +139,7 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D>
+__global__
 void rForceMultTranspose2S(const int numElements,
                            const double* restrict L2QuadToDof,
                            const double* restrict H1DofToQuad,
@@ -157,13 +158,13 @@ void rForceMultTranspose2S(const int numElements,
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
 
   for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) {
-    double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D];
-    double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D];
-    double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D];
+    __shared__ double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D];
+    __shared__ double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D];
+    __shared__ double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D];
 
-    double s_xy[MAX_DOFS_1D * NUM_QUAD_1D];
-    double s_xDy[H1_DOFS_1D * NUM_QUAD_1D];
-    double s_v[NUM_QUAD_1D  * NUM_QUAD_1D];
+    __shared__ double s_xy[MAX_DOFS_1D * NUM_QUAD_1D];
+    __shared__ double s_xDy[H1_DOFS_1D * NUM_QUAD_1D];
+    __shared__ double s_v[NUM_QUAD_1D  * NUM_QUAD_1D];
 
     for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock/*; inner*/) {
       for (int id = idBlock; id < (L2_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {

@@ -27,7 +27,7 @@ void rIniGeom1D(const int numElements,
   forall(e,numElements,{
     double s_nodes[NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
-      for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
+      for (int d = q; d < NUM_DOFS; d += NUM_QUAD) { 
         s_nodes[d] = nodes[ijkN(0,d,e,NUM_QUAD)];
       }
     }
@@ -36,7 +36,7 @@ void rIniGeom1D(const int numElements,
       for (int d = 0; d < NUM_DOFS; ++d) {
         const double wx = dofToQuadD[ijN(q,d,NUM_DOFS)];
         J11 += wx * s_nodes[d];
-      }
+      } 
       J[ijN(q,e,NUM_QUAD)] = J11;
       invJ[ijN(q, e,NUM_QUAD)] = 1.0 / J11;
       detJ[ijN(q, e,NUM_QUAD)] = J11;
@@ -53,7 +53,7 @@ static void rIniGeom2D(const int numElements,
                        double* restrict J,
                        double* restrict invJ,
                        double* restrict detJ) {
-  forall(el,numElements,
+  forall(el,numElements,{
     double s_nodes[2 * NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
@@ -68,8 +68,8 @@ static void rIniGeom2D(const int numElements,
         const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
         const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
         const double x = s_nodes[ijN(0,d,2)];
-        const double y = s_nodes[ijN(1,d,2)];
-        J11 += (wx * x); J12 += (wx * y);
+        const double y = s_nodes[ijN(1,d,2)]; 
+        J11 += (wx * x); J12 += (wx * y); 
         J21 += (wy * x); J22 += (wy * y);
       }
       const double r_detJ = (J11 * J22)-(J12 * J21);
@@ -83,7 +83,8 @@ static void rIniGeom2D(const int numElements,
       invJ[ijklNM(0, 1, q, el,2,NUM_QUAD)] = -J21 * r_idetJ;
       invJ[ijklNM(1, 1, q, el,2,NUM_QUAD)] =  J11 * r_idetJ;
       detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
-    });
+    }
+  });
 }
 
 // *****************************************************************************

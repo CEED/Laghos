@@ -16,14 +16,12 @@
 #include "raja.hpp"
 
 #define  M2_ELEMENT_BATCH 32
-#define sync //__syncthreads()
-
-//#define  NUM_DOFS_1D 6
-//#define  NUM_QUAD_1D 13
+#define sync __syncthreads()
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D>
+__global__
 static void rMassMultAdd2S(const int numElements,
                            const double* restrict dofToQuad,
                            const double* restrict dofToQuadD,
@@ -38,12 +36,12 @@ static void rMassMultAdd2S(const int numElements,
   // Iterate over elements
   for (int eOff = 0; eOff < numElements; eOff += M2_ELEMENT_BATCH) {
     // Store dof <--> quad mappings
-    double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    __shared__ double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
 
     // Store xy planes in shared memory
-    double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
-    double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    __shared__ double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
     double r_x[NUM_MAX_1D];
 

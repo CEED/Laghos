@@ -20,6 +20,7 @@ template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D>
+__global__
 void rUpdateQuadratureData2DS(const double GAMMA,
                               const double H0,
                               const double CFL,
@@ -42,13 +43,13 @@ void rUpdateQuadratureData2DS(const double GAMMA,
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
   for (int el = 0; el < numElements; ++el) {
-    double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    __shared__ double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
-    double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
-    double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
 
-    double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
+    __shared__ double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
 
     double r_v[NUM_DIM * NUM_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D);
 

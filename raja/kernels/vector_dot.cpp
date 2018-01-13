@@ -14,7 +14,12 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-void reduceSum(int size, int threads, int numBlocks,
+void reduceSum(int size,
+               const double *d_i1data,
+               const double *d_i2data,
+               double *d_odata);
+
+void reduceSumN(int size,
                const double *d_i1data,
                const double *d_i2data,
                double *d_odata);
@@ -22,15 +27,26 @@ void reduceSum(int size, int threads, int numBlocks,
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
-  ReduceDecl(Sum,dot,0.0);
-  forall(i,N,dot += vec1[i] * vec2[i];);
+#if defined(__RAJA__) || (!defined(__RAJA__)&&defined(__NVCC__))
+#warning ReduceDecl DOT
+  ReduceDeclRaja(Sum,dot,0.0);
+  forallRaja(i,N,dot += vec1[i]*vec2[i];);
 #else
 #warning pure CUDA dot
-  const int threads = 1024;
-  const int numBlocks = 256;
-  double dot=0.0;
-  reduceSum(N,threads,numBlocks,vec1,vec2,&dot);
+  static double *dot;
+  if (!dot){
+    printf("cudaMallocManaged(dot)\n");
+    //#warning should be size of block
+    cudaMallocManaged(&dot, 1*sizeof(double), cudaMemAttachGlobal);
+    cudaDeviceSynchronize();
+  }
+  dot[0]=0.0;
+  
+  #warning HC N power of 2
+  printf("N=%d => %d",N,16);
+  reduceSum/*N*/(16,vec1,vec2,&dot[0]);
+  
 #endif
+  //printf("[vector_dot] dot=%f\n",dot[0]);
   return dot;
 }

@@ -122,7 +122,6 @@ ifeq ($(LAGHOS_RAJA),YES)
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
-#		-DRAJA_USE_SIMPOOL
 endif
 
 #################
@@ -136,9 +135,7 @@ ifeq ($(LAGHOS_NVCC),YES)
 		--restrict --expt-extended-lambda \
 		--gpu-architecture sm_60 \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
-#		-DRAJA_USE_SIMPOOL
 endif
-
 
 #######################
 # TPL INCLUDES & LIBS #
@@ -157,8 +154,7 @@ RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
-#LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
-LAGHOS_LIBS = $(MFEM_LIBS) $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
+LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
