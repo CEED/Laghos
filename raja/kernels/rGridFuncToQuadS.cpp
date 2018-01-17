@@ -15,9 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-#define M2_ELEMENT_BATCH 32
-#define sync __syncthreads()
-
 // *****************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,

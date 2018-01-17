@@ -21,12 +21,10 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
   trialFes(fes),
   testFes(fes),
   localX(mesh->GetNE() * trialFes->GetLocalDofs() * trialFes->GetVDim()),
-  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim())
-{ }
+  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()) { }
 
 // *****************************************************************************
 RajaBilinearForm::~RajaBilinearForm(){
-  rdbg("\033[31m[~RajaBilinearForm]");
   //if (rap) delete rap;
   //delete  Aout;
 }

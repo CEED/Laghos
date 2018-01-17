@@ -27,10 +27,11 @@ void reduceSumN(int size,
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-#if defined(__RAJA__) || (!defined(__RAJA__)&&defined(__NVCC__))
+#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
 #warning ReduceDecl DOT
-  ReduceDeclRaja(Sum,dot,0.0);
-  forallRaja(i,N,dot += vec1[i]*vec2[i];);
+  ReduceDecl/*Raja*/(Sum,dot,0.0);
+  forall/*Raja*/(i,N,dot += vec1[i]*vec2[i];);
+  return dot;
 #else
 #warning pure CUDA dot
   static double *dot;
@@ -46,7 +47,7 @@ double vector_dot(const int N,
   printf("N=%d => %d",N,16);
   reduceSum/*N*/(16,vec1,vec2,&dot[0]);
   
-#endif
   //printf("[vector_dot] dot=%f\n",dot[0]);
   return dot;
+#endif
 }

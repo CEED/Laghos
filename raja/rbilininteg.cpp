@@ -30,6 +30,43 @@ RajaGeometry::~RajaGeometry(){
 }
 
 // *****************************************************************************
+void RajaGeometry::ReorderByVDim(GridFunction& nodes){
+  const FiniteElementSpace *fes=nodes.FESpace();
+  const int size = nodes.Size();
+  const int vdim = fes->GetVDim();
+  const int ndofs = fes->GetNDofs();
+  double *data = nodes.GetData();
+  double *temp = new double[size];
+  int k=0;
+  for (int j = 0; j < ndofs; j++)
+    for (int i = 0; i < vdim; i++){
+      temp[k++] = data[j+i*ndofs];
+    }
+  for (int i = 0; i < size; i++)
+    data[i] = temp[i];
+  delete [] temp;
+}
+
+// *****************************************************************************
+void RajaGeometry::ReorderByNodes(GridFunction& nodes){
+  const FiniteElementSpace *fes=nodes.FESpace();
+  const int size = nodes.Size();
+  const int vdim = fes->GetVDim();
+  const int ndofs = fes->GetNDofs();
+  double *data = nodes.GetData();
+  double *temp = new double[size];
+  int k = 0;
+  for (int j = 0; j < ndofs; j++)
+    for (int i = 0; i < vdim; i++){
+      temp[j+i*ndofs] = data[k++];
+    }
+  for (int i = 0; i < size; i++){
+    data[i] = temp[i];
+  }
+  delete [] temp;
+}
+
+// *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
                                const IntegrationRule& ir) {
   geom=new RajaGeometry();
@@ -44,9 +81,10 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
   const int elements = fespace.GetNE();
   const int numDofs  = fe.GetDof();
   const int numQuad  = ir.GetNPoints();
-  Ordering::Type originalOrdering = fespace.GetOrdering();
-  if (originalOrdering == Ordering::byNODES) {
-    nodes.ReorderByVDim(true);
+  //Ordering::Type originalOrdering = fespace.GetOrdering();
+  const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
+  if (orderedByNODES) {
+    ReorderByVDim(nodes);
   }
   geom->meshNodes.allocate(dims, numDofs, elements);
   const Table& e2dTable = fespace.GetElementToDofTable();
@@ -60,8 +98,10 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
     }
   }
   // Reorder the original gf back
-  if (originalOrdering == Ordering::byNODES) 
-    nodes.ReorderByNodes(true);
+  if (orderedByNODES){
+    //nodes.ReorderByNodes();
+    ReorderByNodes(nodes);
+  }
 
   geom->J.allocate(dims, dims, numQuad, elements);
   geom->invJ.allocate(dims, dims, numQuad, elements);
@@ -287,9 +327,7 @@ void RajaIntegrator::SetupIntegrator(RajaBilinearForm& bform_,
   trialFESpace = &(bform_.GetTrialFESpace());
   testFESpace  = &(bform_.GetTestFESpace());
   itype = itype_;
-  if (ir == NULL) {
-    SetupIntegrationRule();
-  }
+  if (ir == NULL) assert(false);
   maps = RajaDofQuadMaps::Get(*trialFESpace,*testFESpace,*ir);
   mapsTranspose = RajaDofQuadMaps::Get(*testFESpace,*trialFESpace,*ir);
   Setup();
@@ -306,7 +344,8 @@ RajaGeometry* RajaIntegrator::GetGeometry() {
 void RajaMassIntegrator::SetupIntegrationRule() {
   const FiniteElement& trialFE = *(trialFESpace->GetFE(0));
   const FiniteElement& testFE  = *(testFESpace->GetFE(0));
-  ir = &(GetMassIntegrationRule(trialFE, testFE));
+  assert(false);
+  //ir = &(GetMassIntegrationRule(trialFE, testFE));
 }
 
 // ***************************************************************************
@@ -319,7 +358,7 @@ void RajaMassIntegrator::Assemble() {
 void RajaMassIntegrator::SetOperator(RajaVector& v) { op = v; }
 
 // ***************************************************************************
-  void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
+void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
   const int dim = mesh->Dimension();
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
   const int dofs1D =trialFESpace->GetFE(0)->GetOrder() + 1;

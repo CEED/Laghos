@@ -25,14 +25,14 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
    offsets(globalDofs+1),
    indices(localDofs, GetNE()),  
    map(localDofs, GetNE()) {
-  const FiniteElement& fe = *GetFE(0);
-  const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(&fe);
+  const FiniteElement *fe = GetFE(0);
+  const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
+  const Array<int> &dof_map = el->GetDofMap();
+  const bool dof_map_is_identity = (dof_map.Size()==0);
+    
   const Table& e2dTable = GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
   const int elements = GetNE();
-
-  int* elementDofMap = new int[localDofs];
-  ::memcpy(elementDofMap,el->GetDofMap().GetData(),localDofs * sizeof(int));
 
   // We'll be keeping a count of how many local nodes point to its global dof
   for (int i = 0; i <= globalDofs; ++i) {
@@ -52,13 +52,13 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   // For each global dof, fill in all local nodes that point   to it
   for (int e = 0; e < elements; ++e) {
     for (int d = 0; d < localDofs; ++d) {
-      const int gid = elementMap[localDofs*e + elementDofMap[d]];
+      const int did = dof_map_is_identity?d:dof_map[d];
+      const int gid = elementMap[localDofs*e + did];
       const int lid = localDofs*e + d;
       indices[offsets[gid]++] = lid;
       map[lid] = gid;
     }
   }
-  ::delete [] elementDofMap;
 
   // We shifted the offsets vector by 1 by using it as a counter
   // Now we shift it back.
@@ -106,7 +106,7 @@ bool RajaFiniteElementSpace::hasTensorBasis() const {
 
 // ***************************************************************************
 void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
-    RajaVector& localVec) const {
+                                           RajaVector& localVec) const {
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -123,7 +123,7 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
 // ***************************************************************************
 // Aggregate local node values to their respective global dofs
 void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
-    RajaVector& globalVec) const {
+                                           RajaVector& globalVec) const {
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;

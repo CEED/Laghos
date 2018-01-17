@@ -27,6 +27,8 @@ class RajaGeometry {
   RajaArray<double> meshNodes;
   RajaArray<double> J, invJ, detJ;
   static RajaGeometry* Get(RajaFiniteElementSpace&,const IntegrationRule&);
+  static void ReorderByVDim(GridFunction& nodes);
+  static void ReorderByNodes(GridFunction& nodes);
 };
 
 // ***************************************************************************

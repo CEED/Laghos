@@ -21,56 +21,46 @@ extern "C" bool is_managed;
 
 // RAJA build ******************************************************************
 #ifdef __RAJA__
-#warning RAJA
+// RAJA CUDA
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-
+// RAJA serial
 #define sq_device __host__
 #define sq_exec RAJA::seq_exec
 #define sq_reduce RAJA::seq_reduce
-
 // RAJA reduce *****************************************************************
 #define ReduceDecl(type,var,ini) \
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
-
 // RAJA forall *****************************************************************
-#define forall(i,max,body)                                             \
+#define forall(i,max,body)                                              \
   if (is_managed)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-
 #else // ***********************************************************************
-
-
-#include <cuda.h>
+/*#include <cuda.h>
 #include "RAJA/RAJA.hpp"
 #include "RAJA/util/defines.hpp"
 #include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
-
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-
 #define sq_device __host__
 #define sq_exec RAJA::seq_exec
 #define sq_reduce RAJA::seq_reduce
-
 // RAJA reduce *****************************************************************
 #define ReduceDeclRaja(type,var,ini) \
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
-
 // RAJA forall *****************************************************************
 #define forallRaja(i,max,body)                                             \
   if (is_managed)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-
-
+*/
 // KERNELS GPU *****************************************************************
 #ifdef __NVCC__
 
@@ -97,8 +87,15 @@ void cuda_forallT(int end, LOOP_BODY&& body) {
   }else {                                                               \
     for(int i=0;i<max;i++){body}                                        \
   }
-#else // ***********************************************************************
+#else // __NVCC__ **************************************************************
 // KERNELS CPU *****************************************************************
+#define sync
+#define __global__
+#define __shared__
+#define ELEMENT_BATCH 10
+#define M2_ELEMENT_BATCH 32
+#define A2_ELEMENT_BATCH 1
+#define A2_QUAD_BATCH 1
 // Kernels reduce **************************************************************
 class ReduceSum{
 public:
@@ -106,8 +103,7 @@ public:
 public:
   inline ReduceSum(double d):s(d){}
   inline operator double() { return s; }
-  //inline ReduceSum& operator =(double d) { printf("e");return *this = d; }
-  inline ReduceSum& operator +=(double d) { printf("s");return *this=(s+d); }
+  inline ReduceSum& operator +=(const double d) { return *this=(s+d); }
 };
 class ReduceMin{
 public:
@@ -115,8 +111,7 @@ public:
 public:
   inline ReduceMin(double d):m(d){}
   inline operator double() { return m; }
-  //inline ReduceMin& operator =(const double d) { printf("i");return *this=d; }
-  inline ReduceMin& min(const double d) { printf("m");return *this=(m<d)?m:d; }
+  inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
 };
 #define ReduceDecl(type,var,ini) Reduce##type var(ini);
 // CPU forall macro ************************************************************

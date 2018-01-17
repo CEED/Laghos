@@ -16,10 +16,6 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-#define ELEMENT_BATCH 10
-#define sync __syncthreads()
-
-// *****************************************************************************
 // * /home/camier1/.occa/libraries/laghos/19ef990e7ee5e602/deviceSource.cpp
 // *****************************************************************************
 template<const int NUM_DIM,
@@ -35,6 +31,7 @@ void rForceMult2S(const int numElements,
                   const double* restrict stressJinvT,
                   const double* restrict e,
                   double* restrict v) {
+  assert(false);
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 

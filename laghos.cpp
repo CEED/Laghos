@@ -83,8 +83,7 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
-   #warning CFL @ 0.1
-   double cfl = 0.1;//0.5;
+   double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
    int max_tsteps = -1;

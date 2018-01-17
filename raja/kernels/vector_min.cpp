@@ -19,9 +19,10 @@ void reduceMinN(int size, const double *d_idata, double *d_odata);
 
 double vector_min(const int N,
                   const double* __restrict vec) {
-#if defined(__RAJA__) || (!defined(__RAJA__)&&defined(__NVCC__))
-  ReduceDeclRaja(Min,red,vec[0]);
-  forallRaja(i,N,red.min(vec[i]););
+#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
+#warning ReduceDecl MIN
+  ReduceDecl/*Raja*/(Min,red,vec[0]);
+  forall/*Raja*/(i,N,red.min(vec[i]););
 #else
 #warning pure CUDA min
   static double *red=NULL;

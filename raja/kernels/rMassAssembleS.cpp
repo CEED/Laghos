@@ -15,9 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-#define  A2_ELEMENT_BATCH 1
-#define  A2_QUAD_BATCH 1
-
 // *****************************************************************************
 static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const int numElements,

@@ -17,8 +17,8 @@
 #define LAGHOS_RAJA
 
 // DBG *************************************************************************
-//#include "dbg.hpp"
-//#define __dbg__ dbg();
+#include "dbg.hpp"
+#define __dbg__ dbg();
 
 // stdincs *********************************************************************
 #undef NDEBUG

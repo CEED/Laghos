@@ -69,8 +69,10 @@ TEST_MK = $(MFEM_DIR)/config/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
-MFEM_DIR1 := $(MFEM_DIR)/build/mfem/lib #$(MFEM_DIR)
-MFEM_DIR2 := $(MFEM_DIR)/build/mfem/include/mfem #$(realpath $(MFEM_DIR))
+MFEM_DIR1 := $(MFEM_DIR)
+MFEM_DIR2 := $(realpath $(MFEM_DIR))
+#MFEM_DIR1 := $(MFEM_DIR)/build/mfem/lib
+#MFEM_DIR2 := $(MFEM_DIR)/build/mfem/include/mfem
 
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
@@ -142,9 +144,9 @@ endif
 #######################
 MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
 
-#DBG_INC = -I/home/camier1/home/dbg
-#DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
-#BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
+DBG_INC = -I/home/camier1/home/dbg
+DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
+BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
 CUDA_INC = -I/usr/local/cuda/include
 CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcudart -lcudadevrt 
@@ -172,15 +174,19 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 ################
 SOURCE_FILES  = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
-  CUDA_FILES += $(wildcard $(kernels)/*.cu)
+ifeq ($(LAGHOS_NVCC),YES)
+  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
+endif
   RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
 ################
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
+ifeq ($(LAGHOS_NVCC),YES)
 OBJECT_FILES += $(CUDA_FILES:.cu=.o)
 OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
+endif
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
 OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
