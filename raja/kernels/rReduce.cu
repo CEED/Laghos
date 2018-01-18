@@ -65,7 +65,7 @@ static void cuSetup(const int device,
   if (numBlocks > numBlocksPerSm * numSms)  {
     numBlocks = numBlocksPerSm * numSms;
   }
-  printf("%d threads, %d blocks\033[m", numThreads, numBlocks);
+  //printf("%d threads, %d blocks\033[m", numThreads, numBlocks);
 }
 
 
@@ -77,7 +77,7 @@ __device__ void cuReduceBlockSum(double *sdata, const cg::thread_block &cta){
   const unsigned int tid = cta.thread_rank();
   cg::thread_block_tile<32> tile32 = cg::tiled_partition<32>(cta);
   double beta  = sdata[tid];
-  printf("\033[33m[cuReduceBlockSum] beta=%f\033[m\n",beta);
+  //printf("\033[33m[cuReduceBlockSum] beta=%f\033[m\n",beta);
   double temp;
   for (int i = tile32.size()/2; i > 0; i >>= 1) {
     if (tile32.thread_rank() < i) {
@@ -160,7 +160,7 @@ void reduceSum(int size,
                               dimGrid, dimBlock,
                               kernelArgs, smemSize, NULL);
   cudaDeviceSynchronize();
-  printf("\033[33m[reduceSum] d_odata[0]=%f\n\033[m",d_odata[0]);
+  //printf("\033[33m[reduceSum] d_odata[0]=%f\n\033[m",d_odata[0]);
 }
 
 
@@ -258,7 +258,7 @@ void reduceMinV(int size, const double *d_idata, double *d_odata){
                               dimGrid, dimBlock,
                               kernelArgs, smemSize, NULL);
   cudaDeviceSynchronize();
-  printf("\033[32m[reduceMin] d_odata[0]=%f\n\033[m",d_odata[0]);
+  //printf("\033[32m[reduceMin] d_odata[0]=%f\n\033[m",d_odata[0]);
 //#warning exit(0)
 //  exit(0);
 }

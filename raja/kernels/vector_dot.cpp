@@ -14,7 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-void reduceSum(int size,
+/*void reduceSum(int size,
                const double *d_i1data,
                const double *d_i2data,
                double *d_odata);
@@ -23,20 +23,20 @@ void reduceSumN(int size,
                const double *d_i1data,
                const double *d_i2data,
                double *d_odata);
- 
+*/
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
+//#if defined(__RAJA__) || defined(__NVCC__)
 #warning ReduceDecl DOT
-  ReduceDecl/*Raja*/(Sum,dot,0.0);
-  forall/*Raja*/(i,N,dot += vec1[i]*vec2[i];);
+  ReduceDecl(Sum,dot,0.0);
+  ReduceForall(i,N,dot += vec1[i]*vec2[i];);
   return dot;
-#else
+/*#else
 #warning pure CUDA dot
   static double *dot;
   if (!dot){
-    printf("cudaMallocManaged(dot)\n");
+    //printf("cudaMallocManaged(dot)\n");
     //#warning should be size of block
     cudaMallocManaged(&dot, 1*sizeof(double), cudaMemAttachGlobal);
     cudaDeviceSynchronize();
@@ -44,10 +44,11 @@ double vector_dot(const int N,
   dot[0]=0.0;
   
   #warning HC N power of 2
-  printf("N=%d => %d",N,16);
-  reduceSum/*N*/(16,vec1,vec2,&dot[0]);
+  //printf("N=%d => %d",N,16);
+  reduceSum(16,vec1,vec2,&dot[0]);
   
   //printf("[vector_dot] dot=%f\n",dot[0]);
-  return dot;
+  return dot[0];
 #endif
+  */
 }

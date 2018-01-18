@@ -20,7 +20,7 @@ template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D>
-__global__
+//kernel
 void rUpdateQuadratureData2DS(const double GAMMA,
                               const double H0,
                               const double CFL,
@@ -42,14 +42,15 @@ void rUpdateQuadratureData2DS(const double GAMMA,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
-  for (int el = 0; el < numElements; ++el) {
-    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    __shared__ double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+  //for (int el = 0; el < numElements; ++el) {
+  forall(el,numElements,{
+    share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
-    __shared__ double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
-    __shared__ double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
 
-    __shared__ double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
+    share double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
 
     double r_v[NUM_DIM * NUM_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D);
 
@@ -225,7 +226,7 @@ void rUpdateQuadratureData2DS(const double GAMMA,
         stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11));
       }
     }
-  }
+    });
 }
 // *****************************************************************************
 typedef void (*fUpdateQuadratureDataS)(const double GAMMA,

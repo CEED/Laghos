@@ -19,7 +19,7 @@
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D>
-__global__
+//kernel
 static void rGridFuncToQuad2S(const int numElements,
                               const double* restrict dofToQuad,
                               const int* restrict l2gMap,
@@ -28,12 +28,13 @@ static void rGridFuncToQuad2S(const int numElements,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
-  for (int eOff = 0; eOff < numElements; eOff += M2_ELEMENT_BATCH) {
+  forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+//  for (int eOff = 0; eOff < numElements; eOff += M2_ELEMENT_BATCH) {
     // Store dof <--> quad mappings
-    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
     // Store xy planes in shared memory
-    __shared__ double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
 
     for (int x = 0; x < NUM_MAX_1D; ++x) {
       for (int id = x; id < NUM_QUAD_DOFS_1D; id += NUM_MAX_1D) {
@@ -73,7 +74,7 @@ static void rGridFuncToQuad2S(const int numElements,
         }
       }
     }
-  }
+    });
 }
 // *****************************************************************************
 typedef void (*fGridFuncToQuad)(const int numElements,
