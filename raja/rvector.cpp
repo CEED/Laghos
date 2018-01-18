@@ -71,6 +71,7 @@ RajaVectorRef RajaVector::GetRange(const size_t offset,
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(const RajaVector& v) {
+  dbg();
   SetSize(v.Size(),v.data);
   own = false;
   return *this;
@@ -78,35 +79,41 @@ RajaVector& RajaVector::operator=(const RajaVector& v) {
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(double value) {
+  dbg();
   vector_op_eq(size, value, data);
   return *this;
 }
 
 // ***************************************************************************
 double RajaVector::operator*(const RajaVector& v) const {
+  dbg();
   return vector_dot(size, data, v.data);
 }
 
 // *****************************************************************************
 RajaVector& RajaVector::operator-=(const RajaVector& v) {
+  dbg();
   vector_vec_sub(size, data, v.data);
   return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
+  dbg();
   vector_vec_add(size, data, v.data);
   return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator*=(const double d) {
+  dbg();
   vector_vec_mul(size, data, d);
   return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
+  dbg();
   vector_axpy(Size(),alpha, data, v.data);
   return *this;
 }
@@ -114,6 +121,7 @@ RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
 
 // ***************************************************************************
 void RajaVector::Neg() {
+  dbg();
   vector_neg(Size(),ptr());
 }
 
@@ -127,6 +135,7 @@ void RajaVector::SetSubVector(const RajaArray<int> &ess_tdofs,
 
 // ***************************************************************************
 double RajaVector::Min() const {
+  dbg();
   return vector_min(Size(),(double*)data);
 }
 
@@ -134,6 +143,7 @@ double RajaVector::Min() const {
 // from mfem::TCGSolver<mfem::RajaVector>::Mult in linalg/solvers.hpp:224
 void add(const RajaVector& v1, const double alpha,
          const RajaVector& v2, RajaVector& out) {
+  dbg();
   vector_xpay(out.Size(),alpha,out.ptr(),v1.ptr(),v2.ptr());
 }
 
@@ -151,6 +161,7 @@ void add(const double alpha,
 void subtract(const RajaVector& v1,
               const RajaVector& v2,
               RajaVector& out) {
+  dbg();
   vector_xsy(out.Size(),out.ptr(),v1.ptr(),v2.ptr());
 }
 

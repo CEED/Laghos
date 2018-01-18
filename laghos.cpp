@@ -55,6 +55,7 @@
 #include <memory>
 #include <iostream>
 #include <fstream>
+#include <sys/time.h>
 
 using namespace std;
 using namespace mfem;
@@ -67,7 +68,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   //dbgIni(argv[0]);dbg();
+   dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -83,8 +84,8 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int ode_solver_type = 4;
    double t_final = 0.5;
-   #warning CFL @ 0.1
-   double cfl = 0.1;//0.5;
+//#warning CFL @ 0.1
+   double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
    int max_tsteps = -1;
@@ -95,6 +96,8 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    bool cuda = false;
    bool share = false;
+//#warning dot test @ true
+   bool dot = false;
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -139,6 +142,8 @@ int main(int argc, char *argv[])
                   "Enable or disable CUDA kernels.");
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels.");
+   args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
+                  "Enable or disable DOT test kernels.");
    args.Parse();
    if (!args.Good())
    {
@@ -149,6 +154,30 @@ int main(int argc, char *argv[])
    
    // Setting the info CUDA kernels are requested
    is_managed=cuda;
+   
+   // **************************************************************************
+   if (dot){
+     struct timeval st, et;
+     int size = 0x4F0;
+     for (int lev = 0; lev < rs_levels; lev++) size<<=1;
+     gettimeofday(&st, NULL);
+     RajaVector a(size); a=1.0/M_PI;
+     //for(int i=0;i<size;i++) a[i]=((double)(i+1))/M_PI;
+     //a.Print();
+     RajaVector b(size); b=M_PI;
+     //for(int i=0;i<size;i++) b[i]=M_PI/((double)(i+1));
+     //b.Print();
+     gettimeofday(&et, NULL);
+     const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
+     printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\n\033[m",size,setTime/1000.0);
+     gettimeofday(&st, NULL);
+     double dt = a*b;
+     gettimeofday(&et, NULL);
+     assert(dt == (double)size);
+     const double cmpTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
+     printf("\033[32m[laghos] DOT (%d) in \033[1m%12.6e(s)\n\033[m",size,cmpTime/1000.0);
+     return 0;
+   }
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.

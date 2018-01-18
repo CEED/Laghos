@@ -20,7 +20,7 @@ __global__ void cuReduceMin(const double*, double*, unsigned int);
 
 // *****************************************************************************
 // *****************************************************************************
-unsigned int nextPow2(unsigned int x){
+static unsigned int nextPow2(unsigned int x){
   --x;
   x |= x >> 1;
   x |= x >> 2;
@@ -30,10 +30,10 @@ unsigned int nextPow2(unsigned int x){
   return ++x;
 }
 // *****************************************************************************
-void getNumBlocksAndThreads(const int n,
-                            const int maxBlocks,
-                            const int maxThreads,
-                            int &blocks, int &threads){
+static void getNumBlocksAndThreads(const int n,
+                                   const int maxBlocks,
+                                   const int maxThreads,
+                                   int &blocks, int &threads){
   if (n == 1){
     threads = 1;
     blocks = 1;
@@ -53,8 +53,8 @@ static void cuSetup(const int device,
   checkCudaErrors(cudaSetDevice(device));
   checkCudaErrors(cudaGetDeviceProperties(&prop, device));
   // Determine the launch configuration (threads, blocks)
-  int maxThreads = prop.maxThreadsPerBlock;
-  int maxBlocks = prop.multiProcessorCount*(prop.maxThreadsPerMultiProcessor/prop.maxThreadsPerBlock);
+  const int maxThreads = prop.maxThreadsPerBlock;
+  const int maxBlocks = prop.multiProcessorCount*(prop.maxThreadsPerMultiProcessor/prop.maxThreadsPerBlock);
   getNumBlocksAndThreads(size, maxBlocks, maxThreads, numBlocks, numThreads);
   int numBlocksPerSm = 0;
   checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
@@ -133,34 +133,36 @@ __global__ void cuReduceSum(const double *g_i1data,
 void reduceSum(int size,
                const double *d_i1data, const double *d_i2data,
                double *d_odata){
-  static int threads=0, blocks=0;
-  if (threads==0 && blocks==0){
-    //printf("\n\033[33m[reduceSum] Setup[size=%d]: ",size);  
-    cuSetup(0,size,threads,blocks);
+  if (size==1){
+    d_odata[0]=d_i1data[0]+d_i2data[0];
+    return;
   }
-  assert(blocks==1);
+  /*static*/ int threads=256, blocks=1;
+  if (threads==0 && blocks==0){
+    //printf("\n\033[33m[reduceSum] Setup(size=%d): ",size);  
+    cuSetup(0,size,threads,blocks);
+    //printf("threads=%d, blocks=%d\n\033[m",threads,blocks);  
+  }
   const dim3 dimBlock(threads, 1, 1);
   const dim3 dimGrid(blocks, 1, 1);
   const int smemSize = threads * sizeof(double);
 
-  //printf("\n\033[31m[reduceSum]\033[m");
-  //double t_i1data[size];
-  //double t_i2data[size];
   void *kernelArgs[] = {
     (void*)&d_i1data,
     (void*)&d_i2data,
     (void*)&d_odata,
     (void*)&size,
   };
-  //printf("\n[reduceSum] [#t=%d,#b=%d] d_i1data:", threads,blocks);
+  //printf("\n[reduceSum] d_i1data:");
   //for(int i=0;i<size;i+=1) { printf(" [%f]",d_i1data[i]); }
   //printf("\n[reduceSum] d_i2data:");
   //for(int i=0;i<size;i+=1) { printf(" [%f]",d_i2data[i]); }
+  
   cudaLaunchCooperativeKernel((void*)cuReduceSum,
                               dimGrid, dimBlock,
                               kernelArgs, smemSize, NULL);
   cudaDeviceSynchronize();
-  //printf("\033[33m[reduceSum] d_odata[0]=%f\n\033[m",d_odata[0]);
+  //printf("\n\033[33m[reduceSum] d_odata[0]=%f\n\033[m",d_odata[0]);
 }
 
 
@@ -226,12 +228,12 @@ __global__ void cuReduceMin(const double *g_idata,
 
 // *****************************************************************************
 void reduceMinV(int size, const double *d_idata, double *d_odata){
-  static int threads=0, blocks=0;
+  /*static*/ int threads=256, blocks=1;
   if (threads==0 && blocks==0){
     //printf("\033[32m\n[reduceMin] Setup: ");
     cuSetup(0,size,threads,blocks);
   }
-  assert(blocks==1);
+  //assert(blocks==1);
   const dim3 dimBlock(threads, 1, 1);
   const dim3 dimGrid(blocks, 1, 1);
   const int smemSize = threads * sizeof(double);
