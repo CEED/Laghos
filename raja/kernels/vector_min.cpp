@@ -20,7 +20,7 @@
 double vector_min(const int N,
                   const double* __restrict vec) {
 //#if defined(__RAJA__) || defined(__NVCC__)
-#warning ReduceDecl MIN
+//#warning ReduceDecl MIN
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
   return red;

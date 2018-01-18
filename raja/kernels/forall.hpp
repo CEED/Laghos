@@ -25,24 +25,19 @@ extern "C" bool is_managed;
 #define A2_ELEMENT_BATCH 1
 #define A2_QUAD_BATCH 1
 
-// RAJA build ******************************************************************
-#ifdef __RAJA__
+#ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
 #define sync
 #define share
-// RAJA CUDA
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-// RAJA serial
 #define sq_device __host__
 #define sq_exec RAJA::seq_exec
 #define sq_reduce RAJA::seq_reduce
-// RAJA reduce
 #define ReduceDecl(type,var,ini) \
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
-// RAJA forall
 #define forall(i,max,body)                                              \
   if (is_managed)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
@@ -50,28 +45,23 @@ const int CUDA_BLOCK_SIZE = 256;
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define ReduceForall(i,max,body) forall(i,max,body)
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
-#else // __RAJA__ **************************************************************
-// KERNELS GPU *****************************************************************
-#ifdef __NVCC__
-//#warning NO RAJA, WITH NVCC
+#else // __KERNELS__ ***********************************************************
+#ifdef __NVCC__ // on GPU ******************************************************
+//#warning NO RAJA, WITH NVCC, but still use RAJA for the reduction
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
 #include "RAJA/util/defines.hpp"
 #include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
-
 #define sync __syncthreads();
 #define share __shared__
-
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
 #define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-// RAJA reduce *****************************************************************
-#define ReduceDecl(type,var,ini) \
+#define ReduceDecl(type,var,ini)                                      \
   RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
 #define ReduceForall(i,max,body)                                        \
   RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body});
-// *****************************************************************************
 template <typename FORALL_BODY>
 __global__ void forall_kernel_gpu(const int length,
                                   const int step,
@@ -91,13 +81,10 @@ void cuda_forallT(const int end,
 }
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
-#else // __NVCC__ **************************************************************
+#else // __KERNELS__ on CPU ****************************************************
 //#warning NO RAJA, NO NVCC
-// KERNELS CPU *****************************************************************
 #define sync
-//#define kernel
-#define shared
-// Kernels reduce **************************************************************
+#define share
 class ReduceSum{
 public:
   double s;
@@ -115,8 +102,8 @@ public:
   inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
 };
 #define ReduceDecl(type,var,ini) Reduce##type var(ini);
-// CPU forall macro ************************************************************
 #define forall(i,max,body) for(int i=0;i<max;i++){body}
+#define forallS(i,max,step,body) for(int i=0;i<max;i+=step){body}
 #define ReduceForall(i,max,body) forall(i,max,body)
 #endif //__NVCC__
 #endif // __RAJA__

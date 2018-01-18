@@ -28,7 +28,7 @@ double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
 //#if defined(__RAJA__) || defined(__NVCC__)
-#warning ReduceDecl DOT
+//#warning ReduceDecl DOT
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
   return dot;
