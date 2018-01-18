@@ -27,7 +27,9 @@ extern "C" bool is_managed;
 
 // RAJA build ******************************************************************
 #ifdef __RAJA__
-#warning RAJA, WITH NVCC
+//#warning RAJA, WITH NVCC
+#define sync
+#define share
 // RAJA CUDA
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
@@ -46,6 +48,8 @@ const int CUDA_BLOCK_SIZE = 256;
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
+#define ReduceForall(i,max,body) forall(i,max,body)
+#define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
 #else // __RAJA__ **************************************************************
 // KERNELS GPU *****************************************************************
 #ifdef __NVCC__
@@ -57,7 +61,6 @@ const int CUDA_BLOCK_SIZE = 256;
 
 #define sync __syncthreads();
 #define share __shared__
-//#define kernel __global__
 
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
@@ -89,7 +92,7 @@ void cuda_forallT(const int end,
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #else // __NVCC__ **************************************************************
-#warning NO RAJA, NO NVCC
+//#warning NO RAJA, NO NVCC
 // KERNELS CPU *****************************************************************
 #define sync
 //#define kernel

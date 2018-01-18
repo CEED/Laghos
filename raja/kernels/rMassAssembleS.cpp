@@ -23,7 +23,6 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const double* J,
                             double* __restrict oper) {
   forallS(eOff,numElements,A2_ELEMENT_BATCH,{
-//  for (int eOff = 0; eOff < numElements; eOff += A2_ELEMENT_BATCH) {
     for (int e = eOff; e < (eOff + A2_ELEMENT_BATCH); ++e) {
       if (e < numElements) {
         for (int qOff = 0; qOff < A2_QUAD_BATCH; ++qOff) {

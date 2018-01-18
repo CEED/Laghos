@@ -20,7 +20,6 @@ template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D>
-//kernel
 void rUpdateQuadratureData2DS(const double GAMMA,
                               const double H0,
                               const double CFL,
@@ -42,7 +41,6 @@ void rUpdateQuadratureData2DS(const double GAMMA,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
-  //for (int el = 0; el < numElements; ++el) {
   forall(el,numElements,{
     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
     share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);

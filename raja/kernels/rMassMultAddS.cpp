@@ -18,7 +18,6 @@
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D>
-//kernel
 static void rMassMultAdd2S(const int numElements,
                            const double* restrict dofToQuad,
                            const double* restrict dofToQuadD,
@@ -32,7 +31,6 @@ static void rMassMultAdd2S(const int numElements,
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
   forallS(eOff,numElements,M2_ELEMENT_BATCH,{
-//  for (int eOff = 0; eOff < numElements; eOff += M2_ELEMENT_BATCH) {
     // Store dof <--> quad mappings
     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
     share double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);

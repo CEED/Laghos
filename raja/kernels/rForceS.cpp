@@ -23,7 +23,6 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D>
-//kernel
 void rForceMult2S(const int numElements,
                   const double* restrict L2DofToQuad,
                   const double* restrict H1QuadToDof,
@@ -40,8 +39,6 @@ void rForceMult2S(const int numElements,
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
   
-  //forall(elBlock,numElements/*,ELEMENT_BATCH*/,{
-  //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH) {
   forallS(elBlock,numElements,ELEMENT_BATCH,{
     share double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D];
     share double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D];
@@ -149,14 +146,12 @@ void rForceMultTranspose2S(const int numElements,
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
-  //const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int MAX_DOFS_1D = (L2_DOFS_1D > H1_DOFS_1D)?L2_DOFS_1D:H1_DOFS_1D;
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
 
   forallS(elBlock,numElements,ELEMENT_BATCH,{
-      //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) {
     share double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D];
     share double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D];
     share double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D];
