@@ -21,20 +21,18 @@ void reduceSum(int,const double*,const double*,double*);
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-#if defined(__RAJA__)
-//#warning ReduceDecl DOT
+#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
   return dot;
 #else
-#warning pure CUDA dot
   unsigned int v=N;
   unsigned int nBitInN=0;
   //struct timeval st, et;
   for(;v;nBitInN++) v&=v-1;
   //printf("\n\t[vector_dot] %d bits in %d (0x%X)\n",nBitInN,N,N);
-  static double *dot=NULL;
 
+  static double *dot=NULL;
   if (!dot){
     //printf("cudaMallocManaged(dot)\n");
     //#warning should be size of block

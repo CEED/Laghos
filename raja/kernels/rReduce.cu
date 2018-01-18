@@ -133,11 +133,7 @@ __global__ void cuReduceSum(const double *g_i1data,
 void reduceSum(int size,
                const double *d_i1data, const double *d_i2data,
                double *d_odata){
-  if (size==1){
-    d_odata[0]=d_i1data[0]+d_i2data[0];
-    return;
-  }
-  /*static*/ int threads=256, blocks=1;
+  /*static*/ int threads=1024, blocks=1;
   if (threads==0 && blocks==0){
     //printf("\n\033[33m[reduceSum] Setup(size=%d): ",size);  
     cuSetup(0,size,threads,blocks);
@@ -175,17 +171,20 @@ __device__ void cuReduceBlockMin(double *sdata,
   cg::thread_block_tile<32> tile32 = cg::tiled_partition<32>(cta);
   //printf("\033[31m[cuReduceBlock]\033[m\n");
   double beta  = sdata[tid];
+  double temp;
   for (int i = tile32.size() / 2; i > 0; i >>= 1) {
     if (tile32.thread_rank() < i) {
-      sdata[tid] = sdata[tid]<sdata[tid+i]?sdata[tid]:sdata[tid+i];
+      temp = sdata[tid+i];
+      beta = (beta<sdata[tid+i])?beta:temp;
+      sdata[tid] = beta;
     }
     cg::sync(tile32);
   }
   cg::sync(cta);
   if (cta.thread_rank() == 0) {
-    beta  = 0;
+    //beta  = 0;
     for (int i = 0; i < blockDim.x; i += tile32.size()) {
-      beta  += sdata[i];
+      beta  = (beta<sdata[i])?beta:sdata[i];
     }
     sdata[0] = beta;
   }
@@ -201,12 +200,13 @@ __global__ void cuReduceMin(const double *g_idata,
   cg::grid_group grid = cg::this_grid();
   extern double __shared__ sdata[];
   // Stride over grid and add the values to a shared memory buffer
-  sdata[block.thread_rank()] = g_idata[0];
+  const int btr =  block.thread_rank();
+  sdata[btr] = g_idata[0];
   for (int i = grid.thread_rank(); i < n; i += grid.size()) {
     const double gid = g_idata[i];
-    const double sdb = sdata[block.thread_rank()];
+    const double sdb = sdata[btr];
     //printf("\t\033[32m[cuReduceMin] for thread\033[m\n");
-    sdata[block.thread_rank()] = (sdb<gid)?sdb:gid;
+    sdata[btr] = (sdb<gid)?sdb:gid;
   }
   //printf("\033[32m[cuReduceMin] Reduce each block (called once per block)\033[m\n");
   cuReduceBlockMin(sdata, block);
@@ -227,22 +227,15 @@ __global__ void cuReduceMin(const double *g_idata,
 
 
 // *****************************************************************************
-void reduceMinV(int size, const double *d_idata, double *d_odata){
-  /*static*/ int threads=256, blocks=1;
+void reduceMin(int size, const double *d_idata, double *d_odata){
+  /*static*/ int threads=1024, blocks=1;
   if (threads==0 && blocks==0){
     //printf("\033[32m\n[reduceMin] Setup: ");
     cuSetup(0,size,threads,blocks);
   }
-  //assert(blocks==1);
   const dim3 dimBlock(threads, 1, 1);
   const dim3 dimGrid(blocks, 1, 1);
   const int smemSize = threads * sizeof(double);
-  
-/*  static double *t_idata=NULL;
-  if (!t_idata){
-    cudaMallocManaged(&t_idata, size*sizeof(double), cudaMemAttachGlobal);
-  }
-*/
   
   void *kernelArgs[] = {
     (void*)&d_idata,
@@ -250,17 +243,12 @@ void reduceMinV(int size, const double *d_idata, double *d_odata){
     (void*)&size,
   };
   
-/*  printf("\n\033[32m[reduceMin] [#t=%d,#b=%d] t_idata:\033[m", threads,blocks);
-  for(int i=0;i<size;i+=1) {
-    //printf(" [%f]",t_idata[i]=(i+18)*0.123456789);
-    printf(" [%f]",d_idata[i]);
-  }
-*/
+  //printf("\n\033[32m[reduceMin] [#t=%d,#b=%d] t_idata:\033[m", threads,blocks);
+  //for(int i=0;i<size;i+=1) printf(" [%f]",d_idata[i]);
+
   cudaLaunchCooperativeKernel((void*)cuReduceMin,
                               dimGrid, dimBlock,
                               kernelArgs, smemSize, NULL);
   cudaDeviceSynchronize();
   //printf("\033[32m[reduceMin] d_odata[0]=%f\n\033[m",d_odata[0]);
-//#warning exit(0)
-//  exit(0);
 }

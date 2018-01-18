@@ -28,7 +28,7 @@ extern "C" bool is_managed;
 #ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
 #define sync
-#define share
+#define share // variable cannot be declared with "shared" inside a host function
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -46,22 +46,10 @@ const int CUDA_BLOCK_SIZE = 256;
 #define ReduceForall(i,max,body) forall(i,max,body)
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
 #else // __KERNELS__ ***********************************************************
+//#warning NO RAJA, WITH NVCC
 #ifdef __NVCC__ // on GPU ******************************************************
-//#warning NO RAJA, WITH NVCC, but still use RAJA for the reduction
-#include <cuda.h>
-#include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
 #define sync __syncthreads();
 #define share __shared__
-const int CUDA_BLOCK_SIZE = 256;
-#define cu_device __device__
-#define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
-#define cu_reduce RAJA::cuda_reduce<CUDA_BLOCK_SIZE>
-#define ReduceDecl(type,var,ini)                                      \
-  RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
-#define ReduceForall(i,max,body)                                        \
-  RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body});
 template <typename FORALL_BODY>
 __global__ void forall_kernel_gpu(const int length,
                                   const int step,

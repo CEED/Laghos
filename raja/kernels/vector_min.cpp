@@ -14,48 +14,36 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-//void reduceMinV(int size, const double *d_idata, double *d_odata);
-//void reduceMinN(int size, const double *d_idata, double *d_odata);
+void reduceMin(int size, const double *d_idata, double *d_odata);
 
 double vector_min(const int N,
                   const double* __restrict vec) {
-//#if defined(__RAJA__) || defined(__NVCC__)
-//#warning ReduceDecl MIN
+#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
   return red;
-/*#else
-#warning pure CUDA min
+#else
+  unsigned int v=N;
+  unsigned int nBitInN=0;
+  for(;v;nBitInN++) v&=v-1;
+
   static double *red=NULL;
   if (!red) {
-    //printf("cudaMallocManaged(red)\n");
-    //#warning should be size of block
-    cudaMallocManaged(&red, 1*sizeof(double), cudaMemAttachGlobal);
+    cudaMallocManaged(&red, nBitInN*sizeof(double), cudaMemAttachGlobal);
     cudaDeviceSynchronize();
   }
-  red[0]=vec[0];
+  for(int i=0;i<nBitInN;i+=1) red[i]=vec[0];
   
-  #warning HC N power of 2
-  //printf("N=%d => %d",N,64);
-  reduceMinV(64,vec,&red[0]);
-  //printf("[vector_min] red=%f\n",red[0]);
-  return red[0];
-#endif
-*/
-  
-/*
-  assert(isPowerOfTwo(N)==0);
-  static double *red=NULL;
-  if (!red) {
-    printf("cudaMallocManaged(red)\n");
-    #warning should be size of block
-    cudaMallocManaged(&red, 1*sizeof(double), cudaMemAttachGlobal);
-    cudaDeviceSynchronize();
+  for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
+    if (!(v&1)) continue;
+    reduceMin(k,&vec[vof7],&red[kof7]);
+    kof7++;
+    vof7+=k;
   }
-  *red=vec[0];
-  reduceMinV(N,vec,red);
-#endif
-  //printf("[vector_min] red=%f\n",red);
+  
+  for(int i=1;i<nBitInN;i+=1)
+    red[0]=red[0]<red[i]?red[0]:red[i];
+  
   return red[0];
-*/
+#endif
 }
