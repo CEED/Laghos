@@ -14,11 +14,10 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-void reduceMin(int size, const double *d_idata, double *d_odata);
 
 double vector_min(const int N,
                   const double* __restrict vec) {
-#if defined(__RAJA__) || (!defined(__RAJA__)&&!defined(__NVCC__))
+#if !defined(__NVCC__)
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
   return red;
@@ -28,11 +27,19 @@ double vector_min(const int N,
   for(;v;nBitInN++) v&=v-1;
 
   static double *red=NULL;
+  //static double *d_red=NULL;
+  const int nBytes = nBitInN*sizeof(double);
   if (!red) {
-    cudaMallocManaged(&red, nBitInN*sizeof(double), cudaMemAttachGlobal);
-    cudaDeviceSynchronize();
+    red=(double*)::malloc(nBytes);
+    //cudaMalloc(&d_red, nBytes);
+    //cuMemcpyHtoD(d_red,red,nBytes);
+      //cudaMallocManaged(&red, nBitInN*sizeof(double), cudaMemAttachGlobal);
+      //cudaDeviceSynchronize();
   }
-  for(int i=0;i<nBitInN;i+=1) red[i]=vec[0];
+  
+  for(int i=0;i<nBitInN;i+=1) red[i]= +__builtin_inff();//vec[0];
+  //cuMemcpyHtoD((CUdeviceptr)d_red,red,nBytes);
+  //cudaDeviceSynchronize();
   
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;

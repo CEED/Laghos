@@ -68,7 +68,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   dbgIni(argv[0]);dbg();
+  //dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -158,13 +158,14 @@ int main(int argc, char *argv[])
    // **************************************************************************
    if (dot){
      struct timeval st, et;
-     int size = 0x4F0;
+     int size = 0x400;
      for (int lev = 0; lev < rs_levels; lev++) size<<=1;
      gettimeofday(&st, NULL);
      RajaVector a(size); a=1.0/M_PI;
      //for(int i=0;i<size;i++) a[i]=((double)(i+1))/M_PI;
      //a.Print();
      RajaVector b(size); b=M_PI;
+     RajaVector c(size); c=0.0;
      //for(int i=0;i<size;i++) b[i]=M_PI/((double)(i+1));
      //b.Print();
      gettimeofday(&et, NULL);
@@ -172,10 +173,11 @@ int main(int argc, char *argv[])
      printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\n\033[m",size,setTime/1000.0);
      gettimeofday(&st, NULL);
      double dt = a*b;
+     c+=a;
      gettimeofday(&et, NULL);
-     assert(dt == (double)size);
+     //assert(dt == (double)size);
      const double cmpTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-     printf("\033[32m[laghos] DOT (%d) in \033[1m%12.6e(s)\n\033[m",size,cmpTime/1000.0);
+     printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\n\033[m",size,cmpTime/1000.0);
      return 0;
    }
    

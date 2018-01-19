@@ -278,6 +278,7 @@ void rForceMultS(const int NUM_DIM,
   assert(LOG2(L2_DOFS_1D)<=8);//printf("L2_DOFS_1D:%d ",(L2_DOFS_1D));
   assert(LOG2(H1_DOFS_1D)<=8);//printf("H1_DOFS_1D:%d\n",(H1_DOFS_1D));
   static std::unordered_map<unsigned long long, fForceMult2S> call = {
+    // 2D
     {0x202020102ull,&rForceMult2S<2,2,2,1,2>},
     {0x203040203ull,&rForceMult2S<2,3,4,2,3>},// default 2D
     {0x203040303ull,&rForceMult2S<2,3,4,3,3>},

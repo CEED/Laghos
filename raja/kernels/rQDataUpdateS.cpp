@@ -300,7 +300,6 @@ void rUpdateQuadratureDataS(const double GAMMA,
     // 3D
     //{0x3100403,&rUpdateQuadratureData3D<3,16,4,3>},
     //{0x3400403,&rUpdateQuadratureData3D<3,64,4,3>},
-
   };
   if (!call[id]){
     printf("\n[rUpdateQuadratureDataS] id \033[33m0x%X\033[m ",id);

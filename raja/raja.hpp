@@ -17,14 +17,39 @@
 #define LAGHOS_RAJA
 
 // DBG *************************************************************************
-#include "dbg.hpp"
-#define __dbg__ dbg();
+//#include "dbg.hpp"
+//#define __dbg__ dbg();
 
 // stdincs *********************************************************************
 #undef NDEBUG
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+
+// __NVCC__ ********************************************************************
+#ifdef __NVCC__
+#include <cuda.h>
+template <typename FORALL_BODY>
+__global__ void forall_kernel_gpu(const int length,
+                                  const int step,
+                                  FORALL_BODY body) {
+  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int ids = idx * step;
+  if (ids < length) {body(ids);}
+}
+template <typename FORALL_BODY>
+void cuda_forallT(const int end,
+                  const int step,
+                  FORALL_BODY &&body) {
+  const size_t blockSize = 256;
+  const size_t gridSize = (end+blockSize-1)/blockSize;
+  forall_kernel_gpu<<<gridSize, blockSize>>>(end,step,body);
+  cudaDeviceSynchronize();
+}
+#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body});
+#else
+#define forall(i,max,body) for(int i=0;i<max;i++){body}
+#endif
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"

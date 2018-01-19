@@ -102,6 +102,7 @@ __global__ void cuReduceSum(const double *g_i1data,
                             const double *g_i2data,
                             double *g_odata,
                             unsigned int n){
+  //printf("\n[%04d]", blockDim.x*blockIdx.x + threadIdx.x);
   //printf("\033[33m[cuReduceSum]\033[m\n");
   // Handle to thread block group
   cg::thread_block block = cg::this_thread_block();

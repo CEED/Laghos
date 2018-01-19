@@ -69,7 +69,7 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   RajaArray<int> offsets;
   RajaArray<int> indices, *reorderIndices;
   RajaArray<int> map;
-  RajaOperator* restrictionOp, *prolongationOp;
+  RajaOperator *restrictionOp, *prolongationOp;
  public:
   RajaFiniteElementSpace(Mesh* mesh,
                          const FiniteElementCollection* fec,

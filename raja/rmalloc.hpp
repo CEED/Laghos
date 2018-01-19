@@ -41,7 +41,9 @@ template<class T> struct rmalloc{
     if (!is_managed) return new T[n];
 #ifdef __NVCC__
     void *ptr;
-    cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
+#warning cudaMalloc(Managed)
+    //cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
+    cudaMalloc(&ptr, n*sizeof(T));
     return ptr;
 #endif // __NVCC__
     // We come here when the user requests a manager,
@@ -49,6 +51,7 @@ template<class T> struct rmalloc{
     assert(false);
 #endif // RAJA_USE_SIMPOOL
   }
+  
   // ***************************************************************************
   void _delete(void *ptr) {
     rdbg("-]\033[m");

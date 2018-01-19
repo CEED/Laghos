@@ -54,9 +54,9 @@ template <typename FORALL_BODY>
 __global__ void forall_kernel_gpu(const int length,
                                   const int step,
                                   FORALL_BODY body) {
-  const int idx0 = blockDim.x*blockIdx.x + threadIdx.x;
-  const int idx =  idx0 * step;
-  if (idx < length) {body(idx);}
+  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int ids = idx * step;
+  if (ids < length) {body(ids);}
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,

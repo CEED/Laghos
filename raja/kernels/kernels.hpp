@@ -40,6 +40,10 @@ double vector_dot(const int, const double* restrict, const double* restrict);
 double vector_min(const int, const double* restrict);
 
 // *****************************************************************************
+void reduceMin(int, const double*, double*);
+void reduceSum(int, const double*, const double*, double*);
+
+// *****************************************************************************
 void rGridFuncToQuad(const int dim,
                      const int NUM_VDIM,
                      const int NUM_DOFS_1D,

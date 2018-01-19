@@ -143,6 +143,7 @@ typedef void (*fMassMultAdd)(const int numElements,
   assert(LOG2(NUM_DOFS_1D)<=8);
   assert(LOG2(NUM_QUAD_1D)<=8);
   static std::unordered_map<unsigned int, fMassMultAdd> call = {
+    // 2D
     {0x20102,&rMassMultAdd2S<1,2>},
     {0x20202,&rMassMultAdd2S<2,2>},
     {0x20203,&rMassMultAdd2S<2,3>},
@@ -199,7 +200,8 @@ typedef void (*fMassMultAdd)(const int numElements,
     {0x20709,&rMassMultAdd2S<7,9>},
     {0x2070A,&rMassMultAdd2S<7,10>},
     {0x2070C,&rMassMultAdd2S<7,12>},
-    
+
+    // 3D
 /*    {0x30202,&rMassMultAdd3S<2,2>},
     {0x30203,&rMassMultAdd3S<2,3>},
     {0x30204,&rMassMultAdd3S<2,4>},

@@ -12,6 +12,72 @@
 
 namespace mfem {
 
+  // ***************************************************************************
+  template<class T> struct _rmalloc{
+    static void* _new(size_t n) {
+#ifdef __NVCC__
+      void *ptr;
+      cudaMalloc(&ptr, n*sizeof(T));
+      return ptr;
+#else // __NVCC__
+      return new T[n];
+#endif 
+    }
+  };
+
+  // ***************************************************************************
+  static void offsetsFlush(const int N, int *offsets){
+    forall(i,N,offsets[i] = 0;);
+  }
+
+  // ***************************************************************************
+  static void offsetFill(const int N,
+                         const int localDofs,
+                         const int *elementMap,
+                         int *offsets){
+    forall(e,N,{
+        for (int d = 0; d < localDofs; ++d) {
+          const int gid = elementMap[localDofs*e + d];
+          ++offsets[gid + 1];
+        }
+      });
+  }
+  
+  // ***************************************************************************
+  static void offsetsAggregate(const int N, int *offsets){
+    forall(i,N,offsets[i]+=offsets[i-1];);
+  }
+
+  // ***************************************************************************
+  static void fillIndicesAndMap(const int elements,
+                                const int localDofs,
+                                const bool dof_map_is_identity,
+                                const int *dof_map,
+                                const int *elementMap,
+                                int *offsets,
+                                int *indices,
+                                int *map){
+    forall(e, elements, {
+        for (int d = 0; d < localDofs; ++d) {
+          const int did = dof_map_is_identity?d:dof_map[d];
+          const int gid = elementMap[localDofs*e + did];
+          const int lid = localDofs*e + d;
+          indices[offsets[gid]++] = lid;
+          map[lid] = gid;
+        }
+      });
+  }
+  
+  // ***************************************************************************
+  static void offsetsShift(const int globalDofs, int *offsets){
+    forall(dummy,1,{
+        for (int i = globalDofs; i > 0; --i) {
+          offsets[i] = offsets[i - 1];
+        }
+        offsets[0] = 0;
+      });
+  }
+
 // ***************************************************************************
 // * RajaFiniteElementSpace
 // ***************************************************************************
@@ -28,29 +94,49 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   const FiniteElement *fe = GetFE(0);
   const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
   const Array<int> &dof_map = el->GetDofMap();
+  const size_t dmSize = dof_map.Size();
+#ifdef __NVCC__
+  const int *d_dof_map=(int*) _rmalloc<int>::_new(dmSize);
+  cuMemcpyHtoD((CUdeviceptr)d_dof_map,dof_map,dmSize*sizeof(int));
+#else
+  const int *d_dof_map=dof_map;
+#endif
   const bool dof_map_is_identity = (dof_map.Size()==0);
     
+  const int elements = GetNE();
   const Table& e2dTable = GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
-  const int elements = GetNE();
+
+  const size_t eMapSize = elements*localDofs;
+#ifdef __NVCC__
+  const int *d_elementMap=(int*) _rmalloc<int>::_new(eMapSize);
+  cuMemcpyHtoD((CUdeviceptr)d_elementMap,elementMap,eMapSize*sizeof(int));
+#else
+  const int *d_elementMap=elementMap;
+#endif
 
   // We'll be keeping a count of how many local nodes point to its global dof
-  for (int i = 0; i <= globalDofs; ++i) {
+  /*for (int i = 0; i <= globalDofs; ++i) {
     offsets[i] = 0;
-  }
-  for (int e = 0; e < elements; ++e) {
+    }*/
+  offsetsFlush(globalDofs+1,offsets);  
+  
+  /*for (int e = 0; e < elements; ++e) {
     for (int d = 0; d < localDofs; ++d) {
       const int gid = elementMap[localDofs*e + d];
       ++offsets[gid + 1];
     }
-  }
+    }*/
+  offsetFill(elements,localDofs,d_elementMap,offsets);
+    
   // Aggregate to find offsets for each global dof
-  for (int i = 1; i <= globalDofs; ++i) {
+  /*for (int i = 1; i <= globalDofs; ++i) {
     offsets[i] += offsets[i - 1];
-  }
+    }*/
+  offsetsAggregate(globalDofs,offsets.ptr()+1);  
 
-  // For each global dof, fill in all local nodes that point   to it
-  for (int e = 0; e < elements; ++e) {
+  // For each global dof, fill in all local nodes that point to it
+  /*for (int e = 0; e < elements; ++e) {
     for (int d = 0; d < localDofs; ++d) {
       const int did = dof_map_is_identity?d:dof_map[d];
       const int gid = elementMap[localDofs*e + did];
@@ -58,14 +144,20 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
       indices[offsets[gid]++] = lid;
       map[lid] = gid;
     }
-  }
+    }*/
+  fillIndicesAndMap(elements,localDofs,
+                    dof_map_is_identity,
+                    d_dof_map,
+                    d_elementMap,
+                    offsets,indices,map);
 
   // We shifted the offsets vector by 1 by using it as a counter
   // Now we shift it back.
-  for (int i = globalDofs; i > 0; --i) {
+  /*for (int i = globalDofs; i > 0; --i) {
     offsets[i] = offsets[i - 1];
   }
-  offsets[0] = 0;
+  offsets[0] = 0;*/
+  offsetsShift(globalDofs,offsets);
 
   const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
   const Operator* P = GetProlongationMatrix(); assert(P);
@@ -78,13 +170,21 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
     trueCount += ((I[i + 1] - I[i]) == 1);
   }
   
-  reorderIndices = ::new RajaArray<int>(2*trueCount);
+  Array<int> h_reorderIndices(2*trueCount);
   for (int i = 0, trueIdx=0; i < mHeight; ++i) {
     if ((I[i + 1] - I[i]) == 1) {
-      reorderIndices->operator[](trueIdx++) = J[I[i]];
-      reorderIndices->operator[](trueIdx++) = i;
+      h_reorderIndices[trueIdx++] = J[I[i]];
+      h_reorderIndices[trueIdx++] = i;
     }
   }
+  
+  reorderIndices = ::new RajaArray<int>(2*trueCount);
+#ifdef __NVCC__
+  cuMemcpyHtoD((CUdeviceptr)reorderIndices,h_reorderIndices,2*trueCount*sizeof(int));
+#else
+  ::memcpy(reorderIndices->ptr(),h_reorderIndices.GetData(),2*trueCount*sizeof(int));
+#endif
+  
   restrictionOp = new RajaRestrictionOperator(R->Height(),
                                               R->Width(),
                                               reorderIndices);
