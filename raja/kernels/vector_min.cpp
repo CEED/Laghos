@@ -17,6 +17,7 @@
 
 double vector_min(const int N,
                   const double* __restrict vec) {
+  dbg();
 #if !defined(__NVCC__)
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););

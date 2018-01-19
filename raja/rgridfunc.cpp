@@ -16,6 +16,7 @@ namespace mfem {
 void RajaGridFunction::ToQuad(const bool use_share,
                               const IntegrationRule& ir,
                               RajaVector& quadValues) {
+  dbg();
   const FiniteElement& fe = *(fes.GetFE(0));
   const int dim  = fe.GetDim();
   const int vdim = fes.GetVDim();

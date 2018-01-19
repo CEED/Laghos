@@ -20,6 +20,7 @@ void vector_xpay(const int N,
                  double* __restrict v0,
                  const double* __restrict v1,
                  const double* __restrict v2) {
+  dbg();
   forall(i,N,{
     v0[i] = v1[i] + (c0 * v2[i]);
     });

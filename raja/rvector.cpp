@@ -13,19 +13,25 @@
 namespace mfem {
   
 RajaVector::~RajaVector(){
-  if (!own) return;
+  if (!own) {
+    dbg()<<"!own, nothing to do";
+   return;
+  }
+  dbg()<<"delete";
   rdbg("\033[33m[~v");
   rmalloc<double>::_delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::alloc(const size_t sz) {
+  dbg();
   rdbg("\033[33m[v");
   return (double*) rmalloc<double>::_new(sz);
 }
 
 // ***************************************************************************
 void RajaVector::SetSize(const size_t sz, const void* ptr) {
+  dbg();
   rdbg("\033[33m[size=%d, new sz=%d]\033[m",size,sz);
   own=true;
   size = sz;
@@ -40,20 +46,25 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
 }
 
 // ***************************************************************************
-RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
+RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {  dbg();
+}
 
 RajaVector::RajaVector(const RajaVector& v):
-  size(0),data(NULL),own(true) { SetSize(v.Size(), v); }
+  size(0),data(NULL),own(true) {   dbg();
+SetSize(v.Size(), v); }
 
 RajaVector::RajaVector(const RajaVectorRef& ref):
-  size(ref.v.size),data(ref.v.data),own(false) {}
+  size(ref.v.size),data(ref.v.data),own(false) {  dbg();
+}
   
 RajaVector::RajaVector(RajaArray<double>& v):
-  size(v.size()),data(v.ptr()),own(false) {}
+  size(v.size()),data(v.ptr()),own(false) {  dbg();
+}
 
 // Host 2 Device ***************************************************************
 RajaVector::RajaVector(const Vector& v):
-  size(0),data(NULL),own(false) {
+  size(0),data(NULL),own(false) {  dbg();
+
   //dbg()<<"Host 2 Device";
 #ifdef __NVCC__
   // v comes from the host
@@ -67,6 +78,7 @@ RajaVector::RajaVector(const Vector& v):
 
 // Device 2 Host ***************************************************************
 RajaVector::operator Vector() {
+  dbg();
 #ifdef __NVCC__
   //dbg()<<"Device 2 Host";
   double *h_data= (double*) ::malloc(bytes());
@@ -76,7 +88,9 @@ RajaVector::operator Vector() {
   return Vector(data,size);
 #endif
 }
+  
 RajaVector::operator Vector() const {
+  dbg();
 #ifdef __NVCC__
   //dbg()<<"Device 2 Host (const)";
   double *h_data= (double*) ::malloc(bytes());
@@ -89,6 +103,7 @@ RajaVector::operator Vector() const {
 
 // ***************************************************************************
 void RajaVector::Print(std::ostream& out, int width) const {
+  dbg();
 #ifdef __NVCC__
   //dbg()<<"Device 2 Host (const)";
   double *h_data= (double*) ::malloc(bytes());
@@ -103,6 +118,7 @@ void RajaVector::Print(std::ostream& out, int width) const {
 // ***************************************************************************
 RajaVectorRef RajaVector::GetRange(const size_t offset,
                                    const size_t entries) const {
+  dbg();
   RajaVectorRef ret;
   RajaVector& v = ret.v;
   v.data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
@@ -113,6 +129,7 @@ RajaVectorRef RajaVector::GetRange(const size_t offset,
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(const RajaVector& v) {
+  dbg();
   SetSize(v.Size(),v.data);
   own = false;
   return *this;
@@ -120,17 +137,20 @@ RajaVector& RajaVector::operator=(const RajaVector& v) {
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(double value) {
+  dbg();
   vector_op_eq(size, value, data);
   return *this;
 }
 
 // ***************************************************************************
 double RajaVector::operator*(const RajaVector& v) const {
+  dbg();
   return vector_dot(size, data, v.data);
 }
 
 // *****************************************************************************
 RajaVector& RajaVector::operator-=(const RajaVector& v) {
+  dbg();
   vector_vec_sub(size, data, v.data);
   return *this;
 }
@@ -143,12 +163,14 @@ RajaVector& RajaVector::operator+=(const RajaVector& v) {
 
 // ***************************************************************************
 RajaVector& RajaVector::operator*=(const double d) {
+  dbg();
   vector_vec_mul(size, data, d);
   return *this;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
+  dbg();
   vector_axpy(Size(),alpha, data, v.data);
   return *this;
 }
@@ -156,6 +178,7 @@ RajaVector& RajaVector::Add(const double alpha, const RajaVector& v) {
 
 // ***************************************************************************
 void RajaVector::Neg() {
+  dbg();
   vector_neg(Size(),ptr());
 }
 
@@ -163,12 +186,14 @@ void RajaVector::Neg() {
 void RajaVector::SetSubVector(const RajaArray<int> &ess_tdofs,
                               const double value,
                               const int N) {
+  dbg();
   vector_set_subvector_const(N, value, data, ess_tdofs.ptr());
 }
 
 
 // ***************************************************************************
 double RajaVector::Min() const {
+  dbg();
   return vector_min(Size(),(double*)data);
 }
 
@@ -176,6 +201,7 @@ double RajaVector::Min() const {
 // from mfem::TCGSolver<mfem::RajaVector>::Mult in linalg/solvers.hpp:224
 void add(const RajaVector& v1, const double alpha,
          const RajaVector& v2, RajaVector& out) {
+  dbg();
   vector_xpay(out.Size(),alpha,out.ptr(),v1.ptr(),v2.ptr());
 }
 
@@ -185,6 +211,7 @@ void add(const double alpha,
          const double beta,
          const RajaVector& v2,
          RajaVector& out) {
+  dbg();
   /* used in templated TRK3SSPSolver, but not here */
   assert(false);
 }
@@ -193,6 +220,7 @@ void add(const double alpha,
 void subtract(const RajaVector& v1,
               const RajaVector& v2,
               RajaVector& out) {
+  dbg();
   vector_xsy(out.Size(),out.ptr(),v1.ptr(),v2.ptr());
 }
 

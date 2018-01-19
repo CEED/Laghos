@@ -110,6 +110,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      locCG(), timer(),
      use_cuda(cuda), use_share(share)
 {
+  dbg();
    Vector rho0_ = rho0;
    GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
    GridFunctionCoefficient rho_coeff(&rho0_gf);
@@ -175,6 +176,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // *****************************************************************************
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
+  dbg();
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -183,7 +185,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
-   //dbg()<<"[LagrangianHydroOperator::Mult] UpdateQuadratureData";
+   dbg()<<"UpdateQuadratureData";
    UpdateQuadratureData(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -292,7 +294,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
-  //dbg();
+  dbg();
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
 //#ifdef __NVCC__
 //   const int xSz = H1FESpace.GetVSize();
@@ -313,11 +315,13 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
+  dbg();
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
+  dbg();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -383,7 +387,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 // *****************************************************************************
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
-  //dbg();
+  dbg();
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();
@@ -451,7 +455,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.stressJinvT,
                            quad_data.dtEst);
    quad_data.dt_est = quad_data.dtEst.Min();
-   //dbg()<<"dt_est="<< quad_data.dt_est; // dt_est=0.0153701
+   dbg()<<"dt_est="<< quad_data.dt_est; // dt_est=0.0153701
    
    quad_data_is_current = true;
    

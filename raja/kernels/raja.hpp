@@ -16,6 +16,9 @@
 #ifndef LAGHOS_RAJA_KERNELS_RAJA
 #define LAGHOS_RAJA_KERNELS_RAJA
 
+// DBG *************************************************************************
+#include "dbg.hpp"
+
 // *****************************************************************************
 #undef NDEBUG
 #include <math.h>

@@ -14,6 +14,7 @@ namespace mfem {
 
   // ***************************************************************************
   static void offsetsFlush(const int N, int *offsets){
+  dbg();
     forall(i,N,offsets[i] = 0;);
   }
 
@@ -22,6 +23,7 @@ namespace mfem {
                          const int localDofs,
                          const int *elementMap,
                          int *offsets){
+  dbg();
     forall(e,N,{
         for (int d = 0; d < localDofs; ++d) {
           const int gid = elementMap[localDofs*e + d];
@@ -32,6 +34,7 @@ namespace mfem {
   
   // ***************************************************************************
   static void offsetsAggregate(const int N, int *offsets){
+  dbg();
     forall(i,N,offsets[i]+=offsets[i-1];);
   }
 
@@ -44,7 +47,8 @@ namespace mfem {
                                 int *offsets,
                                 int *indices,
                                 int *map){
-    forall(e, elements, {
+   dbg();
+   forall(e, elements, {
         for (int d = 0; d < localDofs; ++d) {
           const int did = dof_map_is_identity?d:dof_map[d];
           const int gid = elementMap[localDofs*e + did];
@@ -57,6 +61,7 @@ namespace mfem {
   
   // ***************************************************************************
   static void offsetsShift(const int globalDofs, int *offsets){
+  dbg();
     forall(dummy,1,{
         for (int i = globalDofs; i > 0; --i) {
           offsets[i] = offsets[i - 1];
@@ -78,6 +83,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
    offsets(globalDofs+1),
    indices(localDofs, GetNE()),  
    map(localDofs, GetNE()) {
+  dbg();
   const FiniteElement *fe = GetFE(0);
   const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
   const Array<int> &dof_map = el->GetDofMap();
@@ -180,6 +186,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
 
 // ***************************************************************************
 RajaFiniteElementSpace::~RajaFiniteElementSpace() {
+  dbg();
   ::delete restrictionOp;
   ::delete prolongationOp;
   ::delete reorderIndices;
@@ -187,6 +194,7 @@ RajaFiniteElementSpace::~RajaFiniteElementSpace() {
 
 // ***************************************************************************
 bool RajaFiniteElementSpace::hasTensorBasis() const {
+  dbg();
   assert(dynamic_cast<const TensorBasisElement*>(GetFE(0)));
   return true;
 }
@@ -194,6 +202,7 @@ bool RajaFiniteElementSpace::hasTensorBasis() const {
 // ***************************************************************************
 void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                                            RajaVector& localVec) const {
+  dbg();
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -211,6 +220,7 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
 // Aggregate local node values to their respective global dofs
 void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                                            RajaVector& globalVec) const {
+  dbg();
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;

@@ -34,6 +34,7 @@ namespace mfem {
 template<class T> struct rmalloc{
   // ***************************************************************************
   static void* HoDNew(size_t n) {
+    dbg();
 #ifdef __NVCC__
     void *ptr;
     cudaMalloc(&ptr, n*sizeof(T));
@@ -47,7 +48,8 @@ template<class T> struct rmalloc{
 
   // ***************************************************************************
   void* _new(size_t n) {
-    rdbg("+]\033[m");
+    dbg();
+ rdbg("+]\033[m");
 #ifdef RAJA_USE_SIMPOOL
     return PoolType::getInstance().allocate(n*sizeof(T));
 #else
@@ -68,7 +70,8 @@ template<class T> struct rmalloc{
   
   // ***************************************************************************
   void _delete(void *ptr) {
-    rdbg("-]\033[m");
+    dbg();
+ rdbg("-]\033[m");
 #ifdef RAJA_USE_SIMPOOL
     if (ptr) PoolType::getInstance().deallocate(ptr);
 #else

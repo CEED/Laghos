@@ -32,8 +32,9 @@ class RajaRestrictionOperator : public RajaOperator {
                           const RajaArray<int> *idx):
     RajaOperator(h,w),
     entries(idx->size()>>1),
-    indices(idx){}
+    indices(idx){dbg();}
   void Mult(const RajaVector& x, RajaVector& y) const {
+    dbg();
     rExtractSubVector(entries, indices->ptr(), x, y);
   }
 };
@@ -46,13 +47,15 @@ class RajaProlongationOperator : public RajaOperator {
   const Operator* pmat = NULL;
  public:
   RajaProlongationOperator(const Operator* Op):
-    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
+    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {dbg();}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
+    dbg();
     const Vector hostX=x;
     Vector hostY=y;
     pmat->Mult(hostX, hostY);
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
+    dbg();
     const Vector hostX=x;
     Vector hostY=y;
     pmat->MultTranspose(hostX, hostY);
@@ -79,9 +82,9 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   // *************************************************************************
   bool hasTensorBasis() const;
   int GetLocalDofs() const { return localDofs; }
-  const RajaOperator* GetRestrictionOperator() { return restrictionOp; }
-  const RajaOperator* GetProlongationOperator() { return prolongationOp; }
-  const RajaArray<int>& GetLocalToGlobalMap() const { return map; }
+  const RajaOperator* GetRestrictionOperator() { dbg();return restrictionOp; }
+  const RajaOperator* GetProlongationOperator() { dbg();return prolongationOp; }
+  const RajaArray<int>& GetLocalToGlobalMap() const { dbg();return map; }
   // *************************************************************************
   void GlobalToLocal(const RajaVector&, RajaVector&) const;
   void LocalToGlobal(const RajaVector&, RajaVector&) const;

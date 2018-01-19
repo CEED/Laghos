@@ -24,14 +24,15 @@ class RajaGridFunction : public RajaVector {
  public:
   
   RajaGridFunction(const RajaFiniteElementSpace& f):
-    RajaVector(f.GetVSize()),fes(f) {}
+    RajaVector(f.GetVSize()),fes(f) {dbg();}
   
   RajaGridFunction(const RajaFiniteElementSpace& f,const RajaVectorRef ref):
-    RajaVector(ref), fes(f) {}
+    RajaVector(ref), fes(f) {dbg();}
   
   void ToQuad(const bool,const IntegrationRule&,RajaVector&);
   
   RajaGridFunction& operator=(const RajaVector& v) {
+    dbg();
     RajaVector::operator=(v);
     return *this;
   }

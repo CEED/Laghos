@@ -26,7 +26,7 @@ class RajaVector : public rmalloc<double>{
   double* data = NULL;
   bool own = true;
  public:
-  RajaVector(): size(0),data(NULL),own(true) {}
+  RajaVector(): size(0),data(NULL),own(true) {dbg();}
   RajaVector(const RajaVector&);
   RajaVector(const RajaVectorRef&);
   RajaVector(const size_t);

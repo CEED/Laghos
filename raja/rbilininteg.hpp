@@ -44,6 +44,7 @@ class RajaDofQuadMaps {
   RajaArray<double> quadWeights;
 public:
   static void delDofQuadMaps(){
+    dbg();
     rdbg("\033[31m[~delDofQuadMaps]");
     for(std::map<std::string, RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
         itr != AllDofQuadMaps.end(); itr++) delete (itr->second);
@@ -117,11 +118,11 @@ class RajaMassIntegrator : public RajaIntegrator {
 public:
   RajaMassIntegrator(const bool share,
                      const double c = 1.0):use_share(share),
-                                           coeff(c){}
-  virtual ~RajaMassIntegrator() {}
+                                           coeff(c){dbg();}
+  virtual ~RajaMassIntegrator() {dbg();}
   virtual std::string GetName() {return "MassIntegrator";}
   virtual void SetupIntegrationRule();
-  virtual void Setup() {}
+  virtual void Setup() {dbg();}
   virtual void Assemble();
   void SetOperator(RajaVector& v);
   virtual void MultAdd(RajaVector& x, RajaVector& y);

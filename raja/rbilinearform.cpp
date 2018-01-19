@@ -21,10 +21,11 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
   trialFes(fes),
   testFes(fes),
   localX(mesh->GetNE() * trialFes->GetLocalDofs() * trialFes->GetVDim()),
-  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()) { }
+  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()) { dbg(); }
 
 // *****************************************************************************
 RajaBilinearForm::~RajaBilinearForm(){
+  dbg();
   //if (rap) delete rap;
   //delete  Aout;
 }
@@ -32,27 +33,32 @@ RajaBilinearForm::~RajaBilinearForm(){
 // ***************************************************************************
 // Adds new Domain Integrator.
 void RajaBilinearForm::AddDomainIntegrator(RajaIntegrator* i) {
+  dbg();
   AddIntegrator(i, DomainIntegrator);
 }
 
 // Adds new Boundary Integrator.
 void RajaBilinearForm::AddBoundaryIntegrator(RajaIntegrator* i) {
+  dbg();
   AddIntegrator(i, BoundaryIntegrator);
 }
 
 // Adds new interior Face Integrator.
 void RajaBilinearForm::AddInteriorFaceIntegrator(RajaIntegrator* i) {
+  dbg();
   AddIntegrator(i, InteriorFaceIntegrator);
 }
 
 // Adds new boundary Face Integrator.
 void RajaBilinearForm::AddBoundaryFaceIntegrator(RajaIntegrator* i) {
+  dbg();
   AddIntegrator(i, BoundaryFaceIntegrator);
 }
 
 // Adds Integrator based on RajaIntegratorType
 void RajaBilinearForm::AddIntegrator(RajaIntegrator* i,
                                      const RajaIntegratorType itype) {
+  dbg();
   assert(i);
   i->SetupIntegrator(*this, itype);
   integrators.push_back(i);
@@ -60,6 +66,7 @@ void RajaBilinearForm::AddIntegrator(RajaIntegrator* i,
 
 // ***************************************************************************
 void RajaBilinearForm::Assemble() {
+  dbg();
   const int integratorCount = (int) integrators.size();
   for (int i = 0; i < integratorCount; ++i) {
     integrators[i]->Assemble();
@@ -72,6 +79,7 @@ void RajaBilinearForm::FormLinearSystem(const Array<int>& constraintList,
                                         RajaOperator*& Aout,
                                         RajaVector& X, RajaVector& B,
                                         int copy_interior) {
+  dbg();
   FormOperator(constraintList, Aout);
   InitRHS(constraintList, x, b, Aout, X, B, copy_interior);
 }
@@ -92,6 +100,7 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
                                RajaOperator* A,
                                RajaVector& X, RajaVector& B,
                                int copy_interior) {
+  dbg();
   const RajaOperator* P = trialFes->GetProlongationOperator();
   const RajaOperator* R = trialFes->GetRestrictionOperator();
   if (P) {
@@ -115,6 +124,7 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
 
 // ***************************************************************************
 void RajaBilinearForm::Mult(const RajaVector& x, RajaVector& y) const {
+  dbg();
   trialFes->GlobalToLocal(x, localX);
   localY = 0;
   const int integratorCount = (int) integrators.size();
@@ -126,6 +136,7 @@ void RajaBilinearForm::Mult(const RajaVector& x, RajaVector& y) const {
 
 // ***************************************************************************
 void RajaBilinearForm::MultTranspose(const RajaVector& x, RajaVector& y) const {
+  dbg();
   testFes->GlobalToLocal(x, localX);
   localY = 0;
   const int integratorCount = (int) integrators.size();
@@ -139,6 +150,7 @@ void RajaBilinearForm::MultTranspose(const RajaVector& x, RajaVector& y) const {
 void RajaBilinearForm::RecoverFEMSolution(const RajaVector& X,
                                           const RajaVector& b,
                                           RajaVector& x) {
+  dbg();
 //#warning TRecoverFEMSolution
 //  TRecoverFEMSolution<RajaVector> (X, b, x);
    const RajaOperator *P = this->GetProlongation();
@@ -159,12 +171,14 @@ RajaConstrainedOperator::RajaConstrainedOperator(RajaOperator* A_,
                                                  const Array<int>& constraintList_,
                                                  bool own_A_) :
   RajaOperator(A_->Height(), A_->Width()) {
+  dbg();
   Setup(A_, constraintList_, own_A_);
 }
 
 void RajaConstrainedOperator::Setup(RajaOperator* A_,
                                     const Array<int>& constraintList_,
                                     bool own_A_) {
+  dbg();
   A = A_;
   own_A = own_A_;
   constraintIndices = constraintList_.Size();
@@ -177,12 +191,14 @@ void RajaConstrainedOperator::Setup(RajaOperator* A_,
 
 void RajaConstrainedOperator::EliminateRHS(const RajaVector& x,
                                            RajaVector& b) const {
+  dbg();
   w = 0.0;
   A->Mult(w, z);
   b -= z;
 }
 
 void RajaConstrainedOperator::Mult(const RajaVector& x, RajaVector& y) const {
+  dbg();
   if (constraintIndices == 0) {
     A->Mult(x, y);
     return;

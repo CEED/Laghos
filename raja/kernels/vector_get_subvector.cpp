@@ -19,6 +19,7 @@ void vector_get_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
+  dbg();
   forall(i,N,{
       const int dof_i = v2[i];
       v0[i] = dof_i >= 0 ? v1[dof_i] : -v1[-dof_i-1];

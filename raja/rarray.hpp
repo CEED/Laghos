@@ -26,11 +26,11 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   T* data = NULL;
   size_t sz,d[4];
  public:
-  RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
-  RajaArray(const size_t x) {allocate(x);}
-  RajaArray(const size_t x,const size_t y) {allocate(x,y);}
+  RajaArray():data(NULL),sz(0),d{0,0,0,0} {dbg();}
+  RajaArray(const size_t x) {dbg();allocate(x);}
+  RajaArray(const size_t x,const size_t y) {dbg();allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
-  ~RajaArray(){rdbg("\033[32m[~i");rmalloc<T>::_delete(data);}
+  ~RajaArray(){dbg();rdbg("\033[32m[~i");rmalloc<T>::_delete(data);}
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
@@ -43,6 +43,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   void allocate(const size_t X, const size_t Y =1,
                 const size_t Z =1, const size_t D =1,
                 const bool transposed = false) {
+    dbg();
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     rdbg("\033[32m[i");
@@ -56,6 +57,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
     return data[x + d[0]*(y + d[1]*z)];
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
+    dbg();
 #ifdef __NVCC__
     T *h_data= (T*) ::malloc(bytes());
     checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
@@ -74,10 +76,10 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   T* data = NULL;
   size_t sz,d[DIM];
  public:
-  RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
-  RajaArray(const size_t d0) {allocate(d0);}
+  RajaArray():data(NULL),sz(0),d{0,0,0,0} {dbg();}
+  RajaArray(const size_t d0) {dbg();allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
-  ~RajaArray(){rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
+  ~RajaArray(){dbg();rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline T* GetData() const { return data; }
@@ -90,6 +92,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   void allocate(const size_t X, const size_t Y =1,
                 const size_t Z =1, const size_t D =1,
                 const bool transposed = false) {
+    dbg();
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     rdbg("\033[32m[I");
@@ -110,6 +113,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
     return data[d[0]*x + d[1]*y + d[2]*z];
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
+    dbg();
 #ifdef __NVCC__
     T *h_data= (T*) ::malloc(bytes());
     checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));

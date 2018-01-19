@@ -95,7 +95,7 @@ class RajaConstrainedOperator : public RajaOperator {
              bool own_A_ = false);
   void EliminateRHS(const RajaVector& x, RajaVector& b) const;
   virtual void Mult(const RajaVector& x, RajaVector& y) const;
-  virtual ~RajaConstrainedOperator() {}
+  virtual ~RajaConstrainedOperator() {dbg();}
 };
 
 } // mfem
