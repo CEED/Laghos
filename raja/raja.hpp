@@ -17,8 +17,8 @@
 #define LAGHOS_RAJA
 
 // DBG *************************************************************************
-//#include "dbg.hpp"
-//#define __dbg__ dbg();
+#include "dbg.hpp"
+#define __dbg__ dbg()
 
 // stdincs *********************************************************************
 #undef NDEBUG
@@ -29,6 +29,8 @@
 // __NVCC__ ********************************************************************
 #ifdef __NVCC__
 #include <cuda.h>
+#include <helper_functions.h>
+#include <helper_cuda.h>
 template <typename FORALL_BODY>
 __global__ void forall_kernel_gpu(const int length,
                                   const int step,

@@ -25,21 +25,13 @@ double vector_min(const int N,
   unsigned int v=N;
   unsigned int nBitInN=0;
   for(;v;nBitInN++) v&=v-1;
-
-  static double *red=NULL;
-  //static double *d_red=NULL;
   const int nBytes = nBitInN*sizeof(double);
-  if (!red) {
-    red=(double*)::malloc(nBytes);
-    //cudaMalloc(&d_red, nBytes);
-    //cuMemcpyHtoD(d_red,red,nBytes);
-      //cudaMallocManaged(&red, nBitInN*sizeof(double), cudaMemAttachGlobal);
-      //cudaDeviceSynchronize();
-  }
+  static double *red=NULL;
+  if (!red) red=(double*)::malloc(nBytes);
   
-  for(int i=0;i<nBitInN;i+=1) red[i]= +__builtin_inff();//vec[0];
-  //cuMemcpyHtoD((CUdeviceptr)d_red,red,nBytes);
-  //cudaDeviceSynchronize();
+  double h_vec0;
+  checkCudaErrors(cudaMemcpy(&h_vec0,&vec[0],1*sizeof(double),cudaMemcpyDeviceToHost));
+  for(int i=0;i<nBitInN;i+=1) red[i] = h_vec0;
   
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;

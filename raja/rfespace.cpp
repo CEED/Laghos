@@ -83,8 +83,8 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   const Array<int> &dof_map = el->GetDofMap();
   const size_t dmSize = dof_map.Size();
 #ifdef __NVCC__
-  const int *d_dof_map=(int*) rmalloc<int>::HoDNew(dmSize);
-  cuMemcpyHtoD((CUdeviceptr)d_dof_map,dof_map,dmSize*sizeof(int));
+  int *d_dof_map=(int*) rmalloc<int>::HoDNew(dmSize);
+  checkCudaErrors(cudaMemcpy(d_dof_map,dof_map,dmSize*sizeof(int),cudaMemcpyHostToDevice));
 #else
   const int *d_dof_map=dof_map;
 #endif
@@ -96,8 +96,8 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
 
   const size_t eMapSize = elements*localDofs;
 #ifdef __NVCC__
-  const int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
-  cuMemcpyHtoD((CUdeviceptr)d_elementMap,elementMap,eMapSize*sizeof(int));
+  int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
+  checkCudaErrors(cudaMemcpy(d_elementMap,elementMap,eMapSize*sizeof(int),cudaMemcpyHostToDevice));
 #else
   const int *d_elementMap=elementMap;
 #endif
@@ -167,7 +167,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   
   reorderIndices = ::new RajaArray<int>(2*trueCount);
 #ifdef __NVCC__
-  cuMemcpyHtoD((CUdeviceptr)reorderIndices,h_reorderIndices,2*trueCount*sizeof(int));
+  checkCudaErrors(cudaMemcpy(reorderIndices->ptr(),h_reorderIndices,2*trueCount*sizeof(int),cudaMemcpyHostToDevice));
 #else
   ::memcpy(reorderIndices->ptr(),h_reorderIndices.GetData(),2*trueCount*sizeof(int));
 #endif

@@ -87,19 +87,30 @@ RajaGeometry::~RajaGeometry(){
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
-  printf("\n[RajaGeometry] Get!\n");
+  dbg();
   geom=new RajaGeometry();
   Mesh& mesh = *(fes.GetMesh());
   if (!mesh.GetNodes()) {
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   }
   GridFunction& nodes = *(mesh.GetNodes());
+  
+  dbg()<<"nodes:";
+  nodes.Print();
+  cuInit(0);
+  for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,nodes.GetData()[i]);
 #ifdef __NVCC__
-  const double *d_nodes=(double*) rmalloc<double>::HoDNew(nodes.Size());
-  cuMemcpyHtoD((CUdeviceptr)d_nodes,nodes.GetData(),nodes.Size()*sizeof(double));
+#warning __NVCC__
+  double *h_nodes=(double*) ::malloc(nodes.Size()*sizeof(double));
+  double *d_nodes=(double*) rmalloc<double>::HoDNew(nodes.Size());
+  checkCudaErrors(cudaMemcpy(d_nodes,nodes.GetData(),nodes.Size()*sizeof(double),cudaMemcpyHostToDevice));
 #else
   const double *d_nodes=nodes.GetData();
 #endif
+  dbg()<<"d_nodes:";
+  checkCudaErrors(cudaMemcpy((void*)h_nodes,d_nodes,nodes.Size()*sizeof(double),cudaMemcpyDeviceToHost));
+  for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,h_nodes[i]);
+  dbg()<<"done";
 
   const FiniteElementSpace& fespace = *(nodes.FESpace());
   const FiniteElement& fe = *(fespace.GetFE(0));
@@ -110,10 +121,10 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   //Ordering::Type originalOrdering = fespace.GetOrdering();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
   if (orderedByNODES) {
-    printf("\norderedByNODES => ReorderByVDim");
+    //printf("\norderedByNODES => ReorderByVDim");
     ReorderByVDim(nodes);
 #ifdef __NVCC__
-    cuMemcpyHtoD((CUdeviceptr)d_nodes,nodes.GetData(),nodes.Size()*sizeof(double));
+    checkCudaErrors(cudaMemcpy(d_nodes,nodes.GetData(),nodes.Size()*sizeof(double),cudaMemcpyHostToDevice));
 #endif
   }
   geom->meshNodes.allocate(dims, numDofs, elements);
@@ -122,7 +133,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const size_t eMapSize = elements*numDofs;
 #ifdef __NVCC__
   const int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
-  cuMemcpyHtoD((CUdeviceptr)d_elementMap,elementMap,eMapSize*sizeof(int));
+  checkCudaErrors(cudaMemcpy(d_elementMap,elementMap,eMapSize*sizeof(int),cudaMemcpyHostToDevice));
 #else
   const int *d_elementMap=elementMap;
 #endif
@@ -135,17 +146,18 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
       }
     }
     }*/
-  printf("\ngeomMeshNodes");
+  //printf("\ngeomMeshNodes");
   geomMeshNodes(elements,numDofs,dims,
                 geom->meshNodes.dim(),
                 d_elementMap,
                 d_nodes,
                 geom->meshNodes);
+  geom->meshNodes.Print();
   
   // Reorder the original gf back
   if (orderedByNODES){
     //nodes.ReorderByNodes();
-    printf("\norderedByNODES => ReorderByNodes");
+    //printf("\norderedByNODES => ReorderByNodes");
     ReorderByNodes(nodes);
   }
 
@@ -155,12 +167,12 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   assert(maps);
   rIniGeom(dims,numDofs,numQuad,elements,
-           maps->dofToQuadD.ptr(),
-           geom->meshNodes.ptr(),
-           geom->J.ptr(),
-           geom->invJ.ptr(),
-           geom->detJ.ptr());
-  printf("\n[RajaGeometry::Get] done\n");
+           maps->dofToQuadD,
+           geom->meshNodes,
+           geom->J,
+           geom->invJ,
+           geom->detJ);
+  //printf("\n[RajaGeometry::Get] done\n");
   return geom;
 }
 
@@ -275,11 +287,11 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   mfem::Vector d2q(dofs);
   mfem::Vector d2qD(dofs);
 #ifdef __NVCC__
-  const double *d_d2q=(double*) rmalloc<double>::HoDNew(dofs);
-  const double *d_d2qD=(double*) rmalloc<double>::HoDNew(dofs);
+  double *d_d2q=(double*) rmalloc<double>::HoDNew(dofs);
+  double *d_d2qD=(double*) rmalloc<double>::HoDNew(dofs);
 #else
-  const double *d_d2q=d2q;
-  const double *d_d2qD=d2qD;
+  double *d_d2q=d2q;
+  double *d_d2qD=d2qD;
 #endif
 
   for (int q = 0; q < quadPoints; ++q) {
@@ -293,8 +305,9 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       maps->dofToQuadD(q, d) = d2qD[d];
       }*/
 #ifdef __NVCC__
-    cuMemcpyHtoD((CUdeviceptr)d_d2q,d2q,dofs*sizeof(int));
-    cuMemcpyHtoD((CUdeviceptr)d_d2qD,d2qD,dofs*sizeof(int));
+    for (int d = 0; d < dofs; ++d) printf("\n\td2q[%d/%d]=%f",d,dofs,d2q[d]);
+    checkCudaErrors(cudaMemcpy(d_d2q,d2q.GetData(),dofs*sizeof(double),cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_d2qD,d2qD.GetData(),dofs*sizeof(double),cudaMemcpyHostToDevice));
 #endif
     mapsDofToQuad(dofs,q,d_d2q,d_d2qD,maps->dofToQuad.dim(),maps->dofToQuad,maps->dofToQuadD);
   }

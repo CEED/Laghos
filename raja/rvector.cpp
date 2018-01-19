@@ -31,7 +31,8 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   size = sz;
   if (!data) { data = alloc(sz); }
 #ifdef __NVCC__
-  if (ptr) { cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes());}
+  //cudaMemcpyPeer ( void* dst, int  dstDevice, const void* src, int  srcDevice, size_t count ) 
+  if (ptr) { checkCudaErrors(cudaMemcpyPeer(data,0,ptr,0,bytes()));}
 #else
   if (ptr) { ::memcpy(data,ptr,bytes());}
 #endif
@@ -45,21 +46,57 @@ RajaVector::RajaVector(const RajaVector& v):
 
 RajaVector::RajaVector(const RajaVectorRef& ref):
   size(ref.v.size),data(ref.v.data),own(false) {}
-
-RajaVector::RajaVector(const Vector& v):
-  size(0),data(NULL),own(false) { SetSize(v.Size(), v.GetData()); }
-
+  
 RajaVector::RajaVector(RajaArray<double>& v):
   size(v.size()),data(v.ptr()),own(false) {}
 
-// ***************************************************************************
-RajaVector::operator Vector() { return Vector(data,size); }
-RajaVector::operator Vector() const { return Vector(data,size); }
+// Host 2 Device ***************************************************************
+RajaVector::RajaVector(const Vector& v):
+  size(0),data(NULL),own(false) {
+  //dbg()<<"Host 2 Device";
+#ifdef __NVCC__
+  // v comes from the host
+  double* d_v= (double*)rmalloc<double>::HoDNew(v.Size());
+  checkCudaErrors(cudaMemcpy(d_v,v.GetData(),v.Size()*sizeof(double),cudaMemcpyHostToDevice));
+  SetSize(v.Size(), (void*)d_v/*v.GetData()*/);
+#else
+  SetSize(v.Size(), v.GetData());  
+#endif
+}
+
+// Device 2 Host ***************************************************************
+RajaVector::operator Vector() {
+#ifdef __NVCC__
+  //dbg()<<"Device 2 Host";
+  double *h_data= (double*) ::malloc(bytes());
+  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
+  return Vector(h_data,size);
+#else
+  return Vector(data,size);
+#endif
+}
+RajaVector::operator Vector() const {
+#ifdef __NVCC__
+  //dbg()<<"Device 2 Host (const)";
+  double *h_data= (double*) ::malloc(bytes());
+  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
+  return Vector(h_data,size);
+#else
+  return Vector(data,size);
+#endif
+}
 
 // ***************************************************************************
 void RajaVector::Print(std::ostream& out, int width) const {
+#ifdef __NVCC__
+  //dbg()<<"Device 2 Host (const)";
+  double *h_data= (double*) ::malloc(bytes());
+  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyHostToDevice));
+#else
+  double *h_data=data;
+#endif
   for (size_t i=0; i<size; i+=1) 
-    printf("\n\t[%ld] %.15e",i,data[i]);
+    printf("\n\t[%ld] %.15e",i,h_data[i]);
 }
 
 // ***************************************************************************

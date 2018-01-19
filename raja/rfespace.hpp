@@ -48,13 +48,13 @@ class RajaProlongationOperator : public RajaOperator {
   RajaProlongationOperator(const Operator* Op):
     RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
-    const Vector hostX(x.ptr(), x.Size());
-    Vector hostY(y.ptr(), y.Size());
+    const Vector hostX=x;
+    Vector hostY=y;
     pmat->Mult(hostX, hostY);
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
-    const Vector hostX(x.ptr(), x.Size());
-    Vector hostY(y.ptr(), y.Size());
+    const Vector hostX=x;
+    Vector hostY=y;
     pmat->MultTranspose(hostX, hostY);
   }
 };

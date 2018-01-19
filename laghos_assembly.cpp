@@ -101,7 +101,11 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) return;
   ess_tdofs.allocate(ess_tdofs_count);
+#ifdef __NVCC__
+  cudaMemcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int),cudaMemcpyHostToDevice);
+#else
   ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+#endif
 }
 
 // *****************************************************************************

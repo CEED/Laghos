@@ -147,12 +147,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
 
+   quad_data.geom->detJ.Print();
    rInitQuadratureData(NUM_QUAD,
                        nzones,
-                       (const double*)rhoValues.ptr(),
-                       (const double*)quad_data.geom->detJ.ptr(),
-                       (const double*)quad_data.dqMaps->quadWeights.ptr(),
-                       (double*)quad_data.rho0DetJ0w.ptr());
+                       rhoValues,
+                       quad_data.geom->detJ,
+                       quad_data.dqMaps->quadWeights,
+                       quad_data.rho0DetJ0w);
 
    // Needs quad_data.rho0DetJ0w
    ForcePA.Setup();
@@ -439,8 +440,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.geom->detJ,
                            quad_data.stressJinvT,
                            quad_data.dtEst);
-   
    quad_data.dt_est = quad_data.dtEst.Min();
+   dbg()<<"[UpdateQuadratureData] dt_est="<< quad_data.dt_est; // dt_est=0.0153701
    
    quad_data_is_current = true;
    

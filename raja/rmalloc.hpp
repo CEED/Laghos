@@ -37,6 +37,8 @@ template<class T> struct rmalloc{
 #ifdef __NVCC__
     void *ptr;
     cudaMalloc(&ptr, n*sizeof(T));
+    // cudaMemcpyHostToDevice cudaMemcpyDeviceToHost
+    //cudaDeviceSynchronize();
     return ptr;
 #else // __NVCC__
     return new T[n];
