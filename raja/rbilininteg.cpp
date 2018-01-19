@@ -29,52 +29,78 @@ RajaGeometry::~RajaGeometry(){
   delete[] geom;
 }
 
-// *****************************************************************************
-void RajaGeometry::ReorderByVDim(GridFunction& nodes){
-  const FiniteElementSpace *fes=nodes.FESpace();
-  const int size = nodes.Size();
-  const int vdim = fes->GetVDim();
-  const int ndofs = fes->GetNDofs();
-  double *data = nodes.GetData();
-  double *temp = new double[size];
-  int k=0;
-  for (int j = 0; j < ndofs; j++)
-    for (int i = 0; i < vdim; i++){
-      temp[k++] = data[j+i*ndofs];
-    }
-  for (int i = 0; i < size; i++)
-    data[i] = temp[i];
-  delete [] temp;
-}
-
-// *****************************************************************************
-void RajaGeometry::ReorderByNodes(GridFunction& nodes){
-  const FiniteElementSpace *fes=nodes.FESpace();
-  const int size = nodes.Size();
-  const int vdim = fes->GetVDim();
-  const int ndofs = fes->GetNDofs();
-  double *data = nodes.GetData();
-  double *temp = new double[size];
-  int k = 0;
-  for (int j = 0; j < ndofs; j++)
-    for (int i = 0; i < vdim; i++){
-      temp[j+i*ndofs] = data[k++];
-    }
-  for (int i = 0; i < size; i++){
-    data[i] = temp[i];
+  // ***************************************************************************
+  void RajaGeometry::ReorderByVDim(GridFunction& nodes){
+    const FiniteElementSpace *fes=nodes.FESpace();
+    const int size = nodes.Size();//printf("\n[ReorderByVDim] size=%d\n",size);
+    const int vdim = fes->GetVDim();
+    const int ndofs = fes->GetNDofs();
+    double *data = nodes.GetData();//assert(data);
+    double *temp = new double[size];
+    int k=0;
+    for (int j = 0; j < ndofs; j++)
+      for (int i = 0; i < vdim; i++){
+        temp[k++] = data[j+i*ndofs];
+      }
+    for (int i = 0; i < size; i++)
+      data[i] = temp[i];
+    delete [] temp;
   }
-  delete [] temp;
-}
+
+  // ***************************************************************************
+  void RajaGeometry::ReorderByNodes(GridFunction& nodes){
+    const FiniteElementSpace *fes=nodes.FESpace();
+    const int size = nodes.Size();//printf("\n[ReorderByNodes] size=%d",size);
+    const int vdim = fes->GetVDim();
+    const int ndofs = fes->GetNDofs();
+    double *data = nodes.GetData();//assert(data);
+    double *temp = new double[size];
+    int k = 0;
+    for (int j = 0; j < ndofs; j++)
+      for (int i = 0; i < vdim; i++){
+        temp[j+i*ndofs] = data[k++];
+      }
+    for (int i = 0; i < size; i++){
+      data[i] = temp[i];
+    }
+    delete [] temp;
+  }
+  
+  // ***************************************************************************
+  static void geomMeshNodes(const int elements,
+                            const int numDofs,
+                            const int dims,
+                            const size_t *d,
+                            const int *elementMap,
+                            const double *nodes,
+                            double *meshNodes){
+    forall(e,elements,{
+        for (int dof = 0; dof < numDofs; ++dof) {
+          const int gid = elementMap[dof + numDofs*e];
+          for (int dim = 0; dim < dims; ++dim) {
+            meshNodes[dim + d[0]*(dof + d[1]*e)] = nodes[dim + gid*dims];
+          }
+        }
+      });
+  }
 
 // *****************************************************************************
-RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
-                               const IntegrationRule& ir) {
+RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
+                                const IntegrationRule& ir) {
+  printf("\n[RajaGeometry] Get!\n");
   geom=new RajaGeometry();
-  Mesh& mesh = *(ofespace.GetMesh());
+  Mesh& mesh = *(fes.GetMesh());
   if (!mesh.GetNodes()) {
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   }
   GridFunction& nodes = *(mesh.GetNodes());
+#ifdef __NVCC__
+  const double *d_nodes=(double*) rmalloc<double>::HoDNew(nodes.Size());
+  cuMemcpyHtoD((CUdeviceptr)d_nodes,nodes.GetData(),nodes.Size()*sizeof(double));
+#else
+  const double *d_nodes=nodes.GetData();
+#endif
+
   const FiniteElementSpace& fespace = *(nodes.FESpace());
   const FiniteElement& fe = *(fespace.GetFE(0));
   const int dims     = fe.GetDim();
@@ -84,22 +110,42 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
   //Ordering::Type originalOrdering = fespace.GetOrdering();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
   if (orderedByNODES) {
+    printf("\norderedByNODES => ReorderByVDim");
     ReorderByVDim(nodes);
+#ifdef __NVCC__
+    cuMemcpyHtoD((CUdeviceptr)d_nodes,nodes.GetData(),nodes.Size()*sizeof(double));
+#endif
   }
   geom->meshNodes.allocate(dims, numDofs, elements);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
-  for (int e = 0; e < elements; ++e) {
+  const size_t eMapSize = elements*numDofs;
+#ifdef __NVCC__
+  const int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
+  cuMemcpyHtoD((CUdeviceptr)d_elementMap,elementMap,eMapSize*sizeof(int));
+#else
+  const int *d_elementMap=elementMap;
+#endif
+
+  /*for (int e = 0; e < elements; ++e) {
     for (int dof = 0; dof < numDofs; ++dof) {
       const int gid = elementMap[dof + numDofs*e];
       for (int dim = 0; dim < dims; ++dim) {
         geom->meshNodes(dim, dof, e) = nodes[dim + gid*dims];
       }
     }
-  }
+    }*/
+  printf("\ngeomMeshNodes");
+  geomMeshNodes(elements,numDofs,dims,
+                geom->meshNodes.dim(),
+                d_elementMap,
+                d_nodes,
+                geom->meshNodes);
+  
   // Reorder the original gf back
   if (orderedByNODES){
     //nodes.ReorderByNodes();
+    printf("\norderedByNODES => ReorderByNodes");
     ReorderByNodes(nodes);
   }
 
@@ -114,6 +160,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& ofespace,
            geom->J.ptr(),
            geom->invJ.ptr(),
            geom->detJ.ptr());
+  printf("\n[RajaGeometry::Get] done\n");
   return geom;
 }
 
@@ -177,6 +224,29 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
   maps->quadWeights = testMaps->quadWeights;
   return maps;
 }
+  
+  // ***************************************************************************
+  static void mapsDofToQuad(const int dofs,
+                            const int q,
+                            const double *d2q,
+                            const double *d2qD,
+                            const size_t *DIM,
+                            double *dofToQuad,
+                            double *dofToQuadD){
+    forall(d, dofs, {
+        dofToQuad[DIM[0]*q + DIM[1]*d] = d2q[d];
+        dofToQuadD[DIM[0]*q + DIM[1]*d] = d2qD[d];
+      });
+  }
+  
+  // ***************************************************************************
+  static void mapsQuadWeight(const double w,
+                             const int q,
+                             double *quadWeights){
+    forall(dummy,1, {
+        quadWeights[q] = w;
+      });
+  }
 
 // ***************************************************************************
 RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
@@ -204,16 +274,29 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   }
   mfem::Vector d2q(dofs);
   mfem::Vector d2qD(dofs);
+#ifdef __NVCC__
+  const double *d_d2q=(double*) rmalloc<double>::HoDNew(dofs);
+  const double *d_d2qD=(double*) rmalloc<double>::HoDNew(dofs);
+#else
+  const double *d_d2q=d2q;
+  const double *d_d2qD=d2qD;
+#endif
+
   for (int q = 0; q < quadPoints; ++q) {
     const IntegrationPoint& ip = ir1D.IntPoint(q);
     basis.Eval(ip.x, d2q, d2qD);
     if (transpose) {
       quadWeights1DData[q] = ip.weight;
     }
-    for (int d = 0; d < dofs; ++d) {
+    /*for (int d = 0; d < dofs; ++d) {
       maps->dofToQuad(q, d)  = d2q[d];
       maps->dofToQuadD(q, d) = d2qD[d];
-    }
+      }*/
+#ifdef __NVCC__
+    cuMemcpyHtoD((CUdeviceptr)d_d2q,d2q,dofs*sizeof(int));
+    cuMemcpyHtoD((CUdeviceptr)d_d2qD,d2qD,dofs*sizeof(int));
+#endif
+    mapsDofToQuad(dofs,q,d_d2q,d_d2qD,maps->dofToQuad.dim(),maps->dofToQuad,maps->dofToQuadD);
   }
   if (transpose) {
     for (int q = 0; q < quadPointsND; ++q) {
@@ -227,7 +310,8 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       if (dims > 2) {
         w *= quadWeights1DData[qz];
       }
-      maps->quadWeights[q] = w;
+      //maps->quadWeights[q] = w;
+      mapsQuadWeight(w,q,maps->quadWeights);
     }
     ::delete [] quadWeights1DData;
   }
@@ -270,6 +354,39 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
   return maps;
 }
 
+  // ***************************************************************************
+  static void mapsQuadWeights(const double value,
+                              const int q,
+                              double *quadWeights){
+    forall(dummy,1, {
+        quadWeights[q] = value;
+      });
+  }
+  
+  // ***************************************************************************
+  static void mapsDofToQuad(const double value,
+                            const size_t *D,
+                            const int q,
+                            const int d,
+                            double *dofToQuad){
+    forall(dummy,1, {
+        dofToQuad[D[0]*q + D[1]*d] = value;
+      });
+  }
+  
+  // ***************************************************************************
+  static void mapsDofToQuadD(const double value,
+                             const size_t *D,
+                             const int dim,
+                             const int q,
+                             const int d,
+                             double *dofToQuadD){
+//#warning must be an RajaArray<T,false>
+    forall(dummy,1, {
+        dofToQuadD[D[0]*dim + D[1]*q + D[2]*d] = value;
+      });
+  }
+
 // ***************************************************************************
 RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
                                                    const IntegrationRule& ir,
@@ -290,16 +407,19 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
   for (int q = 0; q < numQuad; ++q) {
     const IntegrationPoint& ip = ir.IntPoint(q);
     if (transpose) {
-      maps->quadWeights[q] = ip.weight;
+      //maps->quadWeights[q] = ip.weight;
+      mapsQuadWeights(ip.weight,q,maps->quadWeights);
     }
     fe.CalcShape(ip, d2q);
     fe.CalcDShape(ip, d2qD);
     for (int d = 0; d < numDofs; ++d) {
       const double w = d2q[d];
-      maps->dofToQuad(q, d) = w;
+      //maps->dofToQuad(q, d) = w;
+      mapsDofToQuad(w,maps->dofToQuad.dim(),q,d,maps->dofToQuad);
       for (int dim = 0; dim < dims; ++dim) {
         const double wD = d2qD(d, dim);
-        maps->dofToQuadD(dim, q, d) = wD;
+        //maps->dofToQuadD(dim, q, d) = wD;
+        mapsDofToQuadD(wD,maps->dofToQuadD.dim(),dim,q,d,maps->dofToQuadD);
       }
     }
   }

@@ -33,6 +33,17 @@ namespace mfem {
 // *****************************************************************************
 template<class T> struct rmalloc{
   // ***************************************************************************
+  static void* HoDNew(size_t n) {
+#ifdef __NVCC__
+    void *ptr;
+    cudaMalloc(&ptr, n*sizeof(T));
+    return ptr;
+#else // __NVCC__
+    return new T[n];
+#endif 
+  }
+
+  // ***************************************************************************
   void* _new(size_t n) {
     rdbg("+]\033[m");
 #ifdef RAJA_USE_SIMPOOL
@@ -41,7 +52,7 @@ template<class T> struct rmalloc{
     if (!is_managed) return new T[n];
 #ifdef __NVCC__
     void *ptr;
-#warning cudaMalloc(Managed)
+//#warning cudaMalloc(Managed)
     //cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
     cudaMalloc(&ptr, n*sizeof(T));
     return ptr;

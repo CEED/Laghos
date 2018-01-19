@@ -13,19 +13,6 @@
 namespace mfem {
 
   // ***************************************************************************
-  template<class T> struct _rmalloc{
-    static void* _new(size_t n) {
-#ifdef __NVCC__
-      void *ptr;
-      cudaMalloc(&ptr, n*sizeof(T));
-      return ptr;
-#else // __NVCC__
-      return new T[n];
-#endif 
-    }
-  };
-
-  // ***************************************************************************
   static void offsetsFlush(const int N, int *offsets){
     forall(i,N,offsets[i] = 0;);
   }
@@ -96,7 +83,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   const Array<int> &dof_map = el->GetDofMap();
   const size_t dmSize = dof_map.Size();
 #ifdef __NVCC__
-  const int *d_dof_map=(int*) _rmalloc<int>::_new(dmSize);
+  const int *d_dof_map=(int*) rmalloc<int>::HoDNew(dmSize);
   cuMemcpyHtoD((CUdeviceptr)d_dof_map,dof_map,dmSize*sizeof(int));
 #else
   const int *d_dof_map=dof_map;
@@ -109,7 +96,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
 
   const size_t eMapSize = elements*localDofs;
 #ifdef __NVCC__
-  const int *d_elementMap=(int*) _rmalloc<int>::_new(eMapSize);
+  const int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
   cuMemcpyHtoD((CUdeviceptr)d_elementMap,elementMap,eMapSize*sizeof(int));
 #else
   const int *d_elementMap=elementMap;

@@ -31,6 +31,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
   ~RajaArray(){rdbg("\033[32m[~i");rmalloc<T>::_delete(data);}
+  inline size_t* dim() { return d; }
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
@@ -67,6 +68,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
   ~RajaArray(){rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
+  inline size_t* dim() { return d; }
   inline T* ptr() { return data; }
   inline T* GetData() const { return data; }
   inline const T* ptr() const { return data; }
