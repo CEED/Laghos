@@ -134,7 +134,8 @@ __global__ void cuReduceSum(const double *g_i1data,
 void reduceSum(int size,
                const double *d_i1data, const double *d_i2data,
                double *d_odata){
-  /*static*/ int threads=1024, blocks=1;
+  int threads=1024, blocks=1;
+  //static int threads=0, blocks=0;
   if (threads==0 && blocks==0){
     //printf("\n\033[33m[reduceSum] Setup(size=%d): ",size);  
     cuSetup(0,size,threads,blocks);
@@ -154,7 +155,7 @@ void reduceSum(int size,
   //for(int i=0;i<size;i+=1) { printf(" [%f]",d_i1data[i]); }
   //printf("\n[reduceSum] d_i2data:");
   //for(int i=0;i<size;i+=1) { printf(" [%f]",d_i2data[i]); }
-  
+
   cudaLaunchCooperativeKernel((void*)cuReduceSum,
                               dimGrid, dimBlock,
                               kernelArgs, smemSize, NULL);
@@ -229,10 +230,13 @@ __global__ void cuReduceMin(const double *g_idata,
 
 // *****************************************************************************
 void reduceMin(int size, const double *d_idata, double *d_odata){
-  /*static*/ int threads=1024, blocks=1;
+  int threads=1024, blocks=1;
+  //static int threads=0, blocks=0;
+  //static int threads=0, blocks=0;
+  //int threads=0, blocks=0;
   if (threads==0 && blocks==0){
-    //printf("\033[32m\n[reduceMin] Setup: ");
     cuSetup(0,size,threads,blocks);
+    printf("\033[32;1m\n[reduceMin] Setup: threads=%d, blocks=%d\n\033[m",threads,blocks);
   }
   const dim3 dimBlock(threads, 1, 1);
   const dim3 dimGrid(blocks, 1, 1);
@@ -246,10 +250,7 @@ void reduceMin(int size, const double *d_idata, double *d_odata){
   
   //printf("\n\033[32m[reduceMin] [#t=%d,#b=%d] t_idata:\033[m", threads,blocks);
   //for(int i=0;i<size;i+=1) printf(" [%f]",d_idata[i]);
-
-  cudaLaunchCooperativeKernel((void*)cuReduceMin,
-                              dimGrid, dimBlock,
-                              kernelArgs, smemSize, NULL);
+  cudaLaunchCooperativeKernel((void*)cuReduceMin,dimGrid, dimBlock,kernelArgs, smemSize, NULL);
   cudaDeviceSynchronize();
-  //printf("\033[32m[reduceMin] d_odata[0]=%f\n\033[m",d_odata[0]);
+ //printf("\033[32m[reduceMin] d_odata[0]=%f\n\033[m",d_odata[0]);
 }

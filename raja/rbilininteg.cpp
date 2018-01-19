@@ -70,7 +70,8 @@ RajaGeometry::~RajaGeometry(){
   static void geomMeshNodes(const int elements,
                             const int numDofs,
                             const int dims,
-                            const size_t *d,
+                            const size_t d0,
+                            const size_t d1,
                             const int *elementMap,
                             const double *nodes,
                             double *meshNodes){
@@ -78,7 +79,7 @@ RajaGeometry::~RajaGeometry(){
         for (int dof = 0; dof < numDofs; ++dof) {
           const int gid = elementMap[dof + numDofs*e];
           for (int dim = 0; dim < dims; ++dim) {
-            meshNodes[dim + d[0]*(dof + d[1]*e)] = nodes[dim + gid*dims];
+            meshNodes[dim + d0*(dof + d1*e)] = nodes[dim + gid*dims];
           }
         }
       });
@@ -87,7 +88,7 @@ RajaGeometry::~RajaGeometry(){
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
-  dbg();
+  //dbg();
   geom=new RajaGeometry();
   Mesh& mesh = *(fes.GetMesh());
   if (!mesh.GetNodes()) {
@@ -95,22 +96,21 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   }
   GridFunction& nodes = *(mesh.GetNodes());
   
-  dbg()<<"nodes:";
-  nodes.Print();
-  cuInit(0);
-  for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,nodes.GetData()[i]);
+  //dbg()<<"nodes:";
+  //nodes.Print();
+  //for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,nodes.GetData()[i]);
 #ifdef __NVCC__
-#warning __NVCC__
+//#warning __NVCC__
   double *h_nodes=(double*) ::malloc(nodes.Size()*sizeof(double));
   double *d_nodes=(double*) rmalloc<double>::HoDNew(nodes.Size());
   checkCudaErrors(cudaMemcpy(d_nodes,nodes.GetData(),nodes.Size()*sizeof(double),cudaMemcpyHostToDevice));
 #else
   const double *d_nodes=nodes.GetData();
 #endif
-  dbg()<<"d_nodes:";
-  checkCudaErrors(cudaMemcpy((void*)h_nodes,d_nodes,nodes.Size()*sizeof(double),cudaMemcpyDeviceToHost));
-  for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,h_nodes[i]);
-  dbg()<<"done";
+  //dbg()<<"d_nodes:";
+  //checkCudaErrors(cudaMemcpy((void*)h_nodes,d_nodes,nodes.Size()*sizeof(double),cudaMemcpyDeviceToHost));
+  //for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,h_nodes[i]);
+  //dbg()<<"done";
 
   const FiniteElementSpace& fespace = *(nodes.FESpace());
   const FiniteElement& fe = *(fespace.GetFE(0));
@@ -132,7 +132,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const int* elementMap = e2dTable.GetJ();
   const size_t eMapSize = elements*numDofs;
 #ifdef __NVCC__
-  const int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
+  int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
   checkCudaErrors(cudaMemcpy(d_elementMap,elementMap,eMapSize*sizeof(int),cudaMemcpyHostToDevice));
 #else
   const int *d_elementMap=elementMap;
@@ -148,11 +148,13 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
     }*/
   //printf("\ngeomMeshNodes");
   geomMeshNodes(elements,numDofs,dims,
-                geom->meshNodes.dim(),
+                geom->meshNodes.dim()[0],
+                geom->meshNodes.dim()[1],
                 d_elementMap,
                 d_nodes,
                 geom->meshNodes);
-  geom->meshNodes.Print();
+  //dbg()<<"geom->meshNodes.Print():";
+  //geom->meshNodes.Print();
   
   // Reorder the original gf back
   if (orderedByNODES){
@@ -238,23 +240,24 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
 }
   
   // ***************************************************************************
-  static void mapsDofToQuad(const int dofs,
-                            const int q,
-                            const double *d2q,
-                            const double *d2qD,
-                            const size_t *DIM,
-                            double *dofToQuad,
-                            double *dofToQuadD){
+  static void mapsTensorDofToQuad(const int dofs,
+                                  const int q,
+                                  const double *d2q,
+                                  const double *d2qD,
+                                  const size_t dim0,const size_t dim1,
+                                  double *dofToQuad,
+                                  const size_t dim0D,const size_t dim1D,
+                                  double *dofToQuadD){
     forall(d, dofs, {
-        dofToQuad[DIM[0]*q + DIM[1]*d] = d2q[d];
-        dofToQuadD[DIM[0]*q + DIM[1]*d] = d2qD[d];
+        dofToQuad[dim0*q + dim1*d] = d2q[d];
+        dofToQuadD[dim0D*q + dim1D*d] = d2qD[d];
       });
   }
   
   // ***************************************************************************
-  static void mapsQuadWeight(const double w,
-                             const int q,
-                             double *quadWeights){
+  static void mapsTensorQuadWeight(const double w,
+                                   const int q,
+                                   double *quadWeights){
     forall(dummy,1, {
         quadWeights[q] = w;
       });
@@ -284,7 +287,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
     maps->quadWeights.allocate(quadPointsND);
     quadWeights1DData = ::new double[quadPoints];
   }
-  mfem::Vector d2q(dofs);
+  mfem::Vector d2q(dofs); 
   mfem::Vector d2qD(dofs);
 #ifdef __NVCC__
   double *d_d2q=(double*) rmalloc<double>::HoDNew(dofs);
@@ -305,11 +308,17 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       maps->dofToQuadD(q, d) = d2qD[d];
       }*/
 #ifdef __NVCC__
-    for (int d = 0; d < dofs; ++d) printf("\n\td2q[%d/%d]=%f",d,dofs,d2q[d]);
+    //for (int d = 0; d < dofs; ++d) printf("\n\td2q[%d/%d]=%f",d,dofs,d2q[d]);
     checkCudaErrors(cudaMemcpy(d_d2q,d2q.GetData(),dofs*sizeof(double),cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_d2qD,d2qD.GetData(),dofs*sizeof(double),cudaMemcpyHostToDevice));
 #endif
-    mapsDofToQuad(dofs,q,d_d2q,d_d2qD,maps->dofToQuad.dim(),maps->dofToQuad,maps->dofToQuadD);
+    mapsTensorDofToQuad(dofs,q,
+                        d_d2q,
+                        d_d2qD,
+                        maps->dofToQuad.dim()[0], maps->dofToQuad.dim()[1],
+                        maps->dofToQuad,
+                        maps->dofToQuadD.dim()[0], maps->dofToQuadD.dim()[1],
+                        maps->dofToQuadD);
   }
   if (transpose) {
     for (int q = 0; q < quadPointsND; ++q) {
@@ -324,7 +333,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
         w *= quadWeights1DData[qz];
       }
       //maps->quadWeights[q] = w;
-      mapsQuadWeight(w,q,maps->quadWeights);
+      mapsTensorQuadWeight(w,q,maps->quadWeights);
     }
     ::delete [] quadWeights1DData;
   }
@@ -368,35 +377,38 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
 }
 
   // ***************************************************************************
-  static void mapsQuadWeights(const double value,
-                              const int q,
-                              double *quadWeights){
+  static void mapsSimplexQuadWeights(const double value,
+                                     const int q,
+                                     double *quadWeights){
     forall(dummy,1, {
         quadWeights[q] = value;
       });
   }
   
   // ***************************************************************************
-  static void mapsDofToQuad(const double value,
-                            const size_t *D,
-                            const int q,
-                            const int d,
-                            double *dofToQuad){
+  static void mapsSimplexDofToQuad(const double value,
+                                   const size_t d0,
+                                   const size_t d1,
+                                   const int q,
+                                   const int d,
+                                   double *dofToQuad){
     forall(dummy,1, {
-        dofToQuad[D[0]*q + D[1]*d] = value;
+        dofToQuad[d0*q + d1*d] = value;
       });
   }
   
   // ***************************************************************************
-  static void mapsDofToQuadD(const double value,
-                             const size_t *D,
-                             const int dim,
-                             const int q,
-                             const int d,
-                             double *dofToQuadD){
+  static void mapsSimplexDofToQuadD(const double value,
+                                    const size_t d0,
+                                    const size_t d1,
+                                    const size_t d2,
+                                    const int dim,
+                                    const int q,
+                                    const int d,
+                                    double *dofToQuadD){
 //#warning must be an RajaArray<T,false>
     forall(dummy,1, {
-        dofToQuadD[D[0]*dim + D[1]*q + D[2]*d] = value;
+        dofToQuadD[d0*dim + d1*q + d2*d] = value;
       });
   }
 
@@ -421,18 +433,25 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
     const IntegrationPoint& ip = ir.IntPoint(q);
     if (transpose) {
       //maps->quadWeights[q] = ip.weight;
-      mapsQuadWeights(ip.weight,q,maps->quadWeights);
+      mapsSimplexQuadWeights(ip.weight,q,maps->quadWeights);
     }
     fe.CalcShape(ip, d2q);
     fe.CalcDShape(ip, d2qD);
     for (int d = 0; d < numDofs; ++d) {
       const double w = d2q[d];
       //maps->dofToQuad(q, d) = w;
-      mapsDofToQuad(w,maps->dofToQuad.dim(),q,d,maps->dofToQuad);
+      mapsSimplexDofToQuad(w,
+                           maps->dofToQuad.dim()[0],
+                           maps->dofToQuad.dim()[1],
+                           q,d,maps->dofToQuad);
       for (int dim = 0; dim < dims; ++dim) {
         const double wD = d2qD(d, dim);
         //maps->dofToQuadD(dim, q, d) = wD;
-        mapsDofToQuadD(wD,maps->dofToQuadD.dim(),dim,q,d,maps->dofToQuadD);
+        mapsSimplexDofToQuadD(wD,
+                              maps->dofToQuadD.dim()[0],
+                              maps->dofToQuadD.dim()[1],
+                              maps->dofToQuadD.dim()[2],
+                              dim,q,d,maps->dofToQuadD);
       }
     }
   }

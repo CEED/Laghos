@@ -38,7 +38,7 @@ template<class T> struct rmalloc{
     void *ptr;
     cudaMalloc(&ptr, n*sizeof(T));
     // cudaMemcpyHostToDevice cudaMemcpyDeviceToHost
-    //cudaDeviceSynchronize();
+    cudaDeviceSynchronize();
     return ptr;
 #else // __NVCC__
     return new T[n];
@@ -57,6 +57,7 @@ template<class T> struct rmalloc{
 //#warning cudaMalloc(Managed)
     //cudaMallocManaged(&ptr, n*sizeof(T), cudaMemAttachGlobal);
     cudaMalloc(&ptr, n*sizeof(T));
+    cudaDeviceSynchronize();
     return ptr;
 #endif // __NVCC__
     // We come here when the user requests a manager,

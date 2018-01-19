@@ -147,7 +147,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
 
-   quad_data.geom->detJ.Print();
+   //dbg()<<"quad_data.geom->detJ:";
+   //quad_data.geom->detJ.Print();
    rInitQuadratureData(NUM_QUAD,
                        nzones,
                        rhoValues,
@@ -182,7 +183,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
-   
+   //dbg()<<"[LagrangianHydroOperator::Mult] UpdateQuadratureData";
    UpdateQuadratureData(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -291,8 +292,16 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
+  //dbg();
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
+//#ifdef __NVCC__
+//   const int xSz = H1FESpace.GetVSize();
+//   double* d_x= (double*)rmalloc<double>::HoDNew(xSz);
+//   checkCudaErrors(cudaMemcpy(d_x,h_x.GetData(),xSz*sizeof(double),cudaMemcpyHostToDevice));
+//   ParGridFunction x(&H1FESpace, d_x);
+//#else
    ParGridFunction x(&H1FESpace, h_x.GetData());
+//#endif
    H1FESpace.GetMesh()->NewNodes(x, false);
    UpdateQuadratureData(S);
 
@@ -374,6 +383,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 // *****************************************************************************
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
+  //dbg();
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();
@@ -441,7 +451,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.stressJinvT,
                            quad_data.dtEst);
    quad_data.dt_est = quad_data.dtEst.Min();
-   dbg()<<"[UpdateQuadratureData] dt_est="<< quad_data.dt_est; // dt_est=0.0153701
+   //dbg()<<"dt_est="<< quad_data.dt_est; // dt_est=0.0153701
    
    quad_data_is_current = true;
    

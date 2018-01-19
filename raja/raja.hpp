@@ -17,8 +17,8 @@
 #define LAGHOS_RAJA
 
 // DBG *************************************************************************
-#include "dbg.hpp"
-#define __dbg__ dbg()
+//#include "dbg.hpp"
+//#define __dbg__ dbg()
 
 // stdincs *********************************************************************
 #undef NDEBUG
@@ -32,12 +32,12 @@
 #include <helper_functions.h>
 #include <helper_cuda.h>
 template <typename FORALL_BODY>
-__global__ void forall_kernel_gpu(const int length,
+__global__ void forall_kernel_gpu(const int end,
                                   const int step,
                                   FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
-  if (ids < length) {body(ids);}
+  if (ids < end) {body(ids);}
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,

@@ -22,27 +22,33 @@ double vector_min(const int N,
   ReduceForall(i,N,red.min(vec[i]););
   return red;
 #else
+  //printf("\033[32;1m[vector_min] N=%d\033[m\n",N);
   unsigned int v=N;
   unsigned int nBitInN=0;
   for(;v;nBitInN++) v&=v-1;
   const int nBytes = nBitInN*sizeof(double);
-  static double *red=NULL;
-  if (!red) red=(double*)::malloc(nBytes);
-  
+  double *h_red=(double*)::malloc(nBytes);
+  double *d_red; cudaMalloc(&d_red, nBytes);
+   
   double h_vec0;
-  checkCudaErrors(cudaMemcpy(&h_vec0,&vec[0],1*sizeof(double),cudaMemcpyDeviceToHost));
-  for(int i=0;i<nBitInN;i+=1) red[i] = h_vec0;
-  
+  checkCudaErrors(cudaMemcpy(&h_vec0,vec,1*sizeof(double),cudaMemcpyDeviceToHost));
+  for(int i=0;i<nBitInN;i+=1) h_red[i] = h_vec0;
+  checkCudaErrors(cudaMemcpy(d_red,h_red,nBytes,cudaMemcpyHostToDevice));
+
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;
-    reduceMin(k,&vec[vof7],&red[kof7]);
+    reduceMin(k,&vec[vof7],&d_red[kof7]);
     kof7++;
     vof7+=k;
   }
   
+  checkCudaErrors(cudaMemcpy(h_red,d_red,nBytes,cudaMemcpyDeviceToHost));
+  cudaFree(d_red);
+
   for(int i=1;i<nBitInN;i+=1)
-    red[0]=red[0]<red[i]?red[0]:red[i];
+    h_red[0]=h_red[0]<h_red[i]?h_red[0]:h_red[i];
   
-  return red[0];
+  //printf("\033[32;1m[vector_min] done\n\033[m");
+  return h_red[0];
 #endif
 }

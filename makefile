@@ -144,9 +144,9 @@ endif
 #######################
 MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
 
-DBG_INC = -I/home/camier1/home/dbg
-DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
-BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
+#DBG_INC = -I/home/camier1/home/dbg
+#DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
+#BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
 CUDA_INC = -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
 CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcuda -lcudart -lcudadevrt 

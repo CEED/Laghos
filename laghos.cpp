@@ -68,7 +68,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   dbgIni(argv[0]);dbg();
+  //dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -155,8 +155,9 @@ int main(int argc, char *argv[])
    // Setting the info CUDA kernels are requested
    is_managed=cuda;
 #ifdef __NVCC__
-#warning __NVCC__ cudaSetDevice
+//#warning __NVCC__ cudaSetDevice
    checkCudaErrors(cudaSetDevice(0));
+   cuInit(0);
 #endif
    
    // **************************************************************************
@@ -241,7 +242,7 @@ int main(int argc, char *argv[])
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
-   dbg()<<"Define the parallel finite element spaces";
+   //dbg()<<"Define the parallel finite element spaces";
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
    RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
@@ -249,7 +250,7 @@ int main(int argc, char *argv[])
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   dbg()<<"Boundary conditions";
+   //dbg()<<"Boundary conditions";
    Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -264,7 +265,7 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
-   dbg()<<"Define the explicit ODE solver";
+   //dbg()<<"Define the explicit ODE solver";
    RajaODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
@@ -301,7 +302,7 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-   dbg()<<"S monolithic BlockVector";
+   //dbg()<<"S monolithic BlockVector";
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -313,24 +314,24 @@ int main(int argc, char *argv[])
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   dbg()<<"ParGridFunction: x,v,e";
+   //dbg()<<"ParGridFunction: x,v,e";
    ParGridFunction x_gf(&H1FESpace);
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
 
-   dbg()<<"RajaGridFunction: o_x,v,e_gf";
+   //dbg()<<"RajaGridFunction: o_x,v,e_gf";
    RajaGridFunction o_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
    RajaGridFunction o_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
    RajaGridFunction o_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
-   dbg()<<"SetNodalGridFunction";
+   //dbg()<<"SetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
    o_x_gf = x_gf;
    
    // Initialize the velocity.
-   dbg()<<"Initialize the velocity";
+   //dbg()<<"Initialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    o_v_gf = v_gf;
@@ -341,7 +342,7 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
-   dbg()<<"Initialize density and specific internal energy";
+   //dbg()<<"Initialize density and specific internal energy";
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -351,7 +352,7 @@ int main(int argc, char *argv[])
    rho.ProjectGridFunction(l2_rho);
    RajaGridFunction o_rho(L2FESpace);
    o_rho = rho;
-   dbg()<<"problem 1 or else";
+   //dbg()<<"problem 1 or else";
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -366,10 +367,10 @@ int main(int argc, char *argv[])
    e_gf.ProjectGridFunction(l2_e);
    o_e_gf = e_gf;
 
-   dbg()<<"Space-dependent ideal gas coefficient over the Lagrangian mesh.";
+   //dbg()<<"Space-dependent ideal gas coefficient over the Lagrangian mesh.";
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
-   dbg()<<"Additional details, depending on the problem.";
+   //dbg()<<"Additional details, depending on the problem.";
    int source = 0; bool visc=false;
    switch (problem)
    {
@@ -381,7 +382,7 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
-   dbg()<<"LagrangianHydroOperator oper";
+   //dbg()<<"LagrangianHydroOperator oper";
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, o_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
@@ -434,10 +435,13 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
+   //dbg()<<"ResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
+   //dbg()<<"S_old(S)";
    RajaVector S_old(S);
+   //dbg()<<"for(last_step)";
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)

@@ -32,7 +32,8 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   if (!data) { data = alloc(sz); }
 #ifdef __NVCC__
   //cudaMemcpyPeer ( void* dst, int  dstDevice, const void* src, int  srcDevice, size_t count ) 
-  if (ptr) { checkCudaErrors(cudaMemcpyPeer(data,0,ptr,0,bytes()));}
+  if (ptr) { checkCudaErrors(cudaMemcpy(data,ptr,bytes(),cudaMemcpyDeviceToDevice));}
+  //if (ptr) { cudaMemcpy(data,ptr,bytes(),cudaMemcpyDeviceToDevice);}
 #else
   if (ptr) { ::memcpy(data,ptr,bytes());}
 #endif
