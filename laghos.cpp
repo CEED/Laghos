@@ -155,36 +155,8 @@ int main(int argc, char *argv[])
    // Setting the info CUDA kernels are requested
    is_managed=cuda;
 #ifdef __NVCC__
-//#warning __NVCC__ cudaSetDevice
    checkCudaErrors(cudaSetDevice(0));
-   cuInit(0);
 #endif
-   
-   // **************************************************************************
-   if (dot){
-     struct timeval st, et;
-     int size = 0x400;
-     for (int lev = 0; lev < rs_levels; lev++) size<<=1;
-     gettimeofday(&st, NULL);
-     RajaVector a(size); a=1.0/M_PI;
-     //for(int i=0;i<size;i++) a[i]=((double)(i+1))/M_PI;
-     //a.Print();
-     RajaVector b(size); b=M_PI;
-     RajaVector c(size); c=0.0;
-     //for(int i=0;i<size;i++) b[i]=M_PI/((double)(i+1));
-     //b.Print();
-     gettimeofday(&et, NULL);
-     const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-     printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\n\033[m",size,setTime/1000.0);
-     gettimeofday(&st, NULL);
-     double dt = a*b;
-     c+=a;
-     gettimeofday(&et, NULL);
-     //assert(dt == (double)size);
-     const double cmpTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-     printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\n\033[m",size,cmpTime/1000.0);
-     return 0;
-   }
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
