@@ -37,6 +37,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
   inline operator const T* () const { return data; }
+  double operator* (const RajaArray& a) const { return vector_dot(sz, data, a.data); }
   inline size_t size() const { return sz; }
   inline size_t Size() const { return sz; }
   inline size_t bytes() const { return size()*sizeof(T); }
@@ -59,13 +60,15 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   void Print(std::ostream& out= std::cout, int width = 8) const {
     dbg();
 #ifdef __NVCC__
-    T *h_data= (T*) ::malloc(bytes());
+    T h_data[sz];
     checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
+    cudaDeviceSynchronize();
 #else
     T *h_data=data;
 #endif
     for (size_t i=0; i<sz; i+=1) 
-      printf("\n\t[%ld] %.15e",i,h_data[i]);
+      if (sizeof(T)==8) printf("\n\t[%ld] %.15e",i,h_data[i]);
+      else printf("\n\t[%ld] %d",i,h_data[i]);
   }
 };
 
@@ -86,6 +89,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   inline const T* ptr() const { return data; }
   inline operator T* () { return data; }
   inline operator const T* () const { return data; }
+  double operator* (const RajaArray& a) const { return vector_dot(sz, data, a.data); }
   inline size_t size() const { return sz; }
   inline size_t Size() const { return sz; }
   inline size_t bytes() const { return size()*sizeof(T); }
@@ -121,7 +125,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
     T *h_data=data;
 #endif
     for (size_t i=0; i<sz; i+=1) 
-      printf("\n\t[%ld] %.15e",i,h_data[i]);
+      printf("\n\t[%ld] %d",i,h_data[i]);
   }
 };
 

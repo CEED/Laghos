@@ -21,6 +21,7 @@ double vector_min(const int N,
 #if !defined(__NVCC__)
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
+  printf("\033[32m[vector_min] %.14e\033[m\n",red);
   return red;
 #else
   //printf("\033[32;1m[vector_min] N=%d\033[m\n",N);
@@ -49,7 +50,7 @@ double vector_min(const int N,
   for(int i=1;i<nBitInN;i+=1)
     h_red[0]=h_red[0]<h_red[i]?h_red[0]:h_red[i];
   
-  //printf("\033[32;1m[vector_min] done\n\033[m");
+  printf("\033[32m[vector_min] %.14e\033[m\n",h_red[0]);
   return h_red[0];
 #endif
 }

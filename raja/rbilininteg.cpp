@@ -100,8 +100,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   }
   GridFunction& nodes = *(mesh.GetNodes());
   
-  //dbg()<<"nodes:";
-  //nodes.Print();
+  //dbg()<<"nodes:";  nodes.Print();
   //for(int i=0;i<nodes.Size();i+=1) printf("\n\t[%ld] %.15e",i,nodes.GetData()[i]);
 #ifdef __NVCC__
 //#warning __NVCC__
@@ -406,7 +405,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
                                    const int q,
                                    const int d,
                                    double *dofToQuad){
-  dbg();
+    //dbg();
     forall(dummy,1, {
         dofToQuad[d0*q + d1*d] = value;
       });
@@ -422,7 +421,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
                                     const int d,
                                     double *dofToQuadD){
 //#warning must be an RajaArray<T,false>
-  dbg();
+    //dbg();
     forall(dummy,1, {
         dofToQuadD[d0*dim + d1*q + d2*d] = value;
       });

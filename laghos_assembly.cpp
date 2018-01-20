@@ -176,8 +176,8 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
                              RajaVector &vecH1) const {
-  dbg();
-   l2fes.GlobalToLocal(vecL2, gVecL2);
+  dbg();printf("vecL2");double ddot=vecL2*vecL2;
+   l2fes.GlobalToLocal(vecL2, gVecL2);printf("gVecL2"); ddot=gVecL2*gVecL2;
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
@@ -209,7 +209,9 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
                 quad_data->stressJinvT,
                 gVecL2,
                 gVecH1);
+   printf("gVecH1"); ddot=gVecH1*gVecH1;
    h1fes.LocalToGlobal(gVecH1, vecH1);
+   printf("vecH1"); ddot=vecH1*vecH1;exit(0);
 }
 
 // *************************************************************************

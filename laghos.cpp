@@ -220,15 +220,17 @@ int main(int argc, char *argv[])
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
-   dbg()<<"Define the parallel finite element spaces";
+   dbg()<<"\033[7mDefine the parallel finite element spaces";
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
+   dbg()<<"\033[7mL2FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+   dbg()<<"\033[7mH1FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   dbg()<<"Boundary conditions";
+   dbg()<<"\033[7mBoundary conditions";
    Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -243,7 +245,7 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
-   dbg()<<"Define the explicit ODE solver";
+   dbg()<<"\033[7mDefine the explicit ODE solver";
    RajaODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
@@ -280,36 +282,39 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-   dbg()<<"S monolithic BlockVector";
+   dbg()<<"[7mS monolithic BlockVector";
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   RajaVector _S_(true_offset[3]);
+   RajaVector S(true_offset[3]);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   dbg()<<"ParGridFunction: x,v,e";
+   dbg()<<"[7mParGridFunction: x,v,e";
    ParGridFunction x_gf(&H1FESpace);
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
 
-   dbg()<<"RajaGridFunction: o_x,v,e_gf";
-   RajaGridFunction d_x_gf(H1FESpace, _S_.GetRange(true_offset[0], true_offset[1]));
-   RajaGridFunction d_v_gf(H1FESpace, _S_.GetRange(true_offset[1], true_offset[2]));
-   RajaGridFunction d_e_gf(L2FESpace, _S_.GetRange(true_offset[2], true_offset[3]));
+   dbg()<<"[7mRajaGridFunction: d_x_gf";
+   RajaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
+   dbg()<<"[7mRajaGridFunction: d_v_gf";
+   RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
+   dbg()<<"[7mRajaGridFunction: d_e_gf";
+   RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
-   dbg()<<"SetNodalGridFunction";
+   dbg()<<"[7mSetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
+   dbg()<<"[7md_x_gf = x_gf;";
    d_x_gf = x_gf;
    
    // Initialize the velocity.
-   dbg()<<"Initialize the velocity";
+   dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    d_v_gf = v_gf;
@@ -320,7 +325,7 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
-   dbg()<<"Initialize density and specific internal energy";
+   dbg()<<"[7mInitialize density and specific internal energy";
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -330,7 +335,8 @@ int main(int argc, char *argv[])
    rho.ProjectGridFunction(l2_rho);
    RajaGridFunction d_rho(L2FESpace);
    d_rho = rho;
-   dbg()<<"problem 1 or else";
+   
+   dbg()<<"[7mproblem 1 or else";
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -345,10 +351,10 @@ int main(int argc, char *argv[])
    e_gf.ProjectGridFunction(l2_e);
    d_e_gf = e_gf;
 
-   dbg()<<"Space-dependent ideal gas coefficient over the Lagrangian mesh.";
+   dbg()<<"[7mSpace-dependent ideal gas coefficient over the Lagrangian mesh.";
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
-   dbg()<<"Additional details, depending on the problem.";
+   dbg()<<"[7mAdditional details, depending on the problem.";
    int source = 0; bool visc=false;
    switch (problem)
    {
@@ -360,11 +366,12 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
-   dbg()<<"LagrangianHydroOperator oper";
-   LagrangianHydroOperator oper(_S_.Size(), H1FESpace, L2FESpace,
+   dbg()<<"[7mLagrangianHydroOperator oper";
+   LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
 
+   dbg()<<"[7msocketstream";
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -413,13 +420,13 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   dbg()<<"ResetTimeStepEstimate, GetTimeStepEstimate";
-   double t = 0.0, dt = oper.GetTimeStepEstimate(_S_), t_old;
+   dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
+   double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   dbg()<<"S_old(S)";
-   RajaVector S_old(_S_);//S.Print();
-   dbg()<<"for(last_step)";
+   dbg()<<"[7mS_old(S)";
+   RajaVector S_old(S);//S.Print();
+   dbg()<<"[7mfor(last_step)";
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -429,19 +436,21 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      S_old = _S_;
+      S_old = S;
       t_old = t;
-      dbg()<<"ResetTimeStepEstimate";
+      dbg()<<"[7mResetTimeStepEstimate";
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
-      dbg()<<"Rode_solver->Step";
-      ode_solver->Step(_S_, t, dt);
+      dbg()<<"[7mRode_solver->Step";
+      ode_solver->Step(S, t, dt);
+      printf("\ndbgSS");double dbgSS=S*S;exit(0);
       steps++;
 
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(_S_);
+      dbg()<<"[7mAdaptive time step control";
+      const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -450,7 +459,7 @@ int main(int argc, char *argv[])
          if (dt < numeric_limits<double>::epsilon())
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
-         _S_ = S_old;
+         S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;
@@ -458,6 +467,7 @@ int main(int argc, char *argv[])
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       // Make sure that the mesh corresponds to the new solution state.
+      dbg()<<"[7mMake sure that the mesh corresponds to the new solution state.";
       x_gf = d_x_gf;
       pmesh->NewNodes(x_gf, false);
 
