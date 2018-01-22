@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
       // to advance.
       dbg()<<"[7mRode_solver->Step";
       ode_solver->Step(S, t, dt);
-      printf("\ndbgSS");double dbgSS=S*S;exit(0);
+      //printf("\ndbgSS");double dbgSS=S*S;exit(0);
       steps++;
 
       // Adaptive time step control.

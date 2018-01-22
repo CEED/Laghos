@@ -176,8 +176,8 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
                              RajaVector &vecH1) const {
-  dbg();printf("vecL2");double ddot=vecL2*vecL2;
-   l2fes.GlobalToLocal(vecL2, gVecL2);printf("gVecL2"); ddot=gVecL2*gVecL2;
+  dbg();printf("[Mult] vecL2");double ddot=vecL2*vecL2;
+   l2fes.GlobalToLocal(vecL2, gVecL2);printf("[Mult] gVecL2"); ddot=gVecL2*gVecL2;
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
@@ -211,19 +211,20 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
                 gVecH1);
    printf("gVecH1"); ddot=gVecH1*gVecH1;
    h1fes.LocalToGlobal(gVecH1, vecH1);
-   printf("vecH1"); ddot=vecH1*vecH1;exit(0);
+   printf("vecH1"); ddot=vecH1*vecH1;//exit(0);
 }
 
 // *************************************************************************
 void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                                       RajaVector &vecL2) const {
-   dbg();
-  h1fes.GlobalToLocal(vecH1, gVecH1);
+   dbg();printf("[MultTranspose] vecH1");double ddot=vecH1*vecH1;
+   h1fes.GlobalToLocal(vecH1, gVecH1);printf("[MultTranspose] gVecH1"); ddot=gVecH1*gVecH1;
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
+   
    if (use_share)
      rForceMultTransposeS(dim,
                           NUM_DOFS_1D,
@@ -250,7 +251,9 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                          quad_data->stressJinvT,
                          gVecH1,
                          gVecL2);
+   printf("gVecL2"); ddot=gVecL2*gVecL2;
    l2fes.LocalToGlobal(gVecL2, vecL2);
+   printf("vecL2"); ddot=vecL2*vecL2;//exit(0);
 }
 
 } // namespace hydrodynamics
