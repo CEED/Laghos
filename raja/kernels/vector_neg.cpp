@@ -17,6 +17,6 @@
 
 void vector_neg(const int N,
                 double* __restrict vec) {
-   dbg();
- forall(i,N,vec[i] *= -1.0;);
+   //dbg();
+  forall(i,N,vec[i] *= -1.0;);
 }

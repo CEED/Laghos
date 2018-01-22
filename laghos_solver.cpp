@@ -110,7 +110,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      locCG(), timer(),
      use_cuda(cuda), use_share(share)
 {
-  dbg();
    Vector rho0_ = rho0;
    GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
    GridFunctionCoefficient rho_coeff(&rho0_gf);
@@ -148,8 +147,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
 
-   //dbg()<<"quad_data.geom->detJ:";
-   //quad_data.geom->detJ.Print();
    rInitQuadratureData(NUM_QUAD,
                        nzones,
                        rhoValues,
@@ -177,7 +174,6 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // /home/camier1/home/mfems/mfem-raja/linalg/ode.tpp:121
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
-  dbg();printf("[Mult] S");double ddot=S*S;
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -186,8 +182,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
-   dbg()<<"UpdateQuadratureData";
-   UpdateQuadratureData(S);//dbgSS=S*S;
+   UpdateQuadratureData(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // - Position
@@ -197,24 +192,24 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    const int VsizeL2 = L2FESpace.GetVSize();
    const int VsizeH1 = H1FESpace.GetVSize();
 
-   RajaVector v = S.GetRange(VsizeH1, VsizeH1);printf("[Mult] v");ddot=v*v;
-   RajaVector e = S.GetRange(2*VsizeH1, VsizeL2);printf("[Mult] e");ddot=e*e;
+   RajaVector v = S.GetRange(VsizeH1, VsizeH1);
+   RajaVector e = S.GetRange(2*VsizeH1, VsizeL2);
    
    RajaVector dx = dS_dt.GetRange(0, VsizeH1);
    RajaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
    RajaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);
 
    // Set dx_dt = v (explicit)
-   dx = v;printf("[Mult] dx");ddot=dx*dx;
+   dx = v;
    
    // Solve for velocity.
    RajaVector one(VsizeL2), rhs(VsizeH1); one = 1.0;
    timer.sw_force.Start();
    // /home/camier1/home/laghos/laghos-raja/laghos_assembly.cpp:178
-   ForcePA.Mult(one, rhs);printf("[Mult] rhs");ddot=rhs*rhs;
+   ForcePA.Mult(one, rhs);
    timer.sw_force.Stop();
    timer.dof_tstep += H1FESpace.GlobalTrueVSize();
-   rhs.Neg();printf("[Mult] rhs.Neg()");ddot=rhs*rhs;
+   rhs.Neg();
 
    RajaVector B(H1compFESpace.GetTrueVSize()); B=0.0;
    RajaVector X(H1compFESpace.GetTrueVSize()); X=0.0;
@@ -238,13 +233,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       dv_c = 0.0;
       //RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
       // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
-      printf("[Mult] rhs_c");ddot=rhs_c*rhs_c;
-      printf("[Mult] B");ddot=B*B;
-      // b laghos_solver.cpp:244
       H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
-      printf("[Mult] B");ddot=B*B;
       H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
-      printf("[Mult] X");ddot=X*X;
 
       VMassPA.SetEssentialTrueDofs(c_tdofs);
       VMassPA.EliminateRHS(B);
@@ -302,16 +292,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
-  dbg();
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
-//#ifdef __NVCC__
-//   const int xSz = H1FESpace.GetVSize();
-//   double* d_x= (double*)rmalloc<double>::HoDNew(xSz);
-//   checkCudaErrors(cudaMemcpy(d_x,h_x.GetData(),xSz*sizeof(double),cudaMemcpyHostToDevice));
-//   ParGridFunction x(&H1FESpace, d_x);
-//#else
    ParGridFunction x(&H1FESpace, h_x.GetData());
-//#endif
    H1FESpace.GetMesh()->NewNodes(x, false);
    UpdateQuadratureData(S);
 
@@ -323,13 +305,11 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
-  dbg();
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
-  dbg();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -395,7 +375,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 // *****************************************************************************
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
-  dbg();
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();
@@ -463,7 +442,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.stressJinvT,
                            quad_data.dtEst);
    quad_data.dt_est = quad_data.dtEst.Min();
-   dbg()<<"dt_est="<< quad_data.dt_est; // dt_est=0.0153701
    
    quad_data_is_current = true;
    

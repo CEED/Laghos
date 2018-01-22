@@ -18,6 +18,6 @@
 void vector_vec_mul(const int N,
                     double* __restrict v0,
                     const double d) {
-  dbg();
+  //dbg();
   forall(i,N,v0[i]*=d;);
 }

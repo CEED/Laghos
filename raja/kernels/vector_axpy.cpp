@@ -19,6 +19,6 @@ void vector_axpy(const int N,
                  const double alpha,
                  double* __restrict v0,
                  const double* __restrict v1) {
-  dbg();
+  //dbg();
   forall(i,N,v0[i] += alpha * v1[i];);
 }

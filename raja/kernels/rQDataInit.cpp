@@ -23,7 +23,7 @@ static void rInitQuadratureData(const int nzones,
                                 const double* restrict detJ,
                                 const double* restrict quadWeights,
                                 double* restrict rho0DetJ0w) {
-  dbg();
+  //dbg();
   forall(el,nzones,{
       for (int q = 0; q < NUM_QUAD; ++q){
         rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
@@ -38,7 +38,7 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* restrict detJ,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w) {
-  dbg();
+  //dbg();
   const unsigned int id = NUM_QUAD;
   static std::unordered_map<unsigned int, fInitQuadratureData> call = {
     {2,&rInitQuadratureData<2>},

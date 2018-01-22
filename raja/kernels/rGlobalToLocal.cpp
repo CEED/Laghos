@@ -24,7 +24,7 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const int* __restrict indices,
                     const double* __restrict globalX,
                     double* __restrict localX) {
-  dbg();
+  //dbg();
   forall(i,globalEntries,{
       const int offset = offsets[i];
       const int nextOffset = offsets[i+1];

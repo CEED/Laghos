@@ -29,14 +29,13 @@ namespace hydrodynamics
 QuadratureData::QuadratureData(int dim,
                                int nzones,
                                int nqp)
-{ dbg(); Setup(dim, nzones, nqp); }
+{ Setup(dim, nzones, nqp); }
 
 
 void QuadratureData::Setup(int dim,
                            int nzones,
                            int nqp)
 {
-  dbg();
    rho0DetJ0w.SetSize(nqp * nzones);
    stressJinvT.SetSize(dim * dim * nqp * nzones);
    dtEst.SetSize(nqp * nzones);
@@ -46,7 +45,6 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
 {
-  dbg();
    const int ip_cnt = integ_rule.GetNPoints();
    Vector shape(fe.GetDof());
    Vector rho0DetJ0w = quad_data.rho0DetJ0w;
@@ -75,7 +73,7 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
      bilinearForm(&fes),
      quad_data(quad_data_),
      x_gf(fes),
-     y_gf(fes) { dbg(); }
+     y_gf(fes) {}
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
@@ -87,7 +85,6 @@ RajaMassOperator::~RajaMassOperator(){
 // *****************************************************************************
 void RajaMassOperator::Setup()
 {
-  dbg();
    dim=fes.GetMesh()->Dimension();
    nzones=fes.GetMesh()->GetNE();
    RajaMassIntegrator &massInteg = *(new RajaMassIntegrator(use_share));
@@ -101,7 +98,6 @@ void RajaMassOperator::Setup()
 // *************************************************************************
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
-  dbg();
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) return;
   ess_tdofs.allocate(ess_tdofs_count);
@@ -115,7 +111,6 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 // *****************************************************************************
 void RajaMassOperator::EliminateRHS(RajaVector &b)
 {
-  dbg();
   if (ess_tdofs_count > 0)
     b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
 }
@@ -123,7 +118,6 @@ void RajaMassOperator::EliminateRHS(RajaVector &b)
 // *************************************************************************
 void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 {
-  dbg();
    distX = x;
    if (ess_tdofs_count)
    {
@@ -156,19 +150,16 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
      integ_rule(integ_rule_),
      quad_data(quad_data_),
      gVecL2(l2fes.GetLocalDofs() * nzones),
-     gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) {  dbg();
- }
+     gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) { }
   
 // *****************************************************************************
 RajaForceOperator::~RajaForceOperator(){
-  dbg();
   rdbg("\033[31m[~RajaForceOperator]");
 }
 
 // *************************************************************************
 void RajaForceOperator::Setup()
 {
-  dbg();
    h1D2Q = RajaDofQuadMaps::Get(h1fes, integ_rule);
    l2D2Q = RajaDofQuadMaps::Get(l2fes, integ_rule);
 }
@@ -176,8 +167,7 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
                              RajaVector &vecH1) const {
-  dbg();printf("[Mult] vecL2");double ddot=vecL2*vecL2;
-   l2fes.GlobalToLocal(vecL2, gVecL2);printf("[Mult] gVecL2"); ddot=gVecL2*gVecL2;
+  l2fes.GlobalToLocal(vecL2, gVecL2);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
@@ -209,22 +199,18 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
                 quad_data->stressJinvT,
                 gVecL2,
                 gVecH1);
-   printf("gVecH1"); ddot=gVecH1*gVecH1;
    h1fes.LocalToGlobal(gVecH1, vecH1);
-   printf("vecH1"); ddot=vecH1*vecH1;//exit(0);
 }
 
 // *************************************************************************
 void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                                       RajaVector &vecL2) const {
-   dbg();printf("[MultTranspose] vecH1");double ddot=vecH1*vecH1;
-   h1fes.GlobalToLocal(vecH1, gVecH1);printf("[MultTranspose] gVecH1"); ddot=gVecH1*gVecH1;
+  h1fes.GlobalToLocal(vecH1, gVecH1);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   
    if (use_share)
      rForceMultTransposeS(dim,
                           NUM_DOFS_1D,
@@ -251,9 +237,7 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                          quad_data->stressJinvT,
                          gVecH1,
                          gVecL2);
-   printf("gVecL2"); ddot=gVecL2*gVecL2;
    l2fes.LocalToGlobal(gVecL2, vecL2);
-   printf("vecL2"); ddot=vecL2*vecL2;//exit(0);
 }
 
 } // namespace hydrodynamics

@@ -62,7 +62,7 @@ struct TimingData
    long long int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
 
    TimingData()
-      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) {dbg();}
+      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) {}
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -107,7 +107,7 @@ protected:
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
                                   double p[], double cs[]) const
-   {dbg();
+   {
       for (int v = 0; v < nvalues; v++)
       {
          p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
@@ -131,7 +131,7 @@ public:
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
    double GetTimeStepEstimate(const RajaVector &S) const;
    void ResetTimeStepEstimate() const;
-   void ResetQuadratureData() const { dbg();quad_data_is_current = false; }
+   void ResetQuadratureData() const { quad_data_is_current = false; }
 
    // The density values, which are stored only at some quadrature points, are
    // projected as a ParGridFunction.
@@ -146,7 +146,7 @@ class TaylorCoefficient : public Coefficient
 {
    virtual double Eval(ElementTransformation &T,
                        const IntegrationPoint &ip)
-   {dbg();
+   {
       Vector x(2);
       T.Transform(ip, x);
       return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -

@@ -24,7 +24,7 @@ static void rGridFuncToQuad1D(const int numElements,
                               const int* restrict l2gMap,
                               const double* restrict gf,
                               double* restrict out) {  
-  dbg();
+  //dbg();
   forall(e,numElements,{
       double r_out[NUM_VDIM][NUM_QUAD_1D];
       for (int v = 0; v < NUM_VDIM; ++v) {
@@ -58,7 +58,7 @@ static void rGridFuncToQuad2D(const int numElements,
                               const int* restrict l2gMap,
                               const double* restrict gf,
                               double* restrict out) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
       double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
       for (int v = 0; v < NUM_VDIM; ++v) {
@@ -116,7 +116,7 @@ static void rGridFuncToQuad3D(const int numElements,
                               const int* restrict l2gMap,
                               const double* restrict gf,
                               double* restrict out) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
     double out_xyz[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
@@ -208,7 +208,7 @@ void rGridFuncToQuad(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
-  dbg();
+  //dbg();
   const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
   assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);

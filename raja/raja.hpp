@@ -17,7 +17,7 @@
 #define LAGHOS_RAJA
 
 // DBG *************************************************************************
-#include "dbg.hpp"
+//#include "dbg.hpp"
 
 // stdincs *********************************************************************
 #undef NDEBUG
@@ -36,10 +36,7 @@ __global__ void forall_kernel_gpu(const int end,
                                   FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
-  if (ids < end) {
-    //printf("\033[31m %d\033[m",ids);
-    body(ids);
-  }
+  if (ids < end) { body(ids); }
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,
@@ -47,7 +44,6 @@ void cuda_forallT(const int end,
                   FORALL_BODY &&body) {
   const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
-  //printf("\033[31;1m[cuda_forallT]\033[m");
   forall_kernel_gpu<<<gridSize, blockSize>>>(end,step,body);
   cudaDeviceSynchronize();
 }

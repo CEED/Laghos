@@ -19,11 +19,11 @@
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-  dbg();
+  //dbg();
 #if !defined(__NVCC__)
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
-  printf("\033[33m[vector_dot] %.14e\033[m\n",dot);
+  //printf("\033[33m[vector_dot] %.14e\033[m\n",dot);
   return dot;
 #else
   unsigned int v=N;
@@ -49,7 +49,7 @@ double vector_dot(const int N,
   for(int i=1;i<nBitInN;i+=1)
     h_dot[0]+=h_dot[i];
 
-  printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
+  //printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
   return h_dot[0];
 #endif
 }

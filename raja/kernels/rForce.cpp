@@ -28,7 +28,7 @@ static void rForceMult2D(const int numElements,
                          const double* restrict stressJinvT,
                          const double* restrict e,
                          double* restrict v) {
-  dbg();
+  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
 
   forall(el,numElements,{
@@ -100,7 +100,7 @@ static void rForceMultTranspose2D(const int numElements,
                                   const double* restrict stressJinvT,
                                   const double* restrict v,
                                   double* restrict e) {
-  dbg();
+  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   
   forall(el,numElements,{
@@ -184,7 +184,7 @@ static void rForceMult3D(const int numElements,
                          const double* restrict stressJinvT,
                          const double* restrict e,
                          double* restrict v) {  
-  dbg();
+  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   forall(el,numElements,{
@@ -297,7 +297,7 @@ static void rForceMultTranspose3D(const int numElements,
                                   const double* restrict stressJinvT,
                                   const double* restrict v,
                                   double* restrict e) {
-  dbg();
+  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   forall(el,numElements,{
@@ -414,7 +414,7 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict stressJinvT,
                 const double* restrict e,
                 double* restrict v) {
-  dbg();
+  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -483,7 +483,7 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict stressJinvT,
                          const double* restrict v,
                          double* restrict e) {
-  dbg();
+  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|

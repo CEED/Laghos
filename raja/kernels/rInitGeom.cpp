@@ -24,7 +24,7 @@ void rIniGeom1D(const int numElements,
                 double* restrict J,
                 double* restrict invJ,
                 double* restrict detJ) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
     double s_nodes[NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
@@ -54,7 +54,7 @@ static void rIniGeom2D(const int numElements,
                        double* restrict J,
                        double* restrict invJ,
                        double* restrict detJ) {
-  dbg();
+  //dbg();
   forall(el,numElements,{
     double s_nodes[2 * NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
@@ -98,7 +98,7 @@ static void rIniGeom3D(const int numElements,
                        double* restrict J,
                        double* restrict invJ,
                        double* restrict detJ) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
     double s_nodes[3*NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
@@ -171,7 +171,7 @@ void rIniGeom(const int DIM,
               double* restrict J,
               double* restrict invJ,
               double* restrict detJ) {
-  dbg();
+  //dbg();
   const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
   assert(LOG2(DIM)<=8);
   //printf("NUM_DOFS:%d ",NUM_DOFS);

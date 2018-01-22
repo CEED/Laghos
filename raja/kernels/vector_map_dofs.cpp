@@ -19,7 +19,7 @@ void vector_map_dofs(const int N,
                      double* __restrict v0,
                      const double* __restrict v1,
                      const int* v2) {
-  dbg();
+  //dbg();
   forall(i,N,{
       const int idx = v2[i];
       v0[idx] = v1[idx];

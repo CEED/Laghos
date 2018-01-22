@@ -32,9 +32,8 @@ class RajaRestrictionOperator : public RajaOperator {
                           const RajaArray<int> *idx):
     RajaOperator(h,w),
     entries(idx->size()>>1),
-    indices(idx){dbg();}
+    indices(idx){}
   void Mult(const RajaVector& x, RajaVector& y) const {
-    dbg();
     rExtractSubVector(entries, indices->ptr(), x, y);
   }
 };
@@ -47,23 +46,19 @@ class RajaProlongationOperator : public RajaOperator {
   const Operator* pmat = NULL;
  public:
   RajaProlongationOperator(const Operator* Op):
-    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {dbg();}
+    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
-    dbg();
     const Vector hostX=x;
     Vector hostY(y.Size());
     pmat->Mult(hostX, hostY);
     y=hostY;
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
-    dbg();
-    const Vector hostX=x;//hostX.Print();
+    const Vector hostX=x;
     Vector hostY(y.Size());
     // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
     pmat->MultTranspose(hostX, hostY);
-    //hostY.Print();
     y=hostY;
-    //y.Print();
   }
 };
 
@@ -87,9 +82,9 @@ class RajaFiniteElementSpace : public ParFiniteElementSpace {
   // *************************************************************************
   bool hasTensorBasis() const;
   int GetLocalDofs() const { return localDofs; }
-  const RajaOperator* GetRestrictionOperator() { dbg();return restrictionOp; }
-  const RajaOperator* GetProlongationOperator() { dbg();return prolongationOp; }
-  const RajaArray<int>& GetLocalToGlobalMap() const { dbg();return map; }
+  const RajaOperator* GetRestrictionOperator() { return restrictionOp; }
+  const RajaOperator* GetProlongationOperator() { return prolongationOp; }
+  const RajaArray<int>& GetLocalToGlobalMap() const { return map; }
   // *************************************************************************
   void GlobalToLocal(const RajaVector&, RajaVector&) const;
   void LocalToGlobal(const RajaVector&, RajaVector&) const;

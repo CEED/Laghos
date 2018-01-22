@@ -26,7 +26,7 @@ static void rMassMultAdd2D(const int numElements,
                            const double* restrict oper,
                            const double* restrict solIn,
                            double* restrict solOut) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -89,7 +89,7 @@ static void rMassMultAdd3D(const int numElements,
                            const double* oper,
                            const double* solIn,
                            double* __restrict solOut) {
-  dbg();
+  //dbg();
   forall(e,numElements,{
     double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
@@ -199,7 +199,7 @@ void rMassMultAdd(const int DIM,
                   const double* op,
                   const double* x,
                   double* __restrict y) {
-  dbg();
+  //dbg();
   const unsigned int id = (DIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);
   assert(LOG2(NUM_DOFS_1D)<=8);
