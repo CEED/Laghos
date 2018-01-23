@@ -159,14 +159,13 @@ int main(int argc, char *argv[])
    CUcontext cuContext;
 
    //int deviceCount = 0;
-   checkCudaErrors(cuInit(0));
-   checkCudaErrors(cudaSetDevice(dev));
-   checkCudaErrors(cuDeviceGet(&cuDevice,dev));
+   cuInit(0);
+   //cudaSetDevice(dev);
+   cuDeviceGet(&cuDevice,dev);
    int major, minor;
    char name[128];
-   checkCudaErrors(cuDeviceComputeCapability(&major, &minor,dev));
+   cuDeviceComputeCapability(&major, &minor,dev);
    cuDeviceGetName(name, 128, cuDevice);
-   //printf("\n");
    //printf("\033[32m[laghos] Using Device %d: \"%s with ComputeCapability %d.%d\033[m\n",dev, name, major, minor);
    cuCtxCreate(&cuContext, 0, cuDevice);   
 #ifndef __RAJA__

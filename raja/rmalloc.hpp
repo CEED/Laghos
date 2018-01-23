@@ -28,7 +28,7 @@ template<class T> struct rmalloc{
 #ifdef __NVCC__
     void *ptr;
     //cudaMalloc(&ptr, n*sizeof(T));
-    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+    cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
     //cudaDeviceSynchronize();
     return ptr;
 #else // __NVCC__
@@ -43,7 +43,7 @@ template<class T> struct rmalloc{
 #ifdef __NVCC__
     void *ptr;
     //cudaMalloc(&ptr, n*sizeof(T));
-    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+    cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
     //cudaDeviceSynchronize();
     return ptr;
 #endif // __NVCC__
@@ -59,7 +59,8 @@ template<class T> struct rmalloc{
 #ifdef __NVCC__
     else {
       //cudaDeviceSynchronize();
-      cudaFree(ptr);
+      //cudaFree(ptr);
+      cuMemFree((CUdeviceptr)ptr);
     }
 #endif // __NVCC__
     ptr = nullptr;

@@ -172,7 +172,7 @@ void rForceMultTranspose2D(const int numElements,
 }
 
 // *****************************************************************************
-template<const int NUM_DIM,
+/*template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
@@ -281,10 +281,10 @@ static void rForceMult3D(const int numElements,
       }
     }
     });
-}
+    }*/
 
 // *****************************************************************************
-template<const int NUM_DIM,
+/*template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
@@ -389,7 +389,7 @@ static void rForceMultTranspose3D(const int numElements,
     }
     });
 }
-
+*/
 // *****************************************************************************
 typedef void (*fForceMult)(const int numElements,
                            const double* restrict L2QuadToDof,
@@ -448,7 +448,7 @@ void rForceMult(const int NUM_DIM,
     {0x2070C0607ull,&rForceMult2D<2,7,12,6,7>},
 
     // 3D
-    {0x303040203ull,&rForceMult3D<3,3,4,2,3>},
+    //{0x303040203ull,&rForceMult3D<3,3,4,2,3>},
   };
   if (!call[id]){
     printf("\n[rForceMult] id \033[33m0x%lX\033[m ",id);
@@ -515,7 +515,7 @@ void rForceMultTranspose(const int NUM_DIM,
     {0x2070C0607ull,&rForceMultTranspose2D<2,7,12,6,7>},
 
     // 3D
-    {0x303040203ull,&rForceMultTranspose3D<3,3,4,2,3>},
+    //{0x303040203ull,&rForceMultTranspose3D<3,3,4,2,3>},
   };
   if (!call[id]) {
     printf("\n[rForceMultTranspose] id \033[33m0x%lX\033[m ",id);

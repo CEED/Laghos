@@ -50,15 +50,15 @@ const int CUDA_BLOCK_SIZE = 256;
 #ifdef __NVCC__ // on GPU ******************************************************
 #define sync __syncthreads();
 #define share __shared__
-template <typename FORALL_BODY>
+/*template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
                     FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
   if (ids < length) {body(ids);}
-}
-template <typename FORALL_BODY>
+  }*/
+/*template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
                   FORALL_BODY &&body) {
@@ -67,18 +67,19 @@ void cuda_forallT(const int end,
   //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
   gpu<<<gridSize, blockSize>>>(end,step,body);
   //cudaDeviceSynchronize();
-}
-#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
+  }*/
+//#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 
+//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);
 #define cuKer(name,end,...) \
-  printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);\
   name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
 
+//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
 #define cuKerGB(name,grid,block,end,...)                                \
-  printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);\
   name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...)                                     \
-  printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck); \
+
+//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
+#define call0(name,id,grid,blck,...)                                  \
   call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #else // __KERNELS__ on CPU ****************************************************
