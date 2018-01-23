@@ -31,7 +31,7 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   size = sz;
   if (!data) { data = alloc(sz); }
 #ifdef __NVCC__
-  if (ptr) { checkCudaErrors(cudaMemcpy(data,ptr,bytes(),cudaMemcpyDeviceToDevice));}
+  if (ptr) { checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));}
 #else
   if (ptr) { ::memcpy(data,ptr,bytes());}
 #endif
@@ -51,12 +51,11 @@ RajaVector::RajaVector(RajaArray<double>& v):
 
 // Host 2 Device ***************************************************************
 RajaVector::RajaVector(const Vector& v):
-  size(0),data(NULL),own(false) {
+  size(v.Size()),data(NULL),own(true) {
 #ifdef __NVCC__
   //printf("\033[31m[RajaVector()] Host 2 Device\033[m\n");
-  double* d_v= (double*)rmalloc<double>::HoDNew(v.Size());
-  checkCudaErrors(cudaMemcpy(d_v,v.GetData(),v.Size()*sizeof(double),cudaMemcpyHostToDevice));
-  SetSize(v.Size(), (void*)d_v);
+  checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
+  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
 #else
   SetSize(v.Size(), v.GetData());  
 #endif
@@ -67,7 +66,7 @@ RajaVector::operator Vector() {
 #ifdef __NVCC__
   //printf("\033[31m[Vector()] Device 2 Host\033[m\n");
   double *h_data= (double*) ::malloc(bytes());
-  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
+  checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
   return Vector(h_data,size);
 #else
   return Vector(data,size);
@@ -78,7 +77,7 @@ RajaVector::operator Vector() const {
 #ifdef __NVCC__
   //printf("\033[31m[Vector()const] Device 2 Host\033[m\n");
   double *h_data= (double*) ::malloc(bytes());
-  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyDeviceToHost));
+  checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
   return Vector(h_data,size);
 #else
   return Vector(data,size);
@@ -90,7 +89,7 @@ void RajaVector::Print(std::ostream& out, int width) const {
 #ifdef __NVCC__
   //dbg()<<"Device 2 Host (const)";
   double *h_data= (double*) ::malloc(bytes());
-  checkCudaErrors(cudaMemcpy(h_data,data,bytes(),cudaMemcpyHostToDevice));
+  checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
 #else
   double *h_data=data;
 #endif

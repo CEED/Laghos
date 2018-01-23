@@ -29,12 +29,11 @@ double vector_min(const int N,
   for(;v;nBitInN++) v&=v-1;
   const int nBytes = nBitInN*sizeof(double);
   double *h_red=(double*)::malloc(nBytes);
-  double *d_red; cudaMalloc(&d_red, nBytes);
-   
-  double h_vec0;
-  checkCudaErrors(cudaMemcpy(&h_vec0,vec,1*sizeof(double),cudaMemcpyDeviceToHost));
-  for(int i=0;i<nBitInN;i+=1) h_red[i] = h_vec0;
-  checkCudaErrors(cudaMemcpy(d_red,h_red,nBytes,cudaMemcpyHostToDevice));
+  double *d_red;
+  checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_red, nBytes));
+
+  for(int i=0;i<nBitInN;i+=1) h_red[i] = __builtin_inff();
+  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_red,h_red,nBytes));
 
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;
@@ -43,7 +42,7 @@ double vector_min(const int N,
     vof7+=k;
   }
   
-  checkCudaErrors(cudaMemcpy(h_red,d_red,nBytes,cudaMemcpyDeviceToHost));
+  checkCudaErrors(cuMemcpyDtoH(h_red,(CUdeviceptr)d_red,nBytes));
   cudaFree(d_red);
 
   for(int i=1;i<nBitInN;i+=1)

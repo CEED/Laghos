@@ -62,11 +62,18 @@ template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
                   FORALL_BODY &&body) {
-  const size_t blockSize = 256;
+  const size_t blockSize = 128;
   const size_t gridSize = (end+blockSize-1)/blockSize;
+  //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
   gpu<<<gridSize, blockSize>>>(end,step,body);
+  /*cuLaunchKernel(cuFunction,gridSize,1,1,blockSize,1,1,0,
+                 *((CUstream*) dHandle->currentStream),
+                                     vArgs, 0));
+  */
+  //cudaDeviceSynchronize();
 }
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
+#define forallu(name,end,...) name<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #else // __KERNELS__ on CPU ****************************************************
 //#warning NO RAJA, NO NVCC

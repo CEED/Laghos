@@ -30,11 +30,13 @@ double vector_dot(const int N,
   for(;v;nBitInN++) v&=v-1;
   const int nBytes = nBitInN*sizeof(double);
   double h_dot[nBitInN];
-  double *d_dot; cudaMalloc(&d_dot, nBytes);
-
+  double *d_dot;
+  //cudaMalloc(&d_dot, nBytes);
+  checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_dot, nBytes));
+  
   // flush dot results 
   for(int i=0;i<nBitInN;i+=1) h_dot[i]=0.0;
-  checkCudaErrors(cudaMemcpy(d_dot,h_dot,nBytes,cudaMemcpyHostToDevice));
+  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_dot,h_dot,nBytes));
 
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;
@@ -42,7 +44,7 @@ double vector_dot(const int N,
     kof7++;
     vof7+=k;
   }
-  checkCudaErrors(cudaMemcpy(h_dot,d_dot,nBytes,cudaMemcpyDeviceToHost));
+  checkCudaErrors(cuMemcpyDtoH(h_dot,(CUdeviceptr)d_dot,nBytes));
   cudaFree(d_dot);
   
   for(int i=1;i<nBitInN;i+=1)

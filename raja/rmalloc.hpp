@@ -27,7 +27,9 @@ template<class T> struct rmalloc{
   static void* HoDNew(size_t n) {
 #ifdef __NVCC__
     void *ptr;
-    cudaMalloc(&ptr, n*sizeof(T));
+    //cudaMalloc(&ptr, n*sizeof(T));
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+    //cudaDeviceSynchronize();
     return ptr;
 #else // __NVCC__
     return new T[n];
@@ -40,7 +42,9 @@ template<class T> struct rmalloc{
     if (!is_managed) return new T[n];
 #ifdef __NVCC__
     void *ptr;
-    cudaMalloc(&ptr, n*sizeof(T));
+    //cudaMalloc(&ptr, n*sizeof(T));
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+    //cudaDeviceSynchronize();
     return ptr;
 #endif // __NVCC__
     // We come here when the user requests a manager,
@@ -53,7 +57,10 @@ template<class T> struct rmalloc{
     //rdbg("-]\033[m");
     if (!is_managed) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__
-    else cudaFree(ptr);
+    else {
+      //cudaDeviceSynchronize();
+      cudaFree(ptr);
+    }
 #endif // __NVCC__
     ptr = nullptr;
   }

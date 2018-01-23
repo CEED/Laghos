@@ -154,7 +154,27 @@ int main(int argc, char *argv[])
 
    // CUDA set device & tweak options
 #ifdef __NVCC__
-   checkCudaErrors(cudaSetDevice(0));
+   const int dev = 0;
+   CUdevice cuDevice;
+   CUcontext cuContext;
+
+   //int deviceCount = 0;
+   checkCudaErrors(cuInit(0));
+   checkCudaErrors(cudaSetDevice(dev));
+   checkCudaErrors(cuDeviceGet(&cuDevice,dev));
+   int major, minor;
+   char name[128];
+   checkCudaErrors(cuDeviceComputeCapability(&major, &minor,dev));
+   cuDeviceGetName(name, 128, cuDevice);
+   printf("\033[32m[laghos] Using Device %d: \"%s\" with Compute %d.%d capability\033[m\n", dev, name, major, minor);
+   cuCtxCreate(&cuContext, 0, cuDevice);
+
+   const size_t size = 1024;
+   float *h_A = (float *)malloc(size);
+   CUdeviceptr d_A;
+   cuMemAlloc(&d_A, size);
+   cuMemcpyHtoD(d_A, h_A, size);
+   
 #ifndef __RAJA__
    cuda=true;
    assert(cuda);
@@ -163,6 +183,31 @@ int main(int argc, char *argv[])
 
    // Setting the info CUDA kernels are requested
    is_managed=cuda;
+   
+   // **************************************************************************
+   if (dot){
+     struct timeval st, et;
+     int size = 0x400;
+     for (int lev = 0; lev < rs_levels; lev++) size<<=1;
+     //Vector h_a(size); h_a=1.0/M_PI;
+     //Vector h_b(size); h_b=M_PI;
+     gettimeofday(&st, NULL);
+     RajaVector a(size);a=1.0/M_PI;//h_a;//a.Print();
+     RajaVector b(size);b=M_PI;//(h_b); //b.Print();
+     //RajaVector c(size); c=0.0;
+     gettimeofday(&et, NULL);
+     const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
+     printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\033[m\n",setTime/1000.0);
+     gettimeofday(&st, NULL);
+     //double dt = a*b;
+     //c+=1.0;
+     a+=b;
+     gettimeofday(&et, NULL);
+     //assert(dt == (double)size);
+     const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
+     printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\033[m\n",size,alltime/1000.0);
+     return 0;
+   }
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
