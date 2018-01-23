@@ -44,7 +44,6 @@ class RajaDofQuadMaps {
   RajaArray<double> quadWeights;
 public:
   static void delDofQuadMaps(){
-    rdbg("\033[31m[~delDofQuadMaps]");
     for(std::map<std::string, RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
         itr != AllDofQuadMaps.end(); itr++) delete (itr->second);
     AllDofQuadMaps.clear();

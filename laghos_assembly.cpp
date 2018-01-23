@@ -77,7 +77,7 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  rdbg("\033[31m[~RajaMassOperator]");
+  //rdbg("\033[31m[~RajaMassOperator]");
   delete massOperator;
   RajaDofQuadMaps::delDofQuadMaps();
 }
@@ -154,7 +154,7 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
   
 // *****************************************************************************
 RajaForceOperator::~RajaForceOperator(){
-  rdbg("\033[31m[~RajaForceOperator]");
+  //rdbg("\033[31m[~RajaForceOperator]");
 }
 
 // *************************************************************************

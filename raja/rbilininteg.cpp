@@ -21,7 +21,6 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 static RajaGeometry *geom=NULL;
 
 RajaGeometry::~RajaGeometry(){
-  rdbg("\033[32m[~RajaGeometry]");
   free(geom->meshNodes);
   free(geom->J);
   free(geom->invJ);
