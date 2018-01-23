@@ -24,7 +24,6 @@ static void rGridFuncToQuad2S(const int numElements,
                               const int* restrict l2gMap,
                               const double * restrict gf,
                               double* restrict out) {
-  //dbg();
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
@@ -91,7 +90,6 @@ void rGridFuncToQuadS(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
-  //dbg();
   const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
   assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);

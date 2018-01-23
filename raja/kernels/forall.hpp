@@ -65,7 +65,7 @@ void cuda_forallT(const int end,
   const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
   forall_kernel_gpu<<<gridSize, blockSize>>>(end,step,body);
-  cudaDeviceSynchronize();
+  //cudaDeviceSynchronize();
 }
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 

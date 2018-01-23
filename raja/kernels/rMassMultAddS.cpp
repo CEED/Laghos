@@ -26,7 +26,6 @@ static void rMassMultAdd2S(const int numElements,
                            const double* restrict oper,
                            const double* restrict solIn,
                            double* restrict solOut) {
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
@@ -139,7 +138,6 @@ typedef void (*fMassMultAdd)(const int numElements,
                     const double* op,
                     const double* x,
                     double* __restrict y) {
-  //dbg();
   const unsigned int id = (DIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);
   assert(LOG2(NUM_DOFS_1D)<=8);

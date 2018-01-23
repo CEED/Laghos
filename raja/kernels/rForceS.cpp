@@ -30,8 +30,6 @@ void rForceMult2S(const int numElements,
                   const double* restrict stressJinvT,
                   const double* restrict e,
                   double* restrict v) {
-  
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
@@ -135,7 +133,6 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D>
-//kernel
 void rForceMultTranspose2S(const int numElements,
                            const double* restrict L2QuadToDof,
                            const double* restrict H1DofToQuad,
@@ -143,8 +140,6 @@ void rForceMultTranspose2S(const int numElements,
                            const double* restrict stressJinvT,
                            const double* restrict v,
                            double* restrict e) {
-  
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD = NUM_QUAD_2D;
 
@@ -268,7 +263,6 @@ void rForceMultS(const int NUM_DIM,
                  const double* restrict stressJinvT,
                  const double* restrict e,
                  double* restrict v) {
-  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -335,7 +329,6 @@ void rForceMultTransposeS(const int NUM_DIM,
                           const double* restrict stressJinvT,
                           const double* restrict v,
                           double* restrict e) {
-  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|

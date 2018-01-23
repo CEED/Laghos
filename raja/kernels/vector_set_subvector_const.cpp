@@ -19,7 +19,6 @@ void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs) {
-  //dbg();
   forall(i,N,{
       const int dof_i = tdofs[i];
       data[dof_i] = value;

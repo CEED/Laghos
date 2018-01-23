@@ -22,7 +22,6 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  //dbg();
   forallS(eOff,numElements,A2_ELEMENT_BATCH,{
     for (int e = eOff; e < (eOff + A2_ELEMENT_BATCH); ++e) {
       if (e < numElements) {
@@ -49,7 +48,6 @@ void rMassAssembleS(const int dim,
                     const double* J,
                     const double COEFF,
                     double* __restrict oper) {
-  //dbg();
   if (dim==1) assert(false);
   if (dim==2) rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
   if (dim==3) assert(false);

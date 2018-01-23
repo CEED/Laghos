@@ -19,7 +19,6 @@
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-  //dbg();
 #if !defined(__NVCC__)
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
@@ -31,7 +30,7 @@ double vector_dot(const int N,
   for(;v;nBitInN++) v&=v-1;
   const int nBytes = nBitInN*sizeof(double);
   double h_dot[nBitInN];
-  double *d_dot; cudaMalloc(&d_dot, nBytes); cudaDeviceSynchronize();
+  double *d_dot; cudaMalloc(&d_dot, nBytes);
 
   // flush dot results 
   for(int i=0;i<nBitInN;i+=1) h_dot[i]=0.0;

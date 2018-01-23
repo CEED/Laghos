@@ -37,7 +37,6 @@ void rUpdateQuadratureData2DS(const double GAMMA,
                               const double* restrict detJ,
                               double* restrict stressJinvT,
                               double* restrict dtEst) {
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
@@ -268,7 +267,6 @@ void rUpdateQuadratureDataS(const double GAMMA,
                             const double* restrict detJ,
                             double* restrict stressJinvT,
                             double* restrict dtEst){
-  //dbg();
   const unsigned int id =
     (NUM_DIM<<24)|
     (NUM_QUAD<<16)|

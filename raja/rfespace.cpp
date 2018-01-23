@@ -12,60 +12,6 @@
 
 namespace mfem {
 
-  // ***************************************************************************
-  static void offsetsFlush(const int N, int *offsets){
-    forall(i,N,offsets[i] = 0;); 
-  }
-   
-  // ***************************************************************************
-  static void offsetFill(const int elements,
-                         const int localDofs,
-                         const int *elementMap,
-                         int *offsets){
-    forall(e,elements,{   
-        for (int d = 0; d < localDofs; ++d) {
-          const int gid = elementMap[localDofs*e + d];
-          ++offsets[gid + 1];
-        }
-      });
-  }
-  
-  // ***************************************************************************
-  static void offsetsAggregate(const int N, int *offsets){
-    // Only one thread can aggregate here
-    forall(solo,1,for(int i=0;i<N;i++) offsets[i]+=offsets[i-1];);
-  }
-
-  // ***************************************************************************
-  static void fillIndicesAndMap(const int elements,
-                                const int localDofs,
-                                const bool dof_map_is_identity,
-                                const int *dof_map,
-                                const int *elementMap,
-                                int *offsets,
-                                int *indices,
-                                int *map){
-   forall(e, elements, {
-        for (int d = 0; d < localDofs; ++d) {
-          const int did = dof_map_is_identity?d:dof_map[d];
-          const int gid = elementMap[localDofs*e + did];
-          const int lid = localDofs*e + d;
-          indices[offsets[gid]++] = lid;
-          map[lid] = gid;
-        }
-      });
-  }
-  
-  // ***************************************************************************
-  static void offsetsShift(const int globalDofs, int *offsets){
-    forall(dummy,1,{
-        for (int i = globalDofs; i > 0; --i) {
-          offsets[i] = offsets[i - 1];
-        }
-        offsets[0] = 0;
-      });
-  }
-
 // ***************************************************************************
 // * RajaFiniteElementSpace
 // ***************************************************************************
@@ -82,45 +28,52 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   const FiniteElement *fe = GetFE(0);
   const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
   const Array<int> &dof_map = el->GetDofMap();
-  const size_t dmSize = dof_map.Size();
-#ifdef __NVCC__
-  int *d_dof_map=(int*) rmalloc<int>::HoDNew(dmSize);
-  checkCudaErrors(cudaMemcpy(d_dof_map,dof_map,dmSize*sizeof(int),cudaMemcpyHostToDevice));
-#else
-  const int *d_dof_map=dof_map;
-#endif
   const bool dof_map_is_identity = (dof_map.Size()==0);
-    
-  const int elements = GetNE();
+  
   const Table& e2dTable = GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
-
-  const size_t eMapSize = elements*localDofs;
-#ifdef __NVCC__
-  int *d_elementMap=(int*) rmalloc<int>::HoDNew(eMapSize);
-  checkCudaErrors(cudaMemcpy(d_elementMap,elementMap,eMapSize*sizeof(int),cudaMemcpyHostToDevice));
-#else
-  const int *d_elementMap=elementMap;
-#endif 
-
+  const int elements = GetNE();
+  
+  Array<int> h_offsets(globalDofs+1);
   // We'll be keeping a count of how many local nodes point to its global dof
-  offsetsFlush(globalDofs+1,offsets.ptr());
-  offsetFill(elements,localDofs,d_elementMap,offsets);
-    
+  for (int i = 0; i <= globalDofs; ++i) {
+    h_offsets[i] = 0;
+  }
+  for (int e = 0; e < elements; ++e) {
+    for (int d = 0; d < localDofs; ++d) {
+      const int gid = elementMap[localDofs*e + d];
+      ++h_offsets[gid + 1];
+    }
+  }
   // Aggregate to find offsets for each global dof
-  offsetsAggregate(globalDofs,offsets.ptr()+1);  
-
-  // For each global dof, fill in all local nodes that point to it
-  fillIndicesAndMap(elements,localDofs,
-                    dof_map_is_identity,
-                    d_dof_map,
-                    d_elementMap,
-                    offsets,indices,map);
+  for (int i = 1; i <= globalDofs; ++i) {
+    h_offsets[i] += h_offsets[i - 1];
+  }
+  
+  Array<int> h_indices(localDofs*elements);
+  Array<int> h_map(localDofs*elements);
+  // For each global dof, fill in all local nodes that point   to it
+  for (int e = 0; e < elements; ++e) {
+    for (int d = 0; d < localDofs; ++d) {
+      const int did = dof_map_is_identity?d:dof_map[d];
+      const int gid = elementMap[localDofs*e + did];
+      const int lid = localDofs*e + d;
+      h_indices[h_offsets[gid]++] = lid;
+      h_map[lid] = gid;
+    }
+  }
 
   // We shifted the offsets vector by 1 by using it as a counter
   // Now we shift it back.
-  offsetsShift(globalDofs,offsets);
-
+  for (int i = globalDofs; i > 0; --i) {
+    h_offsets[i] = h_offsets[i - 1];
+  }
+  h_offsets[0] = 0;
+  
+  offsets = h_offsets;
+  indices = h_indices;
+  map = h_map;
+  
   const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
   const Operator* P = GetProlongationMatrix(); assert(P);
   
@@ -139,13 +92,9 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
       h_reorderIndices[trueIdx++] = i;
     }
   }
-  
+
   reorderIndices = ::new RajaArray<int>(2*trueCount);
-#ifdef __NVCC__
-  checkCudaErrors(cudaMemcpy(reorderIndices->ptr(),h_reorderIndices,2*trueCount*sizeof(int),cudaMemcpyHostToDevice));
-#else
-  ::memcpy(reorderIndices->ptr(),h_reorderIndices.GetData(),2*trueCount*sizeof(int));
-#endif
+  *reorderIndices = h_reorderIndices;
   
   restrictionOp = new RajaRestrictionOperator(R->Height(),
                                               R->Width(),

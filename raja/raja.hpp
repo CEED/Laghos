@@ -28,8 +28,8 @@
 // __NVCC__ ********************************************************************
 #ifdef __NVCC__
 #include <cuda.h>
-#include <helper_functions.h>
 #include <helper_cuda.h>
+#include <helper_functions.h>
 template <typename FORALL_BODY>
 __global__ void forall_kernel_gpu(const int end,
                                   const int step,
@@ -45,7 +45,6 @@ void cuda_forallT(const int end,
   const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
   forall_kernel_gpu<<<gridSize, blockSize>>>(end,step,body);
-  cudaDeviceSynchronize();
 }
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body});
 #else

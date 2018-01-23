@@ -1,3 +1,4 @@
+
 // Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
@@ -28,7 +29,6 @@ static void rForceMult2D(const int numElements,
                          const double* restrict stressJinvT,
                          const double* restrict e,
                          double* restrict v) {
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
 
   forall(el,numElements,{
@@ -100,7 +100,6 @@ static void rForceMultTranspose2D(const int numElements,
                                   const double* restrict stressJinvT,
                                   const double* restrict v,
                                   double* restrict e) {
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   
   forall(el,numElements,{
@@ -183,8 +182,7 @@ static void rForceMult3D(const int numElements,
                          const double* restrict H1QuadToDofD,
                          const double* restrict stressJinvT,
                          const double* restrict e,
-                         double* restrict v) {  
-  //dbg();
+                         double* restrict v) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   forall(el,numElements,{
@@ -297,7 +295,6 @@ static void rForceMultTranspose3D(const int numElements,
                                   const double* restrict stressJinvT,
                                   const double* restrict v,
                                   double* restrict e) {
-  //dbg();
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   forall(el,numElements,{
@@ -414,7 +411,6 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict stressJinvT,
                 const double* restrict e,
                 double* restrict v) {
-  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -483,7 +479,6 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict stressJinvT,
                          const double* restrict v,
                          double* restrict e) {
-  //dbg();
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|

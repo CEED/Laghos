@@ -23,7 +23,6 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  //dbg();
   forall(e,numElements,{
     for (int q = 0; q < NUM_QUAD_2D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,2,NUM_QUAD_2D)];
@@ -43,7 +42,6 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  //dbg();
   forall(e,numElements,{
     for (int q = 0; q < NUM_QUAD_3D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,3,NUM_QUAD_3D)];
@@ -71,7 +69,6 @@ void rMassAssemble(const int dim,
                    const double* J,
                    const double COEFF,
                    double* __restrict oper) {
-  //dbg();
   assert(false);
   if (dim==1) assert(false);
   if (dim==2) rMassAssemble2D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);

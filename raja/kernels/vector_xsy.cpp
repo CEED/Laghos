@@ -19,6 +19,5 @@ void vector_xsy(const int N,
                 double* __restrict v0,
                 const double* __restrict v1,
                 const double* __restrict v2) {
-  //dbg();
   forall(i,N,{v0[i] = v1[i]-v2[i];});
 }
