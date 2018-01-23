@@ -88,6 +88,14 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
   ~RajaArray(){rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
+  RajaArray& operator=(Array<T> &a){
+#ifdef __NVCC__
+    checkCudaErrors(cudaMemcpy(data,a.GetData(),a.Size()*sizeof(T),cudaMemcpyHostToDevice));
+#else
+    std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
+#endif
+    return *this;
+  }
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline T* GetData() const { return data; }

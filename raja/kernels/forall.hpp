@@ -51,9 +51,9 @@ const int CUDA_BLOCK_SIZE = 256;
 #define sync __syncthreads();
 #define share __shared__
 template <typename FORALL_BODY>
-__global__ void forall_kernel_gpu(const int length,
-                                  const int step,
-                                  FORALL_BODY body) {
+__global__ void gpu(const int length,
+                    const int step,
+                    FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
   if (ids < length) {body(ids);}
@@ -64,8 +64,7 @@ void cuda_forallT(const int end,
                   FORALL_BODY &&body) {
   const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
-  forall_kernel_gpu<<<gridSize, blockSize>>>(end,step,body);
-  //cudaDeviceSynchronize();
+  gpu<<<gridSize, blockSize>>>(end,step,body);
 }
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
