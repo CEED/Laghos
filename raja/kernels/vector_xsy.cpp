@@ -15,9 +15,19 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+extern "C" __global__
+void vector_xsy0(const int N,
+                 double* __restrict v0,
+                 const double* __restrict v1,
+                 const double* __restrict v2) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N) v0[i] = v1[i]-v2[i];
+}
+
 void vector_xsy(const int N,
                 double* __restrict v0,
                 const double* __restrict v1,
                 const double* __restrict v2) {
-  forall(i,N,{v0[i] = v1[i]-v2[i];});
+  //forall(i,N,{v0[i] = v1[i]-v2[i];});
+  cuKer(vector_xsy,N,v0,v1,v2);
 }

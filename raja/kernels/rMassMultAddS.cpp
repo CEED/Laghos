@@ -17,27 +17,30 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D>
-static void rMassMultAdd2S(const int numElements,
-                           const double* restrict dofToQuad,
-                           const double* restrict dofToQuadD,
-                           const double* restrict quadToDof,
-                           const double* restrict quadToDofD,
-                           const double* restrict oper,
-                           const double* restrict solIn,
-                           double* restrict solOut) {
+         const int NUM_QUAD_1D> __global__ 
+void rMassMultAdd2S(const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
-  forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+  //forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int eOff = idx * M2_ELEMENT_BATCH;
+  if (eOff < numElements){
     // Store dof <--> quad mappings
-    share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    share double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    __shared__ double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
 
     // Store xy planes in shared memory
-    share double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
-    share double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    __shared__ double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    __shared__ double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
     double r_x[NUM_MAX_1D];
 
@@ -113,7 +116,7 @@ static void rMassMultAdd2S(const int numElements,
         }
       }
     }
-    });
+  }
 }
 
 // *****************************************************************************
@@ -233,5 +236,7 @@ typedef void (*fMassMultAdd)(const int numElements,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
+  const int blck = NUM_QUAD_1D;
+  call0(rMassMultAdd2S,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

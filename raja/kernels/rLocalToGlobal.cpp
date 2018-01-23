@@ -16,15 +16,17 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-void rLocalToGlobal(const int NUM_VDIM,
-                    const bool VDIM_ORDERING,
-                    const int globalEntries,
-                    const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* localX,
-                    double* __restrict globalX) {
-  forall(i,globalEntries,{
+extern "C" __global__
+void rLocalToGlobal0(const int NUM_VDIM,
+                     const bool VDIM_ORDERING,
+                     const int globalEntries,
+                     const int localEntries,
+                     const int* offsets,
+                     const int* indices,
+                     const double* localX,
+                     double* __restrict globalX) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < globalEntries){
     const int offset = offsets[i];
     const int nextOffset = offsets[i + 1];
     for (int v = 0; v < NUM_VDIM; ++v) {
@@ -36,5 +38,16 @@ void rLocalToGlobal(const int NUM_VDIM,
       const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
       globalX[g_offset] = dofValue;
     }
-  });
+  }
+}
+void rLocalToGlobal(const int NUM_VDIM,
+                    const bool VDIM_ORDERING,
+                    const int globalEntries,
+                    const int localEntries,
+                    const int* offsets,
+                    const int* indices,
+                    const double* localX,
+                    double* __restrict globalX) {
+  cuKerGB(rLocalToGlobal,1,256,NUM_VDIM,VDIM_ORDERING,
+        globalEntries,localEntries,offsets,indices,localX,globalX);
 }

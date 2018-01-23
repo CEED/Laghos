@@ -166,15 +166,9 @@ int main(int argc, char *argv[])
    char name[128];
    checkCudaErrors(cuDeviceComputeCapability(&major, &minor,dev));
    cuDeviceGetName(name, 128, cuDevice);
-   printf("\033[32m[laghos] Using Device %d: \"%s\" with Compute %d.%d capability\033[m\n", dev, name, major, minor);
-   cuCtxCreate(&cuContext, 0, cuDevice);
-
-   const size_t size = 1024;
-   float *h_A = (float *)malloc(size);
-   CUdeviceptr d_A;
-   cuMemAlloc(&d_A, size);
-   cuMemcpyHtoD(d_A, h_A, size);
-   
+   //printf("\n");
+   //printf("\033[32m[laghos] Using Device %d: \"%s with ComputeCapability %d.%d\033[m\n",dev, name, major, minor);
+   cuCtxCreate(&cuContext, 0, cuDevice);   
 #ifndef __RAJA__
    cuda=true;
    assert(cuda);
@@ -317,7 +311,7 @@ int main(int argc, char *argv[])
       cout << "Number of kinematic (position, velocity) dofs: "
            << glob_size_h1 << endl;
       cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
+           << glob_size_l2 << endl<< endl;
    }
 
    int Vsize_l2 = L2FESpace.GetVSize();

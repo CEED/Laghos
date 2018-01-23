@@ -15,29 +15,61 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+// *****************************************************************************
+extern "C" __global__
+void rSetSubVector0(const int N,
+                    const int* indices,
+                    const double* in,
+                    double* __restrict out) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N) out[indices[i]] = in[i];
+}
 void rSetSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
-  forall(i,N,{
-    out[indices[i]] = in[i];
-  });
+  //forall(i,N,out[indices[i]] = in[i];);
+  cuKer(rSetSubVector,N,indices,in,out);
 }
 
+// *****************************************************************************
+extern "C" __global__
+void rMapSubVector0(const int N,
+                    const int* indices,
+                    const double* in,
+                    double* __restrict out) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N){
+    const int fromIdx = indices[2*i + 0];
+    const int toIdx   = indices[2*i + 1];
+    out[toIdx] = in[fromIdx];
+  }
+}
 void rMapSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
-  forall(i,N,{
+  /*forall(i,N,{
     const int fromIdx = indices[2*i + 0];
     const int toIdx   = indices[2*i + 1];
     out[toIdx] = in[fromIdx];
-  });
+  });*/
+  cuKer(rMapSubVector,N,indices,in,out);
 }
 
+// *****************************************************************************
+extern "C" __global__
+void rExtractSubVector0(const int N,
+                        const int* indices,
+                        const double* in,
+                        double* __restrict out) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N) out[i] = in[indices[i]];
+}
 void rExtractSubVector(const int N,
                        const int* indices,
                        const double* in,
                        double* __restrict out) {
-  forall(i,N,out[i] = in[indices[i]];);
+  //forall(i,N,out[i] = in[indices[i]];);
+  cuKerGB(rExtractSubVector,1,256,N,indices,in,out);
 }

@@ -52,7 +52,7 @@ home = $(HOME)
 raja = $(pwd)/raja
 kernels = $(raja)/kernels
 
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+CPU = 1 #$(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # Default installation location
 PREFIX = ./bin
@@ -122,20 +122,22 @@ ifeq ($(LAGHOS_RAJA),YES)
 		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
-		--gpu-architecture sm_60 \
+		--gpu-architecture sm_61 \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
 endif
 
 #################
 # CUDA compiler #
 # use 'make nvidia'
+# -O3 -arch=sm_61  -Xptxas -v,-dlcm=cg
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = nvcc
-	CXXFLAGS = -std=c++11 -O3 -g -G -x=cu -m64 \
+	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61  -Xptxas -v,-dlcm=cg
+	CXXFLAGS_RAJA = -std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
-		--gpu-architecture sm_60 \
+		--gpu-architecture sm_61 \
 		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
 endif
 
@@ -202,7 +204,7 @@ rule_dumb = @echo -e $(rule_path)/$(rule_file)
 rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
              $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
 output = $(rule_${TERM})
-quiet := --quiet -S
+#quiet := --quiet -S
 
 ###########
 # Targets #

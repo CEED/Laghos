@@ -15,11 +15,28 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+extern "C" __global__
+void vector_set_subvector_const0(const int N,
+                                 const double value,
+                                 double* __restrict data,
+                                 const int* __restrict tdofs) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i >= N) return;
+  const int dof_i = tdofs[i];
+  data[dof_i] = value;
+  if (dof_i >= 0) {
+    data[dof_i] = value;
+  } else {
+    data[-dof_i-1] = -value;
+  }
+}
+
 void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs) {
-  forall(i,N,{
+  cuKer(vector_set_subvector_const,N,value,data,tdofs);
+  /*forall(i,N,{
       const int dof_i = tdofs[i];
       data[dof_i] = value;
       if (dof_i >= 0) {
@@ -27,5 +44,5 @@ void vector_set_subvector_const(const int N,
       } else {
         data[-dof_i-1] = -value;
       }
-    });
+      });*/
 }

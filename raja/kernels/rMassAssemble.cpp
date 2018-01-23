@@ -17,13 +17,15 @@
 
 
 // *****************************************************************************
-static void rMassAssemble2D(const int NUM_QUAD_2D,
-                            const int numElements,
-                            const double COEFF,
-                            const double* quadWeights,
-                            const double* J,
-                            double* __restrict oper) {
-  forall(e,numElements,{
+extern "C" __global__
+void rMassAssemble2D0(const int NUM_QUAD_2D,
+                      const int numElements,
+                      const double COEFF,
+                      const double* quadWeights,
+                      const double* J,
+                      double* __restrict oper) {
+  const int e = blockDim.x * blockIdx.x + threadIdx.x;
+  if (e < numElements){
     for (int q = 0; q < NUM_QUAD_2D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,2,NUM_QUAD_2D)];
       const double J12 = J[ijklNM(1,0,q,e,2,NUM_QUAD_2D)];
@@ -32,17 +34,27 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
       const double detJ = ((J11 * J22)-(J21 * J12));
       oper[ijN(q,e,NUM_QUAD_2D)] = quadWeights[q] * COEFF * detJ;
     }
-  });
+  }
 }
-
-// *****************************************************************************
-static void rMassAssemble3D(const int NUM_QUAD_3D,
+static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const int numElements,
                             const double COEFF,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
-  forall(e,numElements,{
+  cuKer(rMassAssemble2D,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
+}
+
+// *****************************************************************************
+extern "C" __global__
+void rMassAssemble3D0(const int NUM_QUAD_3D,
+                      const int numElements,
+                      const double COEFF,
+                      const double* quadWeights,
+                      const double* J,
+                      double* __restrict oper) {
+  const int e = blockDim.x * blockIdx.x + threadIdx.x;
+  if (e < numElements){
     for (int q = 0; q < NUM_QUAD_3D; ++q) {
       const double J11 = J[ijklNM(0,0,q,e,3,NUM_QUAD_3D)];
       const double J12 = J[ijklNM(1,0,q,e,3,NUM_QUAD_3D)];
@@ -58,7 +70,15 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                            (J12*J21*J33)-(J11*J23*J32));
       oper[ijN(q,e,NUM_QUAD_3D)] = quadWeights[q]*COEFF*detJ;
     }
-  });
+  }
+}
+static void rMassAssemble3D(const int NUM_QUAD_3D,
+                            const int numElements,
+                            const double COEFF,
+                            const double* quadWeights,
+                            const double* J,
+                            double* __restrict oper) {
+  cuKer(rMassAssemble3D,NUM_QUAD_3D,numElements,COEFF,quadWeights,J,oper);
 }
 
 // *****************************************************************************

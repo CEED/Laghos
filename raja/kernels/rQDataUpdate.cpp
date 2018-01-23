@@ -19,27 +19,27 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D>
-static void rUpdateQuadratureData2D(const double GAMMA,
-                                    const double H0,
-                                    const double CFL,
-                                    const bool USE_VISCOSITY,
-                                    const int numElements,
-                                    const double* restrict dofToQuad,
-                                    const double* restrict dofToQuadD,
-                                    const double* restrict quadWeights,
-                                    const double* restrict v,
-                                    const double* restrict e,
-                                    const double* restrict rho0DetJ0w,
-                                    const double* restrict invJ0,
-                                    const double* restrict J,
-                                    const double* restrict invJ,
-                                    const double* restrict detJ,
-                                    double* restrict stressJinvT,
-                                    double* restrict dtEst) {
+         const int NUM_DOFS_1D> __global__
+void rUpdateQuadratureData2D(const double GAMMA,
+                             const double H0,
+                             const double CFL,
+                             const bool USE_VISCOSITY,
+                             const int numElements,
+                             const double* restrict dofToQuad,
+                             const double* restrict dofToQuadD,
+                             const double* restrict quadWeights,
+                             const double* restrict v,
+                             const double* restrict e,
+                             const double* restrict rho0DetJ0w,
+                             const double* restrict invJ0,
+                             const double* restrict J,
+                             const double* restrict invJ,
+                             const double* restrict detJ,
+                             double* restrict stressJinvT,
+                             double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  
-  forall(el,numElements,{
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < numElements) {
     double s_gradv[4*NUM_QUAD_2D] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
       s_gradv[i] = 0;
@@ -170,34 +170,36 @@ static void rUpdateQuadratureData2D(const double GAMMA,
       stressJinvT[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_10)+(S10*invJ_11));
       stressJinvT[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_00)+(S11*invJ_01));
       stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
-    }});
+    }
+  }
 }
 
 // *****************************************************************************
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D>
-static void rUpdateQuadratureData3D(const double GAMMA,
-                                    const double H0,
-                                    const double CFL,
-                                    const bool USE_VISCOSITY,                                    
-                                    const int numElements,
-                                    const double* restrict dofToQuad,
-                                    const double* restrict dofToQuadD,
-                                    const double* restrict quadWeights,
-                                    const double* restrict v,
-                                    const double* restrict e,
-                                    const double* restrict rho0DetJ0w,
-                                    const double* restrict invJ0,
-                                    const double* restrict J,
-                                    const double* restrict invJ,
-                                    const double* restrict detJ,
-                                    double* restrict stressJinvT,
-                                    double* restrict dtEst) {
+         const int NUM_DOFS_1D> __global__
+void rUpdateQuadratureData3D(const double GAMMA,
+                             const double H0,
+                             const double CFL,
+                             const bool USE_VISCOSITY,                                    
+                             const int numElements,
+                             const double* restrict dofToQuad,
+                             const double* restrict dofToQuadD,
+                             const double* restrict quadWeights,
+                             const double* restrict v,
+                             const double* restrict e,
+                             const double* restrict rho0DetJ0w,
+                             const double* restrict invJ0,
+                             const double* restrict J,
+                             const double* restrict invJ,
+                             const double* restrict detJ,
+                             double* restrict stressJinvT,
+                             double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
-  forall(el,numElements,{
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < numElements) {
     double s_gradv[9*NUM_QUAD_3D];
     
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
@@ -475,7 +477,7 @@ static void rUpdateQuadratureData3D(const double GAMMA,
       stressJinvT[ijklNM(1,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_10)+(S12*invJ_11)+(S22*invJ_12));
       stressJinvT[ijklNM(2,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_20)+(S12*invJ_21)+(S22*invJ_22));
     }
-    });
+  }
 }
 
 // *****************************************************************************
@@ -556,18 +558,22 @@ void rUpdateQuadratureData(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](GAMMA,H0,CFL,USE_VISCOSITY,
-           nzones,
-           dofToQuad,
-           dofToQuadD,
-           quadWeights,
-           v,
-           e,
-           rho0DetJ0w,
-           invJ0,
-           J,
-           invJ,
-           detJ,
-           stressJinvT,
-           dtEst);
+  const int grid = nzones;//((nzones+128-1)/128);
+  const int blck = NUM_DOFS_1D;
+  //printf("\033[32;1m[cuKer] rUpdateQuadratureData: %d,%d\n", grid,blck); 
+  call0(rUpdateQuadratureData,id,grid,blck,
+        GAMMA,H0,CFL,USE_VISCOSITY,
+        nzones,
+        dofToQuad,
+        dofToQuadD,
+        quadWeights,
+        v,
+        e,
+        rho0DetJ0w,
+        invJ0,
+        J,
+        invJ,
+        detJ,
+        stressJinvT,
+        dtEst);
 }

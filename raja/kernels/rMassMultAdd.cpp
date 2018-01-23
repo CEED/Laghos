@@ -17,16 +17,17 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D>
-static void rMassMultAdd2D(const int numElements,
-                           const double* restrict dofToQuad,
-                           const double* restrict dofToQuadD,
-                           const double* restrict quadToDof,
-                           const double* restrict quadToDofD,
-                           const double* restrict oper,
-                           const double* restrict solIn,
-                           double* restrict solOut) {
-  forall(e,numElements,{
+         const int NUM_QUAD_1D> __global__
+void rMassMultAdd2D(const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
+  const int e = blockDim.x * blockIdx.x + threadIdx.x;
+  if (e < numElements) {
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -74,21 +75,22 @@ static void rMassMultAdd2D(const int numElements,
           }
         }
       }
-    });
+  }
 }
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D>
-static void rMassMultAdd3D(const int numElements,
-                           const double* dofToQuad,
-                           const double* dofToQuadD,
-                           const double* quadToDof,
-                           const double* quadToDofD,
-                           const double* oper,
-                           const double* solIn,
-                           double* __restrict solOut) {
-  forall(e,numElements,{
+         const int NUM_QUAD_1D> __global__
+void rMassMultAdd3D(const int numElements,
+                    const double* dofToQuad,
+                    const double* dofToQuadD,
+                    const double* quadToDof,
+                    const double* quadToDofD,
+                    const double* oper,
+                    const double* solIn,
+                    double* __restrict solOut) {
+  const int e = blockDim.x * blockIdx.x + threadIdx.x;
+  if (e < numElements) {
     double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -172,7 +174,7 @@ static void rMassMultAdd3D(const int numElements,
         }
       }
     }
-  });
+  }
 }
 
 // *****************************************************************************
@@ -291,5 +293,8 @@ void rMassMultAdd(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+  const int grid = numElements;
+  const int blck = NUM_QUAD_1D;
+  //printf("\033[32;1m[cuKer] rMassMultAdd: %d,%d\n", grid,blck); 
+  call0(rMassMultAdd,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

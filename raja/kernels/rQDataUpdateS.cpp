@@ -19,7 +19,7 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D>
+         const int NUM_DOFS_1D> __global__
 void rUpdateQuadratureData2DS(const double GAMMA,
                               const double H0,
                               const double CFL,
@@ -41,7 +41,10 @@ void rUpdateQuadratureData2DS(const double GAMMA,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
-  forall(el,numElements,{
+  //forall(el,numElements,{
+  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int el = idx;
+  if (el < numElements) {
     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
     share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
@@ -224,7 +227,7 @@ void rUpdateQuadratureData2DS(const double GAMMA,
         stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11));
       }
     }
-    });
+  }
 }
 // *****************************************************************************
 typedef void (*fUpdateQuadratureDataS)(const double GAMMA,
@@ -306,18 +309,23 @@ void rUpdateQuadratureDataS(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](GAMMA,H0,CFL,USE_VISCOSITY,
-           nzones,
-           dofToQuad,
-           dofToQuadD,
-           quadWeights,
-           v,
-           e,
-           rho0DetJ0w,
-           invJ0,
-           J,
-           invJ,
-           detJ,
-           stressJinvT,
-           dtEst);
+  const int grid = nzones;
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const int blck = NUM_MAX_1D;
+  //printf("\033[32;1m[cuKer] rUpdateQuadratureData2DS: %d,%d\n", grid,blck); 
+  call0(rUpdateQuadratureData2DS,id,grid,blck,
+        GAMMA,H0,CFL,USE_VISCOSITY,
+        nzones,
+        dofToQuad,
+        dofToQuadD,
+        quadWeights,
+        v,
+        e,
+        rho0DetJ0w,
+        invJ0,
+        J,
+        invJ,
+        detJ,
+        stressJinvT,
+        dtEst);
 }

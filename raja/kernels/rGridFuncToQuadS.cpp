@@ -18,16 +18,19 @@
 // *****************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D>
-static void rGridFuncToQuad2S(const int numElements,
-                              const double* restrict dofToQuad,
-                              const int* restrict l2gMap,
-                              const double * restrict gf,
-                              double* restrict out) {
+         const int NUM_QUAD_1D> __global__
+void rGridFuncToQuad2S(const int numElements,
+                       const double* restrict dofToQuad,
+                       const int* restrict l2gMap,
+                       const double * restrict gf,
+                       double* restrict out) {
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
-  forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+  //forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int eOff = idx * M2_ELEMENT_BATCH;
+  if (eOff < numElements){
     // Store dof <--> quad mappings
     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
@@ -72,7 +75,7 @@ static void rGridFuncToQuad2S(const int numElements,
         }
       }
     }
-    });
+  }
 }
 // *****************************************************************************
 typedef void (*fGridFuncToQuad)(const int numElements,
@@ -183,5 +186,9 @@ void rGridFuncToQuadS(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](numElements,dofToQuad,l2gMap,gf,out);
+  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const int blck = NUM_MAX_1D;
+  //printf("\033[32;1m[cuKer] rGridFuncToQuadS: %d,%d\n", grid,blck); 
+  call0(rGridFuncToQuadS,id,grid,blck,numElements,dofToQuad,l2gMap,gf,out);
 }

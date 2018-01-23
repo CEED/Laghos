@@ -211,8 +211,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    timer.dof_tstep += H1FESpace.GlobalTrueVSize();
    rhs.Neg();
 
-   RajaVector B(H1compFESpace.GetTrueVSize()); B=0.0;
-   RajaVector X(H1compFESpace.GetTrueVSize()); X=0.0;
+   //RajaVector B(H1compFESpace.GetTrueVSize()); B=0.0;
+   //RajaVector X(H1compFESpace.GetTrueVSize()); X=0.0;
    //dv = 0.0;
 
    // Partial assembly solve for each velocity component.
@@ -231,7 +231,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
       
       dv_c = 0.0;
-      //RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
+      RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
       // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
       H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
       H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);

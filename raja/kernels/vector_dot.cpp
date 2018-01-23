@@ -50,7 +50,7 @@ double vector_dot(const int N,
   for(int i=1;i<nBitInN;i+=1)
     h_dot[0]+=h_dot[i];
 
-  //printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
+  printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
   return h_dot[0];
 #endif
 }

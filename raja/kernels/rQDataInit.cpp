@@ -17,18 +17,19 @@
 
 
 // *****************************************************************************
-template<const int NUM_QUAD>
-static void rInitQuadratureData(const int nzones,
-                                const double* restrict rho0,
-                                const double* restrict detJ,
-                                const double* restrict quadWeights,
-                                double* restrict rho0DetJ0w) {
-  forall(el,nzones,{
-      for (int q = 0; q < NUM_QUAD; ++q){
-        rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
-          rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
-      }
-    });
+template<const int NUM_QUAD> __global__
+void rInitQuadratureData(const int nzones,
+                         const double* restrict rho0,
+                         const double* restrict detJ,
+                         const double* restrict quadWeights,
+                         double* restrict rho0DetJ0w) {
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < nzones){
+    for (int q = 0; q < NUM_QUAD; ++q){
+      rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
+        rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
+    }
+  }
 }
 typedef void (*fInitQuadratureData)(const int,const double*,const double*,const double*,double*);
 void rInitQuadratureData(const int NUM_QUAD,
@@ -57,6 +58,8 @@ void rInitQuadratureData(const int NUM_QUAD,
     printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
-  assert(call[NUM_QUAD]);
-  call[NUM_QUAD](numElements,rho0,detJ,quadWeights,rho0DetJ0w);
+  assert(call[id]);
+  const int grid = numElements;
+  const int blck = NUM_QUAD;
+  call0(rInitQuadratureData,id,grid,blck,numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 }

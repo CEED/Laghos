@@ -21,17 +21,17 @@ template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D>
-static void rForceMult2D(const int numElements,
-                         const double* restrict L2DofToQuad,
-                         const double* restrict H1QuadToDof,
-                         const double* restrict H1QuadToDofD,
-                         const double* restrict stressJinvT,
-                         const double* restrict e,
-                         double* restrict v) {
+         const int H1_DOFS_1D> __global__
+void rForceMult2D(const int numElements,
+                  const double* restrict L2DofToQuad,
+                  const double* restrict H1QuadToDof,
+                  const double* restrict H1QuadToDofD,
+                  const double* restrict stressJinvT,
+                  const double* restrict e,
+                  double* restrict v) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-
-  forall(el,numElements,{
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < numElements) {
     double e_xy[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       e_xy[i] = 0;
@@ -84,7 +84,7 @@ static void rForceMult2D(const int numElements,
         }
       }
     }
-    });
+  }
 }
 
 // *****************************************************************************
@@ -93,16 +93,17 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D>
-static void rForceMultTranspose2D(const int numElements,
-                                  const double* restrict L2QuadToDof,
-                                  const double* restrict H1DofToQuad,
-                                  const double* restrict H1DofToQuadD,
-                                  const double* restrict stressJinvT,
-                                  const double* restrict v,
-                                  double* restrict e) {
+__global__
+void rForceMultTranspose2D(const int numElements,
+                           const double* restrict L2QuadToDof,
+                           const double* restrict H1DofToQuad,
+                           const double* restrict H1DofToQuadD,
+                           const double* restrict stressJinvT,
+                           const double* restrict v,
+                           double* restrict e) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  
-  forall(el,numElements,{
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < numElements) {
     double vStress[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       vStress[i] = 0;
@@ -167,7 +168,7 @@ static void rForceMultTranspose2D(const int numElements,
         }
       }
     }
-    });
+  }
 }
 
 // *****************************************************************************
@@ -454,7 +455,11 @@ void rForceMult(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+  //call[id](nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+  const int grid = nzones;
+  const int blck = NUM_QUAD_1D;
+  //printf("\033[32;1m[cuKer] rForceMult2D: %d,%d\n", grid,blck); 
+  call0(rForceMult2D,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 }
 
 // *****************************************************************************
@@ -517,6 +522,8 @@ void rForceMultTranspose(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call[id](nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+  const int grid = nzones;
+  const int blck = NUM_QUAD_1D;
+  call0(rForceMultTranspose,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 }
 

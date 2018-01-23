@@ -15,7 +15,15 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+extern "C" __global__
+void vector_neg0(const int N,
+                double* __restrict vec) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N) vec[i] *= -1.0;
+}
+
 void vector_neg(const int N,
                 double* __restrict vec) {
-  forall(i,N,vec[i] *= -1.0;);
+  //forall(i,N,vec[i] *= -1.0;);
+  cuKer(vector_neg,N,vec);
 }

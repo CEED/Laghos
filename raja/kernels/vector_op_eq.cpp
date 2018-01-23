@@ -15,11 +15,10 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-
 extern "C" __global__
-void cu_vector_op_eq(const int N,
-                     const double c0,
-                     double* __restrict v0){
+void vector_op_eq0(const int N,
+                   const double c0,
+                   double* __restrict v0){
   const int i = blockDim.x * blockIdx.x + threadIdx.x;
   if (i < N) v0[i] = c0;
 }
@@ -28,6 +27,5 @@ void vector_op_eq(const int N,
                   const double c0,
                   double* __restrict v0){
   //forall(i,N,v0[i] = c0;);
-  forallu(cu_vector_op_eq,N,c0,v0);
-
+  cuKer(vector_op_eq,N,c0,v0);
 }

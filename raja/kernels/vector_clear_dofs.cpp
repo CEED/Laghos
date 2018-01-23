@@ -15,8 +15,17 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+extern "C" __global__
+void vector_clear_dofs0(const int N,
+                       double* __restrict v0,
+                       const int* __restrict v1) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < N) v0[v1[i]] = 0.0;
+}
+
 void vector_clear_dofs(const int N,
                        double* __restrict v0,
                        const int* __restrict v1) {
-  forall(i,N,v0[v1[i]] = 0.0;);
+  //forall(i,N,v0[v1[i]] = 0.0;);
+  cuKer(vector_clear_dofs,N,v0,v1);
 }
