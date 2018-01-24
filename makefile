@@ -130,15 +130,14 @@ endif
 # CUDA compiler #
 # use 'make nvidia'
 # -O3 -arch=sm_61  -Xptxas -v,-dlcm=cg
+# -res-usage
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = nvcc
-	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 -x=cu -Xptxas -v,-dlcm=cg
-	CXXFLAGS_RAJA = -std=c++11 -O3 -g -G -x=cu -m64 \
-		-Xcompiler -fopenmp \
-		--restrict --expt-extended-lambda \
-		--gpu-architecture sm_61 \
-		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 --restrict -x=cu -Xptxas -dlcm=cg
+#	CXXFLAGS = -std=c++11 -O3 -g -G -m64 -arch=sm_61 -x=cu \
+	--restrict -Xcompiler -fopenmp \
+	--expt-extended-lambda
 endif
 
 #######################
@@ -152,7 +151,6 @@ MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include
 
 CUDA_INC = -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
 CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcuda -lcudart -lcudadevrt 
-#CUDA_LIBS = /usr/local/cuda/lib64/libcudart_static.a 
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
@@ -229,10 +227,7 @@ $(kernels)/%.o: $(kernels)/%.cu;$(output)
 	-o $@ -c $<
 
 $(kernels)/%.lo: $(kernels)/%.o;$(output)
-	nvcc -m64 -arch=sm_60 -dlink \
-	-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++ \
-	-o $@ $< -lcudadevrt -lcudart
-
+	nvcc -m64 -arch=sm_61 -dlink -o $@ $< -lcudadevrt -lcudart
 all: 
 	@$(MAKE) $(quiet) -j $(CPU) laghos
 
