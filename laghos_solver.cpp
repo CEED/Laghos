@@ -174,15 +174,25 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // /home/camier1/home/mfems/mfem-raja/linalg/ode.tpp:121
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
+   nvtxRangePush(__FUNCTION__);
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
-   ParGridFunction x(&H1FESpace, h_x.GetData());
-   H1FESpace.GetParMesh()->NewNodes(x, false);
-   UpdateQuadratureData(S);
+   {
+     nvtxRangePush("Mesh");
+     Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
+     ParGridFunction x(&H1FESpace, h_x.GetData());
+     H1FESpace.GetParMesh()->NewNodes(x, false);
+     nvtxRangePop();
+   }
+   
+   {
+     nvtxRangePush("UpdateQ");
+     UpdateQuadratureData(S);
+     nvtxRangePop();
+   }
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // - Position
@@ -203,6 +213,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    dx = v;
    
    // Solve for velocity.
+   nvtxRangePush("ForcePA");
    RajaVector one(VsizeL2), rhs(VsizeH1); one = 1.0;
    timer.sw_force.Start();
    // /home/camier1/home/laghos/laghos-raja/laghos_assembly.cpp:178
@@ -210,6 +221,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    timer.sw_force.Stop();
    timer.dof_tstep += H1FESpace.GlobalTrueVSize();
    rhs.Neg();
+   nvtxRangePop();
 
    //RajaVector B(H1compFESpace.GetTrueVSize()); B=0.0;
    //RajaVector X(H1compFESpace.GetTrueVSize()); X=0.0;
@@ -217,6 +229,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
+   nvtxRangePush("Momentum Solve");
    for (int c = 0; c < dim; c++)
    {
       RajaVector rhs_c = rhs.GetRange(c*size, size),
@@ -252,26 +265,38 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
         H1compFESpace.GlobalTrueVSize();
       H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
+   nvtxRangePop();
 
    // Solve for energy, assemble the energy source if such exists.
+   nvtxRangePush("Solve for energy");
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
+     nvtxRangePush("Taylor-Green");
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
+      nvtxRangePop();
    }
    Array<int> l2dofs;
    RajaVector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-   timer.sw_force.Start();
-   ForcePA.MultTranspose(v, e_rhs);
-   timer.sw_force.Stop();
-   timer.dof_tstep += L2FESpace.GlobalTrueVSize();
+   {
+     nvtxRangePush("ForcePA.MultTranspose");
+     timer.sw_force.Start();
+     ForcePA.MultTranspose(v, e_rhs);
+     timer.sw_force.Stop();
+     timer.dof_tstep += L2FESpace.GlobalTrueVSize();
+     nvtxRangePop();
+   }
+   nvtxRangePop();
 
+   nvtxRangePush("e_source");
    if (e_source) e_rhs += RajaVector(*e_source);
+   nvtxRangePop();
    
+   nvtxRangePush("CG E");
    {
      TCGSolver<RajaVector> cg(L2FESpace.GetParMesh()->GetComm());
      cg.SetOperator(EMassPA);
@@ -285,9 +310,11 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      timer.sw_cgL2.Stop();
      timer.L2dof_iter += cg.GetNumIterations() * L2FESpace.TrueVSize();
    }
+   nvtxRangePop();
    delete e_source;
 
    quad_data_is_current = false;
+   nvtxRangePop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
@@ -376,19 +403,40 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
    if (quad_data_is_current) { return; }
+   nvtxRangePush("UpdateQuadratureData");
+  
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();
 
+   
+   nvtxRangePush("Init");
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
+   
+   nvtxRangePush("ve");
    RajaGridFunction v(H1FESpace, S.GetRange(vSize, vSize));
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
+   nvtxRangePop();
+
+   nvtxRangePush("Geom:Get");
    quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule);
+   nvtxRangePop();
+
+   nvtxRangePush("v2");
    RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs() * nzones);
+   nvtxRangePop();
+
+   nvtxRangePush("GlobalToLocal");
    H1FESpace.GlobalToLocal(v, v2);
+   nvtxRangePop();
+
+   nvtxRangePush("e");
    RajaVector eValues;
    e.ToQuad(use_share,integ_rule, eValues);
-   
+   nvtxRangePop();
+
+   nvtxRangePop();//Init
+
    const int NUM_QUAD = integ_rule.GetNPoints();
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
@@ -397,6 +445,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    ElementTransformation *T = H1FESpace.GetElementTransformation(0);
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
+   
+   nvtxRangePush("Update");
    if (use_share)
      rUpdateQuadratureDataS(gamma,
                             quad_data.h0,
@@ -441,12 +491,19 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.geom->detJ,
                            quad_data.stressJinvT,
                            quad_data.dtEst);
-   quad_data.dt_est = quad_data.dtEst.Min();
+   nvtxRangePop();
+   
+   {
+     nvtxRangePush("Min");
+     quad_data.dt_est = quad_data.dtEst.Min();
+     nvtxRangePop();
+   }
    
    quad_data_is_current = true;
    
    timer.sw_qdata.Stop();
    timer.quad_tstep += nzones * nqp;
+   nvtxRangePop();
 }
 
 } // namespace hydrodynamics

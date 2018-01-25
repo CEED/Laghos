@@ -28,6 +28,7 @@
 // __NVCC__ ********************************************************************
 #ifdef __NVCC__
 #include <cuda.h>
+#include <nvToolsExt.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
 #endif

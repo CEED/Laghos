@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__
+         const int NUM_QUAD_1D> kernel
 void rMassMultAdd2D(const int numElements,
                     const double* restrict dofToQuad,
                     const double* restrict dofToQuadD,
@@ -26,8 +26,13 @@ void rMassMultAdd2D(const int numElements,
                     const double* restrict oper,
                     const double* restrict solIn,
                     double* restrict solOut) {
+#ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements) {
+  if (e < numElements)
+#else
+  forall(e,numElements,
+#endif
+  {
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -76,11 +81,14 @@ void rMassMultAdd2D(const int numElements,
         }
       }
   }
+#ifdef __LAMBDA__
+  );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__
+         const int NUM_QUAD_1D> kernel
 void rMassMultAdd3D(const int numElements,
                     const double* dofToQuad,
                     const double* dofToQuadD,
@@ -89,8 +97,13 @@ void rMassMultAdd3D(const int numElements,
                     const double* oper,
                     const double* solIn,
                     double* __restrict solOut) {
+#ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements) {
+  if (e < numElements)
+#else
+  forall(e,numElements,
+#endif
+  {
     double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -175,6 +188,9 @@ void rMassMultAdd3D(const int numElements,
       }
     }
   }
+#ifdef __LAMBDA__
+  );
+#endif
 }
 
 // *****************************************************************************
@@ -293,8 +309,9 @@ void rMassMultAdd(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD_1D;
-  //printf("\033[32;1m[cuKer] rMassMultAdd: %d,%d\n", grid,blck); 
+#endif
   call0(rMassMultAdd,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

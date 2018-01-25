@@ -18,14 +18,19 @@
 // *****************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__
+         const int NUM_QUAD_1D> kernel
 void rGridFuncToQuad1D(const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
                        double* restrict out) {
+#ifdef __LAMBDA__
+  forall(e,numElements,
+#else
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements) {
+  if (e < numElements)
+#endif
+  {
     double r_out[NUM_VDIM][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
@@ -47,19 +52,27 @@ void rGridFuncToQuad1D(const int numElements,
       }
     }
   }
+#ifdef __LAMBDA__
+         );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__
+         const int NUM_QUAD_1D> kernel
 void rGridFuncToQuad2D(const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
                        double* restrict out) {
+#ifdef __LAMBDA__
+  forall(e,numElements,
+#else
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements) {
+  if (e < numElements)
+#endif
+  {
     double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -101,19 +114,27 @@ void rGridFuncToQuad2D(const int numElements,
       }
     }
   }
+#ifdef __LAMBDA__
+           );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__
+         const int NUM_QUAD_1D> kernel
 void rGridFuncToQuad3D(const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
                        double* restrict out) {
+#ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements){
+  if (e < numElements)
+#else
+  forall(e,numElements,
+#endif
+  {
     double out_xyz[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
     for (int v = 0; v < NUM_VDIM; ++v) {
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
@@ -180,6 +201,9 @@ void rGridFuncToQuad3D(const int numElements,
       }
     }
   }
+#ifdef __LAMBDA__
+           );
+#endif
 }
 
 // *****************************************************************************
@@ -292,8 +316,9 @@ void rGridFuncToQuad(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = 1;
-  //printf("\033[32;1m[cuKer] rGridFuncToQuad: %d,%d\n", grid,blck); 
+#endif
   call0(rGridFuncToQuad,id,grid,blck,numElements,dofToQuad,l2gMap,gf,out);
 }

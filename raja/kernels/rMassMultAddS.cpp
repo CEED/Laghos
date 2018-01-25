@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> __global__ 
+         const int NUM_QUAD_1D> kernel 
 void rMassMultAdd2S(const int numElements,
                     const double* restrict dofToQuad,
                     const double* restrict dofToQuadD,
@@ -30,17 +30,21 @@ void rMassMultAdd2S(const int numElements,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   // Iterate over elements
-  //forallS(eOff,numElements,M2_ELEMENT_BATCH,{
+#ifdef __LAMBDA__
+  forallS(eOff,numElements,M2_ELEMENT_BATCH,
+#else
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int eOff = idx * M2_ELEMENT_BATCH;
-  if (eOff < numElements){
+  if (eOff < numElements)
+#endif
+  {    
     // Store dof <--> quad mappings
-    __shared__ double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    __shared__ double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    share double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
 
     // Store xy planes in shared memory
-    __shared__ double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
-    __shared__ double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    share double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
     double r_x[NUM_MAX_1D];
 
@@ -117,6 +121,9 @@ void rMassMultAdd2S(const int numElements,
       }
     }
   }
+#ifdef __LAMBDA__
+          );
+#endif
 }
 
 // *****************************************************************************
@@ -236,7 +243,9 @@ typedef void (*fMassMultAdd)(const int numElements,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
   const int blck = NUM_QUAD_1D;
+#endif
   call0(rMassMultAdd2S,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

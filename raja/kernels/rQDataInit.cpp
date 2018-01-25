@@ -17,19 +17,27 @@
 
 
 // *****************************************************************************
-template<const int NUM_QUAD> __global__
+template<const int NUM_QUAD> kernel
 void rInitQuadratureData(const int nzones,
                          const double* restrict rho0,
                          const double* restrict detJ,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w) {
+#ifndef __LAMBDA__
   const int el = blockDim.x * blockIdx.x + threadIdx.x;
-  if (el < nzones){
+  if (el < nzones)
+#else
+  forall(el,nzones,
+#endif
+  {
     for (int q = 0; q < NUM_QUAD; ++q){
       rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
         rho0[ijN(q,el,NUM_QUAD)]*detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
     }
   }
+#ifdef __LAMBDA__
+          );
+#endif
 }
 typedef void (*fInitQuadratureData)(const int,const double*,const double*,const double*,double*);
 void rInitQuadratureData(const int NUM_QUAD,
@@ -59,7 +67,9 @@ void rInitQuadratureData(const int NUM_QUAD,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD;
+#endif
   call0(rInitQuadratureData,id,grid,blck,numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 }

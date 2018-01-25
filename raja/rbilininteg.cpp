@@ -21,11 +21,13 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 static RajaGeometry *geom=NULL;
 
 RajaGeometry::~RajaGeometry(){
+  nvtxRangePush("Get");
   free(geom->meshNodes);
   free(geom->J);
   free(geom->invJ);
   free(geom->detJ);
   delete[] geom;
+  nvtxRangePop();
 }
 
   // ***************************************************************************
@@ -68,6 +70,7 @@ RajaGeometry::~RajaGeometry(){
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
+  nvtxRangePush("Get");
   geom=new RajaGeometry();
   Mesh& mesh = *(fes.GetMesh());
   if (!mesh.GetNodes()) {
@@ -103,12 +106,18 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   geom->detJ.allocate(numQuad, elements);
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   assert(maps);
-  rIniGeom(dims,numDofs,numQuad,elements,
-           maps->dofToQuadD,
-           geom->meshNodes,
-           geom->J,
-           geom->invJ,
-           geom->detJ);
+  
+  {
+    rIniGeom(dims,numDofs,numQuad,elements,
+             maps->dofToQuadD,
+             geom->meshNodes,
+             geom->J,
+             geom->invJ,
+             geom->detJ);
+    nvtxRangePop();
+  }
+
+  nvtxRangePop();
   return geom;
 }
 

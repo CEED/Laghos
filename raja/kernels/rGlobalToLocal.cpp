@@ -16,7 +16,7 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-extern "C" __global__
+extern "C" kernel
 void rGlobalToLocal0(const int NUM_VDIM,
                      const bool VDIM_ORDERING,
                      const int globalEntries,
@@ -25,8 +25,13 @@ void rGlobalToLocal0(const int NUM_VDIM,
                      const int* __restrict indices,
                      const double* __restrict globalX,
                      double* __restrict localX) {
+#ifdef __LAMBDA__
+  forall(i,globalEntries,
+#else
   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-  if (i < globalEntries) {
+  if (i < globalEntries)
+#endif
+  {
     const int offset = offsets[i];
     const int nextOffset = offsets[i+1];
     for (int v = 0; v < NUM_VDIM; ++v) {
@@ -38,6 +43,9 @@ void rGlobalToLocal0(const int NUM_VDIM,
       }
     }
   }
+#ifdef __LAMBDA__
+         );
+#endif
 }
 void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,

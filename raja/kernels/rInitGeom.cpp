@@ -17,15 +17,20 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS,
-         const int NUM_QUAD> __global__
+         const int NUM_QUAD> kernel
 void rIniGeom1D(const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
                 double* restrict invJ,
                 double* restrict detJ) {
+#ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements){
+  if (e < numElements)
+#else
+  forall(e,numElements,
+#endif
+  {
     double s_nodes[NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) { 
@@ -43,19 +48,27 @@ void rIniGeom1D(const int numElements,
       detJ[ijN(q, e,NUM_QUAD)] = J11;
     }
   }
+#ifdef __LAMBDA__
+          );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_DOFS,
-         const int NUM_QUAD> __global__
+         const int NUM_QUAD> kernel
 void rIniGeom2D(const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
                 double* restrict invJ,
                 double* restrict detJ) {
+#ifndef __LAMBDA__
   const int el = blockDim.x * blockIdx.x + threadIdx.x;
-  if (el < numElements) {
+  if (el < numElements)
+#else
+  forall(el,numElements,
+#endif
+  {
     double s_nodes[2 * NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d +=NUM_QUAD) {
@@ -87,19 +100,27 @@ void rIniGeom2D(const int numElements,
       detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
     }
   }
+#ifdef __LAMBDA__
+          );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_DOFS,
-         const int NUM_QUAD> __global__
+         const int NUM_QUAD> kernel
 void rIniGeom3D(const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
                 double* restrict invJ,
                 double* restrict detJ) {
+#ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-  if (e < numElements) {
+  if (e < numElements)
+#else
+  forall(e,numElements,
+#endif
+  {
     double s_nodes[3*NUM_DOFS];
     for (int q = 0; q < NUM_QUAD; ++q) {
       for (int d = q; d < NUM_DOFS; d += NUM_QUAD) {
@@ -151,6 +172,9 @@ void rIniGeom3D(const int numElements,
       detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
     }
   }
+#ifdef __LAMBDA__
+          );
+#endif
 }
 
 // *****************************************************************************
@@ -225,8 +249,9 @@ void rIniGeom(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD;
-  //printf("\033[32;1m[rIniGeom2D] %d,%d\n", grid,blck); 
+#endif
   call0(rIniGeom2D,id,grid,blck,numElements,dofToQuadD,nodes,J,invJ,detJ);
 }

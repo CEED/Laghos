@@ -19,7 +19,7 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> __global__
+         const int NUM_DOFS_1D> kernel
 void rUpdateQuadratureData2D(const double GAMMA,
                              const double H0,
                              const double CFL,
@@ -38,8 +38,13 @@ void rUpdateQuadratureData2D(const double GAMMA,
                              double* restrict stressJinvT,
                              double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+#ifndef __LAMBDA__
   const int el = blockDim.x * blockIdx.x + threadIdx.x;
-  if (el < numElements) {
+  if (el < numElements)
+#else
+  forall(el,numElements,
+#endif
+  {
     double s_gradv[4*NUM_QUAD_2D] ;
     for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
       s_gradv[i] = 0;
@@ -172,13 +177,16 @@ void rUpdateQuadratureData2D(const double GAMMA,
       stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
     }
   }
+#ifdef __LAMBDA__
+         );
+#endif
 }
 
 // *****************************************************************************
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> __global__
+         const int NUM_DOFS_1D> kernel
 void rUpdateQuadratureData3D(const double GAMMA,
                              const double H0,
                              const double CFL,
@@ -198,8 +206,13 @@ void rUpdateQuadratureData3D(const double GAMMA,
                              double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+#ifndef __LAMBDA__
   const int el = blockDim.x * blockIdx.x + threadIdx.x;
-  if (el < numElements) {
+  if (el < numElements)
+#else
+  forall(el,numElements,
+#endif
+  {
     double s_gradv[9*NUM_QUAD_3D];
     
     for (int i = 0; i < (9*NUM_QUAD_3D); ++i) {
@@ -478,6 +491,9 @@ void rUpdateQuadratureData3D(const double GAMMA,
       stressJinvT[ijklNM(2,2,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S02*invJ_20)+(S12*invJ_21)+(S22*invJ_22));
     }
   }
+#ifdef __LAMBDA__
+           );
+#endif
 }
 
 // *****************************************************************************
@@ -558,9 +574,10 @@ void rUpdateQuadratureData(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
-  const int grid = nzones;//((nzones+128-1)/128);
+#ifndef __LAMBDA__
+  const int grid = nzones;
   const int blck = NUM_DOFS_1D;
-  //printf("\033[32;1m[cuKer] rUpdateQuadratureData: %d,%d\n", grid,blck); 
+#endif
   call0(rUpdateQuadratureData,id,grid,blck,
         GAMMA,H0,CFL,USE_VISCOSITY,
         nzones,

@@ -15,7 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-extern "C" __global__
+#ifndef __LAMBDA__
+extern "C" kernel
 void vector_get_subvector0(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
@@ -26,16 +27,20 @@ void vector_get_subvector0(const int N,
     v0[i] = dof_i >= 0 ? v1[dof_i] : -v1[-dof_i-1];
   }
 }
+#endif
 
 
 void vector_get_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
-  /*forall(i,N,{
+#ifndef __LAMBDA__
+  cuKer(vector_get_subvector,N,v0,v1,v2);
+#else
+  forall(i,N,{
       const int dof_i = v2[i];
       v0[i] = dof_i >= 0 ? v1[dof_i] : -v1[-dof_i-1];
-      });*/
-  cuKer(vector_get_subvector,N,v0,v1,v2);
+    });
+#endif
 }
 

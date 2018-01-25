@@ -25,6 +25,8 @@ extern "C" bool is_managed;
 #define A2_ELEMENT_BATCH 1
 #define A2_QUAD_BATCH 1
 
+
+// *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
 #define sync
@@ -45,20 +47,37 @@ const int CUDA_BLOCK_SIZE = 256;
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define ReduceForall(i,max,body) forall(i,max,body)
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
-#else // __KERNELS__ ***********************************************************
-//#warning NO RAJA, WITH NVCC
-#ifdef __NVCC__ // on GPU ******************************************************
+
+
+// *****************************************************************************
+#else // __KERNELS__ on GPU, CUDA launches  ************************************
+#ifdef __NVCC__
+#ifndef __LAMBDA__
+#define kernel __global__
 #define sync __syncthreads();
 #define share __shared__
-/*template <typename FORALL_BODY>
+//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);
+//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
+//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
+#define cuKer(name,end,...) name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
+#define cuKerGB(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
+#define call0(name,id,grid,blck,...)  call[id]<<<grid,blck>>>(__VA_ARGS__)
+
+
+// *****************************************************************************
+#else // __KERNELS__ on GPU, LAMBDA launches  **********************************
+#define kernel
+#define sync
+#define share
+template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
                     FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
   if (ids < length) {body(ids);}
-  }*/
-/*template <typename FORALL_BODY>
+}
+template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
                   FORALL_BODY &&body) {
@@ -66,26 +85,21 @@ void cuda_forallT(const int end,
   const size_t gridSize = (end+blockSize-1)/blockSize;
   //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
   gpu<<<gridSize, blockSize>>>(end,step,body);
-  //cudaDeviceSynchronize();
-  }*/
-//#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
-
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);
-#define cuKer(name,end,...) \
-  name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
-
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
-#define cuKerGB(name,grid,block,end,...)                                \
-  name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-
-//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
-#define call0(name,id,grid,blck,...)                                  \
-  call[id]<<<grid,blck>>>(__VA_ARGS__)
+}
+#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
-#else // __KERNELS__ on CPU ****************************************************
+#define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
+#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#endif // __LAMBDA__
+
+
+// *****************************************************************************
+#else // __KERNELS__ on Cpu ****************************************************
 //#warning NO RAJA, NO NVCC
 #define sync
 #define share
+#define kernel
 class ReduceSum{
 public:
   double s;
@@ -106,6 +120,9 @@ public:
 #define forall(i,max,body) for(int i=0;i<max;i++){body}
 #define forallS(i,max,step,body) for(int i=0;i<max;i+=step){body}
 #define ReduceForall(i,max,body) forall(i,max,body)
+#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
+#define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
+#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #endif //__NVCC__
 #endif // __RAJA__
 #endif // LAGHOS_RAJA_KERNELS_FORALL

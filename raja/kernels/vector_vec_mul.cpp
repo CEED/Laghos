@@ -15,17 +15,22 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
-extern "C" __global__
+#ifndef __LAMBDA__
+extern "C" kernel
 void vector_vec_mul0(const int N,
                      double* __restrict v0,
                      const double d) {
   const int i = blockDim.x*blockIdx.x+threadIdx.x;
   if (i < N) v0[i]*=d;
 }
+#endif
 
 void vector_vec_mul(const int N,
                     double* __restrict v0,
                     const double d) {
-  //forall(i,N,v0[i]*=d;);
+#ifndef __LAMBDA__
   cuKer(vector_vec_mul,N,v0,d);
+#else
+  forall(i,N,v0[i]*=d;);
+#endif
 }

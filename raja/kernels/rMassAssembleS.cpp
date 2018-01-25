@@ -16,17 +16,21 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-extern "C" __global__
+extern "C" kernel
 void rMassAssemble2S0(const int NUM_QUAD_2D,
                       const int numElements,
                       const double COEFF,
                       const double* quadWeights,
                       const double* J,
                       double* __restrict oper) {
-  //forallS(eOff,numElements,A2_ELEMENT_BATCH,{
+#ifdef __LAMBDA__
+  forallS(eOff,numElements,A2_ELEMENT_BATCH,
+#else
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int eOff = idx * A2_ELEMENT_BATCH;
-  if (eOff < numElements) {
+  if (eOff < numElements)
+#endif
+  {
     for (int e = eOff; e < (eOff + A2_ELEMENT_BATCH); ++e) {
       if (e < numElements) {
         for (int qOff = 0; qOff < A2_QUAD_BATCH; ++qOff) {
@@ -42,6 +46,9 @@ void rMassAssemble2S0(const int NUM_QUAD_2D,
       }
     }
   }
+#ifdef __LAMBDA__
+  );
+#endif
 }
 static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const int numElements,
@@ -49,8 +56,10 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
+#ifndef __LAMBDA__
    const int grid = ((numElements+A2_ELEMENT_BATCH-1)/A2_ELEMENT_BATCH);
    const int block = A2_QUAD_BATCH;
+#endif
    cuKerGB(rMassAssemble2S,grid,block,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
 }
 

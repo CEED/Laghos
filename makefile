@@ -118,7 +118,7 @@ CXXFLAGS += -std=c++11 #-ftrapv
 ####################
 ifeq ($(LAGHOS_RAJA),YES)
 	CXX = nvcc
-	CXXFLAGS = -D__RAJA__ -DUSE_CUDA \
+	CXXFLAGS = -D__LAMBDA__ -D__RAJA__ -DUSE_CUDA \
 		-std=c++11 -O3 -g -G -x=cu -m64 \
 		-Xcompiler -fopenmp \
 		--restrict --expt-extended-lambda \
@@ -134,10 +134,14 @@ endif
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = nvcc
-	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 --restrict -x=cu -Xptxas -dlcm=cg
+	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 \
+					--restrict -x=cu -Xptxas -dlcm=cg
+	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
 #	CXXFLAGS = -std=c++11 -O3 -g -G -m64 -arch=sm_61 -x=cu \
 	--restrict -Xcompiler -fopenmp \
 	--expt-extended-lambda
+else
+	CXXFLAGS += -D__LAMBDA__
 endif
 
 #######################
@@ -150,7 +154,7 @@ MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include
 #BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
 CUDA_INC = -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
-CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcuda -lcudart -lcudadevrt 
+CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcuda -lcudart -lcudadevrt -lnvToolsExt
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a

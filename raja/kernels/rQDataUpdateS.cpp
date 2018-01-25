@@ -19,7 +19,7 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> __global__
+         const int NUM_DOFS_1D> kernel
 void rUpdateQuadratureData2DS(const double GAMMA,
                               const double H0,
                               const double CFL,
@@ -41,10 +41,14 @@ void rUpdateQuadratureData2DS(const double GAMMA,
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 
-  //forall(el,numElements,{
+#ifdef __LAMBDA__
+  forall(el,numElements,
+#else
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int el = idx;
-  if (el < numElements) {
+  if (el < numElements)
+#endif
+  {
     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
     share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
@@ -228,6 +232,9 @@ void rUpdateQuadratureData2DS(const double GAMMA,
       }
     }
   }
+#ifdef __LAMBDA__
+         );
+#endif
 }
 // *****************************************************************************
 typedef void (*fUpdateQuadratureDataS)(const double GAMMA,
@@ -309,10 +316,11 @@ void rUpdateQuadratureDataS(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
+#ifndef __LAMBDA__
   const int grid = nzones;
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int blck = NUM_MAX_1D;
-  //printf("\033[32;1m[cuKer] rUpdateQuadratureData2DS: %d,%d\n", grid,blck); 
+#endif
   call0(rUpdateQuadratureData2DS,id,grid,blck,
         GAMMA,H0,CFL,USE_VISCOSITY,
         nzones,
