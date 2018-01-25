@@ -49,20 +49,20 @@ class RajaProlongationOperator : public RajaOperator {
     RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
 //    #warning Mult shortcut
-    y=x;
-//    const Vector hostX=x;
-//    Vector hostY(y.Size());
-//    pmat->Mult(hostX, hostY);
-//    y=hostY;
+//    y=x;
+    const Vector hostX=x;
+    Vector hostY(y.Size());
+    pmat->Mult(hostX, hostY);
+    y=hostY;
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
 //#warning Mult shortcut
-    y=x;
-//    const Vector hostX=x;
-//    Vector hostY(y.Size());
-//    // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
-//    pmat->MultTranspose(hostX, hostY);
-//    y=hostY;
+//    y=x;
+    const Vector hostX=x;
+    Vector hostY(y.Size());
+    // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
+    pmat->MultTranspose(hostX, hostY);
+    y=hostY;
   }
 };
 

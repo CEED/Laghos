@@ -180,13 +180,11 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   {
-     nvtxRangePush("Mesh");
-     Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
-     ParGridFunction x(&H1FESpace, h_x.GetData());
-     H1FESpace.GetParMesh()->NewNodes(x, false);
-     nvtxRangePop();
-   }
+   nvtxRangePush("Mesh");
+   Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
+   ParGridFunction x(&H1FESpace, h_x.GetData());
+   H1FESpace.GetParMesh()->NewNodes(x, false);
+   nvtxRangePop();
    
    {
      nvtxRangePush("UpdateQ");
@@ -272,8 +270,9 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-     nvtxRangePush("Taylor-Green");
+      nvtxRangePush("Taylor-Green");
       e_source = new LinearForm(&L2FESpace);
+      assert(L2FESpace.FEColl());
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);

@@ -31,6 +31,9 @@
 #include <nvToolsExt.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
+#else
+#define nvtxRangePush(...)
+#define nvtxRangePop(...)
 #endif
 
 // MFEM/fem  *******************************************************************

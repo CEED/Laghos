@@ -62,7 +62,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+int problem = 0;
 
 void display_banner(ostream & os);
 
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
    RajaGridFunction d_rho(L2FESpace);
    d_rho = rho;
    
-   //dbg()<<"[7mproblem 1 or else";
+   //dbg()<<"[7mproblem 1 or else[m";
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
