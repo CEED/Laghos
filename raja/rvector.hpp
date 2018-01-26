@@ -30,6 +30,7 @@ class RajaVector : public rmalloc<double>{
   RajaVector(const RajaVector&);
   RajaVector(const RajaVectorRef&);
   RajaVector(const size_t);
+  RajaVector(const size_t,double);
   RajaVector(const Vector& v);
   RajaVector(RajaArray<double>& v);
   operator Vector();

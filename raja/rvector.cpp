@@ -14,13 +14,14 @@ namespace mfem {
   
 RajaVector::~RajaVector(){
   if (!own) return;
-  //rdbg("\033[33m[~v");
+  //rdbg("\033[33m[~v(%d)",size);
+  rdbg("\033[33m[~v");
   rmalloc<double>::_delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::alloc(const size_t sz) {
-  //rdbg("\033[33m[v");
+  rdbg("\033[33m[v");
   return (double*) rmalloc<double>::_new(sz);
 }
 
@@ -39,6 +40,8 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
 
 // ***************************************************************************
 RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
+  RajaVector::RajaVector(const size_t sz,double value):
+    size(sz),data(alloc(sz)),own(true) { *this=value;}
 
 RajaVector::RajaVector(const RajaVector& v):
   size(0),data(NULL),own(true) { SetSize(v.Size(), v); }

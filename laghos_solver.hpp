@@ -101,8 +101,13 @@ protected:
    RajaCGSolver locCG;
 
    mutable TimingData timer;
-  const bool use_cuda = false;
-  const bool use_share = false;
+
+   // Device vectors we want to keep
+   mutable RajaVector v,e,rhs,B,X;
+   const RajaVector one;
+  
+   const bool use_cuda = false;
+   const bool use_share = false;
 
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],

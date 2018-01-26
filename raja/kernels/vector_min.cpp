@@ -17,7 +17,8 @@
 
 double vector_min(const int N,
                   const double* __restrict vec) {
-#if !defined(__NVCC__)
+//#if defined(__RAJA__) or !defined(__NVCC__)
+#ifndef __NVCC__
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
   //printf("\033[32m[vector_min] %.14e\033[m\n",red);

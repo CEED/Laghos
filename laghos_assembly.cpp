@@ -77,7 +77,6 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  //rdbg("\033[31m[~RajaMassOperator]");
   delete massOperator;
   RajaDofQuadMaps::delDofQuadMaps();
 }
@@ -153,9 +152,7 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
      gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) { }
   
 // *****************************************************************************
-RajaForceOperator::~RajaForceOperator(){
-  //rdbg("\033[31m[~RajaForceOperator]");
-}
+RajaForceOperator::~RajaForceOperator(){}
 
 // *************************************************************************
 void RajaForceOperator::Setup()

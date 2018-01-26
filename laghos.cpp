@@ -68,7 +68,7 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-  //dbgIni(argv[0]);dbg();
+   //dbgIni(argv[0]);dbg();
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -153,25 +153,25 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // CUDA set device & tweak options
-#ifdef __NVCC__
-   const int dev = 0;
-   CUdevice cuDevice;
-   CUcontext cuContext;
-
-   //int deviceCount = 0;
-   cuInit(0);
-   //cudaSetDevice(dev);
-   cuDeviceGet(&cuDevice,dev);
-   int major, minor;
-   char name[128];
-   cuDeviceComputeCapability(&major, &minor,dev);
-   cuDeviceGetName(name, 128, cuDevice);
-   //printf("\033[32m[laghos] Using Device %d: \"%s with ComputeCapability %d.%d\033[m\n",dev, name, major, minor);
-   cuCtxCreate(&cuContext, 0, cuDevice);   
+#if defined(__NVCC__) //and not defined(__RAJA__)
 #ifndef __RAJA__
    cuda=true;
    assert(cuda);
 #endif
+   if (cuda){
+     const int dev = 0;
+     CUdevice cuDevice;
+     CUcontext cuContext;
+     cuInit(0);
+     //cudaSetDevice(dev);
+     cuDeviceGet(&cuDevice,dev);
+     int major, minor;
+     char name[128];
+     cuDeviceComputeCapability(&major, &minor,dev);
+     cuDeviceGetName(name, 128, cuDevice);
+     printf("\033[32m[laghos] Using Device %d: \"%s with ComputeCapability %d.%d\033[m\n",dev, name, major, minor);
+     cuCtxCreate(&cuContext, 0, cuDevice);
+   }
 #endif
 
    // Setting the info CUDA kernels are requested

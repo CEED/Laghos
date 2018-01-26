@@ -319,7 +319,7 @@ void rForceMultS(const int NUM_DIM,
     {0x2070C0607ull,&rForceMult2S<2,7,12,6,7>},
   };
   if (!call[id]){
-    printf("\n[rForceMult] id \033[33m0x%lX\033[m ",id);
+    printf("\n[rForceMult] id \033[33m0x%llX\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);
@@ -389,7 +389,7 @@ void rForceMultTransposeS(const int NUM_DIM,
     {0x2070C0607ull,&rForceMultTranspose2S<2,7,12,6,7>},
   };
   if (!call[id]) {
-    printf("\n[rForceMultTranspose] id \033[33m0x%lX\033[m ",id);
+    printf("\n[rForceMultTranspose] id \033[33m0x%llX\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);

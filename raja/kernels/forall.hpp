@@ -29,6 +29,7 @@ extern "C" bool is_managed;
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
+#define kernel
 #define sync
 #define share // variable cannot be declared with "shared" inside a host function
 const int CUDA_BLOCK_SIZE = 256;
@@ -47,6 +48,9 @@ const int CUDA_BLOCK_SIZE = 256;
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define ReduceForall(i,max,body) forall(i,max,body)
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
+#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 
 
 // *****************************************************************************

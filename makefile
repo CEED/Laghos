@@ -115,31 +115,26 @@ CXXFLAGS += -std=c++11 #-ftrapv
 
 ####################
 # RAJA compilation #
+# use 'make rj'
 ####################
 ifeq ($(LAGHOS_RAJA),YES)
 	CXX = nvcc
-	CXXFLAGS = -D__LAMBDA__ -D__RAJA__ -DUSE_CUDA \
-		-std=c++11 -O3 -g -G -x=cu -m64 \
-		-Xcompiler -fopenmp \
-		--restrict --expt-extended-lambda \
-		--gpu-architecture sm_61 \
-		-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++
+	CXXFLAGS = -D__RAJA__ -DUSE_CUDA \
+					-std=c++11 -O3 -m64 -arch=sm_61 \
+					--restrict -x=cu -Xptxas -dlcm=cg \
+					-Xcompiler -fopenmp
+	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
 endif
 
 #################
 # CUDA compiler #
-# use 'make nvidia'
-# -O3 -arch=sm_61  -Xptxas -v,-dlcm=cg
-# -res-usage
+# use 'make nv'
 #################
 ifeq ($(LAGHOS_NVCC),YES)
 	CXX = nvcc
 	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 \
 					--restrict -x=cu -Xptxas -dlcm=cg
 	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
-#	CXXFLAGS = -std=c++11 -O3 -g -G -m64 -arch=sm_61 -x=cu \
-	--restrict -Xcompiler -fopenmp \
-	--expt-extended-lambda
 else
 	CXXFLAGS += -D__LAMBDA__
 endif
@@ -181,13 +176,20 @@ KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
 ifeq ($(LAGHOS_NVCC),YES)
   CUDA_FILES  = $(wildcard $(kernels)/*.cu)
 endif
-  RAJA_FILES += $(wildcard $(raja)/*.cpp)
+ifeq ($(LAGHOS_RAJA),YES)
+  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
+endif
+RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
 ################
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
 ifeq ($(LAGHOS_NVCC),YES)
+OBJECT_FILES += $(CUDA_FILES:.cu=.o)
+OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
+endif
+ifeq ($(LAGHOS_RAJA),YES)
 OBJECT_FILES += $(CUDA_FILES:.cu=.o)
 OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
 endif

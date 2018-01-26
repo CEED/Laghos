@@ -15,11 +15,12 @@ namespace mfem {
 // ***************************************************************************
 std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 
+// *****************************************************************************
+static RajaGeometry *geom=NULL;
+
 // ***************************************************************************
 // * RajaGeometry
 // ***************************************************************************
-static RajaGeometry *geom=NULL;
-
 RajaGeometry::~RajaGeometry(){
   nvtxRangePush("Get");
   free(geom->meshNodes);
@@ -30,52 +31,18 @@ RajaGeometry::~RajaGeometry(){
   nvtxRangePop();
 }
 
-  // ***************************************************************************
-  void RajaGeometry::ReorderByVDim(GridFunction& nodes){
-    const FiniteElementSpace *fes=nodes.FESpace();
-    const int size = nodes.Size();
-    const int vdim = fes->GetVDim();
-    const int ndofs = fes->GetNDofs();
-    double *data = nodes.GetData();
-    double *temp = new double[size];
-    int k=0;
-    for (int j = 0; j < ndofs; j++)
-      for (int i = 0; i < vdim; i++){
-        temp[k++] = data[j+i*ndofs];
-      }
-    for (int i = 0; i < size; i++)
-      data[i] = temp[i];
-    delete [] temp;
-  }
+// *****************************************************************************
+static double *meshNodes_data=NULL;
 
-  // ***************************************************************************
-  void RajaGeometry::ReorderByNodes(GridFunction& nodes){
-    const FiniteElementSpace *fes=nodes.FESpace();
-    const int size = nodes.Size();
-    const int vdim = fes->GetVDim();
-    const int ndofs = fes->GetNDofs();
-    double *data = nodes.GetData();
-    double *temp = new double[size];
-    int k = 0;
-    for (int j = 0; j < ndofs; j++)
-      for (int i = 0; i < vdim; i++){
-        temp[j+i*ndofs] = data[k++];
-      }
-    for (int i = 0; i < size; i++){
-      data[i] = temp[i];
-    }
-    delete [] temp;
-  }
-  
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
   nvtxRangePush("Get");
-  geom=new RajaGeometry();
+  const bool geom_to_allocate = !geom;
+  if (geom_to_allocate) geom=new RajaGeometry();
   Mesh& mesh = *(fes.GetMesh());
-  if (!mesh.GetNodes()) {
+  if (!mesh.GetNodes()) 
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
-  }
   GridFunction& nodes = *(mesh.GetNodes());
   const FiniteElementSpace& fespace = *(nodes.FESpace());
   const FiniteElement& fe = *(fespace.GetFE(0));
@@ -86,7 +53,10 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   //Ordering::Type originalOrdering = fespace.GetOrdering();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
   if (orderedByNODES) ReorderByVDim(nodes);
-  Array<double> meshNodes(dims*numDofs*elements);
+  const int asize = dims*numDofs*elements;
+  if (geom_to_allocate)
+    meshNodes_data=(double*)malloc(asize*sizeof(double));
+  Array<double> meshNodes(meshNodes_data,asize);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
   for (int e = 0; e < elements; ++e) {
@@ -97,17 +67,19 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
       }
     }
   }
-  geom->meshNodes.allocate(dims, numDofs, elements);
+  if (geom_to_allocate)
+    geom->meshNodes.allocate(dims, numDofs, elements);
   geom->meshNodes = meshNodes;
   // Reorder the original gf back
   if (orderedByNODES) ReorderByNodes(nodes);
-  geom->J.allocate(dims, dims, numQuad, elements);
-  geom->invJ.allocate(dims, dims, numQuad, elements);
-  geom->detJ.allocate(numQuad, elements);
+  if (geom_to_allocate){
+    geom->J.allocate(dims, dims, numQuad, elements);
+    geom->invJ.allocate(dims, dims, numQuad, elements);
+    geom->detJ.allocate(numQuad, elements);
+  }
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
-  assert(maps);
-  
   {
+    nvtxRangePush("rIniGeom");
     rIniGeom(dims,numDofs,numQuad,elements,
              maps->dofToQuadD,
              geom->meshNodes,
@@ -116,11 +88,46 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
              geom->detJ);
     nvtxRangePop();
   }
-
   nvtxRangePop();
   return geom;
 }
 
+// ***************************************************************************
+void RajaGeometry::ReorderByVDim(GridFunction& nodes){
+  const FiniteElementSpace *fes=nodes.FESpace();
+  const int size = nodes.Size();
+  const int vdim = fes->GetVDim();
+  const int ndofs = fes->GetNDofs();
+  double *data = nodes.GetData();
+  double *temp = new double[size];
+  int k=0;
+  for (int j = 0; j < ndofs; j++)
+    for (int i = 0; i < vdim; i++){
+      temp[k++] = data[j+i*ndofs];
+    }
+  for (int i = 0; i < size; i++)
+    data[i] = temp[i];
+  delete [] temp;
+}
+
+// ***************************************************************************
+void RajaGeometry::ReorderByNodes(GridFunction& nodes){
+  const FiniteElementSpace *fes=nodes.FESpace();
+  const int size = nodes.Size();
+  const int vdim = fes->GetVDim();
+  const int ndofs = fes->GetNDofs();
+  double *data = nodes.GetData();
+  double *temp = new double[size];
+  int k = 0;
+  for (int j = 0; j < ndofs; j++)
+    for (int i = 0; i < vdim; i++){
+      temp[j+i*ndofs] = data[k++];
+    }
+  for (int i = 0; i < size; i++){
+    data[i] = temp[i];
+  }
+  delete [] temp;
+}
 
 // ***************************************************************************
 // * RajaDofQuadMaps
@@ -141,7 +148,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::Get(const RajaFiniteElementSpace&
 }
 
 RajaDofQuadMaps* RajaDofQuadMaps::Get(const FiniteElement& trialFE,
-                                      const FiniteElement& testFE,
+                                     const FiniteElement& testFE,
                                       const IntegrationRule& ir,
                                       const bool transpose) {
   return GetTensorMaps(trialFE, testFE, ir, transpose);
@@ -164,7 +171,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
      << "BT2:" << testTFE.GetBasisType()
      << "Q:"   << ir.GetNPoints();
   std::string hash = ss.str();
-  
   // If we've already made the dof-quad maps, reuse them
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
@@ -223,7 +229,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   }
   maps->dofToQuad = dofToQuad;
   maps->dofToQuadD = dofToQuadD;
-  
   if (transpose) {
     Array<double> quadWeights(quadPointsND);
     for (int q = 0; q < quadPointsND; ++q) {
@@ -285,7 +290,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
 RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
                                                    const IntegrationRule& ir,
                                                    const bool transpose) {
-  const int dims = fe.GetDim();
+   const int dims = fe.GetDim();
   const int numDofs = fe.GetDof();
   const int numQuad = ir.GetNPoints();
   RajaDofQuadMaps* maps = new RajaDofQuadMaps();
@@ -361,8 +366,8 @@ RajaGeometry* RajaIntegrator::GetGeometry() {
 // * Mass Integrator
 // ***************************************************************************
 void RajaMassIntegrator::SetupIntegrationRule() {
-  const FiniteElement& trialFE = *(trialFESpace->GetFE(0));
-  const FiniteElement& testFE  = *(testFESpace->GetFE(0));
+  //const FiniteElement& trialFE = *(trialFESpace->GetFE(0));
+  //const FiniteElement& testFE  = *(testFESpace->GetFE(0));
   assert(false);
 }
 

@@ -108,6 +108,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      EMassPA(L2FESpace, integ_rule, &quad_data, share),
      ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data, share),
      locCG(), timer(),
+     v(),e(),
+     rhs(H1FESpace.GetVSize()),
+     B(H1compFESpace.GetTrueVSize()),X(H1compFESpace.GetTrueVSize()),
+     one(L2FESpace.GetVSize(),1.0),
      use_cuda(cuda), use_share(share)
 {
    Vector rho0_ = rho0;
@@ -200,8 +204,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    const int VsizeL2 = L2FESpace.GetVSize();
    const int VsizeH1 = H1FESpace.GetVSize();
 
-   RajaVector v = S.GetRange(VsizeH1, VsizeH1);
-   RajaVector e = S.GetRange(2*VsizeH1, VsizeL2);
+   v = S.GetRange(VsizeH1, VsizeH1);
+   e = S.GetRange(2*VsizeH1, VsizeL2);
    
    RajaVector dx = dS_dt.GetRange(0, VsizeH1);
    RajaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
@@ -212,7 +216,10 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    
    // Solve for velocity.
    nvtxRangePush("ForcePA");
-   RajaVector one(VsizeL2), rhs(VsizeH1); one = 1.0;
+   
+   //RajaVector one(VsizeL2);one = 1.0;
+   //RajaVector rhs(VsizeH1);
+   
    timer.sw_force.Start();
    // /home/camier1/home/laghos/laghos-raja/laghos_assembly.cpp:178
    ForcePA.Mult(one, rhs);
@@ -230,8 +237,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    nvtxRangePush("Momentum Solve");
    for (int c = 0; c < dim; c++)
    {
-      RajaVector rhs_c = rhs.GetRange(c*size, size),
-        dv_c  = dv.GetRange(c*size, size);
+      RajaVector rhs_c = rhs.GetRange(c*size, size);
+      RajaVector dv_c = dv.GetRange(c*size, size);
 
       Array<int> c_tdofs;
       Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -242,7 +249,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
       
       dv_c = 0.0;
-      RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
+      //RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
       // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
       H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
       H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);

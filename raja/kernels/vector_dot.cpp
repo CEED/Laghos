@@ -19,7 +19,8 @@
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-#if !defined(__NVCC__)
+//#if defined(__RAJA__) or !defined(__NVCC__)
+#ifndef __NVCC__
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
   //printf("\033[33m[vector_dot] %.14e\033[m\n",dot);
