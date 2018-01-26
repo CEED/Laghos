@@ -16,11 +16,20 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D> kernel
-void rUpdateQuadratureData2D(const double GAMMA,
+#endif
+void rUpdateQuadratureData2D(
+#ifndef __TEMPLATES__
+                             const int NUM_DIM,
+                             const int NUM_QUAD,
+                             const int NUM_QUAD_1D,
+                             const int NUM_DOFS_1D,
+#endif
+                             const double GAMMA,
                              const double H0,
                              const double CFL,
                              const bool USE_VISCOSITY,
@@ -183,11 +192,20 @@ void rUpdateQuadratureData2D(const double GAMMA,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D> kernel
-void rUpdateQuadratureData3D(const double GAMMA,
+#endif
+void rUpdateQuadratureData3D(
+#ifndef __TEMPLATES__
+                             const int NUM_DIM,
+                             const int NUM_QUAD,
+                             const int NUM_QUAD_1D,
+                             const int NUM_DOFS_1D,
+#endif
+                             const double GAMMA,
                              const double H0,
                              const double CFL,
                              const bool USE_VISCOSITY,                                    
@@ -537,6 +555,11 @@ void rUpdateQuadratureData(const double GAMMA,
                            const double* restrict detJ,
                            double* restrict stressJinvT,
                            double* restrict dtEst){
+#ifndef __LAMBDA__
+  const int grid = nzones;
+  const int blck = NUM_DOFS_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (NUM_DIM<<24)|(NUM_QUAD<<16)|(NUM_QUAD_1D<<8)|(NUM_DOFS_1D);
   assert(LOG2(NUM_DIM)<=8);//printf("NUM_DIM:%d ",(NUM_DIM));
   assert(LOG2(NUM_QUAD)<=8);//printf("NUM_QUAD:%d ",(NUM_QUAD));
@@ -574,23 +597,26 @@ void rUpdateQuadratureData(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = nzones;
-  const int blck = NUM_DOFS_1D;
-#endif
   call0(rUpdateQuadratureData,id,grid,blck,
         GAMMA,H0,CFL,USE_VISCOSITY,
-        nzones,
-        dofToQuad,
-        dofToQuadD,
-        quadWeights,
-        v,
-        e,
-        rho0DetJ0w,
-        invJ0,
-        J,
-        invJ,
-        detJ,
-        stressJinvT,
-        dtEst);
+        nzones,dofToQuad,dofToQuadD,quadWeights,
+        v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
+        stressJinvT,dtEst);
+#else
+  if (NUM_DIM==1) assert(false);
+  if (NUM_DIM==2)
+    call0(rUpdateQuadratureData2D,id,grid,blck,
+          NUM_DIM,NUM_QUAD,NUM_QUAD_1D,NUM_DOFS_1D,
+          GAMMA,H0,CFL,USE_VISCOSITY,
+          nzones,dofToQuad,dofToQuadD,quadWeights,
+          v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
+          stressJinvT,dtEst);
+  if (NUM_DIM==3)
+    call0(rUpdateQuadratureData3D,id,grid,blck,
+          NUM_DIM,NUM_QUAD,NUM_QUAD_1D,NUM_DOFS_1D,
+          GAMMA,H0,CFL,USE_VISCOSITY,
+          nzones,dofToQuad,dofToQuadD,quadWeights,
+          v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
+          stressJinvT,dtEst);
+#endif
 }

@@ -124,7 +124,11 @@ public:
 #define forall(i,max,body) for(int i=0;i<max;i++){body}
 #define forallS(i,max,step,body) for(int i=0;i<max;i+=step){body}
 #define ReduceForall(i,max,body) forall(i,max,body)
+#ifdef __TEMPLATES__
 #define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
+#else
+#define call0(name,id,grid,blck,...) name(__VA_ARGS__)
+#endif
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #endif //__NVCC__

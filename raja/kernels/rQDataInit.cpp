@@ -17,8 +17,14 @@
 
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_QUAD> kernel
-void rInitQuadratureData(const int nzones,
+#endif
+void rInitQuadData(
+#ifndef __TEMPLATES__
+                         const int NUM_QUAD,
+#endif
+                         const int nzones,
                          const double* restrict rho0,
                          const double* restrict detJ,
                          const double* restrict quadWeights,
@@ -47,29 +53,36 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w) {
   const unsigned int id = NUM_QUAD;
+#ifndef __LAMBDA__
+  const int grid = numElements;
+  const int blck = NUM_QUAD;
+#endif
+#ifdef __TEMPLATES__
   static std::unordered_map<unsigned int, fInitQuadratureData> call = {
-    {2,&rInitQuadratureData<2>},
-    {4,&rInitQuadratureData<4>},
-    {8,&rInitQuadratureData<8>},
-    {16,&rInitQuadratureData<16>},
-    {25,&rInitQuadratureData<25>},
-    {36,&rInitQuadratureData<36>},
-    {49,&rInitQuadratureData<49>},
-    {64,&rInitQuadratureData<64>},
-    {81,&rInitQuadratureData<81>},
-    {100,&rInitQuadratureData<100>},
-    {121,&rInitQuadratureData<121>},
-    {144,&rInitQuadratureData<144>},
-    {0xD8,&rInitQuadratureData<0xD8>},
+    {2,&rInitQuadData<2>},
+    {4,&rInitQuadData<4>},
+    {8,&rInitQuadData<8>},
+    {16,&rInitQuadData<16>},
+    {25,&rInitQuadData<25>},
+    {36,&rInitQuadData<36>},
+    {49,&rInitQuadData<49>},
+    {64,&rInitQuadData<64>},
+    {81,&rInitQuadData<81>},
+    {100,&rInitQuadData<100>},
+    {121,&rInitQuadData<121>},
+    {144,&rInitQuadData<144>},
+    {0xD8,&rInitQuadData<0xD8>},
   };
   if (!call[id]){
     printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD;
+  call0(rInitQuadData,id,grid,blck,
+        numElements,rho0,detJ,quadWeights,rho0DetJ0w);
+#else
+  call0(rInitQuadData,id,grid,blck,
+        NUM_QUAD,
+        numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 #endif
-  call0(rInitQuadratureData,id,grid,blck,numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 }

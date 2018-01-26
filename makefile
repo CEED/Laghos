@@ -136,7 +136,7 @@ ifeq ($(LAGHOS_NVCC),YES)
 					--restrict -x=cu -Xptxas -dlcm=cg
 	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
 else
-	CXXFLAGS += -D__LAMBDA__
+	CXXFLAGS += -D__LAMBDA__ #-D__TEMPLATES__
 endif
 
 #######################

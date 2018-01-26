@@ -16,9 +16,16 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
          const int NUM_QUAD> kernel
-void rIniGeom1D(const int numElements,
+#endif
+void rIniGeom1D(
+#ifndef __TEMPLATES__
+                const int NUM_DOFS,
+                const int NUM_QUAD,
+#endif
+                const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
@@ -54,9 +61,16 @@ void rIniGeom1D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
          const int NUM_QUAD> kernel
-void rIniGeom2D(const int numElements,
+#endif
+void rIniGeom2D(
+#ifndef __TEMPLATES__
+                const int NUM_DOFS,
+                const int NUM_QUAD,
+#endif
+                const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
@@ -106,9 +120,16 @@ void rIniGeom2D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
          const int NUM_QUAD> kernel
-void rIniGeom3D(const int numElements,
+#endif
+void rIniGeom3D(
+#ifndef __TEMPLATES__
+                const int NUM_DOFS,
+                const int NUM_QUAD,
+#endif
+                const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
                 double* restrict J,
@@ -195,6 +216,11 @@ void rIniGeom(const int DIM,
               double* restrict J,
               double* restrict invJ,
               double* restrict detJ) {
+#ifndef __LAMBDA__
+  const int grid = numElements;
+  const int blck = NUM_QUAD;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
   assert(LOG2(DIM)<=8);
   //printf("NUM_DOFS:%d ",NUM_DOFS);
@@ -249,9 +275,13 @@ void rIniGeom(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD;
+  call0(rIniGeom2D,id,grid,blck,
+        numElements,dofToQuadD,nodes,J,invJ,detJ);
+#else
+  if (DIM==2)
+    call0(rIniGeom2D,id,grid,blck,
+          NUM_DOFS,NUM_QUAD,
+          numElements,dofToQuadD,nodes,J,invJ,detJ);
+  else assert(false);
 #endif
-  call0(rIniGeom2D,id,grid,blck,numElements,dofToQuadD,nodes,J,invJ,detJ);
 }

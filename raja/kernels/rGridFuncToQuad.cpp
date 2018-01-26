@@ -16,10 +16,18 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rGridFuncToQuad1D(const int numElements,
+#endif
+void rGridFuncToQuad1D(
+#ifndef __TEMPLATES__
+                       const int NUM_VDIM,
+                       const int NUM_DOFS_1D,
+                       const int NUM_QUAD_1D,
+#endif
+                       const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
@@ -58,10 +66,18 @@ void rGridFuncToQuad1D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rGridFuncToQuad2D(const int numElements,
+#endif
+void rGridFuncToQuad2D(
+#ifndef __TEMPLATES__
+                       const int NUM_VDIM,
+                       const int NUM_DOFS_1D,
+                       const int NUM_QUAD_1D,
+#endif
+                       const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
@@ -120,10 +136,18 @@ void rGridFuncToQuad2D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rGridFuncToQuad3D(const int numElements,
+#endif
+void rGridFuncToQuad3D(
+#ifndef __TEMPLATES__
+                       const int NUM_VDIM,
+                       const int NUM_DOFS_1D,
+                       const int NUM_QUAD_1D,
+#endif
+                       const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double* restrict gf,
@@ -223,6 +247,11 @@ void rGridFuncToQuad(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
+#ifndef __LAMBDA__
+  const int grid = numElements;
+  const int blck = 1;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
   assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);
@@ -316,9 +345,20 @@ void rGridFuncToQuad(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = 1;
+  call0(rGridFuncToQuad,id,grid,blck,
+        numElements,dofToQuad,l2gMap,gf,out);
+#else
+  if (DIM==1)
+    call0(rGridFuncToQuad1D,id,grid,blck,
+          NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,l2gMap,gf,out);
+  if (DIM==2)
+    call0(rGridFuncToQuad2D,id,grid,blck,
+          NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,l2gMap,gf,out);
+  if (DIM==3)
+    call0(rGridFuncToQuad3D,id,grid,blck,
+          NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,l2gMap,gf,out);
 #endif
-  call0(rGridFuncToQuad,id,grid,blck,numElements,dofToQuad,l2gMap,gf,out);
 }

@@ -16,9 +16,16 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel 
-void rMassMultAdd2S(const int numElements,
+         const int NUM_QUAD_1D> kernel
+#endif
+void rMassMultAdd2S(
+#ifndef __TEMPLATES__
+                    const int NUM_DOFS_1D,
+                    const int NUM_QUAD_1D,
+#endif
+                    const int numElements,
                     const double* restrict dofToQuad,
                     const double* restrict dofToQuadD,
                     const double* restrict quadToDof,
@@ -137,17 +144,22 @@ typedef void (*fMassMultAdd)(const int numElements,
                              double* __restrict solOut);
 
 // *****************************************************************************
- void rMassMultAddS(const int DIM,
-                    const int NUM_DOFS_1D,
-                    const int NUM_QUAD_1D,
-                    const int numElements,
-                    const double* dofToQuad,
-                    const double* dofToQuadD,
-                    const double* quadToDof,
-                    const double* quadToDofD,
-                    const double* op,
-                    const double* x,
-                    double* __restrict y) {
+void rMassMultAddS(const int DIM,
+                   const int NUM_DOFS_1D,
+                   const int NUM_QUAD_1D,
+                   const int numElements,
+                   const double* dofToQuad,
+                   const double* dofToQuadD,
+                   const double* quadToDof,
+                   const double* quadToDofD,
+                   const double* op,
+                   const double* x,
+                   double* __restrict y) {
+#ifndef __LAMBDA__
+  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (DIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);
   assert(LOG2(NUM_DOFS_1D)<=8);
@@ -243,9 +255,14 @@ typedef void (*fMassMultAdd)(const int numElements,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
-  const int blck = NUM_QUAD_1D;
+  call0(rMassMultAdd2S,id,grid,blck,
+        numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+#else
+  if (DIM==1) assert(false);
+  if (DIM==2)
+    call0(rMassMultAdd2S,id,grid,blck,
+          NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y); 
+  if (DIM==3) assert(false);
 #endif
-  call0(rMassMultAdd2S,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

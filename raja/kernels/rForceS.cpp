@@ -18,12 +18,22 @@
 // *****************************************************************************
 // * /home/camier1/.occa/libraries/laghos/19ef990e7ee5e602/deviceSource.cpp
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
-void rForceMult2S(const int numElements,
+#endif
+void rForceMult2S(
+#ifndef __TEMPLATES__
+                  const int NUM_DIM,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int L2_DOFS_1D,
+                  const int H1_DOFS_1D,
+#endif
+                  const int numElements,
                   const double* restrict L2DofToQuad,
                   const double* restrict H1QuadToDof,
                   const double* restrict H1QuadToDofD,
@@ -138,12 +148,22 @@ void rForceMult2S(const int numElements,
 
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
-void rForceMultTranspose2S(const int numElements,
+#endif
+void rForceMultTranspose2S(
+#ifndef __TEMPLATES__
+                           const int NUM_DIM,
+                           const int NUM_DOFS_1D,
+                           const int NUM_QUAD_1D,
+                           const int L2_DOFS_1D,
+                           const int H1_DOFS_1D,
+#endif
+                           const int numElements,
                            const double* restrict L2QuadToDof,
                            const double* restrict H1DofToQuad,
                            const double* restrict H1DofToQuadD,
@@ -283,6 +303,16 @@ void rForceMultS(const int NUM_DIM,
                  const double* restrict stressJinvT,
                  const double* restrict e,
                  double* restrict v) {
+#ifndef __LAMBDA__
+  const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
+  //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  //const int NUM_QUAD = NUM_QUAD_2D;
+  //const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD;
+  //const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
+  //const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -323,16 +353,15 @@ void rForceMultS(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
-  //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  //const int NUM_QUAD = NUM_QUAD_2D;
-  //const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD;
-  //const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
-  //const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
-  const int blck = NUM_QUAD_1D;
+  call0(rForceMult2S,id,grid,blck,
+        nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+#else
+  if (NUM_DIM==2)
+    call0(rForceMult2S,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+  else assert(false);
 #endif
-  call0(rForceMult2S,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 }
 
 
@@ -358,6 +387,11 @@ void rForceMultTransposeS(const int NUM_DIM,
                           const double* restrict stressJinvT,
                           const double* restrict v,
                           double* restrict e) {
+#ifndef __LAMBDA__
+  const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -393,9 +427,13 @@ void rForceMultTransposeS(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
-  const int blck = NUM_QUAD_1D;
+  call0(rForceMultTranspose2S,id,grid,blck,
+        nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+#else
+  if (NUM_DIM==2)
+    call0(rForceMultTranspose2S,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+  else assert(false);
 #endif
-  call0(rForceMultTranspose2S,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 }

@@ -17,12 +17,22 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
-void rForceMult2D(const int numElements,
+#endif
+void rForceMult2D(
+#ifndef __TEMPLATES__
+                  const int NUM_DIM,
+                  const int NUM_DOFS_1D,
+                  const int NUM_QUAD_1D,
+                  const int L2_DOFS_1D,
+                  const int H1_DOFS_1D,
+#endif
+                  const int numElements,
                   const double* restrict L2DofToQuad,
                   const double* restrict H1QuadToDof,
                   const double* restrict H1QuadToDofD,
@@ -96,12 +106,22 @@ void rForceMult2D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
-void rForceMultTranspose2D(const int numElements,
+#endif
+void rForceMultTranspose2D(
+#ifndef __TEMPLATES__
+                           const int NUM_DIM,
+                           const int NUM_DOFS_1D,
+                           const int NUM_QUAD_1D,
+                           const int L2_DOFS_1D,
+                           const int H1_DOFS_1D,
+#endif
+                           const int numElements,
                            const double* restrict L2QuadToDof,
                            const double* restrict H1DofToQuad,
                            const double* restrict H1DofToQuadD,
@@ -418,7 +438,7 @@ typedef void (*fForceMult)(const int numElements,
 void rForceMult(const int NUM_DIM,
                 const int NUM_DOFS_1D,
                 const int NUM_QUAD_1D,
-                const int L2_DOFS_1D, // order-thermo
+                const int L2_DOFS_1D,
                 const int H1_DOFS_1D,
                 const int nzones,
                 const double* restrict L2QuadToDof,
@@ -427,6 +447,11 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict stressJinvT,
                 const double* restrict e,
                 double* restrict v) {
+#ifndef __LAMBDA__
+  const int grid = nzones;
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -442,7 +467,7 @@ void rForceMult(const int NUM_DIM,
 
     {0x202020102ull,&rForceMult2D<2,2,2,1,2>},
     {0x203040203ull,&rForceMult2D<2,3,4,2,3>},// default 2D
-    {0x203040303ull,&rForceMult2D<2,3,4,3,3>},
+    {0x203040303ull,&rForceMult2D<2,3,4,3,3>}, 
     
     {0x203050403ull,&rForceMult2D<2,3,5,4,3>},
     {0x203050503ull,&rForceMult2D<2,3,5,5,3>},
@@ -470,11 +495,15 @@ void rForceMult(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = nzones;
-  const int blck = NUM_QUAD_1D;
-#endif
-  call0(rForceMult2D,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+  call0(rForceMult2D,id,grid,blck,
+        nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+#else
+  if (NUM_DIM==2)
+    call0(rForceMult2D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+  else assert(false);
+#endif // __TEMPLATES__
 }
 
 // *****************************************************************************
@@ -499,6 +528,11 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict stressJinvT,
                          const double* restrict v,
                          double* restrict e) {
+#ifndef __LAMBDA__
+  const int grid = nzones;
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned long long id =
     (((unsigned long long)NUM_DIM)<<32)|
     (NUM_DOFS_1D<<24)|
@@ -537,10 +571,14 @@ void rForceMultTranspose(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = nzones;
-  const int blck = NUM_QUAD_1D;
+  call0(rForceMultTranspose,id,grid,blck,
+        nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+#else
+  if (NUM_DIM==2)
+    call0(rForceMultTranspose2D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+  else assert(false);
 #endif
-  call0(rForceMultTranspose,id,grid,blck,nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 }
 

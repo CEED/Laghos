@@ -16,9 +16,16 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rMassMultAdd2D(const int numElements,
+#endif
+void rMassMultAdd2D(
+#ifndef __TEMPLATES__
+                    const int NUM_DOFS_1D,
+                    const int NUM_QUAD_1D,
+#endif
+                    const int numElements,
                     const double* restrict dofToQuad,
                     const double* restrict dofToQuadD,
                     const double* restrict quadToDof,
@@ -87,9 +94,16 @@ void rMassMultAdd2D(const int numElements,
 }
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rMassMultAdd3D(const int numElements,
+#endif
+void rMassMultAdd3D(
+#ifndef __TEMPLATES__
+                    const int NUM_DOFS_1D,
+                    const int NUM_QUAD_1D,
+#endif
+                    const int numElements,
                     const double* dofToQuad,
                     const double* dofToQuadD,
                     const double* quadToDof,
@@ -215,6 +229,11 @@ void rMassMultAdd(const int DIM,
                   const double* op,
                   const double* x,
                   double* __restrict y) {
+#ifndef __LAMBDA__
+  const int grid = numElements;
+  const int blck = NUM_QUAD_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (DIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);
   assert(LOG2(NUM_DOFS_1D)<=8);
@@ -309,9 +328,17 @@ void rMassMultAdd(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD_1D;
+  call0(rMassMultAdd,id,grid,blck,
+        numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+#else
+  if (DIM==1) assert(false);
+  if (DIM==2)
+    call0(rMassMultAdd2D,id,grid,blck,
+          NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+  if (DIM==3)
+    call0(rMassMultAdd3D,id,grid,blck,
+          NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 #endif
-  call0(rMassMultAdd,id,grid,blck,numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

@@ -38,7 +38,8 @@ static double *meshNodes_data=NULL;
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
   nvtxRangePush("Get");
-  const bool geom_to_allocate = !geom;
+#warning geom_to_allocate tied to true
+  const bool geom_to_allocate = true;//!geom;
   if (geom_to_allocate) geom=new RajaGeometry();
   Mesh& mesh = *(fes.GetMesh());
   if (!mesh.GetNodes()) 

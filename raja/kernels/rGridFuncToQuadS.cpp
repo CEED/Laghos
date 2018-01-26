@@ -16,10 +16,18 @@
 #include "raja.hpp"
 
 // *****************************************************************************
+#ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-void rGridFuncToQuad2S(const int numElements,
+#endif
+void rGridFuncToQuad2S(
+#ifndef __TEMPLATES__
+                       const int NUM_VDIM,
+                       const int NUM_DOFS_1D,
+                       const int NUM_QUAD_1D,
+#endif
+                       const int numElements,
                        const double* restrict dofToQuad,
                        const int* restrict l2gMap,
                        const double * restrict gf,
@@ -100,6 +108,12 @@ void rGridFuncToQuadS(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
+#ifndef __LAMBDA__
+  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const int blck = NUM_MAX_1D;
+#endif
+#ifdef __TEMPLATES__
   const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
   assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
   assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);
@@ -193,10 +207,14 @@ void rGridFuncToQuadS(const int DIM,
     fflush(stdout);
   }
   assert(call[id]);
-#ifndef __LAMBDA__
-  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
-  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
-  const int blck = NUM_MAX_1D;
+  call0(rGridFuncToQuadS,id,grid,blck,
+        numElements,dofToQuad,l2gMap,gf,out);
+#else
+  if (DIM==1) assert(false);
+  if (DIM==2)
+    call0(rGridFuncToQuad2S,id,grid,blck,
+          NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,l2gMap,gf,out);
+  if (DIM==3) assert(false);
 #endif
-  call0(rGridFuncToQuadS,id,grid,blck,numElements,dofToQuad,l2gMap,gf,out);
 }
