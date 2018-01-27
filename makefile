@@ -107,37 +107,60 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-CXXFLAGS += -std=c++11 #-ftrapv
-# -DRAJA_USE_SIMPOOL
-#-fopenmp #-Wall 
+CXXFLAGS += -std=c++11 -m64
 #CXXFLAGS = -g -O1 -fno-inline -fno-omit-frame-pointer
 #-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
-####################
-# RAJA compilation #
-# use 'make rj'
-####################
-ifeq ($(LAGHOS_RAJA),YES)
+###############################
+# RAJA compilation: make rj=1 #
+###############################
+ifneq (,$(rj))
 	CXX = nvcc
-	CXXFLAGS = -D__RAJA__ -DUSE_CUDA \
-					-std=c++11 -O3 -m64 -arch=sm_61 \
-					--restrict -x=cu -Xptxas -dlcm=cg \
-					-Xcompiler -fopenmp
+	CXXFLAGS += -D__RAJA__ -DUSE_CUDA
 	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
+	CXXFLAGS += --restrict -Xcompiler -fopenmp 
+	CXXFLAGS += -x=cu -arch=sm_61 -Xptxas -dlcm=cg
 endif
 
-#################
-# CUDA compiler #
-# use 'make nv'
-#################
-ifeq ($(LAGHOS_NVCC),YES)
+###########################
+# CUDA compiler: make nv=1 #
+###########################
+ifneq (,$(nv))
 	CXX = nvcc
-	CXXFLAGS = -std=c++11 -O3 -m64 -arch=sm_61 \
-					--restrict -x=cu -Xptxas -dlcm=cg
-	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
-else
-	CXXFLAGS += -D__LAMBDA__ #-D__TEMPLATES__
+	CXXFLAGS += --restrict -arch=sm_61 -x=cu -Xptxas -dlcm=cg
+ifneq (,$(l))	
+	CXXFLAGS += --expt-extended-lambda
 endif
+endif
+
+############################
+# LAMBDAS launch: make l=1 #
+############################
+ifneq (,$(l))
+	CXXFLAGS += -D__LAMBDA__
+endif
+
+#############################
+# TEMPLATE launch: make t=1 #
+#############################
+ifneq (,$(t))
+	CXXFLAGS += -D__TEMPLATES__
+endif
+
+#################################################
+# CPU,LAMBDA: make v=1 l=1
+# CPU,LAMBDA,TEMPLATE: make v=1 l=1 t=1
+# GPU,LAMBDA,TEMPLATES: make v=1 nv=1 l=1 t=1
+# GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
+# RAJA: make v=1 rj=1 t=1
+##################################################
+cpuL:;$(MAKE) l=1 all
+cpuLT:;$(MAKE) l=1 t=1 all
+
+cpuRJ:;$(MAKE) rj=1 t=1 all
+
+gpuLT:;$(MAKE) nv=1 l=1 t=1 all
+gpuKT:;$(MAKE) nv=1 t=1 all
 
 #######################
 # TPL INCLUDES & LIBS #
@@ -149,7 +172,8 @@ MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include
 #BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
 CUDA_INC = -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
-CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 -lcuda -lcudart -lcudadevrt -lnvToolsExt
+CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 \
+				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
 RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
 RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
@@ -173,10 +197,10 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 ################
 SOURCE_FILES  = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
-ifeq ($(LAGHOS_NVCC),YES)
+ifneq (,$(nv))
   CUDA_FILES  = $(wildcard $(kernels)/*.cu)
 endif
-ifeq ($(LAGHOS_RAJA),YES)
+ifneq (,$(rj))
   CUDA_FILES  = $(wildcard $(kernels)/*.cu)
 endif
 RAJA_FILES += $(wildcard $(raja)/*.cpp)
@@ -185,11 +209,11 @@ RAJA_FILES += $(wildcard $(raja)/*.cpp)
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
-ifeq ($(LAGHOS_NVCC),YES)
+ifneq (,$(nv))
 OBJECT_FILES += $(CUDA_FILES:.cu=.o)
 OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
 endif
-ifeq ($(LAGHOS_RAJA),YES)
+ifneq (,$(rj))
 OBJECT_FILES += $(CUDA_FILES:.cu=.o)
 OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
 endif
@@ -208,7 +232,7 @@ rule_dumb = @echo -e $(rule_path)/$(rule_file)
 rule_xterm = @echo -e \\e[38\;5\;$(shell echo $(COLOR)+$(COLOR_OFFSET)|bc -l)\;1m\
              $(rule_path)\\033[m/\\033[\m$(rule_file)\\033[m
 output = $(rule_${TERM})
-quiet := --quiet -S
+quiet := $(if $(v),,--quiet -S)
 
 ###########
 # Targets #
@@ -227,8 +251,7 @@ $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp;$
 	$(CCC) -c -o $@ $<
 
 $(kernels)/%.o: $(kernels)/%.cu;$(output)
-	nvcc -m64 -arch=sm_60 -rdc=true \
-	-ccbin $(home)/usr/local/gcc/5.5.0/bin/g++ \
+	nvcc -m64 -arch=sm_61 -rdc=true \
 	-I/usr/local/cuda/samples/common/inc \
 	-o $@ -c $<
 
@@ -240,20 +263,6 @@ all:
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(LIBS)
-
-opt:
-	$(MAKE) "LAGHOS_DEBUG=NO"
-
-dbg debug:
-	$(MAKE) "LAGHOS_DEBUG=YES"
-
-# To build for RAJA, just 'make raja' and play with the -cuda laghos flag
-rj raja:
-	$(MAKE) "LAGHOS_RAJA=YES"
-
-# To build for Kernels, just 'make nvcc' and play with the -cuda laghos flag
-nv nvcc:
-	$(MAKE) "LAGHOS_NVCC=YES"
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
@@ -304,3 +313,14 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+print :
+	@echo $(VAR)=$($(VAR))
+
+print-%:
+	$(info [ variable name]: $*)
+	$(info [        origin]: $(origin $*))
+	$(info [         value]: $(value $*))
+	$(info [expanded value]: $($*))
+	$(info )
+	@true
