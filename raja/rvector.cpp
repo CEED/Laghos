@@ -32,7 +32,14 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
   size = sz;
   if (!data) { data = alloc(sz); }
 #ifdef __NVCC__
+#ifdef __RAJA__
+  if (ptr) {
+    if (cuda) checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
+    else ::memcpy(data,ptr,bytes());
+  }
+#else
   if (ptr) { checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));}
+#endif
 #else
   if (ptr) { ::memcpy(data,ptr,bytes());}
 #endif
@@ -56,9 +63,18 @@ RajaVector::RajaVector(RajaArray<double>& v):
 RajaVector::RajaVector(const Vector& v):
   size(v.Size()),data(NULL),own(true) {
 #ifdef __NVCC__
+#ifdef __RAJA__
+  if (cuda) {
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
+    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+  }else{
+    SetSize(v.Size(), v.GetData());  
+  }
+#else
   //printf("\033[31m[RajaVector()] Host 2 Device\033[m\n");
   checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
   checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+#endif
 #else
   SetSize(v.Size(), v.GetData());  
 #endif
@@ -67,10 +83,18 @@ RajaVector::RajaVector(const Vector& v):
 // Device 2 Host ***************************************************************
 RajaVector::operator Vector() {
 #ifdef __NVCC__
+#ifdef __RAJA__
+  if (cuda){
+    double *h_data= (double*) ::malloc(bytes());
+    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    return Vector(h_data,size);
+  }else return Vector(data,size);
+#else
   //printf("\033[31m[Vector()] Device 2 Host\033[m\n");
   double *h_data= (double*) ::malloc(bytes());
   checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
   return Vector(h_data,size);
+#endif
 #else
   return Vector(data,size);
 #endif
@@ -78,10 +102,18 @@ RajaVector::operator Vector() {
   
 RajaVector::operator Vector() const {
 #ifdef __NVCC__
+#ifdef __RAJA__
+  if (cuda){
+    double *h_data= (double*) ::malloc(bytes());
+    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    return Vector(h_data,size);
+  }else return Vector(data,size);
+#else
   //printf("\033[31m[Vector()const] Device 2 Host\033[m\n");
   double *h_data= (double*) ::malloc(bytes());
   checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
   return Vector(h_data,size);
+#endif
 #else
   return Vector(data,size);
 #endif
@@ -89,12 +121,13 @@ RajaVector::operator Vector() const {
 
 // ***************************************************************************
 void RajaVector::Print(std::ostream& out, int width) const {
+  double *h_data;
 #ifdef __NVCC__
-  //dbg()<<"Device 2 Host (const)";
-  double *h_data= (double*) ::malloc(bytes());
-  checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
-#else
-  double *h_data=data;
+  if (cuda){
+    //dbg()<<"Device 2 Host (const)";
+    h_data= (double*) ::malloc(bytes());
+    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+  } else h_data=data;
 #endif
   for (size_t i=0; i<size; i+=1) 
     printf("\n\t[%ld] %.15e",i,h_data[i]);

@@ -63,6 +63,7 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 int problem = 0;
+bool cuda = false;
 
 void display_banner(ostream & os);
 
@@ -94,7 +95,6 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
-   bool cuda = false;
    bool share = false;
 //#warning dot test @ true
    bool dot = false;
@@ -153,29 +153,24 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // CUDA set device & tweak options
-#if defined(__NVCC__) //and not defined(__RAJA__)
+#if defined(__NVCC__)
 #ifndef __RAJA__
    cuda=true;
-   assert(cuda);
 #endif
    if (cuda){
      const int dev = 0;
      CUdevice cuDevice;
      CUcontext cuContext;
      cuInit(0);
-     //cudaSetDevice(dev);
      cuDeviceGet(&cuDevice,dev);
      int major, minor;
      char name[128];
      cuDeviceComputeCapability(&major, &minor,dev);
      cuDeviceGetName(name, 128, cuDevice);
-     printf("\033[32m[laghos] Using Device %d: \"%s with ComputeCapability %d.%d\033[m\n",dev, name, major, minor);
+     printf("\033[32m[laghos] Using Device %d: %s, sm_%d.%d\033[m\n",dev, name, major, minor);
      cuCtxCreate(&cuContext, 0, cuDevice);
    }
 #endif
-
-   // Setting the info CUDA kernels are requested
-   is_managed=cuda;
    
    // **************************************************************************
    if (dot){

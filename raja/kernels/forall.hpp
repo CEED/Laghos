@@ -17,7 +17,7 @@
 #define LAGHOS_RAJA_KERNELS_FORALL
 
 // *****************************************************************************
-extern "C" bool is_managed;
+extern "C" bool cuda;
 
 // *****************************************************************************
 #define ELEMENT_BATCH 10
@@ -40,13 +40,14 @@ const int CUDA_BLOCK_SIZE = 256;
 #define sq_exec RAJA::seq_exec
 #define sq_reduce RAJA::seq_reduce
 #define ReduceDecl(type,var,ini) \
-  RAJA::Reduce ## type<cu_reduce, RAJA::Real_type> var(ini);
-#define forall(i,max,body)                                              \
-  if (is_managed)                                                       \
+  RAJA::Reduce ## type<sq_reduce, RAJA::Real_type> var(ini);
+#define ReduceForall(i,max,body) \
+  RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
+#define forall(i,max,body)                                        \
+  if (cuda)                                                       \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-#define ReduceForall(i,max,body) forall(i,max,body)
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
 #define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
 #define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
@@ -54,7 +55,7 @@ const int CUDA_BLOCK_SIZE = 256;
 
 
 // *****************************************************************************
-#else // __KERNELS__ on GPU, CUDA launches  ************************************
+#else // __KERNELS__ on GPU, CUDA Kernel launches  *****************************
 #ifdef __NVCC__
 #ifndef __LAMBDA__
 #define kernel __global__
@@ -66,6 +67,8 @@ const int CUDA_BLOCK_SIZE = 256;
 #define cuKer(name,end,...) name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
 #define cuKerGB(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
 #define call0(name,id,grid,blck,...)  call[id]<<<grid,blck>>>(__VA_ARGS__)
+#define ReduceDecl(type,var,ini) double var=ini;
+#define ReduceForall(i,max,body) 
 
 
 // *****************************************************************************
@@ -95,6 +98,8 @@ void cuda_forallT(const int end,
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#define ReduceDecl(type,var,ini) double var=ini;
+#define ReduceForall(i,max,body) 
 #endif // __LAMBDA__
 
 

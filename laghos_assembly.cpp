@@ -101,7 +101,9 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   if (ess_tdofs_count == 0) return;
   ess_tdofs.allocate(ess_tdofs_count);
 #ifdef __NVCC__
-  cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+  if (cuda)
+    cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+  else ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
 #else
   ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
 #endif

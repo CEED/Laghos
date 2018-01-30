@@ -16,29 +16,20 @@
 #include "raja.hpp"
 #include <sys/time.h>
 
-double vector_dot(const int N,
-                  const double* __restrict vec1,
-                  const double* __restrict vec2) {
-//#if defined(__RAJA__) or !defined(__NVCC__)
-#ifndef __NVCC__
-  ReduceDecl(Sum,dot,0.0);
-  ReduceForall(i,N,dot += vec1[i]*vec2[i];);
-  //printf("\033[33m[vector_dot] %.14e\033[m\n",dot);
-  return dot;
-#else
+// *****************************************************************************
+#ifdef __NVCC__
+static double cu_vector_dot(const int N,
+                            const double* __restrict vec1,
+                            const double* __restrict vec2) {
   unsigned int v=N;
   unsigned int nBitInN=0;
   for(;v;nBitInN++) v&=v-1;
   const int nBytes = nBitInN*sizeof(double);
   double h_dot[nBitInN];
   double *d_dot;
-  //cudaMalloc(&d_dot, nBytes);
   checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_dot, nBytes));
-  
-  // flush dot results 
   for(int i=0;i<nBitInN;i+=1) h_dot[i]=0.0;
   checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_dot,h_dot,nBytes));
-
   for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
     if (!(v&1)) continue;
     reduceSum(k,&vec1[vof7],&vec2[vof7],&d_dot[kof7]);
@@ -47,11 +38,21 @@ double vector_dot(const int N,
   }
   checkCudaErrors(cuMemcpyDtoH(h_dot,(CUdeviceptr)d_dot,nBytes));
   cudaFree(d_dot);
-  
   for(int i=1;i<nBitInN;i+=1)
     h_dot[0]+=h_dot[i];
-
   //printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
   return h_dot[0];
+}
 #endif
+
+// *****************************************************************************
+double vector_dot(const int N,
+                  const double* __restrict vec1,
+                  const double* __restrict vec2) {
+#ifdef __NVCC__
+  if (cuda) return cu_vector_dot(N,vec1,vec2);
+#endif
+  ReduceDecl(Sum,dot,0.0);
+  ReduceForall(i,N,dot += vec1[i]*vec2[i];);
+  return dot;
 }

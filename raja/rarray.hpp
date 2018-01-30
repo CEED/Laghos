@@ -32,7 +32,8 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
   RajaArray& operator=(Array<T> &a){
 #if defined(__NVCC__)
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    if (cuda) checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #else
     std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #endif
@@ -66,8 +67,11 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
 #ifdef __NVCC__
-    T h_data[sz];
-    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    T *h_data;
+    if (cuda){
+      h_data= (T*)::malloc(bytes());assert(h_data);
+      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    }else h_data=data;
 #else
     T *h_data=data;
 #endif
@@ -90,7 +94,8 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   ~RajaArray(){rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
   RajaArray& operator=(Array<T> &a){
 #ifdef __NVCC__
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    if (cuda) checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
+    else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #else
     std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
 #endif
@@ -130,8 +135,11 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
 #ifdef __NVCC__
-    T *h_data= (T*) ::malloc(bytes());
-    checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    T *h_data;
+    if (cuda){
+      h_data= (T*)::malloc(bytes());assert(h_data);
+      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
+    }else h_data=data;
 #else
     T *h_data=data;
 #endif

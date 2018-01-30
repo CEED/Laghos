@@ -154,13 +154,14 @@ endif
 # GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
 # RAJA: make v=1 rj=1 t=1
 ##################################################
+.PHONY: cpuL cpuLT rj raja cpuRJ nvl gpuLT nvk gpuKT
 cpuL:;$(MAKE) l=1 all
 cpuLT:;$(MAKE) l=1 t=1 all
 
-cpuRJ:;$(MAKE) rj=1 t=1 all
+rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
 
-gpuLT:;$(MAKE) nv=1 l=1 t=1 all
-gpuKT:;$(MAKE) nv=1 t=1 all
+nvl gpuLT:;$(MAKE) nv=1 l=1 t=1 all
+nvk gpuKT:;$(MAKE) nv=1 t=1 all
 
 #######################
 # TPL INCLUDES & LIBS #

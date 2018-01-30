@@ -17,7 +17,7 @@
 #define LAGHOS_RAJA_MALLOC
 
 // ***************************************************************************
-extern bool is_managed;
+extern bool cuda;
 
 namespace mfem {
 
@@ -27,10 +27,9 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void* _new(size_t n) {
     rdbg("+]\033[m");
-    if (!is_managed) return new T[n];
+    if (!cuda) return new T[n];
 #ifdef __NVCC__
     void *ptr;
-    //cudaMalloc(&ptr, n*sizeof(T));
     cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
     //cudaDeviceSynchronize();
     return ptr;
@@ -43,11 +42,9 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void _delete(void *ptr) {
     rdbg("-]\033[m");
-    if (!is_managed) delete[] static_cast<T*>(ptr);
+    if (!cuda) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__
     else {
-      //cudaDeviceSynchronize();
-      //cudaFree(ptr);
       cuMemFree((CUdeviceptr)ptr);
     }
 #endif // __NVCC__
