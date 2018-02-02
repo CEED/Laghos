@@ -46,6 +46,7 @@ static double cu_vector_dot(const int N,
 }
 
 // *****************************************************************************
+__attribute__((unused))
 static double cub_vector_dot(const int N,
                              const double* __restrict vec1,
                              const double* __restrict vec2) {
@@ -54,13 +55,14 @@ static double cub_vector_dot(const int N,
   if (!d_dot)
     checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_dot, 1*sizeof(double)));
   
-  static void *d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  if (!d_temp_storage){
-    cub::DeviceReduce::Dot(d_temp_storage, temp_storage_bytes, vec1,vec2, d_dot, N);
-    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  static void *d_storage = NULL;
+  static size_t storage_bytes = 0;
+  if (!d_storage){
+    cub::DeviceReduce::Dot(d_storage, storage_bytes, vec1, vec2, d_dot, N);
+    cudaMalloc(&d_storage, storage_bytes);
   }
-  cub::DeviceReduce::Dot(d_temp_storage, temp_storage_bytes, vec1,vec2, d_dot, N);
+  //printf(" \033[32;1m%d\033[m", storage_bytes); fflush(stdout);
+  cub::DeviceReduce::Dot(d_storage, storage_bytes, vec1, vec2, d_dot, N);
   checkCudaErrors(cuMemcpyDtoH(&h_dot,(CUdeviceptr)d_dot,1*sizeof(double)));
   return h_dot;
 }

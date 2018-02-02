@@ -43,20 +43,21 @@ static double cu_vector_min(const int N, const double* __restrict vec) {
 }
 
 // *****************************************************************************
+__attribute__((unused))
 static double cub_vector_min(const int N,
                              const double* __restrict vec) {
   double h_min;
   static double *d_min = NULL;
   if (!d_min)
     checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_min, 1*sizeof(double)));
-  
-  static void *d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  if (!d_temp_storage){
-    cub::DeviceReduce::Min(d_temp_storage, temp_storage_bytes, vec, d_min, N);
-    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  static void *d_storage = NULL;
+  static size_t storage_bytes = 0;
+  if (!d_storage){
+    cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
+    cudaMalloc(&d_storage, storage_bytes);
   }
-  cub::DeviceReduce::Min(d_temp_storage, temp_storage_bytes, vec, d_min, N);
+  //printf(" \033[33;1m%d\033[m", storage_bytes);fflush(stdout);
+  cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
   checkCudaErrors(cuMemcpyDtoH(&h_min,(CUdeviceptr)d_min,1*sizeof(double)));
   return h_min;
 }

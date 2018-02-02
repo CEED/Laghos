@@ -7,16 +7,12 @@
 versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
 #          11       21    31      41       51     61     71          81      91
 
-problem=1
-parallel_refs=0
-
+host=tux
 maxsteps=1
-
-outfile=timings_tux_2d_180202_p$problem""_ms$maxsteps.org
+parallel_refs=0
 mesh_file=../data/square01_quad.mesh
 
-calc() { awk "BEGIN{print $*}"; }
-
+#########################################################################
 run_case() {
     # Pass command as all inputs
     # Outputs: order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate
@@ -39,66 +35,68 @@ END { printf("%d|%d|%d|%d|%.8f|%.8f|%.8f|%.8f|%.8f|%.8f|\n",
    total_time, total_rate) }'
 }
 
-[ -r $outfile ] && cp $outfile $outfile.bak
-echo -ne "|H1order|refs|h1_dofs|l2_dofs|h1_cg_rate|l2_cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
-
-# {0..5}{1..6}
-rmax=6 # must match {0..rmax} of sref
-for torder in {0..0}; do
-    for sref in {1..6}; do
-        nzones=$(( 4**(sref+1) ))
-        for version in "${versions[@]}"; do
-            #echo \#$version >> $outfile
-            # Test for specific CUDA versions
-            #echo version is $version
-            version_name=$version
-            additional_options=
-            if [ $version == 'kernels-share' ]; then
-                version_name=kernels
-                additional_options=-share
+#bsub -Ip -x -G guests mpirun -n 1
+#########################################################################
+rmax=6 # must match {1..rmax} of sref
+for problem in {0..1}; do
+    outfile=timings_$host""_2d_p$problem""_ms$maxsteps.org
+    [ -r $outfile ] && cp $outfile $outfile.bak
+    echo -ne "|H1order|refs|H1dofs|L2dofs|H1cg_rate|L2cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
+    for torder in {0..5}; do
+        for sref in {1..6}; do
+            for version in "${versions[@]}"; do
+                #echo \#$version >> $outfile
+                # Test for specific CUDA versions
+                #echo version is $version
+                version_name=$version
+                additional_options=
+                if [ $version == 'kernels-share' ]; then
+                    version_name=kernels
+                    additional_options=-share
+                fi
+                if [ $version == 'kernels-cuda' ]; then
+                    version_name=kernels
+                    additional_options=-cuda
+                fi
+                if [ $version == 'kernels-cuda-share' ]; then
+                    version_name=kernels
+                    additional_options="-cuda -share"
+                fi
+                if [ $version == 'raja-cuda' ]; then
+                    version_name=raja
+                    additional_options=-cuda
+                fi
+                if [ $version == 'occa-cuda' ]; then
+                    version_name=occa
+                    additional_options="--occa-config cuda.json"
+                fi
+                echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
+                echo ../laghos.$version_name \
+                    -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
+                    --cg-tol 0 --cg-max-steps 50 \
+                    --max-steps $maxsteps \
+                    --mesh $mesh_file \
+                    --refine-serial $sref \
+                    --refine-parallel $parallel_refs \
+                    --order-thermo $torder \
+                    --order-kinematic $((torder+1)) \
+                    $additional_options
+                echo -n $(run_case ../laghos.$version_name \
+                    -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
+                    --cg-tol 0 --cg-max-steps 50 \
+                    --max-steps $maxsteps \
+                    --mesh $mesh_file \
+                    --refine-serial $sref \
+                    --refine-parallel $parallel_refs \
+                    --order-thermo $torder \
+                    --order-kinematic $((torder+1)) \
+                    $additional_options)>> $outfile
+            done
+            if [ $((sref)) != $rmax ]; then 
+                echo -ne "\n|">> $outfile
+            else
+                echo -ne "\n\n|">> $outfile
             fi
-            if [ $version == 'kernels-cuda' ]; then
-                version_name=kernels
-                additional_options=-cuda
-            fi
-            if [ $version == 'kernels-cuda-share' ]; then
-                version_name=kernels
-                additional_options="-cuda -share"
-            fi
-            if [ $version == 'raja-cuda' ]; then
-                version_name=raja
-                additional_options=-cuda
-            fi
-            if [ $version == 'occa-cuda' ]; then
-                version_name=occa
-                additional_options="--occa-config cuda.json"
-            fi
-            echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
-            echo ../laghos.$version_name \
-                -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
-                --cg-tol 0 --cg-max-steps 50 \
-                --max-steps $maxsteps \
-                --mesh $mesh_file \
-                --refine-serial $sref \
-                --refine-parallel $parallel_refs \
-                --order-thermo $torder \
-                --order-kinematic $((torder+1)) \
-               $additional_options
-            echo -n $(run_case ../laghos.$version_name \
-                -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
-                --cg-tol 0 --cg-max-steps 50 \
-                --max-steps $maxsteps \
-                --mesh $mesh_file \
-                --refine-serial $sref \
-                --refine-parallel $parallel_refs \
-                --order-thermo $torder \
-                --order-kinematic $((torder+1)) \
-                $additional_options)>> $outfile
         done
-        if [ $((sref)) != $rmax ]; then 
-            echo -ne "\n|">> $outfile
-        else
-            echo -ne "\n\n|">> $outfile
-        fi
     done
 done
