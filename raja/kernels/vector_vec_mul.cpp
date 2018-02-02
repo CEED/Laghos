@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
 
+// *****************************************************************************
 #ifndef __LAMBDA__
 extern "C" kernel
 void vector_vec_mul0(const int N,

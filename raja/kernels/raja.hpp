@@ -36,6 +36,7 @@
 #include <cuda.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
+#include <cub/cub.cuh>
 #endif
 
 // *****************************************************************************

@@ -2,15 +2,17 @@
 #           10      20        30     40          50     60
 #versions=( 'master' 'kernels' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
 #versions=( 'master' 'kernels' 'raja' 'occa')
-versions=('kernels' 'kernels-share' 'kernels-cuda' 'kernels-cuda-share')
+#versions=('kernels' 'kernels-share' 'kernels-cuda' 'kernels-cuda-share')
 #versions=( 'master' 'raja-cuda' 'occa-cuda')
+versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
+#          11       21    31      41       51     61     71          81      91
 
-problem=0
+problem=1
 parallel_refs=0
 
 maxsteps=1
 
-outfile=timings_tux_2d_share_$maxsteps.org
+outfile=timings_tux_2d_180202_p$problem""_ms$maxsteps.org
 mesh_file=../data/square01_quad.mesh
 
 calc() { awk "BEGIN{print $*}"; }
@@ -40,9 +42,10 @@ END { printf("%d|%d|%d|%d|%.8f|%.8f|%.8f|%.8f|%.8f|%.8f|\n",
 [ -r $outfile ] && cp $outfile $outfile.bak
 echo -ne "|H1order|refs|h1_dofs|l2_dofs|h1_cg_rate|l2_cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
 
-rmax=1
-for torder in {0..5}; do
-    for sref in {1..1}; do
+# {0..5}{1..6}
+rmax=6 # must match {0..rmax} of sref
+for torder in {0..0}; do
+    for sref in {1..6}; do
         nzones=$(( 4**(sref+1) ))
         for version in "${versions[@]}"; do
             #echo \#$version >> $outfile
@@ -68,11 +71,10 @@ for torder in {0..5}; do
             fi
             if [ $version == 'occa-cuda' ]; then
                 version_name=occa
-                #additional_options="--device-info \"mode:'CUDA',deviceID:0\""
                 additional_options="--occa-config cuda.json"
             fi
             echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
-            echo ../laghos-$version_name \
+            echo ../laghos.$version_name \
                 -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                 --cg-tol 0 --cg-max-steps 50 \
                 --max-steps $maxsteps \
@@ -81,8 +83,8 @@ for torder in {0..5}; do
                 --refine-parallel $parallel_refs \
                 --order-thermo $torder \
                 --order-kinematic $((torder+1)) \
-                $additional_options
-            echo -n $(run_case ../laghos-$version_name \
+               $additional_options
+            echo -n $(run_case ../laghos.$version_name \
                 -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                 --cg-tol 0 --cg-max-steps 50 \
                 --max-steps $maxsteps \

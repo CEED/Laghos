@@ -18,6 +18,7 @@
 
 // *****************************************************************************
 #ifdef __NVCC__
+__attribute__((unused))
 static double cu_vector_dot(const int N,
                             const double* __restrict vec1,
                             const double* __restrict vec2) {
@@ -43,14 +44,34 @@ static double cu_vector_dot(const int N,
   //printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
   return h_dot[0];
 }
-#endif
+
+// *****************************************************************************
+static double cub_vector_dot(const int N,
+                             const double* __restrict vec1,
+                             const double* __restrict vec2) {
+  double h_dot;
+  static double *d_dot = NULL;
+  if (!d_dot)
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_dot, 1*sizeof(double)));
+  
+  static void *d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  if (!d_temp_storage){
+    cub::DeviceReduce::Dot(d_temp_storage, temp_storage_bytes, vec1,vec2, d_dot, N);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  }
+  cub::DeviceReduce::Dot(d_temp_storage, temp_storage_bytes, vec1,vec2, d_dot, N);
+  checkCudaErrors(cuMemcpyDtoH(&h_dot,(CUdeviceptr)d_dot,1*sizeof(double)));
+  return h_dot;
+}
+#endif // __NVCC__
 
 // *****************************************************************************
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
 #ifdef __NVCC__
-  if (cuda) return cu_vector_dot(N,vec1,vec2);
+  if (cuda) return cub_vector_dot(N,vec1,vec2);
 #endif
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);

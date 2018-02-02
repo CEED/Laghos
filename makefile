@@ -59,7 +59,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../mfem-raja
+MFEM_DIR = /home/camier1/home/mfem/mfem-raja
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -160,7 +160,7 @@ cpuLT:;$(MAKE) l=1 t=1 all
 
 rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
 
-nvl gpuLT:;$(MAKE) nv=1 l=1 t=1 all
+nv nvl gpuLT:;$(MAKE) nv=1 l=1 t=1 all
 nvk gpuKT:;$(MAKE) nv=1 t=1 all
 
 #######################
@@ -172,12 +172,14 @@ MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include
 #DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
 #BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
 
-CUDA_INC = -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
+CUDA_HOME = /usr/local/cuda
+CUDA_INC = -I$(CUDA_HOME)/samples/common/inc
 CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
-RAJA_INC = -I$(home)/usr/local/raja/0.4.1/include
-RAJA_LIBS = $(home)/usr/local/raja/0.4.1/lib/libRAJA.a
+CUB_DIR = $(home)/usr/src/cub
+RAJA_INC = -I$(CUB_DIR) -I$(home)/usr/local/raja/last/include
+RAJA_LIBS = $(home)/usr/local/raja/last/lib/libRAJA.a
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
 LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)

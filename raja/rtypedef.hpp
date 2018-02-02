@@ -14,7 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #ifndef LAGHOS_RAJA_TYPEDEFS
-#define LAGHOS_RAJA_TYPEDE
+#define LAGHOS_RAJA_TYPEDEFS
 
 // mfem::ode.hpp ***************************************************************
 using namespace mfem;
@@ -44,5 +44,5 @@ typedef TTransposeOperator<RajaVector>      RajaTransposeOperator;
 typedef TRAPOperator<RajaVector>            RajaRAPOperator;
 typedef TTripleProductOperator<RajaVector>  RajaTripleProductOperator;
 
-#endif // LAGHOS_RAJA_TYPEDEF
+#endif // LAGHOS_RAJA_TYPEDEFS
 

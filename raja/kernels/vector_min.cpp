@@ -17,6 +17,7 @@
 
 // *****************************************************************************
 #ifdef __NVCC__
+__attribute__((unused))
 static double cu_vector_min(const int N, const double* __restrict vec) {
   unsigned int v=N;
   unsigned int nBitInN=0;
@@ -40,17 +41,36 @@ static double cu_vector_min(const int N, const double* __restrict vec) {
   //printf("\033[32m[vector_min] %.14e\033[m\n",h_red[0]);
   return h_red[0];
 }
-#endif
+
+// *****************************************************************************
+static double cub_vector_min(const int N,
+                             const double* __restrict vec) {
+  double h_min;
+  static double *d_min = NULL;
+  if (!d_min)
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_min, 1*sizeof(double)));
+  
+  static void *d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  if (!d_temp_storage){
+    cub::DeviceReduce::Min(d_temp_storage, temp_storage_bytes, vec, d_min, N);
+    cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  }
+  cub::DeviceReduce::Min(d_temp_storage, temp_storage_bytes, vec, d_min, N);
+  checkCudaErrors(cuMemcpyDtoH(&h_min,(CUdeviceptr)d_min,1*sizeof(double)));
+  return h_min;
+}
+#endif // __NVCC__
+
 
 // *****************************************************************************
 double vector_min(const int N,
                   const double* __restrict vec) {
 #ifdef __NVCC__
-  if (cuda) return cu_vector_min(N,vec);
+  if (cuda) return cub_vector_min(N,vec);
 #endif
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
-  //printf("\033[32m[vector_min] %.14e\033[m\n",red);
   return red;
 }
 
