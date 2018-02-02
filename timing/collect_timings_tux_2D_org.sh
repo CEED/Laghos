@@ -5,7 +5,7 @@
 #versions=('kernels' 'kernels-share' 'kernels-cuda' 'kernels-cuda-share')
 #versions=( 'master' 'raja-cuda' 'occa-cuda')
 versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
-#          11       21    31      41       51     61     71          81      91
+#          11       21     31      41      51      61     71          81     91
 
 host=tux
 maxsteps=1
