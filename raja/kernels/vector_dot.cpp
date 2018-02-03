@@ -14,11 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-#include <sys/time.h>
+#include <cub/cub.cuh>
 
 // *****************************************************************************
 #ifdef __NVCC__
-__attribute__((unused))
+/*__attribute__((unused))
 static double cu_vector_dot(const int N,
                             const double* __restrict vec1,
                             const double* __restrict vec2) {
@@ -43,7 +43,7 @@ static double cu_vector_dot(const int N,
     h_dot[0]+=h_dot[i];
   //printf("\033[33m[vector_dot] %.14e\033[m\n",h_dot[0]);
   return h_dot[0];
-}
+  }*/
 
 // *****************************************************************************
 __attribute__((unused))

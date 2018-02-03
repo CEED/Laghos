@@ -447,6 +447,7 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict stressJinvT,
                 const double* restrict e,
                 double* restrict v) {
+  push();
 #ifndef __LAMBDA__
   const int grid = nzones;
   const int blck = NUM_QUAD_1D;
@@ -504,6 +505,7 @@ void rForceMult(const int NUM_DIM,
           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
   else assert(false);
 #endif // __TEMPLATES__
+  pop();
 }
 
 // *****************************************************************************
@@ -528,6 +530,7 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict stressJinvT,
                          const double* restrict v,
                          double* restrict e) {
+  push();
 #ifndef __LAMBDA__
   const int grid = nzones;
   const int blck = NUM_QUAD_1D;
@@ -580,5 +583,6 @@ void rForceMultTranspose(const int NUM_DIM,
           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
   else assert(false);
 #endif
+  pop();
 }
 

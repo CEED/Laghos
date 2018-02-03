@@ -14,10 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
+#include <cub/cub.cuh>
 
 // *****************************************************************************
 #ifdef __NVCC__
-__attribute__((unused))
+/*__attribute__((unused))
 static double cu_vector_min(const int N, const double* __restrict vec) {
   unsigned int v=N;
   unsigned int nBitInN=0;
@@ -40,7 +41,7 @@ static double cu_vector_min(const int N, const double* __restrict vec) {
     h_red[0]=h_red[0]<h_red[i]?h_red[0]:h_red[i];
   //printf("\033[32m[vector_min] %.14e\033[m\n",h_red[0]);
   return h_red[0];
-}
+  }*/
 
 // *****************************************************************************
 __attribute__((unused))
@@ -58,6 +59,7 @@ static double cub_vector_min(const int N,
   }
   //printf(" \033[33;1m%d\033[m", storage_bytes);fflush(stdout);
   cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
+  //D2H
   checkCudaErrors(cuMemcpyDtoH(&h_min,(CUdeviceptr)d_min,1*sizeof(double)));
   return h_min;
 }

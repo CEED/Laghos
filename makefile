@@ -200,26 +200,26 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 ################
 SOURCE_FILES  = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/*.cpp)
-ifneq (,$(nv))
-  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
-endif
-ifneq (,$(rj))
-  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
-endif
+#ifneq (,$(nv))
+#  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
+#endif
+#ifneq (,$(rj))
+#  CUDA_FILES  = $(wildcard $(kernels)/*.cu)
+#endif
 RAJA_FILES += $(wildcard $(raja)/*.cpp)
 
 ################
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
-ifneq (,$(nv))
-OBJECT_FILES += $(CUDA_FILES:.cu=.o)
-OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
-endif
-ifneq (,$(rj))
-OBJECT_FILES += $(CUDA_FILES:.cu=.o)
-OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
-endif
+#ifneq (,$(nv))
+#OBJECT_FILES += $(CUDA_FILES:.cu=.o)
+#OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
+#endif
+#ifneq (,$(rj))
+#OBJECT_FILES += $(CUDA_FILES:.cu=.o)
+#OBJECT_FILES += $(CUDA_FILES:.cu=.lo)
+#endif
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
 OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp

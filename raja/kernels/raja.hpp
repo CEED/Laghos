@@ -36,7 +36,10 @@
 #include <cuda.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
-#include <cub/cub.cuh>
+#include <nvToolsExt.h>
+#include <cudaProfiler.h>
+#define push() nvtxRangePush(__FUNCTION__)
+#define pop nvtxRangePop
 #endif
 
 // *****************************************************************************

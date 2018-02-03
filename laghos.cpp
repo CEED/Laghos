@@ -400,9 +400,11 @@ int main(int argc, char *argv[])
    }
 
    //dbg()<<"[7mLagrangianHydroOperator oper";
+   //push("LagrangianHydroOperator");
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
+   //pop();
 
    //dbg()<<"[7msocketstream";
    socketstream vis_rho, vis_v, vis_e;
@@ -451,14 +453,22 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
+   nvtxRangePush("odeInit");
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
+   nvtxRangePop();
+   
    //dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    //dbg()<<"[7mS_old(S)";
-   RajaVector S_old(S);//S.Print();
+   nvtxRangePush("SoldS");
+   RajaVector S_old(S);//D2D
+   nvtxRangePop();
+   
+
+ 
    //dbg()<<"[7mfor(last_step)";
    for (int ti = 1; !last_step; ti++)
    {
@@ -469,16 +479,30 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      S_old = S;
+      push("Sold=S");
+      S_old = S;//D2D
+      pop();
       t_old = t;
       //dbg()<<"[7mResetTimeStepEstimate";
+      push("ResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
+      pop();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       //dbg()<<"[7mRode_solver->Step";
+//cuProfilerStart();
+
+      //push("odeStep");
       ode_solver->Step(S, t, dt);
+      //pop();
       steps++;
+
+      
+//cuProfilerStop();
+//#warning exit
+//exit(0);
+
 
       // Adaptive time step control.
       //dbg()<<"[7mAdaptive time step control";

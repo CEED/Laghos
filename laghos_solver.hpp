@@ -119,6 +119,7 @@ protected:
          cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
       }
    }
+public:
 
   void UpdateQuadratureData(const RajaVector &S) const;
 
