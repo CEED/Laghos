@@ -128,6 +128,8 @@ void RajaVector::Print(std::ostream& out, int width) const {
     h_data= (double*) ::malloc(bytes());
     checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
   } else h_data=data;
+#else
+  h_data=data;
 #endif
   for (size_t i=0; i<size; i+=1) 
     printf("\n\t[%ld] %.15e",i,h_data[i]);

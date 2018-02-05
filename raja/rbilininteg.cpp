@@ -33,15 +33,47 @@ RajaGeometry::~RajaGeometry(){
 
 // *****************************************************************************
 static double *meshNodes_data=NULL;
+static int *eMap_data=NULL;
 
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
-                                const IntegrationRule& ir) {
-  nvtxRangePush("Get");
-#warning geom_to_allocate tied to true
-  const bool geom_to_allocate = true;//!geom;
-  if (geom_to_allocate) geom=new RajaGeometry();
+                                const IntegrationRule& ir,
+                                const RajaVector& Sx,
+                                const bool capture_nodes) {
+  pushf();
   Mesh& mesh = *(fes.GetMesh());
+  
+  if (capture_nodes){
+    push("cpynode");
+    GridFunction& nodes = *(mesh.GetNodes());
+    const FiniteElementSpace& fespace = *(nodes.FESpace());
+    const FiniteElement& fe = *(fespace.GetFE(0));
+    const int elements = fespace.GetNE();
+    const int numDofs  = fe.GetDof();
+    const int numQuad  = ir.GetNPoints();
+    const int ndofs = fespace.GetNDofs();
+    const int dims     = fe.GetDim();
+    printf("\n\033[32m[Get] now RE meshNodes\033[m");
+    rNodes(elements,numDofs,ndofs,dims,geom->eMap,Sx,geom->meshNodes);
+    const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
+    printf("\n\033[32m[Get] rIniGeom\033[m");
+    push("rIniGeom");
+    rIniGeom(dims,numDofs,numQuad,elements,
+             maps->dofToQuadD,
+             geom->meshNodes,
+             geom->J,
+             geom->invJ,
+             geom->detJ);
+    pop();
+    pop();
+    return geom;
+  }
+    
+  const bool geom_to_allocate = (!geom) || rconfig::NeedUpdate(mesh);
+  if (geom_to_allocate) {
+    printf("\n\033[32m[Get] new geom\033[m");
+    geom=new RajaGeometry();
+  }
   if (!mesh.GetNodes()) 
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   GridFunction& nodes = *(mesh.GetNodes());
@@ -51,45 +83,86 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const int elements = fespace.GetNE();
   const int numDofs  = fe.GetDof();
   const int numQuad  = ir.GetNPoints();
+  const int ndofs = fespace.GetNDofs();
   //Ordering::Type originalOrdering = fespace.GetOrdering();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
-  if (orderedByNODES) ReorderByVDim(nodes);
+
+  //printf("\n\033[32m[Get] Sx==0\033[m");
+  if (orderedByNODES) {
+    //RajaVector rnodes(nodes.Size());
+    //rnodes = nodes; rnodes.Print();
+    //printf("\n\033[32m[Get] ReorderByVDim %d\033[m",nodes.Size());
+    ReorderByVDim(nodes);
+    //rnodes = nodes; rnodes.Print();
+  }
   const int asize = dims*numDofs*elements;
-  if (geom_to_allocate)
+  if (geom_to_allocate){
+    //printf("\n\033[32m[Get] new datas (asize=%d)\033[m",asize);
     meshNodes_data=(double*)malloc(asize*sizeof(double));
+    eMap_data=(int*)malloc(numDofs*elements*sizeof(int));
+  }else{
+    printf("\n\033[32m[Get] old datas (asize=%d)\033[m",asize);
+  }
   Array<double> meshNodes(meshNodes_data,asize);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
-  for (int e = 0; e < elements; ++e) {
-    for (int dof = 0; dof < numDofs; ++dof) {
-      const int gid = elementMap[dof + numDofs*e];
-      for (int dim = 0; dim < dims; ++dim) {
-        meshNodes[dim+dims*(dof+numDofs*e)] = nodes[dim + gid*dims];
+  Array<int> eMap(eMap_data,numDofs*elements);
+  {
+    printf("\n\033[32m[Get] cpynodes e=%d, dof=%d\033[m",elements,numDofs);
+    pushcn(33,"cpynodes");
+    for (int e = 0; e < elements; ++e) {
+      printf("\n\033[32m[Get] elem %d/%d:\033[m",e,elements);
+      for (int d = 0; d < numDofs; ++d) {
+        const int lid = d+numDofs*e;
+        const int gid = elementMap[lid];
+        printf("\n\t\033[32m[Get] dof %d/%d, lid=%d -> gid=%d:\033[m",d,numDofs,lid,gid);
+        eMap[lid]=gid;
+        //printf("\n\t\033[32m[Get] node @ [%f,%f]\033[m",nodes[0+dims*gid],nodes[1+dims*gid]);
+        for (int v = 0; v < dims; ++v) {
+          const int moffset = v+dims*lid;
+          const int xoffset = v+dims*gid;
+          const int voffset = gid+v*ndofs;
+          printf("\n\t\t\033[32m[Get] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
+          meshNodes[moffset] = nodes[xoffset];
+        }
       }
     }
+    pop();
   }
-  if (geom_to_allocate)
+  if (geom_to_allocate){
     geom->meshNodes.allocate(dims, numDofs, elements);
-  geom->meshNodes = meshNodes;
+    geom->eMap.allocate(numDofs, elements);
+  }
+  {
+    pushcn(14,"H2D:cpyMeshNodes");
+    printf("\n\033[32m[Get] H2D:cpyMeshNodes\033[m");
+    geom->meshNodes = meshNodes;
+    geom->meshNodes.Print();
+    geom->eMap = eMap;
+    pop();
+  }
   // Reorder the original gf back
   if (orderedByNODES) ReorderByNodes(nodes);
   if (geom_to_allocate){
+    //printf("\n\033[32m[Get] J allocates\033[m");
     geom->J.allocate(dims, dims, numQuad, elements);
     geom->invJ.allocate(dims, dims, numQuad, elements);
     geom->detJ.allocate(numQuad, elements);
   }
+    
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   {
-    nvtxRangePush("rIniGeom");
+    printf("\n\033[32m[Get] rIniGeom\033[m");
+    push("rIniGeom");
     rIniGeom(dims,numDofs,numQuad,elements,
              maps->dofToQuadD,
              geom->meshNodes,
              geom->J,
              geom->invJ,
              geom->detJ);
-    nvtxRangePop();
+    pop();
   }
-  nvtxRangePop();
+  pop();
   return geom;
 }
 
@@ -102,9 +175,10 @@ void RajaGeometry::ReorderByVDim(GridFunction& nodes){
   double *data = nodes.GetData();
   double *temp = new double[size];
   int k=0;
-  for (int j = 0; j < ndofs; j++)
-    for (int i = 0; i < vdim; i++){
-      temp[k++] = data[j+i*ndofs];
+  for (int d = 0; d < ndofs; d++)
+    for (int v = 0; v < vdim; v++){
+      printf("\n\033[32m[ReorderByVDim] dof,dim:(%d,%d): %d->%d\033[m",d,v,v+d*vdim,d+v*ndofs);
+      temp[k++] = data[d+v*ndofs];
     }
   for (int i = 0; i < size; i++)
     data[i] = temp[i];

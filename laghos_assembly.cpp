@@ -100,6 +100,8 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) return;
   ess_tdofs.allocate(ess_tdofs_count);
+  {
+    pushcn(14,"H2D:ess_tdofs");
 #ifdef __NVCC__
   if (cuda)
     cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
@@ -107,6 +109,8 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 #else
   ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
 #endif
+  pop();
+  }
 }
 
 // *****************************************************************************

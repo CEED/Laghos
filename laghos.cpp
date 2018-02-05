@@ -64,6 +64,7 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem = 0;
 bool cuda = false;
+int world_size = 0;
 
 void display_banner(ostream & os);
 
@@ -73,6 +74,7 @@ int main(int argc, char *argv[])
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
+   world_size = mpi.WorldSize();
 
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }

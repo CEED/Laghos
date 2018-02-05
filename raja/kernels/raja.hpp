@@ -40,6 +40,9 @@
 #include <cudaProfiler.h>
 #define push() nvtxRangePush(__FUNCTION__)
 #define pop nvtxRangePop
+#else
+#define push(...)
+#define pop(...)
 #endif
 
 // *****************************************************************************

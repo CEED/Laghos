@@ -199,7 +199,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   rgbn(14,"Mult:h_x");//D2H
+   pushcn(14,"Mult:h_x");//D2H
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
@@ -359,7 +359,7 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
   pushf();
   
-  rgbn(14,"GetTimeStepEstimate:h_x");//D2H
+  pushcn(14,"GetTimeStepEstimate:h_x");//D2H
   Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
   pop();
    ParGridFunction x(&H1FESpace, h_x.GetData());
@@ -457,12 +457,33 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const int eSize = L2FESpace.GetVSize();
    
    push("ve");
+   const RajaGridFunction x(H1FESpace, S.GetRange(0, vSize));
+   //printf("\n\n\033[33;1m[UpdateQuadratureData] S.nodes:\033[m");
+   //x.Print();
    RajaGridFunction v(H1FESpace, S.GetRange(vSize, vSize));
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
    pop();
+   
+   //printf("[UpdateQuadratureData] before meshNodes:\n");
+   //quad_data.geom->meshNodes.Print();
 
    push("Geom:Get");
-   quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule);
+   printf("\n\033[33m[UpdateQuadratureData] Get\033[m");
+   quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule,x,true);
+   //printf("[UpdateQuadratureData] meshNodes:\n");
+   //quad_data.geom->meshNodes.Print();
+
+   // Set back Sx to our meshNodes
+   /*Mesh& mesh = *(H1FESpace.GetMesh());
+   GridFunction& nodes = *(mesh.GetNodes());
+   const FiniteElementSpace& fespace = *(nodes.FESpace());
+   const FiniteElement& fe = *(fespace.GetFE(0));
+   const int dims     = fe.GetDim();
+   const int elements = fespace.GetNE();
+   const int numDofs  = fe.GetDof();
+   rNodes(elements,numDofs,dims,quad_data.geom->eMap,x,quad_data.geom->meshNodes);
+   printf("[UpdateQuadratureData] meshNodes:\n");
+   quad_data.geom->meshNodes.Print();*/
    pop();
 
    push("v2");

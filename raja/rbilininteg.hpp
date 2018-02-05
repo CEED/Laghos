@@ -24,9 +24,12 @@ namespace mfem {
 class RajaGeometry {
  public:
   ~RajaGeometry();
+  RajaArray<int> eMap;
   RajaArray<double> meshNodes;
   RajaArray<double> J, invJ, detJ;
-  static RajaGeometry* Get(RajaFiniteElementSpace&,const IntegrationRule&);
+  static RajaGeometry* Get(RajaFiniteElementSpace&,
+                           const IntegrationRule&,
+                           const RajaVector& =0,const bool =false);
   static void ReorderByVDim(GridFunction& nodes);
   static void ReorderByNodes(GridFunction& nodes);
 };

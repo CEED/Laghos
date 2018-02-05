@@ -48,26 +48,29 @@ class RajaProlongationOperator : public RajaOperator {
   RajaProlongationOperator(const Operator* Op):
     RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
-    #warning Mult shortcut
-    y=x;
-/*    rgbn(14,"Mult");
+    if (rconfig::IAmAlone()){
+      y=x;
+      return;
+    }
+    pushcn(14,"Mult");
     const Vector hostX=x;//H2H
     Vector hostY(y.Size());
     pmat->Mult(hostX, hostY);
     y=hostY;//D2H
-    pop();*/
+    pop();
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
-#warning Mult shortcut
-    y=x;
-    /*
-    rgbn(14,"MultTranspose");
+    if (rconfig::IAmAlone()){
+      y=x;
+      return;
+    }
+    pushcn(14,"MultTranspose");
     const Vector hostX=x;//H2H
     Vector hostY(y.Size());
     // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
     pmat->MultTranspose(hostX, hostY);
     y=hostY;//D2H
-    pop();*/
+    pop();
   }
 };
 

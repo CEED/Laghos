@@ -14,10 +14,10 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "raja.hpp"
-#include <cub/cub.cuh>
 
 // *****************************************************************************
 #ifdef __NVCC__
+#include <cub/cub.cuh>
 /*__attribute__((unused))
 static double cu_vector_min(const int N, const double* __restrict vec) {
   unsigned int v=N;
