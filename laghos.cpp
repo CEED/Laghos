@@ -65,6 +65,7 @@ using namespace mfem::hydrodynamics;
 int problem = 0;
 bool cuda = false;
 int world_size = 0;
+bool like_occa = false;
 
 void display_banner(ostream & os);
 
@@ -146,6 +147,8 @@ int main(int argc, char *argv[])
                   "Enable or disable SHARE kernels.");
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
                   "Enable or disable DOT test kernels.");
+   args.AddOption(&like_occa, "-like-occa", "--like-occa", "-not-like-occa", "--no-like-occa",
+                  "Enable or disable like-occa test kernels.");
    args.Parse();
    if (!args.Good())
    {
@@ -170,7 +173,7 @@ int main(int argc, char *argv[])
      cuDeviceComputeCapability(&major, &minor,dev);
      cuDeviceGetName(name, 128, cuDevice);
      printf("\033[32m[laghos] Using Device %d: %s, sm_%d.%d\033[m\n",dev, name, major, minor);
-     cuCtxCreate(&cuContext, 0, cuDevice);
+     cuCtxCreate(&cuContext, mpi.WorldRank(), cuDevice);
    }
 #endif
    

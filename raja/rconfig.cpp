@@ -17,9 +17,13 @@
 
 namespace mfem {
   
-  bool rconfig::IAmAlone() { return world_size==1; }
+  bool rconfig::IAmAlone() {
+    if (like_occa) return false;
+    return world_size==1;
+  }
   
   bool rconfig::NeedUpdate(Mesh &mesh) {
+    if (like_occa) return true;
     assert(mesh.GetSequence()==0);
     return (mesh.GetSequence()!=0);
   }

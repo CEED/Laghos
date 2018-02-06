@@ -211,7 +211,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // - Position
    // - Velocity
    // - Specific Internal Energy
-
    const int VsizeL2 = L2FESpace.GetVSize();
    const int VsizeH1 = H1FESpace.GetVSize();
 
@@ -238,12 +237,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    timer.dof_tstep += H1FESpace.GlobalTrueVSize();
    push("Neg");
    rhs.Neg();
-   pop();
-   pop();//ForcePA
-
-   //RajaVector B(H1compFESpace.GetTrueVSize()); B=0.0;
-   //RajaVector X(H1compFESpace.GetTrueVSize()); X=0.0;
-   //dv = 0.0;
+   pop("Neg");
+   pop("ForcePA");
 
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
@@ -251,11 +246,11 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    for (int c = 0; c < dim; c++)
    {
      push("rhs_c");
-      RajaVector rhs_c = rhs.GetRange(c*size, size);
-      pop();
+     RajaVector rhs_c = rhs.GetRange(c*size, size);
+     pop();
      push("dv_c");
-      RajaVector dv_c = dv.GetRange(c*size, size);
-      pop();
+     RajaVector dv_c = dv.GetRange(c*size, size);
+     pop();
      push("c_tdofs");
       Array<int> c_tdofs;
       Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -451,43 +446,24 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();
 
-   
    push("Init");
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
    
    push("ve");
    const RajaGridFunction x(H1FESpace, S.GetRange(0, vSize));
-   //printf("\n\n\033[33;1m[UpdateQuadratureData] S.nodes:\033[m");
-   //x.Print();
    RajaGridFunction v(H1FESpace, S.GetRange(vSize, vSize));
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
    pop();
-   
-   //printf("[UpdateQuadratureData] before meshNodes:\n");
-   //quad_data.geom->meshNodes.Print();
 
    push("Geom:Get");
-   //printf("\n\033[33m[UpdateQuadratureData] Get\033[m");
-   quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule,x,true);
-   //printf("[UpdateQuadratureData] meshNodes:\n");
-   //quad_data.geom->meshNodes.Print();
-
-   // Set back Sx to our meshNodes
-   /*Mesh& mesh = *(H1FESpace.GetMesh());
-   GridFunction& nodes = *(mesh.GetNodes());
-   const FiniteElementSpace& fespace = *(nodes.FESpace());
-   const FiniteElement& fe = *(fespace.GetFE(0));
-   const int dims     = fe.GetDim();
-   const int elements = fespace.GetNE();
-   const int numDofs  = fe.GetDof();
-   rNodes(elements,numDofs,dims,quad_data.geom->eMap,x,quad_data.geom->meshNodes);
-   printf("[UpdateQuadratureData] meshNodes:\n");
-   quad_data.geom->meshNodes.Print();*/
+   quad_data.geom = (like_occa) ?
+     RajaGeometry::Get(H1FESpace,integ_rule):
+     RajaGeometry::Get(H1FESpace,integ_rule,x);
    pop();
 
    push("v2");
-   RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs() * nzones);
+   RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones);
    pop();
 
    push("GlobalToLocal");
@@ -499,7 +475,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    e.ToQuad(use_share,integ_rule, eValues);
    pop();
 
-   pop();//Init
+   pop("Init");
 
    const int NUM_QUAD = integ_rule.GetNPoints();
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());

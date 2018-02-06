@@ -183,13 +183,13 @@ void rForceMultTransposeS(const int NUM_DIM,
                           double* restrict e);
 
 // *****************************************************************************
-void rNodes(const int elements,
-            const int numDofs,
-            const int ndofs,
-            const int dims,
-            const int* eMap,
-            const double* Sx,
-            double* meshNodes);
+void rNodeCopyByVDim(const int elements,
+                     const int numDofs,
+                     const int ndofs,
+                     const int dims,
+                     const int* eMap,
+                     const double* Sx,
+                     double* nodes);
 
 // *****************************************************************************
 void rIniGeom(const int dim,

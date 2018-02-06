@@ -19,7 +19,7 @@ std::map<std::string, RajaDofQuadMaps*> RajaDofQuadMaps::AllDofQuadMaps;
 static RajaGeometry *geom=NULL;
 
 // ***************************************************************************
-// * RajaGeometry
+// * ~ RajaGeometry
 // ***************************************************************************
 RajaGeometry::~RajaGeometry(){
   nvtxRangePush("Get");
@@ -32,47 +32,46 @@ RajaGeometry::~RajaGeometry(){
 }
 
 // *****************************************************************************
-static double *meshNodes_data=NULL;
-static int *eMap_data=NULL;
-
+// * RajaGeometry Get: use this one to fetch nodes from vector Sx
 // *****************************************************************************
 RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir,
-                                const RajaVector& Sx,
-                                const bool capture_nodes) {
+                                const RajaVector& Sx) {
+  pushf();
+  const Mesh *mesh = fes.GetMesh();
+  const GridFunction *nodes = mesh->GetNodes();
+  const FiniteElementSpace *fespace = nodes->FESpace();
+  const FiniteElement *fe = fespace->GetFE(0);
+  const int dims     = fe->GetDim();
+  const int numDofs  = fe->GetDof();
+  const int numQuad  = ir.GetNPoints();
+  const int elements = fespace->GetNE();
+  const int ndofs    = fespace->GetNDofs();
+  const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(*fe, ir);
+  push("rNodeCopyByVDim");
+  rNodeCopyByVDim(elements,numDofs,ndofs,dims,geom->eMap,Sx,geom->meshNodes);
+  pop("rNodeCopyByVDim");
+  push("rIniGeom");
+  rIniGeom(dims,numDofs,numQuad,elements,
+           maps->dofToQuadD,
+           geom->meshNodes,
+           geom->J,
+           geom->invJ,
+           geom->detJ);
+  pop("rIniGeom");
+  pop("Get");
+  return geom;
+}
+  
+
+// *****************************************************************************
+RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
+                                const IntegrationRule& ir) {
   pushf();
   Mesh& mesh = *(fes.GetMesh());
-  
-  if (capture_nodes){
-    push("cpynode");
-    GridFunction& nodes = *(mesh.GetNodes());
-    const FiniteElementSpace& fespace = *(nodes.FESpace());
-    const FiniteElement& fe = *(fespace.GetFE(0));
-    const int elements = fespace.GetNE();
-    const int numDofs  = fe.GetDof();
-    const int numQuad  = ir.GetNPoints();
-    const int ndofs = fespace.GetNDofs();
-    const int dims     = fe.GetDim();
-    rNodes(elements,numDofs,ndofs,dims,geom->eMap,Sx,geom->meshNodes);
-    const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
-    push("rIniGeom");
-    rIniGeom(dims,numDofs,numQuad,elements,
-             maps->dofToQuadD,
-             geom->meshNodes,
-             geom->J,
-             geom->invJ,
-             geom->detJ);
-    pop();
-    pop();
-    pop();
-    return geom;
-  }
-    
   const bool geom_to_allocate = (!geom) || rconfig::NeedUpdate(mesh);
-  if (geom_to_allocate) 
-    geom=new RajaGeometry();
-  if (!mesh.GetNodes()) 
-    mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
+  if (geom_to_allocate) geom=new RajaGeometry();
+  if (!mesh.GetNodes()) mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   GridFunction& nodes = *(mesh.GetNodes());
   const FiniteElementSpace& fespace = *(nodes.FESpace());
   const FiniteElement& fe = *(fespace.GetFE(0));
@@ -81,44 +80,25 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const int numDofs  = fe.GetDof();
   const int numQuad  = ir.GetNPoints();
   const int ndofs = fespace.GetNDofs();
-  //Ordering::Type originalOrdering = fespace.GetOrdering();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
-
-  //printf("\n\033[32m[Get] Sx==0\033[m");
-  if (orderedByNODES) {
-    //RajaVector rnodes(nodes.Size());
-    //rnodes = nodes; rnodes.Print();
-    //printf("\n\033[32m[Get] ReorderByVDim %d\033[m",nodes.Size());
-    ReorderByVDim(nodes);
-    //rnodes = nodes; rnodes.Print();
-  }
+  
+  if (orderedByNODES) ReorderByVDim(nodes);
   const int asize = dims*numDofs*elements;
-  if (geom_to_allocate){
-    //printf("\n\033[32m[Get] new datas (asize=%d)\033[m",asize);
-    meshNodes_data=(double*)malloc(asize*sizeof(double));
-    eMap_data=(int*)malloc(numDofs*elements*sizeof(int));
-  }
-  Array<double> meshNodes(meshNodes_data,asize);
+  Array<double> meshNodes(asize);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
-  Array<int> eMap(eMap_data,numDofs*elements);
+  Array<int> eMap(numDofs*elements);
   {
-    //printf("\n\033[32m[Get] cpynodes e=%d, dof=%d\033[m",elements,numDofs);
     pushcn(33,"cpynodes");
     for (int e = 0; e < elements; ++e) {
-      //printf("\n\033[32m[Get] elem %d/%d:\033[m",e,elements);
       for (int d = 0; d < numDofs; ++d) {
         const int lid = d+numDofs*e;
         const int gid = elementMap[lid];
-        //printf("\n\t\033[32m[Get] dof %d/%d, lid=%d -> gid=%d:\033[m",d,numDofs,lid,gid);
         eMap[lid]=gid;
-        //printf("\n\t\033[32m[Get] node @ [%f,%f]\033[m",nodes[0+dims*gid],nodes[1+dims*gid]);
         for (int v = 0; v < dims; ++v) {
           const int moffset = v+dims*lid;
           const int xoffset = v+dims*gid;
-          //const int voffset = gid+v*ndofs;
-          //printf("\n\t\t\033[32m[Get] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
-          meshNodes[moffset] = nodes[xoffset];
+           meshNodes[moffset] = nodes[xoffset];
         }
       }
     }
@@ -130,16 +110,13 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   }
   {
     pushcn(14,"H2D:cpyMeshNodes");
-    //printf("\n\033[32m[Get] H2D:cpyMeshNodes\033[m");
     geom->meshNodes = meshNodes;
-    //geom->meshNodes.Print();
     geom->eMap = eMap;
     pop();
   }
   // Reorder the original gf back
   if (orderedByNODES) ReorderByNodes(nodes);
   if (geom_to_allocate){
-    //printf("\n\033[32m[Get] J allocates\033[m");
     geom->J.allocate(dims, dims, numQuad, elements);
     geom->invJ.allocate(dims, dims, numQuad, elements);
     geom->detJ.allocate(numQuad, elements);
@@ -147,7 +124,6 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
     
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   {
-    //printf("\n\033[32m[Get] rIniGeom\033[m");
     push("rIniGeom");
     rIniGeom(dims,numDofs,numQuad,elements,
              maps->dofToQuadD,

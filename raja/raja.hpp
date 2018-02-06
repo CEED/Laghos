@@ -84,7 +84,7 @@ const int num_colors = sizeof(colors)/sizeof(uint32_t);
     nvtxRangePushEx(&eventAttrib);                                    \
   }
 #define pushc(cid) pushcn(cid,__FUNCTION__)
-#define pop nvtxRangePop
+#define pop(...) nvtxRangePop()
 #include <nvToolsExt.h>
 #include <cudaProfiler.h>
 //cuProfilerStart/cuProfilerStop

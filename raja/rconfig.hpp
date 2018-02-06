@@ -18,6 +18,7 @@
 
 extern bool cuda;
 extern int world_size;
+extern bool like_occa;
 
 namespace mfem {
   class rconfig{

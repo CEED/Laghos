@@ -16,13 +16,13 @@
 #include "raja.hpp"
 
 // *****************************************************************************
-void rNodes(const int elements,
-            const int numDofs,
-            const int ndofs,
-            const int dims,
-            const int* eMap,
-            const double* x,
-            double* meshNodes){
+void rNodeCopyByVDim(const int elements,
+                     const int numDofs,
+                     const int ndofs,
+                     const int dims,
+                     const int* eMap,
+                     const double* Sx,
+                     double* nodes){
 #ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
   if (e < elements)
@@ -30,19 +30,13 @@ void rNodes(const int elements,
   forall(e,elements,
 #endif
   {
-    //printf("\n\033[33m[rNodes] e=%d, dof=%d\033[m",elements,numDofs);
     for(int dof = 0; dof < numDofs; ++dof) {
-      //printf("\n\033[33m[rNodes] elem %d:\033[m",e);
       const int lid = dof+numDofs*e;
       const int gid = eMap[lid];
-      //printf("\n\t\033[33m[rNodes] dof %d, lid=%d -> gid=%d:\033[m",dof,lid,gid);
-      //printf("\n\t\033[33m[rNodes] node @ [%f,%f]\033[m",x[0+dims*gid],x[1+dims*gid]);
       for(int v = 0; v < dims; ++v) {
         const int moffset = v+dims*lid;
-        //const int xoffset = v+dims*gid;
         const int voffset = gid+v*ndofs;
-        //printf("\n\t\t\033[33m[rNodes] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
-        meshNodes[moffset] = x[voffset];
+        nodes[moffset] = Sx[voffset];
       }
     }
   }
