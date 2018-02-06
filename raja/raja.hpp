@@ -45,6 +45,10 @@
 #include "rarray.hpp"
 #include "rvector.hpp"
 #include "rtypedef.hpp"
+// LAGHOS/raja/linalg **********************************************************
+#include "roperator.hpp"
+#include "rode.hpp"
+#include "rsolvers.hpp"
 
 // LAGHOS/raja/kernels *********************************************************
 #include "kernels/kernels.hpp"

@@ -25,14 +25,14 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
 
 // *****************************************************************************
 RajaBilinearForm::~RajaBilinearForm(){
-  //if (rap) delete rap;
-  //delete  Aout;
+  //if (rap) delete rap;  
+  //delete  Aout;  
 }
 
 // ***************************************************************************
 // Adds new Domain Integrator.
 void RajaBilinearForm::AddDomainIntegrator(RajaIntegrator* i) {
-  push();
+  push(); 
   AddIntegrator(i, DomainIntegrator);
   pop();
 }

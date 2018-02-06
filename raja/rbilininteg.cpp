@@ -28,7 +28,7 @@ RajaGeometry::~RajaGeometry(){
   free(geom->invJ);
   free(geom->detJ);
   delete[] geom;
-  nvtxRangePop();
+  pop();
 }
 
 // *****************************************************************************

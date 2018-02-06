@@ -285,13 +285,12 @@ int main(int argc, char *argv[])
    // Define the explicit ODE solver used for time integration.
    //dbg()<<"\033[7mDefine the explicit ODE solver";
    RajaODESolver *ode_solver = NULL;
-   switch (ode_solver_type)
-   {
-      case 1: ode_solver = new RajaForwardEulerSolver; break;
-      case 2: ode_solver = new RajaRK2Solver(0.5); break;
-      case 3: ode_solver = new RajaRK3SSPSolver; break;
-      case 4: ode_solver = new RajaRK4Solver; break;
-      case 6: ode_solver = new RajaRK6Solver; break;
+   switch (ode_solver_type) {
+   case 1: ode_solver = new RajaForwardEulerSolver; break;
+   case 2: ode_solver = new RajaRK2Solver(0.5); break;
+     //case 3: ode_solver = new RajaRK3SSPSolver; break;
+   case 4: ode_solver = new RajaRK4Solver; break;
+     //case 6: ode_solver = new RajaRK6Solver; break;
       default:
          if (myid == 0)
          {
@@ -461,7 +460,7 @@ int main(int argc, char *argv[])
    push(odeInit);
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   nvtxRangePop();
+   pop();
    
    //dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
@@ -498,9 +497,9 @@ int main(int argc, char *argv[])
       //dbg()<<"[7mRode_solver->Step";
 //cuProfilerStart();
 
-      //push(odeStep);
+      push(odeStep);
       ode_solver->Step(S, t, dt);
-      //pop();
+      pop();
       steps++;
 
       

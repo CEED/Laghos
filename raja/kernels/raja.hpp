@@ -36,7 +36,6 @@
 #include <cuda.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
-#include "../rnvvp.hpp"
 #endif // __NVCC__
 
 // *****************************************************************************
@@ -51,5 +50,6 @@
 #include "forall.hpp"
 #include "offsets.hpp"
 #include "kernels.hpp"
+#include "../rnvvp.hpp"
 
 #endif // LAGHOS_RAJA_KERNELS_RAJA

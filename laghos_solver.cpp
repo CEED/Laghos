@@ -192,7 +192,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // /home/camier1/home/mfems/mfem-raja/linalg/ode.tpp:121
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
-  push(Mult);
+   push();
 
    dS_dt = 0.0;
 
@@ -282,7 +282,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       pop();
 
       push(cg);
-      TCGSolver<RajaVector> cg(H1FESpace.GetParMesh()->GetComm());
+      RajaCGSolver cg(H1FESpace.GetParMesh()->GetComm());
       cg.SetOperator(VMassPA);
       cg.SetRelTol(cg_rel_tol);
       cg.SetAbsTol(0.0);
@@ -331,7 +331,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    
    push(CG_E);
    {
-     TCGSolver<RajaVector> cg(L2FESpace.GetParMesh()->GetComm());
+     RajaCGSolver cg(L2FESpace.GetParMesh()->GetComm());
      cg.SetOperator(EMassPA);
      cg.iterative_mode = false;
      cg.SetRelTol(1e-8);
@@ -441,7 +441,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
    if (quad_data_is_current) { return; }
-   push(UQD);
+   push();
   
    timer.sw_qdata.Start();
    const int nqp = integ_rule.GetNPoints();

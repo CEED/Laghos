@@ -30,8 +30,10 @@ template<class T> struct rmalloc{
     if (!cuda) return new T[n];
 #ifdef __NVCC__
     void *ptr;
+    push(new,Purple);
     cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
     //cudaDeviceSynchronize();
+    pop();
     return ptr;
 #endif // __NVCC__
     // We come here when the user requests a manager,
@@ -45,7 +47,9 @@ template<class T> struct rmalloc{
     if (!cuda) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__
     else {
+      push(delete,Fuchsia);
       cuMemFree((CUdeviceptr)ptr);
+      pop();
     }
 #endif // __NVCC__
     ptr = nullptr;

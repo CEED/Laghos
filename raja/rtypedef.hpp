@@ -18,31 +18,31 @@
 
 // mfem::ode.hpp ***************************************************************
 using namespace mfem;
-typedef TODESolver<RajaVector>              RajaODESolver;
-typedef TForwardEulerSolver<RajaVector>     RajaForwardEulerSolver;
-typedef TRK2Solver<RajaVector>              RajaRK2Solver;
-typedef TRK3SSPSolver<RajaVector>           RajaRK3SSPSolver;
-typedef TRK4Solver<RajaVector>              RajaRK4Solver;
-typedef TExplicitRKSolver<RajaVector>       RajaExplicitRKSolver;
-typedef TRK6Solver<RajaVector>              RajaRK6Solver;
-typedef TRK8Solver<RajaVector>              RajaRK8Solver;
-typedef TBackwardEulerSolver<RajaVector>    RajaBackwardEulerSolver;
-typedef TImplicitMidpointSolver<RajaVector> RajaImplicitMidpointSolver;
-typedef TSDIRK23Solver<RajaVector>          RajaSDIRK23Solver;
-typedef TSDIRK34Solver<RajaVector>          RajaSDIRK34Solver;
-typedef TSDIRK33Solver<RajaVector>          RajaSDIRK33Solver;
+//typedef TODESolver<RajaVector>              RajaODESolver;
+//typedef TForwardEulerSolver<RajaVector>     RajaForwardEulerSolver;
+//typedef TRK2Solver<RajaVector>              RajaRK2Solver;
+//typedef TRK3SSPSolver<RajaVector>           RajaRK3SSPSolver;
+//typedef TRK4Solver<RajaVector>              RajaRK4Solver;
+//typedef TExplicitRKSolver<RajaVector>       RajaExplicitRKSolver;
+//typedef TRK6Solver<RajaVector>              RajaRK6Solver;
+//typedef TRK8Solver<RajaVector>              RajaRK8Solver;
+//typedef TBackwardEulerSolver<RajaVector>    RajaBackwardEulerSolver;
+//typedef TImplicitMidpointSolver<RajaVector> RajaImplicitMidpointSolver;
+//typedef TSDIRK23Solver<RajaVector>          RajaSDIRK23Solver;
+//typedef TSDIRK34Solver<RajaVector>          RajaSDIRK34Solver;
+//typedef TSDIRK33Solver<RajaVector>          RajaSDIRK33Solver;
 
 // mfem::solver.hpp ************************************************************
-typedef TIterativeSolver<RajaVector>        RajaIterativeSolver;
-typedef TCGSolver<RajaVector>               RajaCGSolver;
+//typedef TIterativeSolver<RajaVector>        RajaIterativeSolver;
+//typedef TCGSolver<RajaVector>               RajaCGSolver;
 
 // mfem::operator.hpp **********************************************************
-typedef TTimeDependentOperator<RajaVector>  RajaTimeDependentOperator;
-typedef TSolver<RajaVector>                 RajaSolver;
-typedef TIdentityOperator<RajaVector>       RajaIdentityOperator;
-typedef TTransposeOperator<RajaVector>      RajaTransposeOperator;
-typedef TRAPOperator<RajaVector>            RajaRAPOperator;
-typedef TTripleProductOperator<RajaVector>  RajaTripleProductOperator;
+//typedef TTimeDependentOperator<RajaVector>  RajaTimeDependentOperator;
+//typedef TSolver<RajaVector>                 RajaSolver;
+//typedef TIdentityOperator<RajaVector>       RajaIdentityOperator;
+//typedef TTransposeOperator<RajaVector>      RajaTransposeOperator;
+//typedef TRAPOperator<RajaVector>            RajaRAPOperator;
+//typedef TTripleProductOperator<RajaVector>  RajaTripleProductOperator;
 
 #endif // LAGHOS_RAJA_TYPEDEFS
 

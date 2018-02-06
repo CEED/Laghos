@@ -16,22 +16,29 @@
 #ifndef LAGHOS_RAJA_NVVP
 #define LAGHOS_RAJA_NVVP
 
-#if defined(__NVCC__) and defined(__NVVP__)
-
-#include <nvToolsExt.h>
-#include <cudaProfiler.h>
-
 // *****************************************************************************
+// https://jonasjacek.github.io/colors
 typedef enum {
   Black, Maroon, Green, Olive, Navy, Purple, Teal, Silver,
   Grey, Red, Lime, Yellow, Blue, Fuchsia, Aqua, White
 } colors;
+
+// *****************************************************************************
+#if defined(__NVCC__) and defined(__NVVP__)
+
+#include <cuda.h>
+#include <nvToolsExt.h>
+#include <cudaProfiler.h>
+
 static const uint32_t legacy_colors[] = {
 0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xC0C0C0,
 0x808080, 0xFF0000, 0x00FF00, 0xFFFF00, 0x0000FF, 0xFF00FF, 0x00FFFF, 0xFFFFFF,
 };
 static const int nb_colors = sizeof(legacy_colors)/sizeof(uint32_t);
 
+static char marker[2048];
+
+//__PRETTY_FUNCTION__
 #define pop(...) nvtxRangePop()
 // *****************************************************************************
 #define PUSH2(marker,rgb){                                             \
@@ -45,7 +52,12 @@ static const int nb_colors = sizeof(legacy_colors)/sizeof(uint32_t);
     eAttrib.message.ascii = #marker;                                   \
     nvtxRangePushEx(&eAttrib); }
 #define PUSH1(marker) nvtxRangePush(#marker)
-#define PUSH0() nvtxRangePush(__PRETTY_FUNCTION__)
+#define PUSH0() {                                                     \
+    char marker[2048];                                                \
+    snprintf(marker,2048,"%s@%s:%d",                                  \
+             __PRETTY_FUNCTION__, __FILE__, __LINE__);                \
+    nvtxRangePush(marker);                                            \
+  }
 #define PUSH(a0,a1,a2,a3,a4,a5,a,...) a
 // *****************************************************************************
 #define LPAREN (
@@ -61,9 +73,6 @@ static const int nb_colors = sizeof(legacy_colors)/sizeof(uint32_t);
 
 #define pop(...)
 #define push(...)
-#define pushcn(...)
-#define nvtxRangePop(...)
-#define nvtxRangePush(...)
 
 #endif // defined(__NVCC__) and defined(__NVVP__)
 

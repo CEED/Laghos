@@ -17,8 +17,6 @@
 #define LAGHOS_RAJA_FESPACE
 
 namespace mfem {
-  typedef TOperator<RajaVector> RajaOperator;
-
   
 // ***************************************************************************
 // * RajaRestrictionOperator
@@ -32,9 +30,11 @@ class RajaRestrictionOperator : public RajaOperator {
                           const RajaArray<int> *idx):
     RajaOperator(h,w),
     entries(idx->size()>>1),
-    indices(idx){}
+    indices(idx){} 
   void Mult(const RajaVector& x, RajaVector& y) const {
+    push();
     rExtractSubVector(entries, indices->ptr(), x, y);
+    pop();
   }
 };
 
@@ -48,28 +48,34 @@ class RajaProlongationOperator : public RajaOperator {
   RajaProlongationOperator(const Operator* Op):
     RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
   virtual void Mult(const RajaVector& x, RajaVector& y) const {
+    push();
     if (rconfig::IAmAlone()){
       y=x;
+      pop();
       return;
     }
-    push(Mult);
-    const Vector hostX=x;//H2H
+    push(D2H2D,Red);
+    const Vector hostX=x;//D2H
     Vector hostY(y.Size());
     pmat->Mult(hostX, hostY);
-    y=hostY;//D2H
+    y=hostY;//H2D
+    pop();
     pop();
   }
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
+    push();
     if (rconfig::IAmAlone()){
       y=x;
+      pop();
       return;
     }
-    push(MultTranspose);
-    const Vector hostX=x;//H2H
+    push(D2H2D,Red);
+    const Vector hostX=x;//D2H
     Vector hostY(y.Size());
     // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
     pmat->MultTranspose(hostX, hostY);
-    y=hostY;//D2H
+    y=hostY;//H2D
+    pop();
     pop();
   }
 };
