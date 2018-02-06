@@ -53,10 +53,8 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
     const int numQuad  = ir.GetNPoints();
     const int ndofs = fespace.GetNDofs();
     const int dims     = fe.GetDim();
-    printf("\n\033[32m[Get] now RE meshNodes\033[m");
     rNodes(elements,numDofs,ndofs,dims,geom->eMap,Sx,geom->meshNodes);
     const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
-    printf("\n\033[32m[Get] rIniGeom\033[m");
     push("rIniGeom");
     rIniGeom(dims,numDofs,numQuad,elements,
              maps->dofToQuadD,
@@ -66,14 +64,13 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
              geom->detJ);
     pop();
     pop();
+    pop();
     return geom;
   }
     
   const bool geom_to_allocate = (!geom) || rconfig::NeedUpdate(mesh);
-  if (geom_to_allocate) {
-    printf("\n\033[32m[Get] new geom\033[m");
+  if (geom_to_allocate) 
     geom=new RajaGeometry();
-  }
   if (!mesh.GetNodes()) 
     mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   GridFunction& nodes = *(mesh.GetNodes());
@@ -100,29 +97,27 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
     //printf("\n\033[32m[Get] new datas (asize=%d)\033[m",asize);
     meshNodes_data=(double*)malloc(asize*sizeof(double));
     eMap_data=(int*)malloc(numDofs*elements*sizeof(int));
-  }else{
-    printf("\n\033[32m[Get] old datas (asize=%d)\033[m",asize);
   }
   Array<double> meshNodes(meshNodes_data,asize);
   const Table& e2dTable = fespace.GetElementToDofTable();
   const int* elementMap = e2dTable.GetJ();
   Array<int> eMap(eMap_data,numDofs*elements);
   {
-    printf("\n\033[32m[Get] cpynodes e=%d, dof=%d\033[m",elements,numDofs);
+    //printf("\n\033[32m[Get] cpynodes e=%d, dof=%d\033[m",elements,numDofs);
     pushcn(33,"cpynodes");
     for (int e = 0; e < elements; ++e) {
-      printf("\n\033[32m[Get] elem %d/%d:\033[m",e,elements);
+      //printf("\n\033[32m[Get] elem %d/%d:\033[m",e,elements);
       for (int d = 0; d < numDofs; ++d) {
         const int lid = d+numDofs*e;
         const int gid = elementMap[lid];
-        printf("\n\t\033[32m[Get] dof %d/%d, lid=%d -> gid=%d:\033[m",d,numDofs,lid,gid);
+        //printf("\n\t\033[32m[Get] dof %d/%d, lid=%d -> gid=%d:\033[m",d,numDofs,lid,gid);
         eMap[lid]=gid;
         //printf("\n\t\033[32m[Get] node @ [%f,%f]\033[m",nodes[0+dims*gid],nodes[1+dims*gid]);
         for (int v = 0; v < dims; ++v) {
           const int moffset = v+dims*lid;
           const int xoffset = v+dims*gid;
-          const int voffset = gid+v*ndofs;
-          printf("\n\t\t\033[32m[Get] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
+          //const int voffset = gid+v*ndofs;
+          //printf("\n\t\t\033[32m[Get] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
           meshNodes[moffset] = nodes[xoffset];
         }
       }
@@ -135,9 +130,9 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   }
   {
     pushcn(14,"H2D:cpyMeshNodes");
-    printf("\n\033[32m[Get] H2D:cpyMeshNodes\033[m");
+    //printf("\n\033[32m[Get] H2D:cpyMeshNodes\033[m");
     geom->meshNodes = meshNodes;
-    geom->meshNodes.Print();
+    //geom->meshNodes.Print();
     geom->eMap = eMap;
     pop();
   }
@@ -152,7 +147,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
     
   const RajaDofQuadMaps* maps = RajaDofQuadMaps::GetSimplexMaps(fe, ir);
   {
-    printf("\n\033[32m[Get] rIniGeom\033[m");
+    //printf("\n\033[32m[Get] rIniGeom\033[m");
     push("rIniGeom");
     rIniGeom(dims,numDofs,numQuad,elements,
              maps->dofToQuadD,
@@ -177,7 +172,7 @@ void RajaGeometry::ReorderByVDim(GridFunction& nodes){
   int k=0;
   for (int d = 0; d < ndofs; d++)
     for (int v = 0; v < vdim; v++){
-      printf("\n\033[32m[ReorderByVDim] dof,dim:(%d,%d): %d->%d\033[m",d,v,v+d*vdim,d+v*ndofs);
+      //printf("\n\033[32m[ReorderByVDim] dof,dim:(%d,%d): %d->%d\033[m",d,v,v+d*vdim,d+v*ndofs);
       temp[k++] = data[d+v*ndofs];
     }
   for (int i = 0; i < size; i++)

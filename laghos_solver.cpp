@@ -468,7 +468,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    //quad_data.geom->meshNodes.Print();
 
    push("Geom:Get");
-   printf("\n\033[33m[UpdateQuadratureData] Get\033[m");
+   //printf("\n\033[33m[UpdateQuadratureData] Get\033[m");
    quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule,x,true);
    //printf("[UpdateQuadratureData] meshNodes:\n");
    //quad_data.geom->meshNodes.Print();

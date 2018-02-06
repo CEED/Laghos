@@ -39,7 +39,7 @@ void rNodes(const int elements,
       //printf("\n\t\033[33m[rNodes] node @ [%f,%f]\033[m",x[0+dims*gid],x[1+dims*gid]);
       for(int v = 0; v < dims; ++v) {
         const int moffset = v+dims*lid;
-        const int xoffset = v+dims*gid;
+        //const int xoffset = v+dims*gid;
         const int voffset = gid+v*ndofs;
         //printf("\n\t\t\033[33m[rNodes] m=%d,x=%d =>%d\033[m",moffset,xoffset,voffset);
         meshNodes[moffset] = x[voffset];
