@@ -70,13 +70,13 @@ bool like_occa = false;
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
-{
+{  
    //dbgIni(argv[0]);dbg();
    // Initialize MPI.
-   MPI_Session mpi(argc, argv);
+   MPI_Session mpi(argc, argv); 
    int myid = mpi.WorldRank();
    world_size = mpi.WorldSize();
-
+   
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
 
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.5; 
 //#warning CFL @ 0.1
    double cfl = 0.5;
    double cg_tol = 1e-8;
@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
    }
 
    //dbg()<<"[7mLagrangianHydroOperator oper";
-   //push("LagrangianHydroOperator");
+   //push(LagrangianHydroOperator);
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
@@ -458,7 +458,7 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   nvtxRangePush("odeInit");
+   push(odeInit);
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    nvtxRangePop();
@@ -468,9 +468,9 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    //dbg()<<"[7mS_old(S)";
-   nvtxRangePush("SoldS");
+   push(SoldS);
    RajaVector S_old(S);//D2D
-   nvtxRangePop();
+   pop();
    
 
  
@@ -484,12 +484,12 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      push("Sold=S");
+      push(Sold=S,Teal);
       S_old = S;//D2D
       pop();
       t_old = t;
       //dbg()<<"[7mResetTimeStepEstimate";
-      push("ResetTimeStepEstimate");
+      push(ResetTimeStepEstimate);
       oper.ResetTimeStepEstimate();
       pop();
 
@@ -498,7 +498,7 @@ int main(int argc, char *argv[])
       //dbg()<<"[7mRode_solver->Step";
 //cuProfilerStart();
 
-      //push("odeStep");
+      //push(odeStep);
       ode_solver->Step(S, t, dt);
       //pop();
       steps++;

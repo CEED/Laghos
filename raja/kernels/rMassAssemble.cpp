@@ -49,7 +49,9 @@ static void rMassAssemble2D(const int NUM_QUAD_2D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
+  push();
   cuKer(rMassAssemble2D,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
+  pop();
 }
 
 // *****************************************************************************
@@ -93,7 +95,9 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
+  push();
   cuKer(rMassAssemble3D,NUM_QUAD_3D,numElements,COEFF,quadWeights,J,oper);
+  pop();
 }
 
 // *****************************************************************************
@@ -104,8 +108,10 @@ void rMassAssemble(const int dim,
                    const double* J,
                    const double COEFF,
                    double* __restrict oper) {
+  push();
   assert(false);
   if (dim==1) assert(false);
   if (dim==2) rMassAssemble2D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
   if (dim==3) rMassAssemble3D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
+  pop();
 }

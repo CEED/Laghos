@@ -69,11 +69,17 @@ static double cub_vector_min(const int N,
 // *****************************************************************************
 double vector_min(const int N,
                   const double* __restrict vec) {
+  push(min,Aqua);
 #ifdef __NVCC__
-  if (cuda) return cub_vector_min(N,vec);
+  if (cuda){
+    const double result = cub_vector_min(N,vec);
+    pop();
+    return result;
+  }
 #endif
   ReduceDecl(Min,red,vec[0]);
   ReduceForall(i,N,red.min(vec[i]););
+  pop();
   return red;
 }
 

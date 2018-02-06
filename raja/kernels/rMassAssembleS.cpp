@@ -71,7 +71,9 @@ void rMassAssembleS(const int dim,
                     const double* J,
                     const double COEFF,
                     double* __restrict oper) {
+  push();
   if (dim==1) assert(false);
   if (dim==2) rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
   if (dim==3) assert(false);
+  pop();
 }

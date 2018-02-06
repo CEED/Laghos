@@ -30,9 +30,11 @@ void vector_axpy(const int N,
                  const double alpha,
                  double* __restrict v0,
                  const double* __restrict v1) {
+  push(axpy,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_axpy,N,alpha,v0,v1);
 #else
   forall(i,N,v0[i] += alpha * v1[i];);
 #endif
+  pop();
 }

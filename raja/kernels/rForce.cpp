@@ -583,6 +583,6 @@ void rForceMultTranspose(const int NUM_DIM,
           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
   else assert(false);
 #endif
-  pop();
+  pop(); 
 }
 

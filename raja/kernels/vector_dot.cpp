@@ -72,10 +72,16 @@ static double cub_vector_dot(const int N,
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
+  push(dot,Aqua);
 #ifdef __NVCC__
-  if (cuda) return cub_vector_dot(N,vec1,vec2);
+  if (cuda){
+    const double result = cub_vector_dot(N,vec1,vec2);
+    pop();
+    return result;
+  }
 #endif
   ReduceDecl(Sum,dot,0.0);
   ReduceForall(i,N,dot += vec1[i]*vec2[i];);
+  pop();
   return dot;
 }

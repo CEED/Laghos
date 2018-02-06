@@ -36,6 +36,7 @@ void vector_set_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
+  push(set,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_set_subvector,N,v0,v1,v2);
 #else
@@ -47,4 +48,5 @@ void vector_set_subvector(const int N,
       v0[idx]=value;
       });
 #endif
+  pop();
 }

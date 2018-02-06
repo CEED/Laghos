@@ -24,7 +24,8 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
    localDofs(GetFE(0)->GetDof()),
    offsets(globalDofs+1),
    indices(localDofs, GetNE()),  
-   map(localDofs, GetNE()) { 
+   map(localDofs, GetNE()) {
+  push();
   const FiniteElement *fe = GetFE(0);
   const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
   const Array<int> &dof_map = el->GetDofMap();
@@ -100,6 +101,7 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
                                               R->Width(),
                                               reorderIndices);
   prolongationOp = new RajaProlongationOperator(P);
+  pop();
 }
 
 // ***************************************************************************
@@ -118,6 +120,7 @@ bool RajaFiniteElementSpace::hasTensorBasis() const {
 // ***************************************************************************
 void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                                            RajaVector& localVec) const {
+  push();
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -129,12 +132,14 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                  indices,
                  globalVec,
                  localVec);
+  pop();
 }
 
 // ***************************************************************************
 // Aggregate local node values to their respective global dofs
 void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                                            RajaVector& globalVec) const {
+  push();
   const int vdim = GetVDim();
   const int localEntries = localDofs * GetNE();
   const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -146,6 +151,7 @@ void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                  indices,
                  localVec,
                  globalVec);
+  pop();
 }
   
 } // namespace mfem

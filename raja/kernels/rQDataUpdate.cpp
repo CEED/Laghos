@@ -555,6 +555,7 @@ void rUpdateQuadratureData(const double GAMMA,
                            const double* restrict detJ,
                            double* restrict stressJinvT,
                            double* restrict dtEst){
+  push();
 #ifndef __LAMBDA__
   const int grid = nzones;
   const int blck = NUM_DOFS_1D;
@@ -619,4 +620,5 @@ void rUpdateQuadratureData(const double GAMMA,
           v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
           stressJinvT,dtEst);
 #endif
+  pop();
 }

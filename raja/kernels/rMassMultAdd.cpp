@@ -229,6 +229,7 @@ void rMassMultAdd(const int DIM,
                   const double* op,
                   const double* x,
                   double* __restrict y) {
+  push();
 #ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD_1D;
@@ -341,4 +342,5 @@ void rMassMultAdd(const int DIM,
           NUM_DOFS_1D,NUM_QUAD_1D,
           numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 #endif
+  pop();
 }

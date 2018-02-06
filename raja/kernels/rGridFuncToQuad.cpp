@@ -247,6 +247,7 @@ void rGridFuncToQuad(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
+  push();
 #ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = 1;
@@ -361,4 +362,5 @@ void rGridFuncToQuad(const int DIM,
           NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
           numElements,dofToQuad,l2gMap,gf,out);
 #endif
+  pop();
 }

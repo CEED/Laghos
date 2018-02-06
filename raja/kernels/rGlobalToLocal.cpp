@@ -55,6 +55,8 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const int* __restrict indices,
                     const double* __restrict globalX,
                     double* __restrict localX) {
+  push();
   cuKerGB(rGlobalToLocal,1,256,NUM_VDIM,VDIM_ORDERING,
         globalEntries,localEntries,offsets,indices,globalX,localX);
+  pop();
 }

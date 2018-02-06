@@ -28,9 +28,11 @@ void vector_vec_sub0(const int N,
 void vector_vec_sub(const int N,
                     double* __restrict v0,
                     const double* __restrict v1) {
+  push(sub,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_vec_sub,N,v0,v1);
 #else
   forall(i,N,{ v0[i] -= v1[i]; });
 #endif
+  pop();
 }

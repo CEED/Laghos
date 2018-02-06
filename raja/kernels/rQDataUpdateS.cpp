@@ -286,6 +286,7 @@ void rUpdateQuadratureDataS(const double GAMMA,
                             const double* restrict detJ,
                             double* restrict stressJinvT,
                             double* restrict dtEst){
+  push();
 #ifndef __LAMBDA__
   const int grid = nzones;
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
@@ -346,4 +347,5 @@ void rUpdateQuadratureDataS(const double GAMMA,
           stressJinvT,dtEst);
   else assert(false);
 #endif
+  pop();
 }

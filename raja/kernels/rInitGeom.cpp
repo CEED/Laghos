@@ -23,6 +23,7 @@ void rNodeCopyByVDim(const int elements,
                      const int* eMap,
                      const double* Sx,
                      double* nodes){
+  push();
 #ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
   if (e < elements)
@@ -43,6 +44,7 @@ void rNodeCopyByVDim(const int elements,
 #ifdef __LAMBDA__
          );
 #endif
+  pop();
 }
 
 
@@ -247,6 +249,7 @@ void rIniGeom(const int DIM,
               double* restrict J,
               double* restrict invJ,
               double* restrict detJ) {
+  push();
 #ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD;
@@ -315,4 +318,5 @@ void rIniGeom(const int DIM,
           numElements,dofToQuadD,nodes,J,invJ,detJ);
   else assert(false);
 #endif
+  pop();
 }

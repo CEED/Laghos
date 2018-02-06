@@ -52,7 +52,7 @@ class RajaProlongationOperator : public RajaOperator {
       y=x;
       return;
     }
-    pushcn(14,"Mult");
+    push(Mult);
     const Vector hostX=x;//H2H
     Vector hostY(y.Size());
     pmat->Mult(hostX, hostY);
@@ -64,7 +64,7 @@ class RajaProlongationOperator : public RajaOperator {
       y=x;
       return;
     }
-    pushcn(14,"MultTranspose");
+    push(MultTranspose);
     const Vector hostX=x;//H2H
     Vector hostY(y.Size());
     // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444

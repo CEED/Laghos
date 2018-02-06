@@ -29,9 +29,11 @@ void vector_vec_mul0(const int N,
 void vector_vec_mul(const int N,
                     double* __restrict v0,
                     const double d) {
+  push(mul,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_vec_mul,N,v0,d);
 #else
   forall(i,N,v0[i]*=d;);
 #endif
+  pop();
 }

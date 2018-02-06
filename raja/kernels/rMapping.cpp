@@ -30,11 +30,13 @@ void rSetSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
+  push();
 #ifndef __LAMBDA__
   cuKer(rSetSubVector,N,indices,in,out);
 #else
   forall(i,N,out[indices[i]] = in[i];);
 #endif
+  pop();
 }
 
 // *****************************************************************************
@@ -57,6 +59,7 @@ void rMapSubVector(const int N,
                    const int* indices,
                    const double* in,
                    double* __restrict out) {
+  push();
 #ifndef __LAMBDA__
   cuKer(rMapSubVector,N,indices,in,out);
 #else
@@ -66,6 +69,7 @@ void rMapSubVector(const int N,
       out[toIdx] = in[fromIdx];
     });
 #endif
+  pop();
 }
 
 // *****************************************************************************
@@ -83,9 +87,11 @@ void rExtractSubVector(const int N,
                        const int* indices,
                        const double* in,
                        double* __restrict out) {
+  push();
 #ifndef __LAMBDA__
   cuKerGB(rExtractSubVector,1,256,N,indices,in,out);
 #else
   forall(i,N,out[i] = in[indices[i]];);
 #endif
+  pop();
 }

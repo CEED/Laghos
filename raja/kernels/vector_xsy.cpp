@@ -30,9 +30,11 @@ void vector_xsy(const int N,
                 double* __restrict v0,
                 const double* __restrict v1,
                 const double* __restrict v2) {
+  push(xsy,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_xsy,N,v0,v1,v2);
 #else
   forall(i,N,{v0[i] = v1[i]-v2[i];});
 #endif
+  pop();
 }

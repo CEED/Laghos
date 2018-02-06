@@ -34,6 +34,7 @@ void vector_get_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2) {
+  push(get,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_get_subvector,N,v0,v1,v2);
 #else
@@ -42,5 +43,6 @@ void vector_get_subvector(const int N,
       v0[i] = dof_i >= 0 ? v1[dof_i] : -v1[-dof_i-1];
     });
 #endif
+  pop();
 }
 

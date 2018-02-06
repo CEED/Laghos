@@ -37,6 +37,7 @@ void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs) {
+  push(set,Aqua);
 #ifndef __LAMBDA__
   cuKer(vector_set_subvector_const,N,value,data,tdofs);
 #else
@@ -50,4 +51,5 @@ void vector_set_subvector_const(const int N,
       }
     });
 #endif
+  pop();
 }
