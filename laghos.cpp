@@ -288,17 +288,17 @@ int main(int argc, char *argv[])
    switch (ode_solver_type) {
    case 1: ode_solver = new RajaForwardEulerSolver; break;
    case 2: ode_solver = new RajaRK2Solver(0.5); break;
-     //case 3: ode_solver = new RajaRK3SSPSolver; break;
+   case 3: ode_solver = new RajaRK3SSPSolver; break;
    case 4: ode_solver = new RajaRK4Solver; break;
-     //case 6: ode_solver = new RajaRK6Solver; break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
+   case 6: ode_solver = new RajaRK6Solver; break;
+   default:
+     if (myid == 0)
+     {
+       cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+     }
+     delete pmesh;
+     MPI_Finalize();
+     return 3;
    }
 
    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();

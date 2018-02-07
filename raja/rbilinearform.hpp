@@ -44,7 +44,6 @@ class RajaBilinearForm : public RajaOperator {
   mutable RajaVector localX, localY;
  public:
   RajaBilinearForm(RajaFiniteElementSpace*);
-  ~RajaBilinearForm();
   Mesh& GetMesh() const { return *mesh; }
   RajaFiniteElementSpace& GetTrialFESpace() const { return *trialFes;}
   RajaFiniteElementSpace& GetTestFESpace() const { return *testFes;}
@@ -61,15 +60,12 @@ class RajaBilinearForm : public RajaOperator {
                         RajaOperator*& Aout,
                         RajaVector& X, RajaVector& B,
                         int copy_interior = 0);
-
   void FormOperator(const Array<int>& constraintList, RajaOperator*& Aout);
-
   void InitRHS(const Array<int>& constraintList,
                const RajaVector& x, const RajaVector& b,
                RajaOperator* Aout,
                RajaVector& X, RajaVector& B,
                int copy_interior = 0);
-
   virtual void Mult(const RajaVector& x, RajaVector& y) const;
   virtual void MultTranspose(const RajaVector& x, RajaVector& y) const;
   void RecoverFEMSolution(const RajaVector&, const RajaVector&, RajaVector&);
@@ -87,14 +83,10 @@ class RajaConstrainedOperator : public RajaOperator {
   int constraintIndices;
   mutable RajaVector z, w;
  public:
-  RajaConstrainedOperator(RajaOperator* A_,
-                          const Array<int>& constraintList_,
-                          bool own_A_ = false);
-  void Setup(RajaOperator* A_,
-             const Array<int>& constraintList_,
-             bool own_A_ = false);
-  void EliminateRHS(const RajaVector& x, RajaVector& b) const;
-  virtual void Mult(const RajaVector& x, RajaVector& y) const;
+  RajaConstrainedOperator(RajaOperator*, const Array<int>&, bool = false);
+  void Setup(RajaOperator*, const Array<int>&, bool = false);
+  void EliminateRHS(const RajaVector&, RajaVector&) const;
+  virtual void Mult(const RajaVector&, RajaVector&) const;
   virtual ~RajaConstrainedOperator() {}
 };
 

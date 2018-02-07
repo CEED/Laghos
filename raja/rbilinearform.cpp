@@ -23,11 +23,6 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
   localX(mesh->GetNE() * trialFes->GetLocalDofs() * trialFes->GetVDim()),
   localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()) {}
 
-// *****************************************************************************
-RajaBilinearForm::~RajaBilinearForm(){
-  //if (rap) delete rap;  
-  //delete  Aout;  
-}
 
 // ***************************************************************************
 // Adds new Domain Integrator.

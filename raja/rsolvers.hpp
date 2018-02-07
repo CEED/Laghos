@@ -22,96 +22,134 @@
 
 namespace mfem {
 
-  class RajaIterativeSolver : public RajaSolverOperator
-{
+  // ***************************************************************************
+  class RajaIterativeSolver : public RajaSolverOperator{
 #ifdef MFEM_USE_MPI
-private:
-   int dot_prod_type; // 0 - local, 1 - global over 'comm'
-   MPI_Comm comm;
+  private:
+    int dot_prod_type; // 0 - local, 1 - global over 'comm'
+    MPI_Comm comm;
 #endif
-
-protected:
-   const RajaOperator *oper;
-   RajaSolverOperator *prec;
-
-   int max_iter, print_level;
-   double rel_tol, abs_tol;
-
-   // stats
-   mutable int final_iter, converged;
-   mutable double final_norm;
-
-   double Dot(const RajaVector &x,
-              const RajaVector &y) const {
+  protected:
+    const RajaOperator *oper;
+    RajaSolverOperator *prec;
+    int max_iter, print_level;
+    double rel_tol, abs_tol;
+    // stats
+    mutable int final_iter, converged;
+    mutable double final_norm;
+    double Dot(const RajaVector &x,
+               const RajaVector &y) const {
 #ifndef MFEM_USE_MPI
       return (x * y);
 #else
       if (dot_prod_type == 0){
-         return (x * y);
+        return (x * y);
       }
       double local_dot = (x * y);
       double global_dot;
       MPI_Allreduce(&local_dot, &global_dot, 1, MPI_DOUBLE, MPI_SUM, comm);
       return global_dot;
 #endif
-   }
-
-   double Norm(const RajaVector &x) const { return sqrt(Dot(x, x)); }
-
-public:
-  RajaIterativeSolver();
-  
+    }
+    double Norm(const RajaVector &x) const { return sqrt(Dot(x, x)); }
+  public:
+    
+    RajaIterativeSolver(): RajaSolverOperator(0, true){
+      oper = NULL;
+      prec = NULL;
+      max_iter = 10;
+      print_level = -1;
+      rel_tol = abs_tol = 0.0;
 #ifdef MFEM_USE_MPI
-   RajaIterativeSolver(MPI_Comm _comm);
+      dot_prod_type = 0;
+#endif
+    }
+
+#ifdef MFEM_USE_MPI
+  RajaIterativeSolver(MPI_Comm _comm)
+    : RajaSolverOperator(0, true)
+  {
+    oper = NULL;
+    prec = NULL;
+    max_iter = 10;
+    print_level = -1;
+    rel_tol = abs_tol = 0.0;
+    dot_prod_type = 1;
+    comm = _comm;
+  }
 #endif
 
-   void SetRelTol(double rtol) { rel_tol = rtol; }
-   void SetAbsTol(double atol) { abs_tol = atol; }
-   void SetMaxIter(int max_it) { max_iter = max_it; }
-   void SetPrintLevel(int print_lvl);
-
-   int GetNumIterations() const { return final_iter; }
-   int GetConverged() const { return converged; }
-   double GetFinalNorm() const { return final_norm; }
-
-   /// This should be called before SetOperator
-  virtual void SetPreconditioner(RajaSolverOperator &pr);
-
-   /// Also calls SetOperator for the preconditioner if there is one
-   virtual void SetOperator(const RajaOperator &op);
-};
-
+    void SetRelTol(double rtol) { rel_tol = rtol; }
+    void SetAbsTol(double atol) { abs_tol = atol; }
+    void SetMaxIter(int max_it) { max_iter = max_it; }
+    
+    void SetPrintLevel(int print_lvl){
+#ifndef MFEM_USE_MPI
+      print_level = print_lvl;
+#else
+      if (dot_prod_type == 0)
+      {
+        print_level = print_lvl;
+      }
+      else
+      {
+        int rank;
+        MPI_Comm_rank(comm, &rank);
+        if (rank == 0)
+        {
+          print_level = print_lvl;
+        }
+      }
+#endif
+    }
+    
+    int GetNumIterations() const { return final_iter; }
+  
+    int GetConverged() const { return converged; }
+    double GetFinalNorm() const { return final_norm; }
+  
+    /// This should be called before SetOperator
+    virtual void SetPreconditioner(RajaSolverOperator &pr){
+      prec = &pr;
+      prec->iterative_mode = false;
+    }
+  
+    /// Also calls SetOperator for the preconditioner if there is one
+    virtual void SetOperator(const RajaOperator &op){
+      oper = &op;
+      height = op.Height();
+      width = op.Width();
+      if (prec)
+      {
+        prec->SetOperator(*oper);
+      }
+    }
+  };
 
   
-/// Conjugate gradient method
+  /// Conjugate gradient method
+  // ***************************************************************************
   class RajaCGSolver : public RajaIterativeSolver{
   protected:
     mutable RajaVector r, d, z;
-
     void UpdateVectors()   {
       r.SetSize(width);
       d.SetSize(width);
       z.SetSize(width);
     }
-
   public:
     RajaCGSolver() { }
-
 #ifdef MFEM_USE_MPI
     RajaCGSolver(MPI_Comm _comm) : RajaIterativeSolver(_comm) { }
 #endif
-
     virtual void SetOperator(const RajaOperator &op) {
       RajaIterativeSolver::SetOperator(op);
       UpdateVectors();
     }
-
     virtual void Mult(const RajaVector &b, RajaVector &x) const {
       int i;
       double r0, den, nom, nom0, betanom, alpha, beta;
-
-      if (iterative_mode)
-      {
+      if (iterative_mode) {
         oper->Mult(x, r);
         subtract(b, r, r); // r = b - A x
       }
@@ -237,26 +275,26 @@ public:
       }
       if (print_level >= 0 && !converged)
       {
-         if (print_level != 1)
-         {
-            if (print_level != 3)
-            {
-               mfem::out << "   Iteration : " << std::setw(3) << 0 << "  (B r, r) = "
-                         << nom0 << " ...\n";
-            }
-            mfem::out << "   Iteration : " << std::setw(3) << final_iter << "  (B r, r) = "
-                      << betanom << '\n';
-         }
-         mfem::out << "PCG: No convergence!" << '\n';
+        if (print_level != 1)
+        {
+          if (print_level != 3)
+          {
+            mfem::out << "   Iteration : " << std::setw(3) << 0 << "  (B r, r) = "
+                      << nom0 << " ...\n";
+          }
+          mfem::out << "   Iteration : " << std::setw(3) << final_iter << "  (B r, r) = "
+                    << betanom << '\n';
+        }
+        mfem::out << "PCG: No convergence!" << '\n';
       }
       if (print_level >= 1 || (print_level >= 0 && !converged))
       {
-         mfem::out << "Average reduction factor = "
-                   << pow (betanom/nom0, 0.5/final_iter) << '\n';
+        mfem::out << "Average reduction factor = "
+                  << pow (betanom/nom0, 0.5/final_iter) << '\n';
       }
       final_norm = sqrt(betanom);
-   }
-};
+    }
+  };
 
 } // mfem
 
