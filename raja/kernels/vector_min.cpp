@@ -44,10 +44,14 @@ static double cu_vector_min(const int N, const double* __restrict vec) {
   }*/
 
 // *****************************************************************************
-__attribute__((unused))
 static double cub_vector_min(const int N,
                              const double* __restrict vec) {
-  double h_min;
+  static double *h_min = NULL;
+  if (!h_min){
+    const int flag = CU_MEMHOSTALLOC_PORTABLE;
+    checkCudaErrors(cuMemHostAlloc((void**)&h_min,sizeof(double),flag));
+    // should be freed with cuMemFreeHost()
+  }
   static double *d_min = NULL;
   if (!d_min)
     checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_min, 1*sizeof(double)));
@@ -55,13 +59,13 @@ static double cub_vector_min(const int N,
   static size_t storage_bytes = 0;
   if (!d_storage){
     cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
-    cudaMalloc(&d_storage, storage_bytes);
+    cuMemAlloc((CUdeviceptr*)&d_storage, storage_bytes);
   }
   //printf(" \033[33;1m%d\033[m", storage_bytes);fflush(stdout);
   cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
   //D2H
-  checkCudaErrors(cuMemcpyDtoH(&h_min,(CUdeviceptr)d_min,1*sizeof(double)));
-  return h_min;
+  checkCudaErrors(cuMemcpyDtoH(h_min,(CUdeviceptr)d_min,1*sizeof(double)));
+  return *h_min;
 }
 #endif // __NVCC__
 

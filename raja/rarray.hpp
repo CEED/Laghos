@@ -39,7 +39,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
 #endif
     return *this;
   }
-  ~RajaArray(){rdbg("\033[32m[~i");rmalloc<T>::_delete(data);}
+  ~RajaArray(){rdbg("\033[32m[~i"); rmalloc<T>::operator delete(data);}
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
@@ -56,7 +56,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     rdbg("\033[32m[i");
-    data=(T*) rmalloc<T>::_new(sz);
+    data=(T*) rmalloc<T>::operator new(sz);
   }
   inline T& operator[](const size_t x) { return data[x]; }
   inline T& operator()(const size_t x, const size_t y) {
@@ -91,7 +91,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
-  ~RajaArray(){rdbg("\033[32m[~I");rmalloc<T>::_delete(data);}
+  ~RajaArray(){rdbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
   RajaArray& operator=(Array<T> &a){
 #ifdef __NVCC__
     if (cuda) checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
@@ -117,7 +117,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     rdbg("\033[32m[I");
-    data=(T*) rmalloc<T>::_new(sz);
+    data=(T*) rmalloc<T>::operator new(sz);
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }
     for (size_t i=1,b=d[0]; i<DIM; xsw(d[i],b),++i) {

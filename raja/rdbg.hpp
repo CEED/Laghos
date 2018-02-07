@@ -17,7 +17,6 @@
 #define LAGHOS_RAJA_DBG
 
 // DBG *************************************************************************
-//#undef LAGHOS_DEBUG
 inline void rdbg(const char *format,...){
 #ifdef LAGHOS_DEBUG
   va_list args;

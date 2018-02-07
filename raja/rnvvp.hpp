@@ -73,6 +73,8 @@ static char marker[2048];
 
 #define pop(...)
 #define push(...)
+#define cuProfilerStart(...)
+#define cuProfilerStop(...)
 
 #endif // defined(__NVCC__) and defined(__NVVP__)
 

@@ -16,17 +16,17 @@ RajaVector::~RajaVector(){
   if (!own) return;
   //rdbg("\033[33m[~v(%d)",size);
   rdbg("\033[33m[~v");
-  rmalloc<double>::_delete(data);
+  this->operator delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::alloc(const size_t sz) {
   rdbg("\033[33m[v");
-  return (double*) rmalloc<double>::_new(sz);
+  return (double*) this->operator new(sz);
 }
 
 // ***************************************************************************
-void RajaVector::SetSize(const size_t sz, const void* ptr) {
+  void RajaVector::SetSize(const size_t sz, const void* ptr) {
   //rdbg("\033[33m[size=%d, new sz=%d]\033[m",size,sz);
   own=true;
   size = sz;
@@ -37,27 +37,30 @@ void RajaVector::SetSize(const size_t sz, const void* ptr) {
     if (cuda) checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
     else ::memcpy(data,ptr,bytes());
   }
-#else
-  if (ptr) { checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));}
+#else // __RAJA__
+  if (ptr) {
+    assert(data);
+    assert(ptr);
+    assert(bytes()>0);
+    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
+  }
 #endif
-#else
+#else // __NVCC__
   if (ptr) { ::memcpy(data,ptr,bytes());}
 #endif
 }
 
 // ***************************************************************************
 RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
-  RajaVector::RajaVector(const size_t sz,double value):
+RajaVector::RajaVector(const size_t sz,double value):
     size(sz),data(alloc(sz)),own(true) { *this=value;}
 
 RajaVector::RajaVector(const RajaVector& v):
   size(0),data(NULL),own(true) { SetSize(v.Size(), v); }
 
-RajaVector::RajaVector(const RajaVectorRef& ref):
-  size(ref.v.size),data(ref.v.data),own(false) {}
+RajaVector::RajaVector(const RajaVector *v): size(v->size),data(v->data),own(false) {}
   
-RajaVector::RajaVector(RajaArray<double>& v):
-  size(v.size()),data(v.ptr()),own(false) {}
+RajaVector::RajaVector(RajaArray<double>& v): size(v.size()),data(v.ptr()),own(false) {}
 
 // Host 2 Device ***************************************************************
 RajaVector::RajaVector(const Vector& v):
@@ -135,20 +138,40 @@ void RajaVector::Print(std::ostream& out, int width) const {
     printf("\n\t[%ld] %.15e",i,h_data[i]);
 }
 
+
 // ***************************************************************************
-RajaVectorRef RajaVector::GetRange(const size_t offset,
-                                   const size_t entries) const {
-  RajaVectorRef ret;
-  RajaVector& v = ret.v;
-  v.data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
-  v.size = entries;
-  v.own = false;
-  return ret;
+RajaVector* RajaVector::GetRange(const size_t offset,
+                                 const size_t entries) const {
+  RajaVector *ref = ::new RajaVector();
+  ref->size = entries;
+  ref->data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
+  ref->own = false;
+  return ref;
 }
 
 // ***************************************************************************
 RajaVector& RajaVector::operator=(const RajaVector& v) {
   SetSize(v.Size(),v.data);
+  own = false;
+  return *this;
+}
+
+// ***************************************************************************
+RajaVector& RajaVector::operator=(const Vector& v) {
+  size=v.Size();
+#ifdef __NVCC__
+#ifdef __RAJA__
+  if (cuda) {
+    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+  }else{
+    SetSize(v.Size(),v.GetData());  
+  }
+#else
+  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
+#endif
+#else
+  SetSize(v.Size(),v.GetData());  
+#endif
   own = false;
   return *this;
 }

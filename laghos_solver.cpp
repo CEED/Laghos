@@ -114,7 +114,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      v(),e(),
      rhs(H1FESpace.GetVSize()),
      B(H1compFESpace.GetTrueVSize()),X(H1compFESpace.GetTrueVSize()),
+                                              //dx(H1FESpace.GetVSize()),
+                                              //dv(H1FESpace.GetVSize()),
+                                              //de(L2FESpace.GetVSize()),
      one(L2FESpace.GetVSize(),1.0),
+     e_rhs(L2FESpace.GetVSize()),
+     rhs_c(H1compFESpace.GetVSize()),
+                                              //dv_c(H1compFESpace.GetVSize()),
+     v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
+     e_quad(),                               
      use_cuda(cuda), use_share(share)
 {
    push(LagrangianHydroOperator);
@@ -154,7 +162,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    quad_data.Jac0inv = quad_data.geom->invJ;
 
    push(ToQuad);
-   RajaVector rhoValues;
+   RajaVector rhoValues; // used in rInitQuadratureData
    rho0.ToQuad(use_share,integ_rule, rhoValues);
    pop();
 
@@ -234,13 +242,19 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
    v = S.GetRange(VsizeH1, VsizeH1);
    e = S.GetRange(2*VsizeH1, VsizeL2);
+
+   push(dx);
+   RajaVector dx = dS_dt.GetRange(0, VsizeH1);pop();
    
-   RajaVector dx = dS_dt.GetRange(0, VsizeH1);
-   RajaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
-   RajaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);
+   push(dv);
+   RajaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);pop();
+   
+   push(de);
+   RajaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);pop();
 
    // Set dx_dt = v (explicit)
-   dx = v;
+   push(dx=v);
+   dx = v; pop();
    
    // Solve for velocity.
    push(ForcePA);
@@ -265,7 +279,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    for (int c = 0; c < dim; c++)
    {
      push(rhs_c);
-     RajaVector rhs_c = rhs.GetRange(c*size, size);
+     rhs_c = rhs.GetRange(c*size, size);
      pop();
      push(dv_c);
      RajaVector dv_c = dv.GetRange(c*size, size);
@@ -326,7 +340,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       pop();
    }
    Array<int> l2dofs;
-   RajaVector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+   //RajaVector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    {
      push(ForcePA.MultTranspose);
      timer.sw_force.Start();
@@ -338,7 +352,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    pop();//Solve for energy
 
    push(e_source);
-   if (e_source) e_rhs += RajaVector(*e_source);
+   if (e_source) e_rhs += RajaVector(*e_source); // this alloc/free
    pop();
    
    push(CG_EMass);
@@ -467,17 +481,17 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
      RajaGeometry::Get(H1FESpace,integ_rule,x);
    pop();
 
-   push(v2);
-   RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones);
-   pop();
+   //push(v2);
+   //RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones);
+   //pop();
 
    push(GlobalToLocal);
-   H1FESpace.GlobalToLocal(v, v2);
+   H1FESpace.GlobalToLocal(v, v_local);
    pop();
 
    push(e);
-   RajaVector eValues;
-   e.ToQuad(use_share,integ_rule, eValues);
+   //RajaVector eValues;
+   e.ToQuad(use_share,integ_rule, e_quad);
    pop();
 
    pop(Init);
@@ -505,8 +519,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                             quad_data.dqMaps->dofToQuad,
                             quad_data.dqMaps->dofToQuadD,
                             quad_data.dqMaps->quadWeights,
-                            v2,
-                            eValues,
+                            v_local,
+                            e_quad,
                             quad_data.rho0DetJ0w,
                             quad_data.Jac0inv,
                             quad_data.geom->J,
@@ -527,8 +541,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.dqMaps->dofToQuad,
                            quad_data.dqMaps->dofToQuadD,
                            quad_data.dqMaps->quadWeights,
-                           v2,
-                           eValues,
+                           v_local,
+                           e_quad,
                            quad_data.rho0DetJ0w,
                            quad_data.Jac0inv,
                            quad_data.geom->J,

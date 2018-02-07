@@ -25,14 +25,13 @@ namespace mfem {
 template<class T> struct rmalloc{
 
   // ***************************************************************************
-  void* _new(size_t n) {
+  void* operator new(size_t n) {
     rdbg("+]\033[m");
     if (!cuda) return new T[n];
 #ifdef __NVCC__
     void *ptr;
     push(new,Purple);
     cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
-    //cudaDeviceSynchronize();
     pop();
     return ptr;
 #endif // __NVCC__
@@ -42,7 +41,7 @@ template<class T> struct rmalloc{
   }
   
   // ***************************************************************************
-  void _delete(void *ptr) {
+  void operator delete(void *ptr) {
     rdbg("-]\033[m");
     if (!cuda) delete[] static_cast<T*>(ptr);
 #ifdef __NVCC__

@@ -18,7 +18,7 @@
 
 namespace mfem {
 
-struct RajaVectorRef;
+//struct RajaVectorRef;
 
 class RajaVector : public rmalloc<double>{
  private:
@@ -28,7 +28,7 @@ class RajaVector : public rmalloc<double>{
  public:
   RajaVector(): size(0),data(NULL),own(true) {}
   RajaVector(const RajaVector&);
-  RajaVector(const RajaVectorRef&);
+  RajaVector(const RajaVector*);
   RajaVector(const size_t);
   RajaVector(const size_t,double);
   RajaVector(const Vector& v);
@@ -45,19 +45,20 @@ class RajaVector : public rmalloc<double>{
   inline size_t bytes() const { return size*sizeof(double); }
   double operator* (const RajaVector& v) const;
   RajaVector& operator = (const RajaVector& v);
+  RajaVector& operator = (const Vector& v);
   RajaVector& operator = (double value);
   RajaVector& operator -= (const RajaVector& v);
   RajaVector& operator += (const RajaVector& v);
   RajaVector& operator *=(const double d);
   RajaVector& Add(const double a, const RajaVector& Va);
   void Neg();
-  RajaVectorRef GetRange(const size_t, const size_t) const;
+  RajaVector*/*&Ref*/ GetRange(const size_t, const size_t) const;
   void SetSubVector(const RajaArray<int> &, const double, const int);
   double Min() const;
   ~RajaVector();
 };
 
-struct RajaVectorRef { RajaVector v; };
+//struct RajaVectorRef { RajaVector v; };
 
 // ***************************************************************************
 void add(const RajaVector&,const double,const RajaVector&,RajaVector&);
