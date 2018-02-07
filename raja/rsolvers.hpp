@@ -141,18 +141,24 @@ namespace mfem {
     }
     virtual void Mult(const RajaVector &b, RajaVector &x) const {
       push();
+      
       int i;
       double r0, den, nom, nom0, betanom, alpha, beta;
       if (iterative_mode) {
+        push(iMsub,Silver);
         oper->Mult(x, r);
         subtract(b, r, r); // r = b - A x
+        pop();
       }
       else
       {
+        push(rbx0,Silver);
         r = b;
         x = 0.0;
+        pop();
       }
 
+      push(d,Silver);
       if (prec)
       {
         prec->Mult(r, z); // z = B r
@@ -162,55 +168,77 @@ namespace mfem {
       {
         d = r;
       }
+      pop();
+
+      push(nom,Silver);
       nom0 = nom = Dot(d, r);
       MFEM_ASSERT(IsFinite(nom), "nom = " << nom);
-
+      pop();
+      
       if (print_level == 1
           || print_level == 3)
       {
         mfem::out << "   Iteration : " << std::setw(3) << 0 << "  (B r, r) = "
                   << nom << (print_level == 3 ? " ...\n" : "\n");
       }
+      pop();
+      
+      push(r0,Silver);
+      r0 = std::max(nom*rel_tol*rel_tol,abs_tol*abs_tol);
+      pop();
 
-      r0 = std::max(nom*rel_tol*rel_tol,
-                    abs_tol*abs_tol);
+      push(nCvg?,Silver);
       if (nom <= r0)
       {
         converged = 1;
         final_iter = 0;
         final_norm = sqrt(nom);
         pop();
+        pop();
         return;
       }
+      pop();
 
+      push(z=Ad,Silver);
       oper->Mult(d, z);  // z = A d
+      pop();
 
+      push(z.d,Silver);
       den = Dot(z, d);
       MFEM_ASSERT(IsFinite(den), "den = " << den);
+      pop();
 
       if (print_level >= 0 && den < 0.0)
       {
         mfem::out << "Negative denominator in step 0 of PCG: " << den << '\n';
       }
 
+      push(dCvg?,Silver);
       if (den == 0.0)
       {
         converged = 0;
         final_iter = 0;
         final_norm = sqrt(nom);
         pop();
+        pop();
         return;
       }
+      pop();
 
       // start iteration
       converged = 0;
       final_iter = max_iter;
-      for (i = 1; true; )
-      {
+      push(for,Grey);
+      for (i = 1; true; ){
         alpha = nom/den;
+        push(x+ad,Silver);
         add(x,  alpha, d, x);     //  x = x + alpha d
+        pop();
+        push(r-aAd,Silver);
         add(r, -alpha, z, r);     //  r = r - alpha A d
+        pop();
 
+        push(z=Br,Silver);
         if (prec)
         {
           prec->Mult(r, z);      //  z = B r
@@ -221,7 +249,9 @@ namespace mfem {
           betanom = Dot(r, r);
         }
         MFEM_ASSERT(IsFinite(betanom), "betanom = " << betanom);
-
+        pop();
+        
+        
         if (print_level == 1)
         {
           mfem::out << "   Iteration : " << std::setw(3) << i << "  (B r, r) = "
@@ -249,6 +279,7 @@ namespace mfem {
           break;
         }
 
+        push(z+bd,Silver);
         beta = betanom/nom;
         if (prec)
         {
@@ -258,8 +289,16 @@ namespace mfem {
         {
           add(r, beta, d, d);
         }
+        pop();
+        
+        push(Ad,Silver);
         oper->Mult(d, z);       //  z = A d
+        pop();
+
+        push(d.z,Silver);
         den = Dot(d, z);
+        pop();
+        
         MFEM_ASSERT(IsFinite(den), "den = " << den);
         if (den <= 0.0)
         {
@@ -269,6 +308,8 @@ namespace mfem {
         }
         nom = betanom;
       }
+      pop(for);
+     
       if (print_level >= 0 && !converged)
       {
         if (print_level != 1)
@@ -283,11 +324,13 @@ namespace mfem {
         }
         mfem::out << "PCG: No convergence!" << '\n';
       }
+      
       if (print_level >= 1 || (print_level >= 0 && !converged))
       {
         mfem::out << "Average reduction factor = "
                   << pow (betanom/nom0, 0.5/final_iter) << '\n';
       }
+      push(final_norm,Silver);
       final_norm = sqrt(betanom);
       pop();
     }

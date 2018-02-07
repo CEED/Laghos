@@ -124,19 +124,40 @@ namespace mfem {
     void Step(RajaVector &x, double &t, double &dt){
       push();
       f->SetTime(t);
+      push(k1);
       f->Mult(x, k); // k1
+      pop(k1);
+      
+      push(addxx);
       add(x, dt/2, k, y);
-      add(x, dt/6, k, z);
+      add(x, dt/6, k, z);pop();
+      
       f->SetTime(t + dt/2);
+      
+      push(k2);
       f->Mult(y, k); // k2
+      pop(k2);
+      
+      push(addxz1);
       add(x, dt/2, k, y);
-      z.Add(dt/3, k);
+      z.Add(dt/3, k);pop();
+      
+      push(k3);
       f->Mult(y, k); // k3
+      pop(k3);
+
+      push(addxz2);
       add(x, dt, k, y);
       z.Add(dt/3, k);
-      f->SetTime(t + dt);
+      f->SetTime(t + dt);pop();
+      
+      push(k4);
       f->Mult(y, k); // k4
-      add(z, dt/6, k, x);
+      pop(k4);
+      
+      push(addz);
+      add(z, dt/6, k, x);pop();
+      
       t += dt;
       pop();
     }

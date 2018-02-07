@@ -107,7 +107,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      VMassPA(H1compFESpace, integ_rule, &quad_data, share),
      EMassPA(L2FESpace, integ_rule, &quad_data, share),
      ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data, share),
-     locCG(), timer(),
+     locCG(),
+     CG_VMass(H1FESpace.GetParMesh()->GetComm()),
+     CG_EMass(L2FESpace.GetParMesh()->GetComm()),
+     timer(),
      v(),e(),
      rhs(H1FESpace.GetVSize()),
      B(H1compFESpace.GetTrueVSize()),X(H1compFESpace.GetTrueVSize()),
@@ -173,6 +176,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    VMassPA.Setup();
    EMassPA.Setup();
    pop();
+   
+   //RajaCGSolver CG_VMass(H1FESpace.GetParMesh()->GetComm());
+   CG_VMass.SetOperator(VMassPA);
+   CG_VMass.SetRelTol(cg_rel_tol);
+   CG_VMass.SetAbsTol(0.0);
+   CG_VMass.SetMaxIter(cg_max_iter);
+   CG_VMass.SetPrintLevel(-1);
+   
+   //RajaCGSolver CG_EMass(L2FESpace.GetParMesh()->GetComm());
+   CG_EMass.SetOperator(EMassPA);
+   CG_EMass.iterative_mode = false;
+   CG_EMass.SetRelTol(1e-8);
+   CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+   CG_EMass.SetMaxIter(200);
+   CG_EMass.SetPrintLevel(-1);
 
    push(locCG);
    locCG.SetOperator(EMassPA);
@@ -243,21 +261,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
    
-   RajaCGSolver CG_VMass(H1FESpace.GetParMesh()->GetComm());
-   CG_VMass.SetOperator(VMassPA);
-   CG_VMass.SetRelTol(cg_rel_tol);
-   CG_VMass.SetAbsTol(0.0);
-   CG_VMass.SetMaxIter(cg_max_iter);
-   CG_VMass.SetPrintLevel(-1);
-   
-   RajaCGSolver CG_EMass(L2FESpace.GetParMesh()->GetComm());
-   CG_EMass.SetOperator(EMassPA);
-   CG_EMass.iterative_mode = false;
-   CG_EMass.SetRelTol(1e-8);
-   CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-   CG_EMass.SetMaxIter(200);
-   CG_EMass.SetPrintLevel(-1);
-
    push(MomentumSolve);
    for (int c = 0; c < dim; c++)
    {
@@ -268,42 +271,42 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      RajaVector dv_c = dv.GetRange(c*size, size);
      pop();
      push(c_tdofs);
-      Array<int> c_tdofs;
-      Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-      // we must enforce v_x/y/z = 0 for the velocity components.
-      ess_bdr = 0; ess_bdr[c] = 1;
-      // Essential true dofs as if there's only one component.
-      H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-      pop();
+     Array<int> c_tdofs;
+     Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
+     // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+     // we must enforce v_x/y/z = 0 for the velocity components.
+     ess_bdr = 0; ess_bdr[c] = 1;
+     // Essential true dofs as if there's only one component.
+     H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+     pop();
 
-      push(dv_c=0);
-      dv_c = 0.0;
-      pop();
+     push(dv_c=0);
+     dv_c = 0.0;
+     pop();
       
-      // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
-      push(MultTranspose(rhs_c,B));
-      H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
-      pop();
-      push(Mult(dv_c,X));
-      H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
-      pop();
+     // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
+     push(MultTranspose(rhs_c,B));
+     H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
+     pop();
+     push(Mult(dv_c,X));
+     H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
+     pop();
       
-      push(VMassPA.SetEssentialTrueDofs);
-      VMassPA.SetEssentialTrueDofs(c_tdofs);
-      pop();
-      push(VMassPA.EliminateRHS(B));
-      VMassPA.EliminateRHS(B);
-      pop();
+     push(VMassPA.SetEssentialTrueDofs);
+     VMassPA.SetEssentialTrueDofs(c_tdofs);
+     pop();
+     push(VMassPA.EliminateRHS(B));
+     VMassPA.EliminateRHS(B);
+     pop();
 
-      push(RajaCGSolver);
-      timer.sw_cgH1.Start();
-      CG_VMass.Mult(B, X);
-      timer.sw_cgH1.Stop();
-      timer.H1dof_iter += CG_VMass.GetNumIterations() *
-        H1compFESpace.GlobalTrueVSize();
-      H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
-      pop();
+     push(CG_VMass);
+     timer.sw_cgH1.Start();
+     CG_VMass.Mult(B, X);
+     timer.sw_cgH1.Stop();
+     timer.H1dof_iter += CG_VMass.GetNumIterations() *
+       H1compFESpace.GlobalTrueVSize();
+     H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
+     pop();
    }
    pop();//Momentum Solve
    
@@ -338,7 +341,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    if (e_source) e_rhs += RajaVector(*e_source);
    pop();
    
-   push(CG_E);
+   push(CG_EMass);
    {
      timer.sw_cgL2.Start();
      CG_EMass.Mult(e_rhs, de);

@@ -99,7 +99,8 @@ protected:
 
    // Linear solver for energy.
    RajaCGSolver locCG;
-
+   RajaCGSolver CG_VMass,CG_EMass;
+  
    mutable TimingData timer;
 
    // Device vectors we want to keep
