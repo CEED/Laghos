@@ -105,14 +105,10 @@ protected:
 
    // Device vectors we want to keep
    mutable RajaVector v,e,rhs,B,X;
-  //mutable RajaVector dx,dv,de;
    const RajaVector one;
-   mutable RajaVector e_rhs;//, loc_rhs, loc_de;
+   mutable RajaVector e_rhs;
    mutable RajaVector rhs_c;
-  //mutable RajaVector dv_c;
-  
-  //mutable RajaGridFunction uqd_x,
-  mutable RajaVector v_local,e_quad;
+   mutable RajaVector v_local,e_quad;
 
    const bool use_cuda = false;
    const bool use_share = false;

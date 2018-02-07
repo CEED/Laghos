@@ -23,7 +23,7 @@ namespace mfem {
   }
   
   bool rconfig::NeedUpdate(Mesh &mesh) {
-    if (like_occa) return true;
+    //if (like_occa) return true;
     assert(mesh.GetSequence()==0);
     return (mesh.GetSequence()!=0);
   }

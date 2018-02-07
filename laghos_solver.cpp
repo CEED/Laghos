@@ -114,18 +114,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      v(),e(),
      rhs(H1FESpace.GetVSize()),
      B(H1compFESpace.GetTrueVSize()),X(H1compFESpace.GetTrueVSize()),
-                                              //dx(H1FESpace.GetVSize()),
-                                              //dv(H1FESpace.GetVSize()),
-                                              //de(L2FESpace.GetVSize()),
      one(L2FESpace.GetVSize(),1.0),
      e_rhs(L2FESpace.GetVSize()),
      rhs_c(H1compFESpace.GetVSize()),
-                                              //dv_c(H1compFESpace.GetVSize()),
      v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
      e_quad(),                               
      use_cuda(cuda), use_share(share)
 {
-   push(LagrangianHydroOperator);
+   push(LagrangianHydroOperator); 
    //Vector rho0_ = rho0;
    //GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
    //GridFunctionCoefficient rho_coeff(&rho0_gf);

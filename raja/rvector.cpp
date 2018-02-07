@@ -53,7 +53,12 @@ double* RajaVector::alloc(const size_t sz) {
 // ***************************************************************************
 RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
 RajaVector::RajaVector(const size_t sz,double value):
-    size(sz),data(alloc(sz)),own(true) { *this=value;}
+  size(sz),data(alloc(sz)),own(true) {
+  push();
+  //printf("\033[31m[%d]\033[m",sz);
+  *this=value;
+  pop();
+}
 
 RajaVector::RajaVector(const RajaVector& v):
   size(0),data(NULL),own(true) { SetSize(v.Size(), v); }
