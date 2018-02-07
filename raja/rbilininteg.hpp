@@ -41,18 +41,14 @@ class RajaGeometry {
 // ***************************************************************************
 class RajaDofQuadMaps {
  private:
-  static std::map<std::string, RajaDofQuadMaps*> AllDofQuadMaps;
   std::string hash;
  public:
   RajaArray<double, false> dofToQuad, dofToQuadD; // B
   RajaArray<double, false> quadToDof, quadToDofD; // B^T
   RajaArray<double> quadWeights;
 public:
-  static void delDofQuadMaps(){
-    for(std::map<std::string, RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
-        itr != AllDofQuadMaps.end(); itr++) delete (itr->second);
-    AllDofQuadMaps.clear();
-  }
+  ~RajaDofQuadMaps();
+  static void delRajaDofQuadMaps();
   static RajaDofQuadMaps* Get(const RajaFiniteElementSpace&,
                               const IntegrationRule&,
                               const bool = false);

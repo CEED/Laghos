@@ -81,8 +81,7 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  delete massOperator;
-  RajaDofQuadMaps::delDofQuadMaps();
+  //delete massOperator;
 }
 
 // *****************************************************************************
@@ -106,7 +105,11 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   push();
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) { pop(); return; }
-  ess_tdofs.allocate(ess_tdofs_count);
+  if (ess_tdofs.Size()==0){
+    ess_tdofs.allocate(ess_tdofs_count);
+  }else{
+    assert(ess_tdofs_count==ess_tdofs.Size());
+  }
   {
     push(H2D:ess_tdofs,Red);
 #ifdef __NVCC__

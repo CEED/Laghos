@@ -139,14 +139,20 @@ void RajaVector::Print(std::ostream& out, int width) const {
 }
 
 
+// *****************************************************************************
+static RajaVector ref;
+  
 // ***************************************************************************
 RajaVector* RajaVector::GetRange(const size_t offset,
                                  const size_t entries) const {
-  RajaVector *ref = ::new RajaVector();
-  ref->size = entries;
-  ref->data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
-  ref->own = false;
-  return ref;
+  //RajaVector *ref = ::new RajaVector();
+  //ref->size = entries;
+  //ref->data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
+  //ref->own = false;
+  ref.size = entries;
+  ref.data = (double*) ((unsigned char*)data + (offset*sizeof(double)));
+  ref.own = false;
+  return &ref;
 }
 
 // ***************************************************************************
@@ -196,6 +202,29 @@ RajaVector& RajaVector::operator-=(const RajaVector& v) {
 // ***************************************************************************
 RajaVector& RajaVector::operator+=(const RajaVector& v) {
   vector_vec_add(size, data, v.data);
+  return *this;
+}
+  
+// ***************************************************************************
+RajaVector& RajaVector::operator+=(const Vector& v) {
+  double *d_v_data;
+#ifdef __NVCC__
+#ifdef __RAJA__
+  if (cuda) {
+    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_v_data, bytes()));
+    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_v_data,v.GetData(),bytes()));
+    vector_vec_add(size, data, d_v_data);  
+  }else{
+    vector_vec_add(size, data, v.GetData());  
+  }
+#else
+  checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_v_data, bytes()));
+  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_v_data,v.GetData(),bytes()));
+  vector_vec_add(size, data, d_v_data);  
+#endif
+#else
+  vector_vec_add(size, data, v.GetData());  
+#endif
   return *this;
 }
 

@@ -49,6 +49,7 @@ class RajaVector : public rmalloc<double>{
   RajaVector& operator = (double value);
   RajaVector& operator -= (const RajaVector& v);
   RajaVector& operator += (const RajaVector& v);
+  RajaVector& operator += (const Vector& v);
   RajaVector& operator *=(const double d);
   RajaVector& Add(const double a, const RajaVector& Va);
   void Neg();

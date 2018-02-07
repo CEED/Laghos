@@ -216,6 +216,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
 // *****************************************************************************
 // /home/camier1/home/mfems/mfem-raja/linalg/ode.tpp:121
+// b laghos_solver.cpp:221
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
    push();
@@ -340,7 +341,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       pop();
    }
    Array<int> l2dofs;
-   //RajaVector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    {
      push(ForcePA.MultTranspose);
      timer.sw_force.Start();
@@ -352,7 +352,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    pop();//Solve for energy
 
    push(e_source);
-   if (e_source) e_rhs += RajaVector(*e_source); // this alloc/free
+   if (e_source) e_rhs += *e_source;
    pop();
    
    push(CG_EMass);
@@ -469,9 +469,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
    
-   push(ve);
-   const RajaGridFunction x(H1FESpace, S.GetRange(0, vSize));
-   RajaGridFunction v(H1FESpace, S.GetRange(vSize, vSize));
+   push(xve);
+   const RajaVector x = S.GetRange(0, vSize);
+   RajaVector v = S.GetRange(vSize, vSize);
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
    pop();
 
@@ -481,16 +481,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
      RajaGeometry::Get(H1FESpace,integ_rule,x);
    pop();
 
-   //push(v2);
-   //RajaVector v2(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones);
-   //pop();
-
    push(GlobalToLocal);
    H1FESpace.GlobalToLocal(v, v_local);
    pop();
 
    push(e);
-   //RajaVector eValues;
    e.ToQuad(use_share,integ_rule, e_quad);
    pop();
 

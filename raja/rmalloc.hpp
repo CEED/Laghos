@@ -27,7 +27,7 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void* operator new(size_t n) {
     rdbg("+]\033[m");
-    if (!cuda) return new T[n];
+    if (!cuda) return ::new T[n];
 #ifdef __NVCC__
     void *ptr;
     push(new,Purple);
@@ -43,7 +43,12 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void operator delete(void *ptr) {
     rdbg("-]\033[m");
-    if (!cuda) delete[] static_cast<T*>(ptr);
+    if (!cuda) {
+      //assert(ptr!=NULL);
+      //assert(ptr!=nullptr);
+      if (ptr)
+        ::delete[] static_cast<T*>(ptr);
+    }
 #ifdef __NVCC__
     else {
       push(delete,Fuchsia);

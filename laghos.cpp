@@ -495,15 +495,14 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       //dbg()<<"[7mRode_solver->Step";
-cuProfilerStart();
+//cuProfilerStart();
 
       push(odeStep);
       ode_solver->Step(S, t, dt);
       pop();
       steps++;
-
-      
-cuProfilerStop();
+    
+//cuProfilerStop();
 //#warning exit
 //exit(0);
 
@@ -629,7 +628,7 @@ cuProfilerStop();
    delete ode_solver;
    delete pmesh;
    delete material_pcf;
-
+   //RajaDofQuadMaps::delRajaDofQuadMaps();
    return 0;
 }
 

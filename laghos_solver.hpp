@@ -111,6 +111,7 @@ protected:
    mutable RajaVector rhs_c;
   //mutable RajaVector dv_c;
   
+  //mutable RajaGridFunction uqd_x,
   mutable RajaVector v_local,e_quad;
 
    const bool use_cuda = false;

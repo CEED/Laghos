@@ -21,9 +21,11 @@ RajaBilinearForm::RajaBilinearForm(RajaFiniteElementSpace* fes) :
   trialFes(fes),
   testFes(fes),
   localX(mesh->GetNE() * trialFes->GetLocalDofs() * trialFes->GetVDim()),
-  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()) {}
+  localY(mesh->GetNE() * testFes->GetLocalDofs() * testFes->GetVDim()){}
 
-
+  // ***************************************************************************
+  RajaBilinearForm::~RajaBilinearForm(){ }
+  
 // ***************************************************************************
 // Adds new Domain Integrator.
 void RajaBilinearForm::AddDomainIntegrator(RajaIntegrator* i) {
@@ -91,7 +93,7 @@ void RajaBilinearForm::FormOperator(const Array<int>& constraintList,
   push();
   const RajaOperator* trialP = trialFes->GetProlongationOperator();
   const RajaOperator* testP  = testFes->GetProlongationOperator();
-  RajaOperator* rap = this;
+  RajaOperator *rap = this;
   if (trialP) { rap = new RajaRAPOperator(*testP, *this, *trialP); }
   Aout = new RajaConstrainedOperator(rap, constraintList, rap!=this);
   pop();
