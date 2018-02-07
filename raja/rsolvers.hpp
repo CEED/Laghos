@@ -53,7 +53,6 @@ namespace mfem {
     }
     double Norm(const RajaVector &x) const { return sqrt(Dot(x, x)); }
   public:
-    
     RajaIterativeSolver(): RajaSolverOperator(0, true){
       oper = NULL;
       prec = NULL;
@@ -64,7 +63,7 @@ namespace mfem {
       dot_prod_type = 0;
 #endif
     }
-
+    
 #ifdef MFEM_USE_MPI
   RajaIterativeSolver(MPI_Comm _comm)
     : RajaSolverOperator(0, true)
@@ -82,7 +81,6 @@ namespace mfem {
     void SetRelTol(double rtol) { rel_tol = rtol; }
     void SetAbsTol(double atol) { abs_tol = atol; }
     void SetMaxIter(int max_it) { max_iter = max_it; }
-    
     void SetPrintLevel(int print_lvl){
 #ifndef MFEM_USE_MPI
       print_level = print_lvl;
@@ -102,18 +100,14 @@ namespace mfem {
       }
 #endif
     }
-    
     int GetNumIterations() const { return final_iter; }
-  
     int GetConverged() const { return converged; }
     double GetFinalNorm() const { return final_norm; }
-  
     /// This should be called before SetOperator
     virtual void SetPreconditioner(RajaSolverOperator &pr){
       prec = &pr;
       prec->iterative_mode = false;
     }
-  
     /// Also calls SetOperator for the preconditioner if there is one
     virtual void SetOperator(const RajaOperator &op){
       oper = &op;
@@ -128,7 +122,6 @@ namespace mfem {
 
   
   /// Conjugate gradient method
-  // ***************************************************************************
   class RajaCGSolver : public RajaIterativeSolver{
   protected:
     mutable RajaVector r, d, z;
@@ -147,6 +140,7 @@ namespace mfem {
       UpdateVectors();
     }
     virtual void Mult(const RajaVector &b, RajaVector &x) const {
+      push();
       int i;
       double r0, den, nom, nom0, betanom, alpha, beta;
       if (iterative_mode) {
@@ -185,6 +179,7 @@ namespace mfem {
         converged = 1;
         final_iter = 0;
         final_norm = sqrt(nom);
+        pop();
         return;
       }
 
@@ -203,6 +198,7 @@ namespace mfem {
         converged = 0;
         final_iter = 0;
         final_norm = sqrt(nom);
+        pop();
         return;
       }
 
@@ -293,6 +289,7 @@ namespace mfem {
                   << pow (betanom/nom0, 0.5/final_iter) << '\n';
       }
       final_norm = sqrt(betanom);
+      pop();
     }
   };
 

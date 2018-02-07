@@ -77,7 +77,7 @@ class RajaBilinearForm : public RajaOperator {
 // ***************************************************************************
 class RajaConstrainedOperator : public RajaOperator {
  protected:
-  RajaOperator* A;
+  RajaOperator *A;
   bool own_A;
   RajaArray<int> constraintList;
   int constraintIndices;

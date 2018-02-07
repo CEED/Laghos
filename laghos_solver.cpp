@@ -242,6 +242,22 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
+   
+   RajaCGSolver CG_VMass(H1FESpace.GetParMesh()->GetComm());
+   CG_VMass.SetOperator(VMassPA);
+   CG_VMass.SetRelTol(cg_rel_tol);
+   CG_VMass.SetAbsTol(0.0);
+   CG_VMass.SetMaxIter(cg_max_iter);
+   CG_VMass.SetPrintLevel(-1);
+   
+   RajaCGSolver CG_EMass(L2FESpace.GetParMesh()->GetComm());
+   CG_EMass.SetOperator(EMassPA);
+   CG_EMass.iterative_mode = false;
+   CG_EMass.SetRelTol(1e-8);
+   CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+   CG_EMass.SetMaxIter(200);
+   CG_EMass.SetPrintLevel(-1);
+
    push(MomentumSolve);
    for (int c = 0; c < dim; c++)
    {
@@ -265,7 +281,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       dv_c = 0.0;
       pop();
       
-      //RajaVector B(H1compFESpace.GetTrueVSize()), X(H1compFESpace.GetTrueVSize());
       // => /home/camier1/home/laghos/laghos-raja/raja/kernels/rForce.cpp:486
       push(MultTranspose(rhs_c,B));
       H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
@@ -281,17 +296,11 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
       VMassPA.EliminateRHS(B);
       pop();
 
-      push(cg);
-      RajaCGSolver cg(H1FESpace.GetParMesh()->GetComm());
-      cg.SetOperator(VMassPA);
-      cg.SetRelTol(cg_rel_tol);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(cg_max_iter);
-      cg.SetPrintLevel(-1);
+      push(RajaCGSolver);
       timer.sw_cgH1.Start();
-      cg.Mult(B, X);
+      CG_VMass.Mult(B, X);
       timer.sw_cgH1.Stop();
-      timer.H1dof_iter += cg.GetNumIterations() *
+      timer.H1dof_iter += CG_VMass.GetNumIterations() *
         H1compFESpace.GlobalTrueVSize();
       H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
       pop();
@@ -331,17 +340,10 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    
    push(CG_E);
    {
-     RajaCGSolver cg(L2FESpace.GetParMesh()->GetComm());
-     cg.SetOperator(EMassPA);
-     cg.iterative_mode = false;
-     cg.SetRelTol(1e-8);
-     cg.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-     cg.SetMaxIter(200);
-     cg.SetPrintLevel(-1);
      timer.sw_cgL2.Start();
-     cg.Mult(e_rhs, de);
+     CG_EMass.Mult(e_rhs, de);
      timer.sw_cgL2.Stop();
-     timer.L2dof_iter += cg.GetNumIterations() * L2FESpace.TrueVSize();
+     timer.L2dof_iter += CG_EMass.GetNumIterations() * L2FESpace.TrueVSize();
    }
    pop();
    delete e_source;

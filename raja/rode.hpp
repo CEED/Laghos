@@ -61,6 +61,7 @@ namespace mfem {
       x1.SetSize(n);
     }
     void Step(RajaVector &x, double &t, double &dt){
+      push();
       const double b = 0.5/a;
       f->SetTime(t);
       f->Mult(x, dxdt);
@@ -70,6 +71,7 @@ namespace mfem {
       f->Mult(x, dxdt);
       add(x1, b*dt, dxdt, x);
       t += dt;
+      pop();
     }
   };
 
@@ -85,6 +87,7 @@ namespace mfem {
      k.SetSize(n);
    }
    void Step(RajaVector &x, double &t, double &dt){
+      push();
      // x0 = x, t0 = t, k0 = dt*f(t0, x0)
      f->SetTime(t);
      f->Mult(x, k);
@@ -101,6 +104,7 @@ namespace mfem {
      y.Add(dt, k);
      add(1./3, x, 2./3, y, x);
      t += dt;
+     pop();
    }
  };
 
@@ -118,6 +122,7 @@ namespace mfem {
     }
     
     void Step(RajaVector &x, double &t, double &dt){
+      push();
       f->SetTime(t);
       f->Mult(x, k); // k1
       add(x, dt/2, k, y);
@@ -133,6 +138,7 @@ namespace mfem {
       f->Mult(y, k); // k4
       add(z, dt/6, k, x);
       t += dt;
+      pop();
     }
   };
 
@@ -160,6 +166,7 @@ namespace mfem {
       }
     }
     void Step(RajaVector &x, double &t, double &dt){
+      push();
       f->SetTime(t);
       f->Mult(x, k[0]);
       for (int l = 0, i = 1; i < s; i++)
@@ -177,6 +184,7 @@ namespace mfem {
         x.Add(b[i]*dt, k[i]);
       }
       t += dt;
+      pop();
     }
     ~RajaExplicitRKSolver(){
       delete [] k;

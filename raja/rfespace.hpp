@@ -47,33 +47,50 @@ class RajaProlongationOperator : public RajaOperator {
  public:
   RajaProlongationOperator(const Operator* Op):
     RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
-  virtual void Mult(const RajaVector& x, RajaVector& y) const {
+  void Mult(const RajaVector& x, RajaVector& y) const {
     push();
     if (rconfig::IAmAlone()){
       y=x;
       pop();
       return;
     }
-    push(D2H2D,Red);
+    push(hostX:D2H,Red);
     const Vector hostX=x;//D2H
+    pop();
+    
+    push(hostY);
     Vector hostY(y.Size());
-    pmat->Mult(hostX, hostY);
+    pop();
+    
+    push(pmat->Mult);
+    pmat->Mult(hostX, hostY); // fem/pfespace.cpp:2675
+    pop();
+    push(hostY:H2D);
     y=hostY;//H2D
     pop();
     pop();
   }
-  virtual void MultTranspose(const RajaVector& x, RajaVector& y) const {
+  void MultTranspose(const RajaVector& x, RajaVector& y) const {
     push();
     if (rconfig::IAmAlone()){
       y=x;
       pop();
       return;
     }
-    push(D2H2D,Red);
+    push(hostX:D2H,Red);
     const Vector hostX=x;//D2H
+    pop();
+
+    push(hostY);
     Vector hostY(y.Size());
+    pop();
+
     // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
+    push(pmat->MultT);
     pmat->MultTranspose(hostX, hostY);
+    pop();
+    
+    push(hostY:H2D);
     y=hostY;//H2D
     pop();
     pop();

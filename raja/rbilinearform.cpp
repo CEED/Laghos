@@ -213,7 +213,7 @@ void RajaConstrainedOperator::Mult(const RajaVector& x, RajaVector& y) const {
     return;
   }
   z = x;
-  A->Mult(z, y);
+  A->Mult(z, y); // roperator.hpp:76
   pop();
 }
 

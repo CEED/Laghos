@@ -72,11 +72,21 @@ namespace mfem {
       : RajaOperator(Rt_.Width(), P_.Width()), Rt(Rt_), A(A_), P(P_),
         Px(P.Height()), APx(A.Height()) { }
     /// Operator application.
-    void Mult(const RajaVector & x, RajaVector & y) const
-    { P.Mult(x, Px); A.Mult(Px, APx); Rt.MultTranspose(APx, y); }
+    void Mult(const RajaVector & x, RajaVector & y) const {
+      push();
+      P.Mult(x, Px);
+      A.Mult(Px, APx);
+      Rt.MultTranspose(APx, y);
+      pop();
+    }
     /// Application of the transpose.
-    void MultTranspose(const RajaVector & x, RajaVector & y) const
-    { Rt.Mult(x, APx); A.MultTranspose(APx, Px); P.MultTranspose(Px, y); }
+    void MultTranspose(const RajaVector & x, RajaVector & y) const {
+      push();
+      Rt.Mult(x, APx);
+      A.MultTranspose(APx, Px);
+      P.MultTranspose(Px, y);
+      pop();
+    }
   };
   
 } // mfem
