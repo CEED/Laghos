@@ -16,9 +16,6 @@
 #ifndef LAGHOS_RAJA
 #define LAGHOS_RAJA
 
-// DBG *************************************************************************
-//#include "dbg.hpp"
-
 // stdincs *********************************************************************
 #undef NDEBUG
 #include <stdio.h>
@@ -37,30 +34,32 @@
 #include "general/communication.hpp"
 #include "fem/pfespace.hpp"
 
-// LAGHOS/raja *****************************************************************
-#include "rdbg.hpp"
-#include "rnvvp.hpp"
-#include "rconfig.hpp"
-#include "rmalloc.hpp"
-#include "rarray.hpp"
-#include "rvector.hpp"
-#include "rtypedef.hpp"
+// LAGHOS/raja/config **********************************************************
+#include "config/rdbg.hpp"
+#include "config/rnvvp.hpp"
+#include "config/rconfig.hpp"
+
+// LAGHOS/raja/general *********************************************************
+#include "general/rmalloc.hpp"
+#include "general/rarray.hpp"
+
 // LAGHOS/raja/linalg **********************************************************
-#include "roperator.hpp"
-#include "rode.hpp"
-#include "rsolvers.hpp"
+#include "linalg/rvector.hpp"
+#include "linalg/roperator.hpp"
+#include "linalg/rode.hpp"
+#include "linalg/rsolvers.hpp"
 
 // LAGHOS/raja/kernels *********************************************************
-#include "kernels/kernels.hpp"
+#include "kernels/include/kernels.hpp"
 
-// LAGHOS/raja *****************************************************************
-#include "rconform.hpp"
-#include "rprolong.hpp"
-#include "rrestrict.hpp"
-#include "rfespace.hpp"
-#include "rbilinearform.hpp"
-#include "rgridfunc.hpp"
-#include "rbilininteg.hpp"
+// LAGHOS/raja/fem *************************************************************
+#include "fem/rconform.hpp"
+#include "fem/rprolong.hpp"
+#include "fem/rrestrict.hpp"
+#include "fem/rfespace.hpp"
+#include "fem/rbilinearform.hpp"
+#include "fem/rgridfunc.hpp"
+#include "fem/rbilininteg.hpp"
 
 #endif // LAGHOS_RAJA
 

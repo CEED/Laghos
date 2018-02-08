@@ -16,9 +16,6 @@
 #ifndef LAGHOS_RAJA_KERNELS_RAJA
 #define LAGHOS_RAJA_KERNELS_RAJA
 
-// DBG *************************************************************************
-//#include "dbg.hpp"
-
 // *****************************************************************************
 #undef NDEBUG
 #include <math.h>
@@ -47,9 +44,9 @@
 #endif
 
 // *****************************************************************************
-#include "forall.hpp"
-#include "offsets.hpp"
-#include "kernels.hpp"
-#include "../rnvvp.hpp"
+#include "include/forall.hpp"
+#include "include/offsets.hpp"
+#include "include/kernels.hpp"
+#include "../config/rnvvp.hpp"
 
 #endif // LAGHOS_RAJA_KERNELS_RAJA
