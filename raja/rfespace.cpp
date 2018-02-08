@@ -11,325 +11,148 @@
 #include "raja.hpp"
 
 namespace mfem {
+  
   // ***************************************************************************
-  // * RajaConformingProlongationOperator
-  // ***************************************************************************
-  RajaConformingProlongationOperator::RajaConformingProlongationOperator
-  (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
-                                 external_ldofs(),
-                                 gc(pfes.GroupComm()){
-    MFEM_VERIFY(pfes.Conforming(), "");
-    Array<int> ldofs;
-    Table &group_ldof = gc.GroupLDofTable();
-    external_ldofs.Reserve(Height()-Width());
-    for (int gr = 1; gr < group_ldof.Size(); gr++)
-    {
-      if (!gc.GetGroupTopology().IAmMaster(gr))
-      {
-        ldofs.MakeRef(group_ldof.GetRow(gr), group_ldof.RowSize(gr));
-        external_ldofs.Append(ldofs);
+  // * RajaFiniteElementSpace
+  //  ***************************************************************************
+  RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
+                                                 const FiniteElementCollection* fec,
+                                                 const int vdim_,
+                                                 Ordering::Type ordering_)
+    :ParFiniteElementSpace(dynamic_cast<ParMesh*>(mesh),fec,vdim_,ordering_),
+     globalDofs(GetNDofs()),
+     localDofs(GetFE(0)->GetDof()),
+     offsets(globalDofs+1),
+     indices(localDofs, GetNE()),  
+     map(localDofs, GetNE()) {
+    push();
+    const FiniteElement *fe = GetFE(0);
+    const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
+    const Array<int> &dof_map = el->GetDofMap();
+    const bool dof_map_is_identity = (dof_map.Size()==0);
+  
+    const Table& e2dTable = GetElementToDofTable();
+    const int* elementMap = e2dTable.GetJ();
+    const int elements = GetNE();
+  
+    Array<int> h_offsets(globalDofs+1);
+    // We'll be keeping a count of how many local nodes point to its global dof
+    for (int i = 0; i <= globalDofs; ++i) {
+      h_offsets[i] = 0;
+    }
+    for (int e = 0; e < elements; ++e) {
+      for (int d = 0; d < localDofs; ++d) {
+        const int gid = elementMap[localDofs*e + d];
+        ++h_offsets[gid + 1];
       }
     }
-    external_ldofs.Sort();
-    MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-#ifdef MFEM_DEBUG
-    for (int j = 1; j < external_ldofs.Size(); j++)
-    {
-      // Check for repeated ldofs.
-      MFEM_VERIFY(external_ldofs[j-1] < external_ldofs[j], "");
+    // Aggregate to find offsets for each global dof
+    for (int i = 1; i <= globalDofs; ++i) {
+      h_offsets[i] += h_offsets[i - 1];
     }
-    int j = 0;
-    for (int i = 0; i < external_ldofs.Size(); i++)
-    {
-      const int end = external_ldofs[i];
-      for ( ; j < end; j++)
-      {
-        MFEM_VERIFY(j-i == pfes.GetLocalTDofNumber(j), "");
+  
+    Array<int> h_indices(localDofs*elements);
+    Array<int> h_map(localDofs*elements);
+    // For each global dof, fill in all local nodes that point   to it
+    for (int e = 0; e < elements; ++e) {
+      for (int d = 0; d < localDofs; ++d) {
+        const int did = dof_map_is_identity?d:dof_map[d];
+        const int gid = elementMap[localDofs*e + did];
+        const int lid = localDofs*e + d;
+        h_indices[h_offsets[gid]++] = lid;
+        h_map[lid] = gid;
       }
-      j = end+1;
     }
-    for ( ; j < Height(); j++)
-    {
-      MFEM_VERIFY(j-external_ldofs.Size() == pfes.GetLocalTDofNumber(j), "");
+
+    // We shifted the offsets vector by 1 by using it as a counter
+    // Now we shift it back.
+    for (int i = globalDofs; i > 0; --i) {
+      h_offsets[i] = h_offsets[i - 1];
     }
-    // gc.PrintInfo();
-    // pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
-#endif
+    h_offsets[0] = 0;
+  
+    offsets = h_offsets;
+    indices = h_indices;
+    map = h_map;
+  
+    const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
+    //const Operator* P = GetProlongationMatrix(); assert(P);
+    const RajaConformingProlongationOperator *P = new RajaConformingProlongationOperator(*this);
+  
+    const int mHeight = R->Height();
+    const int* I = R->GetI();
+    const int* J = R->GetJ();
+    int trueCount = 0;
+    for (int i = 0; i < mHeight; ++i) {
+      trueCount += ((I[i + 1] - I[i]) == 1); 
+    }
+  
+    Array<int> h_reorderIndices(2*trueCount);
+    for (int i = 0, trueIdx=0; i < mHeight; ++i) {
+      if ((I[i + 1] - I[i]) == 1) {
+        h_reorderIndices[trueIdx++] = J[I[i]];
+        h_reorderIndices[trueIdx++] = i;
+      }
+    }
+
+    reorderIndices = ::new RajaArray<int>(2*trueCount);
+    *reorderIndices = h_reorderIndices;
+  
+    restrictionOp = new RajaRestrictionOperator(R->Height(),
+                                                R->Width(),
+                                                reorderIndices);
+    prolongationOp = new RajaProlongationOperator(P);
+    pop();
   }
 
   // ***************************************************************************
-  void RajaConformingProlongationOperator::h_Mult(const Vector &x,
-                                                  Vector &y) const{
+  RajaFiniteElementSpace::~RajaFiniteElementSpace() {
+    ::delete restrictionOp;
+    ::delete prolongationOp;
+    ::delete reorderIndices;
+  }
+
+  // ***************************************************************************
+  bool RajaFiniteElementSpace::hasTensorBasis() const {
+    assert(dynamic_cast<const TensorBasisElement*>(GetFE(0)));
+    return true;
+  }
+
+  // ***************************************************************************
+  void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
+                                             RajaVector& localVec) const {
     push();
-    MFEM_ASSERT(x.Size() == Width(), "");
-    MFEM_ASSERT(y.Size() == Height(), "");
-    const double *xdata = x.GetData();
-    double *ydata = y.GetData(); 
-    const int m = external_ldofs.Size();
-    const int in_layout = 2; // 2 - input is ltdofs array
-    push(BcastBegin);
-    gc.BcastBegin(const_cast<double*>(xdata), in_layout);
-    pop();
-    push(copy);
-    int j = 0;
-    for (int i = 0; i < m; i++)
-    {
-      const int end = external_ldofs[i];
-      std::copy(xdata+j-i, xdata+end-i, ydata+j);
-      j = end+1;
-    }
-    std::copy(xdata+j-m, xdata+Width(), ydata+j);
-    const int out_layout = 0; // 0 - output is ldofs array
-    pop();
-    push(BcastEnd);
-    gc.BcastEnd(ydata, out_layout);
-    pop();
+    const int vdim = GetVDim();
+    const int localEntries = localDofs * GetNE();
+    const bool vdim_ordering = ordering == Ordering::byVDIM;
+    rGlobalToLocal(vdim,
+                   vdim_ordering,
+                   globalDofs,
+                   localEntries,
+                   offsets,
+                   indices,
+                   globalVec,
+                   localVec);
     pop();
   }
 
   // ***************************************************************************
-  void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
-                                                           Vector &y) const{
-    MFEM_ASSERT(x.Size() == Height(), "");
-    MFEM_ASSERT(y.Size() == Width(), "");
-    const double *xdata = x.GetData();
-    double *ydata = y.GetData();
-    const int m = external_ldofs.Size();
-    push(BcastBegin);
-    gc.ReduceBegin(xdata);
-    pop();
-    push(copy);
-    int j = 0;
-    for (int i = 0; i < m; i++)   {
-      const int end = external_ldofs[i];
-      std::copy(xdata+j, xdata+end, ydata+j-i);
-      j = end+1;
-    }
-    std::copy(xdata+j, xdata+Height(), ydata+j-m);
-    const int out_layout = 2; // 2 - output is an array on all ltdofs
-    pop();
-    push(BcastEnd);
-    gc.ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
-    pop();
-    pop();
-  }
-
-  
-  // ***************************************************************************
-  // * RajaRestrictionOperator
-  // ***************************************************************************
-  void RajaRestrictionOperator::Mult(const RajaVector& x,
-                                     RajaVector& y) const {
+  // Aggregate local node values to their respective global dofs
+  void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
+                                             RajaVector& globalVec) const {
     push();
-    rExtractSubVector(entries, indices->ptr(), x, y);
+    const int vdim = GetVDim();
+    const int localEntries = localDofs * GetNE();
+    const bool vdim_ordering = ordering == Ordering::byVDIM;
+    rLocalToGlobal(vdim,
+                   vdim_ordering,
+                   globalDofs,
+                   localEntries,
+                   offsets,
+                   indices,
+                   localVec,
+                   globalVec);
     pop();
   }
-  
-  // ***************************************************************************
-  // * RajaProlongationOperator
-  // ***************************************************************************
-  RajaProlongationOperator::RajaProlongationOperator
-  (const RajaConformingProlongationOperator* Op):
-    RajaOperator(Op->Height(), Op->Width()),pmat(Op){}
-  
-  // ***************************************************************************
-  void RajaProlongationOperator::Mult(const RajaVector& x,
-                                      RajaVector& y) const {
-    push();
-    if (rconfig::IAmAlone()){
-      y=x;
-      pop();
-      return;
-    }
-    push(hostX:D2H,Red);
-    const Vector hostX=x;//D2H
-    pop(); 
-    
-    push(hostY);
-    Vector hostY(y.Size());
-    pop();
-    
-    push(pmat->Mult,Blue);
-    //pmat->Mult(x, y); // RajaConformingProlongationOperator::Mult
-    pmat->h_Mult(hostX, hostY); // fem/pfespace.cpp:2675
-    pop();
-    
-    push(hostY:H2D,Yellow);
-    y=hostY;//H2D
-    pop();
-    pop();
-  }
-
-  // ***************************************************************************
-  void RajaProlongationOperator::MultTranspose(const RajaVector& x,
-                                               RajaVector& y) const {
-    push();
-    if (rconfig::IAmAlone()){
-      y=x;
-      pop();
-      return;
-    }
-    push(hostX:D2H,Red);
-    const Vector hostX=x;//D2H
-    pop();
-
-    push(hostY);
-    Vector hostY(y.Size());
-    pop();
-
-    push(pmat->MultT,Blue);
-    //pmat->MultTranspose(x, y); // RajaConformingProlongationOperator::MultTranspose
-    pmat->h_MultTranspose(hostX, hostY);
-    pop();
-    
-    push(hostY:H2D,Yellow);
-    y=hostY;//H2D
-    pop();
-    pop();
-  }
-
-  
-// ***************************************************************************
-// * RajaFiniteElementSpace
-// ***************************************************************************
-RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
-                                               const FiniteElementCollection* fec,
-                                               const int vdim_,
-                                               Ordering::Type ordering_)
-  :ParFiniteElementSpace(dynamic_cast<ParMesh*>(mesh),fec,vdim_,ordering_),
-   globalDofs(GetNDofs()),
-   localDofs(GetFE(0)->GetDof()),
-   offsets(globalDofs+1),
-   indices(localDofs, GetNE()),  
-   map(localDofs, GetNE()) {
-  push();
-  const FiniteElement *fe = GetFE(0);
-  const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
-  const Array<int> &dof_map = el->GetDofMap();
-  const bool dof_map_is_identity = (dof_map.Size()==0);
-  
-  const Table& e2dTable = GetElementToDofTable();
-  const int* elementMap = e2dTable.GetJ();
-  const int elements = GetNE();
-  
-  Array<int> h_offsets(globalDofs+1);
-  // We'll be keeping a count of how many local nodes point to its global dof
-  for (int i = 0; i <= globalDofs; ++i) {
-    h_offsets[i] = 0;
-  }
-  for (int e = 0; e < elements; ++e) {
-    for (int d = 0; d < localDofs; ++d) {
-      const int gid = elementMap[localDofs*e + d];
-      ++h_offsets[gid + 1];
-    }
-  }
-  // Aggregate to find offsets for each global dof
-  for (int i = 1; i <= globalDofs; ++i) {
-    h_offsets[i] += h_offsets[i - 1];
-  }
-  
-  Array<int> h_indices(localDofs*elements);
-  Array<int> h_map(localDofs*elements);
-  // For each global dof, fill in all local nodes that point   to it
-  for (int e = 0; e < elements; ++e) {
-    for (int d = 0; d < localDofs; ++d) {
-      const int did = dof_map_is_identity?d:dof_map[d];
-      const int gid = elementMap[localDofs*e + did];
-      const int lid = localDofs*e + d;
-      h_indices[h_offsets[gid]++] = lid;
-      h_map[lid] = gid;
-    }
-  }
-
-  // We shifted the offsets vector by 1 by using it as a counter
-  // Now we shift it back.
-  for (int i = globalDofs; i > 0; --i) {
-    h_offsets[i] = h_offsets[i - 1];
-  }
-  h_offsets[0] = 0;
-  
-  offsets = h_offsets;
-  indices = h_indices;
-  map = h_map;
-  
-  const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
-  //const Operator* P = GetProlongationMatrix(); assert(P);
-  const RajaConformingProlongationOperator *P = new RajaConformingProlongationOperator(*this);
-  
-  const int mHeight = R->Height();
-  const int* I = R->GetI();
-  const int* J = R->GetJ();
-  int trueCount = 0;
-  for (int i = 0; i < mHeight; ++i) {
-    trueCount += ((I[i + 1] - I[i]) == 1); 
-  }
-  
-  Array<int> h_reorderIndices(2*trueCount);
-  for (int i = 0, trueIdx=0; i < mHeight; ++i) {
-    if ((I[i + 1] - I[i]) == 1) {
-      h_reorderIndices[trueIdx++] = J[I[i]];
-      h_reorderIndices[trueIdx++] = i;
-    }
-  }
-
-  reorderIndices = ::new RajaArray<int>(2*trueCount);
-  *reorderIndices = h_reorderIndices;
-  
-  restrictionOp = new RajaRestrictionOperator(R->Height(),
-                                              R->Width(),
-                                              reorderIndices);
-  prolongationOp = new RajaProlongationOperator(P);
-  pop();
-}
-
-// ***************************************************************************
-RajaFiniteElementSpace::~RajaFiniteElementSpace() {
-  ::delete restrictionOp;
-  ::delete prolongationOp;
-  ::delete reorderIndices;
-}
-
-// ***************************************************************************
-bool RajaFiniteElementSpace::hasTensorBasis() const {
-  assert(dynamic_cast<const TensorBasisElement*>(GetFE(0)));
-  return true;
-}
-
-// ***************************************************************************
-void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
-                                           RajaVector& localVec) const {
-  push();
-  const int vdim = GetVDim();
-  const int localEntries = localDofs * GetNE();
-  const bool vdim_ordering = ordering == Ordering::byVDIM;
-  rGlobalToLocal(vdim,
-                 vdim_ordering,
-                 globalDofs,
-                 localEntries,
-                 offsets,
-                 indices,
-                 globalVec,
-                 localVec);
-  pop();
-}
-
-// ***************************************************************************
-// Aggregate local node values to their respective global dofs
-void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
-                                           RajaVector& globalVec) const {
-  push();
-  const int vdim = GetVDim();
-  const int localEntries = localDofs * GetNE();
-  const bool vdim_ordering = ordering == Ordering::byVDIM;
-  rLocalToGlobal(vdim,
-                 vdim_ordering,
-                 globalDofs,
-                 localEntries,
-                 offsets,
-                 indices,
-                 localVec,
-                 globalVec);
-  pop();
-}
   
 } // namespace mfem

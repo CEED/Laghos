@@ -54,6 +54,9 @@
 #include "kernels/kernels.hpp"
 
 // LAGHOS/raja *****************************************************************
+#include "rconform.hpp"
+#include "rprolong.hpp"
+#include "rrestrict.hpp"
 #include "rfespace.hpp"
 #include "rbilinearform.hpp"
 #include "rgridfunc.hpp"
