@@ -43,6 +43,7 @@ namespace mfem {
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
     push();
+    printf("\n\033[31m[d_Mult]\033[m");
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
     const double *d_xdata = x.GetData();
@@ -60,8 +61,8 @@ namespace mfem {
 #ifndef __NVCC__
       std::copy(d_xdata+j-i, d_xdata+end-i, d_ydata+j);
 #else
-      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_xdata+j-i),
-                                   (CUdeviceptr)(d_ydata+j),
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
+                                   (CUdeviceptr)(d_xdata+j-i),
                                    (end-j)*sizeof(double)));
 #endif
       j = end+1;
@@ -69,7 +70,9 @@ namespace mfem {
 #ifndef __NVCC__
     std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
 #else
-    assert(false);
+    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
+                                 (CUdeviceptr)(d_xdata+j-m),
+                                 (Width()+m-j)*sizeof(double)));
 #endif
     const int out_layout = 0; // 0 - output is ldofs array
     pop();
@@ -84,29 +87,36 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
+    printf("\n\033[31m[d_MultTranspose]\033[m");
     MFEM_ASSERT(x.Size() == Height(), "");
     MFEM_ASSERT(y.Size() == Width(), "");
     const double *d_xdata = x.GetData();
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
     push(BcastBegin);
-    gc.ReduceBegin(d_xdata);
+    gc.ReduceBegin(d_xdata); 
     pop();
     push(copy);
     int j = 0;
+    //printf("\n\033[31m[d_MultTranspose] m=%d\033[m",m);
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
 #ifndef __NVCC__
       std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
 #else
-    assert(false);
+      assert(false);
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-i),
+                                   (CUdeviceptr)(d_xdata+j),
+                                   (end-j)*sizeof(double)));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
 #else
-    assert(false);
+    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-m),
+                                 (CUdeviceptr)(d_xdata+j),
+                                 (Height()-j)*sizeof(double)));
 #endif
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     pop();

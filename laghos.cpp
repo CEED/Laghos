@@ -163,30 +163,37 @@ int main(int argc, char *argv[])
    cuda=true;
 #endif
    if (cuda){
-     const int dev = 0;
+     const int rank = mpi.WorldRank();
+     const int dev = 0;//rank;
      CUdevice cuDevice;
      CUcontext cuContext;
      cuInit(0);
      cuDeviceGet(&cuDevice,dev);
      int major, minor;
      char name[128];
-     cuDeviceComputeCapability(&major, &minor,dev);
+     cuDeviceComputeCapability(&major, &minor, dev);
      cuDeviceGetName(name, 128, cuDevice);
-     printf("\033[32m[laghos] Using Device %d: %s, sm_%d.%d\033[m\n",dev, name, major, minor);
+     printf("\033[32m[laghos] Rank %d, use Device %d: %s, sm_%d.%d\033[m\n",
+            rank, dev, name, major, minor);
      cuCtxCreate(&cuContext, mpi.WorldRank(), cuDevice);
    }
 #endif
    
    // **************************************************************************
    if (dot){
+     cuProfilerStart();
      struct timeval st, et;
      int size = 0x400;
      for (int lev = 0; lev < rs_levels; lev++) size<<=1;
      //Vector h_a(size); h_a=1.0/M_PI;
      //Vector h_b(size); h_b=M_PI;
      gettimeofday(&st, NULL);
+     push(a);
      RajaVector a(size);a=1.0/M_PI;//h_a;//a.Print();
+     pop();
+     push(b);
      RajaVector b(size);b=M_PI;//(h_b); //b.Print();
+     pop();
      //RajaVector c(size); c=0.0;
      gettimeofday(&et, NULL);
      const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
@@ -194,7 +201,9 @@ int main(int argc, char *argv[])
      gettimeofday(&st, NULL);
      //double dt = a*b;
      //c+=1.0;
+     push(a+=b);
      a+=b;
+     pop();
      gettimeofday(&et, NULL);
      //assert(dt == (double)size);
      const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
