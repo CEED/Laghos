@@ -31,73 +31,39 @@ class RajaRestrictionOperator : public RajaOperator {
     RajaOperator(h,w),
     entries(idx->size()>>1),
     indices(idx){} 
-  void Mult(const RajaVector& x, RajaVector& y) const {
-    push();
-    rExtractSubVector(entries, indices->ptr(), x, y);
-    pop();
-  }
+  void Mult(const RajaVector& x, RajaVector& y) const ;
 };
 
+
+// *****************************************************************************
+// * RajaConformingProlongationOperator
+// *****************************************************************************
+class RajaConformingProlongationOperator : public RajaOperator{
+protected:
+  Array<int> external_ldofs;
+  GroupCommunicator &gc;
+public:
+  RajaConformingProlongationOperator(ParFiniteElementSpace &pfes);
+  //void Mult(const RajaVector &x, RajaVector &y) const;
+  //void MultTranspose(const RajaVector &x, RajaVector &y) const;  
+  void h_Mult(const Vector &x, Vector &y) const;
+  void h_MultTranspose(const Vector &x, Vector &y) const;
+};
+
+  
 // ***************************************************************************
 // * RajaProlongationOperator
 // ***************************************************************************
 class RajaProlongationOperator : public RajaOperator {
  protected:
-  const Operator* pmat = NULL;
+  const RajaConformingProlongationOperator* pmat = NULL;
  public:
-  RajaProlongationOperator(const Operator* Op):
-    RajaOperator(Op->Height(), Op->Width()), pmat(Op) {}
-  void Mult(const RajaVector& x, RajaVector& y) const {
-    push();
-    if (rconfig::IAmAlone()){
-      y=x;
-      pop();
-      return;
-    }
-    push(hostX:D2H,Red);
-    const Vector hostX=x;//D2H
-    pop();
-    
-    push(hostY);
-    Vector hostY(y.Size());
-    pop();
-    
-    push(pmat->Mult);
-    pmat->Mult(hostX, hostY); // fem/pfespace.cpp:2675
-    pop();
-    push(hostY:H2D);
-    y=hostY;//H2D
-    pop();
-    pop();
-  }
-  void MultTranspose(const RajaVector& x, RajaVector& y) const {
-    push();
-    if (rconfig::IAmAlone()){
-      y=x;
-      pop();
-      return;
-    }
-    push(hostX:D2H,Red);
-    const Vector hostX=x;//D2H
-    pop();
-
-    push(hostY);
-    Vector hostY(y.Size());
-    pop();
-
-    // mfem::ConformingProlongationOperator::MultTranspose @ fem/pfespace.cpp:2444
-    push(pmat->MultT);
-    pmat->MultTranspose(hostX, hostY);
-    pop();
-    
-    push(hostY:H2D);
-    y=hostY;//H2D
-    pop();
-    pop();
-  }
+  RajaProlongationOperator(const RajaConformingProlongationOperator* Op);
+  void Mult(const RajaVector& x, RajaVector& y) const;
+  void MultTranspose(const RajaVector& x, RajaVector& y) const ;
 };
-
-
+  
+  
 // ***************************************************************************
 // * RajaFiniteElementSpace
 // ***************************************************************************

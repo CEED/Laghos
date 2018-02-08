@@ -228,7 +228,7 @@ namespace mfem {
       // start iteration
       converged = 0;
       final_iter = max_iter;
-      push(for,Grey);
+      push(for,SlateGray);
       for (i = 1; true; ){
         alpha = nom/den;
         push(x+ad,Silver);

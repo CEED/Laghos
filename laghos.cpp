@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    // **************************************************************************
-   cuProfilerStart();
+   //cuProfilerStart();
    push();
 
    // Define the parallel finite element spaces. We use:
@@ -512,6 +512,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       //dbg()<<"[7mRode_solver->Step";
+      cuProfilerStart();
       push(odeStep);
       ode_solver->Step(S, t, dt);
       pop();

@@ -11,7 +11,184 @@
 #include "raja.hpp"
 
 namespace mfem {
+  // ***************************************************************************
+  // * RajaConformingProlongationOperator
+  // ***************************************************************************
+  RajaConformingProlongationOperator::RajaConformingProlongationOperator
+  (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
+                                 external_ldofs(),
+                                 gc(pfes.GroupComm()){
+    MFEM_VERIFY(pfes.Conforming(), "");
+    Array<int> ldofs;
+    Table &group_ldof = gc.GroupLDofTable();
+    external_ldofs.Reserve(Height()-Width());
+    for (int gr = 1; gr < group_ldof.Size(); gr++)
+    {
+      if (!gc.GetGroupTopology().IAmMaster(gr))
+      {
+        ldofs.MakeRef(group_ldof.GetRow(gr), group_ldof.RowSize(gr));
+        external_ldofs.Append(ldofs);
+      }
+    }
+    external_ldofs.Sort();
+    MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
+#ifdef MFEM_DEBUG
+    for (int j = 1; j < external_ldofs.Size(); j++)
+    {
+      // Check for repeated ldofs.
+      MFEM_VERIFY(external_ldofs[j-1] < external_ldofs[j], "");
+    }
+    int j = 0;
+    for (int i = 0; i < external_ldofs.Size(); i++)
+    {
+      const int end = external_ldofs[i];
+      for ( ; j < end; j++)
+      {
+        MFEM_VERIFY(j-i == pfes.GetLocalTDofNumber(j), "");
+      }
+      j = end+1;
+    }
+    for ( ; j < Height(); j++)
+    {
+      MFEM_VERIFY(j-external_ldofs.Size() == pfes.GetLocalTDofNumber(j), "");
+    }
+    // gc.PrintInfo();
+    // pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
+#endif
+  }
 
+  // ***************************************************************************
+  void RajaConformingProlongationOperator::h_Mult(const Vector &x,
+                                                  Vector &y) const{
+    push();
+    MFEM_ASSERT(x.Size() == Width(), "");
+    MFEM_ASSERT(y.Size() == Height(), "");
+    const double *xdata = x.GetData();
+    double *ydata = y.GetData(); 
+    const int m = external_ldofs.Size();
+    const int in_layout = 2; // 2 - input is ltdofs array
+    push(BcastBegin);
+    gc.BcastBegin(const_cast<double*>(xdata), in_layout);
+    pop();
+    push(copy);
+    int j = 0;
+    for (int i = 0; i < m; i++)
+    {
+      const int end = external_ldofs[i];
+      std::copy(xdata+j-i, xdata+end-i, ydata+j);
+      j = end+1;
+    }
+    std::copy(xdata+j-m, xdata+Width(), ydata+j);
+    const int out_layout = 0; // 0 - output is ldofs array
+    pop();
+    push(BcastEnd);
+    gc.BcastEnd(ydata, out_layout);
+    pop();
+    pop();
+  }
+
+  // ***************************************************************************
+  void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
+                                                           Vector &y) const{
+    MFEM_ASSERT(x.Size() == Height(), "");
+    MFEM_ASSERT(y.Size() == Width(), "");
+    const double *xdata = x.GetData();
+    double *ydata = y.GetData();
+    const int m = external_ldofs.Size();
+    push(BcastBegin);
+    gc.ReduceBegin(xdata);
+    pop();
+    push(copy);
+    int j = 0;
+    for (int i = 0; i < m; i++)   {
+      const int end = external_ldofs[i];
+      std::copy(xdata+j, xdata+end, ydata+j-i);
+      j = end+1;
+    }
+    std::copy(xdata+j, xdata+Height(), ydata+j-m);
+    const int out_layout = 2; // 2 - output is an array on all ltdofs
+    pop();
+    push(BcastEnd);
+    gc.ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
+    pop();
+    pop();
+  }
+
+  
+  // ***************************************************************************
+  // * RajaRestrictionOperator
+  // ***************************************************************************
+  void RajaRestrictionOperator::Mult(const RajaVector& x,
+                                     RajaVector& y) const {
+    push();
+    rExtractSubVector(entries, indices->ptr(), x, y);
+    pop();
+  }
+  
+  // ***************************************************************************
+  // * RajaProlongationOperator
+  // ***************************************************************************
+  RajaProlongationOperator::RajaProlongationOperator
+  (const RajaConformingProlongationOperator* Op):
+    RajaOperator(Op->Height(), Op->Width()),pmat(Op){}
+  
+  // ***************************************************************************
+  void RajaProlongationOperator::Mult(const RajaVector& x,
+                                      RajaVector& y) const {
+    push();
+    if (rconfig::IAmAlone()){
+      y=x;
+      pop();
+      return;
+    }
+    push(hostX:D2H,Red);
+    const Vector hostX=x;//D2H
+    pop(); 
+    
+    push(hostY);
+    Vector hostY(y.Size());
+    pop();
+    
+    push(pmat->Mult,Blue);
+    //pmat->Mult(x, y); // RajaConformingProlongationOperator::Mult
+    pmat->h_Mult(hostX, hostY); // fem/pfespace.cpp:2675
+    pop();
+    
+    push(hostY:H2D,Yellow);
+    y=hostY;//H2D
+    pop();
+    pop();
+  }
+
+  // ***************************************************************************
+  void RajaProlongationOperator::MultTranspose(const RajaVector& x,
+                                               RajaVector& y) const {
+    push();
+    if (rconfig::IAmAlone()){
+      y=x;
+      pop();
+      return;
+    }
+    push(hostX:D2H,Red);
+    const Vector hostX=x;//D2H
+    pop();
+
+    push(hostY);
+    Vector hostY(y.Size());
+    pop();
+
+    push(pmat->MultT,Blue);
+    //pmat->MultTranspose(x, y); // RajaConformingProlongationOperator::MultTranspose
+    pmat->h_MultTranspose(hostX, hostY);
+    pop();
+    
+    push(hostY:H2D,Yellow);
+    y=hostY;//H2D
+    pop();
+    pop();
+  }
+
+  
 // ***************************************************************************
 // * RajaFiniteElementSpace
 // ***************************************************************************
@@ -76,14 +253,15 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
   map = h_map;
   
   const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
-  const Operator* P = GetProlongationMatrix(); assert(P);
+  //const Operator* P = GetProlongationMatrix(); assert(P);
+  const RajaConformingProlongationOperator *P = new RajaConformingProlongationOperator(*this);
   
   const int mHeight = R->Height();
   const int* I = R->GetI();
   const int* J = R->GetJ();
   int trueCount = 0;
   for (int i = 0; i < mHeight; ++i) {
-    trueCount += ((I[i + 1] - I[i]) == 1);
+    trueCount += ((I[i + 1] - I[i]) == 1); 
   }
   
   Array<int> h_reorderIndices(2*trueCount);
