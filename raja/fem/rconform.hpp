@@ -27,8 +27,8 @@ namespace mfem {
     GroupCommunicator &gc;
   public:
     RajaConformingProlongationOperator(ParFiniteElementSpace &pfes);
-    //void Mult(const RajaVector &x, RajaVector &y) const;
-    //void MultTranspose(const RajaVector &x, RajaVector &y) const;  
+    void d_Mult(const RajaVector &x, RajaVector &y) const;
+    void d_MultTranspose(const RajaVector &x, RajaVector &y) const;  
     void h_Mult(const Vector &x, Vector &y) const;
     void h_MultTranspose(const Vector &x, Vector &y) const;
   };

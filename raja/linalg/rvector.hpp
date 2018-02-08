@@ -37,6 +37,7 @@ class RajaVector : public rmalloc<double>{
   operator Vector() const;
   double* alloc(const size_t);
   inline double* ptr() const { return data;}
+  inline double* GetData() const { return data;}
   inline operator double* () { return data; }
   inline operator const double* () const { return data; }
   void Print(std::ostream& = std::cout, int = 8) const;

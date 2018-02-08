@@ -16,7 +16,7 @@
 #include "../raja.hpp"
 
 namespace mfem {
-  
+    
   bool rconfig::IAmAlone() {
     if (like_occa) return false;
     return world_size==1;
@@ -27,5 +27,11 @@ namespace mfem {
     assert(mesh.GetSequence()==0);
     return (mesh.GetSequence()!=0);
   }
-  
+    
+  bool rconfig::DoHostConformingProlongationOperator() {
+    //if (like_occa) return false;
+    //return (cuda)?false:true;
+    return false; // On force pour l'instant
+  }
+
 } // namespace mfem

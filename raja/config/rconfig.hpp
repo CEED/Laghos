@@ -25,6 +25,7 @@ namespace mfem {
   public:
     static bool IAmAlone();
     static bool NeedUpdate(Mesh &mesh);
+    static bool DoHostConformingProlongationOperator();
   };  
 } // namespace mfem
 

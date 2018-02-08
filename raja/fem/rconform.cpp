@@ -33,31 +33,91 @@ namespace mfem {
     }
     external_ldofs.Sort();
     MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-//#ifdef MFEM_DEBUG
-    for (int j = 1; j < external_ldofs.Size(); j++)
-    {
-      // Check for repeated ldofs.
-      MFEM_VERIFY(external_ldofs[j-1] < external_ldofs[j], "");
-    }
-    int j = 0;
-    for (int i = 0; i < external_ldofs.Size(); i++)
-    {
-      const int end = external_ldofs[i];
-      for ( ; j < end; j++)
-      {
-        MFEM_VERIFY(j-i == pfes.GetLocalTDofNumber(j), "");
-      }
-      j = end+1;
-    }
-    for ( ; j < Height(); j++)
-    {
-      MFEM_VERIFY(j-external_ldofs.Size() == pfes.GetLocalTDofNumber(j), "");
-    }
-    gc.PrintInfo();
-    pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
-//#endif
+    //gc.PrintInfo();
+    //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
 
+  // ***************************************************************************
+  // * Device Mult
+  // ***************************************************************************
+  void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
+                                                  RajaVector &y) const{
+    push();
+    MFEM_ASSERT(x.Size() == Width(), "");
+    MFEM_ASSERT(y.Size() == Height(), "");
+    const double *d_xdata = x.GetData();
+    double *d_ydata = y.GetData(); 
+    const int m = external_ldofs.Size();
+    const int in_layout = 2; // 2 - input is ltdofs array
+    push(BcastBegin);
+    gc.BcastBegin(const_cast<double*>(d_xdata), in_layout);
+    pop();
+    push(copy);
+    int j = 0;
+    for (int i = 0; i < m; i++)
+    {
+      const int end = external_ldofs[i];
+#ifndef __NVCC__
+      std::copy(d_xdata+j-i, d_xdata+end-i, d_ydata+j);
+#else
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_xdata+j-i),
+                                   (CUdeviceptr)(d_ydata+j),
+                                   (end-j)*sizeof(double)));
+#endif
+      j = end+1;
+    }
+#ifndef __NVCC__
+    std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
+#else
+    assert(false);
+#endif
+    const int out_layout = 0; // 0 - output is ldofs array
+    pop();
+    push(BcastEnd);
+    gc.BcastEnd(d_ydata, out_layout);
+    pop();
+    pop();
+  }
+
+  // ***************************************************************************
+  // * Device MultTranspose
+  // ***************************************************************************
+  void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
+                                                           RajaVector &y) const{
+    MFEM_ASSERT(x.Size() == Height(), "");
+    MFEM_ASSERT(y.Size() == Width(), "");
+    const double *d_xdata = x.GetData();
+    double *d_ydata = y.GetData();
+    const int m = external_ldofs.Size();
+    push(BcastBegin);
+    gc.ReduceBegin(d_xdata);
+    pop();
+    push(copy);
+    int j = 0;
+    for (int i = 0; i < m; i++)   {
+      const int end = external_ldofs[i];
+#ifndef __NVCC__
+      std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
+#else
+    assert(false);
+#endif
+      j = end+1;
+    }
+#ifndef __NVCC__
+    std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
+#else
+    assert(false);
+#endif
+    const int out_layout = 2; // 2 - output is an array on all ltdofs
+    pop();
+    push(BcastEnd);
+    gc.ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
+    pop();
+    pop();
+  }
+
+  // ***************************************************************************
+  // * Host Mult
   // ***************************************************************************
   void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
@@ -88,6 +148,8 @@ namespace mfem {
     pop();
   }
 
+  // ***************************************************************************
+  // * Host MultTranspose
   // ***************************************************************************
   void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                            Vector &y) const{

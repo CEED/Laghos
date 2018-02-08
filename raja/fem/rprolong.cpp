@@ -28,6 +28,14 @@ namespace mfem {
       pop();
       return;
     }
+    
+    if (!rconfig::DoHostConformingProlongationOperator()){
+      //assert(false);
+      pmat->d_Mult(x, y);
+      pop();
+      return;
+    }
+
     push(hostX:D2H,Red);
     const Vector hostX=x;//D2H
     pop(); 
@@ -37,13 +45,13 @@ namespace mfem {
     pop();
     
     push(pmat->Mult,Blue);
-    //pmat->Mult(x, y); // RajaConformingProlongationOperator::Mult
-    pmat->h_Mult(hostX, hostY); // fem/pfespace.cpp:2675
+    pmat->h_Mult(hostX, hostY);
     pop();
     
     push(hostY:H2D,Yellow);
     y=hostY;//H2D
     pop();
+    
     pop();
   }
 
@@ -56,22 +64,30 @@ namespace mfem {
       pop();
       return;
     }
+    
+    if (!rconfig::DoHostConformingProlongationOperator()){
+      //assert(false);
+      pmat->d_MultTranspose(x, y);
+      pop();
+      return;
+    }
+    
     push(hostX:D2H,Red);
     const Vector hostX=x;//D2H
     pop();
-
+   
     push(hostY);
     Vector hostY(y.Size());
     pop();
 
     push(pmat->MultT,Blue);
-    //pmat->MultTranspose(x, y); // RajaConformingProlongationOperator::MultTranspose
     pmat->h_MultTranspose(hostX, hostY);
     pop();
     
     push(hostY:H2D,Yellow);
     y=hostY;//H2D
     pop();
+    
     pop();
   }
 
