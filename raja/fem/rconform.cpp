@@ -33,7 +33,7 @@ namespace mfem {
     }
     external_ldofs.Sort();
     MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-#ifdef MFEM_DEBUG
+//#ifdef MFEM_DEBUG
     for (int j = 1; j < external_ldofs.Size(); j++)
     {
       // Check for repeated ldofs.
@@ -53,9 +53,9 @@ namespace mfem {
     {
       MFEM_VERIFY(j-external_ldofs.Size() == pfes.GetLocalTDofNumber(j), "");
     }
-    // gc.PrintInfo();
-    // pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
-#endif
+    gc.PrintInfo();
+    pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
+//#endif
   }
 
   // ***************************************************************************

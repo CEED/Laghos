@@ -106,10 +106,17 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) { pop(); return; }
   if (ess_tdofs.Size()==0){
+#ifdef MFEM_USE_MPI
+    int global_ess_tdofs_count;
+    const MPI_Comm comm = fes.GetParMesh()->GetComm();
+    MPI_Allreduce(&ess_tdofs_count,
+                  &global_ess_tdofs_count, 1, MPI_INT, MPI_SUM, comm);
+    ess_tdofs.allocate(global_ess_tdofs_count);
+#else
     ess_tdofs.allocate(ess_tdofs_count);
-  }else{
-    assert(ess_tdofs_count==ess_tdofs.Size());
-  }
+#endif
+  }else assert(ess_tdofs_count<=ess_tdofs.Size());
+
   {
     push(H2D:ess_tdofs,Red);
 #ifdef __NVCC__
