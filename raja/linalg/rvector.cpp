@@ -34,7 +34,8 @@ double* RajaVector::alloc(const size_t sz) {
 #ifdef __NVCC__
 #ifdef __RAJA__
   if (ptr) {
-    if (cuda) checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
+    if (rconfig::Get().Cuda())
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)data,(CUdeviceptr)ptr,bytes()));
     else ::memcpy(data,ptr,bytes());
   }
 #else // __RAJA__
@@ -72,7 +73,7 @@ RajaVector::RajaVector(const Vector& v):
   size(v.Size()),data(NULL),own(true) {
 #ifdef __NVCC__
 #ifdef __RAJA__
-  if (cuda) {
+  if (rconfig::Get().Cuda()) {
     checkCudaErrors(cuMemAlloc((CUdeviceptr*)&data, size*sizeof(double)));
     checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
   }else{
@@ -92,7 +93,7 @@ RajaVector::RajaVector(const Vector& v):
 RajaVector::operator Vector() {
 #ifdef __NVCC__
 #ifdef __RAJA__
-  if (cuda){
+  if (rconfig::Get().Cuda()){
     double *h_data= (double*) ::malloc(bytes());
     checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
     return Vector(h_data,size);
@@ -111,7 +112,7 @@ RajaVector::operator Vector() {
 RajaVector::operator Vector() const {
 #ifdef __NVCC__
 #ifdef __RAJA__
-  if (cuda){
+  if (rconfig::Get().Cuda()){
     double *h_data= (double*) ::malloc(bytes());
     checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
     return Vector(h_data,size);
@@ -131,7 +132,7 @@ RajaVector::operator Vector() const {
 void RajaVector::Print(std::ostream& out, int width) const {
   double *h_data;
 #ifdef __NVCC__
-  if (cuda){
+  if (rconfig::Get().Cuda()){
     //dbg()<<"Device 2 Host (const)";
     h_data= (double*) ::malloc(bytes());
     checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
@@ -172,7 +173,7 @@ RajaVector& RajaVector::operator=(const Vector& v) {
   size=v.Size();
 #ifdef __NVCC__
 #ifdef __RAJA__
-  if (cuda) {
+  if (rconfig::Get().Cuda()) {
     checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,v.GetData(),v.Size()*sizeof(double)));
   }else{
     SetSize(v.Size(),v.GetData());  
@@ -215,7 +216,7 @@ RajaVector& RajaVector::operator+=(const Vector& v) {
   double *d_v_data;
 #ifdef __NVCC__
 #ifdef __RAJA__
-  if (cuda) {
+  if (rconfig::Get().Cuda()) {
     checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_v_data, bytes()));
     checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_v_data,v.GetData(),bytes()));
     vector_vec_add(size, data, d_v_data);  

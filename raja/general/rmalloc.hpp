@@ -28,11 +28,11 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void* operator new(size_t n) {
     rdbg("+]\033[m");
-    if (!cuda) return ::new T[n];
+    if (!rconfig::Get().Cuda()) return ::new T[n];
 #ifdef __NVCC__
     void *ptr;
     push(new,Purple);
-    if (!uvm){
+    if (!rconfig::Get().Uvm()){
       cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
     }else{
       cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
@@ -48,7 +48,7 @@ template<class T> struct rmalloc{
   // ***************************************************************************
   void operator delete(void *ptr) {
     rdbg("-]\033[m");
-    if (!cuda) {
+    if (!rconfig::Get().Cuda()) {
       //assert(ptr!=NULL);
       //assert(ptr!=nullptr);
       //if (ptr)

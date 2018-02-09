@@ -44,9 +44,12 @@
 #endif
 
 // *****************************************************************************
+#include "../config/rnvvp.hpp"
+#include "../config/rconfig.hpp"
+
+// *****************************************************************************
 #include "include/forall.hpp"
 #include "include/offsets.hpp"
 #include "include/kernels.hpp"
-#include "../config/rnvvp.hpp"
 
 #endif // LAGHOS_RAJA_KERNELS_RAJA

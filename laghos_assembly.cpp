@@ -67,10 +67,9 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
 
 RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
                                    const IntegrationRule &integ_rule_,
-                                   QuadratureData *quad_data_,
-                                   const bool share)
+                                   QuadratureData *quad_data_)
    : RajaOperator(fes_.GetTrueVSize()),
-     use_share(share),
+     use_share(rconfig::Get().Share()),
      fes(fes_),
      integ_rule(integ_rule_),
      ess_tdofs_count(0),
@@ -120,7 +119,7 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
   {
     push(H2D:ess_tdofs,Red);
 #ifdef __NVCC__
-    if (cuda)
+    if (rconfig::Get().Cuda())
       cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
     else ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
 #else
@@ -172,12 +171,11 @@ void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                                      RajaFiniteElementSpace &l2fes_,
                                      const IntegrationRule &integ_rule_,
-                                     const QuadratureData *quad_data_,
-                                     const bool share)
+                                     const QuadratureData *quad_data_)
    : RajaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
      dim(h1fes_.GetMesh()->Dimension()),
      nzones(h1fes_.GetMesh()->GetNE()),
-     use_share(share),
+     use_share(rconfig::Get().Share()),
      h1fes(h1fes_),
      l2fes(l2fes_),
      integ_rule(integ_rule_),

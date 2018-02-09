@@ -64,20 +64,13 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem = 0;
 
-bool uvm = false;
-bool cuda = false;
-int world_size = 0;
-bool like_occa = false;
-
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-   //dbgIni(argv[0]);dbg();
-   // Initialize MPI.
+    // Initialize MPI.
    MPI_Session mpi(argc, argv); 
    int myid = mpi.WorldRank();
-   world_size = mpi.WorldSize();
    
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
@@ -99,8 +92,17 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
-   bool share = false;
    bool dot = false;
+   bool cuda = false;
+   bool uvm = false;
+   bool share = false;
+   bool like_occa = false;
+   
+#ifdef __NVCC__
+#ifndef __RAJA__
+   cuda=true;
+#endif
+#endif
    const char *basename = "results/Laghos";
 
    OptionsParser args(argc, argv);
@@ -141,14 +143,14 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
-                  "Enable or disable CUDA kernels.");
-   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
-                  "Enable or disable CUDA managed alloc.");
-   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
-                  "Enable or disable SHARE kernels.");
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
                   "Enable or disable DOT test kernels.");
+   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
+                  "Enable or disable CUDA managed alloc.");
+   args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
+                  "Enable or disable CUDA kernels.");
+   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
+                  "Enable or disable SHARE kernels.");
    args.AddOption(&like_occa, "-like-occa", "--like-occa", "-not-like-occa", "--no-like-occa",
                   "Enable or disable like-occa test kernels.");
    args.Parse();
@@ -161,12 +163,7 @@ int main(int argc, char *argv[])
 
    // CUDA set device & tweak options
    // **************************************************************************
-#if defined(__NVCC__)
-#ifndef __RAJA__
-   cuda=true;
-#endif
-   if (cuda) rconfig::setupDevice(mpi);
-#endif
+   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),cuda,uvm,share,like_occa);
    
    // **************************************************************************
    if (dot){
@@ -422,7 +419,7 @@ int main(int argc, char *argv[])
    push(Oper);
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
-                                visc, p_assembly, cg_tol, cg_max_iter, cuda, share);
+                                visc, p_assembly, cg_tol, cg_max_iter);
    pop();
 
    //dbg()<<"[7msocketstream";

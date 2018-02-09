@@ -86,12 +86,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
-                                                 double cgt, int cgiter,
-                                                 bool cuda,
-                                                 bool share)
-   : RajaTimeDependentOperator(size),
+                                                 double cgt, int cgiter)
+: RajaTimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
-     H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
+     H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
      ess_tdofs(essential_tdofs),
      dim(h1_fes.GetMesh()->Dimension()),
      nzones(h1_fes.GetMesh()->GetNE()),
@@ -104,9 +102,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
-     VMassPA(H1compFESpace, integ_rule, &quad_data, share),
-     EMassPA(L2FESpace, integ_rule, &quad_data, share),
-     ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data, share),
+     VMassPA(H1compFESpace, integ_rule, &quad_data),
+     EMassPA(L2FESpace, integ_rule, &quad_data),
+     ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data),
      locCG(),
      CG_VMass(H1FESpace.GetParMesh()->GetComm()),
      CG_EMass(L2FESpace.GetParMesh()->GetComm()),
@@ -118,8 +116,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      e_rhs(L2FESpace.GetVSize()),
      rhs_c(H1compFESpace.GetVSize()),
      v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
-     e_quad(),                               
-     use_cuda(cuda), use_share(share)
+     e_quad()
 {
    push(LagrangianHydroOperator); 
    //Vector rho0_ = rho0;
@@ -159,7 +156,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    push(ToQuad);
    RajaVector rhoValues; // used in rInitQuadratureData
-   rho0.ToQuad(use_share,integ_rule, rhoValues);
+   rho0.ToQuad(rconfig::Get().Share(),integ_rule, rhoValues);
    pop();
 
    if (dim==1) { assert(false); }
@@ -464,6 +461,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    push(Init);
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
+   const bool use_share = rconfig::Get().Share();
    
    push(xve);
    const RajaVector x = S.GetRange(0, vSize);
@@ -472,7 +470,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    pop();
 
    push(Geom:Get);
-   quad_data.geom = (like_occa) ?
+   quad_data.geom = rconfig::Get().LikeOcca() ?
      RajaGeometry::Get(H1FESpace,integ_rule):
      RajaGeometry::Get(H1FESpace,integ_rule,x);
    pop();

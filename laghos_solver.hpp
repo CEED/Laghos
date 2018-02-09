@@ -110,9 +110,6 @@ protected:
    mutable RajaVector rhs_c;
    mutable RajaVector v_local,e_quad;
 
-   const bool use_cuda = false;
-   const bool use_share = false;
-
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
                                   double p[], double cs[]) const
@@ -133,7 +130,7 @@ public:
                            Array<int> &essential_tdofs, RajaGridFunction &rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
-                           double cgt, int cgiter,bool cuda,bool share);
+                           double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;

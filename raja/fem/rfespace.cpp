@@ -19,7 +19,7 @@ namespace mfem {
                                                  const FiniteElementCollection* fec,
                                                  const int vdim_,
                                                  Ordering::Type ordering_)
-    :ParFiniteElementSpace(dynamic_cast<ParMesh*>(mesh),fec,vdim_,ordering_),
+    :ParFiniteElementSpace(static_cast<ParMesh*>(mesh),fec,vdim_,ordering_),
      globalDofs(GetNDofs()),
      localDofs(GetFE(0)->GetDof()),
      offsets(globalDofs+1),

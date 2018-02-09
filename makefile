@@ -99,7 +99,7 @@ CFLAGS = -O3 -Wall
 # sm_61, sm_5.2
 #############
 NV_ARCH = -arch=sm_61
-#-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
+#NV_ARCH = -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
 
 # Optional link flags
 LDFLAGS =

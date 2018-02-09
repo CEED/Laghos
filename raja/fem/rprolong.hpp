@@ -25,7 +25,7 @@ namespace mfem {
   protected:
     const RajaConformingProlongationOperator* pmat = NULL;
   public:
-    RajaProlongationOperator(const RajaConformingProlongationOperator* Op);
+    RajaProlongationOperator(const RajaConformingProlongationOperator*);
     void Mult(const RajaVector& x, RajaVector& y) const;
     void MultTranspose(const RajaVector& x, RajaVector& y) const ;
   };

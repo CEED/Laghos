@@ -115,8 +115,7 @@ private:
 public:
    RajaMassOperator(RajaFiniteElementSpace &fes_,
                     const IntegrationRule &integ_rule_,
-                    QuadratureData *quad_data_,
-                    const bool share);
+                    QuadratureData *quad_data_);
   ~RajaMassOperator();
    void Setup();
    void SetEssentialTrueDofs(Array<int> &dofs);
@@ -143,8 +142,7 @@ public:
    RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                      RajaFiniteElementSpace &l2fes_,
                      const IntegrationRule &integ_rule,
-                     const QuadratureData *quad_data_,
-                     const bool share);
+                     const QuadratureData *quad_data_);
    void Setup();
    void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
    void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;

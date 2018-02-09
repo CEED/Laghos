@@ -66,7 +66,8 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
   push();
   Mesh& mesh = *(fes.GetMesh());
-  const bool geom_to_allocate = (!geom) || rconfig::NeedUpdate(mesh);
+  const bool geom_to_allocate =
+    (!geom) || rconfig::Get().NeedUpdate(mesh.GetSequence());
   if (geom_to_allocate) geom=new RajaGeometry();
   if (!mesh.GetNodes()) mesh.SetCurvature(1, false, -1, Ordering::byVDIM);
   GridFunction& nodes = *(mesh.GetNodes());

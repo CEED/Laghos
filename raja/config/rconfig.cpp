@@ -18,13 +18,22 @@
 namespace mfem {
 
   // ***************************************************************************
-  bool rconfig::setupDevice(MPI_Session &mpi){
-#if defined(__NVCC__)
+  void rconfig::Setup(const int _mpi_rank,
+                      const int _mpi_size,
+                      const bool _cuda,
+                      const bool _uvm,
+                      const bool _share,
+                      const bool _like_occa){
+    mpi_rank=_mpi_rank;
+    mpi_size=_mpi_size;
+    uvm=_uvm;
+    cuda=_cuda;
+    share=_share;
+    like_occa=_like_occa;
+#if defined(__NVCC__) 
     CUdevice cuDevice;
     CUcontext cuContext;
-    const int mpi_rank = mpi.WorldRank();
-    const int mpi_size = mpi.WorldSize();
-    const int device = mpi_rank;
+    const int device = 0; // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -38,7 +47,7 @@ namespace mfem {
     { // Check if we have enough devices for all ranks
       int gpu_n;
       checkCudaErrors(cudaGetDeviceCount(&gpu_n));
-      if (mpi.Root())
+      if (mpi_rank==0)
         printf("\033[32m[laghos] CUDA device count: %i\033[m\n", gpu_n);
       assert(gpu_n>=mpi_size);
     }
@@ -55,27 +64,25 @@ namespace mfem {
     }
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
 #endif
-    return true;
   }
 
   // ***************************************************************************
   bool rconfig::IAmAlone() {
     if (like_occa) return false;
-    return world_size==1;
+    return mpi_size==1;
   }
 
   // ***************************************************************************
-  bool rconfig::NeedUpdate(Mesh &mesh) {
-    //if (like_occa) return true;
-    assert(mesh.GetSequence()==0);
-    return (mesh.GetSequence()!=0);
+  bool rconfig::NeedUpdate(const int sequence) {
+    if (like_occa) return true;
+    assert(sequence==0);
+    return (sequence!=0);
   }
 
   // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
-    //if (like_occa) return false;
-    //return (cuda)?false:true;
-    return false; // On force pour l'instant
+    if (like_occa) return true;
+    return (cuda)?false:true;
   }
-
+  
 } // namespace mfem

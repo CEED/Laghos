@@ -23,13 +23,13 @@ namespace mfem {
   void RajaProlongationOperator::Mult(const RajaVector& x,
                                       RajaVector& y) const {
     push();
-    if (rconfig::IAmAlone()){
+    if (rconfig::Get().IAmAlone()){
       y=x;
       pop();
       return;
     }
     
-    if (!rconfig::DoHostConformingProlongationOperator()){
+    if (!rconfig::Get().DoHostConformingProlongationOperator()){
       //assert(false);
       pmat->d_Mult(x, y);
       pop();
@@ -59,13 +59,13 @@ namespace mfem {
   void RajaProlongationOperator::MultTranspose(const RajaVector& x,
                                                RajaVector& y) const {
     push();
-    if (rconfig::IAmAlone()){
+    if (rconfig::Get().IAmAlone()){
       y=x;
       pop();
       return;
     }
     
-    if (!rconfig::DoHostConformingProlongationOperator()){
+    if (!rconfig::Get().DoHostConformingProlongationOperator()){
       //assert(false);
       pmat->d_MultTranspose(x, y);
       pop();

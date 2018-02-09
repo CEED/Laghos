@@ -17,14 +17,10 @@
 #define LAGHOS_RAJA_KERNELS_FORALL
 
 // *****************************************************************************
-extern "C" bool cuda;
-
-// *****************************************************************************
 #define ELEMENT_BATCH 10
 #define M2_ELEMENT_BATCH 32
 #define A2_ELEMENT_BATCH 1
 #define A2_QUAD_BATCH 1
-
 
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
@@ -44,7 +40,7 @@ const int CUDA_BLOCK_SIZE = 256;
 #define ReduceForall(i,max,body) \
   RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define forall(i,max,body)                                        \
-  if (cuda)                                                       \
+  if (rconfig::Get().Cuda())                                            \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});

@@ -18,30 +18,6 @@
 // *****************************************************************************
 #ifdef __NVCC__
 #include <cub/cub.cuh>
-/*__attribute__((unused))
-static double cu_vector_min(const int N, const double* __restrict vec) {
-  unsigned int v=N;
-  unsigned int nBitInN=0;
-  for(;v;nBitInN++) v&=v-1;
-  const int nBytes = nBitInN*sizeof(double);
-  double *h_red=(double*)::malloc(nBytes);
-  double *d_red;
-  checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_red, nBytes));
-  for(int i=0;i<nBitInN;i+=1) h_red[i] = __builtin_inff();
-  checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_red,h_red,nBytes));
-  for(unsigned int k=1, v=N,vof7=0,kof7=0;v;v>>=1,k<<=1){
-    if (!(v&1)) continue;
-    reduceMin(k,&vec[vof7],&d_red[kof7]);
-    kof7++;
-    vof7+=k;
-  }
-  checkCudaErrors(cuMemcpyDtoH(h_red,(CUdeviceptr)d_red,nBytes));
-  cudaFree(d_red);
-  for(int i=1;i<nBitInN;i+=1)
-    h_red[0]=h_red[0]<h_red[i]?h_red[0]:h_red[i];
-  //printf("\033[32m[vector_min] %.14e\033[m\n",h_red[0]);
-  return h_red[0];
-  }*/
 
 // *****************************************************************************
 static double cub_vector_min(const int N,
@@ -75,7 +51,7 @@ double vector_min(const int N,
                   const double* __restrict vec) {
   push(min,Aqua);
 #ifdef __NVCC__
-  if (cuda){
+  if (mfem::rconfig::Get().Cuda()){
     const double result = cub_vector_min(N,vec);
     pop();
     return result;

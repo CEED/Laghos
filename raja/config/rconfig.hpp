@@ -16,18 +16,42 @@
 #ifndef LAGHOS_RAJA_CONFIG
 #define LAGHOS_RAJA_CONFIG
 
-extern bool cuda;
-extern int world_size;
-extern bool like_occa;
-
 namespace mfem {
+
+  // ***************************************************************************
+  // * Configuration class for RAJA
+  // ***************************************************************************
   class rconfig{
+  private:
+    int mpi_rank=0;
+    int mpi_size=0;
+    bool uvm=false;
+    bool cuda=false;
+    bool share=false;
+    bool like_occa=false;
+    // *************************************************************************
+  private:
+    rconfig(){}
+    rconfig(rconfig const&);
+    void operator=(rconfig const&);
+    // *************************************************************************
   public:
-    static bool setupDevice(MPI_Session&);
-    static bool IAmAlone();
-    static bool NeedUpdate(Mesh&);
-    static bool DoHostConformingProlongationOperator();
-  };  
+    static rconfig& Get(){
+      static rconfig rconfig_singleton;
+      return rconfig_singleton;
+    }
+    void Setup(const int,const int,const bool,const bool,const bool,const bool);
+    // *************************************************************************
+    bool IAmAlone();
+    bool NeedUpdate(const int);
+    bool DoHostConformingProlongationOperator();
+    // *************************************************************************
+    inline bool Uvm() { return uvm; }
+    inline bool Cuda() { return cuda; }
+    inline bool Share() { return share; }
+    inline bool LikeOcca() { return like_occa; }
+  };
+  
 } // namespace mfem
 
 #endif // LAGHOS_RAJA_CONFIG
