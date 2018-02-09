@@ -110,9 +110,9 @@ protected:
 
    mutable TimingData timer;
 
-   void ComputeMaterialProperties(int nvalues, const double gamma[],
-                                  const double rho[], const double e[],
-                                  double p[], double cs[]) const
+   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
+                                          const double rho[], const double e[],
+                                          double p[], double cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
