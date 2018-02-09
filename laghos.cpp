@@ -63,6 +63,8 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 int problem = 0;
+
+bool uvm = false;
 bool cuda = false;
 int world_size = 0;
 bool like_occa = false;
@@ -87,8 +89,7 @@ int main(int argc, char *argv[])
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5; 
-//#warning CFL @ 0.1
+   double t_final = 0.5;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
@@ -99,7 +100,6 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    bool share = false;
-//#warning dot test @ true
    bool dot = false;
    const char *basename = "results/Laghos";
 
@@ -143,6 +143,8 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels.");
+   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
+                  "Enable or disable CUDA managed alloc.");
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels.");
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
@@ -163,9 +165,7 @@ int main(int argc, char *argv[])
 #ifndef __RAJA__
    cuda=true;
 #endif
-   if (cuda) {
-     rconfig::setupDevice(mpi);
-   }
+   if (cuda) rconfig::setupDevice(mpi);
 #endif
    
    // **************************************************************************

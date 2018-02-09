@@ -17,6 +17,7 @@
 #define LAGHOS_RAJA_MALLOC
 
 // ***************************************************************************
+extern bool uvm;
 extern bool cuda;
 
 namespace mfem {
@@ -31,9 +32,11 @@ template<class T> struct rmalloc{
 #ifdef __NVCC__
     void *ptr;
     push(new,Purple);
-    cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
-//#warning using cuMemAllocManaged
-//    cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
+    if (!uvm){
+      cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
+    }else{
+      cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
+    }
     pop();
     return ptr;
 #endif // __NVCC__

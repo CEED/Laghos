@@ -18,24 +18,12 @@
 namespace mfem {
 
   // ***************************************************************************
-  bool rconfig::setupDevice(MPI_Session mpi){
-/*    const int dev = 0;
-    CUdevice cuDevice;
-    CUcontext cuContext;
-    cuInit(0);
-    cuDeviceGet(&cuDevice,dev);
-    int major, minor;
-    char name[128];
-    cuDeviceComputeCapability(&major, &minor,dev);
-    cuDeviceGetName(name, 128, cuDevice);
-    printf("\033[32m[laghos] Using Device %d: %s, sm_%d.%d\033[m\n",dev, name, major, minor);
-    cuCtxCreate(&cuContext, mpi.WorldRank(), cuDevice);
-*/
+  bool rconfig::setupDevice(MPI_Session &mpi){
 #if defined(__NVCC__)
     CUdevice cuDevice;
     CUcontext cuContext;
-    const int mpi_rank = 0;//mpi.WorldRank();
-    const int mpi_size = 1;//mpi.WorldSize();
+    const int mpi_rank = mpi.WorldRank();
+    const int mpi_size = mpi.WorldSize();
     const int device = mpi_rank;
     
     // Initializes the driver API
@@ -55,7 +43,7 @@ namespace mfem {
       assert(gpu_n>=mpi_size);
     }
     
-    //MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     { // Check the compute capability of the device
       char name[128];
