@@ -31,7 +31,7 @@
 //
 //    V. Dobrev, Tz. Kolev and R. Rieben, "High-order curvilinear finite element
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
-//    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
+//    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
 //    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
+   int partition_type = 111;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -131,6 +132,15 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&partition_type, "-pt", "--partition",
+                  "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
+                  "Here x,y,z are relative task ratios in each direction.\n\t"
+                  "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
+                  "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
+                  "NOTE: the serially refined mesh must have the appropriate number\n\t"
+                  "of zones in each direction, e.g., the number of zones in direction x\n\t"
+                  "must be divisible by the number of MPI tasks in direction x.\n\t"
+                  "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.Parse();
    if (!args.Good())
    {
@@ -156,14 +166,59 @@ int main(int argc, char *argv[])
 
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
-   const int num_tasks = mpi.WorldSize();
-   const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+   const int num_tasks = mpi.WorldSize(); int unit;
    int *nxyz = new int[dim];
-   int product = 1;
-   for (int d = 0; d < dim; d++)
+   switch (partition_type)
    {
-      nxyz[d] = partitions;
-      product *= partitions;
+      case 11:
+      case 111:
+         unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
+         if (dim == 2) { nxyz[2] = 0; }
+         break;
+      case 21: // 2D
+         unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
+         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = 0;
+         break;
+      case 211: // 3D.
+         unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
+         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 221: // 3D.
+         unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
+         nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 311: // 3D.
+         unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 3 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 321: // 3D.
+         unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
+         nxyz[0] = 3 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 322: // 3D.
+         unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 3 * unit / 2; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 432: // 3D.
+         unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
+         break;
+      default:
+         if (myid == 0)
+         {
+            cout << "Unknown partition type: " << partition_type << '\n';
+         }
+         delete mesh;
+         MPI_Finalize();
+         return 3;
+   }
+   int product = 1;
+   for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
+   if (myid == 0)
+   {
+      cout << nxyz[0] << " " << nxyz[1] << " " << nxyz[2] << " "
+           << product << " " << num_tasks << endl;
    }
    if (product == num_tasks)
    {
@@ -191,6 +246,13 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+
+   int nzones = pmesh->GetNE(), nzones_min, nzones_max;
+   MPI_Reduce(&nzones, &nzones_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
+   MPI_Reduce(&nzones, &nzones_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
+   if (myid == 0)
+   { cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl; }
+
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -353,7 +415,7 @@ int main(int argc, char *argv[])
                      "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
-   // Save data for VisIt visualization
+   // Save data for VisIt visualization.
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {

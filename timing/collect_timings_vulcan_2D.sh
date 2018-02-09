@@ -3,8 +3,12 @@
 options=( 'pa' 'fa' )
 
 parallel_refs=0
+minL2dof=200
 maxL2dof=1000000
-nproc=4
+
+# To get Cartesian mesh partitions, use 1/4/16/64/256 ... nodes.
+nodes=4
+nproc=$(( 16 * nodes ))
 
 mesh_file=../data/square01_quad.mesh
 outfile=timings_2d
@@ -31,16 +35,14 @@ BEGIN { ref = 0 }
 END { printf("%d %d %d %d %.8f %.8f %.8f %.8f %.8f\n", order, ref, h1_dofs, l2_dofs, h1_cg_rate, l2_cg_rate, forces_rate, update_quad_rate, total_time) }'
 }
 
-[ -r $outfile ] && cp $outfile $outfile.bak
-echo "# order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[0]}
-echo "# order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"${options[1]}
 for method in "${options[@]}"; do
+  echo "# order refs h1_dofs l2_dofs h1_cg_rate l2_cg_rate forces_rate update_quad_rate total_time" > $outfile"_"$method
   for torder in {0..4}; do
     for sref in {0..10}; do
        nzones=$(( 4**(sref+1) ))
        nL2dof=$(( nzones*(torder+1)**2 ))
-       if (( nproc <= nzones )) && (( nL2dof < maxL2dof )) ; then
-         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method $outfile"_"${options[0]}
+       if (( nproc <= nzones )) && (( nL2dof > minL2dof )) && (( nL2dof < maxL2dof )) ; then
+         echo "np"$nproc "Q"$((torder+1))"Q"$torder $sref"ref" $method $outfile"_"$method
          echo $(run_case srun -n $nproc ../laghos -$method -p 1 -tf 0.8 \
                        --cg-tol 0 --cg-max-steps 50 \
                        --max-steps 10 \

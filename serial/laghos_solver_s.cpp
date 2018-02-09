@@ -128,7 +128,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       }
    }
 
-   // Initial local mesh size (assumes similar cells).
+   // Initial local mesh size (assumes all mesh elements are of the same type).
    double area = 0.0;
    Mesh *m = H1FESpace.GetMesh();
    for (int i = 0; i < nzones; i++) { area += m->GetElementVolume(i); }
@@ -378,8 +378,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    *e_b   = new double[nqp_batch],
    *p_b   = new double[nqp_batch],
    *cs_b  = new double[nqp_batch];
-   // Jacobians of reference->physical transformations for all quadrature
-   // points in the batch.
+   // Jacobians of reference->physical transformations for all quadrature points
+   // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nqp_batch];
    for (int b = 0; b < nbatches; b++)
    {

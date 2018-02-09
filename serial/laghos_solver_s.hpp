@@ -73,7 +73,7 @@ protected:
    mutable bool quad_data_is_current;
 
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
-   // assembled in each time step and then it's used to compute the final
+   // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
 
@@ -111,7 +111,7 @@ public:
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
-   // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
+   // Calls UpdateQuadratureData to compute the new quad_data.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { quad_data_is_current = false; }

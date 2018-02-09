@@ -86,7 +86,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  double cgt, int cgiter)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
-     H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
      ess_tdofs(essential_tdofs),
      dim(h1_fes.GetMesh()->Dimension()),
      nzones(h1_fes.GetMesh()->GetNE()),
@@ -101,7 +100,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1compFESpace), locEMassPA(&quad_data, l2_fes),
+     VMassPA(&quad_data, H1FESpace), locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
    GridFunctionCoefficient rho_coeff(&rho0);
@@ -144,7 +143,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       }
    }
 
-   // Initial local mesh size (assumes similar cells).
+   // Initial local mesh size (assumes all mesh elements are of the same type).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;
    ParMesh *pm = H1FESpace.GetParMesh();
@@ -239,65 +238,40 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       timer.sw_force.Start();
       ForcePA.Mult(one, rhs);
       timer.sw_force.Stop();
-      timer.dof_tstep += H1FESpace.GlobalTrueVSize();
       rhs.Neg();
 
-      // Partial assembly solve for each velocity component.
-      const int size = H1compFESpace.GetVSize();
-      for (int c = 0; c < dim; c++)
-      {
-         Vector rhs_c(rhs.GetData() + c*size, size),
-                dv_c(dv.GetData() + c*size, size);
-
-         Array<int> c_tdofs;
-         Array<int> ess_bdr(H1FESpace.GetParMesh()->bdr_attributes.Max());
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-         // we must enforce v_x/y/z = 0 for the velocity components.
-         ess_bdr = 0; ess_bdr[c] = 1;
-         // Essential true dofs as if there's only one component.
-         H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-
-         dv_c = 0.0;
-         Vector B(H1compFESpace.TrueVSize()), X(H1compFESpace.TrueVSize());
-         H1compFESpace.Dof_TrueDof_Matrix()->MultTranspose(rhs_c, B);
-         H1compFESpace.GetRestrictionMatrix()->Mult(dv_c, X);
-
-         VMassPA.EliminateRHS(c_tdofs, B);
-
-         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-         cg.SetOperator(VMassPA);
-         cg.SetRelTol(cg_rel_tol);
-         cg.SetAbsTol(0.0);
-         cg.SetMaxIter(cg_max_iter);
-         cg.SetPrintLevel(-1);
-         timer.sw_cgH1.Start();
-         cg.Mult(B, X);
-         timer.sw_cgH1.Stop();
-         timer.H1dof_iter += cg.GetNumIterations() *
-                             H1compFESpace.GlobalTrueVSize();
-         H1compFESpace.Dof_TrueDof_Matrix()->Mult(X, dv_c);
-      }
+      Operator *cVMassPA;
+      VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
+      CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+      cg.SetOperator(*cVMassPA);
+      cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+      cg.SetMaxIter(cg_max_iter);
+      cg.SetPrintLevel(0);
+      timer.sw_cgH1.Start();
+      cg.Mult(B, X);
+      timer.sw_cgH1.Stop();
+      timer.H1cg_iter += cg.GetNumIterations();
+      VMassPA.RecoverFEMSolution(X, rhs, dv);
+      delete cVMassPA;
    }
    else
    {
       timer.sw_force.Start();
       Force.Mult(one, rhs);
       timer.sw_force.Stop();
-      timer.dof_tstep += H1FESpace.GlobalTrueVSize();
       rhs.Neg();
+
       HypreParMatrix A;
-      dv = 0.0;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1FESpace.GetParMesh()->GetComm());
       cg.SetOperator(A);
-      cg.SetRelTol(1e-8); cg.SetAbsTol(0.0);
-      cg.SetMaxIter(200);
+      cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+      cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(0);
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
-      timer.H1dof_iter += cg.GetNumIterations() *
-                          H1compFESpace.GlobalTrueVSize();
+      timer.H1cg_iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 
@@ -318,7 +292,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       timer.sw_force.Start();
       ForcePA.MultTranspose(v, e_rhs);
       timer.sw_force.Stop();
-      timer.dof_tstep += L2FESpace.GlobalTrueVSize();
 
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
@@ -338,7 +311,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       timer.sw_force.Start();
       Force.MultTranspose(v, e_rhs);
       timer.sw_force.Stop();
-      timer.dof_tstep += L2FESpace.GlobalTrueVSize();
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
       {
@@ -409,34 +381,39 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
-   double mydata[2], alldata[2];
+   HYPRE_Int mydata[2], alldata[2];
    mydata[0] = timer.L2dof_iter;
    mydata[1] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 2, MPI_DOUBLE, MPI_SUM, 0, H1FESpace.GetComm());
+   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0,
+              H1FESpace.GetComm());
 
    if (IamRoot)
    {
+      const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
+                      L2gsize = L2FESpace.GlobalTrueVSize();
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * timer.H1dof_iter / rt_max[0] << endl;
+           << 1e-6 * H1gsize * timer.H1cg_iter / rt_max[0] << endl;
       cout << endl;
       cout << "CG (L2) total time: " << rt_max[1] << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
            << 1e-6 * alldata[0] / rt_max[1] << endl;
       cout << endl;
+      // The Force operator is applied twice per time step, on the H1 and the L2
+      // vectors, respectively.
       cout << "Forces total time: " << rt_max[2] << endl;
       cout << "Forces rate (megadofs x timesteps / second): "
-           << 1e-6 * timer.dof_tstep / rt_max[2] << endl;
+           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[2] << endl;
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << 1e-6 * alldata[1] / rt_max[3] << endl;
+           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
-           << 1e-6 * H1FESpace.GlobalTrueVSize() * steps / rt_max[4] << endl;
+           << 1e-6 * H1gsize * steps / rt_max[4] << endl;
    }
 }
 
@@ -475,8 +452,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    *e_b   = new double[nqp_batch],
    *p_b   = new double[nqp_batch],
    *cs_b  = new double[nqp_batch];
-   // Jacobians of reference->physical transformations for all quadrature
-   // points in the batch.
+   // Jacobians of reference->physical transformations for all quadrature points
+   // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nqp_batch];
    for (int b = 0; b < nbatches; b++)
    {
@@ -633,7 +610,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    quad_data_is_current = true;
 
    timer.sw_qdata.Stop();
-   timer.quad_tstep += nzones * nqp;
+   timer.quad_tstep += nzones;
 }
 
 } // namespace hydrodynamics

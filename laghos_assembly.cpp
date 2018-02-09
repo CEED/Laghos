@@ -360,7 +360,7 @@ void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
    else { MFEM_ABORT("Unsupported dimension"); }
 }
 
-// Force matrix action on quadrilateral elements in 2D
+// Force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -429,7 +429,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Force matrix action on hexahedral elements in 3D
+// Force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -590,7 +590,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Transpose force matrix action on quadrilateral elements in 2D
+// Transpose force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                                         Vector &vecL2) const
 {
@@ -658,7 +658,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
    }
 }
 
-// Transpose force matrix action on hexahedral elements in 3D
+// Transpose force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -812,34 +812,18 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   if (ess_tdofs)
+   const int comp_size = FESpace.GetNDofs();
+   for (int c = 0; c < dim; c++)
    {
-      Vector xx = x;
-      for (int i = 0; i < ess_tdofs->Size(); i++)
-      {
-         const int idx = (*ess_tdofs)[i];
-         xx(idx) = 0.0;
-      }
-      x_gf.Distribute(xx);
-   }
-   else { x_gf.Distribute(x); }
-
-   if      (dim == 2) { MultQuad(x_gf, y_gf); }
-   else if (dim == 3) { MultHex(x_gf, y_gf); }
-   else { MFEM_ABORT("Unsupported dimension"); }
-   FESpace.Dof_TrueDof_Matrix()->MultTranspose(y_gf, y);
-
-   if (ess_tdofs)
-   {
-      for (int i = 0; i < ess_tdofs->Size(); i++)
-      {
-         const int idx = (*ess_tdofs)[i];
-         y(idx) = 0.0;
-      }
+      Vector x_comp(x.GetData() + c * comp_size, comp_size),
+             y_comp(y.GetData() + c * comp_size, comp_size);
+      if      (dim == 2) { MultQuad(x_comp, y_comp); }
+      else if (dim == 3) { MultHex(x_comp, y_comp); }
+      else { MFEM_ABORT("Unsupported dimension"); }
    }
 }
 
-// Mass matrix action on quadrilateral elements in 2D
+// Mass matrix action on quadrilateral elements in 2D.
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
    const H1_QuadrilateralElement *fe_H1 =

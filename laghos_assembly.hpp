@@ -136,14 +136,14 @@ private:
    QuadratureData *quad_data;
    ParFiniteElementSpace &H1FESpace, &L2FESpace;
 
-   // Force matrix action on quadrilateral elements in 2D
+   // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
-   // Force matrix action on hexahedral elements in 3D
+   // Force matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &vecL2, Vector &vecH1) const;
 
-   // Transpose force matrix action on quadrilateral elements in 2D
+   // Transpose force matrix action on quadrilateral elements in 2D.
    void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
-   // Transpose force matrix action on hexahedral elements in 3D
+   // Transpose force matrix action on hexahedral elements in 3D.
    void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
 public:
@@ -167,10 +167,6 @@ private:
    QuadratureData *quad_data;
    ParFiniteElementSpace &FESpace;
 
-   Array<int> *ess_tdofs;
-
-   mutable ParGridFunction x_gf, y_gf;
-
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
    // Mass matrix action on hexahedral elements in 3D.
@@ -178,20 +174,18 @@ private:
 
 public:
    MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : Operator(fes.TrueVSize()),
+      : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes), ess_tdofs(NULL),
-        x_gf(&fes), y_gf(&fes)
+        quad_data(quad_data_), FESpace(fes)
    { }
 
-   // Mass matrix action. We work with one velocity component at a time.
+   // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
 
-   void EliminateRHS(Array<int> &dofs, Vector &b)
-   {
-      ess_tdofs = &dofs;
-      for (int i = 0; i < dofs.Size(); i++) { b(dofs[i]) = 0.0; }
-   }
+   virtual const Operator *GetProlongation() const
+   { return FESpace.GetProlongationMatrix(); }
+   virtual const Operator *GetRestriction() const
+   { return FESpace.GetRestrictionMatrix(); }
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.
