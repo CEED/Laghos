@@ -13,26 +13,31 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_RAJA_CONFORM_PROLONGATIONG_OP
-#define LAGHOS_RAJA_CONFORM_PROLONGATION_OP
+#ifndef LAGHOS_RAJA_COMMUNICATION
+#define LAGHOS_RAJA_COMMUNICATION
+
+#ifdef MFEM_USE_MPI
+#include <mpi.h>
+#endif
 
 namespace mfem {
-  
-  // ***************************************************************************
-  // * RajaConformingProlongationOperator
-  //  **************************************************************************
-  class RajaConformingProlongationOperator : public RajaOperator{
-  protected:
-    Array<int> external_ldofs;
-    RajaCommunicator *gc;
+
+  class RajaCommunicator : public GroupCommunicator{
   public:
-    RajaConformingProlongationOperator(ParFiniteElementSpace &pfes);
-    void d_Mult(const RajaVector &x, RajaVector &y) const;
-    void d_MultTranspose(const RajaVector &x, RajaVector &y) const;  
-    void h_Mult(const Vector &x, Vector &y) const;
-    void h_MultTranspose(const Vector &x, Vector &y) const;
-  };
-  
+    RajaCommunicator(GroupTopology &gt);
+    ~RajaCommunicator();
+    
+    template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
+    template <class T> const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
+    template <class T> const T *d_ReduceGroupFromBuffer(const T*,T*,int,int,void (*)(OpData<T>)) const;
+    
+    template <class T> void d_BcastBegin(T*,int);
+    template <class T> void d_BcastEnd(T*, int);
+    
+    template <class T> void d_ReduceBegin(const T*);
+    template <class T> void d_ReduceEnd(T*,int,void (*)(OpData<T>));
+ };
+
 } // mfem
 
-#endif // LAGHOS_RAJA_CONFORM_PROLONGATION
+#endif // LAGHOS_RAJA_SOLVERS

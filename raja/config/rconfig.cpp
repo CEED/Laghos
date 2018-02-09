@@ -16,18 +16,74 @@
 #include "../raja.hpp"
 
 namespace mfem {
+
+  // ***************************************************************************
+  bool rconfig::setupDevice(MPI_Session mpi){
+/*    const int dev = 0;
+    CUdevice cuDevice;
+    CUcontext cuContext;
+    cuInit(0);
+    cuDeviceGet(&cuDevice,dev);
+    int major, minor;
+    char name[128];
+    cuDeviceComputeCapability(&major, &minor,dev);
+    cuDeviceGetName(name, 128, cuDevice);
+    printf("\033[32m[laghos] Using Device %d: %s, sm_%d.%d\033[m\n",dev, name, major, minor);
+    cuCtxCreate(&cuContext, mpi.WorldRank(), cuDevice);
+*/
+#if defined(__NVCC__)
+    CUdevice cuDevice;
+    CUcontext cuContext;
+    const int mpi_rank = 0;//mpi.WorldRank();
+    const int mpi_size = 1;//mpi.WorldSize();
+    const int device = mpi_rank;
     
+    // Initializes the driver API
+    // Must be called before any other function from the driver API
+    // Currently, the Flags parameter must be 0. 
+    const unsigned int Flags = 0; // parameter must be 0
+    cuInit(Flags);
+    
+    // Returns properties for the selected device
+    cuDeviceGet(&cuDevice,device);
+
+    { // Check if we have enough devices for all ranks
+      int gpu_n;
+      checkCudaErrors(cudaGetDeviceCount(&gpu_n));
+      if (mpi.Root())
+        printf("\033[32m[laghos] CUDA device count: %i\033[m\n", gpu_n);
+      assert(gpu_n>=mpi_size);
+    }
+    
+    //MPI_Barrier(MPI_COMM_WORLD);
+
+    { // Check the compute capability of the device
+      char name[128];
+      int major, minor;
+      cuDeviceGetName(name, 128, cuDevice);
+      cuDeviceComputeCapability(&major, &minor, device);
+      printf("\033[32m[laghos] Rank_%d => Device_%d (%s:sm_%d.%d)\033[m\n",
+             mpi_rank, device, name, major, minor);
+    }
+    cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
+#endif
+    return true;
+  }
+
+  // ***************************************************************************
   bool rconfig::IAmAlone() {
     if (like_occa) return false;
     return world_size==1;
   }
-  
+
+  // ***************************************************************************
   bool rconfig::NeedUpdate(Mesh &mesh) {
     //if (like_occa) return true;
     assert(mesh.GetSequence()==0);
     return (mesh.GetSequence()!=0);
   }
-    
+
+  // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
     //if (like_occa) return false;
     //return (cuda)?false:true;

@@ -23,8 +23,9 @@ extern bool like_occa;
 namespace mfem {
   class rconfig{
   public:
+    static bool setupDevice(MPI_Session);
     static bool IAmAlone();
-    static bool NeedUpdate(Mesh &mesh);
+    static bool NeedUpdate(Mesh&);
     static bool DoHostConformingProlongationOperator();
   };  
 } // namespace mfem

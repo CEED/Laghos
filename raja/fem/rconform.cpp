@@ -18,14 +18,14 @@ namespace mfem {
   RajaConformingProlongationOperator::RajaConformingProlongationOperator
   (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
                                  external_ldofs(),
-                                 gc(pfes.GroupComm()){
+                                 gc(static_cast<RajaCommunicator*>(&pfes.GroupComm())){
     MFEM_VERIFY(pfes.Conforming(), "");
     Array<int> ldofs;
-    Table &group_ldof = gc.GroupLDofTable();
+    Table &group_ldof = gc->GroupLDofTable();
     external_ldofs.Reserve(Height()-Width());
     for (int gr = 1; gr < group_ldof.Size(); gr++)
     {
-      if (!gc.GetGroupTopology().IAmMaster(gr))
+      if (!gc->GetGroupTopology().IAmMaster(gr))
       {
         ldofs.MakeRef(group_ldof.GetRow(gr), group_ldof.RowSize(gr));
         external_ldofs.Append(ldofs);
@@ -33,7 +33,7 @@ namespace mfem {
     }
     external_ldofs.Sort();
     MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-    //gc.PrintInfo();
+    //gc->PrintInfo();
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
 
@@ -43,7 +43,7 @@ namespace mfem {
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
     push();
-    printf("\n\033[31m[d_Mult]\033[m");
+    //printf("\n\033[31m[d_Mult]\033[m");
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
     const double *d_xdata = x.GetData();
@@ -51,10 +51,10 @@ namespace mfem {
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
     push(BcastBegin);
-    gc.BcastBegin(const_cast<double*>(d_xdata), in_layout);
+    gc->d_BcastBegin(const_cast<double*>(d_xdata), in_layout);
     pop();
     push(copy);
-    int j = 0;
+    int j = 0; 
     for (int i = 0; i < m; i++)
     {
       const int end = external_ldofs[i];
@@ -77,7 +77,7 @@ namespace mfem {
     const int out_layout = 0; // 0 - output is ldofs array
     pop();
     push(BcastEnd);
-    gc.BcastEnd(d_ydata, out_layout);
+    gc->d_BcastEnd(d_ydata, out_layout);
     pop();
     pop();
   }
@@ -87,14 +87,14 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
-    printf("\n\033[31m[d_MultTranspose]\033[m");
+    //printf("\n\033[31m[d_MultTranspose]\033[m");
     MFEM_ASSERT(x.Size() == Height(), "");
     MFEM_ASSERT(y.Size() == Width(), "");
     const double *d_xdata = x.GetData();
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
     push(BcastBegin);
-    gc.ReduceBegin(d_xdata); 
+    gc->d_ReduceBegin(d_xdata); 
     pop();
     push(copy);
     int j = 0;
@@ -104,7 +104,6 @@ namespace mfem {
 #ifndef __NVCC__
       std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
 #else
-      assert(false);
       checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-i),
                                    (CUdeviceptr)(d_xdata+j),
                                    (end-j)*sizeof(double)));
@@ -121,7 +120,7 @@ namespace mfem {
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     pop();
     push(BcastEnd);
-    gc.ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
+    gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
     pop();
     pop();
   }
@@ -139,7 +138,7 @@ namespace mfem {
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
     push(BcastBegin);
-    gc.BcastBegin(const_cast<double*>(xdata), in_layout);
+    gc->BcastBegin(const_cast<double*>(xdata), in_layout);
     pop();
     push(copy);
     int j = 0;
@@ -153,7 +152,7 @@ namespace mfem {
     const int out_layout = 0; // 0 - output is ldofs array
     pop();
     push(BcastEnd);
-    gc.BcastEnd(ydata, out_layout);
+    gc->BcastEnd(ydata, out_layout);
     pop();
     pop();
   }
@@ -169,7 +168,7 @@ namespace mfem {
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();
     push(BcastBegin);
-    gc.ReduceBegin(xdata);
+    gc->ReduceBegin(xdata);
     pop();
     push(copy);
     int j = 0;
@@ -182,7 +181,7 @@ namespace mfem {
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     pop();
     push(BcastEnd);
-    gc.ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
+    gc->ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
     pop();
     pop();
   }

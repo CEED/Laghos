@@ -158,24 +158,13 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // CUDA set device & tweak options
+   // **************************************************************************
 #if defined(__NVCC__)
 #ifndef __RAJA__
    cuda=true;
 #endif
-   if (cuda){
-     const int rank = mpi.WorldRank();
-     const int dev = 0;//rank;
-     CUdevice cuDevice;
-     CUcontext cuContext;
-     cuInit(0);
-     cuDeviceGet(&cuDevice,dev);
-     int major, minor;
-     char name[128];
-     cuDeviceComputeCapability(&major, &minor, dev);
-     cuDeviceGetName(name, 128, cuDevice);
-     printf("\033[32m[laghos] Rank %d, use Device %d: %s, sm_%d.%d\033[m\n",
-            rank, dev, name, major, minor);
-     cuCtxCreate(&cuContext, mpi.WorldRank(), cuDevice);
+   if (cuda) {
+     rconfig::setupDevice(mpi);
    }
 #endif
    
@@ -210,7 +199,7 @@ int main(int argc, char *argv[])
      printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\033[m\n",size,alltime/1000.0);
      return 0;
    }
-   
+
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -260,6 +249,7 @@ int main(int argc, char *argv[])
    }
    delete [] nxyz;
    delete mesh;
+   
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }

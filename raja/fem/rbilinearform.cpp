@@ -131,13 +131,19 @@ void RajaBilinearForm::InitRHS(const Array<int>& constraintList,
 // ***************************************************************************
 void RajaBilinearForm::Mult(const RajaVector& x, RajaVector& y) const {
   push();
+  push(GlobalToLocal);
   trialFes->GlobalToLocal(x, localX);
+  pop();
   localY = 0;
+  push(MultAdd);
   const int integratorCount = (int) integrators.size();
   for (int i = 0; i < integratorCount; ++i) {
     integrators[i]->MultAdd(localX, localY);
   }
+  pop();
+  push(LocalToGlobal);
   testFes->LocalToGlobal(localY, y);
+  pop();
   pop();
 }
 

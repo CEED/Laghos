@@ -32,6 +32,8 @@ template<class T> struct rmalloc{
     void *ptr;
     push(new,Purple);
     cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
+//#warning using cuMemAllocManaged
+//    cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
     pop();
     return ptr;
 #endif // __NVCC__
@@ -46,7 +48,7 @@ template<class T> struct rmalloc{
     if (!cuda) {
       //assert(ptr!=NULL);
       //assert(ptr!=nullptr);
-      if (ptr)
+      //if (ptr)
         ::delete[] static_cast<T*>(ptr);
     }
 #ifdef __NVCC__
