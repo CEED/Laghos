@@ -26,6 +26,8 @@ void vector_xpay(const int, const double, double* restrict, const double* restri
 void vector_xsy(const int, double* restrict, const double* restrict, const double* restrict);
 void vector_axpy(const int, const double, double* restrict, const double* restrict);
 void vector_map_dofs(const int, double* restrict, const double* restrict, const int* restrict);
+template <class T>
+void vector_map_add_dofs(const int, T* restrict, const T* restrict, const int* restrict);
 void vector_clear_dofs(const int, double* restrict, const int* restrict);
 void vector_vec_sub(const int, double* restrict, const double* restrict);
 void vector_vec_add(const int, double* restrict, const double* restrict);

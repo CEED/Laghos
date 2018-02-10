@@ -17,14 +17,24 @@
 #define LAGHOS_RAJA_DBG
 
 // DBG *************************************************************************
-inline void rdbg(const char *format,...){
-#ifdef LAGHOS_DEBUG
+inline void _dbg(const char *format,...){
   va_list args;
   va_start(args, format);
   vfprintf(stdout,format,args);
   fflush(stdout);
   va_end(args);
+}
+
+inline void rdbg(const char *format,...){
+#ifdef LAGHOS_DEBUG
+  _dbg(format,...);
 #endif // LAGHOS_DEBUG
 }
+
+// *****************************************************************************
+//#define dbg(...) _dbg(__VA_ARGS__)
+#define dbg(format,...)
+
+
 
 #endif // LAGHOS_RAJA_DBG

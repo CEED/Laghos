@@ -98,8 +98,8 @@ CFLAGS = -O3 -Wall
 # No arch for Quadro M2000, sm_5.2 & GeForce GTX 1070, sm_6.1
 # sm_61, sm_5.2
 #############
-NV_ARCH = -arch=sm_61
-#NV_ARCH = -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
+#NV_ARCH = -arch=sm_61
+NV_ARCH = -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
 
 # Optional link flags
 LDFLAGS =

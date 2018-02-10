@@ -47,6 +47,7 @@ namespace mfem {
     bool DoHostConformingProlongationOperator();
     // *************************************************************************
     inline bool Uvm() { return uvm; }
+    inline bool Rank() { return mpi_rank; }
     inline bool Cuda() { return cuda; }
     inline bool Share() { return share; }
     inline bool LikeOcca() { return like_occa; }

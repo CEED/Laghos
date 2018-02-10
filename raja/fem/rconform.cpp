@@ -43,7 +43,7 @@ namespace mfem {
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
     push();
-    //printf("\n\033[31m[d_Mult]\033[m");
+    dbg("\n\033[32m[d_Mult]\033[m");
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
     const double *d_xdata = x.GetData();
@@ -87,7 +87,7 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
-    //printf("\n\033[31m[d_MultTranspose]\033[m");
+    dbg("\n\033[32m[d_MultTranspose]\033[m");
     MFEM_ASSERT(x.Size() == Height(), "");
     MFEM_ASSERT(y.Size() == Width(), "");
     const double *d_xdata = x.GetData();
@@ -98,7 +98,7 @@ namespace mfem {
     pop();
     push(copy);
     int j = 0;
-    //printf("\n\033[31m[d_MultTranspose] m=%d\033[m",m);
+    dbg("\n\033[32m[d_MultTranspose] m=%d\033[m",m);
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
 #ifndef __NVCC__

@@ -33,7 +33,7 @@ namespace mfem {
 #if defined(__NVCC__) 
     CUdevice cuDevice;
     CUcontext cuContext;
-    const int device = 0; // We still use the same device for now // mpi_rank;
+    const int device = mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -49,10 +49,11 @@ namespace mfem {
       checkCudaErrors(cudaGetDeviceCount(&gpu_n));
       if (mpi_rank==0)
         printf("\033[32m[laghos] CUDA device count: %i\033[m\n", gpu_n);
-      assert(gpu_n>=mpi_size);
+      //#warning NO assert(gpu_n>=mpi_size)
+      //assert(gpu_n>=mpi_size);
     }
     
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
 
     { // Check the compute capability of the device
       char name[128];
@@ -81,7 +82,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
-    if (like_occa) return true;
+   if (like_occa) return true;
     return (cuda)?false:true;
   }
   

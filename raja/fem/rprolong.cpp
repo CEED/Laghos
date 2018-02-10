@@ -30,10 +30,13 @@ namespace mfem {
     }
     
     if (!rconfig::Get().DoHostConformingProlongationOperator()){
+      dbg("\n\033[35m[DEVICE::Mult]\033[m");
       //assert(false);
       pmat->d_Mult(x, y);
       pop();
       return;
+    }else{
+      dbg("\n\033[35m[DEVICE::Mult]\033[m");
     }
 
     push(hostX:D2H,Red);
@@ -66,10 +69,13 @@ namespace mfem {
     }
     
     if (!rconfig::Get().DoHostConformingProlongationOperator()){
+      dbg("\n\033[35m[DEVICE::MultTranspose]\033[m");
       //assert(false);
       pmat->d_MultTranspose(x, y);
       pop();
       return;
+    }else{
+      dbg("\n\033[35m[HOST::MultTranspose]\033[m");
     }
     
     push(hostX:D2H,Red);
