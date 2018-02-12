@@ -39,10 +39,11 @@ template<class T> struct rmalloc{
     }
     pop();
     return ptr;
-#endif // __NVCC__
+#else
     // We come here when the user requests a manager,
     // but has compiled the code without NVCC
     assert(false);
+#endif // __NVCC__
   }
   
   // ***************************************************************************

@@ -283,7 +283,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
      << " dofs:" << dofs
      << " dims:" << dims
      << " quadPoints:"<<quadPoints
-     << " transpose:"  << transpose?"T":"F";
+     << " transpose:"  << (transpose?"T":"F");
   std::string hash = ss.str();
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
@@ -391,7 +391,7 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
      << " Dim:" << dims
      << " numDofs:" << numDofs
      << " numQuad:" << numQuad
-     << " transpose:"  << transpose?"T":"F";
+     << " transpose:"  << (transpose?"T":"F");
   std::string hash = ss.str();
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];

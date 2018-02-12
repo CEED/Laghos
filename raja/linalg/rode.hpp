@@ -23,7 +23,8 @@ namespace mfem {
   protected:
     RajaTimeDependentOperator *f;
   public:
-    RajaODESolver() : f(NULL) { }
+    RajaODESolver() : f(NULL){}
+    virtual ~RajaODESolver(){}
     virtual void Init(RajaTimeDependentOperator &f) { this->f = &f; }
     virtual void Step(RajaVector &x, double &t, double &dt) =0;
   };

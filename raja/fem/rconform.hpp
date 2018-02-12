@@ -13,7 +13,7 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef LAGHOS_RAJA_CONFORM_PROLONGATIONG_OP
+#ifndef LAGHOS_RAJA_CONFORM_PROLONGATION_OP
 #define LAGHOS_RAJA_CONFORM_PROLONGATION_OP
 
 namespace mfem {
@@ -35,4 +35,4 @@ namespace mfem {
   
 } // mfem
 
-#endif // LAGHOS_RAJA_CONFORM_PROLONGATION
+#endif // LAGHOS_RAJA_CONFORM_PROLONGATION_OP
