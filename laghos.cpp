@@ -482,7 +482,10 @@ int main(int argc, char *argv[])
       ode_solver->Step(S, t, dt);
       steps++;
       //cuProfilerStop();
-      
+//#warning exit
+//      MPI_Finalize();
+//      exit(0);
+
       // Make sure that the mesh corresponds to the new solution state.
       //dbg("[7mMake sure that the mesh corresponds to the new solution state.");
       //#warning NewNodes x_gf

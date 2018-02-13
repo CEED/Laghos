@@ -18,8 +18,9 @@ namespace mfem {
   RajaConformingProlongationOperator::RajaConformingProlongationOperator
   (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
                                  external_ldofs(),
+//                                 gc(new RajaCommunicator(pfes)){
                                  gc(new RajaCommD(pfes)){
-    MFEM_VERIFY(pfes.Conforming(), "");
+   MFEM_VERIFY(pfes.Conforming(), "");
     Array<int> ldofs;
     Table &group_ldof = gc->GroupLDofTable();
     external_ldofs.Reserve(Height()-Width());
@@ -58,7 +59,8 @@ namespace mfem {
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
     gc->d_BcastBegin(const_cast<double*>(d_xdata), in_layout);
-    int j = 0; 
+    int j = 0;
+    const CUstream s = rconfig::Get().Stream();
     for (int i = 0; i < m; i++)
     {
       const int end = external_ldofs[i];
@@ -67,16 +69,16 @@ namespace mfem {
 #else
       checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
                                         (CUdeviceptr)(d_xdata+j-i),
-                                        (end-j)*sizeof(double),rconfig::Get().Stream()));
+                                        (end-j)*sizeof(double),s));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
-                                 (CUdeviceptr)(d_xdata+j-m),
-                                 (Width()+m-j)*sizeof(double)));
+    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
+                                      (CUdeviceptr)(d_xdata+j-m),
+                                      (Width()+m-j)*sizeof(double),s));
 #endif
     const int out_layout = 0; // 0 - output is ldofs array
     gc->d_BcastEnd(d_ydata, out_layout);
@@ -98,23 +100,24 @@ namespace mfem {
     gc->d_ReduceBegin(d_xdata);
     int j = 0;
     dbg("\n\033[32m[d_MultTranspose] m=%d\033[m",m);
+    const CUstream s = rconfig::Get().Stream();
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
 #ifndef __NVCC__
       std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
 #else
-      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-i),
+      checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-i),
                                         (CUdeviceptr)(d_xdata+j),
-                                        (end-j)*sizeof(double)));
+                                        (end-j)*sizeof(double),s));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-m),
+    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-m),
                                       (CUdeviceptr)(d_xdata+j),
-                                      (Height()-j)*sizeof(double)));
+                                      (Height()-j)*sizeof(double),s));
 #endif
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);

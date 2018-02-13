@@ -33,8 +33,8 @@ namespace mfem {
 #if defined(__NVCC__) 
     CUdevice cuDevice;
     CUcontext cuContext;
-#warning device tied to 0
-    const int device = 0;//mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
+//#warning device tied to 0
+    const int device = mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -53,8 +53,6 @@ namespace mfem {
       //#warning NO assert(gpu_n>=mpi_size)
       //assert(gpu_n>=mpi_size);
     }
-    
-    //MPI_Barrier(MPI_COMM_WORLD);
 
     { // Check the compute capability of the device
       char name[128];
@@ -77,6 +75,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::NeedUpdate(const int sequence) {
+    if (like_occa) return false;
     if (like_occa) return true;
     assert(sequence==0);
     return (sequence!=0);

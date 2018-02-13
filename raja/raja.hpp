@@ -42,7 +42,7 @@
 // LAGHOS/raja/general *********************************************************
 #include "general/rmalloc.hpp"
 #include "general/rarray.hpp"
-#include "general/rcommunication.hpp"
+#include "general/rcommunicator.hpp"
 
 // LAGHOS/raja/linalg **********************************************************
 #include "linalg/rvector.hpp"

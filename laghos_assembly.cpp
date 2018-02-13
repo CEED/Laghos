@@ -142,22 +142,22 @@ void RajaMassOperator::EliminateRHS(RajaVector &b)
 // *************************************************************************
 void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 {
-   push(Wheat);
+  push(Wheat);
    
-   distX = x;
+  distX = x;
    
-   if (ess_tdofs_count)
-   {
-      distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-   }
+  if (ess_tdofs_count)
+  {
+    distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+  }
 
-   massOperator->Mult(distX, y);
-   
-   if (ess_tdofs_count)
-   {
-      y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-   }
-   pop();
+  massOperator->Mult(distX, y);
+
+  if (ess_tdofs_count)
+  {
+    y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+  }
+  pop();
 }
 
   

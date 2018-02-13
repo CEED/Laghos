@@ -25,69 +25,55 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::~RajaCommD(){ }
 
+  
+  // ***************************************************************************
+  // * kCopyFromTable
+  // ***************************************************************************
+  template <class T>
+  static __global__ void kCopyFromTable(const int N, T* adrs, T *value){
+    const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+    if (tid>=N) return;
+  }
+  //template __global__ void kAtomicAdd<int>(int*, int*);
+  //template __global__ void kAtomicAdd<double>(double*, double*);
+
+
+  // ***************************************************************************
+  // ***************************************************************************
+  template <class T>
+  T *d_CopyGroupToBuffer_k(const T *d_ldata,
+                           T *d_buf,
+                           const int ndofs,
+                           const int *dofs){
+    push(Yellow);
+    dbg("\033[33m %d\033[m",ndofs);
+    for (int j = 0; j < ndofs; j++){
+      CUdeviceptr dest = (CUdeviceptr)(d_buf+j);
+      const CUdeviceptr src = (CUdeviceptr)(d_ldata+dofs[j]);
+      checkCudaErrors(cuMemcpyDtoDAsync(dest,src,sizeof(T),0));
+    }
+    pop();
+    return d_buf + ndofs;
+  }  
+  
   // ***************************************************************************
   // * d_CopyGroupToBuffer
   // ***************************************************************************
   template <class T>
   T *RajaCommD::d_CopyGroupToBuffer(const T *d_ldata,
-                                           T *d_buf, int group,
-                                           int layout) const  {
-    push(Yellow);
-    dbg("\t\033[33m[d_CopyGroupToBuffer]");
-    switch (layout) {
-    case 1:
-      {
-        dbg("\t\t\033[33m[d_CopyGroupToBuffer] layout 1");
-#ifndef __NVCC__ 
-        pop();
-        return std::copy(d_ldata + group_ldof.GetI()[group],
-                         d_ldata + group_ldof.GetI()[group+1],
-                         d_buf);
-#else
-        CUdeviceptr dest = (CUdeviceptr)d_buf;
-        const CUdeviceptr src = (CUdeviceptr)(d_ldata + group_ldof.GetI()[group]);
-        const size_t sz = group_ldof.GetI()[group+1]-group_ldof.GetI()[group];
-        checkCudaErrors(cuMemcpyDtoD(dest,src,sz*sizeof(T)));
-#endif
-      }
-    case 2:
-      {
-        dbg("\t\t\033[33m[d_CopyGroupToBuffer] layout 2");
-        const int nltdofs = group_ltdof.RowSize(group);
-        const int *ltdofs = group_ltdof.GetRow(group);
-        for (int j = 0; j < nltdofs; j++)
-        {
-#ifndef __NVCC__
-          d_buf[j] = d_ldata[ltdofs[j]];
-#else
-          CUdeviceptr dest = (CUdeviceptr)(d_buf+j);
-          const CUdeviceptr src = (CUdeviceptr)(d_ldata+ltdofs[j]);
-          checkCudaErrors(cuMemcpyDtoD(dest,src,sizeof(T)));
-#endif
-        }
-        pop();
-        return d_buf + nltdofs;
-      }
-    default:
-      {
-        dbg("\t\t\033[33m[d_CopyGroupToBuffer] default");
-        const int nldofs = group_ldof.RowSize(group);
-        const int *ldofs = group_ldof.GetRow(group);
-        for (int j = 0; j < nldofs; j++)
-        {
-#ifndef __NVCC__
-          d_buf[j] = d_ldata[ldofs[j]];
-#else
-          CUdeviceptr dest = (CUdeviceptr)(d_buf+j);
-          const CUdeviceptr src = (CUdeviceptr)(d_ldata+ldofs[j]);
-          checkCudaErrors(cuMemcpyDtoD(dest,src,sizeof(T)));
-#endif
-        }
-        dbg("\t\t\033[33m[d_CopyGroupToBuffer] done");
-        pop();
-        return d_buf + nldofs;
-      }
-    }
+                                    T *d_buf, int group,
+                                    int layout) const  {
+    if (layout==2)
+      return d_CopyGroupToBuffer_k(d_ldata,d_buf,
+                                   group_ltdof.RowSize(group),
+                                   group_ltdof.GetRow(group));
+    if (layout==0)
+      return d_CopyGroupToBuffer_k(d_ldata,d_buf,
+                                   group_ldof.RowSize(group),
+                                   group_ldof.GetRow(group));
+    
+    assert(false);
+    return 0;
   }
 
   // ***************************************************************************
@@ -108,7 +94,7 @@ namespace mfem {
 #else
       CUdeviceptr dest = (CUdeviceptr)(d_ldata+ldofs[j]);
       const CUdeviceptr src = (CUdeviceptr)(d_buf+j);
-      checkCudaErrors(cuMemcpyDtoD(dest,src,sizeof(T)));
+      checkCudaErrors(cuMemcpyDtoDAsync(dest,src,sizeof(T),0));
 #endif
     }
     dbg("\t\t\033[33m[d_CopyGroupFromBuffer] done");
@@ -150,21 +136,6 @@ namespace mfem {
 #else
     assert(opd.nb == 1);
     
-    // this is the operation to perform:
-    // opd.ldata[opd.ldofs[i]] += opd.buf[i];
-    // mfem/general/communication.cpp, line 1008
-    //T adrs,value;
-    //for (int i = 0; i < opd.nldofs; i++){
-    //  const CUdeviceptr src = (CUdeviceptr)(opd.ldata+opd.ldofs[i]);
-    //  checkCudaErrors(cuMemcpyDtoH(&adrs,src,sizeof(T)));
-    //  const CUdeviceptr sval = (CUdeviceptr)(opd.buf+i);
-    //  checkCudaErrors(cuMemcpyDtoH(&value,sval,sizeof(T)));
-    //  // Do the +=
-    //  adrs += value;//opd.buf[i];
-    //  // Push back the answer          
-    //  checkCudaErrors(cuMemcpyHtoD(src,&adrs,sizeof(T)));
-    //}
-
     // this is the operation to perform: opd.ldata[opd.ldofs[i]] += opd.buf[i];
     // mfem/general/communication.cpp, line 1008
     for (int i = 0; i < opd.nldofs; i++)
@@ -212,9 +183,9 @@ namespace mfem {
         }
         push(MPI_Isend,Orange);
 #ifdef __NVCC__
-        checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                     (CUdeviceptr)d_buf_start,
-                                     (buf-buf_start)*sizeof(T)));
+        checkCudaErrors(cuMemcpyDtoHAsync(buf_start,
+                                          (CUdeviceptr)d_buf_start,
+                                          (buf-buf_start)*sizeof(T),0));
 #endif
         MPI_Isend(buf_start,
                   buf - buf_start,
@@ -293,7 +264,9 @@ namespace mfem {
 #else
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,buf,recv_size*sizeof(T)));
+        checkCudaErrors(cuMemcpyHtoDAsync((CUdeviceptr)d_buf,
+                                          buf,
+                                          recv_size*sizeof(T),0));
 #endif
         for (int i = 0; i < num_recv_groups; i++)
         {
@@ -322,6 +295,7 @@ namespace mfem {
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
 #ifdef __NVCC__
+    //assert(d_group_buf);
     if (!d_group_buf){
       dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
       checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
@@ -331,13 +305,11 @@ namespace mfem {
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
       const int num_send_groups = nbr_recv_groups.RowSize(nbr);
-      if (num_send_groups > 0)
-      {
+      if (num_send_groups > 0){
         T *buf_start = buf;
         T *d_buf_start = d_buf;
         const int *grp_list = nbr_recv_groups.GetRow(nbr);
-        for (int i = 0; i < num_send_groups; i++)
-        {
+        for (int i = 0; i < num_send_groups; i++){
           T *d_buf_ini = d_buf;
           d_buf = d_CopyGroupToBuffer(d_ldata, d_buf, grp_list[i], 0);
           buf += d_buf - d_buf_ini;
@@ -345,9 +317,9 @@ namespace mfem {
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
 #ifdef __NVCC__
         push(DtoH,Red);
-        checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                     (CUdeviceptr)d_buf_start,
-                                     (buf-buf_start)*sizeof(T)));
+        checkCudaErrors(cuMemcpyDtoHAsync(buf_start,
+                                          (CUdeviceptr)d_buf_start,
+                                          (buf-buf_start)*sizeof(T),0));
         pop();
 #endif
         push(MPI_Isend,Orange);
@@ -358,7 +330,7 @@ namespace mfem {
                   43822,
                   gtopo.GetComm(),
                   &requests[request_counter]);
-        pop();
+        pop();        
         request_marker[request_counter] = -1; // mark as send request
         request_counter++;
       }
@@ -424,7 +396,9 @@ namespace mfem {
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
 #ifdef __NVCC__
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,buf,recv_size*sizeof(T)));
+        checkCudaErrors(cuMemcpyHtoDAsync((CUdeviceptr)d_buf,
+                                          buf,
+                                          recv_size*sizeof(T),0));
 #endif       
         for (int i = 0; i < num_recv_groups; i++)
         {
