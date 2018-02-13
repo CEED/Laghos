@@ -18,11 +18,16 @@
 
 namespace mfem {
 
+#ifndef __NVCC__
+  typedef int CUstream;
+#endif
+
   // ***************************************************************************
   // * Configuration class for RAJA
   // ***************************************************************************
   class rconfig{
   private:
+    CUstream hStream=0;
     int mpi_rank=0;
     int mpi_size=0;
     bool uvm=false;
@@ -51,6 +56,7 @@ namespace mfem {
     inline bool Cuda() { return cuda; }
     inline bool Share() { return share; }
     inline bool LikeOcca() { return like_occa; }
+    inline CUstream Stream() { return hStream; }
   };
   
 } // namespace mfem

@@ -18,7 +18,7 @@ namespace mfem {
   RajaConformingProlongationOperator::RajaConformingProlongationOperator
   (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
                                  external_ldofs(),
-                                 gc(static_cast<RajaCommunicator*>(&pfes.GroupComm())){
+                                 gc(new RajaCommD(pfes)){
     MFEM_VERIFY(pfes.Conforming(), "");
     Array<int> ldofs;
     Table &group_ldof = gc->GroupLDofTable();
@@ -33,10 +33,17 @@ namespace mfem {
     }
     external_ldofs.Sort();
     MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-    gc->PrintInfo();
+    //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
 
+  // ***************************************************************************
+  // * ~RajaConformingProlongationOperator
+  // ***************************************************************************
+  RajaConformingProlongationOperator::~RajaConformingProlongationOperator(){
+    delete  gc;
+  }
+  
   // ***************************************************************************
   // * Device Mult
   // ***************************************************************************
@@ -60,16 +67,16 @@ namespace mfem {
 #else
       checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
                                         (CUdeviceptr)(d_xdata+j-i),
-                                        (end-j)*sizeof(double),0));
+                                        (end-j)*sizeof(double),rconfig::Get().Stream()));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
 #else
-    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
-                                      (CUdeviceptr)(d_xdata+j-m),
-                                      (Width()+m-j)*sizeof(double),0));
+    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
+                                 (CUdeviceptr)(d_xdata+j-m),
+                                 (Width()+m-j)*sizeof(double)));
 #endif
     const int out_layout = 0; // 0 - output is ldofs array
     gc->d_BcastEnd(d_ydata, out_layout);
@@ -96,18 +103,18 @@ namespace mfem {
 #ifndef __NVCC__
       std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
 #else
-      checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-i),
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-i),
                                         (CUdeviceptr)(d_xdata+j),
-                                        (end-j)*sizeof(double),0));
+                                        (end-j)*sizeof(double)));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
 #else
-    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-m),
+    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-m),
                                       (CUdeviceptr)(d_xdata+j),
-                                      (Height()-j)*sizeof(double),0));
+                                      (Height()-j)*sizeof(double)));
 #endif
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);

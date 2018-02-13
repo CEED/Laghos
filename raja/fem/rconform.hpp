@@ -24,9 +24,10 @@ namespace mfem {
   class RajaConformingProlongationOperator : public RajaOperator{
   protected:
     Array<int> external_ldofs;
-    RajaCommunicator *gc;
+    RajaCommD *gc;
   public:
-    RajaConformingProlongationOperator(ParFiniteElementSpace &pfes);
+    RajaConformingProlongationOperator(ParFiniteElementSpace &);
+    ~RajaConformingProlongationOperator();
     void d_Mult(const RajaVector &x, RajaVector &y) const;
     void d_MultTranspose(const RajaVector &x, RajaVector &y) const;  
     void h_Mult(const Vector &x, Vector &y) const;

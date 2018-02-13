@@ -22,9 +22,14 @@
 
 namespace mfem {
 
+  // ***************************************************************************
+  // * First communicator, buf stays on the host
+  // ***************************************************************************
   class RajaCommunicator : public GroupCommunicator{
+  private:
+    void *d_group_buf;
   public:
-    RajaCommunicator(GroupTopology &gt);
+    RajaCommunicator(ParFiniteElementSpace&);
     ~RajaCommunicator();
     
     template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
@@ -36,7 +41,29 @@ namespace mfem {
     
     template <class T> void d_ReduceBegin(const T*);
     template <class T> void d_ReduceEnd(T*,int,void (*)(OpData<T>));
+  };
+  
+  // ***************************************************************************
+  // * First communicator, buf goes on the device
+  // ***************************************************************************
+  class RajaCommD : public GroupCommunicator{
+  private:
+    void *d_group_buf;
+  public:
+    RajaCommD(ParFiniteElementSpace&);
+    ~RajaCommD();
+    
+    template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
+    template <class T> const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
+    template <class T> const T *d_ReduceGroupFromBuffer(const T*,T*,int,int,void (*)(OpData<T>)) const;
+    
+    template <class T> void d_BcastBegin(T*,int);
+    template <class T> void d_BcastEnd(T*, int);
+    
+    template <class T> void d_ReduceBegin(const T*);
+    template <class T> void d_ReduceEnd(T*,int,void (*)(OpData<T>));
  };
+
 
 } // mfem
 
