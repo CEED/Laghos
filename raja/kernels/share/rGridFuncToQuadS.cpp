@@ -108,7 +108,7 @@ void rGridFuncToQuadS(const int DIM,
                      const int* l2gMap,
                      const double* gf,
                      double* __restrict out) {
-  push();
+  push(Green);
 #ifndef __LAMBDA__
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;

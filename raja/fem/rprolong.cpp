@@ -22,7 +22,7 @@ namespace mfem {
   // ***************************************************************************
   void RajaProlongationOperator::Mult(const RajaVector& x,
                                       RajaVector& y) const {
-    push();
+    push(LightSteelBlue);
     if (rconfig::Get().IAmAlone()){
       y=x;
       pop();
@@ -36,22 +36,22 @@ namespace mfem {
       pop();
       return;
     }else{
-      dbg("\n\033[35m[DEVICE::Mult]\033[m");
+      dbg("\n\033[35m[HOST::Mult]\033[m");
     }
 
     push(hostX:D2H,Red);
     const Vector hostX=x;//D2H
     pop(); 
     
-    push(hostY);
+    push(hostY,LightSteelBlue);
     Vector hostY(y.Size());
     pop();
     
-    push(pmat->Mult,Blue);
+    push(pmat->Mult,LightSteelBlue);
     pmat->h_Mult(hostX, hostY);
     pop();
     
-    push(hostY:H2D,Yellow);
+    push(hostY:H2D,LightSteelBlue);
     y=hostY;//H2D
     pop();
     
@@ -61,7 +61,7 @@ namespace mfem {
   // ***************************************************************************
   void RajaProlongationOperator::MultTranspose(const RajaVector& x,
                                                RajaVector& y) const {
-    push();
+    push(LightSteelBlue);
     if (rconfig::Get().IAmAlone()){
       y=x;
       pop();
@@ -82,15 +82,15 @@ namespace mfem {
     const Vector hostX=x;//D2H
     pop();
    
-    push(hostY);
+    push(hostY,LightSteelBlue);
     Vector hostY(y.Size());
     pop();
 
-    push(pmat->MultT,Blue);
+    push(pmat->MultT,LightSteelBlue);
     pmat->h_MultTranspose(hostX, hostY);
     pop();
     
-    push(hostY:H2D,Yellow);
+    push(hostY:H2D,LightSteelBlue);
     y=hostY;//H2D
     pop();
     

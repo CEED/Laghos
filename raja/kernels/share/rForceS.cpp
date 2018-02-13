@@ -303,7 +303,7 @@ void rForceMultS(const int NUM_DIM,
                  const double* restrict stressJinvT,
                  const double* restrict e,
                  double* restrict v) {
-  push();
+  push(Green);
 #ifndef __LAMBDA__
   const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
   //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
@@ -389,7 +389,7 @@ void rForceMultTransposeS(const int NUM_DIM,
                           const double* restrict stressJinvT,
                           const double* restrict v,
                           double* restrict e) {
-  push();
+  push(Green);
 #ifndef __LAMBDA__
   const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
   const int blck = NUM_QUAD_1D;

@@ -36,7 +36,7 @@ void QuadratureData::Setup(int dim,
                            int nzones,
                            int nqp)
 {
-   push();
+  push(Wheat);
    rho0DetJ0w.SetSize(nqp * nzones);
    stressJinvT.SetSize(dim * dim * nqp * nzones);
    dtEst.SetSize(nqp * nzones);
@@ -47,7 +47,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
 {
-   push();
+   push(Wheat);
    const int ip_cnt = integ_rule.GetNPoints();
    Vector shape(fe.GetDof());
    Vector rho0DetJ0w = quad_data.rho0DetJ0w;
@@ -86,7 +86,7 @@ RajaMassOperator::~RajaMassOperator(){
 // *****************************************************************************
 void RajaMassOperator::Setup()
 {
-   push();
+   push(Wheat);
    dim=fes.GetMesh()->Dimension();
    nzones=fes.GetMesh()->GetNE();
    RajaMassIntegrator &massInteg = *(new RajaMassIntegrator(use_share));
@@ -101,7 +101,7 @@ void RajaMassOperator::Setup()
 // *************************************************************************
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
-  push();
+  push(Wheat);
   ess_tdofs_count = dofs.Size();
   if (ess_tdofs_count == 0) { pop(); return; }
   if (ess_tdofs.Size()==0){
@@ -133,7 +133,7 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 // *****************************************************************************
 void RajaMassOperator::EliminateRHS(RajaVector &b)
 {
-  push();
+  push(Wheat);
   if (ess_tdofs_count > 0)
     b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
   pop();
@@ -142,20 +142,16 @@ void RajaMassOperator::EliminateRHS(RajaVector &b)
 // *************************************************************************
 void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 {
-   push();
+   push(Wheat);
    
-   push(distX=x);
    distX = x;
-   pop();
    
    if (ess_tdofs_count)
    {
       distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
 
-   push(massOperatorMult);
    massOperator->Mult(distX, y);
-   pop();
    
    if (ess_tdofs_count)
    {
@@ -196,7 +192,7 @@ void RajaForceOperator::Setup()
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
                              RajaVector &vecH1) const {
-   push();
+   push(Wheat);
    l2fes.GlobalToLocal(vecL2, gVecL2);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -236,7 +232,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
 // *************************************************************************
 void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                                       RajaVector &vecL2) const {
-   push();
+   push(Wheat);
    h1fes.GlobalToLocal(vecH1, gVecH1);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());

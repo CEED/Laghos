@@ -91,9 +91,19 @@ static char marker[2048];
     eAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                     \
     eAttrib.message.ascii = #marker;                                   \
     nvtxRangePushEx(&eAttrib); }
-#define PUSH1(marker) nvtxRangePush(#marker)
+#define PUSH1(rgb) {                                                  \
+    snprintf(marker,2048,"%s@%s:%d",                                  \
+             __PRETTY_FUNCTION__, __FILE__, __LINE__);                \
+    const int color_id = rgb%nb_colors;                               \
+    nvtxEventAttributes_t eAttrib = {0};                              \
+    eAttrib.version = NVTX_VERSION;                                   \
+    eAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;                     \
+    eAttrib.colorType = NVTX_COLOR_ARGB;                              \
+    eAttrib.color = legacy_colors[color_id];                          \
+    eAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;                    \
+    eAttrib.message.ascii = marker;                                   \
+    nvtxRangePushEx(&eAttrib); }
 #define PUSH0() {                                                     \
-    char marker[2048];                                                \
     snprintf(marker,2048,"%s@%s:%d",                                  \
              __PRETTY_FUNCTION__, __FILE__, __LINE__);                \
     nvtxRangePush(marker);                                            \

@@ -25,7 +25,7 @@ namespace mfem {
      offsets(globalDofs+1),
      indices(localDofs, GetNE()),  
      map(localDofs, GetNE()) {
-    push();
+    push(PowderBlue);
     const FiniteElement *fe = GetFE(0);
     const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
     const Array<int> &dof_map = el->GetDofMap();
@@ -121,7 +121,7 @@ namespace mfem {
   // ***************************************************************************
   void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                                              RajaVector& localVec) const {
-    push();
+    push(PowderBlue);
     const int vdim = GetVDim();
     const int localEntries = localDofs * GetNE();
     const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -140,7 +140,7 @@ namespace mfem {
   // Aggregate local node values to their respective global dofs
   void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                                              RajaVector& globalVec) const {
-    push();
+    push(PowderBlue);
     const int vdim = GetVDim();
     const int localEntries = localDofs * GetNE();
     const bool vdim_ordering = ordering == Ordering::byVDIM;

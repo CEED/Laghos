@@ -174,12 +174,8 @@ int main(int argc, char *argv[])
      //Vector h_a(size); h_a=1.0/M_PI;
      //Vector h_b(size); h_b=M_PI;
      gettimeofday(&st, NULL);
-     push(a);
      RajaVector a(size);a=1.0/M_PI;//h_a;//a.Print();
-     pop();
-     push(b);
      RajaVector b(size);b=M_PI;//(h_b); //b.Print();
-     pop();
      //RajaVector c(size); c=0.0;
      gettimeofday(&et, NULL);
      const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
@@ -187,9 +183,7 @@ int main(int argc, char *argv[])
      gettimeofday(&st, NULL);
      //double dt = a*b;
      //c+=1.0;
-     push(a+=b);
      a+=b;
-     pop();
      gettimeofday(&et, NULL);
      //assert(dt == (double)size);
      const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
@@ -253,7 +247,7 @@ int main(int argc, char *argv[])
 
    // **************************************************************************
    //cuProfilerStart();
-   push();
+   push(Tan);
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -321,21 +315,18 @@ int main(int argc, char *argv[])
    // - 1 -> velocity
    // - 2 -> specific internal energy
    //dbg()<<"[7mS monolithic BlockVector";
-   push(S);
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    RajaVector S(true_offset[3]);
-   pop();
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
    //dbg()<<"[7mParGridFunction: x,v,e";
-   push(ParGridFunction);
    ParGridFunction x_gf(&H1FESpace);
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
@@ -346,24 +337,19 @@ int main(int argc, char *argv[])
    RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
    //dbg()<<"[7mRajaGridFunction: d_e_gf";
    RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
-   pop();
    
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    //dbg()<<"[7mSetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
    //dbg()<<"[7md_x_gf = x_gf;";
-   push(d_x_gf);
    d_x_gf = x_gf;
-   pop();
    
    // Initialize the velocity.
    //dbg()<<"[7mInitialize the velocity";
-   push(IniVelocity);
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    d_v_gf = v_gf;
-   pop();
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -372,7 +358,6 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    //dbg()<<"[7mInitialize density and specific internal energy";
-   push(IniRhoE);
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -397,7 +382,6 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
    d_e_gf = e_gf;
-   pop();
 
    //dbg()<<"[7mSpace-dependent ideal gas coefficient over the Lagrangian mesh.";
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
@@ -415,12 +399,9 @@ int main(int argc, char *argv[])
    }
 
    //dbg()<<"[7mLagrangianHydroOperator oper";
-   //push(LagrangianHydroOperator);
-   push(Oper);
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
-   pop();
 
    //dbg()<<"[7msocketstream";
    socketstream vis_rho, vis_v, vis_e;
@@ -469,24 +450,17 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   push(odeInit);
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   pop();
    
    //dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    //dbg()<<"[7mS_old(S)";
-   push(SoldS);
    RajaVector S_old(S);//D2D
-   pop();
    
-
-//cuProfilerStart();
-
-   //dbg()<<"[7mfor(last_step)";
+   //dbg("[7mfor(last_step)");
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -496,24 +470,24 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      push(Sold=S,Teal);
       S_old = S;//D2D
-      pop();
       t_old = t;
-      //dbg()<<"[7mResetTimeStepEstimate";
-      push(ResetTimeStepEstimate);
+      //dbg("[7mResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
-      pop();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       //dbg()<<"[7mRode_solver->Step";
       cuProfilerStart();
-      push(odeStep);
       ode_solver->Step(S, t, dt);
-      pop();
       steps++;
       //cuProfilerStop();
+      
+      // Make sure that the mesh corresponds to the new solution state.
+      //dbg("[7mMake sure that the mesh corresponds to the new solution state.");
+      //#warning NewNodes x_gf
+      x_gf = d_x_gf;
+      pmesh->NewNodes(x_gf, false);
 
       // Adaptive time step control.
       //dbg()<<"[7mAdaptive time step control";
@@ -532,13 +506,7 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
-
-      // Make sure that the mesh corresponds to the new solution state.
-      //dbg()<<"[7mMake sure that the mesh corresponds to the new solution state.";
-      push(x_gf);
-      x_gf = d_x_gf;
-      pmesh->NewNodes(x_gf, false);
-      pop();
+      
 
       if (last_step || (ti % vis_steps) == 0)
       {

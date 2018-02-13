@@ -33,7 +33,7 @@ namespace mfem {
     }
     external_ldofs.Sort();
     MFEM_ASSERT(external_ldofs.Size() == Height()-Width(), "");
-    //gc->PrintInfo();
+    gc->PrintInfo();
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
 
@@ -42,7 +42,7 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
-    push();
+    push(Magenta);
     dbg("\n\033[32m[d_Mult]\033[m");
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
@@ -50,10 +50,7 @@ namespace mfem {
     double *d_ydata = y.GetData(); 
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
-    push(BcastBegin);
     gc->d_BcastBegin(const_cast<double*>(d_xdata), in_layout);
-    pop();
-    push(copy);
     int j = 0; 
     for (int i = 0; i < m; i++)
     {
@@ -61,24 +58,21 @@ namespace mfem {
 #ifndef __NVCC__
       std::copy(d_xdata+j-i, d_xdata+end-i, d_ydata+j);
 #else
-      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
-                                   (CUdeviceptr)(d_xdata+j-i),
-                                   (end-j)*sizeof(double)));
+      checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
+                                        (CUdeviceptr)(d_xdata+j-i),
+                                        (end-j)*sizeof(double),0));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
-                                 (CUdeviceptr)(d_xdata+j-m),
-                                 (Width()+m-j)*sizeof(double)));
+    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j),
+                                      (CUdeviceptr)(d_xdata+j-m),
+                                      (Width()+m-j)*sizeof(double),0));
 #endif
     const int out_layout = 0; // 0 - output is ldofs array
-    pop();
-    push(BcastEnd);
     gc->d_BcastEnd(d_ydata, out_layout);
-    pop();
     pop();
   }
 
@@ -87,16 +81,14 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
+    push(Magenta);
     dbg("\n\033[32m[d_MultTranspose]\033[m");
     MFEM_ASSERT(x.Size() == Height(), "");
     MFEM_ASSERT(y.Size() == Width(), "");
     const double *d_xdata = x.GetData();
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
-    push(BcastBegin);
-    gc->d_ReduceBegin(d_xdata); 
-    pop();
-    push(copy);
+    gc->d_ReduceBegin(d_xdata);
     int j = 0;
     dbg("\n\033[32m[d_MultTranspose] m=%d\033[m",m);
     for (int i = 0; i < m; i++)   {
@@ -104,24 +96,21 @@ namespace mfem {
 #ifndef __NVCC__
       std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
 #else
-      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-i),
-                                   (CUdeviceptr)(d_xdata+j),
-                                   (end-j)*sizeof(double)));
+      checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-i),
+                                        (CUdeviceptr)(d_xdata+j),
+                                        (end-j)*sizeof(double),0));
 #endif
       j = end+1;
     }
 #ifndef __NVCC__
     std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-m),
-                                 (CUdeviceptr)(d_xdata+j),
-                                 (Height()-j)*sizeof(double)));
+    checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)(d_ydata+j-m),
+                                      (CUdeviceptr)(d_xdata+j),
+                                      (Height()-j)*sizeof(double),0));
 #endif
     const int out_layout = 2; // 2 - output is an array on all ltdofs
-    pop();
-    push(BcastEnd);
     gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
-    pop();
     pop();
   }
 
@@ -130,17 +119,14 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
-    push();
+    push(DeepSkyBlue);
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
     const double *xdata = x.GetData();
     double *ydata = y.GetData(); 
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
-    push(BcastBegin);
     gc->BcastBegin(const_cast<double*>(xdata), in_layout);
-    pop();
-    push(copy);
     int j = 0;
     for (int i = 0; i < m; i++)
     {
@@ -150,10 +136,7 @@ namespace mfem {
     }
     std::copy(xdata+j-m, xdata+Width(), ydata+j);
     const int out_layout = 0; // 0 - output is ldofs array
-    pop();
-    push(BcastEnd);
     gc->BcastEnd(ydata, out_layout);
-    pop();
     pop();
   }
 
@@ -167,10 +150,7 @@ namespace mfem {
     const double *xdata = x.GetData();
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();
-    push(BcastBegin);
     gc->ReduceBegin(xdata);
-    pop();
-    push(copy);
     int j = 0;
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
@@ -179,10 +159,7 @@ namespace mfem {
     }
     std::copy(xdata+j, xdata+Height(), ydata+j-m);
     const int out_layout = 2; // 2 - output is an array on all ltdofs
-    pop();
-    push(BcastEnd);
     gc->ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
-    pop();
     pop();
   }
 

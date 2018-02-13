@@ -20,7 +20,9 @@
 inline void _dbg(const char *format,...){
   va_list args;
   va_start(args, format);
+  fprintf(stdout,"\n");
   vfprintf(stdout,format,args);
+  fprintf(stdout,"[m");
   fflush(stdout);
   va_end(args);
 }

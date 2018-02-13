@@ -140,25 +140,25 @@ namespace mfem {
       UpdateVectors();
     }
     virtual void Mult(const RajaVector &b, RajaVector &x) const {
-      push();
+      push(SkyBlue);
       
       int i;
       double r0, den, nom, nom0, betanom, alpha, beta;
       if (iterative_mode) {
-        push(iMsub,Silver);
+        push(iMsub,SkyBlue);
         oper->Mult(x, r);
         subtract(b, r, r); // r = b - A x
         pop();
       }
       else
       {
-        push(rbx0,Silver);
+        push(rbx0,SkyBlue);
         r = b;
         x = 0.0;
         pop();
       }
 
-      push(d,Silver);
+      push(d,SkyBlue);
       if (prec)
       {
         prec->Mult(r, z); // z = B r
@@ -170,7 +170,7 @@ namespace mfem {
       }
       pop();
 
-      push(nom,Silver);
+      push(nom,SkyBlue);
       nom0 = nom = Dot(d, r);
       MFEM_ASSERT(IsFinite(nom), "nom = " << nom);
       pop();
@@ -183,11 +183,11 @@ namespace mfem {
       }
       pop();
       
-      push(r0,Silver);
+      push(r0,SkyBlue);
       r0 = std::max(nom*rel_tol*rel_tol,abs_tol*abs_tol);
       pop();
 
-      push(nCvg?,Silver);
+      push(nCvg?,SkyBlue);
       if (nom <= r0)
       {
         converged = 1;
@@ -199,11 +199,11 @@ namespace mfem {
       }
       pop();
 
-      push(z=Ad,Silver);
+      push(z=Ad,SkyBlue);
       oper->Mult(d, z);  // z = A d
       pop();
 
-      push(z.d,Silver);
+      push(z.d,SkyBlue);
       den = Dot(z, d);
       MFEM_ASSERT(IsFinite(den), "den = " << den);
       pop();
@@ -213,7 +213,7 @@ namespace mfem {
         mfem::out << "Negative denominator in step 0 of PCG: " << den << '\n';
       }
 
-      push(dCvg?,Silver);
+      push(dCvg?,SkyBlue);
       if (den == 0.0)
       {
         converged = 0;
@@ -228,17 +228,17 @@ namespace mfem {
       // start iteration
       converged = 0;
       final_iter = max_iter;
-      push(for,SlateGray);
+      push(for,SkyBlue);
       for (i = 1; true; ){
         alpha = nom/den;
-        push(x+ad,Silver);
+        push(x+ad,SkyBlue);
         add(x,  alpha, d, x);     //  x = x + alpha d
         pop();
-        push(r-aAd,Silver);
+        push(r-aAd,SkyBlue);
         add(r, -alpha, z, r);     //  r = r - alpha A d
         pop();
 
-        push(z=Br,Silver);
+        push(z=Br,SkyBlue);
         if (prec)
         {
           prec->Mult(r, z);      //  z = B r
@@ -279,7 +279,7 @@ namespace mfem {
           break;
         }
 
-        push(z+bd,Silver);
+        push(z+bd,SkyBlue);
         beta = betanom/nom;
         if (prec)
         {
@@ -291,11 +291,11 @@ namespace mfem {
         }
         pop();
         
-        push(Ad,Silver);
+        push(Ad,SkyBlue);
         oper->Mult(d, z);       //  z = A d
         pop();
 
-        push(d.z,Silver);
+        push(d.z,SkyBlue);
         den = Dot(d, z);
         pop();
         
@@ -330,7 +330,7 @@ namespace mfem {
         mfem::out << "Average reduction factor = "
                   << pow (betanom/nom0, 0.5/final_iter) << '\n';
       }
-      push(final_norm,Silver);
+      push(final_norm,SkyBlue);
       final_norm = sqrt(betanom);
       pop();
     }

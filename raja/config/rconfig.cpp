@@ -33,7 +33,8 @@ namespace mfem {
 #if defined(__NVCC__) 
     CUdevice cuDevice;
     CUcontext cuContext;
-    const int device = mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
+#warning device tied to 0
+    const int device = 0;//mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -69,6 +70,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::IAmAlone() {
+    //#warning Faking MPI    return false;
     if (like_occa) return false;
     return mpi_size==1;
   }
@@ -82,7 +84,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
-   if (like_occa) return true;
+    if (like_occa) return true;
     return (cuda)?false:true;
   }
   

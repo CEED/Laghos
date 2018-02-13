@@ -98,7 +98,7 @@ protected:
    mutable RajaForceOperator ForcePA;
 
    // Linear solver for energy.
-   RajaCGSolver locCG;
+   //RajaCGSolver locCG;
    RajaCGSolver CG_VMass,CG_EMass;
   
    mutable TimingData timer;

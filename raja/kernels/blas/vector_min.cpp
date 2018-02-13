@@ -49,7 +49,7 @@ static double cub_vector_min(const int N,
 // *****************************************************************************
 double vector_min(const int N,
                   const double* __restrict vec) {
-  push(min,Aqua);
+  push(min,Cyan);
 #ifdef __NVCC__
   if (mfem::rconfig::Get().Cuda()){
     const double result = cub_vector_min(N,vec);

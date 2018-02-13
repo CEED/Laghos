@@ -52,7 +52,7 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* restrict detJ,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w) {
-  push();
+  push(Lime);
   const unsigned int id = NUM_QUAD;
 #ifndef __LAMBDA__
   const int grid = numElements;

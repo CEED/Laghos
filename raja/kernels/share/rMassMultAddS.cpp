@@ -155,7 +155,7 @@ void rMassMultAddS(const int DIM,
                    const double* op,
                    const double* x,
                    double* __restrict y) {
-  push();
+  push(Green);
 #ifndef __LAMBDA__
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
   const int blck = NUM_QUAD_1D;

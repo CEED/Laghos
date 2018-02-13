@@ -26,7 +26,7 @@ void vector_neg0(const int N,
 
 void vector_neg(const int N,
                 double* __restrict vec) {
-  push(neg,Aqua);
+  push(neg,Cyan);
 #ifndef __LAMBDA__
   cuKer(vector_neg,N,vec);
 #else

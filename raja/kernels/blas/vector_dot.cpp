@@ -51,7 +51,7 @@ static double cub_vector_dot(const int N,
 double vector_dot(const int N,
                   const double* __restrict vec1,
                   const double* __restrict vec2) {
-  push(dot,Aqua);
+  push(dot,Cyan);
 #ifdef __NVCC__
   if (mfem::rconfig::Get().Cuda()){
     const double result = cub_vector_dot(N,vec1,vec2);

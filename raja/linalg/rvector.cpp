@@ -55,7 +55,7 @@ double* RajaVector::alloc(const size_t sz) {
 RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
 RajaVector::RajaVector(const size_t sz,double value):
   size(sz),data(alloc(sz)),own(true) {
-  push();
+  push(SkyBlue);
   //printf("\033[31m[%d]\033[m",sz);
   *this=value;
   pop();

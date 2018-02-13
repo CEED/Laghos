@@ -28,7 +28,7 @@ void vector_vec_add0(const int N,
 void vector_vec_add(const int N,
                     double* __restrict v0,
                     const double* __restrict v1) {
-  push(add,Aqua);
+  push(add,Cyan);
 #ifndef __LAMBDA__
   cuKer(vector_vec_add,N,v0,v1);
 #else

@@ -33,7 +33,7 @@ void vector_map_dofs(const int N,
                      double* __restrict v0,
                      const double* __restrict v1,
                      const int* v2) {
-  push(map,Aqua);
+  push(map,Cyan);
 #ifndef __LAMBDA__
   cuKer(vector_map_dofs,N,v0,v1,v2);
 #else
@@ -47,7 +47,7 @@ void vector_map_add_dofs(const int N,
                          T* __restrict v0,
                          const T* __restrict v1,
                          const int* v2) {
-  push(map,Aqua);
+  push(map,MediumAquamarine);
 #ifndef __LAMBDA__
   assert(false);//cuKer(vector_map_dofs,N,v0,v1,v2);
 #else
