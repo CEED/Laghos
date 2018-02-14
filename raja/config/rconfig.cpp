@@ -32,13 +32,22 @@ namespace mfem {
     share=_share;
     like_occa=_like_occa;
     cuda_aware=(MPIX_Query_cuda_support()==1)?true:false;
+
 #if defined(__NVCC__) 
+    int nb_gpu=0;
+    
+    { // Check if we have enough devices for all ranks
+      checkCudaErrors(cudaGetDeviceCount(&nb_gpu));
+      if (mpi_rank==0)
+        printf("\033[32m[laghos] CUDA device count: %i\033[m\n", nb_gpu);
+      assert(nb_gpu>=mpi_size);
+    }
+    
     CUdevice cuDevice;
     CUcontext cuContext;
-#warning device tied to 0
+//#warning device tied to 0
 //#warning mpi_rank%2
-    const int device = 0;//mpi_rank%2;//mpi_size;
-    // We still use the same device for now // mpi_rank;
+    const int device = mpi_rank%nb_gpu;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -48,15 +57,6 @@ namespace mfem {
     
     // Returns properties for the selected device
     cuDeviceGet(&cuDevice,device);
-
-    { // Check if we have enough devices for all ranks
-      int gpu_n;
-      checkCudaErrors(cudaGetDeviceCount(&gpu_n));
-      if (mpi_rank==0)
-        printf("\033[32m[laghos] CUDA device count: %i\033[m\n", gpu_n);
-      //#warning NO assert(gpu_n>=mpi_size)
-      //assert(gpu_n>=mpi_size);
-    }
 
     { // Check the compute capability of the device
       char name[128];

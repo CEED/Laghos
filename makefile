@@ -59,7 +59,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = /home/camier1/home/mfem/mfem-raja
+MFEM_DIR = $(HOME)/home/mfem/mfem-raja
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -189,7 +189,7 @@ nvk gpuKT:;$(MAKE) nv=1 t=1 all
 # TPL INCLUDES & LIBS #
 #######################
 # Ray MPI_INC = -I/opt/ibm/spectrum_mpi/include
-MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
+MPI_INC = -I$(MPI_HOME)/include 
 
 #DBG_INC = -I/home/camier1/home/dbg
 #DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
