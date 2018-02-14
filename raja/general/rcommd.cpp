@@ -141,7 +141,6 @@ namespace mfem {
     assert(opd.nb == 1);
     // this is the operation to perform: opd.ldata[opd.ldofs[i]] += opd.buf[i];
     // mfem/general/communication.cpp, line 1008
-    //for (int i = 0; i < opd.nldofs; i++)
     kAtomicAdd<<<opd.nldofs,1>>>(opd.ldata,opd.ldofs,opd.buf);
 #endif // __NVCC__
     dbg("\t\t\033[33m[d_ReduceGroupFromBuffer] done");
@@ -188,19 +187,39 @@ namespace mfem {
           d_buf = d_CopyGroupToBuffer(d_ldata, d_buf, grp_list[i], 2);
           buf += d_buf - d_buf_ini;
         }
-        push(MPI_Isend,Orange);
 #ifdef __NVCC__
-        checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                     (CUdeviceptr)d_buf_start,
-                                     (buf-buf_start)*sizeof(T)));
+        if (!rconfig::Get().cudaAware()){
+          push(BcastBegin:DtoH,Red); 
+          checkCudaErrors(cuMemcpyDtoH(buf_start,
+                                       (CUdeviceptr)d_buf_start,
+                                       (buf-buf_start)*sizeof(T)));
+          pop();
+        }
 #endif
-        MPI_Isend(buf_start,
-                  buf - buf_start,
-                  MPITypeMap<T>::mpi_type,
-                  gtopo.GetNeighborRank(nbr),
-                  40822,
-                  gtopo.GetComm(),
-                  &requests[request_counter]);
+        // make sure the device has finished
+        if (rconfig::Get().cudaAware()){
+          push(sync,Lime);
+          cudaStreamSynchronize(0);
+          pop();
+        }
+
+        push(MPI_Isend,Orange);
+        if (rconfig::Get().cudaAware())
+          MPI_Isend(d_buf_start,
+                    buf - buf_start,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    40822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
+        else
+          MPI_Isend(buf_start,
+                    buf - buf_start,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    40822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
         pop();
         request_marker[request_counter] = -1; // mark as send request
         request_counter++;
@@ -216,13 +235,22 @@ namespace mfem {
           recv_size += group_ldof.RowSize(grp_list[i]);
         }
         push(MPI_Irecv,Orange);
-        MPI_Irecv(buf,
-                  recv_size,
-                  MPITypeMap<T>::mpi_type,
-                  gtopo.GetNeighborRank(nbr),
-                  40822,
-                  gtopo.GetComm(),
-                  &requests[request_counter]);
+        if (rconfig::Get().cudaAware())
+          MPI_Irecv(d_buf,
+                    recv_size,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    40822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
+        else
+          MPI_Irecv(buf,
+                    recv_size,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    40822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
         pop();
         request_marker[request_counter] = nbr;
         request_counter++;
@@ -251,9 +279,11 @@ namespace mfem {
     assert(comm_lock == 1);
     // copy the received data from the buffer to d_ldata, as it arrives
     int idx;
+    push(MPI_Waitany,Orange);   
     while (MPI_Waitany(num_requests, requests, &idx, MPI_STATUS_IGNORE),
            idx != MPI_UNDEFINED)
     {
+      pop();
       int nbr = request_marker[idx];
       if (nbr == -1) { continue; } // skip send requests
 
@@ -271,9 +301,13 @@ namespace mfem {
 #else
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                     buf,
-                                     recv_size*sizeof(T)));
+        if (!rconfig::Get().cudaAware()){
+          push(BcastEnd:HtoD,Red);
+          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
+                                       buf,
+                                       recv_size*sizeof(T)));
+          pop();
+        }
 #endif
         for (int i = 0; i < num_recv_groups; i++)
         {
@@ -324,20 +358,38 @@ namespace mfem {
         }
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
 #ifdef __NVCC__
-        push(DtoH,Red);
-        checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                     (CUdeviceptr)d_buf_start,
-                                     (buf-buf_start)*sizeof(T)));
-        pop();
+        if (!rconfig::Get().cudaAware()){
+          push(ReduceBegin:DtoH,Red);
+          checkCudaErrors(cuMemcpyDtoH(buf_start,
+                                       (CUdeviceptr)d_buf_start,
+                                       (buf-buf_start)*sizeof(T)));
+          pop();
+        }
 #endif
+        // make sure the device has finished
+        if (rconfig::Get().cudaAware()){
+          push(sync,Lime);
+          cudaStreamSynchronize(0);
+          pop();
+        }
+        
         push(MPI_Isend,Orange);
-        MPI_Isend(buf_start,
-                  buf - buf_start,
-                  MPITypeMap<T>::mpi_type,
-                  gtopo.GetNeighborRank(nbr),
-                  43822,
-                  gtopo.GetComm(),
-                  &requests[request_counter]);
+        if (rconfig::Get().cudaAware())
+          MPI_Isend(d_buf_start,
+                    buf - buf_start,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    43822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
+        else
+          MPI_Isend(buf_start,
+                    buf - buf_start,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    43822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
         pop();        
         request_marker[request_counter] = -1; // mark as send request
         request_counter++;
@@ -355,13 +407,22 @@ namespace mfem {
         }
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Irecv",rnk);
         push(MPI_Irecv,Orange);
-        MPI_Irecv(buf,
-                  recv_size,
-                  MPITypeMap<T>::mpi_type,
-                  gtopo.GetNeighborRank(nbr),
-                  43822,
-                  gtopo.GetComm(),
-                  &requests[request_counter]);
+        if (rconfig::Get().cudaAware())
+          MPI_Irecv(d_buf,
+                    recv_size,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    43822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
+        else
+          MPI_Irecv(buf,
+                    recv_size,
+                    MPITypeMap<T>::mpi_type,
+                    gtopo.GetNeighborRank(nbr),
+                    43822,
+                    gtopo.GetComm(),
+                    &requests[request_counter]);
         pop();
         request_marker[request_counter] = nbr;
         request_counter++;
@@ -390,7 +451,7 @@ namespace mfem {
     // The above also handles the case (group_buf_size == 0).
     assert(comm_lock == 2);
     
-    push(MPI_Waitall,LavenderBlush);
+    push(MPI_Waitall,Orange);
     MPI_Waitall(num_requests, requests, MPI_STATUSES_IGNORE);
     pop();
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
@@ -405,10 +466,15 @@ namespace mfem {
           recv_size += group_ldof.RowSize(grp_list[i]);
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
 #ifdef __NVCC__
+        assert(d_group_buf);
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                     buf,
-                                     recv_size*sizeof(T)));
+        if (!rconfig::Get().cudaAware()){
+          push(ReduceEnd:HtoD,Red);
+          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
+                                       buf,
+                                       recv_size*sizeof(T)));
+          pop();
+        }
 #else
         const T *d_buf = buf;
 #endif       

@@ -87,7 +87,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::NeedUpdate(const int sequence) {
-    if (like_occa) return false;
+    //if (like_occa) return false;
     if (like_occa) return true;
     assert(sequence==0);
     return (sequence!=0);
