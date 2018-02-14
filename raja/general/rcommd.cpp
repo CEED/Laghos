@@ -217,8 +217,8 @@ namespace mfem {
         T *buf_start = buf;
         const int *grp_list = nbr_send_groups.GetRow(nbr);
         for (int i = 0; i < num_send_groups; i++){
-          assert(layout==2);
           buf += d_group_ltdof.RowSize(grp_list[i]);
+          d_buf += d_group_ltdof.RowSize(grp_list[i]);
         }
         push(MPI_Isend,Orange);
         MPI_Isend(buf_start,
@@ -374,7 +374,6 @@ namespace mfem {
     }
     push(sync,Red);
     cudaStreamSynchronize(0);
-    //cudaDeviceSynchronize();
     pop();
 
     // Redo with MPI_Isend
@@ -391,8 +390,10 @@ namespace mfem {
       if (num_send_groups > 0){
         T *buf_start = buf;
         const int *grp_list = nbr_recv_groups.GetRow(nbr);
-        for (int i = 0; i < num_send_groups; i++)
+        for (int i = 0; i < num_send_groups; i++){
           buf += d_group_ldof.RowSize(grp_list[i]);
+          d_buf += d_group_ldof.RowSize(grp_list[i]);
+        }
         push(MPI_Isend,Orange);
         MPI_Isend(buf_start,
                   buf - buf_start,
@@ -466,6 +467,7 @@ namespace mfem {
         int recv_size = 0;
         for (int i = 0; i < num_recv_groups; i++)
           recv_size += group_ldof.RowSize(grp_list[i]);
+        
         const T *buf = (T*)h_group_buf + buf_offsets[nbr];
 #ifdef __NVCC__
         const T *d_buf = (T*)h_group_buf + buf_offsets[nbr];

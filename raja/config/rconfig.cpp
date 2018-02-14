@@ -17,12 +17,7 @@
 #include <mpi-ext.h>
 
 namespace mfem {
-
-  // ***************************************************************************
-  int cuda_support(void){
-    return MPIX_Query_cuda_support();
-  }
-  
+ 
   // ***************************************************************************
   void rconfig::Setup(const int _mpi_rank,
                       const int _mpi_size,
@@ -36,6 +31,7 @@ namespace mfem {
     cuda=_cuda;
     share=_share;
     like_occa=_like_occa;
+    cuda_aware=(MPIX_Query_cuda_support()==1)?true:false;
 #if defined(__NVCC__) 
     CUdevice cuDevice;
     CUcontext cuContext;
@@ -72,10 +68,9 @@ namespace mfem {
     }
 
     { // Check if there is CUDA aware support
-      const int cuda_aware = cuda_support();
       if (mpi_rank==0)
         printf("\033[32m[laghos] MPI %s CUDA aware\033[m\n",
-               (cuda_aware==1)?"\033[1mIS":"is \033[31;1mNOT\033[32m");
+               cuda_aware?"\033[1mIS":"is \033[31;1mNOT\033[32m");
     }
 
     // Create our context

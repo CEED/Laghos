@@ -34,6 +34,7 @@ namespace mfem {
     bool cuda=false;
     bool share=false;
     bool like_occa=false;
+    bool cuda_aware=false;
     // *************************************************************************
   private:
     rconfig(){}
@@ -57,6 +58,7 @@ namespace mfem {
     inline bool Share() { return share; }
     inline bool LikeOcca() { return like_occa; }
     inline CUstream Stream() { return hStream; }
+    inline bool cudaAware() { return cuda_aware; }
   };
   
 } // namespace mfem
