@@ -51,7 +51,6 @@ namespace mfem {
     RajaTable d_group_ldof;
     RajaTable d_group_ltdof;
     void *d_group_buf;
-    void *h_group_buf;
   public:
     RajaCommD(ParFiniteElementSpace&);
     ~RajaCommD();

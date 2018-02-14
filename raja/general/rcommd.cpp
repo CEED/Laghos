@@ -19,8 +19,7 @@ namespace mfem {
     GroupCommunicator(pfes.GroupComm()),
     d_group_ldof(group_ldof),
     d_group_ltdof(group_ltdof),
-    d_group_buf(NULL),
-    h_group_buf(NULL) {}
+    d_group_buf(NULL) {}
 
   
   // ***************************************************************************
@@ -47,7 +46,7 @@ namespace mfem {
   T *d_CopyGroupToBuffer_k(const T *d_ldata,T *d_buf,
                            const RajaTable &d_dofs,
                            const int group){
-    push(SpringGreen);
+    push(PapayaWhip);
     const int ndofs = d_dofs.RowSize(group);
     const int *dofs = d_dofs.GetRow(group);
 #ifndef __NVCC__
@@ -164,63 +163,37 @@ namespace mfem {
     const int rnk = rconfig::Get().Rank();
     dbg("\033[33;1m[%d-d_BcastBegin]",rnk);
     int request_counter = 0;
+    group_buf.SetSize(group_buf_size*sizeof(T));
+    T *buf = (T *)group_buf.GetData();
 #ifdef __NVCC__
-    // Coming here with d_group_buf already alloc'ed
-    assert(h_group_buf);
     assert(d_group_buf);
-    T *buf = (T *)h_group_buf;
     T *d_buf = (T*)d_group_buf;
 #else
-    group_buf.SetSize(group_buf_size*sizeof(T));
-    T *buf = h_group_buf = (T *)group_buf.GetData();
-    T *d_buf = (T*)buf;
+    T *d_buf = (T*)d_buf;
 #endif
-
-    // First pass to async launch cuMemcpyDtoH    
-    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++){
+    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
+    {
       const int num_send_groups = nbr_send_groups.RowSize(nbr);
-      if (num_send_groups > 0){
+      if (num_send_groups > 0)
+      {
         T *buf_start = buf;
+#ifdef __NVCC__
         T *d_buf_start = d_buf;
+#endif
         const int *grp_list = nbr_send_groups.GetRow(nbr);
-        for (int i = 0; i < num_send_groups; i++){
+        for (int i = 0; i < num_send_groups; i++)
+        {
           T *d_buf_ini = d_buf;
           assert(layout==2);
           d_buf = d_CopyGroupToBuffer(d_ldata, d_buf, grp_list[i], 2);
           buf += d_buf - d_buf_ini;
         }
-#ifdef __NVCC__
-        push(DtoH,Red);
-        checkCudaErrors(cuMemcpyDtoHAsync(buf_start,
-                                          (CUdeviceptr)d_buf_start,
-                                          (buf-buf_start)*sizeof(T),0));
-        pop();
-#endif
-      }
-    }
-    push(sync,Red);
-    cudaStreamSynchronize(0);
-    pop();
-
-    // Redo with MPI_Isend
-    // Rewind pointers
-#ifdef __NVCC__
-    buf = (T*)h_group_buf;
-    d_buf = (T*)d_group_buf;
-#else
-    buf = (T*)h_group_buf;
-    d_buf = (T*)buf;
-#endif
-    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++){
-      const int num_send_groups = nbr_send_groups.RowSize(nbr);
-      if (num_send_groups > 0){
-        T *buf_start = buf;
-        const int *grp_list = nbr_send_groups.GetRow(nbr);
-        for (int i = 0; i < num_send_groups; i++){
-          buf += d_group_ltdof.RowSize(grp_list[i]);
-          d_buf += d_group_ltdof.RowSize(grp_list[i]);
-        }
         push(MPI_Isend,Orange);
+#ifdef __NVCC__
+        checkCudaErrors(cuMemcpyDtoH(buf_start,
+                                     (CUdeviceptr)d_buf_start,
+                                     (buf-buf_start)*sizeof(T)));
+#endif
         MPI_Isend(buf_start,
                   buf - buf_start,
                   MPITypeMap<T>::mpi_type,
@@ -253,12 +226,12 @@ namespace mfem {
         pop();
         request_marker[request_counter] = nbr;
         request_counter++;
-        buf_offsets[nbr] = buf - (T*)h_group_buf;
+        buf_offsets[nbr] = buf - (T*)group_buf.GetData();
         buf += recv_size;
         d_buf += recv_size;
       }
     }
-    assert(buf - (T*)h_group_buf == group_buf_size);
+    assert(buf - (T*)group_buf.GetData() == group_buf_size);
     comm_lock = 1; // 1 - locked for Bcast
     num_requests = request_counter;
     dbg("\033[33;1m[%d-d_BcastBegin] done",rnk);
@@ -296,13 +269,11 @@ namespace mfem {
 #ifndef __NVCC__
         const T *d_buf = (T*)group_buf.GetData() + buf_offsets[nbr];
 #else
-        const T *buf = (T*)h_group_buf + buf_offsets[nbr];
+        const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        push(HtoD,Red);
-        checkCudaErrors(cuMemcpyHtoD/*Async*/((CUdeviceptr)d_buf,
-                                              buf,
-                                              recv_size*sizeof(T)));
-        pop();
+        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
+                                     buf,
+                                     recv_size*sizeof(T)));
 #endif
         for (int i = 0; i < num_recv_groups; i++)
         {
@@ -328,18 +299,8 @@ namespace mfem {
     dbg("\033[33;1m[%d-d_ReduceBegin]",rnk);
 
     int request_counter = 0;
-    
-    // Allocating group_buf
-#ifdef __NVCC__
-    checkCudaErrors(cuMemHostAlloc((void**)&h_group_buf,
-                                   group_buf_size*sizeof(T),
-                                   CU_MEMHOSTALLOC_PORTABLE));
-    T *buf = (T *)h_group_buf;
-#else
     group_buf.SetSize(group_buf_size*sizeof(T));
-    T *buf = h_group_buf = (T *)group_buf.GetData();
-#endif
-    
+    T *buf = (T *)group_buf.GetData();
 #ifdef __NVCC__
     if (!d_group_buf){
       dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
@@ -347,11 +308,10 @@ namespace mfem {
     }
     T *d_buf = (T*)d_group_buf;
 #else
-    T *d_buf = (T*)buf;
+    T *d_buf = (T*)d_buf;
 #endif
-
-    // First pass to async launch cuMemcpyDtoH    
-    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++){
+    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
+    {
       const int num_send_groups = nbr_recv_groups.RowSize(nbr);
       if (num_send_groups > 0){
         T *buf_start = buf;
@@ -365,35 +325,11 @@ namespace mfem {
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
 #ifdef __NVCC__
         push(DtoH,Red);
-        checkCudaErrors(cuMemcpyDtoHAsync(buf_start,
-                                          (CUdeviceptr)d_buf_start,
-                                          (buf-buf_start)*sizeof(T),0));
+        checkCudaErrors(cuMemcpyDtoH(buf_start,
+                                     (CUdeviceptr)d_buf_start,
+                                     (buf-buf_start)*sizeof(T)));
         pop();
 #endif
-      }
-    }
-    push(sync,Red);
-    cudaStreamSynchronize(0);
-    pop();
-
-    // Redo with MPI_Isend
-    // Rewind pointers
-#ifdef __NVCC__
-    buf = (T*)h_group_buf;
-    d_buf = (T*)d_group_buf;
-#else
-    buf = (T*)h_group_buf;
-    d_buf = (T*)buf;
-#endif
-    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++){
-      const int num_send_groups = nbr_recv_groups.RowSize(nbr);
-      if (num_send_groups > 0){
-        T *buf_start = buf;
-        const int *grp_list = nbr_recv_groups.GetRow(nbr);
-        for (int i = 0; i < num_send_groups; i++){
-          buf += d_group_ldof.RowSize(grp_list[i]);
-          d_buf += d_group_ldof.RowSize(grp_list[i]);
-        }
         push(MPI_Isend,Orange);
         MPI_Isend(buf_start,
                   buf - buf_start,
@@ -429,12 +365,12 @@ namespace mfem {
         pop();
         request_marker[request_counter] = nbr;
         request_counter++;
-        buf_offsets[nbr] = buf - (T*)h_group_buf;
+        buf_offsets[nbr] = buf - (T*)group_buf.GetData();
         buf += recv_size;
         d_buf += recv_size;
       }
     }
-    assert(buf - (T*)h_group_buf == group_buf_size);
+    assert(buf - (T*)group_buf.GetData() == group_buf_size);
     comm_lock = 2;
     num_requests = request_counter;
     dbg("\033[33;1m[%d-d_ReduceBegin] done",rnk);
@@ -467,15 +403,12 @@ namespace mfem {
         int recv_size = 0;
         for (int i = 0; i < num_recv_groups; i++)
           recv_size += group_ldof.RowSize(grp_list[i]);
-        
-        const T *buf = (T*)h_group_buf + buf_offsets[nbr];
+        const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
 #ifdef __NVCC__
-        const T *d_buf = (T*)h_group_buf + buf_offsets[nbr];
-        push(HtoD,Red);
-        checkCudaErrors(cuMemcpyHtoD/*Async*/((CUdeviceptr)d_buf,
-                                              buf,
-                                              recv_size*sizeof(T)));
-        pop();
+        const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
+        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
+                                     buf,
+                                     recv_size*sizeof(T)));
 #else
         const T *d_buf = buf;
 #endif       
