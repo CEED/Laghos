@@ -34,7 +34,8 @@ namespace mfem {
     CUdevice cuDevice;
     CUcontext cuContext;
 //#warning device tied to 0
-    const int device = mpi_rank%mpi_size; // We still use the same device for now // mpi_rank;
+#warning mpi_rank%2
+    const int device = mpi_rank%2;//mpi_size; // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API

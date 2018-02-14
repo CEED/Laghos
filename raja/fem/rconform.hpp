@@ -24,7 +24,7 @@ namespace mfem {
   class RajaConformingProlongationOperator : public RajaOperator{
   protected:
     Array<int> external_ldofs;
-    //RajaCommunicator *gc;
+    RajaArray<int> d_external_ldofs;
     RajaCommD *gc;
   public:
     RajaConformingProlongationOperator(ParFiniteElementSpace &);
