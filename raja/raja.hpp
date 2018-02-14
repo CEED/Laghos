@@ -31,6 +31,7 @@
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"
+//#include "general/table.hpp"
 #include "general/communication.hpp"
 #include "fem/pfespace.hpp"
 
@@ -42,6 +43,7 @@
 // LAGHOS/raja/general *********************************************************
 #include "general/rmalloc.hpp"
 #include "general/rarray.hpp"
+#include "general/rtable.hpp"
 #include "general/rcommunicator.hpp"
 
 // LAGHOS/raja/linalg **********************************************************

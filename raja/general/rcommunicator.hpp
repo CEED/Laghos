@@ -48,6 +48,8 @@ namespace mfem {
   // ***************************************************************************
   class RajaCommD : public GroupCommunicator{
   private:
+    RajaTable d_group_ldof;
+    RajaTable d_group_ltdof;
     void *d_group_buf;
   public:
     RajaCommD(ParFiniteElementSpace&);

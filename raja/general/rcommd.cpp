@@ -17,6 +17,8 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::RajaCommD(ParFiniteElementSpace &pfes):
     GroupCommunicator(pfes.GroupComm()),
+    d_group_ldof(),//group_tdof),
+    d_group_ltdof(),//group_ltdof),
     d_group_buf(NULL) {}
 
   
@@ -29,6 +31,7 @@ namespace mfem {
   // ***************************************************************************
   // * kCopyFromTable
   // ***************************************************************************
+#ifdef __NVCC__
   template <class T>
   static __global__ void kCopyFromTable(const int N, T* adrs, T *value){
     const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -36,6 +39,7 @@ namespace mfem {
   }
   //template __global__ void kAtomicAdd<int>(int*, int*);
   //template __global__ void kAtomicAdd<double>(double*, double*);
+#endif
 
 
   // ***************************************************************************
@@ -48,9 +52,13 @@ namespace mfem {
     push(Yellow);
     dbg("\033[33m %d\033[m",ndofs);
     for (int j = 0; j < ndofs; j++){
+#ifdef __NVCC__
       CUdeviceptr dest = (CUdeviceptr)(d_buf+j);
       const CUdeviceptr src = (CUdeviceptr)(d_ldata+dofs[j]);
       checkCudaErrors(cuMemcpyDtoDAsync(dest,src,sizeof(T),0));
+#else
+      d_buf[j] = d_ldata[dofs[j]];
+#endif
     }
     pop();
     return d_buf + ndofs;
@@ -105,6 +113,7 @@ namespace mfem {
   // ***************************************************************************
   // * kAtomicAdd
   // ***************************************************************************
+#ifdef __NVCC__
   template <class T>
   static __global__ void kAtomicAdd(T* adrs, T *value){
     //const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -114,6 +123,7 @@ namespace mfem {
   }
   template __global__ void kAtomicAdd<int>(int*, int*);
   template __global__ void kAtomicAdd<double>(double*, double*);
+#endif
 
   // ***************************************************************************
   // * ReduceGroupFromBuffer
@@ -165,6 +175,8 @@ namespace mfem {
 #ifdef __NVCC__
     assert(d_group_buf);
     T *d_buf = (T*)d_group_buf;
+#else
+    T *d_buf = (T*)d_buf;
 #endif
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
@@ -172,7 +184,9 @@ namespace mfem {
       if (num_send_groups > 0)
       {
         T *buf_start = buf;
+#ifdef __NVCC__
         T *d_buf_start = d_buf;
+#endif
         const int *grp_list = nbr_send_groups.GetRow(nbr);
         for (int i = 0; i < num_send_groups; i++)
         {
@@ -301,6 +315,8 @@ namespace mfem {
       checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
     }
     T *d_buf = (T*)d_group_buf;
+#else
+    T *d_buf = (T*)d_buf;
 #endif
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
@@ -399,6 +415,8 @@ namespace mfem {
         checkCudaErrors(cuMemcpyHtoDAsync((CUdeviceptr)d_buf,
                                           buf,
                                           recv_size*sizeof(T),0));
+#else
+        const T *d_buf = buf;
 #endif       
         for (int i = 0; i < num_recv_groups; i++)
         {
