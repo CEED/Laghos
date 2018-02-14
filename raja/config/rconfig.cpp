@@ -14,9 +14,15 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
+#include <mpi-ext.h>
 
 namespace mfem {
 
+  // ***************************************************************************
+  int cuda_support(void){
+    return MPIX_Query_cuda_support();
+  }
+  
   // ***************************************************************************
   void rconfig::Setup(const int _mpi_rank,
                       const int _mpi_size,
@@ -64,6 +70,15 @@ namespace mfem {
       printf("\033[32m[laghos] Rank_%d => Device_%d (%s:sm_%d.%d)\033[m\n",
              mpi_rank, device, name, major, minor);
     }
+
+    { // Check if there is CUDA aware support
+      const int cuda_aware = cuda_support();
+      if (mpi_rank==0)
+        printf("\033[32m[laghos] MPI %s CUDA aware\033[m\n",
+               (cuda_aware==1)?"\033[1mIS":"is \033[31;1mNOT\033[32m");
+    }
+
+    // Create our context
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
 #endif
   }

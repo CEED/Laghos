@@ -298,9 +298,11 @@ namespace mfem {
 #else
         const T *buf = (T*)h_group_buf + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                     buf,
-                                     recv_size*sizeof(T)));
+        push(HtoD,Red);
+        checkCudaErrors(cuMemcpyHtoD/*Async*/((CUdeviceptr)d_buf,
+                                              buf,
+                                              recv_size*sizeof(T)));
+        pop();
 #endif
         for (int i = 0; i < num_recv_groups; i++)
         {
@@ -467,9 +469,11 @@ namespace mfem {
         const T *buf = (T*)h_group_buf + buf_offsets[nbr];
 #ifdef __NVCC__
         const T *d_buf = (T*)h_group_buf + buf_offsets[nbr];
-        checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                     buf,
-                                     recv_size*sizeof(T)));
+        push(HtoD,Red);
+        checkCudaErrors(cuMemcpyHtoD/*Async*/((CUdeviceptr)d_buf,
+                                              buf,
+                                              recv_size*sizeof(T)));
+        pop();
 #else
         const T *d_buf = buf;
 #endif       

@@ -147,7 +147,7 @@ endif
 ifneq (,$(nv))
 	CXX = nvcc
 	CXXFLAGS += -D__NVVP__
-	CXXFLAGS += -default-stream per-thread
+#	CXXFLAGS += -default-stream per-thread
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu -Xptxas -dlcm=cg
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
@@ -188,6 +188,7 @@ nvk gpuKT:;$(MAKE) nv=1 t=1 all
 #######################
 # TPL INCLUDES & LIBS #
 #######################
+# Ray MPI_INC = -I/opt/ibm/spectrum_mpi/include
 MPI_INC = -I$(home)/usr/local/openmpi/3.0.0/include 
 
 #DBG_INC = -I/home/camier1/home/dbg
