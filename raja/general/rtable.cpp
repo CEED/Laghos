@@ -11,19 +11,21 @@
 #include "../raja.hpp"
 
 namespace mfem {
-  RajaTable::RajaTable():size(0),I(NULL),J(NULL){}
+  //RajaTable::RajaTable():size(0),I(NULL),J(NULL){}
   RajaTable::RajaTable(const Table &table){
     size = table.Size();
-    assert(size >= 0);
+    assert(size > 0);
+    //printf("[RajaTable] size=%d",size);
     const int nnz = table.GetI()[size];
-    I = (int*) this->operator new(size+1);
+    I = ::new int[size+1];
     J = (int*) this->operator new(nnz);
 #ifdef __NVCC__
-    checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)I,table.GetI(),sizeof(int)*(size+1)));
+    memcpy(I, table.GetI(), sizeof(int)*(size+1));
+    //checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)I,table.GetI(),sizeof(int)*(size+1)));
     checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)J,table.GetJ(),sizeof(int)*nnz));
 #else
-      memcpy(I, table.GetI(), sizeof(int)*(size+1));
-      memcpy(J, table.GetJ(), sizeof(int)*nnz);
+    memcpy(I, table.GetI(), sizeof(int)*(size+1));
+    memcpy(J, table.GetJ(), sizeof(int)*nnz);
 #endif
   }
   

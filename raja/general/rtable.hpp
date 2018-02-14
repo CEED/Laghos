@@ -20,12 +20,16 @@ namespace mfem {
   
   class RajaTable : public rmalloc<int>{
   private:
-    size_t size = 0;
+    int size = 0;
     int *I = NULL;
     int *J = NULL;
   public:
-    RajaTable();
+    //RajaTable();
     RajaTable(const Table&);
+    inline int Size(){return size;}
+    int RowSize(int i) const { return I[i+1]-I[i]; }
+    const int *GetRow(int i) const { return J+I[i]; }
+    int *GetRow(int i) { return J+I[i]; }
   };
 
 } // mfem

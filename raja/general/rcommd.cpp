@@ -17,8 +17,8 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::RajaCommD(ParFiniteElementSpace &pfes):
     GroupCommunicator(pfes.GroupComm()),
-    d_group_ldof(),//group_tdof),
-    d_group_ltdof(),//group_ltdof),
+    d_group_ldof(group_ldof),
+    d_group_ltdof(group_ltdof),
     d_group_buf(NULL) {}
 
   
@@ -32,35 +32,31 @@ namespace mfem {
   // * kCopyFromTable
   // ***************************************************************************
 #ifdef __NVCC__
-  template <class T>
-  static __global__ void kCopyFromTable(const int N, T* adrs, T *value){
-    const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-    if (tid>=N) return;
+  template <class T> static __global__
+  void kCopyGroupToBuffer(T *buf,
+                          const T *data,
+                          const int *dofs){
+    const int j = blockDim.x * blockIdx.x + threadIdx.x;
+    const int idx = dofs[j];
+    buf[j]=data[idx];
   }
-  //template __global__ void kAtomicAdd<int>(int*, int*);
-  //template __global__ void kAtomicAdd<double>(double*, double*);
 #endif
 
-
   // ***************************************************************************
   // ***************************************************************************
-  template <class T>
+  template <class T> static
   T *d_CopyGroupToBuffer_k(const T *d_ldata,
                            T *d_buf,
-                           const int ndofs,
-                           const int *dofs){
-    push(Yellow);
-    dbg("\033[33m %d\033[m",ndofs);
-    for (int j = 0; j < ndofs; j++){
-#ifdef __NVCC__
-      CUdeviceptr dest = (CUdeviceptr)(d_buf+j);
-      const CUdeviceptr src = (CUdeviceptr)(d_ldata+dofs[j]);
-      checkCudaErrors(cuMemcpyDtoDAsync(dest,src,sizeof(T),0));
-#else
+                           const RajaTable &d_dofs,
+                           const int group){
+    const int ndofs = d_dofs.RowSize(group);
+    const int *dofs = d_dofs.GetRow(group);
+#ifndef __NVCC__
+    for (int j = 0; j < ndofs; j++)
       d_buf[j] = d_ldata[dofs[j]];
+#else
+    kCopyGroupToBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
 #endif
-    }
-    pop();
     return d_buf + ndofs;
   }  
   
@@ -68,46 +64,47 @@ namespace mfem {
   // * d_CopyGroupToBuffer
   // ***************************************************************************
   template <class T>
-  T *RajaCommD::d_CopyGroupToBuffer(const T *d_ldata,
-                                    T *d_buf, int group,
-                                    int layout) const  {
-    if (layout==2)
-      return d_CopyGroupToBuffer_k(d_ldata,d_buf,
-                                   group_ltdof.RowSize(group),
-                                   group_ltdof.GetRow(group));
-    if (layout==0)
-      return d_CopyGroupToBuffer_k(d_ldata,d_buf,
-                                   group_ldof.RowSize(group),
-                                   group_ldof.GetRow(group));
-    
+  T *RajaCommD::d_CopyGroupToBuffer(const T *d_ldata, T *d_buf,
+                                    int group, int layout) const  {
+    if (layout==2) // master
+      return d_CopyGroupToBuffer_k(d_ldata,d_buf,d_group_ltdof,group);
+    if (layout==0) // slave
+      return d_CopyGroupToBuffer_k(d_ldata,d_buf,d_group_ldof,group);
     assert(false);
     return 0;
   }
+
+  
+  // ***************************************************************************
+  // ***************************************************************************
+#ifdef __NVCC__
+  template <class T> static __global__
+  void kCopyGroupFromBuffer(const T *buf,
+                            T *data,
+                            const int *dofs){
+    const int j = blockDim.x * blockIdx.x + threadIdx.x;
+    const int idx = dofs[j];
+    data[idx]=buf[j];
+  }
+#endif
 
   // ***************************************************************************
   // ***************************************************************************
   template <class T>
   const T *RajaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
-                                                   int group, int layout) const{
+                                            int group, int layout) const{
     push(Gold);
-    dbg("\t\033[33m[d_CopyGroupFromBuffer]");
-    const int nldofs = group_ldof.RowSize(group);
     assert(layout==0);
-    dbg("\t\t\033[33m[d_CopyGroupFromBuffer] default");
-    const int *ldofs = group_ldof.GetRow(group);
-    for (int j = 0; j < nldofs; j++)
-    {
+    const int ndofs = d_group_ldof.RowSize(group);
+    const int *dofs = d_group_ldof.GetRow(group);
 #ifndef __NVCC__
+    for (int j = 0; j < nldofs; j++)    
       d_ldata[ldofs[j]] = d_buf[j];
 #else
-      CUdeviceptr dest = (CUdeviceptr)(d_ldata+ldofs[j]);
-      const CUdeviceptr src = (CUdeviceptr)(d_buf+j);
-      checkCudaErrors(cuMemcpyDtoDAsync(dest,src,sizeof(T),0));
+    kCopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
 #endif
-    }
-    dbg("\t\t\033[33m[d_CopyGroupFromBuffer] done");
     pop();
-    return d_buf + nldofs;
+    return d_buf + ndofs;
   }
 
   // ***************************************************************************
