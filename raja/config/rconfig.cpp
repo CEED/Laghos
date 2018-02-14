@@ -35,7 +35,8 @@ namespace mfem {
     CUcontext cuContext;
 #warning device tied to 0
 //#warning mpi_rank%2
-    const int device = 0;//mpi_rank%2;//mpi_size; // We still use the same device for now // mpi_rank;
+    const int device = 0;//mpi_rank%2;//mpi_size;
+    // We still use the same device for now // mpi_rank;
     
     // Initializes the driver API
     // Must be called before any other function from the driver API
@@ -76,7 +77,7 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::NeedUpdate(const int sequence) {
-    //if (like_occa) return false;
+    if (like_occa) return false;
     if (like_occa) return true;
     assert(sequence==0);
     return (sequence!=0);

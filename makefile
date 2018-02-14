@@ -147,6 +147,7 @@ endif
 ifneq (,$(nv))
 	CXX = nvcc
 	CXXFLAGS += -D__NVVP__
+	CXXFLAGS += -default-stream per-thread
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu -Xptxas -dlcm=cg
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
