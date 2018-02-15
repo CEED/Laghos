@@ -27,14 +27,23 @@ namespace mfem {
   // ***************************************************************************
   class rconfig{
   private:
-    CUstream hStream=0;
+    // *************************************************************************
     int mpi_rank=0;
     int mpi_size=0;
-    bool uvm=false;
+    bool aware=false;
+    //  ************************************************************************
+    bool mps=false;
+    int gpu_count=0;
+    CUdevice cuDevice;
+    CUcontext cuContext;
+    CUstream hStream=0;
+    // *************************************************************************
     bool cuda=false;
+    bool uvm=false;
     bool share=false;
-    bool like_occa=false;
-    bool cuda_aware=false;
+    // *************************************************************************
+    bool occa=false;
+    bool sync=false;
     // *************************************************************************
   private:
     rconfig(){}
@@ -46,19 +55,28 @@ namespace mfem {
       static rconfig rconfig_singleton;
       return rconfig_singleton;
     }
-    void Setup(const int,const int,const bool,const bool,const bool,const bool);
+    // *************************************************************************
+    void Setup(const int,const int,
+               const bool,const bool,const bool,const bool,const bool);
     // *************************************************************************
     bool IAmAlone();
-    bool NeedUpdate(const int);
+    bool GeomNeedsUpdate(const int);
     bool DoHostConformingProlongationOperator();
     // *************************************************************************
-    inline bool Uvm() { return uvm; }
     inline bool Rank() { return mpi_rank; }
+    inline bool Size() { return mpi_size; }
+    inline bool Root() { return mpi_rank==0; }
+    inline bool Aware() { return aware; }
+    // *************************************************************************
+    inline bool Mps() { return mps; }
+    // *************************************************************************
+    inline bool Uvm() { return uvm; }
     inline bool Cuda() { return cuda; }
     inline bool Share() { return share; }
-    inline bool LikeOcca() { return like_occa; }
+    inline bool Occa() { return occa; }
+    inline bool Sync() { return sync; }
+    // *************************************************************************
     inline CUstream Stream() { return hStream; }
-    inline bool cudaAware() { return cuda_aware; }
   };
   
 } // namespace mfem

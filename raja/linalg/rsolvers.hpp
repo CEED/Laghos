@@ -308,7 +308,7 @@ namespace mfem {
         }
         nom = betanom;
       }
-      pop(for);
+      pop();
      
       if (print_level >= 0 && !converged)
       {

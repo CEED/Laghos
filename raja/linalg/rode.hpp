@@ -127,7 +127,7 @@ namespace mfem {
       f->SetTime(t);
       push(k1,SkyBlue);
       f->Mult(x, k); // k1
-      pop(k1);
+      pop();
       
       push(addxx,SkyBlue);
       add(x, dt/2, k, y);
@@ -137,7 +137,7 @@ namespace mfem {
       
       push(k2,SkyBlue);
       f->Mult(y, k); // k2
-      pop(k2);
+      pop();
       
       push(addxz1,SkyBlue);
       add(x, dt/2, k, y);
@@ -145,7 +145,7 @@ namespace mfem {
       
       push(k3,SkyBlue);
       f->Mult(y, k); // k3
-      pop(k3);
+      pop();
 
       push(addxz2,SkyBlue);
       add(x, dt, k, y);
@@ -154,7 +154,7 @@ namespace mfem {
       
       push(k4,SkyBlue);
       f->Mult(y, k); // k4
-      pop(k4);
+      pop();
       
       push(addz,SkyBlue);
       add(z, dt/6, k, x);pop();

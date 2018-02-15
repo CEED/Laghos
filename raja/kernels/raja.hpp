@@ -44,8 +44,8 @@
 #endif
 
 // *****************************************************************************
-#include "../config/rnvvp.hpp"
 #include "../config/rconfig.hpp"
+#include "../config/rnvvp.hpp"
 
 // *****************************************************************************
 #include "include/forall.hpp"

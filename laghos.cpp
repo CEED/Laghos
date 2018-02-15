@@ -96,7 +96,8 @@ int main(int argc, char *argv[])
    bool cuda = false;
    bool uvm = false;
    bool share = false;
-   bool like_occa = false;
+   bool occa = false;
+   bool sync = false;
    
 #ifdef __NVCC__
 #ifndef __RAJA__
@@ -151,8 +152,10 @@ int main(int argc, char *argv[])
                   "Enable or disable CUDA kernels.");
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels.");
-   args.AddOption(&like_occa, "-like-occa", "--like-occa", "-not-like-occa", "--no-like-occa",
-                  "Enable or disable like-occa test kernels.");
+   args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
+                  "Enable or disable 'like' occa kernels.");
+   args.AddOption(&sync, "-sync", "--sync", "-no-sync", "--no-sync",
+                  "Enable or disable Enforced Kernel Synchronization.");
    args.Parse();
    if (!args.Good())
    {
@@ -163,7 +166,7 @@ int main(int argc, char *argv[])
 
    // CUDA set device & tweak options
    // **************************************************************************
-   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),cuda,uvm,share,like_occa);
+   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),cuda,uvm,share,occa,sync);
    
    // **************************************************************************
    if (dot){

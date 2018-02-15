@@ -188,7 +188,7 @@ namespace mfem {
           buf += d_buf - d_buf_ini;
         }
 #ifdef __NVCC__
-        if (!rconfig::Get().cudaAware()){
+        if (!rconfig::Get().Aware()){
           push(BcastBegin:DtoH,Red); 
           checkCudaErrors(cuMemcpyDtoH(buf_start,
                                        (CUdeviceptr)d_buf_start,
@@ -197,14 +197,14 @@ namespace mfem {
         }
 #endif
         // make sure the device has finished
-        if (rconfig::Get().cudaAware()){
+        if (rconfig::Get().Aware()){
           push(sync,Lime);
           cudaStreamSynchronize(0);
           pop();
         }
 
         push(MPI_Isend,Orange);
-        if (rconfig::Get().cudaAware())
+        if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
                     buf - buf_start,
                     MPITypeMap<T>::mpi_type,
@@ -235,7 +235,7 @@ namespace mfem {
           recv_size += group_ldof.RowSize(grp_list[i]);
         }
         push(MPI_Irecv,Orange);
-        if (rconfig::Get().cudaAware())
+        if (rconfig::Get().Aware())
           MPI_Irecv(d_buf,
                     recv_size,
                     MPITypeMap<T>::mpi_type,
@@ -301,7 +301,7 @@ namespace mfem {
 #else
         const T *buf = (T*)group_buf.GetData() + buf_offsets[nbr];
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        if (!rconfig::Get().cudaAware()){
+        if (!rconfig::Get().Aware()){
           push(BcastEnd:HtoD,Red);
           checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
                                        buf,
@@ -358,7 +358,7 @@ namespace mfem {
         }
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
 #ifdef __NVCC__
-        if (!rconfig::Get().cudaAware()){
+        if (!rconfig::Get().Aware()){
           push(ReduceBegin:DtoH,Red);
           checkCudaErrors(cuMemcpyDtoH(buf_start,
                                        (CUdeviceptr)d_buf_start,
@@ -367,14 +367,14 @@ namespace mfem {
         }
 #endif
         // make sure the device has finished
-        if (rconfig::Get().cudaAware()){
+        if (rconfig::Get().Aware()){
           push(sync,Lime);
           cudaStreamSynchronize(0);
           pop();
         }
         
         push(MPI_Isend,Orange);
-        if (rconfig::Get().cudaAware())
+        if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
                     buf - buf_start,
                     MPITypeMap<T>::mpi_type,
@@ -407,7 +407,7 @@ namespace mfem {
         }
         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Irecv",rnk);
         push(MPI_Irecv,Orange);
-        if (rconfig::Get().cudaAware())
+        if (rconfig::Get().Aware())
           MPI_Irecv(d_buf,
                     recv_size,
                     MPITypeMap<T>::mpi_type,
@@ -468,7 +468,7 @@ namespace mfem {
 #ifdef __NVCC__
         assert(d_group_buf);
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
-        if (!rconfig::Get().cudaAware()){
+        if (!rconfig::Get().Aware()){
           push(ReduceEnd:HtoD,Red);
           checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
                                        buf,

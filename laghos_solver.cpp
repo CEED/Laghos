@@ -118,10 +118,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
      e_quad()
 {
-  push(Wheat); 
-   //Vector rho0_ = rho0;
-   //GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
-   //GridFunctionCoefficient rho_coeff(&rho0_gf);
+  push(Wheat);
 
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
@@ -182,13 +179,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    CG_EMass.SetMaxIter(200);
    CG_EMass.SetPrintLevel(-1);
-
-   //locCG.SetOperator(EMassPA);
-   //locCG.iterative_mode = false;
-   //locCG.SetRelTol(1e-8);
-   //locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-   //locCG.SetMaxIter(200);
-   //locCG.SetPrintLevel(0);
    pop();
 }
 
@@ -414,7 +404,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    RajaVector v = S.GetRange(vSize, vSize);
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
 
-   quad_data.geom = rconfig::Get().LikeOcca() ?
+   quad_data.geom = rconfig::Get().Occa() ?
      RajaGeometry::Get(H1FESpace,integ_rule):
      RajaGeometry::Get(H1FESpace,integ_rule,x);
    H1FESpace.GlobalToLocal(v, v_local);

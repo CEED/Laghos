@@ -27,11 +27,11 @@
 #include <cuda.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
+#define cuCheck checkCudaErrors
 #endif
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"
-//#include "general/table.hpp"
 #include "general/communication.hpp"
 #include "fem/pfespace.hpp"
 
