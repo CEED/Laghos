@@ -219,6 +219,8 @@ int main(int argc, char *argv[])
    }
    if (product == num_tasks)
    {
+      if (myid == 0)
+        printf("\033[32m[laghos] \033[32;1mCartesian\033[m\033[32m partitioning will be used\033[m\n");
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete[] partitioning;
@@ -227,7 +229,7 @@ int main(int argc, char *argv[])
    {
       if (myid == 0)
       {
-         cout << "Non-Cartesian partitioning through METIS will be used.\n";
+        printf("\033[32m[laghos] Non-Cartesian partitioning through METIS will be used\033[m\n");
 #ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;

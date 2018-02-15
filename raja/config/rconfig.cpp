@@ -17,7 +17,13 @@
 #include <mpi-ext.h>
 
 namespace mfem {
- 
+
+  // ***************************************************************************
+  bool isNvidiaCudaMpsDaemonRunning(void){
+    const char *command="pidof -s nvidia-cuda-mps-control>/dev/null";
+    return system(command)==0;
+  }
+  
   // ***************************************************************************
   void rconfig::Setup(const int _mpi_rank,
                       const int _mpi_size,
@@ -36,19 +42,35 @@ namespace mfem {
 #if defined(__NVCC__) 
     int nb_gpu=0;
     
-    { // Check if we have enough devices for all ranks
+    { // Check if there is CUDA aware support
+      if (mpi_rank==0)
+        printf("\033[32m[laghos] MPI %s CUDA aware\033[m\n",
+               cuda_aware?"\033[1mIS":"is \033[31;1mNOT\033[32m");
+    }
+        
+    { 
+      // Returns the number of devices with compute capability greater or equal to 2.0
+      // Can be changed wuth CUDA_VISIBLE_DEVICES
       checkCudaErrors(cudaGetDeviceCount(&nb_gpu));
       if (mpi_rank==0)
         printf("\033[32m[laghos] CUDA device count: %i\033[m\n", nb_gpu);
-      assert(nb_gpu>=mpi_size);
     }
-    
+
     CUdevice cuDevice;
     CUcontext cuContext;
-//#warning device tied to 0
-//#warning mpi_rank%2
-    const int device = mpi_rank%nb_gpu;
+    const bool mpsRunning = isNvidiaCudaMpsDaemonRunning();
+    const int device = mpsRunning?0:(mpi_rank%nb_gpu);
     
+    // Check if we have enough devices for all ranks
+    assert(device<nb_gpu);
+
+    if (mpi_rank==0)
+      if (mpsRunning)
+        printf("\033[32m[laghos] \033[32;1mMPS daemon\033[m\033[32m => \033[32;1m#%d\033[m\n", device);
+      else
+        printf("\033[32m[laghos] \033[31;1mNo MPS daemon\033[m\n");
+
+   
     // Initializes the driver API
     // Must be called before any other function from the driver API
     // Currently, the Flags parameter must be 0. 
@@ -66,13 +88,7 @@ namespace mfem {
       printf("\033[32m[laghos] Rank_%d => Device_%d (%s:sm_%d.%d)\033[m\n",
              mpi_rank, device, name, major, minor);
     }
-
-    { // Check if there is CUDA aware support
-      if (mpi_rank==0)
-        printf("\033[32m[laghos] MPI %s CUDA aware\033[m\n",
-               cuda_aware?"\033[1mIS":"is \033[31;1mNOT\033[32m");
-    }
-
+    
     // Create our context
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
 #endif
