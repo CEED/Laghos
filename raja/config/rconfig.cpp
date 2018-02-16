@@ -46,7 +46,9 @@ namespace mfem {
                       const bool _uvm,
                       const bool _share,
                       const bool _occa,
-                      const bool _sync){
+                      const bool _sync,
+                      const bool _dot,
+                      const int rs_levels){
     mpi_rank=_mpi_rank;
     mpi_size=_mpi_size;
     aware=(MPIX_Query_cuda_support()==1)?true:false;
@@ -97,6 +99,11 @@ namespace mfem {
     // Create our context
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
 #endif
+    if (_dot){
+      dotTest(rs_levels);
+      MPI_Finalize();
+      exit(0);
+    }
   }
 
   // ***************************************************************************

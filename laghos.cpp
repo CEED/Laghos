@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    bool dot = false;
+   bool mult = false;
    bool cuda = false;
    bool uvm = false;
    bool share = false;
@@ -146,6 +147,8 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
                   "Enable or disable DOT test kernels.");
+   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
+                  "Enable or disable MULT test kernels.");
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "Enable or disable CUDA managed alloc.");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
@@ -166,34 +169,9 @@ int main(int argc, char *argv[])
 
    // CUDA set device & tweak options
    // **************************************************************************
-   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),cuda,uvm,share,occa,sync);
+   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
+                        cuda,uvm,share,occa,sync,dot,rs_levels);
    
-   // **************************************************************************
-   if (dot){
-     cuProfilerStart();
-     struct timeval st, et;
-     int size = 0x400;
-     for (int lev = 0; lev < rs_levels; lev++) size<<=1;
-     //Vector h_a(size); h_a=1.0/M_PI;
-     //Vector h_b(size); h_b=M_PI;
-     gettimeofday(&st, NULL);
-     RajaVector a(size);a=1.0/M_PI;//h_a;//a.Print();
-     RajaVector b(size);b=M_PI;//(h_b); //b.Print();
-     //RajaVector c(size); c=0.0;
-     gettimeofday(&et, NULL);
-     const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-     printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\033[m\n",setTime/1000.0);
-     gettimeofday(&st, NULL);
-     //double dt = a*b;
-     //c+=1.0;
-     a+=b;
-     gettimeofday(&et, NULL);
-     //assert(dt == (double)size);
-     const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-     printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\033[m\n",size,alltime/1000.0);
-     return 0;
-   }
-
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -250,6 +228,13 @@ int main(int argc, char *argv[])
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
+   // **************************************************************************
+   if (mult){
+     multTest(pmesh);
+     MPI_Finalize();
+     exit(0);
+   }
+   
    // **************************************************************************
    //cuProfilerStart();
    push(Tan);

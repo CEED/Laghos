@@ -70,7 +70,6 @@ namespace mfem {
     
     if (!rconfig::Get().DoHostConformingProlongationOperator()){
       dbg("\n\033[35m[DEVICE::MultTranspose]\033[m");
-      //assert(false);
       pmat->d_MultTranspose(x, y);
       pop();
       return;

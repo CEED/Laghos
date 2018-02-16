@@ -57,7 +57,9 @@ namespace mfem {
     }
     // *************************************************************************
     void Setup(const int,const int,
-               const bool,const bool,const bool,const bool,const bool);
+               const bool cuda, const bool uvm, const bool share,
+               const bool occa, const bool sync,
+               const bool dot, const int rs_levels);
     // *************************************************************************
     bool IAmAlone();
     bool GeomNeedsUpdate(const int);

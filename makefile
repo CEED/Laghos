@@ -233,6 +233,7 @@ RAJA_FILES = $(wildcard $(raja)/config/*.cpp)
 RAJA_FILES += $(wildcard $(raja)/fem/*.cpp)
 RAJA_FILES += $(wildcard $(raja)/general/*.cpp)
 RAJA_FILES += $(wildcard $(raja)/linalg/*.cpp)
+RAJA_FILES += $(wildcard $(raja)/tests/*.cpp)
 
 ################
 # OBJECT FILES #

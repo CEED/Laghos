@@ -64,5 +64,8 @@
 #include "fem/rgridfunc.hpp"
 #include "fem/rbilininteg.hpp"
 
+// LAGHOS/raja/tests ***********************************************************
+#include "tests/tests.hpp"
+
 #endif // LAGHOS_RAJA
 
