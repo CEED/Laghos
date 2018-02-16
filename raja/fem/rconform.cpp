@@ -48,6 +48,7 @@ namespace mfem {
   // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
+#ifdef __NVCC__
   static __global__
   void k_Mult(double *y,const double *x,const int *external_ldofs){
     const int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -56,13 +57,14 @@ namespace mfem {
     for(int k=0;k<(end-j);k+=1)
       y[j+k]=x[j-i+k];
   }
-  
+#endif
+
   // ***************************************************************************
   // * Device Mult
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
-    push(Magenta);
+    push(Coral);
     dbg("\n\033[32m[d_Mult]\033[m");
     const double *d_xdata = x.GetData();
     const int in_layout = 2; // 2 - input is ltdofs array
@@ -101,6 +103,7 @@ namespace mfem {
   // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
+#ifdef __NVCC__
   static __global__
   void k_MultTranspose(double *y,const double *x,const int *external_ldofs){
     const int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -109,13 +112,14 @@ namespace mfem {
     for(int k=0;k<(end-j);k+=1)
       y[j-i+k]=x[j+k];
   }
-
+#endif
+  
   // ***************************************************************************
   // * Device MultTranspose
   // ***************************************************************************
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
-    push(Magenta);
+    push(Coral);
     dbg("\n\033[32m[d_MultTranspose]\033[m");
     const double *d_xdata = x.GetData();
     
@@ -154,14 +158,16 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
-    push(DeepSkyBlue);
+    push(Coral);
     MFEM_ASSERT(x.Size() == Width(), "");
     MFEM_ASSERT(y.Size() == Height(), "");
     const double *xdata = x.GetData();
     double *ydata = y.GetData(); 
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
+    push(BcastBegin,Moccasin);
     gc->BcastBegin(const_cast<double*>(xdata), in_layout);
+    pop();
     int j = 0;
     for (int i = 0; i < m; i++)
     {
@@ -171,7 +177,9 @@ namespace mfem {
     }
     std::copy(xdata+j-m, xdata+Width(), ydata+j);
     const int out_layout = 0; // 0 - output is ldofs array
+    push(BcastEnd,PeachPuff);
     gc->BcastEnd(ydata, out_layout);
+    pop();
     pop();
   }
 
@@ -180,12 +188,15 @@ namespace mfem {
   // ***************************************************************************
   void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                            Vector &y) const{
+    push(Coral);
     MFEM_ASSERT(x.Size() == Height(), "");
     MFEM_ASSERT(y.Size() == Width(), "");
     const double *xdata = x.GetData();
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();
+    push(ReduceBegin,PapayaWhip);
     gc->ReduceBegin(xdata);
+    pop();
     int j = 0;
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
@@ -194,7 +205,9 @@ namespace mfem {
     }
     std::copy(xdata+j, xdata+Height(), ydata+j-m);
     const int out_layout = 2; // 2 - output is an array on all ltdofs
+    push(ReduceEnd,LavenderBlush);
     gc->ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
+    pop();
     pop();
   }
 

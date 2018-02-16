@@ -96,8 +96,8 @@ namespace mfem {
     const int ndofs = d_group_ldof.RowSize(group);
     const int *dofs = d_group_ldof.GetRow(group);
 #ifndef __NVCC__
-    for (int j = 0; j < nldofs; j++)    
-      d_ldata[ldofs[j]] = d_buf[j];
+    for (int j = 0; j < ndofs; j++)    
+      d_ldata[dofs[j]] = d_buf[j];
 #else
     k_CopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
 #endif
@@ -165,10 +165,15 @@ namespace mfem {
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
 #ifdef __NVCC__
-    assert(d_group_buf);
+    if (!d_group_buf){
+      push(alloc,Purple);
+      dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
+      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
+      pop();
+    }
     T *d_buf = (T*)d_group_buf;
 #else
-    T *d_buf = (T*)d_buf;
+    T *d_buf = (T*)buf;
 #endif
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
@@ -195,15 +200,17 @@ namespace mfem {
                                        (buf-buf_start)*sizeof(T)));
           pop();
         }
-#endif
+        
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
           cudaStreamSynchronize(0);
           pop();
         }
+#endif
 
         push(MPI_Isend,Orange);
+#ifdef __NVCC__
         if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
                     buf - buf_start,
@@ -213,6 +220,7 @@ namespace mfem {
                     gtopo.GetComm(),
                     &requests[request_counter]);
         else
+#endif
           MPI_Isend(buf_start,
                     buf - buf_start,
                     MPITypeMap<T>::mpi_type,
@@ -365,14 +373,15 @@ namespace mfem {
                                        (buf-buf_start)*sizeof(T)));
           pop();
         }
-#endif
+        
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
           cudaStreamSynchronize(0);
           pop();
         }
-        
+#endif
+       
         push(MPI_Isend,Orange);
         if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,

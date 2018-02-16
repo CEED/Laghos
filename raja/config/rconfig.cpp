@@ -25,6 +25,7 @@ namespace mfem {
     return system(command)==0;
   }
 
+#ifdef __NVCC__
   // ***************************************************************************
   void computeCapabilityOfTheDevice(const int mpi_rank,
                                     const CUdevice cuDevice,
@@ -36,6 +37,7 @@ namespace mfem {
     printf("\033[32m[laghos] Rank_%d => Device_%d (%s:sm_%d.%d)\033[m\n",
            mpi_rank, device, name, major, minor);
   }
+#endif
 
   // ***************************************************************************
   // *   Setup
@@ -53,9 +55,11 @@ namespace mfem {
     mpi_size=_mpi_size;
     aware=(MPIX_Query_cuda_support()==1)?true:false;
     mps = isNvidiaCudaMpsDaemonRunning();
+#ifdef __NVCC__
     // Get the number of devices with compute capability greater or equal to 2.0
     // Can be changed wuth CUDA_VISIBLE_DEVICES
     cuCheck(cudaGetDeviceCount(&gpu_count));
+#endif
     cuda=_cuda;
     uvm=_uvm;
     share=_share;

@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 
    // **************************************************************************
    if (mult){
-     multTest(pmesh);
+     multTest(pmesh,order_v,max_tsteps);
      MPI_Finalize();
      exit(0);
    }

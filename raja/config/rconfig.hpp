@@ -34,9 +34,11 @@ namespace mfem {
     //  ************************************************************************
     bool mps=false;
     int gpu_count=0;
+#ifdef __NVCC__
     CUdevice cuDevice;
     CUcontext cuContext;
     CUstream hStream=0;
+#endif
     // *************************************************************************
     bool cuda=false;
     bool uvm=false;
@@ -78,7 +80,9 @@ namespace mfem {
     inline bool Occa() { return occa; }
     inline bool Sync() { return sync; }
     // *************************************************************************
+#ifdef __NVCC__
     inline CUstream Stream() { return hStream; }
+#endif
   };
   
 } // namespace mfem

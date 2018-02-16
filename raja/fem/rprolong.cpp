@@ -31,7 +31,6 @@ namespace mfem {
     
     if (!rconfig::Get().DoHostConformingProlongationOperator()){
       dbg("\n\033[35m[DEVICE::Mult]\033[m");
-      //assert(false);
       pmat->d_Mult(x, y);
       pop();
       return;
@@ -51,7 +50,7 @@ namespace mfem {
     pmat->h_Mult(hostX, hostY);
     pop();
     
-    push(hostY:H2D,LightSteelBlue);
+    push(hostY:H2D,Red);
     y=hostY;//H2D
     pop();
     
@@ -89,7 +88,7 @@ namespace mfem {
     pmat->h_MultTranspose(hostX, hostY);
     pop();
     
-    push(hostY:H2D,LightSteelBlue);
+    push(hostY:H2D,Red);
     y=hostY;//H2D
     pop();
     

@@ -19,7 +19,7 @@
 namespace mfem {
   
   bool dotTest(const int rs_levels);
-  bool multTest(ParMesh *pmesh, const int order = 2);
+  bool multTest(ParMesh *pmesh, const int order =1, const int max_step =2);
 
 } // mfem
 

@@ -14,6 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
+#include <sys/time.h>
 
 namespace mfem {
 

@@ -31,6 +31,12 @@ void vector_op_eq(const int N,
   push(eq,Cyan);
 #ifndef __LAMBDA__
   cuKer(vector_op_eq,N,c0,v0);
+  /*void *args[] = {
+        (void*)&N,
+        (void*)&c0,
+        (void*)&v0,
+    };
+    cuLaunchKernel(vector_op_eq,args);*/
 #else
   forall(i,N,v0[i] = c0;);
 #endif

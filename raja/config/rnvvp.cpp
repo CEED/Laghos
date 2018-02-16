@@ -15,6 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
+#if defined(__NVCC__) and defined(__NVVP__)
+
 // *****************************************************************************
 static const uint32_t legacy_colors[] = {
   0x000000, 0x000080, 0x00008B, 0x0000CD, 0x0000FF, 0x006400, 0x008000,
@@ -75,6 +77,8 @@ int rNvtxRangePushEx(const char *ascii, const int color){
 int rNvtxSyncPop(void){ // Enforce Kernel Synchronization
   rNvtxAttrPushEx("EKS", Yellow);
   cudaStreamSynchronize(mfem::rconfig::Get().Stream());
+  nvtxRangePop();
   return nvtxRangePop();
 }
   
+#endif // defined(__NVCC__) and defined(__NVVP__)
