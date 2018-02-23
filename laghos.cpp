@@ -41,8 +41,8 @@
 //    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
 //    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
 //    mpirun -np 8 laghos -p 2 -m data/segment01.mesh     -rs 5 -tf 0.2
-//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5
-//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 2.5
+//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0
+//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 3.0
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
@@ -215,11 +215,13 @@ int main(int argc, char *argv[])
    }
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
+   /*
    if (myid == 0)
    {
       cout << nxyz[0] << " " << nxyz[1] << " " << nxyz[2] << " "
            << product << " " << num_tasks << endl;
    }
+   */
    if (product == num_tasks)
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
@@ -365,8 +367,15 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
-   // Space-dependent ideal gas coefficient over the Lagrangian mesh.
-   Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+   // gamma values are projected on a function that stays constant on the moving
+   // mesh.
+   L2_FECollection mat_fec(0, pmesh->Dimension());
+   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   ParGridFunction mat_gf(&mat_fes);
+   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   mat_gf.ProjectCoefficient(mat_coeff);
+   GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
    // Additional details, depending on the problem.
    int source = 0; bool visc;
@@ -381,7 +390,7 @@ int main(int argc, char *argv[])
    }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, material_pcf,
+                                ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
@@ -571,7 +580,7 @@ int main(int argc, char *argv[])
    // Free the used memory.
    delete ode_solver;
    delete pmesh;
-   delete material_pcf;
+   delete mat_gf_coeff;
 
    return 0;
 }

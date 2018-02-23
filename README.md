@@ -237,8 +237,8 @@ To make sure the results are correct, we tabulate reference final iterations
 3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
 4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
 5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
-6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -no-vis -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -no-vis -pa`
+6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -no-vis -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -no-vis -pa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
@@ -247,8 +247,8 @@ To make sure the results are correct, we tabulate reference final iterations
 |  3. | 1150 | 0.002271 | 46.3055694447   |
 |  4. |  561 | 0.000360 | 134.0937837800  |
 |  5. |  414 | 0.000339 | 32.0120759651   |
-|  6. | 4968 | 0.000048 | 147.2685142131  |
-|  7. |  882 | 0.002225 | 149.6915209641  |
+|  6. | 5310 | 0.000264 | 141.8347412865  |
+|  7. |  936 | 0.002430 | 144.0009090934  |
 
 
 An implementation is considered valid if the final energy values are all within
