@@ -72,8 +72,9 @@ namespace mfem {
 
   // ***************************************************************************
   bool multTest(ParMesh *pmesh, const int order, const int max_step){
+    struct timeval st, et;
     assert(order>=1);
-    assert(max_step>0);
+    const int nb_step = (max_step>0)?max_step:128;
     
     // Launch first dummy kernel
     // And don't enable API tracing in NVVP
@@ -122,9 +123,13 @@ namespace mfem {
     push(y=2,Turquoise);
     y=2.0;
     pop();
+    
+    gettimeofday(&st, NULL);
 
+    // Allow MPI buffer setup
+    Pm1AP.Mult(x, y);
 
-    for(int i=0;i<max_step;i++){
+    for(int i=0;i<nb_step;i++){
 #ifdef __NVCC__
       cudaDeviceSynchronize();
 #endif
@@ -132,6 +137,11 @@ namespace mfem {
       Pm1AP.Mult(x, y);
       pop();
     }
+    gettimeofday(&et, NULL);
+    const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+ (et.tv_usec - st.tv_usec)/1.0e3);
+    
+    if (rconfig::Get().Root())
+      printf("\033[32m[laghos] Elapsed time = %f ms/iter\33[m\n", alltime/nb_step);
     
     pop();
     return true;
