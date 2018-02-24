@@ -400,7 +400,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // HQ_i2_k1   = HQs_i2_k2 QQ_k1_k2 -- contract in y direction.
          // HHx_i1_i2  = HQg_i1_k1 HQ_i2_k1 -- gradients in x direction.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQshape1D, QQd, HQ);
          MultABt(tensors1D->HQgrad1D, HQ, HHx);
 
@@ -408,7 +408,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // HQ_i2_k1  = HQg_i2_k2 QQ_k1_k2 -- gradients in y direction.
          // HHy_i1_i2 = HQ_i1_k1 HQ_i2_k1  -- contract in x direction.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQgrad1D, QQd, HQ);
          MultABt(tensors1D->HQshape1D, HQ, HHy);
 
@@ -492,7 +492,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
       {
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQs_i2_k2 -- contract  in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -518,7 +518,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- gradients in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -544,7 +544,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
          d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- contract  in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -724,7 +724,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
 
@@ -751,7 +751,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
 
@@ -778,7 +778,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
          d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,2) * d[v_c]_dz) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
       }
