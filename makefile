@@ -147,7 +147,8 @@ endif
 ifneq (,$(nv))
 	CXX = nvcc
 #	CXXFLAGS += -D__NVVP__
-	CXXFLAGS += --restrict $(NV_ARCH) -x=cu -Xptxas -dlcm=cg
+	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
+	CUFLAGS  += --restrict $(NV_ARCH)
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
 endif
@@ -196,7 +197,7 @@ MPI_INC = -I$(MPI_HOME)/include
 
 CUDA_HOME = /usr/local/cuda
 CUDA_INC = -I$(CUDA_HOME)/samples/common/inc
-CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64/lib -L/usr/local/cuda/lib64 \
+CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64 -L/usr/local/cuda/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
 CUB_DIR = $(home)/usr/src/cub
@@ -223,6 +224,9 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 SOURCE_FILES = $(wildcard $(pwd)/*.cpp)
 KERNEL_FILES = $(wildcard $(kernels)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/blas/*.cpp)
+ifneq (,$(nv))
+#KERNEL_FILES += $(wildcard $(kernels)/blas/*.cu)
+endif
 KERNEL_FILES += $(wildcard $(kernels)/force/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/geom/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/maps/*.cpp)
@@ -276,6 +280,9 @@ $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
 
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
+	$(call quiet,CCC) -c -o $@ $(abspath $<)
+
+$(kernels)/%.ou: $(kernels)/%.cu
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
 
 all: 

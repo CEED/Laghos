@@ -17,6 +17,9 @@
 
 // *****************************************************************************
 #ifdef __NVCC__
+__inline__ __device__ double4 operator*(double4 a, double4 b) {
+  return make_double4(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w);
+}
 #include <cub/cub.cuh>
 
 // *****************************************************************************
