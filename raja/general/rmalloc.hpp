@@ -21,7 +21,7 @@ namespace mfem {
   // ***************************************************************************
   template<class T> struct rmalloc: public rmemcpy {
     
-    void* operator new(size_t n, bool page_locked = true) {
+    void* operator new(size_t n, bool page_locked = false) {
       rdbg("+]\033[m");
       if (!rconfig::Get().Cuda()) return ::new T[n];
 #ifdef __NVCC__

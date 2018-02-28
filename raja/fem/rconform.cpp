@@ -92,9 +92,7 @@ namespace mfem {
 #ifndef __NVCC__
     std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j),
-                                 (CUdeviceptr)(d_xdata+j-m),
-                                 (Width()+m-j)*sizeof(double)));
+    rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
 #endif
     const int out_layout = 0; // 0 - output is ldofs array
     gc->d_BcastEnd(d_ydata, out_layout);
@@ -145,9 +143,7 @@ namespace mfem {
 #ifndef __NVCC__
     std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
 #else
-    checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)(d_ydata+j-m),
-                                 (CUdeviceptr)(d_xdata+j),
-                                 (Height()-j)*sizeof(double)));
+    rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));
 #endif
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);

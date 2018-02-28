@@ -27,7 +27,7 @@ static double cub_vector_dot(const int N,
                              const double* __restrict vec1,
                              const double* __restrict vec2) {
   static double *h_dot = NULL;
-  if (!h_dot) h_dot = (double*)mfem::rmalloc<double>::operator new(1);
+  if (!h_dot) h_dot = (double*)mfem::rmalloc<double>::operator new(1,true);
   static double *d_dot = NULL;
   if (!d_dot) d_dot=(double*)mfem::rmalloc<double>::operator new(1);
   static void *d_storage = NULL;
@@ -37,7 +37,7 @@ static double cub_vector_dot(const int N,
     d_storage = mfem::rmalloc<char>::operator new(storage_bytes);
   }
   cub::DeviceReduce::Dot(d_storage, storage_bytes, vec1, vec2, d_dot, N);
-  checkCudaErrors(cuMemcpyDtoH(h_dot,(CUdeviceptr)d_dot,1*sizeof(double)));
+  mfem::rmemcpy::rDtoH(h_dot,d_dot,sizeof(double));
   return *h_dot;
 }
 #endif // __NVCC__

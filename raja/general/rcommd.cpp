@@ -194,10 +194,8 @@ namespace mfem {
         }
 #ifdef __NVCC__
         if (!rconfig::Get().Aware()){
-          push(BcastBegin:DtoH,Red); 
-          checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                       (CUdeviceptr)d_buf_start,
-                                       (buf-buf_start)*sizeof(T)));
+          push(BcastBegin:DtoH,Red);
+          rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
           pop();
         }
         
@@ -311,9 +309,7 @@ namespace mfem {
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
         if (!rconfig::Get().Aware()){
           push(BcastEnd:HtoD,Red);
-          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                       buf,
-                                       recv_size*sizeof(T)));
+          rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
           pop();
         }
 #endif
@@ -366,12 +362,9 @@ namespace mfem {
 #ifdef __NVCC__
         if (!rconfig::Get().Aware()){
           push(ReduceBegin:DtoH,Red);
-          checkCudaErrors(cuMemcpyDtoH(buf_start,
-                                       (CUdeviceptr)d_buf_start,
-                                       (buf-buf_start)*sizeof(T)));
+          rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
           pop();
         }
-        
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
@@ -379,7 +372,6 @@ namespace mfem {
           pop();
         }
 #endif
-       
         push(MPI_Isend,Orange);
         if (rconfig::Get().Aware())
           MPI_Isend(d_buf_start,
@@ -477,9 +469,7 @@ namespace mfem {
         const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
         if (!rconfig::Get().Aware()){
           push(ReduceEnd:HtoD,Red);
-          checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)d_buf,
-                                       buf,
-                                       recv_size*sizeof(T)));
+          rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
           pop();
         }
 #else

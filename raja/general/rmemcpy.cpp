@@ -31,7 +31,9 @@ namespace mfem {
     assert(src); assert(dest); assert(count>0);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);
 #ifdef __NVCC__
-    if (!rconfig::Get().Uvm()) checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,count));
+    if (!rconfig::Get().Uvm())
+      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,count));
+    else checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,count));
 #endif
     return dest;
   }
@@ -42,14 +44,11 @@ namespace mfem {
     assert(src); assert(dest); assert(count>0);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);
 #ifdef __NVCC__
-    if (!rconfig::Get().Uvm()) checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,count));
+    if (!rconfig::Get().Uvm())
+      checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,count));
+    else checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,count));
 #endif
     return dest;
-  }
-  
-  // ***************************************************************************
-  void* rmemcpy::rDtoH(void *dest, const void *src, std::size_t count)const{
-    return rDtoH(dest,src,count);
   }
   
   // ***************************************************************************
@@ -58,7 +57,9 @@ namespace mfem {
     assert(src); assert(dest); assert(count>0);    
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);
 #ifdef __NVCC__
-    if (!rconfig::Get().Uvm()) checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,count));
+    if (!rconfig::Get().Uvm())
+      checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,count));
+    else checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,count));
 #endif
     return dest;
   }

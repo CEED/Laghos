@@ -17,17 +17,13 @@
 #define LAGHOS_RAJA_MEMCPY
 
 namespace mfem {
-  
-  // ***************************************************************************
-  // void* memcpy(void* dest, const void* src, std::size_t count);
 	
   // ***************************************************************************
   struct rmemcpy{
-    void* rHtoH(void*, const void*, std::size_t);
-    void* rHtoD(void*, const void*, std::size_t);
-    void* rDtoH(void*, const void*, std::size_t);
-    void* rDtoH(void*, const void*, std::size_t)const;
-    void* rDtoD(void*, const void*, std::size_t);
+    static void* rHtoH(void*, const void*, std::size_t);
+    static void* rHtoD(void*, const void*, std::size_t);
+    static void* rDtoH(void*, const void*, std::size_t);
+    static void* rDtoD(void*, const void*, std::size_t);
   };
   
 } // mfem
