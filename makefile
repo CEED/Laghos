@@ -138,7 +138,7 @@ ifneq (,$(rj))
 	CXXFLAGS += -D__RAJA__ -DUSE_CUDA
 	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
 	CXXFLAGS += --restrict -Xcompiler -fopenmp 
-	CXXFLAGS += -x=cu $(NV_ARCH) -Xptxas -dlcm=cg
+	CXXFLAGS += -x=cu $(NV_ARCH)
 endif
 
 ############################
