@@ -27,23 +27,15 @@ static double cub_vector_dot(const int N,
                              const double* __restrict vec1,
                              const double* __restrict vec2) {
   static double *h_dot = NULL;
-  if (!h_dot){
-    const int flag = CU_MEMHOSTALLOC_PORTABLE;
-    checkCudaErrors(cuMemHostAlloc((void**)&h_dot,sizeof(double),flag));
-    // should be freed with cuMemFreeHost()
-  }
+  if (!h_dot) h_dot = (double*)mfem::rmalloc<double>::operator new(1);
   static double *d_dot = NULL;
-  if (!d_dot)
-    checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_dot, 1*sizeof(double)));
-  
+  if (!d_dot) d_dot=(double*)mfem::rmalloc<double>::operator new(1);
   static void *d_storage = NULL;
   static size_t storage_bytes = 0;
   if (!d_storage){
     cub::DeviceReduce::Dot(d_storage, storage_bytes, vec1, vec2, d_dot, N);
-    //cudaMalloc(&d_storage, storage_bytes);
-    cuMemAlloc((CUdeviceptr*)&d_storage, storage_bytes);
+    d_storage = mfem::rmalloc<char>::operator new(storage_bytes);
   }
-  //printf(" \033[32;1m%d\033[m", storage_bytes); fflush(stdout);
   cub::DeviceReduce::Dot(d_storage, storage_bytes, vec1, vec2, d_dot, N);
   checkCudaErrors(cuMemcpyDtoH(h_dot,(CUdeviceptr)d_dot,1*sizeof(double)));
   return *h_dot;

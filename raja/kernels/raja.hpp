@@ -19,6 +19,7 @@
 // *****************************************************************************
 #undef NDEBUG
 #include <math.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,8 +45,11 @@
 #endif
 
 // *****************************************************************************
-#include "../config/rconfig.hpp"
+#include "../config/rdbg.hpp"
 #include "../config/rnvvp.hpp"
+#include "../config/rconfig.hpp"
+#include "../general/rmemcpy.hpp"
+#include "../general/rmalloc.hpp"
 
 // *****************************************************************************
 #include "include/forall.hpp"

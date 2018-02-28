@@ -17,7 +17,7 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::RajaCommD(ParFiniteElementSpace &pfes):
     GroupCommunicator(pfes.GroupComm()),
-    d_group_ldof(GroupLDofTable()),//group_ldof),
+    d_group_ldof(group_ldof),
     d_group_ltdof(group_ltdof),
     d_group_buf(NULL) {comm_lock=0;}
 
@@ -167,9 +167,8 @@ namespace mfem {
 #ifdef __NVCC__
     if (!d_group_buf){
       push(alloc,Purple);
-      //d_group_buf = rmalloc<T>::operator new(group_buf_size);
+      d_group_buf = rmalloc<T>::operator new(group_buf_size);
       dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
-      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
       pop();
     }
     T *d_buf = (T*)d_group_buf;
@@ -345,10 +344,8 @@ namespace mfem {
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
 #ifdef __NVCC__
-    if (!d_group_buf){
-      dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
-      checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
-    }
+    if (!d_group_buf)
+      d_group_buf = rmalloc<T>::operator new(group_buf_size);
     T *d_buf = (T*)d_group_buf;
 #else
     T *d_buf = (T*)d_buf;
