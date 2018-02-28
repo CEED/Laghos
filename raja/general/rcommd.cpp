@@ -17,7 +17,7 @@ namespace mfem {
   // ***************************************************************************
   RajaCommD::RajaCommD(ParFiniteElementSpace &pfes):
     GroupCommunicator(pfes.GroupComm()),
-    d_group_ldof(group_ldof),
+    d_group_ldof(GroupLDofTable()),//group_ldof),
     d_group_ltdof(group_ltdof),
     d_group_buf(NULL) {}
 

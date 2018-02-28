@@ -97,11 +97,11 @@ namespace mfem {
     HYPRE_Int glob_size = fes.GlobalTrueVSize();
     
     if (rconfig::Get().Root())
-      cout << "Number of global dofs: " << glob_size << endl;
+      std::cout << "Number of global dofs: " << glob_size << std::endl;
     
     const int vsize = fes.GetVSize();
     if (rconfig::Get().Root())
-      cout << "Number of local dofs: " << vsize << endl;
+      std::cout << "Number of local dofs: " << vsize << std::endl;
 
     push(Ops,Chocolate)
     const RajaOperator &prolong = *fes.GetProlongationOperator();
