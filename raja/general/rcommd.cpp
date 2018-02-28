@@ -19,7 +19,7 @@ namespace mfem {
     GroupCommunicator(pfes.GroupComm()),
     d_group_ldof(GroupLDofTable()),//group_ldof),
     d_group_ltdof(group_ltdof),
-    d_group_buf(NULL) {}
+    d_group_buf(NULL) {comm_lock=0;}
 
   
   // ***************************************************************************
@@ -167,6 +167,7 @@ namespace mfem {
 #ifdef __NVCC__
     if (!d_group_buf){
       push(alloc,Purple);
+      //d_group_buf = rmalloc<T>::operator new(group_buf_size);
       dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
       checkCudaErrors(cuMemAlloc((CUdeviceptr*)&d_group_buf,group_buf_size*sizeof(T)));
       pop();

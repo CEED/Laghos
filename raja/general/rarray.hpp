@@ -61,18 +61,12 @@ template <class T, bool xyz = true> class RajaArray;
     return data[x + d[0]*(y + d[1]*z)];
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
-#ifdef __NVCC__
-    T *h_data;
-    if (rconfig::Get().Cuda()){
-      h_data= (T*)::malloc(bytes());assert(h_data);
-      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
-    }else h_data=data;
-#else
-    T *h_data=data;
-#endif
+    T *h_data = (double*) ::malloc(bytes());
+    rmemcpy::rDtoH(h_data,data,bytes());
     for (size_t i=0; i<sz; i+=1) 
       if (sizeof(T)==8) printf("\n\t[%ld] %.15e",i,h_data[i]);
       else printf("\n\t[%ld] %d",i,h_data[i]);
+    free(h_data);
   }
 };
 
@@ -88,13 +82,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
   ~RajaArray(){rdbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
   RajaArray& operator=(Array<T> &a){
-#ifdef __NVCC__
-    if (rconfig::Get().Cuda())
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
-    else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
-#else
-    std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
-#endif
+    rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
   }
   inline size_t* dim() { return &d[0]; }
@@ -131,17 +119,12 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
     return data[d[0]*x + d[1]*y + d[2]*z];
   }
   void Print(std::ostream& out= std::cout, int width = 8) const {
-#ifdef __NVCC__
-    T *h_data;
-    if (rconfig::Get().Cuda()){
-      h_data= (T*)::malloc(bytes());assert(h_data);
-      checkCudaErrors(cuMemcpyDtoH(h_data,(CUdeviceptr)data,bytes()));
-    }else h_data=data;
-#else
-    T *h_data=data;
-#endif
+    T *h_data = (double*) ::malloc(bytes());
+    rmemcpy::rDtoH(h_data,data,bytes());
     for (size_t i=0; i<sz; i+=1) 
-      printf("\n\t[%ld] %d",i,h_data[i]);
+      if (sizeof(T)==8) printf("\n\t[%ld] %.15e",i,h_data[i]);
+      else printf("\n\t[%ld] %d",i,h_data[i]);
+    free(h_data);
   }
 };
 

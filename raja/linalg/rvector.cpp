@@ -63,7 +63,7 @@ RajaVector::operator Vector() {
   mfem_vector.MakeDataOwner();
   return mfem_vector;
 }
-  
+
 RajaVector::operator Vector() const {
   if (!rconfig::Get().Cuda()) return Vector(data,size);
   double *h_data= (double*) ::malloc(bytes());
