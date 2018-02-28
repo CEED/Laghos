@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 #include "../../laghos_solver.hpp"
+#include <sys/time.h>
 
 namespace mfem {
 
