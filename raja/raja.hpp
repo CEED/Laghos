@@ -41,6 +41,7 @@
 #include "config/rconfig.hpp"
 
 // LAGHOS/raja/general *********************************************************
+#include "general/rmemcpy.hpp"
 #include "general/rmalloc.hpp"
 #include "general/rarray.hpp"
 #include "general/rtable.hpp"

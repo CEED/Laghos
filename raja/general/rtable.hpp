@@ -24,7 +24,6 @@ namespace mfem {
     int *I = NULL;
     int *J = NULL;
   public:
-    //RajaTable();
     RajaTable(const Table&);
     inline int Size(){return size;}
     int RowSize(int i) const { return I[i+1]-I[i]; }

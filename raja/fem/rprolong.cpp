@@ -75,9 +75,9 @@ namespace mfem {
     }else{
       dbg("\n\033[35m[HOST::MultTranspose]\033[m");
     }
-    
+
     push(hostX:D2H,Red);
-    const Vector hostX=x;//D2H
+    const Vector hostX=x;
     pop();
    
     push(hostY,LightSteelBlue);

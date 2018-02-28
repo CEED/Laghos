@@ -16,14 +16,10 @@
 #ifndef LAGHOS_RAJA_MALLOC
 #define LAGHOS_RAJA_MALLOC
 
-// ***************************************************************************
-extern bool uvm;
-extern bool cuda;
-
 namespace mfem {
 
 // *****************************************************************************
-template<class T> struct rmalloc{
+  template<class T> struct rmalloc: public rmemcpy {
 
   // ***************************************************************************
   void* operator new(size_t n) {
@@ -50,9 +46,7 @@ template<class T> struct rmalloc{
   void operator delete(void *ptr) {
     rdbg("-]\033[m");
     if (!rconfig::Get().Cuda()) {
-      //assert(ptr!=NULL);
-      //assert(ptr!=nullptr);
-      //if (ptr)
+      if (ptr)
         ::delete[] static_cast<T*>(ptr);
     }
 #ifdef __NVCC__

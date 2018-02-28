@@ -108,23 +108,21 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 #ifdef MFEM_USE_MPI
     int global_ess_tdofs_count;
     const MPI_Comm comm = fes.GetParMesh()->GetComm();
-    MPI_Allreduce(&ess_tdofs_count,
-                  &global_ess_tdofs_count, 1, MPI_INT, MPI_SUM, comm);
+    MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
+                  1, MPI_INT, MPI_SUM, comm);
+    assert(global_ess_tdofs_count>0);
     ess_tdofs.allocate(global_ess_tdofs_count);
 #else
+    assert(ess_tdofs_count>0);
     ess_tdofs.allocate(ess_tdofs_count);
 #endif
   }else assert(ess_tdofs_count<=ess_tdofs.Size());
 
   {
     push(H2D:ess_tdofs,Red);
-#ifdef __NVCC__
-    if (rconfig::Get().Cuda())
-      cuMemcpyHtoD((CUdeviceptr)ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-    else ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-#else
-    ::memcpy(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-#endif
+    assert(ess_tdofs_count>0);
+    assert(dofs.GetData());
+    rHtoD(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
     pop();
   }
   pop();

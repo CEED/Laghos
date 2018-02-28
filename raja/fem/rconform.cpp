@@ -18,21 +18,24 @@ namespace mfem {
   RajaConformingProlongationOperator::RajaConformingProlongationOperator
   (ParFiniteElementSpace &pfes): RajaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
                                  external_ldofs(),
-                                 d_external_ldofs(Height()-Width()),
+                                 d_external_ldofs(Height()-Width()), // size can be 0 here
                                  gc(new RajaCommD(pfes)){
     Array<int> ldofs;
     Table &group_ldof = gc->GroupLDofTable();
+    const int HmW=Height()-Width();
     external_ldofs.Reserve(Height()-Width());
     for (int gr = 1; gr < group_ldof.Size(); gr++)
     {
-      if (!gc->GetGroupTopology().IAmMaster(gr))
+      if (!gc->GetGroupTopology().IAmMaster(gr)) 
       {
         ldofs.MakeRef(group_ldof.GetRow(gr), group_ldof.RowSize(gr));
         external_ldofs.Append(ldofs);
       }
     }
     external_ldofs.Sort();
-    d_external_ldofs=external_ldofs;
+#ifdef __NVCC__
+    if (HmW>0) d_external_ldofs=external_ldofs;
+#endif
     assert(external_ldofs.Size() == Height()-Width());
     //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
@@ -65,7 +68,6 @@ namespace mfem {
   void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                   RajaVector &y) const{
     push(Coral);
-    dbg("\n\033[32m[d_Mult]\033[m");
     const double *d_xdata = x.GetData();
     const int in_layout = 2; // 2 - input is ltdofs array
     
@@ -120,7 +122,6 @@ namespace mfem {
   void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                            RajaVector &y) const{
     push(Coral);
-    dbg("\n\033[32m[d_MultTranspose]\033[m");
     const double *d_xdata = x.GetData();
     
     gc->d_ReduceBegin(d_xdata);
@@ -159,8 +160,8 @@ namespace mfem {
   void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
     push(Coral);
-    MFEM_ASSERT(x.Size() == Width(), "");
-    MFEM_ASSERT(y.Size() == Height(), "");
+    assert(x.Size() == Width());
+    assert(y.Size() == Height());
     const double *xdata = x.GetData();
     double *ydata = y.GetData(); 
     const int m = external_ldofs.Size();
@@ -189,8 +190,8 @@ namespace mfem {
   void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                            Vector &y) const{
     push(Coral);
-    MFEM_ASSERT(x.Size() == Height(), "");
-    MFEM_ASSERT(y.Size() == Width(), "");
+    assert(x.Size() == Height());
+    assert(y.Size() == Width());
     const double *xdata = x.GetData();
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();

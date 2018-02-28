@@ -61,16 +61,18 @@ namespace mfem {
                       const bool _sync,
                       const bool _dot,
                       const int rs_levels){
+    mpi_rank=_mpi_rank;
+    mpi_size=_mpi_size;
+
+    // Look if we are on a Tux machine
     const bool tux = isTux();
     if (tux && Root())
       printf("\033[32m[laghos] \033[1mTux\033[m\n");
     
-    mpi_rank=_mpi_rank;
-    mpi_size=_mpi_size;
     // On Tux machines, use the MPIX_Query_cuda_support
     // Otherwise, assume there is a support
     aware = tux?(MPIX_Query_cuda_support()==1)?true:false:true;
-    
+
     // Same thing while looking for MPS
     mps = tux?isNvidiaCudaMpsDaemonRunning():false;
     if (tux && Mps() && Root())

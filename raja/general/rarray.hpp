@@ -21,7 +21,7 @@ namespace mfem {
 template <class T, bool xyz = true> class RajaArray;
 
 // Partial Specializations for xyz==TRUE *************************************
-template <class T> class RajaArray<T,true> : public rmalloc<T>{
+  template <class T> class RajaArray<T,true> : public rmalloc<T> {
  private:
   T* data = NULL;
   size_t sz,d[4];
@@ -31,13 +31,7 @@ template <class T> class RajaArray<T,true> : public rmalloc<T>{
   RajaArray(const size_t x,const size_t y) {allocate(x,y);}
   RajaArray(const RajaArray<T,true> &r) {assert(false);}
   RajaArray& operator=(Array<T> &a){
-#if defined(__NVCC__)
-    if (rconfig::Get().Cuda())
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)data,a.GetData(),a.Size()*sizeof(T)));
-    else std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
-#else
-    std::memcpy(data,a.GetData(),a.Size()*sizeof(T));
-#endif
+    rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
   }
   ~RajaArray(){rdbg("\033[32m[~i"); rmalloc<T>::operator delete(data);}
@@ -119,6 +113,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
     rdbg("\033[32m[I");
+    assert(sz>0);
     data=(T*) rmalloc<T>::operator new(sz);
 #define xsw(a,b) a^=b^=a^=b
     if (transposed) { xsw(d[0],d[1]); }

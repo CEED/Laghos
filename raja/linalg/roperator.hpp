@@ -19,7 +19,7 @@
 namespace mfem {
 
   // ***************************************************************************
-  class RajaOperator {
+  class RajaOperator : public rmemcpy {
   protected:
     int height;
     int width;
