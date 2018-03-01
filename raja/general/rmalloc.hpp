@@ -20,15 +20,16 @@ namespace mfem {
 
   // ***************************************************************************
   template<class T> struct rmalloc: public rmemcpy {
-    
-    void* operator new(size_t n, bool page_locked = false) {
+
+    // *************************************************************************
+    inline void* operator new(size_t n, bool lock_page = false) {
       rdbg("+]\033[m");
       if (!rconfig::Get().Cuda()) return ::new T[n];
 #ifdef __NVCC__
       void *ptr;
       push(new,Purple);
       if (!rconfig::Get().Uvm()){
-        if (page_locked) cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE);
+        if (lock_page) cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE);
         else cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
       }else{
         cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
@@ -41,9 +42,9 @@ namespace mfem {
       assert(false);
 #endif // __NVCC__
     }
-   
+  
     // ***************************************************************************
-    void operator delete(void *ptr) {
+    inline void operator delete(void *ptr) {
       rdbg("-]\033[m");
       if (!rconfig::Get().Cuda()) {
         if (ptr)

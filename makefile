@@ -121,6 +121,8 @@ endif
 # -fno-omit-frame-pointer
 ###################
 CXXFLAGS += -std=c++11 -m64
+#CXXFLAGS += -DLAGHOS_DEBUG
+#CXXFLAGS += -D__NVVP__
 
 #############
 # SANITIZER #
@@ -147,7 +149,6 @@ endif
 ############################
 ifneq (,$(nv))
 	CXX = nvcc
-#	CXXFLAGS += -D__NVVP__
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
 	CUFLAGS  += --restrict $(NV_ARCH)
 ifneq (,$(l))	
@@ -160,7 +161,6 @@ endif
 ############################
 ifneq (,$(l))
 	CXXFLAGS += -D__LAMBDA__
-#	CXXFLAGS += -DLAGHOS_DEBUG
 endif
 
 #############################

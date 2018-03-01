@@ -98,6 +98,12 @@ namespace mfem {
     if (Root())
       printf("\033[32m[laghos] \033[31;1m__NVVP__\033[m\n");
 #endif // __NVVP__
+
+    // LAGHOS_DEBUG warning output
+#if defined(LAGHOS_DEBUG)
+    if (Root())
+      printf("\033[32m[laghos] \033[31;1mLAGHOS_DEBUG\033[m\n");
+#endif // __NVVP__
     
     // Check for Enforced Kernel Synchronization
     if (Sync() && Root())

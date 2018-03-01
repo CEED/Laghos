@@ -11,13 +11,14 @@
 #include "../raja.hpp"
 
 namespace mfem {
-  
+
+  // ***************************************************************************
   RajaTable::RajaTable(const Table &table){
     size = table.Size();
     assert(size > 0);
     const int nnz = table.GetI()[size];
     I = new int[size+1];
-    J = (int*) rmalloc::operator new(nnz);
+    J = (int*) operator new(nnz);
     rHtoH(I,table.GetI(),sizeof(int)*(size+1));
     if (nnz>0) {
       assert(table.GetJ());
