@@ -62,6 +62,16 @@ const int CUDA_BLOCK_SIZE = 256;
 //printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
 #define cuKer(name,end,...) name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
 
+  /* void *args[] = {
+    (void*)&N,
+    (void*)&c0,
+    (void*)&v0,
+  };
+  cuLaunchKernel(vector_op_eq,
+                 ((N+128-1)/128),1,1,
+                 128,1,1,
+                 0,0,//sharedMemBytes, hStream
+                 args);*/
 
 /*CUresult cuLaunchKernel(CUfunction f,
                           unsigned int  gridDimX, unsigned int  gridDimY, unsigned int  gridDimZ,

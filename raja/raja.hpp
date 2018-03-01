@@ -46,7 +46,6 @@
 #include "general/rarray.hpp"
 #include "general/rtable.hpp"
 #include "general/rcommd.hpp"
-//#include "general/rcommunicator.hpp"
 
 // LAGHOS/raja/linalg **********************************************************
 #include "linalg/rvector.hpp"

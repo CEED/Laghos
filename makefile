@@ -126,8 +126,6 @@ CXXFLAGS += -std=c++11 -m64
 
 #############
 # SANITIZER #
-# -fsanitize=undefined 
-# -fsanitize=address
 #############
 #CXXFLAGS += -g -O1 -fno-inline -fsanitize=address -fsanitize=undefined
 #ASAN_LIB = -lasan -lubsan
@@ -149,8 +147,8 @@ endif
 ############################
 ifneq (,$(nv))
 	CXX = nvcc
+	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) -rdc=true
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-	CUFLAGS  += --restrict $(NV_ARCH)
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
 endif
@@ -217,23 +215,23 @@ endif
 #########################
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
+CCU  = $(strip $(CXX) $(CUFLAGS) $(MFEM_INCFLAGS) $(CUDA_INC) $(MPI_INC))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 ################
 # SOURCE FILES #
 ################
 SOURCE_FILES = $(wildcard $(pwd)/*.cpp)
+
 KERNEL_FILES = $(wildcard $(kernels)/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/blas/*.cpp)
-ifneq (,$(nv))
-#KERNEL_FILES += $(wildcard $(kernels)/blas/*.cu)
-endif
 KERNEL_FILES += $(wildcard $(kernels)/force/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/geom/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/maps/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/mass/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/quad/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/share/*.cpp)
+
 RAJA_FILES = $(wildcard $(raja)/config/*.cpp)
 RAJA_FILES += $(wildcard $(raja)/fem/*.cpp)
 RAJA_FILES += $(wildcard $(raja)/general/*.cpp)
@@ -246,6 +244,22 @@ RAJA_FILES += $(wildcard $(raja)/tests/*.cpp)
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
 OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
+
+##############
+# CUDA FILES #
+##############
+CUDA_FILES    = $(wildcard $(kernels)/blas/*.cu)
+CUDA_FILES   += $(wildcard $(raja)/linalg/*.cu)
+OBJECT_CUDAS  = $(CUDA_FILES:.cu=.o)
+DLINK_CUDA    = $(OBJECT_CUDAS:.o=.lo)
+ifneq (,$(nv))
+OBJECT_FILES += $(OBJECT_CUDAS)
+OBJECT_FILES += $(DLINK_CUDA)
+endif
+
+################
+# HEADER FILES #
+################
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 ################
@@ -283,9 +297,22 @@ $(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
 
-$(kernels)/%.ou: $(kernels)/%.cu
-	$(call quiet,CCC) -c -o $@ $(abspath $<)
+####################
+# CUDA compilation #
+####################
+$(raja)/%.o: $(raja)/%.cu
+	$(call quiet,CCU) -c -o $@ $(abspath $<)
+$(raja)/%.lo: $(raja)/%.o
+	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
 
+$(kernels)/%.o: $(kernels)/%.cu
+	$(call quiet,CCU) -c -o $@ $(abspath $<)
+$(kernels)/%.lo: $(kernels)/%.o
+	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
+
+################
+# All & LAGHOS #
+################
 all: 
 	@$(MAKE) -j $(CPU) laghos
 

@@ -55,6 +55,7 @@ namespace mfem {
   void rconfig::Setup(const int _mpi_rank,
                       const int _mpi_size,
                       const bool _cuda,
+                      const bool _dcg,
                       const bool _uvm,
                       const bool _share,
                       const bool _occa,
@@ -86,6 +87,7 @@ namespace mfem {
     cuCheck(cudaGetDeviceCount(&gpu_count));
 #endif
     cuda=_cuda;
+    dcg=_dcg; // CG on device
     uvm=_uvm;
     share=_share;
     occa=_occa;

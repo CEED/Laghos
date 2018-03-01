@@ -41,6 +41,7 @@ namespace mfem {
 #endif
     // *************************************************************************
     bool cuda=false;
+    bool dcg=false;
     bool uvm=false;
     bool share=false;
     // *************************************************************************
@@ -59,7 +60,8 @@ namespace mfem {
     }
     // *************************************************************************
     void Setup(const int,const int,
-               const bool cuda, const bool uvm, const bool share,
+               const bool cuda, const bool dcg,
+               const bool uvm, const bool share,
                const bool occa, const bool sync,
                const bool dot, const int rs_levels);
     // *************************************************************************
@@ -76,6 +78,7 @@ namespace mfem {
     // *************************************************************************
     inline bool Uvm() { return uvm; }
     inline bool Cuda() { return cuda; }
+    inline bool Dcg() { return dcg; }
     inline bool Share() { return share; }
     inline bool Occa() { return occa; }
     inline bool Sync() { return sync; }
