@@ -57,6 +57,7 @@ namespace mfem {
                       const bool _cuda,
                       const bool _dcg,
                       const bool _uvm,
+                      const bool _aware,
                       const bool _share,
                       const bool _occa,
                       const bool _sync,
@@ -72,9 +73,9 @@ namespace mfem {
     
     // On Tux machines, use the MPIX_Query_cuda_support
     // Otherwise, assume there is a support
-    aware = tux?(MPIX_Query_cuda_support()==1)?true:false:true;
+    //aware = tux?(MPIX_Query_cuda_support()==1)?true:false:true;
 
-    // Same thing while looking for MPS
+    // On Tux machines, look for MPS
     mps = tux?isNvidiaCudaMpsDaemonRunning():false;
     if (tux && Mps() && Root())
       printf("\033[32m[laghos] \033[32;1mMPS daemon\033[m\033[m\n");
@@ -89,6 +90,7 @@ namespace mfem {
     cuda=_cuda;
     dcg=_dcg; // CG on device
     uvm=_uvm;
+    aware=_aware;
     share=_share;
     occa=_occa;
     sync=_sync;

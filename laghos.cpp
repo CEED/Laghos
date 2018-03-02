@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
    bool cuda = false;
    bool dcg = false;
    bool uvm = false;
+   bool aware = false;
    bool share = false;
    bool occa = false;
    bool sync = false;
@@ -152,6 +153,8 @@ int main(int argc, char *argv[])
                   "Enable or disable MULT test kernels.");
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "Enable or disable CUDA managed alloc.");
+   args.AddOption(&aware, "-aware", "--aware", "-no-aware", "--no-aware",
+                  "Enable or disable GPUDirect.");
    args.AddOption(&dcg, "-dcg", "--dcg", "-no-dcg", "--no-dcg",
                   "Enable or disable CUDA CG.");
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
@@ -173,7 +176,7 @@ int main(int argc, char *argv[])
    // CUDA set device & tweak options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,dcg,uvm,share,occa,sync,dot,rs_levels);
+                        cuda,dcg,uvm,aware,share,occa,sync,dot,rs_levels);
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.

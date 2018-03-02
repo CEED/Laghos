@@ -199,7 +199,7 @@ CUDA_INC = -I$(CUDA_HOME)/samples/common/inc
 CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64 -L/usr/local/cuda/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
-CUB_DIR = $(home)/usr/src/cub
+CUB_DIR = ./cub
 RAJA_INC = -I$(CUB_DIR) -I$(home)/usr/local/raja/last/include
 RAJA_LIBS = $(home)/usr/local/raja/last/lib/libRAJA.a
 
