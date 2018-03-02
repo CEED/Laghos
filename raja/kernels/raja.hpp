@@ -17,7 +17,6 @@
 #define LAGHOS_RAJA_KERNELS_RAJA
 
 // *****************************************************************************
-#undef NDEBUG
 #include <math.h>
 #include <stdarg.h>
 #include <assert.h>

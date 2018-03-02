@@ -119,7 +119,8 @@ endif
 ###################
 # CXXFLAGS ADDONS #
 ###################
-CXXFLAGS += -std=c++11 -m64
+CXXFLAGS += -std=c++11 -m64 
+CXXFLAGS += -DNDEBUG
 #CXXFLAGS += -DLAGHOS_DEBUG
 #CXXFLAGS += -D__NVVP__
 

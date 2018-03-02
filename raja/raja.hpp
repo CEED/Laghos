@@ -17,7 +17,6 @@
 #define LAGHOS_RAJA
 
 // stdincs *********************************************************************
-#undef NDEBUG
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
