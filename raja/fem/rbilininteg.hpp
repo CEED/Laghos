@@ -112,12 +112,9 @@ class RajaIntegrator {
 class RajaMassIntegrator : public RajaIntegrator {
  private:
   const bool use_share = false;
-  const double coeff = 1.0;
   RajaVector op;
 public:
-  RajaMassIntegrator(const bool share,
-                     const double c = 1.0):use_share(share),
-                                           coeff(c){}
+  RajaMassIntegrator(const bool share):use_share(share){}
   virtual ~RajaMassIntegrator() {}
   virtual std::string GetName() {return "MassIntegrator";}
   virtual void SetupIntegrationRule();

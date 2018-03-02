@@ -14,19 +14,31 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
+#########
+# SETUP #
+#########
+CUB_DIR  ?= ./cub
+CUDA_DIR ?= /usr/local/cuda
+MFEM_DIR ?= $(HOME)/home/mfem/mfem-raja
+RAJA_DIR ?= $(home)/usr/local/raja/last
+MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
+
+NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
+CXXEXTRA = -std=c++11 -m64 -DNDEBUG # -DLAGHOS_DEBUG -D__NVVP__
+
+
+###################
+# LAGHOS_HELP_MSG #
+###################
 define LAGHOS_HELP_MSG
-
 Laghos makefile targets:
-
    make
    make status/info
    make install
    make clean
    make distclean
    make style
-
 Examples:
-
 make -j 4
    Build Laghos using the current configuration options from MFEM.
    (Laghos requires the MFEM finite element library, and uses its compiler and
@@ -43,8 +55,10 @@ make distclean
 make style
    Format the Laghos C++ source files using the Artistic Style (astyle) settings
    from MFEM.
-
 endef
+
+# number of proc to use for compilation stage
+CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # fetch current/working directory
 pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
@@ -52,15 +66,11 @@ home = $(HOME)
 raja = $(pwd)/raja
 kernels = $(raja)/kernels
 
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
-
 # Default installation location
 PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = $(HOME)/home/mfem/mfem-raja
-#MFEM_DIR = $(HOME)/home/mfem/mfem-master
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -89,22 +99,11 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
-
 # MFEM config does not define C compiler
 CC     = gcc
 CFLAGS = -O3 -Wall
-
-#############
-# CUDA ARCH #
-# No arch for Quadro M2000, sm_5.2 & GeForce GTX 1070, sm_6.1
-# sm_61, sm_5.2
-#############
-NV_ARCH = -arch=sm_60
-#NV_ARCH = -gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-
 # Optional link flags
 LDFLAGS =
-
 OPTIM_OPTS = -O3
 DEBUG_OPTS = -g -Wall
 LAGHOS_DEBUG ?= $(MFEM_DEBUG)
@@ -119,10 +118,7 @@ endif
 ###################
 # CXXFLAGS ADDONS #
 ###################
-CXXFLAGS += -std=c++11 -m64 
-CXXFLAGS += -DNDEBUG
-#CXXFLAGS += -DLAGHOS_DEBUG
-#CXXFLAGS += -D__NVVP__
+CXXFLAGS += $(CXXEXTRA)
 
 #############
 # SANITIZER #
@@ -175,37 +171,44 @@ endif
 # GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
 # RAJA: make v=1 rj=1 t=1
 ##################################################
-.PHONY: cpuL cpuLT rj raja cpuRJ nvl gpuLT nvk gpuKT
+.PHONY: cpuL cpuLT rj raja cpuRJ cuda nvl gpuLT nvk gpuKT
 cpuL:;$(MAKE) l=1 all
 cpuLT:;$(MAKE) l=1 t=1 all
 
+################
+# RAJA targets #
+################
 rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
 
-nv nvl gpuLT:;$(MAKE) nv=1 l=1 t=1 all
-nvk gpuKT:;$(MAKE) nv=1 t=1 all
+################
+# CUDA targets #
+################
+nv nvl cuda gpuLT:;$(MAKE) nv=1 l=1 t=1 all
+# not usable yet nvk gpuKT:;$(MAKE) nv=1 t=1 all
 
 #######################
 # TPL INCLUDES & LIBS #
 #######################
-# Ray MPI_INC = -I/opt/ibm/spectrum_mpi/include
 MPI_INC = -I$(MPI_HOME)/include 
 
-#DBG_INC = -I/home/camier1/home/dbg
-#DBG_LIB = -Wl,-rpath -Wl,/home/camier1/home/dbg -L/home/camier1/home/dbg -ldbg 
-#BKT_LIB = -Wl,-rpath -Wl,$(HOME)/lib -L$(HOME)/lib -lbacktrace
-
-CUDA_HOME = /usr/local/cuda
-CUDA_INC = -I$(CUDA_HOME)/samples/common/inc
-CUDA_LIBS = -Wl,-rpath -Wl,/usr/local/cuda/lib64 -L/usr/local/cuda/lib64 \
+############
+# CUDA ENV #
+############
+CUDA_INC = -I$(CUDA_DIR)/samples/common/inc
+CUDA_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
-CUB_DIR = ./cub
-RAJA_INC = -I$(CUB_DIR) -I$(home)/usr/local/raja/last/include
-RAJA_LIBS = $(home)/usr/local/raja/last/lib/libRAJA.a
+############
+# RAJA ENV #
+############
+RAJA_INC = -I$(CUB_DIR) -I$(RAJA_DIR)/include
+RAJA_LIBS = $(RAJA_DIR)/lib/libRAJA.a
 
+################
+# LAGHOS FLAGS #
+################
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
 LAGHOS_LIBS = $(ASAN_LIB) $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
-
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
 endif
@@ -253,11 +256,8 @@ CUDA_FILES   += $(wildcard $(raja)/linalg/*.cu)
 OBJECT_CUDAS  = $(CUDA_FILES:.cu=.o)
 DLINK_CUDA    = $(OBJECT_CUDAS:.o=.lo)
 #ifeq ($(CXX),nvcc)
-#$(info $(shell  echo -e "\033[32mCXX=$(CXX)\033[m"))
 #OBJECT_FILES += $(OBJECT_CUDAS)
 #OBJECT_FILES += $(DLINK_CUDA)
-#else
-#$(info $(shell  echo -e "\033[31;1mCXX=$(CXX)\033[m"))
 #endif
 
 ################
@@ -280,7 +280,6 @@ color_out = @if [ -t 1 ]; then \
 				printf "%s %s\n" $(1) $(2); fi
 # if TERM=dumb, use it, otherwise switch to the term one
 output = $(if $(TERM:dumb=),$(call color_out,$1,$2),$(call emacs_out,$1,$2))
-
 # if V is set to non-nil, turn the verbose mode
 quiet = $(if $(v),$($(1)),$(call output,$1,$@);$($(1)))
 
@@ -314,7 +313,7 @@ $(kernels)/%.lo: $(kernels)/%.o
 	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
 
 ################
-# All & LAGHOS #
+# all & LAGHOS #
 ################
 all: 
 	@$(MAKE) -j $(CPU) laghos

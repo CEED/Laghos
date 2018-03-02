@@ -40,6 +40,7 @@ namespace mfem {
       // We come here when the user requests a manager,
       // but has compiled the code without NVCC
       assert(false);
+      return ::new T[n];
 #endif // __NVCC__
     }
   

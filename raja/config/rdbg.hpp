@@ -28,7 +28,7 @@ inline void rdbg(const char *format,...){
 
 // *****************************************************************************
 #ifdef LAGHOS_DEBUG
-#define dbg(...) rdbg(__VA_ARGS__)
+#define dbg(...) // rdbg(__VA_ARGS__)
 #else
 #define dbg(...)
 #endif // LAGHOS_DEBUG
