@@ -252,10 +252,13 @@ CUDA_FILES    = $(wildcard $(kernels)/blas/*.cu)
 CUDA_FILES   += $(wildcard $(raja)/linalg/*.cu)
 OBJECT_CUDAS  = $(CUDA_FILES:.cu=.o)
 DLINK_CUDA    = $(OBJECT_CUDAS:.o=.lo)
-ifneq (,$(nv))
-OBJECT_FILES += $(OBJECT_CUDAS)
-OBJECT_FILES += $(DLINK_CUDA)
-endif
+#ifeq ($(CXX),nvcc)
+#$(info $(shell  echo -e "\033[32mCXX=$(CXX)\033[m"))
+#OBJECT_FILES += $(OBJECT_CUDAS)
+#OBJECT_FILES += $(DLINK_CUDA)
+#else
+#$(info $(shell  echo -e "\033[31;1mCXX=$(CXX)\033[m"))
+#endif
 
 ################
 # HEADER FILES #
@@ -341,8 +344,8 @@ clean cln: clean-build clean-exec
 
 clean-build:
 	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM \
-	raja/*/*.o \
-	raja/kernels/*.o raja/kernels/*/*.o 
+	raja/*/*.o raja/*/*.lo \
+	raja/kernels/*.o raja/kernels/*/*.o raja/kernels/*/*.lo 
 clean-exec:
 	rm -rf ./results
 

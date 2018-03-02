@@ -23,7 +23,7 @@
 namespace mfem {
 
   // ***************************************************************************
-  extern "C" void d_Mult(const RajaVector &b, RajaVector &x,
+  /*extern "C" void d_Mult(const RajaVector &b, RajaVector &x,
                          const int N,
                          const RajaOperator *oper,
                          RajaSolverOperator *prec,
@@ -31,7 +31,7 @@ namespace mfem {
                          RajaVector &r,
                          RajaVector &d,
                          RajaVector &z,
-                         double &final_norm);
+                         double &final_norm);*/
 
 
   // ***************************************************************************
@@ -156,7 +156,7 @@ namespace mfem {
     virtual void Mult(const RajaVector &b, RajaVector &x) const {
       if (rconfig::Get().Dcg()){
 #ifdef __NVCC__
-        d_Mult(b,x,b.Size(),oper,prec,iterative_mode,r,d,z,final_norm);
+        //d_Mult(b,x,b.Size(),oper,prec,iterative_mode,r,d,z,final_norm);
 #endif
       }
       else h_Mult(b,x);
