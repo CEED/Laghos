@@ -100,18 +100,18 @@ int main(int argc, char *argv[])
    bool aware = false;
    bool share = false;
    bool occa = false;
+   bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
-   
-#ifdef __NVCC__
-#ifndef __RAJA__
+
+   // **************************************************************************
+#if defined(__NVCC__) and not defined(__RAJA__)
    cuda=true;
 #endif
-#endif
+   
    const char *basename = "results/Laghos";
-
    OptionsParser args(argc, argv);
-   args.AddOption(&mesh_file, "-m", "--mesh",
-                  "Mesh file to use.");
+   // Standard Options *********************************************************
+   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -147,36 +147,45 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   // Tests Options ************************************************************
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
                   "Enable or disable DOT test kernels.");
-   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
+   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",                  
                   "Enable or disable MULT test kernels.");
-   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
-                  "Enable or disable CUDA managed alloc.");
-   args.AddOption(&aware, "-aware", "--aware", "-no-aware", "--no-aware",
-                  "Enable or disable GPUDirect.");
-   args.AddOption(&dcg, "-dcg", "--dcg", "-no-dcg", "--no-dcg",
-                  "Enable or disable CUDA CG.");
+   // RAJA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
-                  "Enable or disable CUDA kernels.");
-   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
-                  "Enable or disable SHARE kernels.");
+                  "Enable or disable CUDA kernels if you are using RAJA.");
+   // OCCA Options *************************************************************
    args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
-                  "Enable or disable 'like' occa kernels.");
+                  "Enable or disable OCCA behavior: geometry update and\n"
+                  "\tHost Conforming Prolongation Operations.");
+   // CUDA Options *************************************************************
+   args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
+                  "[32mEnable or disable Unified Memory.[m");
+   args.AddOption(&aware, "-aware", "--aware", "-no-aware", "--no-aware",
+                  "[32mEnable or disable MPI CUDA Aware (GPUDirect).[m");
+   args.AddOption(&hcpo, "-hcpo", "--hcpo", "-not-hcpo", "--no-hcpo",
+                  "[32mEnable or disable Host Conforming Prolongation Operations,\n"
+                  "\twhich transfers ALL the data to the host before communications.[m");
    args.AddOption(&sync, "-sync", "--sync", "-no-sync", "--no-sync",
-                  "Enable or disable Enforced Kernel Synchronization.");
+                  "[32mEnable or disable Enforced Kernel Synchronization.[m");
+   // Not usable Options *******************************************************
+   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
+                  "Enable or disable SHARE kernels (WIP, not usable).");
+   args.AddOption(&dcg, "-dcg", "--dcg", "-no-dcg", "--no-dcg",
+                  "Enable or disable CUDA CG (WIP, not usable).");
    args.Parse();
    if (!args.Good())
    {
       if (mpi.Root()) { args.PrintUsage(cout); }
       return 1;
-   }
+   }   
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   // CUDA set device & tweak options
+   // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,dcg,uvm,aware,share,occa,sync,dot,rs_levels);
+                        cuda,dcg,uvm,aware,share,occa,hcpo,sync,dot,rs_levels);
    
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -194,6 +203,7 @@ int main(int argc, char *argv[])
    }
    
    // Parallel partitioning of the mesh.
+   // **************************************************************************
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
    const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
@@ -230,18 +240,22 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
+   // **************************************************************************
    // We need at least some elements in each partition for now
+#ifdef MFEM_USE_MPI
+   int global_pmesh_NE;
+   const int pmesh_NE=pmesh->GetNE();
+   MPI_Allreduce(&pmesh_NE,&global_pmesh_NE,1,MPI_INT,MPI_MIN,pmesh->GetComm());
+   if (global_pmesh_NE==0) return printf("[Laghos] ERROR: pmesh->GetNE()==0!");
    assert(pmesh->GetNE()>0);
+#endif
 
    // Refine the mesh further in parallel to increase the resolution.
-   for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+   for (int lev = 0; lev < rp_levels; lev++) pmesh->UniformRefinement();
 
    // **************************************************************************
-   if (mult){
-     multTest(pmesh,order_v,max_tsteps);
-     MPI_Finalize();
-     exit(0);
-   }
+   // Mult RAP MPI test
+   if (mult) return multTest(pmesh,order_v,max_tsteps)?0:1;   
    
    // **************************************************************************
    //cuProfilerStart();
@@ -250,17 +264,13 @@ int main(int argc, char *argv[])
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
-   //dbg()<<"\033[7mDefine the parallel finite element spaces";
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   //dbg()<<"\033[7mL2FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   //dbg()<<"\033[7mH1FESpace RajaFiniteElementSpace";
    RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
-   // that the boundaries are straight.
-   //dbg()<<"\033[7mBoundary conditions";   
+   // Boundary conditions: all tests use v.n = 0 on the boundary,
+   // and we assume that the boundaries are straight.
    Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -275,7 +285,6 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
-   //dbg()<<"\033[7mDefine the explicit ODE solver";
    RajaODESolver *ode_solver = NULL;
    switch (ode_solver_type) {
    case 1: ode_solver = new RajaForwardEulerSolver; break;
@@ -312,7 +321,6 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-   //dbg()<<"[7mS monolithic BlockVector";
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -324,23 +332,17 @@ int main(int argc, char *argv[])
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   //dbg()<<"[7mParGridFunction: x,v,e";
    ParGridFunction x_gf(&H1FESpace);
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
 
-   //dbg()<<"[7mRajaGridFunction: d_x_gf";
    RajaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
-   //dbg()<<"[7mRajaGridFunction: d_v_gf";
    RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
-   //dbg()<<"[7mRajaGridFunction: d_e_gf";
    RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
  
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
-   //dbg()<<"[7mSetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
-   //dbg()<<"[7md_x_gf = x_gf;";
    d_x_gf = x_gf;
   
    // Initialize the velocity.
@@ -355,7 +357,6 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
-   //dbg()<<"[7mInitialize density and specific internal energy";
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -366,7 +367,6 @@ int main(int argc, char *argv[])
    RajaGridFunction d_rho(L2FESpace);
    d_rho = rho;
 
-   //dbg()<<"[7mproblem 1 or else[m";
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -381,10 +381,8 @@ int main(int argc, char *argv[])
    e_gf.ProjectGridFunction(l2_e);
    d_e_gf = e_gf;
 
-   //dbg()<<"[7mSpace-dependent ideal gas coefficient over the Lagrangian mesh.";
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
-
-   //dbg()<<"[7mAdditional details, depending on the problem.";
+   
    int source = 0; bool visc=false;
    switch (problem)
    {
@@ -396,12 +394,10 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
-   //dbg()<<"[7mLagrangianHydroOperator oper";
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
 
-   //dbg()<<"[7msocketstream";
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -450,16 +446,11 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
-   
-   //dbg()<<"[7mResetTimeStepEstimate, GetTimeStepEstimate";
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   //dbg("\n\033[31;1m[Laghos] Barrier & Exit\033[m"); MPI_Barrier(MPI_COMM_WORLD); return 0;
-   //dbg()<<"[7mS_old(S)";
-   RajaVector S_old(S);//D2D
+   RajaVector S_old(S);
 
-   //dbg("[7mfor(last_step)");
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -469,30 +460,22 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
-      S_old = S;//D2D
+      S_old = S;
       t_old = t;
-      //dbg("[7mResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
 
-      // S is the vector of dofs, t is the current time, and dt is the time step
-      // to advance.
-      //dbg()<<"[7mRode_solver->Step";
+      // S is the vector of dofs, t is the current time,
+      // and dt is the time step to advance.
       cuProfilerStart();
       ode_solver->Step(S, t, dt);
       steps++;
       //cuProfilerStop();
-//#warning exit
-//      MPI_Finalize();
-//      exit(0);
 
       // Make sure that the mesh corresponds to the new solution state.
-      //dbg("[7mMake sure that the mesh corresponds to the new solution state.");
-      //#warning NewNodes x_gf
       x_gf = d_x_gf;
       pmesh->NewNodes(x_gf, false);
 
       // Adaptive time step control.
-      //dbg()<<"[7mAdaptive time step control";
       const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
@@ -608,7 +591,6 @@ int main(int argc, char *argv[])
    delete ode_solver;
    delete pmesh;
    delete material_pcf;
-   //RajaDofQuadMaps::delRajaDofQuadMaps();
    pop();
    return 0;
 }

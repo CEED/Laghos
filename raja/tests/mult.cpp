@@ -20,6 +20,8 @@
 namespace mfem {
 
   // ***************************************************************************
+  // RajaPm1APOperator
+  // ***************************************************************************
   class RajaPm1APOperator : public RajaOperator{
   private:
     const RajaOperator &Rt;
@@ -51,6 +53,8 @@ namespace mfem {
   };
 
   // ***************************************************************************
+  // RajaIdOperator
+  // ***************************************************************************
   class RajaIdOperator: public RajaOperator {
   public:
     RajaIdOperator(int s = 0) { height = width = s; }
@@ -78,7 +82,7 @@ namespace mfem {
     const int nb_step = (max_step>0)?max_step:128;
     
     // Launch first dummy kernel
-    // And don't enable API tracing in NVVP
+    // And don't enable API tracing yet in NVVP
 #ifdef __NVCC__
     cuProfilerStart();
     iniK<<<128,1>>>();
@@ -87,63 +91,43 @@ namespace mfem {
 
     MPI_Barrier(pmesh->GetComm());
     
-    //cuProfilerStart();
+#ifdef __NVCC__
+    cuProfilerStart();
+#endif
     push();
-
     const int dim = pmesh->Dimension();
-    
     const H1_FECollection fec(order, dim);
     RajaFiniteElementSpace fes(pmesh, &fec, 1);
     HYPRE_Int glob_size = fes.GlobalTrueVSize();
-    
     if (rconfig::Get().Root())
-      std::cout << "Number of global dofs: " << glob_size << std::endl;
-    
+      mfem::out << "Number of global dofs: " << glob_size << std::endl;
     const int vsize = fes.GetVSize();
     if (rconfig::Get().Root())
-      std::cout << "Number of local dofs: " << vsize << std::endl;
-
-    push(Ops,Chocolate);
+      mfem::out << "Number of local dofs: " << vsize << std::endl;
     const RajaOperator &prolong = *fes.GetProlongationOperator();
     const RajaOperator &testP  = prolong;
     const RajaOperator &trialP = prolong;
     const RajaIdOperator Id(vsize);
     RajaPm1APOperator Pm1AP(testP,Id,trialP);
-    pop();
+    RajaVector x(vsize); x=1.0;
+    RajaVector y(vsize); y=1.0;
     
-    push(xy,Magenta);
-    RajaVector x(vsize);
-    //cout << "x size:" << x.Size() << endl;
-    RajaVector y(vsize);
-    pop();
-    
-    push(x=1,Turquoise);
-    x=1.0;
-    pop();
-    
-    push(y=2,Turquoise);
-    y=2.0;
-    pop();
-    
-    gettimeofday(&st, NULL);
-
-    // Allow MPI buffer setup
+    // Do one RAP to set MPI's buffers
     Pm1AP.Mult(x, y);
 
+    gettimeofday(&st, NULL);
     for(int i=0;i<nb_step;i++){
 #ifdef __NVCC__
-      cudaDeviceSynchronize();
+      //cudaDeviceSynchronize(); // used with nvvp
 #endif
       push(SkyBlue);
       Pm1AP.Mult(x, y);
       pop();
     }
     gettimeofday(&et, NULL);
-    const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+ (et.tv_usec - st.tv_usec)/1.0e3);
-    
+    const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+(et.tv_usec - st.tv_usec)/1.0e3);
     if (rconfig::Get().Root())
-      printf("\033[32m[laghos] Elapsed time = %f ms/iter\33[m\n", alltime/nb_step);
-    
+      printf("\033[32m[laghos] Elapsed time = %f ms/step\33[m\n", alltime/nb_step);
     pop();
     return true;
   }

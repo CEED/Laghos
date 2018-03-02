@@ -156,8 +156,6 @@ namespace mfem {
   void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
     push(Coral);
-    assert(x.Size() == Width());
-    assert(y.Size() == Height());
     const double *xdata = x.GetData();
     double *ydata = y.GetData(); 
     const int m = external_ldofs.Size();
@@ -186,8 +184,6 @@ namespace mfem {
   void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                            Vector &y) const{
     push(Coral);
-    assert(x.Size() == Height());
-    assert(y.Size() == Width());
     const double *xdata = x.GetData();
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();

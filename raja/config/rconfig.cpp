@@ -60,6 +60,7 @@ namespace mfem {
                       const bool _aware,
                       const bool _share,
                       const bool _occa,
+                      const bool _hcpo,
                       const bool _sync,
                       const bool _dot,
                       const int rs_levels){
@@ -93,6 +94,7 @@ namespace mfem {
     aware=_aware;
     share=_share;
     occa=_occa;
+    hcpo=_hcpo;
     sync=_sync;
 
 #if defined(__NVCC__)
@@ -162,7 +164,7 @@ namespace mfem {
   // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
     if (Occa()) return true;
-    return (Cuda())?false:true;
+    return (Cuda())?hcpo:true;
   }
   
 } // namespace mfem

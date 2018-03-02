@@ -77,9 +77,8 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const int elements = fespace.GetNE();
   const int numDofs  = fe.GetDof();
   const int numQuad  = ir.GetNPoints();
-  //const int ndofs = fespace.GetNDofs();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
-  
+ 
   if (orderedByNODES) ReorderByVDim(nodes);
   const int asize = dims*numDofs*elements;
   Array<double> meshNodes(asize);
@@ -146,10 +145,8 @@ void RajaGeometry::ReorderByVDim(GridFunction& nodes){
   double *temp = new double[size];
   int k=0;
   for (int d = 0; d < ndofs; d++)
-    for (int v = 0; v < vdim; v++){
-      //printf("\n\033[32m[ReorderByVDim] dof,dim:(%d,%d): %d->%d\033[m",d,v,v+d*vdim,d+v*ndofs);
+    for (int v = 0; v < vdim; v++)
       temp[k++] = data[d+v*ndofs];
-    }
   for (int i = 0; i < size; i++)
     data[i] = temp[i];
   delete [] temp;
@@ -167,12 +164,10 @@ void RajaGeometry::ReorderByNodes(GridFunction& nodes){
   double *temp = new double[size];
   int k = 0;
   for (int j = 0; j < ndofs; j++)
-    for (int i = 0; i < vdim; i++){
+    for (int i = 0; i < vdim; i++)
       temp[j+i*ndofs] = data[k++];
-    }
-  for (int i = 0; i < size; i++){
+  for (int i = 0; i < size; i++)
     data[i] = temp[i];
-  }
   delete [] temp;
   pop();
 }
@@ -181,26 +176,18 @@ void RajaGeometry::ReorderByNodes(GridFunction& nodes){
 // * RajaDofQuadMaps
 // ***************************************************************************
   static std::map<std::string, RajaDofQuadMaps* > AllDofQuadMaps;
-  //static std::map<std::string, std::unique_ptr<RajaDofQuadMaps> > AllDofQuadMaps;
 
   // ***************************************************************************
-  RajaDofQuadMaps::~RajaDofQuadMaps(){
-    //printf("\n\t\t\033[31m[~RajaDofQuadMaps]\033[m");
-    //delRajaDofQuadMaps();
-  }
+  RajaDofQuadMaps::~RajaDofQuadMaps(){}
 
 // *****************************************************************************
 void RajaDofQuadMaps::delRajaDofQuadMaps(){
-  //printf("\033[31m[delRajaDofQuadMaps]\033[m");
   for(std::map<std::string,
         RajaDofQuadMaps*>::iterator itr = AllDofQuadMaps.begin();
       itr != AllDofQuadMaps.end();
       itr++) {
-    //printf("\n\t\033[31m[delRajaDofQuadMaps] found %s \033[m",itr->first.c_str());
     delete itr->second;
-    //AllDofQuadMaps.erase(itr);
   }
-  //AllDofQuadMaps.clear();
 }
 
 // *****************************************************************************
@@ -246,7 +233,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
   // Otherwise, build them
-  //printf("\n\033[32m[Adding MAP] GetTensorMaps %s\033[m",hash.c_str());
   RajaDofQuadMaps *maps = new RajaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
@@ -289,7 +275,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
     return AllDofQuadMaps[hash];
 
   push(SteelBlue);
-  //printf("\n\033[32m[Adding MAP] GetD2QTensorMaps %s\033[m",hash.c_str());
   RajaDofQuadMaps *maps = new RajaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
@@ -364,7 +349,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
   push(SteelBlue);
-  //printf("\n\033[32m[Adding MAP] GetSimplexMaps %s\033[m",hash.c_str());
   RajaDofQuadMaps *maps = new RajaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
@@ -395,7 +379,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
   std::string hash = ss.str();
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
-  //printf("\n\033[32m[Adding MAP] GetD2QSimplexMaps %s\033[m",hash.c_str());
   RajaDofQuadMaps* maps = new RajaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;  
@@ -441,7 +424,6 @@ RajaDofQuadMaps* RajaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
 // ***************************************************************************
 // * Base Integrator
 // ***************************************************************************
-
 void RajaIntegrator::SetIntegrationRule(const IntegrationRule& ir_) {
   ir = &ir_;
 }
@@ -480,7 +462,7 @@ void RajaMassIntegrator::SetupIntegrationRule() {
 // ***************************************************************************
 void RajaMassIntegrator::Assemble() {
   if (op.Size()) return;
-  //assert(false);
+  assert(false);
 }
 
 // ***************************************************************************

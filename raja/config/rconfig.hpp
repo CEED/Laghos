@@ -46,6 +46,7 @@ namespace mfem {
     bool share=false;
     // *************************************************************************
     bool occa=false;
+    bool hcpo=false;
     bool sync=false;
     // *************************************************************************
   private:
@@ -62,7 +63,7 @@ namespace mfem {
     void Setup(const int,const int,
                const bool cuda, const bool dcg,
                const bool uvm, const bool aware,
-               const bool share, const bool occa,
+               const bool share, const bool occa, const bool hcpo,
                const bool sync, const bool dot, const int rs_levels);
     // *************************************************************************
     bool IAmAlone();
@@ -81,6 +82,7 @@ namespace mfem {
     inline bool Dcg() { return dcg; }
     inline bool Share() { return share; }
     inline bool Occa() { return occa; }
+    inline bool Hcpo() { return hcpo; }
     inline bool Sync() { return sync; }
     // *************************************************************************
 #ifdef __NVCC__
