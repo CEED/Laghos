@@ -19,7 +19,7 @@ namespace mfem {
 
   // *************************************************************************
   void* rmemcpy::rHtoH(void *dest, const void *src, std::size_t count){
-    rdbg(">\033[m");
+    dbg(">\033[m");
     if (count==0) return dest;
     assert(src); assert(dest);
     std::memcpy(dest,src,count);
@@ -28,7 +28,7 @@ namespace mfem {
 
   // *************************************************************************
   void* rmemcpy::rHtoD(void *dest, const void *src, std::size_t count){
-    rdbg(">\033[m");
+    dbg(">\033[m");
     if (count==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);
@@ -42,7 +42,7 @@ namespace mfem {
 
   // ***************************************************************************
   void* rmemcpy::rDtoH(void *dest, const void *src, std::size_t count){
-    rdbg("<\033[m");
+    dbg("<\033[m");
     if (count==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);
@@ -56,7 +56,7 @@ namespace mfem {
   
   // ***************************************************************************
   void* rmemcpy::rDtoD(void *dest, const void *src, std::size_t count){
-    rdbg("<\033[m");
+    dbg("<\033[m");
     if (count==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,count);

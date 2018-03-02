@@ -23,7 +23,7 @@ namespace mfem {
 
     // *************************************************************************
     inline void* operator new(size_t n, bool lock_page = false) {
-      rdbg("+]\033[m");
+      dbg("+]\033[m");
       if (!rconfig::Get().Cuda()) return ::new T[n];
 #ifdef __NVCC__
       void *ptr;
@@ -45,7 +45,7 @@ namespace mfem {
   
     // ***************************************************************************
     inline void operator delete(void *ptr) {
-      rdbg("-]\033[m");
+      dbg("-]\033[m");
       if (!rconfig::Get().Cuda()) {
         if (ptr)
           ::delete[] static_cast<T*>(ptr);

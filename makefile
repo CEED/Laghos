@@ -107,7 +107,7 @@ LDFLAGS =
 
 OPTIM_OPTS = -O3
 DEBUG_OPTS = -g -Wall
-LAGHOS_DEBUG = $(MFEM_DEBUG)
+LAGHOS_DEBUG ?= $(MFEM_DEBUG)
 ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    ifeq ($(LAGHOS_DEBUG),YES)
       CXXFLAGS = $(DEBUG_OPTS)
@@ -118,7 +118,6 @@ endif
 
 ###################
 # CXXFLAGS ADDONS #
-# -fno-omit-frame-pointer
 ###################
 CXXFLAGS += -std=c++11 -m64
 #CXXFLAGS += -DLAGHOS_DEBUG

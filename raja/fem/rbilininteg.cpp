@@ -77,7 +77,7 @@ RajaGeometry* RajaGeometry::Get(RajaFiniteElementSpace& fes,
   const int elements = fespace.GetNE();
   const int numDofs  = fe.GetDof();
   const int numQuad  = ir.GetNPoints();
-  const int ndofs = fespace.GetNDofs();
+  //const int ndofs = fespace.GetNDofs();
   const bool orderedByNODES = (fespace.GetOrdering() == Ordering::byNODES);
   
   if (orderedByNODES) ReorderByVDim(nodes);
@@ -480,7 +480,7 @@ void RajaMassIntegrator::SetupIntegrationRule() {
 // ***************************************************************************
 void RajaMassIntegrator::Assemble() {
   if (op.Size()) return;
-  assert(false);
+  //assert(false);
 }
 
 // ***************************************************************************

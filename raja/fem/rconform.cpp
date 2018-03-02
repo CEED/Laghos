@@ -22,7 +22,6 @@ namespace mfem {
                                  gc(new RajaCommD(pfes)){
     Array<int> ldofs;
     Table &group_ldof = gc->GroupLDofTable();
-    const int HmW=Height()-Width();
     external_ldofs.Reserve(Height()-Width());
     for (int gr = 1; gr < group_ldof.Size(); gr++)
     {
@@ -34,6 +33,7 @@ namespace mfem {
     }
     external_ldofs.Sort();
 #ifdef __NVCC__
+    const int HmW=Height()-Width();
     if (HmW>0) d_external_ldofs=external_ldofs;
 #endif
     assert(external_ldofs.Size() == Height()-Width());

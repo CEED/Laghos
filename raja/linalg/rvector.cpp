@@ -14,13 +14,13 @@ namespace mfem {
   
 RajaVector::~RajaVector(){
   if (!own) return;
-  rdbg("\033[33m[~v");
+  dbg("\033[33m[~v");
   rmalloc::operator delete(data);
 }
 
 // ***************************************************************************
 double* RajaVector::alloc(const size_t sz) {
-  rdbg("\033[33m[v");
+  dbg("\033[33m[v");
   return (double*) rmalloc::operator new(sz);
 }
 
@@ -102,7 +102,6 @@ RajaVector& RajaVector::operator=(const RajaVector& v) {
 // ***************************************************************************
 RajaVector& RajaVector::operator=(const Vector& v) {
   size=v.Size();
-  assert(v.GetData());
   if (!rconfig::Get().Cuda()) SetSize(size,v.GetData());
   else rHtoD(data,v.GetData(),bytes());
   own = false;

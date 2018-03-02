@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
-
+   
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
@@ -229,7 +229,9 @@ int main(int argc, char *argv[])
    }
    delete [] nxyz;
    delete mesh;
-   
+
+   // We need at least some elements in each partition for now
+   assert(pmesh->GetNE()>0);
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
@@ -244,7 +246,7 @@ int main(int argc, char *argv[])
    // **************************************************************************
    //cuProfilerStart();
    push(Tan);
-
+   
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -258,7 +260,7 @@ int main(int argc, char *argv[])
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   //dbg()<<"\033[7mBoundary conditions";
+   //dbg()<<"\033[7mBoundary conditions";   
    Array<int> essential_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -333,14 +335,14 @@ int main(int argc, char *argv[])
    RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
    //dbg()<<"[7mRajaGridFunction: d_e_gf";
    RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
-   
+ 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    //dbg()<<"[7mSetNodalGridFunction";
    pmesh->SetNodalGridFunction(&x_gf);
    //dbg()<<"[7md_x_gf = x_gf;";
    d_x_gf = x_gf;
-   
+  
    // Initialize the velocity.
    //dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
@@ -363,7 +365,7 @@ int main(int argc, char *argv[])
    rho.ProjectGridFunction(l2_rho);
    RajaGridFunction d_rho(L2FESpace);
    d_rho = rho;
-   
+
    //dbg()<<"[7mproblem 1 or else[m";
    if (problem == 1)
    {
@@ -453,9 +455,10 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
+   //dbg("\n\033[31;1m[Laghos] Barrier & Exit\033[m"); MPI_Barrier(MPI_COMM_WORLD); return 0;
    //dbg()<<"[7mS_old(S)";
    RajaVector S_old(S);//D2D
-   
+
    //dbg("[7mfor(last_step)");
    for (int ti = 1; !last_step; ti++)
    {

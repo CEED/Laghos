@@ -78,7 +78,7 @@ NVTX_DECLSPEC int NVTX_API rNvtxSyncPop(void);
 #else // __NVCC__ && _NVVP__ ***************************************************
 
 #define pop(...)
-#define push(...)
+#define push(...) dbg("\n%s",__PRETTY_FUNCTION__)
 #define cuProfilerStart(...)
 #define cuProfilerStop(...)
 

@@ -34,7 +34,7 @@ template <class T, bool xyz = true> class RajaArray;
     rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
   }
-  ~RajaArray(){rdbg("\033[32m[~i"); rmalloc<T>::operator delete(data);}
+  ~RajaArray(){dbg("\033[32m[~i"); rmalloc<T>::operator delete(data);}
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
@@ -50,7 +50,7 @@ template <class T, bool xyz = true> class RajaArray;
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    rdbg("\033[32m[i");
+    dbg("\033[32m[i");
     data=(T*) rmalloc<T>::operator new(sz);
   }
   inline T& operator[](const size_t x) { return data[x]; }
@@ -80,7 +80,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
   RajaArray():data(NULL),sz(0),d{0,0,0,0} {}
   RajaArray(const size_t d0) {allocate(d0);}
   RajaArray(const RajaArray<T,false> &r) {assert(false);}
-  ~RajaArray(){rdbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
+  ~RajaArray(){dbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
   RajaArray& operator=(Array<T> &a){
     rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
@@ -100,7 +100,7 @@ template <class T> class RajaArray<T,false> : public rmalloc<T>{
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    rdbg("\033[32m[I");
+    dbg("\033[32m[I");
     assert(sz>0);
     data=(T*) rmalloc<T>::operator new(sz);
 #define xsw(a,b) a^=b^=a^=b

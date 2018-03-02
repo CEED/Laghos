@@ -34,7 +34,6 @@ namespace mfem {
     const Table& e2dTable = GetElementToDofTable();
     const int* elementMap = e2dTable.GetJ();
     const int elements = GetNE();
-  
     Array<int> h_offsets(globalDofs+1);
     // We'll be keeping a count of how many local nodes point to its global dof
     for (int i = 0; i <= globalDofs; ++i) {
@@ -107,8 +106,6 @@ namespace mfem {
 
   // ***************************************************************************
   RajaFiniteElementSpace::~RajaFiniteElementSpace() {
-    ::delete restrictionOp;
-    ::delete prolongationOp;
     ::delete reorderIndices;
   }
 

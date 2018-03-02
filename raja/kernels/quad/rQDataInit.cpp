@@ -53,12 +53,12 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w) {
   push(Lime);
-  const unsigned int id = NUM_QUAD;
 #ifndef __LAMBDA__
   const int grid = numElements;
   const int blck = NUM_QUAD;
 #endif
 #ifdef __TEMPLATES__
+  const unsigned int id = NUM_QUAD;
   static std::unordered_map<unsigned int, fInitQuadratureData> call = {
     {2,&rInitQuadData<2>},
     {4,&rInitQuadData<4>},
@@ -81,7 +81,7 @@ void rInitQuadratureData(const int NUM_QUAD,
   assert(call[id]);
   call0(rInitQuadData,id,grid,blck,
         numElements,rho0,detJ,quadWeights,rho0DetJ0w);
-#else
+#else // __TEMPLATES__
   call0(rInitQuadData,id,grid,blck,
         NUM_QUAD,
         numElements,rho0,detJ,quadWeights,rho0DetJ0w);

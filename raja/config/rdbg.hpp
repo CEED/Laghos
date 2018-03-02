@@ -18,16 +18,19 @@
 
 // DBG *************************************************************************
 inline void rdbg(const char *format,...){
-#ifdef LAGHOS_DEBUG
   va_list args;
   va_start(args, format);
+  fflush(stdout);
   vfprintf(stdout,format,args);
   fflush(stdout);
   va_end(args);
-#endif // LAGHOS_DEBUG
 }
 
 // *****************************************************************************
+#ifdef LAGHOS_DEBUG
 #define dbg(...) rdbg(__VA_ARGS__)
+#else
+#define dbg(...)
+#endif // LAGHOS_DEBUG
 
 #endif // LAGHOS_RAJA_DBG

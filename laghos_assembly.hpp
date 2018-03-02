@@ -104,7 +104,7 @@ private:
    const bool use_share;
    RajaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
-   int ess_tdofs_count;
+   unsigned int ess_tdofs_count;
    RajaArray<int> ess_tdofs;
    RajaBilinearForm bilinearForm;
    RajaOperator *massOperator;

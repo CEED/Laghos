@@ -103,7 +103,7 @@ namespace mfem {
     if (rconfig::Get().Root())
       std::cout << "Number of local dofs: " << vsize << std::endl;
 
-    push(Ops,Chocolate)
+    push(Ops,Chocolate);
     const RajaOperator &prolong = *fes.GetProlongationOperator();
     const RajaOperator &testP  = prolong;
     const RajaOperator &trialP = prolong;

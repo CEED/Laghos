@@ -390,7 +390,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 // *****************************************************************************
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
-   if (quad_data_is_current) { return; }
+   if (quad_data_is_current) return;
    push(Wheat);
   
    timer.sw_qdata.Start();
@@ -399,7 +399,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
    const bool use_share = rconfig::Get().Share();
-   
+
    const RajaVector x = S.GetRange(0, vSize);
    RajaVector v = S.GetRange(vSize, vSize);
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
@@ -418,7 +418,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    ElementTransformation *T = H1FESpace.GetElementTransformation(0);
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
-   
+     
    if (use_share)
      rUpdateQuadratureDataS(gamma,
                             quad_data.h0,
@@ -464,7 +464,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                            quad_data.stressJinvT,
                            quad_data.dtEst);
 
-   quad_data.dt_est = quad_data.dtEst.Min();   
+   quad_data.dt_est = quad_data.dtEst.Min();
    quad_data_is_current = true;
    
    timer.sw_qdata.Stop();

@@ -102,8 +102,9 @@ void RajaMassOperator::Setup()
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
   push(Wheat);
+  dbg("\n\033[33;1m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
   ess_tdofs_count = dofs.Size();
-  if (ess_tdofs_count == 0) { pop(); return; }
+  
   if (ess_tdofs.Size()==0){
 #ifdef MFEM_USE_MPI
     int global_ess_tdofs_count;
@@ -118,6 +119,10 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 #endif
   }else assert(ess_tdofs_count<=ess_tdofs.Size());
 
+  assert(ess_tdofs>0);
+  
+  if (ess_tdofs_count == 0) { pop(); return; }
+  
   {
     push(H2D:ess_tdofs,Red);
     assert(ess_tdofs_count>0);
