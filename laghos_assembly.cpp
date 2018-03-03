@@ -810,6 +810,86 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
    }
 }
 
+// Can be optimized, but we do it once as the diagonal is constant in time.
+void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
+{
+   const H1_QuadrilateralElement *fe_H1 =
+      dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
+   const Array<int> &dof_map = fe_H1->GetDofMap();
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
+   const int ndof = ndof1D * ndof1D, nqp = nqp1D * nqp1D;
+   Array<int> dofs;
+
+   diag.SetSize(height);
+   diag = 0.0;
+
+   for (int z = 0; z < nzones; z++)
+   {
+      const double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
+      for (int j = 0; j < ndof; j++)
+      {
+         double val_j = 0.0;
+         for (int q = 0; q < nqp; q++)
+         {
+            const double phi_j_q = HQs(j % ndof1D, q % nqp1D) *
+                                   HQs(j / ndof1D, q / nqp1D);
+            val_j += d[q] * phi_j_q * phi_j_q;
+         }
+
+         // Transfer from the tensor structure numbering to mfem's H1 numbering.
+         FESpace.GetElementDofs(z, dofs);
+         diag[dofs[dof_map[j]]] += val_j;
+      }
+   }
+
+   for (int i = 0; i < height / 2; i++)
+   {
+      diag(i + height / 2) = diag(i);
+   }
+}
+
+// Can be optimized, but we do it once as the diagonal is constant in time.
+void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
+{
+   const H1_HexahedronElement *fe_H1 =
+      dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
+   const Array<int> &dof_map = fe_H1->GetDofMap();
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
+   const int ndof = ndof1D * ndof1D * ndof1D, nqp = nqp1D * nqp1D * nqp1D;
+   Array<int> dofs;
+
+   diag.SetSize(height);
+   diag = 0.0;
+
+   for (int z = 0; z < nzones; z++)
+   {
+      const double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
+      for (int j = 0; j < ndof; j++)
+      {
+         double val_j = 0.0;
+         for (int q = 0; q < nqp; q++)
+         {
+            const double phi_j_q = HQs(j % ndof1D, q % nqp1D) *
+                                   HQs(j / ndof1D % ndof1D, q / nqp1D % nqp1D) *
+                                   HQs(j / ndof1D / ndof1D, q / nqp1D / nqp1D);
+            val_j += d[q] * phi_j_q * phi_j_q;
+         }
+
+         // Transfer from the tensor structure numbering to mfem's H1 numbering.
+         FESpace.GetElementDofs(z, dofs);
+         diag[dofs[dof_map[j]]] += val_j;
+      }
+   }
+
+   for (int i = 0; i < height / 3; i++)
+   {
+      diag(i + height / 3) = diag(i);
+      diag(i + 2 * height / 3) = diag(i);
+   }
+}
+
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    const int comp_size = FESpace.GetNDofs();

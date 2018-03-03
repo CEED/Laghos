@@ -182,10 +182,38 @@ public:
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
 
+   void ComputeDiagonal2D(Vector &d) const;
+   void ComputeDiagonal3D(Vector &d) const;
+
    virtual const Operator *GetProlongation() const
    { return FESpace.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
    { return FESpace.GetRestrictionMatrix(); }
+};
+
+// Scales by the inverse diagonal of the MassPAOperator.
+class DiagonalSolver : public Solver
+{
+private:
+   Vector diag;
+   ParFiniteElementSpace &FESpace;
+
+public:
+   DiagonalSolver(ParFiniteElementSpace &fes)
+      : Solver(fes.GetVSize()), diag(fes.GetVSize()), FESpace(fes) { }
+
+   void SetDiagonal(Vector &d)
+   {
+      const Operator *P = FESpace.GetProlongationMatrix();
+      diag.SetSize(P->Width());
+      P->MultTranspose(d, diag);
+   }
+
+   virtual void Mult(const Vector &x, Vector &y) const
+   {
+      for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
+   }
+   virtual void SetOperator(const Operator &op) { }
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.

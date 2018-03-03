@@ -100,7 +100,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1FESpace), locEMassPA(&quad_data, l2_fes),
+     VMassPA(&quad_data, H1FESpace), VMassPA_prec(H1FESpace),
+     locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
    GridFunctionCoefficient rho_coeff(&rho0);
@@ -175,10 +176,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    if (p_assembly)
    {
+      // Compute the global 1D reference tensors.
       tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                                 L2FESpace.GetFE(0)->GetOrder(),
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))));
       evaluator = new FastEvaluator(H1FESpace);
+
+      // Setup the preconditioner of the velocity mass operator.
+      Vector d;
+      (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
+      VMassPA_prec.SetDiagonal(d);
    }
 
    locCG.SetOperator(locEMassPA);
@@ -243,6 +250,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       Operator *cVMassPA;
       VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
       CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+      cg.SetPreconditioner(VMassPA_prec);
       cg.SetOperator(*cVMassPA);
       cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
       cg.SetMaxIter(cg_max_iter);
@@ -264,6 +272,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+      HypreSmoother prec;
+      prec.SetType(HypreSmoother::Jacobi, 1);
+      cg.SetPreconditioner(prec);
       cg.SetOperator(A);
       cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
       cg.SetMaxIter(cg_max_iter);
