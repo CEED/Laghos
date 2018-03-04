@@ -182,8 +182,8 @@ public:
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
 
-   void ComputeDiagonal2D(Vector &d) const;
-   void ComputeDiagonal3D(Vector &d) const;
+   void ComputeDiagonal2D(Vector &diag) const;
+   void ComputeDiagonal3D(Vector &diag) const;
 
    virtual const Operator *GetProlongation() const
    { return FESpace.GetProlongationMatrix(); }
