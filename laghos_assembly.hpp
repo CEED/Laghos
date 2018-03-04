@@ -200,7 +200,7 @@ private:
 
 public:
    DiagonalSolver(ParFiniteElementSpace &fes)
-      : Solver(fes.GetVSize()), diag(fes.GetVSize()), FESpace(fes) { }
+      : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
 
    void SetDiagonal(Vector &d)
    {
