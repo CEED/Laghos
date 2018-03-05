@@ -201,13 +201,20 @@ CUDA_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
 ############
 # RAJA ENV #
 ############
-RAJA_INC = -I$(CUB_DIR) -I$(RAJA_DIR)/include
+ifneq (,$(rj))
+RAJA_INC = -I$(RAJA_DIR)/include
 RAJA_LIBS = $(RAJA_DIR)/lib/libRAJA.a
+endif
+
+###########
+# CUB INC #
+###########
+CUB_INC = -I$(CUB_DIR)
 
 ################
 # LAGHOS FLAGS #
 ################
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUB_INC) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
 LAGHOS_LIBS = $(ASAN_LIB) $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
