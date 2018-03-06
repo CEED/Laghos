@@ -17,9 +17,9 @@
 
 // *****************************************************************************
 extern "C" kernel
-void rGlobalToLocal0(const int NUM_VDIM,
-                     const bool VDIM_ORDERING,
-                     const int globalEntries,
+void rGlobalToLocal0(const int globalEntries,
+                     const int NUM_VDIM,
+                     const bool VDIM_ORDERING,                     
                      const int localEntries,
                      const int* __restrict offsets,
                      const int* __restrict indices,
@@ -56,7 +56,7 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const double* __restrict globalX,
                     double* __restrict localX) {
   push(Lime);
-  cuKerGB(rGlobalToLocal,1,256,NUM_VDIM,VDIM_ORDERING,
-        globalEntries,localEntries,offsets,indices,globalX,localX);
+  cuKer(rGlobalToLocal,globalEntries,NUM_VDIM,VDIM_ORDERING,
+        localEntries,offsets,indices,globalX,localX);
   pop();
 }

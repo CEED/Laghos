@@ -17,8 +17,8 @@
 
 // *****************************************************************************
 extern "C" kernel
-void rMassAssemble2D0(const int NUM_QUAD_2D,
-                      const int numElements,
+void rMassAssemble2D0(const int numElements,
+                      const int NUM_QUAD_2D,
                       const double COEFF,
                       const double* quadWeights,
                       const double* J,
@@ -43,21 +43,22 @@ void rMassAssemble2D0(const int NUM_QUAD_2D,
           );
 #endif
 }
-static void rMassAssemble2D(const int NUM_QUAD_2D,
-                            const int numElements,
+// *****************************************************************************
+static void rMassAssemble2D(const int numElements,
+                            const int NUM_QUAD_2D,
                             const double COEFF,
                             const double* quadWeights,
                             const double* J,
                             double* __restrict oper) {
   push(Lime);
-  cuKer(rMassAssemble2D,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
+  cuKer(rMassAssemble2D,numElements,NUM_QUAD_2D,COEFF,quadWeights,J,oper);
   pop();
 }
 
 // *****************************************************************************
 extern "C" kernel
-void rMassAssemble3D0(const int NUM_QUAD_3D,
-                      const int numElements,
+void rMassAssemble3D0(const int numElements,
+                      const int NUM_QUAD_3D,
                       const double COEFF,
                       const double* quadWeights,
                       const double* J,
@@ -96,7 +97,7 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* J,
                             double* __restrict oper) {
   push(Lime);
-  cuKer(rMassAssemble3D,NUM_QUAD_3D,numElements,COEFF,quadWeights,J,oper);
+  cuKer(rMassAssemble3D,numElements,NUM_QUAD_3D,COEFF,quadWeights,J,oper);
   pop();
 }
 
@@ -111,7 +112,7 @@ void rMassAssemble(const int dim,
   push(Lime);
   assert(false);
   if (dim==1) assert(false);
-  if (dim==2) rMassAssemble2D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
-  if (dim==3) rMassAssemble3D(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
+  if (dim==2) rMassAssemble2D(numElements,NUM_QUAD,COEFF,quadWeights,J,oper);
+  if (dim==3) rMassAssemble3D(numElements,NUM_QUAD,COEFF,quadWeights,J,oper);
   pop();
 }

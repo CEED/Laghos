@@ -231,8 +231,8 @@ void rMassMultAdd(const int DIM,
                   double* __restrict y) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD_1D;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
   assert(LOG2(DIM)<=4);

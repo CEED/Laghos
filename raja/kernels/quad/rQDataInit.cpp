@@ -54,8 +54,8 @@ void rInitQuadratureData(const int NUM_QUAD,
                          double* restrict rho0DetJ0w) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
   const unsigned int id = NUM_QUAD;

@@ -89,7 +89,7 @@ void rExtractSubVector(const int N,
                        double* __restrict out) {
   push(Lime);
 #ifndef __LAMBDA__
-  cuKerGB(rExtractSubVector,1,256,N,indices,in,out);
+  cuKer(rExtractSubVector,N,indices,in,out);
 #else
   forall(i,N,out[i] = in[indices[i]];);
 #endif

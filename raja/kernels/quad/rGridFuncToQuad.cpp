@@ -249,8 +249,8 @@ void rGridFuncToQuad(const int DIM,
                      double* __restrict out) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = 1;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
    const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);

@@ -487,8 +487,8 @@ void rForceMult(const int NUM_DIM,
                 double* restrict v) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = nzones;
-  const int blck = NUM_QUAD_1D;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (nzones+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
@@ -578,8 +578,8 @@ void rForceMultTranspose(const int NUM_DIM,
                          double* restrict e) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = nzones;
-  const int blck = NUM_QUAD_1D;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (nzones+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
   assert(NUM_DOFS_1D==H1_DOFS_1D);

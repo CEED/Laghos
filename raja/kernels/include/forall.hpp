@@ -54,6 +54,7 @@ const int CUDA_BLOCK_SIZE = 256;
 #else // __KERNELS__ on GPU, CUDA Kernel launches  *****************************
 #ifdef __NVCC__
 #ifndef __LAMBDA__
+const int CUDA_BLOCK_SIZE = 256;
 #define kernel __global__
 #define sync __syncthreads();
 #define share __shared__
@@ -83,7 +84,7 @@ const int CUDA_BLOCK_SIZE = 256;
                    0,0,                                               \
                    args);                                             \
       }
-#define cuKerGB(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
 #define call0(name,id,grid,blck,...)  call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
@@ -100,7 +101,7 @@ __global__ void gpu(const int length,
                     FORALL_BODY body) {
   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
   const int ids = idx * step;
-  if (ids < length) {body(ids);}
+  if (ids < length) {body(idx);}
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,
@@ -114,7 +115,7 @@ void cuda_forallT(const int end,
 #define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
-#define cuKerGB(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
+#define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 

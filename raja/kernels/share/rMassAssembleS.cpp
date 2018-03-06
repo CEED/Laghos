@@ -50,6 +50,7 @@ void rMassAssemble2S0(const int NUM_QUAD_2D,
   );
 #endif
 }
+// *****************************************************************************
 static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const int numElements,
                             const double COEFF,
@@ -57,10 +58,10 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const double* J,
                             double* __restrict oper) {
 #ifndef __LAMBDA__
-   const int grid = ((numElements+A2_ELEMENT_BATCH-1)/A2_ELEMENT_BATCH);
-   const int block = A2_QUAD_BATCH;
+  const int grid = ((numElements+A2_ELEMENT_BATCH-1)/A2_ELEMENT_BATCH);
+  const int block = A2_QUAD_BATCH;
 #endif
-   cuKerGB(rMassAssemble2S,grid,block,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
+   cuKerGBS(rMassAssemble2S,grid,block,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
 }
 
 // *****************************************************************************
@@ -72,8 +73,8 @@ void rMassAssembleS(const int dim,
                     const double COEFF,
                     double* __restrict oper) {
   push(Green);
-  if (dim==1) assert(false);
+  if (dim==1) {assert(false);}
   if (dim==2) rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
-  if (dim==3) assert(false);
+  if (dim==3) {assert(false);}
   pop();
 }

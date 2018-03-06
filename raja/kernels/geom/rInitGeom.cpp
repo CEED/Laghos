@@ -59,9 +59,7 @@ void rNodeCopyByVDim(const int elements,
                      const double* Sx,
                      double* nodes){
 #ifndef __LAMBDA__
-  const int grid = elements;
-  const int blck = ndofs;
-  cuKerGB(rNodeCopyByVDim,grid,blck,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
+  cuKer(rNodeCopyByVDim,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
 #else
   rNodeCopyByVDim0(elements,numDofs,ndofs,dims,eMap,Sx,nodes);
 #endif
@@ -272,8 +270,8 @@ void rIniGeom(const int DIM,
               double* restrict detJ) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int grid = numElements;
-  const int blck = NUM_QUAD;
+  const int blck = CUDA_BLOCK_SIZE;
+  const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
   const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
