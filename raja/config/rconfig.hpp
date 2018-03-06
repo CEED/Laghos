@@ -44,6 +44,7 @@ namespace mfem {
     bool dcg=false;
     bool uvm=false;
     bool share=false;
+    bool share_env=false;
     // *************************************************************************
     bool occa=false;
     bool hcpo=false;
@@ -80,7 +81,8 @@ namespace mfem {
     inline bool Uvm() { return uvm; }
     inline bool Cuda() { return cuda; }
     inline bool Dcg() { return dcg; }
-    inline bool Share() { return share; }
+    inline bool Share() { return share && !share_env; }
+    inline bool ShareEnv() { return share_env; }
     inline bool Occa() { return occa; }
     inline bool Hcpo() { return hcpo; }
     inline bool Sync() { return sync; }

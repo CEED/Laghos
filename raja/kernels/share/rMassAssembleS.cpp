@@ -17,8 +17,8 @@
 
 // *****************************************************************************
 extern "C" kernel
-void rMassAssemble2S0(const int NUM_QUAD_2D,
-                      const int numElements,
+void rMassAssemble2S0(const int numElements,
+                      const int NUM_QUAD_2D,
                       const double COEFF,
                       const double* quadWeights,
                       const double* J,
@@ -26,14 +26,22 @@ void rMassAssemble2S0(const int NUM_QUAD_2D,
 #ifdef __LAMBDA__
   forallS(eOff,numElements,A2_ELEMENT_BATCH,
 #else
-  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int idx = blockIdx.x;
   const int eOff = idx * A2_ELEMENT_BATCH;
   if (eOff < numElements)
 #endif
   {
+#ifdef __LAMBDA__
     for (int e = eOff; e < (eOff + A2_ELEMENT_BATCH); ++e) {
+#else
+    { const int e = threadIdx.x;
+#endif
       if (e < numElements) {
+#ifdef __LAMBDA__
         for (int qOff = 0; qOff < A2_QUAD_BATCH; ++qOff) {
+#else
+       { const int qOff = threadIdx.y;
+#endif
           for (int q = qOff; q < NUM_QUAD_2D; q += A2_QUAD_BATCH) {
             const double J11 = J[ijklNM(0, 0, q, e,2,NUM_QUAD_2D)];
             const double J12 = J[ijklNM(1, 0, q, e,2,NUM_QUAD_2D)];
@@ -58,10 +66,13 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const double* J,
                             double* __restrict oper) {
 #ifndef __LAMBDA__
-  const int grid = ((numElements+A2_ELEMENT_BATCH-1)/A2_ELEMENT_BATCH);
-  const int block = A2_QUAD_BATCH;
+  const int gX = ((numElements+A2_ELEMENT_BATCH-1)/A2_ELEMENT_BATCH);
+  const int tX = A2_ELEMENT_BATCH;
+  const int tY = A2_QUAD_BATCH;
+  dim3 threads(tX, tY, 1);
+  dim3 blocks(gX, 1, 1);
 #endif
-   cuKerGBS(rMassAssemble2S,grid,block,NUM_QUAD_2D,numElements,COEFF,quadWeights,J,oper);
+  cuKerGBS(rMassAssemble2S,blocks,threads,numElements,NUM_QUAD_2D,COEFF,quadWeights,J,oper);
 }
 
 // *****************************************************************************
@@ -72,6 +83,7 @@ void rMassAssembleS(const int dim,
                     const double* J,
                     const double COEFF,
                     double* __restrict oper) {
+  assert(false);
   push(Green);
   if (dim==1) {assert(false);}
   if (dim==2) rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);

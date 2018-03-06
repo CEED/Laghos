@@ -253,7 +253,7 @@ void rGridFuncToQuad(const int DIM,
   const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
-   const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);
+  const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);
   assert(LOG2(DIM)<=4);
   assert(LOG2(NUM_VDIM)<=4);
   assert(LOG2(NUM_DOFS_1D-1)<=4);

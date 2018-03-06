@@ -93,6 +93,7 @@ namespace mfem {
     uvm=_uvm;
     aware=_aware;
     share=_share;
+    share_env=getenv("SHR");
     occa=_occa;
     hcpo=_hcpo;
     sync=_sync;

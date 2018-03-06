@@ -29,7 +29,7 @@ class RajaGridFunction : public RajaVector {
   RajaGridFunction(const RajaFiniteElementSpace& f,const RajaVector* v):
     RajaVector(v), fes(f) {}
   
-  void ToQuad(const bool,const IntegrationRule&,RajaVector&);
+  void ToQuad(const IntegrationRule&,RajaVector&);
   
   RajaGridFunction& operator=(const RajaVector& v) {
     RajaVector::operator=(v);

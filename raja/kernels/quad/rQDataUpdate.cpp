@@ -557,7 +557,6 @@ void rUpdateQuadratureData(const double GAMMA,
                            double* restrict dtEst){
   push(Lime);
 #ifndef __LAMBDA__
-  //printf("CUDA_BLOCK_SIZE=%d",CUDA_BLOCK_SIZE);
   const int blck = CUDA_BLOCK_SIZE;
   const int grid = (nzones+blck-1)/blck;
 #endif

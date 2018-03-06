@@ -22,38 +22,37 @@ template<const int NUM_DIM,
          const int NUM_QUAD_1D,
          const int NUM_DOFS_1D> kernel
 #endif
-void rUpdateQuadratureData2DS(
+void rUpdateQuadratureData2S(
 #ifndef __TEMPLATES__
-                              const int NUM_DIM,
-                              const int NUM_QUAD,
-                              const int NUM_QUAD_1D,
-                              const int NUM_DOFS_1D,
+                             const int NUM_DIM,
+                             const int NUM_QUAD,
+                             const int NUM_QUAD_1D,
+                             const int NUM_DOFS_1D,
 #endif
-                              const double GAMMA,
-                              const double H0,
-                              const double CFL,
-                              const bool USE_VISCOSITY,
-                              const int numElements,
-                              const double* restrict dofToQuad,
-                              const double* restrict dofToQuadD,
-                              const double* restrict quadWeights,
-                              const double* restrict v,
-                              const double* restrict e,
-                              const double* restrict rho0DetJ0w,
-                              const double* restrict invJ0,
-                              const double* restrict J,
-                              const double* restrict invJ,
-                              const double* restrict detJ,
-                              double* restrict stressJinvT,
-                              double* restrict dtEst) {
+                             const double GAMMA,
+                             const double H0,
+                             const double CFL,
+                             const bool USE_VISCOSITY,
+                             const int numElements,
+                             const double* restrict dofToQuad,
+                             const double* restrict dofToQuadD,
+                             const double* restrict quadWeights,
+                             const double* restrict v,
+                             const double* restrict e,
+                             const double* restrict rho0DetJ0w,
+                             const double* restrict invJ0,
+                             const double* restrict J,
+                             const double* restrict invJ,
+                             const double* restrict detJ,
+                             double* restrict stressJinvT,
+                             double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
-  
 #ifdef __LAMBDA__
   forall(el,numElements,
 #else
-  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+  const int idx = blockIdx.x;
   const int el = idx;
   if (el < numElements)
 #endif
@@ -68,14 +67,23 @@ void rUpdateQuadratureData2DS(
 
     double r_v[NUM_DIM * NUM_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D);
 
+#ifdef __LAMBDA__
     for (int x = 0; x < NUM_MAX_1D; ++x) {
+#else
+    {  const int x = threadIdx.x;
+#endif
       for (int id = x; id < NUM_QUAD_DOFS_1D; id += NUM_MAX_1D) {
         s_dofToQuad[id]  = dofToQuad[id];
         s_dofToQuadD[id] = dofToQuadD[id];
       }
     }
 
+    sync;
+#ifdef __LAMBDA__    
     for (int dx = 0; dx < NUM_MAX_1D; ++dx) {
+#else
+    {  const int dx = threadIdx.x;
+#endif
       if (dx < NUM_DOFS_1D) {
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
           for (int vi = 0; vi < NUM_DIM; ++vi) {
@@ -109,7 +117,12 @@ void rUpdateQuadratureData2DS(
       }
     }
 
+    sync;
+#ifdef __LAMBDA__
     for (int qy = 0; qy < NUM_MAX_1D; ++qy) {
+#else
+    {  const int qy = threadIdx.x;
+#endif
       if (qy < NUM_QUAD_1D) {
         for (int qx = 0; qx < NUM_MAX_1D; ++qx) {
           double gradX[NUM_DIM];
@@ -132,7 +145,12 @@ void rUpdateQuadratureData2DS(
       }
     }
 
+    sync;
+#ifdef __LAMBDA__
     for (int qBlock = 0; qBlock < NUM_MAX_1D; ++qBlock) {
+#else
+    {  const int qBlock = threadIdx.x;
+#endif
       for (int q = qBlock; q < NUM_QUAD; q += NUM_MAX_1D) {
         double q_gradv[NUM_DIM * NUM_DIM];//@dim(NUM_DIM, NUM_DIM);
         double q_stress[NUM_DIM * NUM_DIM];//@dim(NUM_DIM, NUM_DIM);
@@ -289,57 +307,64 @@ void rUpdateQuadratureDataS(const double GAMMA,
   push(Green);
 #ifndef __LAMBDA__
   const int grid = nzones;
-  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
-  const int blck = NUM_MAX_1D;
+  const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
 #endif
 #ifdef __TEMPLATES__
-  const unsigned int id =
-    (NUM_DIM<<24)|
-    (NUM_QUAD<<16)|
-    (NUM_QUAD_1D<<8)|
-    (NUM_DOFS_1D);
-  assert(LOG2(NUM_DIM)<=8);//printf("NUM_DIM:%d ",(NUM_DIM));
-  assert(LOG2(NUM_QUAD)<=8);//printf("NUM_QUAD:%d ",(NUM_QUAD));
-  assert(LOG2(NUM_QUAD_1D)<=8);//printf("NUM_QUAD_1D:%d ",(NUM_QUAD_1D));
-  assert(LOG2(NUM_DOFS_1D)<=8);//printf("NUM_DOFS_1D:%d ",(NUM_DOFS_1D));
-  static std::unordered_map<unsigned int, fUpdateQuadratureDataS> call = {
+  assert(LOG2(NUM_DIM)<=4);
+  assert(LOG2(NUM_DOFS_1D-2)<=4);
+  assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
+  assert(IROOT(NUM_DIM,NUM_QUAD)==NUM_QUAD_1D);
+  const unsigned int id = (NUM_DIM<<4)|(NUM_DOFS_1D-2);
+  static std::unordered_map<unsigned int,fUpdateQuadratureDataS> call = {
     // 2D
-    {0x2040202,&rUpdateQuadratureData2DS<2,4,2,2>},
-    {0x2100403,&rUpdateQuadratureData2DS<2,16,4,3>},
-    {0x2100404,&rUpdateQuadratureData2DS<2,16,4,4>},
-    
-    {0x2190503,&rUpdateQuadratureData2DS<2,25,5,3>},
-    {0x2190504,&rUpdateQuadratureData2DS<2,25,5,4>},
-    
-    {0x2240603,&rUpdateQuadratureData2DS<2,36,6,3>},
-    {0x2240604,&rUpdateQuadratureData2DS<2,36,6,4>},
-    
-    {0x2310704,&rUpdateQuadratureData2DS<2,49,7,4>},
-    
-    {0x2400805,&rUpdateQuadratureData2DS<2,64,8,5>},
-    
-    {0x2510905,&rUpdateQuadratureData2DS<2,81,9,5>},
-    
-    {0x2640A06,&rUpdateQuadratureData2DS<2,100,10,6>},
-    {0x2900C07,&rUpdateQuadratureData2DS<2,144,12,7>},
-    
+    {0x20,&rUpdateQuadratureData2S<2,2*2,2,2>},
+    {0x21,&rUpdateQuadratureData2S<2,4*4,4,3>},
+    {0x22,&rUpdateQuadratureData2S<2,6*6,6,4>},
+    {0x23,&rUpdateQuadratureData2S<2,8*8,8,5>},
+    {0x24,&rUpdateQuadratureData2S<2,10*10,10,6>},
+    {0x25,&rUpdateQuadratureData2S<2,12*12,12,7>},     
+    {0x26,&rUpdateQuadratureData2S<2,14*14,14,8>},
+    {0x27,&rUpdateQuadratureData2S<2,16*16,16,9>},
+    {0x28,&rUpdateQuadratureData2S<2,18*18,18,10>},
+    {0x29,&rUpdateQuadratureData2S<2,20*20,20,11>},
+    {0x2A,&rUpdateQuadratureData2S<2,22*22,22,12>},
+    {0x2B,&rUpdateQuadratureData2S<2,24*24,24,13>},
+    {0x2C,&rUpdateQuadratureData2S<2,26*26,26,14>},
+    {0x2D,&rUpdateQuadratureData2S<2,28*28,28,15>},
+    //{0x2E,&rUpdateQuadratureData2S<2,30*30,30,16>}, uses too much shared data
+    //{0x2F,&rUpdateQuadratureData2S<2,32*32,32,17>}, uses too much shared data
     // 3D
-    //{0x3100403,&rUpdateQuadratureData3D<3,16,4,3>},
-    //{0x3400403,&rUpdateQuadratureData3D<3,64,4,3>},
+/*    {0x30,&rUpdateQuadratureData3S<3,2*2*2,2,2>},
+    {0x31,&rUpdateQuadratureData3S<3,4*4*4,4,3>},
+    {0x32,&rUpdateQuadratureData3S<3,6*6*6,6,4>},
+    {0x33,&rUpdateQuadratureData3S<3,8*8*8,8,5>},
+    {0x34,&rUpdateQuadratureData3S<3,10*10*10,10,6>},
+    {0x35,&rUpdateQuadratureData3S<3,12*12*12,12,7>},
+    {0x36,&rUpdateQuadratureData3S<3,14*14*14,14,8>},
+    {0x37,&rUpdateQuadratureData3S<3,16*16*16,16,9>},
+    {0x38,&rUpdateQuadratureData3S<3,18*18*18,18,10>},
+    {0x39,&rUpdateQuadratureData3S<3,20*20*20,20,11>},
+    {0x3A,&rUpdateQuadratureData3S<3,22*22*22,22,12>},
+    {0x3B,&rUpdateQuadratureData3S<3,24*24*24,24,13>},
+    {0x3C,&rUpdateQuadratureData3S<3,26*26*26,26,14>},
+    {0x3D,&rUpdateQuadratureData3S<3,28*28*28,28,15>},
+    {0x3E,&rUpdateQuadratureData3S<3,30*30*30,30,16>},
+    {0x3F,&rUpdateQuadratureData3S<3,32*32*32,32,17>},
+*/
   };
   if (!call[id]){
     printf("\n[rUpdateQuadratureDataS] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);
-  call0(rUpdateQuadratureData2DS,id,grid,blck,
+  call0(rUpdateQuadratureData2S,id,grid,blck,
         GAMMA,H0,CFL,USE_VISCOSITY,
         nzones,dofToQuad,dofToQuadD,quadWeights,
         v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
         stressJinvT,dtEst);
 #else
   if (NUM_DIM==2)
-    call0(rUpdateQuadratureData2DS,id,grid,blck,
+    call0(rUpdateQuadratureData2S,id,grid,blck,
           NUM_DIM,NUM_QUAD,NUM_QUAD_1D,NUM_DOFS_1D,
           GAMMA,H0,CFL,USE_VISCOSITY,
           nzones,dofToQuad,dofToQuadD,quadWeights,

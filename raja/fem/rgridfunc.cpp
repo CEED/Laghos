@@ -13,8 +13,7 @@
 namespace mfem {
 
 // ***************************************************************************
-void RajaGridFunction::ToQuad(const bool use_share,
-                              const IntegrationRule& ir,
+void RajaGridFunction::ToQuad(const IntegrationRule& ir,
                               RajaVector& quadValues) {
   push(PowderBlue);
   const FiniteElement& fe = *(fes.GetFE(0));
@@ -26,12 +25,13 @@ void RajaGridFunction::ToQuad(const bool use_share,
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
   const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
   quadValues.SetSize(numQuad * elements);
-  if (use_share)
+  if (rconfig::Get().Share()){
     rGridFuncToQuadS(dim,vdim,dofs1D,quad1D,elements,
                      maps->dofToQuad,
                      fes.GetLocalToGlobalMap(),
                      ptr(),
                      quadValues);
+  }
   else
     rGridFuncToQuad(dim,vdim,dofs1D,quad1D,elements,
                     maps->dofToQuad,

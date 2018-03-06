@@ -148,7 +148,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    quad_data.Jac0inv = quad_data.geom->invJ;
 
    RajaVector rhoValues; // used in rInitQuadratureData
-   rho0.ToQuad(rconfig::Get().Share(),integ_rule, rhoValues);
+   rho0.ToQuad(integ_rule, rhoValues);
 
    if (dim==1) { assert(false); }
    const int NUM_QUAD = integ_rule.GetNPoints();
@@ -383,7 +383,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
-   const bool use_share = rconfig::Get().Share();
 
    const RajaVector x = S.GetRange(0, vSize);
    RajaVector v = S.GetRange(vSize, vSize);
@@ -393,7 +392,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
      RajaGeometry::Get(H1FESpace,integ_rule):
      RajaGeometry::Get(H1FESpace,integ_rule,x);
    H1FESpace.GlobalToLocal(v, v_local);
-   e.ToQuad(use_share,integ_rule, e_quad);
+   e.ToQuad(integ_rule, e_quad);
 
    const int NUM_QUAD = integ_rule.GetNPoints();
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -404,7 +403,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
      
-   if (use_share)
+   if (rconfig::Get().Share())
      rUpdateQuadratureDataS(gamma,
                             quad_data.h0,
                             cfl,

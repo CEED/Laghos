@@ -167,8 +167,10 @@ endif
 #################################################
 # CPU,LAMBDA: make v=1 l=1
 # CPU,LAMBDA,TEMPLATE: make v=1 l=1 t=1
+#
 # GPU,LAMBDA,TEMPLATES: make v=1 nv=1 l=1 t=1
 # GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
+#
 # RAJA: make v=1 rj=1 t=1
 ##################################################
 .PHONY: cpuL cpuLT rj raja cpuRJ cuda nvl gpuLT nvk gpuKT

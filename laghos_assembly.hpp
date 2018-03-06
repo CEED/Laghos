@@ -101,7 +101,6 @@ class RajaMassOperator : public RajaOperator
 private:
    int dim;
    int nzones;
-   const bool use_share;
    RajaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
    unsigned int ess_tdofs_count;
@@ -132,7 +131,6 @@ class RajaForceOperator : public RajaOperator
 private:
   const int dim;
   const int nzones;
-  const bool use_share;
   const RajaFiniteElementSpace &h1fes, &l2fes;
   const IntegrationRule &integ_rule;
   const QuadratureData *quad_data;

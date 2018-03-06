@@ -69,7 +69,6 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
                                    const IntegrationRule &integ_rule_,
                                    QuadratureData *quad_data_)
    : RajaOperator(fes_.GetTrueVSize()),
-     use_share(rconfig::Get().Share()),
      fes(fes_),
      integ_rule(integ_rule_),
      ess_tdofs_count(0),
@@ -89,7 +88,7 @@ void RajaMassOperator::Setup()
    push(Wheat);
    dim=fes.GetMesh()->Dimension();
    nzones=fes.GetMesh()->GetNE();
-   RajaMassIntegrator &massInteg = *(new RajaMassIntegrator(use_share));
+   RajaMassIntegrator &massInteg = *(new RajaMassIntegrator());
    massInteg.SetIntegrationRule(integ_rule);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
    bilinearForm.AddDomainIntegrator(&massInteg);
@@ -174,7 +173,6 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
    : RajaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
      dim(h1fes_.GetMesh()->Dimension()),
      nzones(h1fes_.GetMesh()->GetNE()),
-     use_share(rconfig::Get().Share()),
      h1fes(h1fes_),
      l2fes(l2fes_),
      integ_rule(integ_rule_),
@@ -202,7 +200,7 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   if (use_share)
+   if (rconfig::Get().Share())
      rForceMultS(dim,
                  NUM_DOFS_1D,
                  NUM_QUAD_1D,
@@ -242,7 +240,7 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   if (use_share)
+   if (rconfig::Get().Share())
      rForceMultTransposeS(dim,
                           NUM_DOFS_1D,
                           NUM_QUAD_1D,

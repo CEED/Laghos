@@ -60,7 +60,6 @@ const int CUDA_BLOCK_SIZE = 256;
 #define share __shared__
 //printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+256-1)/256),256);
 //printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
-//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
   /* void *args[] = {
     (void*)&N,
@@ -85,7 +84,10 @@ const int CUDA_BLOCK_SIZE = 256;
                    args);                                             \
       }
 #define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...)  call[id]<<<grid,blck>>>(__VA_ARGS__)
+//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
+#define call0(name,id,grid,blck,...) {                                  \
+    call[id]<<<grid,blck>>>(__VA_ARGS__);                               \
+  }
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 
