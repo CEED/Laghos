@@ -537,7 +537,7 @@ void rForceMult(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call0(rForceMult2D,id,grid,blck,
+  call0(NULL,id,grid,blck,
         nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 #else
   if (NUM_DIM==2)

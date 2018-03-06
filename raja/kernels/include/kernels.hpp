@@ -225,22 +225,6 @@ void rLocalToGlobal(const int NUM_VDIM,
                     double* restrict globalX);
 
 // *****************************************************************************
-/*void rMassAssemble(const int dim,
-                   const int NUM_QUAD,
-                   const int numElements,
-                   const double COEFF,
-                   const double* restrict quadWeights,
-                   const double* restrict J,
-                   double* restrict oper);
-void rMassAssembleS(const int dim,
-                    const int NUM_QUAD,
-                    const int numElements,
-                    const double COEFF,
-                    const double* restrict quadWeights,
-                    const double* restrict J,
-                    double* restrict oper);
-*/
-// *****************************************************************************
 void rMassMultAdd(const int dim,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,

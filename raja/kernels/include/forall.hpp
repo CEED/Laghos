@@ -58,6 +58,7 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel __global__
 #define sync __syncthreads();
 #define share __shared__
+#define shared __shared__
 //printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+256-1)/256),256);
 //printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
