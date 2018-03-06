@@ -57,18 +57,18 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel __global__
 #define sync __syncthreads();
 #define share __shared__
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+128-1)/128),128);
+//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+256-1)/256),256);
 //printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
 //printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
-#define cuKer(name,end,...) name ## 0<<<((end+128-1)/128),128>>>(end,__VA_ARGS__)
+#define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
   /* void *args[] = {
     (void*)&N,
     (void*)&c0,
     (void*)&v0,
   };
   cuLaunchKernel(vector_op_eq,
-                 ((N+128-1)/128),1,1,
-                 128,1,1,
+                 ((N+256-1)/256),1,1,
+                 256,1,1,
                  0,0,//sharedMemBytes, hStream
                  args);*/
 /*CUresult cuLaunchKernel(CUfunction f,
@@ -78,8 +78,8 @@ const int CUDA_BLOCK_SIZE = 256;
                           void** kernelParams, void** extra );*/
 #define cuLaunchKer(name,args) {                                      \
     cuLaunchKernel(name ## 0,                                         \
-                   ((end+128-1)/128),1,1,                             \
-                   128,1,1,                                           \
+                   ((end+256-1)/256),1,1,                             \
+                   256,1,1,                                           \
                    0,0,                                               \
                    args);                                             \
       }
@@ -106,7 +106,7 @@ template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
                   FORALL_BODY &&body) {
-  const size_t blockSize = 128;
+  const size_t blockSize = 256;
   const size_t gridSize = (end+blockSize-1)/blockSize;
   //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
   gpu<<<gridSize, blockSize>>>(end,step,body);

@@ -63,8 +63,7 @@ void rNodeCopyByVDim(const int elements,
   const int blck = ndofs;
   cuKerGB(rNodeCopyByVDim,grid,blck,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
 #else
-  call0(rNodeCopyByVDim,0,grid,blck,
-        elements,numDofs,ndofs,dims,eMap,Sx,nodes);
+  rNodeCopyByVDim0(elements,numDofs,ndofs,dims,eMap,Sx,nodes);
 #endif
 }
 
