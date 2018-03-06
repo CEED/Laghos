@@ -31,8 +31,7 @@ void vector_op_eq(const int N,
                   double* __restrict v0){
   push(eq,Cyan);
 #ifndef __LAMBDA__
-  //vector_op_eq(N,c0,v0);
-  #warning vector_op_eq
+  cuKer(vector_op_eq,N,c0,v0);
 #else
   forall(i,N,v0[i] = c0;);
 #endif

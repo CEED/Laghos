@@ -16,13 +16,16 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-void rNodeCopyByVDim(const int elements,
-                     const int numDofs,
-                     const int ndofs,
-                     const int dims,
-                     const int* eMap,
-                     const double* Sx,
-                     double* nodes){
+#ifdef __TEMPLATES__
+kernel
+#endif
+void rNodeCopyByVDim0(const int elements,
+                      const int numDofs,
+                      const int ndofs,
+                      const int dims,
+                      const int* eMap,
+                      const double* Sx,
+                      double* nodes){
   push(Lime);
 #ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
@@ -45,6 +48,24 @@ void rNodeCopyByVDim(const int elements,
          );
 #endif
   pop();
+}
+
+// *****************************************************************************
+void rNodeCopyByVDim(const int elements,
+                     const int numDofs,
+                     const int ndofs,
+                     const int dims,
+                     const int* eMap,
+                     const double* Sx,
+                     double* nodes){
+#ifdef __TEMPLATES__
+  const int grid = elements;
+  const int blck = ndofs;
+  cuKerGB(rNodeCopyByVDim,grid,blck,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
+#else
+  call0(rNodeCopyByVDim,0,grid,blck,
+        elements,numDofs,ndofs,dims,eMap,Sx,nodes);
+#endif
 }
 
 

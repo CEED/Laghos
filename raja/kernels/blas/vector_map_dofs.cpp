@@ -42,6 +42,7 @@ void vector_map_dofs(const int N,
   pop();
 }
 
+/*
 template <class T>
 void vector_map_add_dofs(const int N,
                          T* __restrict v0,
@@ -49,12 +50,12 @@ void vector_map_add_dofs(const int N,
                          const int* v2) {
   push(map,MediumAquamarine);
 #ifndef __LAMBDA__
-  assert(false);//cuKer(vector_map_dofs,N,v0,v1,v2);
+  cuKer(vector_map_dofs,N,v0,v1,v2);
 #else
   forall(i,N,{ const int idx = v2[0]; v0[idx] += v1[0]; });
 #endif
   pop();
 }
-
 template void vector_map_add_dofs<int>(const int,int* __restrict,const int* __restrict, const int*);
 template void vector_map_add_dofs<double>(const int,double* __restrict,const double* __restrict, const int*);
+*/

@@ -24,7 +24,7 @@ RAJA_DIR ?= $(home)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 -DNDEBUG # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 #-DNDEBUG # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################
@@ -184,7 +184,7 @@ rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
 # CUDA targets #
 ################
 nv nvl cuda gpuLT:;$(MAKE) nv=1 l=1 t=1 all
-# not usable yet nvk gpuKT:;$(MAKE) nv=1 t=1 all
+nvk gpuKT:;$(MAKE) nv=1 t=1 all
 
 #######################
 # TPL INCLUDES & LIBS #

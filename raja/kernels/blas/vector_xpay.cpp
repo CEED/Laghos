@@ -23,9 +23,7 @@ void vector_xpay0(const int N,
                   const double* __restrict v1,
                   const double* __restrict v2) {
   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-  if (i < N) {
-    v0[i] = v1[i] + (c0 * v2[i]);
-  }
+  if (i < N) v0[i] = v1[i] + (c0 * v2[i]);
 }
 #endif
 
