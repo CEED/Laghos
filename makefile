@@ -24,7 +24,7 @@ RAJA_DIR ?= $(home)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-DNDEBUG # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 -DNDEBUG # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################

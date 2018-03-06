@@ -258,6 +258,8 @@ void rGridFuncToQuad(const int DIM,
   assert(LOG2(NUM_VDIM)<=4);
   assert(LOG2(NUM_DOFS_1D-1)<=4);
   assert(NUM_QUAD_1D==2*NUM_DOFS_1D);
+  if (NUM_QUAD_1D!=2*NUM_DOFS_1D)
+    return exit(printf("\033[31;1m[rGridFuncToQuad] order ERROR: -ok=p -ot=p-1, p in [1,16]\033[m\n"));
   static std::unordered_map<unsigned int, fGridFuncToQuad> call = {
     // 2D
     {0x210,&rGridFuncToQuad2D<1,1,2>},
