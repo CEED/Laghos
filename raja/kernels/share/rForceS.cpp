@@ -427,7 +427,7 @@ void rForceMult3S(
 #endif
           sync;
 #ifdef __LAMBDA__
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
           { const int dx = 0 + threadIdx.x;
 #endif
@@ -452,13 +452,13 @@ void rForceMult3S(
           // Fill xy plane at given z position
           sync;
 #ifdef __LAMBDA__
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
           { const int dy = 0 + threadIdx.x;
 #endif
             sync;
 #ifdef __LAMBDA__
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+            for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
             { const int dx = 0 + threadIdx.x;
 #endif
@@ -470,13 +470,13 @@ void rForceMult3S(
           // Calculate Dxyz, xDyz, xyDz in plane
           sync;
 #ifdef __LAMBDA__
-          for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
+          for (int qy = 0; qy < INNER_SIZE; ++qy/*; inner*/) {
 #else
           { const int qy = 0 + threadIdx.x;
 #endif
             sync;
 #ifdef __LAMBDA__
-            for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+            for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
             { const int qx = 0 + threadIdx.x;
 #endif
@@ -499,13 +499,13 @@ void rForceMult3S(
             // Fill xy plane at given z position
             sync;
 #ifdef __LAMBDA__
-            for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
+            for (int qy = 0; qy < INNER_SIZE; ++qy/*; inner*/) {
 #else
             { const int qy = 0 + threadIdx.x;
 #endif
               sync;
 #ifdef __LAMBDA__
-              for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+              for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
               { const int qx = 0 + threadIdx.x;
 #endif
@@ -530,13 +530,13 @@ void rForceMult3S(
             // Finalize solution in xy plane
             sync;
 #ifdef __LAMBDA__
-            for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+            for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
             { const int dy = 0 + threadIdx.x;
 #endif
               sync;
 #ifdef __LAMBDA__
-              for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+              for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
               { const int dx = 0 + threadIdx.x;
 #endif
@@ -617,13 +617,13 @@ void rForceMultTranspose3S(
     /*exclusive*/ double r_xyDz[NUM_QUAD_1D * NUM_DIM];
 
 #ifdef __LAMBDA__
-    for (int y = 0; y < INNER_SIZE; ++y; inner) {
+    for (int y = 0; y < INNER_SIZE; ++y/*; inner*/) {
 #else
     { const int y = threadIdx.x;
 #endif
       sync;
 #ifdef __LAMBDA__      
-      for (int x = 0; x < INNER_SIZE; ++x; inner) {
+      for (int x = 0; x < INNER_SIZE; ++x/*; inner*/) {
 #else
       { const int x = threadIdx.x;
 #endif
@@ -641,13 +641,13 @@ void rForceMultTranspose3S(
       if (el < numElements) {
         sync;
 #ifdef __LAMBDA__      
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+        for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
         { const int dy = threadIdx.x;
 #endif
         sync;
 #ifdef __LAMBDA__      
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
           { const int dx = threadIdx.x;
 #endif
@@ -677,13 +677,13 @@ void rForceMultTranspose3S(
           // Finalize solution in xy plane
           sync;
 #ifdef __LAMBDA__      
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
           { const int dy = threadIdx.x;
 #endif
           sync;
 #ifdef __LAMBDA__      
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
             { const int dx = threadIdx.x;
 #endif
@@ -698,13 +698,13 @@ void rForceMultTranspose3S(
           // Finalize solution in xy plane
           sync;
 #ifdef __LAMBDA__      
-          for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
+          for (int qy = 0; qy < INNER_SIZE; ++qy/*; inner*/) {
 #else
           { const int qy = threadIdx.x;
 #endif
           sync;
 #ifdef __LAMBDA__      
-            for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
             { const int qx = threadIdx.x;
 #endif
@@ -741,13 +741,13 @@ void rForceMultTranspose3S(
           }
           sync;
 #ifdef __LAMBDA__      
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
           { const int dy = threadIdx.x;
 #endif
           sync;
 #ifdef __LAMBDA__      
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
             { const int dx = threadIdx.x;
 #endif
@@ -767,13 +767,13 @@ void rForceMultTranspose3S(
         }
           sync;
 #ifdef __LAMBDA__      
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
         { const int dy = threadIdx.x;
 #endif
           sync;
 #ifdef __LAMBDA__      
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
           { const int dx = threadIdx.x;
 #endif

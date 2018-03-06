@@ -28,6 +28,7 @@
 #define kernel
 #define sync
 #define share // variable cannot be declared with "shared" inside a host function
+#define shared
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -54,13 +55,11 @@ const int CUDA_BLOCK_SIZE = 256;
 #else // __KERNELS__ on GPU, CUDA Kernel launches  *****************************
 #ifdef __NVCC__
 #ifndef __LAMBDA__
-const int CUDA_BLOCK_SIZE = 256;
 #define kernel __global__
-#define sync __syncthreads();
 #define share __shared__
 #define shared __shared__
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,((end+256-1)/256),256);
-//printf("\033[32;1m[cuKer] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,block);
+#define sync __syncthreads();
+const int CUDA_BLOCK_SIZE = 256;
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
   /* void *args[] = {
     (void*)&N,
@@ -85,10 +84,7 @@ const int CUDA_BLOCK_SIZE = 256;
                    args);                                             \
       }
 #define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-//printf("\033[32;1m[call] \033[32;1m%s:\033[0;32m \033[33;1m%d\033[0;32m,\033[35;1m%d\033[m\n",#name,grid,blck);
-#define call0(name,id,grid,blck,...) {                                  \
-    call[id]<<<grid,blck>>>(__VA_ARGS__);                               \
-  }
+#define call0(name,id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 
@@ -98,6 +94,7 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel
 #define sync
 #define share
+//#define shared
 template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
@@ -119,17 +116,18 @@ void cuda_forallT(const int end,
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 #endif // __LAMBDA__
 
 
 // *****************************************************************************
-#else // __KERNELS__ on Cpu ****************************************************
+#else // __KERNELS__ on CPU ****************************************************
 //#warning NO RAJA, NO NVCC
 #define sync
 #define share
+#define shared
 #define kernel
 class ReduceSum{
 public:
