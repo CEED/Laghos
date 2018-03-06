@@ -190,11 +190,11 @@ nvk gpuKT:;$(MAKE) nv=1 t=1 all
 # make all targets #
 ####################
 tgts:
-	make cpuL && mv laghos laghos.cpuL
-	make cpuLT && mv laghos laghos.cpuLT
-	make raja && mv laghos laghos.raja
-	make gpuLT && mv laghos laghos.gpuLT
-	make gpuKT && mv laghos laghos.gpuKT
+	make cln && make cpuL && mv laghos laghos.cpuL
+	make cln && make cpuLT && mv laghos laghos.cpuLT
+	make cln && make raja && mv laghos laghos.raja
+	make cln && make gpuLT && mv laghos laghos.gpuLT
+	make cln && make gpuKT && mv laghos laghos.gpuKT
 
 #######################
 # TPL INCLUDES & LIBS #

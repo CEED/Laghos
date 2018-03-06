@@ -58,7 +58,7 @@ void rNodeCopyByVDim(const int elements,
                      const int* eMap,
                      const double* Sx,
                      double* nodes){
-#ifdef __TEMPLATES__
+#ifndef __LAMBDA__
   const int grid = elements;
   const int blck = ndofs;
   cuKerGB(rNodeCopyByVDim,grid,blck,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
