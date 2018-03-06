@@ -235,94 +235,46 @@ void rMassMultAdd(const int DIM,
   const int blck = NUM_QUAD_1D;
 #endif
 #ifdef __TEMPLATES__
-  const unsigned int id = (DIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
-  assert(LOG2(DIM)<=8);
-  assert(LOG2(NUM_DOFS_1D)<=8);
-  assert(LOG2(NUM_QUAD_1D)<=8);
+  assert(LOG2(DIM)<=4);
+  assert((NUM_QUAD_1D&1)==0);
+  assert(LOG2(NUM_DOFS_1D-1)<=8);
+  assert(LOG2(NUM_QUAD_1D>>1)<=8);
+  const unsigned int id = (DIM<<16)|((NUM_DOFS_1D-1)<<8)|(NUM_QUAD_1D>>1);
   static std::unordered_map<unsigned int, fMassMultAdd> call = {
     // 2D
-    {0x20102,&rMassMultAdd2D<1,2>},
-    {0x20202,&rMassMultAdd2D<2,2>},
-    {0x20203,&rMassMultAdd2D<2,3>},
-    {0x20204,&rMassMultAdd2D<2,4>},
-    {0x20205,&rMassMultAdd2D<2,5>},
-    {0x20206,&rMassMultAdd2D<2,6>},
-    {0x20207,&rMassMultAdd2D<2,7>},
-    {0x20208,&rMassMultAdd2D<2,8>},
-    
-    {0x20302,&rMassMultAdd2D<3,2>},
-    {0x20303,&rMassMultAdd2D<3,3>},
-    {0x20304,&rMassMultAdd2D<3,4>},
-    {0x20305,&rMassMultAdd2D<3,5>},
-    {0x20306,&rMassMultAdd2D<3,6>},
-    {0x20307,&rMassMultAdd2D<3,7>},
-    {0x20308,&rMassMultAdd2D<3,8>},
-    
-    {0x20402,&rMassMultAdd2D<4,2>},
-    {0x20403,&rMassMultAdd2D<4,3>},
-    {0x20404,&rMassMultAdd2D<4,4>},
-    {0x20405,&rMassMultAdd2D<4,5>},
-    {0x20406,&rMassMultAdd2D<4,6>},
-    {0x20407,&rMassMultAdd2D<4,7>},
-    {0x20408,&rMassMultAdd2D<4,8>},
-
-    {0x20502,&rMassMultAdd2D<5,2>},
-    {0x20503,&rMassMultAdd2D<5,3>},
-    {0x20504,&rMassMultAdd2D<5,4>},
-    {0x20505,&rMassMultAdd2D<5,5>},
-    {0x20506,&rMassMultAdd2D<5,6>},
-    {0x20507,&rMassMultAdd2D<5,7>},
-    {0x20508,&rMassMultAdd2D<5,8>},
-    {0x20509,&rMassMultAdd2D<5,9>},
-    {0x2050A,&rMassMultAdd2D<5,10>},
-
-    {0x20602,&rMassMultAdd2D<6,2>},
-    {0x20603,&rMassMultAdd2D<6,3>},
-    {0x20604,&rMassMultAdd2D<6,4>},
-    {0x20605,&rMassMultAdd2D<6,5>},
-    {0x20606,&rMassMultAdd2D<6,6>},
-    {0x20607,&rMassMultAdd2D<6,7>},
-    {0x20608,&rMassMultAdd2D<6,8>},
-    {0x20609,&rMassMultAdd2D<6,9>},
-    {0x2060A,&rMassMultAdd2D<6,10>},
-    {0x2060C,&rMassMultAdd2D<6,12>},
-    
-    {0x20702,&rMassMultAdd2D<7,2>},
-    {0x20703,&rMassMultAdd2D<7,3>},
-    {0x20704,&rMassMultAdd2D<7,4>},
-    {0x20705,&rMassMultAdd2D<7,5>},
-    {0x20706,&rMassMultAdd2D<7,6>},
-    {0x20707,&rMassMultAdd2D<7,7>},
-    {0x20708,&rMassMultAdd2D<7,8>},
-    {0x20709,&rMassMultAdd2D<7,9>},
-    {0x2070A,&rMassMultAdd2D<7,10>},
-    {0x2070C,&rMassMultAdd2D<7,12>},
-
+    {0x20001,&rMassMultAdd2D<1,2>},    {0x20101,&rMassMultAdd2D<2,2>},
+    {0x20102,&rMassMultAdd2D<2,4>},    {0x20202,&rMassMultAdd2D<3,4>},
+    {0x20203,&rMassMultAdd2D<3,6>},    {0x20303,&rMassMultAdd2D<4,6>},
+    {0x20304,&rMassMultAdd2D<4,8>},    {0x20404,&rMassMultAdd2D<5,8>},
+    {0x20405,&rMassMultAdd2D<5,10>},   {0x20505,&rMassMultAdd2D<6,10>},
+    {0x20506,&rMassMultAdd2D<6,12>},   {0x20606,&rMassMultAdd2D<7,12>},
+    {0x20607,&rMassMultAdd2D<7,14>},   {0x20707,&rMassMultAdd2D<8,14>},
+    {0x20708,&rMassMultAdd2D<8,16>},   {0x20808,&rMassMultAdd2D<9,16>},
+    {0x20809,&rMassMultAdd2D<9,18>},   {0x20909,&rMassMultAdd2D<10,18>},
+    {0x2090A,&rMassMultAdd2D<10,20>},  {0x20A0A,&rMassMultAdd2D<11,20>},
+    {0x20A0B,&rMassMultAdd2D<11,22>},  {0x20B0B,&rMassMultAdd2D<12,22>},
+    {0x20B0C,&rMassMultAdd2D<12,24>},  {0x20C0C,&rMassMultAdd2D<13,24>},
+    {0x20C0D,&rMassMultAdd2D<13,26>},  {0x20D0D,&rMassMultAdd2D<14,26>},
+    {0x20D0E,&rMassMultAdd2D<14,28>},  {0x20E0E,&rMassMultAdd2D<15,28>},
+    {0x20E0F,&rMassMultAdd2D<15,30>},  {0x20F0F,&rMassMultAdd2D<16,30>},
+    {0x20F10,&rMassMultAdd2D<16,32>},  {0x21010,&rMassMultAdd2D<17,32>},
     // 3D
-    {0x30202,&rMassMultAdd3D<2,2>},
-    {0x30203,&rMassMultAdd3D<2,3>},
-    {0x30204,&rMassMultAdd3D<2,4>},
-    {0x30205,&rMassMultAdd3D<2,5>},
-    {0x30206,&rMassMultAdd3D<2,6>},
-    {0x30207,&rMassMultAdd3D<2,7>},
-    {0x30208,&rMassMultAdd3D<2,8>},
-    {0x30209,&rMassMultAdd3D<2,9>},
-    
-    {0x30302,&rMassMultAdd3D<3,2>},
-    {0x30303,&rMassMultAdd3D<3,3>},
-    {0x30304,&rMassMultAdd3D<3,4>},
-    {0x30305,&rMassMultAdd3D<3,5>},
-    {0x30306,&rMassMultAdd3D<3,6>},
-    {0x30307,&rMassMultAdd3D<3,7>},
-    {0x30308,&rMassMultAdd3D<3,8>},
-    
-    {0x30402,&rMassMultAdd3D<4,2>},
-    {0x30403,&rMassMultAdd3D<4,3>},
-    {0x30404,&rMassMultAdd3D<4,4>},
-    {0x30405,&rMassMultAdd3D<4,5>},
-    {0x30406,&rMassMultAdd3D<4,6>},
-    {0x30407,&rMassMultAdd3D<4,7>},
-    {0x30408,&rMassMultAdd3D<4,8>},
+    {0x30001,&rMassMultAdd3D<1,2>},    {0x30101,&rMassMultAdd3D<2,2>},
+    {0x30102,&rMassMultAdd3D<2,4>},    {0x30202,&rMassMultAdd3D<3,4>},
+    {0x30203,&rMassMultAdd3D<3,6>},    {0x30303,&rMassMultAdd3D<4,6>},
+    {0x30304,&rMassMultAdd3D<4,8>},    {0x30404,&rMassMultAdd3D<5,8>},
+    {0x30405,&rMassMultAdd3D<5,10>},   {0x30505,&rMassMultAdd3D<6,10>},
+    {0x30506,&rMassMultAdd3D<6,12>},   {0x30606,&rMassMultAdd3D<7,12>},
+    {0x30607,&rMassMultAdd3D<7,14>},   {0x30707,&rMassMultAdd3D<8,14>},
+    {0x30708,&rMassMultAdd3D<8,16>},   {0x30808,&rMassMultAdd3D<9,16>},
+    {0x30809,&rMassMultAdd3D<9,18>},   {0x30909,&rMassMultAdd3D<10,18>},
+    {0x3090A,&rMassMultAdd3D<10,20>},  {0x30A0A,&rMassMultAdd3D<11,20>},
+    {0x30A0B,&rMassMultAdd3D<11,22>},  {0x30B0B,&rMassMultAdd3D<12,22>},
+    {0x30B0C,&rMassMultAdd3D<12,24>},  {0x30C0C,&rMassMultAdd3D<13,24>},
+    {0x30C0D,&rMassMultAdd3D<13,26>},  {0x30D0D,&rMassMultAdd3D<14,26>},
+    {0x30D0E,&rMassMultAdd3D<14,28>},  {0x30E0E,&rMassMultAdd3D<15,28>},
+    {0x30E0F,&rMassMultAdd3D<15,30>},  {0x30F0F,&rMassMultAdd3D<16,30>},
+    {0x30F10,&rMassMultAdd3D<16,32>},  {0x31010,&rMassMultAdd3D<17,32>},
   };
   if(!call[id]){
     printf("\n[rMassMultAdd] id \033[33m0x%X\033[m ",id);

@@ -71,11 +71,34 @@ void rInitQuadratureData(const int NUM_QUAD,
     {81,&rInitQuadData<81>},
     {100,&rInitQuadData<100>},
     {121,&rInitQuadData<121>},
+    {125,&rInitQuadData<125>},
     {144,&rInitQuadData<144>},
-    {0xD8,&rInitQuadData<0xD8>},
+    {196,&rInitQuadData<196>},
+    {216,&rInitQuadData<216>},
+    {256,&rInitQuadData<256>},
+    {324,&rInitQuadData<324>},
+    {400,&rInitQuadData<400>},
+    {484,&rInitQuadData<484>},
+    {512,&rInitQuadData<512>},
+    {576,&rInitQuadData<576>},
+    {676,&rInitQuadData<676>},
+    {900,&rInitQuadData<900>},
+    {1000,&rInitQuadData<1000>},
+    {1024,&rInitQuadData<1024>},
+    {1728,&rInitQuadData<1728>},
+    {2744,&rInitQuadData<2744>},
+    {4096,&rInitQuadData<4096>},
+    {5832,&rInitQuadData<5832>},
+    {8000,&rInitQuadData<8000>},
+    {10648,&rInitQuadData<10648>},
+    {13824,&rInitQuadData<13824>},
+    {17576,&rInitQuadData<17576>},
+    {21952,&rInitQuadData<21952>},
+    {27000,&rInitQuadData<27000>},
+    {32768,&rInitQuadData<32768>},    
   };
   if (!call[id]){
-    printf("\n[rInitQuadratureData] id \033[33m0x%X\033[m ",id);
+    printf("\n[rInitQuadratureData] id \033[33m0x%X (%d)\033[m ",id,id);
     fflush(stdout);
   }
   assert(call[id]);

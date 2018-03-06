@@ -239,10 +239,11 @@ typedef void (*fIniGeom)(const int numElements,
                          double* restrict invJ,
                          double* restrict detJ);
 
+
 // *****************************************************************************
 void rIniGeom(const int DIM,
               const int NUM_DOFS,
-              const int NUM_QUAD, // order-thermo
+              const int NUM_QUAD,
               const int numElements,
               const double* dofToQuadD,
               const double* nodes,
@@ -255,54 +256,47 @@ void rIniGeom(const int DIM,
   const int blck = NUM_QUAD;
 #endif
 #ifdef __TEMPLATES__
-  const unsigned int id = (DIM<<16)|(NUM_DOFS<<8)|(NUM_QUAD);
-  assert(LOG2(DIM)<=8);
-  //printf("NUM_DOFS:%d ",NUM_DOFS);
-  assert(LOG2(NUM_DOFS)<=8);
-  //printf("NUM_QUAD:%d ",NUM_QUAD);
-  assert(LOG2(NUM_QUAD)<=8);
+  const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
+  const unsigned int quad1D = IROOT(DIM,NUM_QUAD);
+  const unsigned int id = (DIM<<4)|(dofs1D-2);
+  assert(LOG2(DIM)<=4);
+  assert(LOG2(dofs1D-2)<=4);
+  assert(quad1D==2*(dofs1D-1));
   static std::unordered_map<unsigned int, fIniGeom> call = {
     // 2D
-    {0x20404,&rIniGeom2D<4,4>},
-    
-    {0x20410,&rIniGeom2D<4,16>},
-    {0x20419,&rIniGeom2D<4,25>},
-    {0x20424,&rIniGeom2D<4,36>},
-    {0x20431,&rIniGeom2D<4,49>},
-    {0x20440,&rIniGeom2D<4,64>},
-    
-    {0x20910,&rIniGeom2D<9,16>},
-    {0x20919,&rIniGeom2D<9,25>},
-    {0x20924,&rIniGeom2D<9,36>},
-    {0x20931,&rIniGeom2D<9,49>},
-    {0x20940,&rIniGeom2D<9,64>},
-    
-    {0x20910,&rIniGeom2D<9,16>},
-    {0x20919,&rIniGeom2D<9,25>},
-    {0x20924,&rIniGeom2D<9,36>},
-    {0x20931,&rIniGeom2D<9,49>},
-    {0x20940,&rIniGeom2D<9,64>},
-    
-    {0x21010,&rIniGeom2D<16,16>},
-    {0x21019,&rIniGeom2D<16,25>},
-    {0x21024,&rIniGeom2D<16,36>},
-    {0x21031,&rIniGeom2D<16,49>},
-    {0x21040,&rIniGeom2D<16,64>},
-    
-    {0x21910,&rIniGeom2D<25,16>},
-    {0x21919,&rIniGeom2D<25,25>},
-    {0x21924,&rIniGeom2D<25,36>},
-    {0x21931,&rIniGeom2D<25,49>},
-    {0x21940,&rIniGeom2D<25,64>},
-    {0x21951,&rIniGeom2D<25,81>},
-    
-    {0x22464,&rIniGeom2D<36,100>},
-    
-    {0x23190,&rIniGeom2D<49,144>},
-
+    {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},
+    {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
+    {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
+    {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
+    {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
+    {0x25,&rIniGeom2D<7*7,(7*2-2)*(7*2-2)>},
+    {0x26,&rIniGeom2D<8*8,(8*2-2)*(8*2-2)>},
+    {0x27,&rIniGeom2D<9*9,(9*2-2)*(9*2-2)>},
+    {0x28,&rIniGeom2D<10*10,(10*2-2)*(10*2-2)>},
+    {0x29,&rIniGeom2D<11*11,(11*2-2)*(11*2-2)>},
+    {0x2A,&rIniGeom2D<12*12,(12*2-2)*(12*2-2)>},
+    {0x2B,&rIniGeom2D<13*13,(13*2-2)*(13*2-2)>},
+    {0x2C,&rIniGeom2D<14*14,(14*2-2)*(14*2-2)>},
+    {0x2D,&rIniGeom2D<15*15,(15*2-2)*(15*2-2)>},
+    {0x2E,&rIniGeom2D<16*16,(16*2-2)*(16*2-2)>},
+    {0x2F,&rIniGeom2D<17*17,(17*2-2)*(17*2-2)>},
     // 3D
-    {0x31B40,&rIniGeom3D<27,64>},
-    {0x340D8,&rIniGeom3D<64,216>},
+    {0x30,&rIniGeom3D<2*2*2,2*2*2>},
+    {0x31,&rIniGeom3D<3*3*3,4*4*4>},
+    {0x32,&rIniGeom3D<4*4*4,6*6*6>},
+    {0x33,&rIniGeom3D<5*5*5,8*8*8>},
+    {0x34,&rIniGeom3D<6*6*6,10*10*10>},
+    {0x35,&rIniGeom3D<7*7*7,12*12*12>},
+    {0x36,&rIniGeom3D<8*8*8,14*14*14>},
+    {0x37,&rIniGeom3D<9*9*9,16*16*16>},
+    {0x38,&rIniGeom3D<10*10*10,18*18*18>},
+    {0x39,&rIniGeom3D<11*11*11,20*20*20>},
+    {0x3A,&rIniGeom3D<12*12*12,22*22*22>},
+    {0x3B,&rIniGeom3D<13*13*13,24*24*24>},
+    {0x3C,&rIniGeom3D<14*14*14,26*26*26>},
+    {0x3D,&rIniGeom3D<15*15*15,28*28*28>},
+    {0x3E,&rIniGeom3D<16*16*16,30*30*30>},
+    {0x3F,&rIniGeom3D<17*17*17,32*32*32>},
   };
   if (!call[id]){
     printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);
@@ -313,10 +307,12 @@ void rIniGeom(const int DIM,
         numElements,dofToQuadD,nodes,J,invJ,detJ);
 #else
   if (DIM==2)
-    call0(rIniGeom2D,id,grid,blck,
-          NUM_DOFS,NUM_QUAD,
+    call0(rIniGeom2D,id,grid,blck,NUM_DOFS,NUM_QUAD,
           numElements,dofToQuadD,nodes,J,invJ,detJ);
-  else assert(false);
+  if (DIM==3)
+    call0(rIniGeom3D,id,grid,blck,NUM_DOFS,NUM_QUAD,
+          numElements,dofToQuadD,nodes,J,invJ,detJ);
+  assert(DIM==2 || DIM==3);
 #endif
   pop();
 }

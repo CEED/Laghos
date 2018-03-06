@@ -253,93 +253,47 @@ void rGridFuncToQuad(const int DIM,
   const int blck = 1;
 #endif
 #ifdef __TEMPLATES__
-  const unsigned int id = (DIM<<24)|(NUM_VDIM<<16)|(NUM_DOFS_1D<<8)|(NUM_QUAD_1D);
-  assert(LOG2(DIM)<=8);//printf("DIM:%d ",DIM);
-  assert(LOG2(NUM_VDIM)<=8);//printf("NUM_VDIM:%d ",NUM_VDIM);
-  assert(LOG2(NUM_DOFS_1D)<=8);//printf("NUM_DOFS_1D:%d ",NUM_DOFS_1D);
-  assert(LOG2(NUM_QUAD_1D)<=8);//printf("NUM_QUAD_1D:%d ",NUM_QUAD_1D);
+   const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);
+  assert(LOG2(DIM)<=4);
+  assert(LOG2(NUM_VDIM)<=4);
+  assert(LOG2(NUM_DOFS_1D-1)<=4);
+  assert(NUM_QUAD_1D==2*NUM_DOFS_1D);
   static std::unordered_map<unsigned int, fGridFuncToQuad> call = {
     // 2D
-    {0x2010102,&rGridFuncToQuad2D<1,1,2>},
-    {0x2010202,&rGridFuncToQuad2D<1,2,2>},
-    {0x2010203,&rGridFuncToQuad2D<1,2,3>},
-    {0x2010204,&rGridFuncToQuad2D<1,2,4>},
-    {0x2010205,&rGridFuncToQuad2D<1,2,5>},
-    {0x2010206,&rGridFuncToQuad2D<1,2,6>},
-    {0x2010207,&rGridFuncToQuad2D<1,2,7>},
-    {0x2010208,&rGridFuncToQuad2D<1,2,8>},
-    {0x2010209,&rGridFuncToQuad2D<1,2,9>},
-    {0x201020A,&rGridFuncToQuad2D<1,2,10>},
-    
-    {0x2010302,&rGridFuncToQuad2D<1,3,2>},
-    {0x2010303,&rGridFuncToQuad2D<1,3,3>},
-    {0x2010304,&rGridFuncToQuad2D<1,3,4>},
-    {0x2010305,&rGridFuncToQuad2D<1,3,5>},
-    {0x2010306,&rGridFuncToQuad2D<1,3,6>},
-    {0x2010307,&rGridFuncToQuad2D<1,3,7>},
-    {0x2010308,&rGridFuncToQuad2D<1,3,8>},
-    {0x2010309,&rGridFuncToQuad2D<1,3,9>},
-    {0x201030A,&rGridFuncToQuad2D<1,3,10>},
-
-    {0x2010402,&rGridFuncToQuad2D<1,4,2>},
-    {0x2010403,&rGridFuncToQuad2D<1,4,3>},
-    {0x2010404,&rGridFuncToQuad2D<1,4,4>},
-    {0x2010405,&rGridFuncToQuad2D<1,4,5>},
-    {0x2010406,&rGridFuncToQuad2D<1,4,6>},
-    {0x2010407,&rGridFuncToQuad2D<1,4,7>},
-    {0x2010408,&rGridFuncToQuad2D<1,4,8>},
-    {0x2010409,&rGridFuncToQuad2D<1,4,9>},
-    {0x201040A,&rGridFuncToQuad2D<1,4,10>},
-    
-    {0x2010502,&rGridFuncToQuad2D<1,5,2>},
-    {0x2010503,&rGridFuncToQuad2D<1,5,3>},
-    {0x2010504,&rGridFuncToQuad2D<1,5,4>},
-    {0x2010505,&rGridFuncToQuad2D<1,5,5>},
-    {0x2010506,&rGridFuncToQuad2D<1,5,6>},
-    {0x2010507,&rGridFuncToQuad2D<1,5,7>},
-    {0x2010508,&rGridFuncToQuad2D<1,5,8>},
-    {0x2010509,&rGridFuncToQuad2D<1,5,9>},
-    {0x201050A,&rGridFuncToQuad2D<1,5,10>},
-    
-    {0x2010602,&rGridFuncToQuad2D<1,6,2>},
-    {0x2010603,&rGridFuncToQuad2D<1,6,3>},
-    {0x2010604,&rGridFuncToQuad2D<1,6,4>},
-    {0x2010605,&rGridFuncToQuad2D<1,6,5>},
-    {0x2010606,&rGridFuncToQuad2D<1,6,6>},
-    {0x2010607,&rGridFuncToQuad2D<1,6,7>},
-    {0x2010608,&rGridFuncToQuad2D<1,6,8>},
-    {0x2010609,&rGridFuncToQuad2D<1,6,9>},
-    {0x201060A,&rGridFuncToQuad2D<1,6,10>},
-    {0x201060C,&rGridFuncToQuad2D<1,6,12>},
-    
-    {0x2010702,&rGridFuncToQuad2D<1,7,2>},
-    {0x2010703,&rGridFuncToQuad2D<1,7,3>},
-    {0x2010704,&rGridFuncToQuad2D<1,7,4>},
-    {0x2010705,&rGridFuncToQuad2D<1,7,5>},
-    {0x2010706,&rGridFuncToQuad2D<1,7,6>},
-    {0x2010707,&rGridFuncToQuad2D<1,7,7>},
-    {0x2010708,&rGridFuncToQuad2D<1,7,8>},
-    {0x2010709,&rGridFuncToQuad2D<1,7,9>},
-    {0x201070A,&rGridFuncToQuad2D<1,7,10>},
+    {0x210,&rGridFuncToQuad2D<1,1,2>},
+    {0x211,&rGridFuncToQuad2D<1,2,4>},
+    {0x212,&rGridFuncToQuad2D<1,3,6>},
+    {0x213,&rGridFuncToQuad2D<1,4,8>},
+    {0x214,&rGridFuncToQuad2D<1,5,10>},
+    {0x215,&rGridFuncToQuad2D<1,6,12>},
+    {0x216,&rGridFuncToQuad2D<1,7,14>},
+    {0x217,&rGridFuncToQuad2D<1,8,16>},
+    {0x218,&rGridFuncToQuad2D<1,9,18>},
+    {0x219,&rGridFuncToQuad2D<1,10,20>},
+    {0x21A,&rGridFuncToQuad2D<1,11,22>},
+    {0x21B,&rGridFuncToQuad2D<1,12,24>},
+    {0x21C,&rGridFuncToQuad2D<1,13,26>},
+    {0x21D,&rGridFuncToQuad2D<1,14,28>},
+    {0x21E,&rGridFuncToQuad2D<1,15,30>},
+    {0x21F,&rGridFuncToQuad2D<1,16,32>},
 
     // 3D
-    {0x3010202,&rGridFuncToQuad3D<1,2,2>},
-    {0x3010203,&rGridFuncToQuad3D<1,2,3>},
-    {0x3010204,&rGridFuncToQuad3D<1,2,4>},
-    {0x3010205,&rGridFuncToQuad3D<1,2,5>},
-    {0x3010206,&rGridFuncToQuad3D<1,2,6>},
-    
-    {0x3010302,&rGridFuncToQuad3D<1,3,2>},
-    {0x3010303,&rGridFuncToQuad3D<1,3,3>},
-    {0x3010304,&rGridFuncToQuad3D<1,3,4>},
-    {0x3010305,&rGridFuncToQuad3D<1,3,5>},
-    {0x3010306,&rGridFuncToQuad3D<1,3,6>},
-    
-    {0x3010402,&rGridFuncToQuad3D<1,4,2>},
-    {0x3010403,&rGridFuncToQuad3D<1,4,3>},
-    {0x3010404,&rGridFuncToQuad3D<1,4,4>},
-    {0x3010405,&rGridFuncToQuad3D<1,4,5>},
-    {0x3010406,&rGridFuncToQuad3D<1,4,6>},
+    {0x310,&rGridFuncToQuad3D<1,1,2>},
+    {0x311,&rGridFuncToQuad3D<1,2,4>},
+    {0x312,&rGridFuncToQuad3D<1,3,6>},
+    {0x313,&rGridFuncToQuad3D<1,4,8>},
+    {0x314,&rGridFuncToQuad3D<1,5,10>},
+    {0x315,&rGridFuncToQuad3D<1,6,12>},
+    {0x316,&rGridFuncToQuad3D<1,7,14>},
+    {0x317,&rGridFuncToQuad3D<1,8,16>},
+    {0x318,&rGridFuncToQuad3D<1,9,18>},
+    {0x319,&rGridFuncToQuad3D<1,10,20>},
+    {0x31A,&rGridFuncToQuad3D<1,11,22>},
+    {0x31B,&rGridFuncToQuad3D<1,12,24>},
+    {0x31C,&rGridFuncToQuad3D<1,13,26>},
+    {0x31D,&rGridFuncToQuad3D<1,14,28>},
+    {0x31E,&rGridFuncToQuad3D<1,15,30>},
+    {0x31F,&rGridFuncToQuad3D<1,16,32>},
   };
   if (!call[id]){
     printf("\n[rGridFuncToQuad] id \033[33m0x%X\033[m ",id);
