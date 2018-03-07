@@ -385,13 +385,13 @@ void rForceMult3S(
   if (elBlock < numElements)
 #endif
   {
-    shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D];
-    shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D];
-    shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D];
+    share double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D];
+    share double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D];
+    share double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D];
 
-    shared double s_Dxyz[INNER_SIZE_2D];
-    shared double s_xDyz[NUM_QUAD_2D];
-    shared double s_xyDz[NUM_QUAD_2D];
+    share double s_Dxyz[INNER_SIZE_2D];
+    share double s_xDyz[NUM_QUAD_2D];
+    share double s_xyDz[NUM_QUAD_2D];
 
     double r_z[NUM_QUAD_1D];
 
@@ -605,13 +605,13 @@ void rForceMultTranspose3S(
   if (elBlock < numElements)
 #endif
   {
-    shared double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D];
-    shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D];
-    shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D];
+    share double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D];
+    share double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D];
+    share double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D];
 
-    shared double s_xyz[NUM_QUAD_2D * NUM_DIM];
-    shared double s_xyDz[NUM_QUAD_2D * NUM_DIM];
-    shared double s_v[NUM_QUAD_2D];
+    share double s_xyz[NUM_QUAD_2D * NUM_DIM];
+    share double s_xyDz[NUM_QUAD_2D * NUM_DIM];
+    share double s_v[NUM_QUAD_2D];
 
     /*exclusive*/ double r_xyz[NUM_QUAD_1D * NUM_DIM];
     /*exclusive*/ double r_xyDz[NUM_QUAD_1D * NUM_DIM];
@@ -666,8 +666,8 @@ void rForceMultTranspose3S(
                     xyz  += r_v[c][dz] * s_H1DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
                     xyDz += r_v[c][dz] * s_H1DofToQuadD[ijN(qz, dz,NUM_QUAD_1D)];
                   }
-                  r_xyz[ijN(c, qz,NUM_QUAD_1D)]  = xyz;
-                  r_xyDz[ijN(c, qz,NUM_QUAD_1D)] = xyDz;
+                  r_xyz[ijN(c, qz,NUM_DIM)]  = xyz;
+                  r_xyDz[ijN(c, qz,NUM_DIM)] = xyDz;
                 }
               }
             }
@@ -689,8 +689,8 @@ void rForceMultTranspose3S(
 #endif
               if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                 for (int c = 0; c < NUM_DIM; ++c) {
-                  s_xyz[ijkN(c, dx, dy,NUM_QUAD_1D)]  = r_xyz[ijN(c, qz,NUM_QUAD_1D)];
-                  s_xyDz[ijkN(c, dx, dy,NUM_QUAD_1D)] = r_xyDz[ijN(c, qz,NUM_QUAD_1D)];
+                  s_xyz[ijkN(c, dx, dy,NUM_QUAD_1D)]  = r_xyz[ijN(c, qz,NUM_DIM)];
+                  s_xyDz[ijkN(c, dx, dy,NUM_QUAD_1D)] = r_xyDz[ijN(c, qz,NUM_DIM)];
                 }
               }
             }
@@ -723,9 +723,9 @@ void rForceMultTranspose3S(
                     for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
                       const double wx  = s_H1DofToQuad[ijN(qx, dx,NUM_QUAD_1D)];
                       const double wDx = s_H1DofToQuadD[ijN(qx, dx,NUM_QUAD_1D)];
-                      Dxz += wDx * s_xyz[ijkN(c, dx, dy,NUM_QUAD_1D)];
-                      xz  += wx  * s_xyz[ijkN(c, dx, dy,NUM_QUAD_1D)];
-                      xDz += wx  * s_xyDz[ijkN(c, dx, dy,NUM_QUAD_1D)];
+                      Dxz += wDx * s_xyz[ijkN(c, dx, dy,NUM_DIM)];
+                      xz  += wx  * s_xyz[ijkN(c, dx, dy,NUM_DIM)];
+                      xDz += wx  * s_xyDz[ijkN(c, dx, dy,NUM_DIM)];
                     }
                     Dxyz += wy  * Dxz;
                     xDyz += wDy * xz;
@@ -822,10 +822,10 @@ void rForceMultS(const int NUM_DIM,
   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
   assert(NUM_DOFS_1D==H1_DOFS_1D);
   assert(L2_DOFS_1D==NUM_DOFS_1D-1);
-  const unsigned long long id =((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
+  const unsigned int id =((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
   assert(LOG2(NUM_DIM)<=4);
   assert(LOG2(NUM_DOFS_1D-2)<=4);
-  static std::unordered_map<unsigned long long, fForceMult2S> call = {
+  static std::unordered_map<unsigned int, fForceMult2S> call = {
     {0x20,&rForceMult2S<2,2,2,1,2>},
     {0x21,&rForceMult2S<2,3,4,2,3>},
     {0x22,&rForceMult2S<2,4,6,3,4>},
@@ -861,7 +861,7 @@ void rForceMultS(const int NUM_DIM,
     // {0x3F,&rForceMult3S<3,17,32,16,17>},
   };
   if (!call[id]){
-    printf("\n[rForceMult] id \033[33m0x%llX\033[m ",id);
+    printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);
@@ -956,7 +956,7 @@ void rForceMultTransposeS(const int NUM_DIM,
     //{0x3F,&rForceMultTranspose3S<3,17,32,16,17>},
   };
   if (!call[id]) {
-    printf("\n[rForceMultTranspose] id \033[33m0x%llX\033[m ",id);
+    printf("\n[rForceMultTranspose] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);

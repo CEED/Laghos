@@ -42,8 +42,9 @@
 #ifdef __RAJA__
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
-#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
+//#include "RAJA/util/defines.hpp"
+#include "RAJA/policy/cuda.hpp"
+//#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
 #endif
 
 // *****************************************************************************

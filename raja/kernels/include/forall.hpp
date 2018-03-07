@@ -25,10 +25,9 @@
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
 //#warning RAJA, WITH NVCC
-#define kernel
 #define sync
-#define share // variable cannot be declared with "shared" inside a host function
-#define shared
+#define share
+#define kernel
 const int CUDA_BLOCK_SIZE = 256;
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -40,13 +39,13 @@ const int CUDA_BLOCK_SIZE = 256;
   RAJA::Reduce ## type<sq_reduce, RAJA::Real_type> var(ini);
 #define ReduceForall(i,max,body) \
   RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-#define forall(i,max,body)                                        \
+#define forall(i,max,body)                                              \
   if (mfem::rconfig::Get().Cuda())                                      \
     RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
   else                                                                  \
     RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 #define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
-#define call0(name,id,grid,blck,...)  call[id](__VA_ARGS__)
+#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 
@@ -57,7 +56,6 @@ const int CUDA_BLOCK_SIZE = 256;
 #ifndef __LAMBDA__
 #define kernel __global__
 #define share __shared__
-#define shared __shared__
 #define sync __syncthreads();
 const int CUDA_BLOCK_SIZE = 256;
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
@@ -94,7 +92,6 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel
 #define sync
 #define share
-//#define shared
 template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
@@ -127,7 +124,6 @@ void cuda_forallT(const int end,
 //#warning NO RAJA, NO NVCC
 #define sync
 #define share
-#define shared
 #define kernel
 class ReduceSum{
 public:

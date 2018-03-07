@@ -533,7 +533,7 @@ void rForceMult(const int NUM_DIM,
     {0x3F,&rForceMult3D<3,17,32,16,17>},
   };
   if (!call[id]){
-    printf("\n[rForceMult] id \033[33m0x%llX\033[m ",id);
+    printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
     fflush(stdout);
   }
   assert(call[id]);

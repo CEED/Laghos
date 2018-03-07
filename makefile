@@ -20,7 +20,7 @@
 CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
 MFEM_DIR ?= $(HOME)/home/mfem/mfem-raja
-RAJA_DIR ?= $(home)/usr/local/raja/last
+RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
