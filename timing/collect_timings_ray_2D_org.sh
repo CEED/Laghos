@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
-versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
+#versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
 #          11       21    31      41       51     61     71          81      91
+#versions=('gpuLT' 'gpuKT' 'raja-cuda' 'occa-cuda' 'gpuKT-uvm' 'gpuKT-share')
+#          11      21      31         41           51          61
+versions=('gpuKT-share')
 
-maxsteps=5
-parallel_refs=0
+MN=10
+host=ray
+maxsteps=10
 mesh_file=../data/square01_quad.mesh
 
 
@@ -31,33 +35,32 @@ END { printf("%d|%d|%d|%d|%.8f|%.8f|%.8f|%.8f|%.8f|%.8f|\n",
    total_time, total_rate) }'
 }
 
+#########################################################################
+bkill -u camier1
 
 #########################################################################
-rmax=6 # must match {1..rmax} of sref
-for problem in {0..1}; do
-    outfile=timings_ray_2d_p$problem""_ms$maxsteps.org
+n=0
+rmax=4 # must match {1..rmax} of sref
+for problem in {1..1}; do
+    outfile=timings_$host""_2d_p$problem""_ms$maxsteps.org
     [ -r $outfile ] && cp $outfile $outfile.bak
     echo -ne "|H1order|refs|H1dofs|L2dofs|H1cg_rate|L2cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
-    for torder in {0..5}; do
-        for sref in {1..6}; do
+    for torder in 8; do
+        for sref in 3; do
+#    for torder in {9..9}; do
+#        for sref in {4..4}; do
             for version in "${versions[@]}"; do
+                ((n+=1))
+#                echo $n
+#                if [ $(( $n % 15 )) -eq 0 ] ; then
+#                    until [ bjobs 2>1 | grep -m 1 "No unfinished job found"] ; do sleep 0.125 ; done
+#                fi
+                #sleep 1;
                 #echo \#$version >> $outfile
                 # Test for specific CUDA versions
                 #echo version is $version
                 version_name=$version
                 additional_options=
-                if [ $version == 'kernels-share' ]; then
-                    version_name=kernels
-                    additional_options=-share
-                fi
-                if [ $version == 'kernels-cuda' ]; then
-                    version_name=kernels
-                    additional_options=-cuda
-                fi
-                if [ $version == 'kernels-cuda-share' ]; then
-                    version_name=kernels
-                    additional_options="-cuda -share"
-                fi
                 if [ $version == 'raja-cuda' ]; then
                     version_name=raja
                     additional_options=-cuda
@@ -66,24 +69,30 @@ for problem in {0..1}; do
                     version_name=occa
                     additional_options="--occa-config cuda.json"
                 fi
+                if [ $version == 'gpuKT-uvm' ]; then
+                    version_name=gpuKT
+                    additional_options="-uvm"
+                fi
+                if [ $version == 'gpuKT-share' ]; then
+                    version_name=gpuKT
+                    additional_options="-share"
+                fi
                 echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
-                echo bsub -Ip -x -G guests mpirun -n 1 ../laghos.$version_name \
+#                bsub -J rLaghos -n 1 -I -x -W $MN -R "span[ptile=4]" mpirun ../laghos.$version_name \
+#                    -p $problem -tf 0.5 -cfl 0.01 -vs 1 \
+#                    --cg-tol 0 --cg-max-steps 50 \
+#                    --max-steps $maxsteps \
+#                   --mesh $mesh_file \
+#                    --refine-serial $sref \
+#                    --order-thermo $torder \
+#                    --order-kinematic $((torder+1)) \
+#                    $additional_options
+                echo -n $(run_case bsub -n 1 -W $MN -I -x -R "span[ptile=4]" mpirun ../laghos.$version_name \
                     -p $problem -tf 0.5 -cfl 0.01 -vs 1 \
                     --cg-tol 0 --cg-max-steps 50 \
                     --max-steps $maxsteps \
                     --mesh $mesh_file \
                     --refine-serial $sref \
-                    --refine-parallel $parallel_refs \
-                    --order-thermo $torder \
-                    --order-kinematic $((torder+1)) \
-                    $additional_options
-                echo -n $(run_case bsub -Ip -x -G guests mpirun -n 1 ../laghos.$version_name \
-                    -p $problem -tf 0.5 -cfl 0.01 -vs 1 \
-                    --cg-tol 0 --cg-max-steps 50 \
-                    --max-steps $maxsteps \
-                    --mesh $mesh_file \
-                    --refine-serial $sref \
-                    --refine-parallel $parallel_refs \
                     --order-thermo $torder \
                     --order-kinematic $((torder+1)) \
                     $additional_options)>> $outfile

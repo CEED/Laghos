@@ -26,11 +26,11 @@ void rNodeCopyByVDim0(const int elements,
                       const int* eMap,
                       const double* Sx,
                       double* nodes){
-  push(Lime);
 #ifndef __LAMBDA__
   const int e = blockDim.x * blockIdx.x + threadIdx.x;
   if (e < elements)
 #else
+  push(Lime);
   forall(e,elements,
 #endif
   {
@@ -46,8 +46,8 @@ void rNodeCopyByVDim0(const int elements,
   }
 #ifdef __LAMBDA__
          );
-#endif
   pop();
+#endif
 }
 
 // *****************************************************************************

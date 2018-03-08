@@ -4,12 +4,13 @@
 #versions=( 'master' 'kernels' 'raja' 'occa')
 #versions=('kernels' 'kernels-share' 'kernels-cuda' 'kernels-cuda-share')
 #versions=( 'master' 'raja-cuda' 'occa-cuda')
-versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuLT' 'raja' 'raja-cuda' 'occa' 'occa-cuda')
-#          11       21     31      41      51      61     71          81     91
+#versions=('master' 'cpuL' 'cpuLT' 'gpuLT' 'gpuKT' 'raja' 'raja-cuda' 'occa' 'occa-cuda' 'gpuKT-uvm' 'gpuKT-share')
+#          11       21     31      41      51      61     71          81     91         101         111
+versions=('gpuLT' 'gpuKT' 'raja-cuda' 'occa-cuda' 'gpuKT-uvm' 'gpuKT-share')
+#          11      21      31         41           51          61
 
 host=tux
-maxsteps=1
-parallel_refs=0
+maxsteps=10
 mesh_file=../data/square01_quad.mesh
 
 #########################################################################
@@ -35,14 +36,16 @@ END { printf("%d|%d|%d|%d|%.8f|%.8f|%.8f|%.8f|%.8f|%.8f|\n",
    total_time, total_rate) }'
 }
 
+#########################################################################
 #bsub -Ip -x -G guests mpirun -n 1
 #########################################################################
+# order must start at 1
 rmax=6 # must match {1..rmax} of sref
-for problem in {0..1}; do
+for problem in {1..1}; do
     outfile=timings_$host""_2d_p$problem""_ms$maxsteps.org
     [ -r $outfile ] && cp $outfile $outfile.bak
     echo -ne "|H1order|refs|H1dofs|L2dofs|H1cg_rate|L2cg_rate|forces_rate|update_quad_rate|total_time|total_rate|\n|" > $outfile
-    for torder in {0..5}; do
+    for torder in {1..9}; do
         for sref in {1..6}; do
             for version in "${versions[@]}"; do
                 #echo \#$version >> $outfile
@@ -50,18 +53,6 @@ for problem in {0..1}; do
                 #echo version is $version
                 version_name=$version
                 additional_options=
-                if [ $version == 'kernels-share' ]; then
-                    version_name=kernels
-                    additional_options=-share
-                fi
-                if [ $version == 'kernels-cuda' ]; then
-                    version_name=kernels
-                    additional_options=-cuda
-                fi
-                if [ $version == 'kernels-cuda-share' ]; then
-                    version_name=kernels
-                    additional_options="-cuda -share"
-                fi
                 if [ $version == 'raja-cuda' ]; then
                     version_name=raja
                     additional_options=-cuda
@@ -70,6 +61,14 @@ for problem in {0..1}; do
                     version_name=occa
                     additional_options="--occa-config cuda.json"
                 fi
+                if [ $version == 'gpuKT-uvm' ]; then
+                    version_name=gpuKT
+                    additional_options="-uvm"
+                fi
+                if [ $version == 'gpuKT-share' ]; then
+                    version_name=gpuKT
+                    additional_options="-share"
+                fi
                 echo -e "\e[35mlaghos-\e[32;1m$version\e[m\e[35m Q$((torder+1))Q$torder $sref"ref"\e[m"
                 echo ../laghos.$version_name \
                     -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
@@ -77,17 +76,24 @@ for problem in {0..1}; do
                     --max-steps $maxsteps \
                     --mesh $mesh_file \
                     --refine-serial $sref \
-                    --refine-parallel $parallel_refs \
                     --order-thermo $torder \
                     --order-kinematic $((torder+1)) \
                     $additional_options
+#                ../laghos.$version_name \
+#                    -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
+#                    --cg-tol 0 --cg-max-steps 50 \
+#                    --max-steps $maxsteps \
+#                    --mesh $mesh_file \
+#                    --refine-serial $sref \
+#                    --order-thermo $torder \
+#                    --order-kinematic $((torder+1)) \
+#                    $additional_options
                 echo -n $(run_case ../laghos.$version_name \
                     -p $problem -tf 0.5 -cfl 0.05 -vs 1 \
                     --cg-tol 0 --cg-max-steps 50 \
                     --max-steps $maxsteps \
                     --mesh $mesh_file \
                     --refine-serial $sref \
-                    --refine-parallel $parallel_refs \
                     --order-thermo $torder \
                     --order-kinematic $((torder+1)) \
                     $additional_options)>> $outfile
