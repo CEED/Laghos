@@ -37,7 +37,7 @@ namespace mfem {
 #ifdef __NVCC__
     CUdevice cuDevice;
     CUcontext cuContext;
-    CUstream hStream=0;
+    CUstream *hStream;
 #endif
     // *************************************************************************
     bool cuda=false;
@@ -49,6 +49,7 @@ namespace mfem {
     bool occa=false;
     bool hcpo=false;
     bool sync=false;
+    bool nvvp=false;
     // *************************************************************************
   private:
     rconfig(){}
@@ -71,8 +72,8 @@ namespace mfem {
     bool GeomNeedsUpdate(const int);
     bool DoHostConformingProlongationOperator();
     // *************************************************************************
-    inline bool Rank() { return mpi_rank; }
-    inline bool Size() { return mpi_size; }
+    inline int Rank() { return mpi_rank; }
+    inline int Size() { return mpi_size; }
     inline bool Root() { return mpi_rank==0; }
     inline bool Aware() { return aware; }
     // *************************************************************************
@@ -86,9 +87,10 @@ namespace mfem {
     inline bool Occa() { return occa; }
     inline bool Hcpo() { return hcpo; }
     inline bool Sync() { return sync; }
-    // *************************************************************************
+    inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
+   // *************************************************************************
 #ifdef __NVCC__
-    inline CUstream Stream() { return hStream; }
+    inline CUstream *Stream() { return hStream; }
 #endif
   };
   

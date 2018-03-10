@@ -26,6 +26,7 @@ namespace mfem {
     Array<int> external_ldofs;
     RajaArray<int> d_external_ldofs;
     RajaCommD *gc;
+    int kMaxTh;
   public:
     RajaConformingProlongationOperator(ParFiniteElementSpace &);
     ~RajaConformingProlongationOperator();

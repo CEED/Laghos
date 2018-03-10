@@ -46,6 +46,7 @@ static const int nb_colors = sizeof(legacy_colors)/sizeof(uint32_t);
 
 // *****************************************************************************
 static int rNvtxAttrPushEx(const char *ascii, const int color){
+  if (!mfem::rconfig::Get().Nvvp()) return 0;
   const int color_id = color%nb_colors;
   nvtxEventAttributes_t eAttrib = {0};
   eAttrib.version = NVTX_VERSION;
@@ -60,6 +61,7 @@ static int rNvtxAttrPushEx(const char *ascii, const int color){
 // *****************************************************************************
 int rNvtxRangePushEx(const char *function, const char *file, const int line,
                      const int color){
+  if (!mfem::rconfig::Get().Nvvp()) return 0;
   const size_t size = 2048;
   static char marker[size];
   const int nb_of_char_printed =
@@ -75,8 +77,9 @@ int rNvtxRangePushEx(const char *ascii, const int color){
 
 // ***************************************************************************
 int rNvtxSyncPop(void){ // Enforce Kernel Synchronization
+  if (!mfem::rconfig::Get().Nvvp()) return 0;
   rNvtxAttrPushEx("EKS", Yellow);
-  cudaStreamSynchronize(mfem::rconfig::Get().Stream());
+  cudaStreamSynchronize(0);//*mfem::rconfig::Get().Stream());
   nvtxRangePop();
   return nvtxRangePop();
 }

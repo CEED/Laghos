@@ -193,11 +193,11 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   //push(Mult:h_x,Red);//D2H
-   //Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
-   //ParGridFunction x(&H1FESpace, h_x.GetData());
-   //H1FESpace.GetParMesh()->NewNodes(x, false);
-   //pop();
+   push(Mult:h_x,Red);//D2H
+   Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
+   ParGridFunction x(&H1FESpace, h_x.GetData());
+   H1FESpace.GetParMesh()->NewNodes(x, false);
+   pop();
    
    UpdateQuadratureData(S);
 

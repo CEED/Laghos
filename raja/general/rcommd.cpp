@@ -143,6 +143,7 @@ namespace mfem {
     const int rnk = rconfig::Get().Rank();
     dbg("\033[33;1m[%d-d_BcastBegin]",rnk);
     int request_counter = 0;
+    push(alloc,Moccasin);
     group_buf.SetSize(group_buf_size*sizeof(T));
     T *buf = (T *)group_buf.GetData();
     if (!d_group_buf){
@@ -152,6 +153,7 @@ namespace mfem {
       pop();
     }
     T *d_buf = (T*)d_group_buf;
+    pop();
     for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
     {
       const int num_send_groups = nbr_send_groups.RowSize(nbr);
@@ -176,7 +178,7 @@ namespace mfem {
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
-          cudaStreamSynchronize(0);
+          cudaStreamSynchronize(0);//*rconfig::Get().Stream());
           pop();
         }
 
@@ -330,7 +332,7 @@ namespace mfem {
         // make sure the device has finished
         if (rconfig::Get().Aware()){
           push(sync,Lime);
-          cudaStreamSynchronize(0);
+          cudaStreamSynchronize(0);//*rconfig::Get().Stream());
           pop();
         }
         push(MPI_Isend,Orange);

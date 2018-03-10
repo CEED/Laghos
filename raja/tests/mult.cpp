@@ -16,6 +16,7 @@
 #include "../raja.hpp"
 #include "../../laghos_solver.hpp"
 #include <sys/time.h>
+#include <unistd.h>
 
 namespace mfem {
 
@@ -36,7 +37,7 @@ namespace mfem {
         Px(P.Height()), APx(A.Height()) { }
     /// Operator application.
     void Mult(const RajaVector & x, RajaVector & y) const {
-      push(SkyBlue);
+      push(Pm1AP,SkyBlue);
       P.Mult(x, Px);
       A.Mult(Px, APx);
       Rt.MultTranspose(APx, y);
@@ -44,7 +45,7 @@ namespace mfem {
     }
     /// Application of the transpose.
     void MultTranspose(const RajaVector & x, RajaVector & y) const {
-      push(SkyBlue);
+      push(Pm1APT,SkyBlue);
       Rt.Mult(x, APx);
       A.MultTranspose(APx, Px);
       P.MultTranspose(Px, y);
@@ -59,12 +60,14 @@ namespace mfem {
   public:
     RajaIdOperator(int s = 0) { height = width = s; }
     void Mult(const RajaVector &x, RajaVector &y) const  {
-      push(DarkCyan);
+      push(Id=,DarkCyan);
+      //usleep(100);
       y=x;
       pop();
     }
     void MultTranspose(const RajaVector &x, RajaVector &y) const {
-      push(DarkCyan);
+      push(Id=T,DarkCyan);
+      //usleep(100);
       y=x;
       pop();
     }
@@ -80,21 +83,6 @@ namespace mfem {
     struct timeval st, et;
     assert(order>=1);
     const int nb_step = (max_step>0)?max_step:128;
-    
-    // Launch first dummy kernel
-    // And don't enable API tracing yet in NVVP
-#ifdef __NVCC__
-    cuProfilerStart();
-    iniK<<<128,1>>>();
-    cudaDeviceSynchronize();
-#endif
-
-    MPI_Barrier(pmesh->GetComm());
-    
-#ifdef __NVCC__
-    cuProfilerStart();
-#endif
-    push();
     const int dim = pmesh->Dimension();
     const H1_FECollection fec(order, dim);
     RajaFiniteElementSpace fes(pmesh, &fec, 1);
@@ -112,23 +100,52 @@ namespace mfem {
     RajaVector x(vsize); x=1.0;
     RajaVector y(vsize); y=1.0;
     
-    // Do one RAP to set MPI's buffers
-    Pm1AP.Mult(x, y);
-
+    MPI_Barrier(pmesh->GetComm());
+    cudaDeviceSynchronize();
+    
+    // Do one RAP Mult/MultTranspose to set MPI's buffers
+    Pm1AP.Mult(x,y);
+    Pm1AP.MultTranspose(x,y);
+    
+#ifdef __NVCC__
+    MPI_Barrier(pmesh->GetComm());
+    cudaDeviceSynchronize();
+    // Now let go the markers
+    rconfig::Get().Nvvp(true);
+    cuProfilerStart();
+#endif
+    
+    // Launch first dummy kernel for profiling overhead to start
+#ifdef __NVCC__
+    push(iniK,Green);
+    iniK<<<128,1>>>();
+    pop();
+#endif
+    
+    MPI_Barrier(pmesh->GetComm());
+    cudaDeviceSynchronize();
+    
     gettimeofday(&st, NULL);
     for(int i=0;i<nb_step;i++){
 #ifdef __NVCC__
-      //cudaDeviceSynchronize(); // used with nvvp
+      cudaDeviceSynchronize(); // used with nvvp
 #endif
       push(SkyBlue);
       Pm1AP.Mult(x, y);
+      pop();
+      
+      push(Wrk,LawnGreen);
+      usleep(1);
+      pop();
+      
+      push(SkyBlue);
+      Pm1AP.MultTranspose(x, y);
       pop();
     }
     gettimeofday(&et, NULL);
     const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+(et.tv_usec - st.tv_usec)/1.0e3);
     if (rconfig::Get().Root())
       printf("\033[32m[laghos] Elapsed time = %f ms/step\33[m\n", alltime/nb_step);
-    pop();
     return true;
   }
 
