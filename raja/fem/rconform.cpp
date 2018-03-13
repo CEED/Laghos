@@ -111,6 +111,14 @@ namespace mfem {
     double *d_ydata = y.GetData(); 
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
+    /*push(k_DtoD,Coral);
+    for (int i = 0; i < m; i++){
+      const int end = external_ldofs[i];
+      rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double));
+      j = end+1;
+    }
+    pop();
+    */
     if (m>0){
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim){
@@ -122,7 +130,7 @@ namespace mfem {
         assert(kMaxTh<rconfig::Get().MaxXGridSize());
         for(int of7=0;of7<m/maxXThDim;of7+=1){
           const int base = of7*maxXThDim;
-          k_Mult2<<<kMaxTh,maxXThDim,0/*Stream?*/>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+          k_Mult2<<<kMaxTh,maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
           cuLastCheck();
         }
         k_Mult2<<<kMaxTh,m%maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
@@ -185,6 +193,13 @@ namespace mfem {
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
+    /*push(k_DtoDT,Coral);
+    for (int i = 0; i < m; i++)   {
+      const int end = external_ldofs[i];
+      rmemcpy::rDtoD(d_ydata+j-i,d_xdata+j,(end-j)*sizeof(double));
+      j = end+1;
+    }
+    pop();*/
     if (m>0){      
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim){
