@@ -146,6 +146,7 @@ ifneq (,$(nv))
 	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
 	CXXFLAGS += -lineinfo
+#	CXXFLAGS += -default-stream per-thread
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
 endif

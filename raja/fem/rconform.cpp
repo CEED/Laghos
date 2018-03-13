@@ -42,7 +42,10 @@ namespace mfem {
     const int m = external_ldofs.Size();
     for (int i = 1; i < m; i++){
       const int diff =(external_ldofs[i]-external_ldofs[i-1]);
-      if (diff>kMaxTh) kMaxTh=diff;
+      if (diff>kMaxTh){
+        kMaxTh=diff;
+        //printf(" %d",kMaxTh);
+      }
     }
     //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
@@ -69,6 +72,15 @@ namespace mfem {
   // * k_Mult
   // ***************************************************************************
 #ifdef __NVCC__
+  static __global__
+  void k_Mult(double *y,const double *x,const int *external_ldofs,const int m){
+    const int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i>=m) return;
+    const int j = (i>0)?external_ldofs[i-1]+1:0;
+    const int end = external_ldofs[i];
+    for(int k=0;k<(end-j);k+=1)
+      y[j+k]=x[j-i+k];
+  }
   static __global__
   void k_Mult2(double *y,const double *x,const int *external_ldofs,
                const int m, const int base){
@@ -100,15 +112,22 @@ namespace mfem {
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
     if (m>0){
-      const int TpB = rconfig::Get().MaxXThreadsDim();
-      assert(kMaxTh<rconfig::Get().MaxXGridSize());
-      for(int of7=0;of7<m/TpB;of7+=1){
-        const int base = of7*TpB;
-        k_Mult2<<<kMaxTh,TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+      const int maxXThDim = rconfig::Get().MaxXThreadsDim();
+      if (m>maxXThDim){
+        const int kTpB=64;
+        printf("\n[k_Mult] m=%d kMaxTh=%d",m,kMaxTh);
+        k_Mult<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
+        cuLastCheck();
+      }else{      
+        assert(kMaxTh<rconfig::Get().MaxXGridSize());
+        for(int of7=0;of7<m/maxXThDim;of7+=1){
+          const int base = of7*maxXThDim;
+          k_Mult2<<<kMaxTh,maxXThDim,0/*Stream?*/>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+          cuLastCheck();
+        }
+        k_Mult2<<<kMaxTh,m%maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
         cuLastCheck();
       }
-      k_Mult2<<<kMaxTh,m%TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
-      cuLastCheck();
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
@@ -126,7 +145,17 @@ namespace mfem {
   // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
-#ifdef __NVCC__ 
+#ifdef __NVCC__
+  static __global__
+  void k_MultTranspose(double *y,const double *x,const int *external_ldofs,const int m){
+    const int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i>=m) return;
+    const int j = (i>0)?external_ldofs[i-1]+1:0;
+    const int end = external_ldofs[i];
+    for(int k=0;k<(end-j);k+=1)
+      y[j-i+k]=x[j+k];
+  }
+  
   static __global__
   void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,
                         const int m, const int base){
@@ -156,16 +185,23 @@ namespace mfem {
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
-    if (m>0){
-      const int TpB = rconfig::Get().MaxXThreadsDim();
-      assert(kMaxTh<rconfig::Get().MaxXGridSize());
-      for(int of7=0;of7<m/TpB;of7+=1){
-        const int base = of7*TpB;
-        k_MultTranspose2<<<kMaxTh,TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+    if (m>0){      
+      const int maxXThDim = rconfig::Get().MaxXThreadsDim();
+      if (m>maxXThDim){
+        const int kTpB=64;
+        k_MultTranspose<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
+        cuLastCheck();
+      }else{
+        const int TpB = rconfig::Get().MaxXThreadsDim();
+        assert(kMaxTh<rconfig::Get().MaxXGridSize());
+        for(int of7=0;of7<m/maxXThDim;of7+=1){
+        const int base = of7*maxXThDim;
+        k_MultTranspose2<<<kMaxTh,maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
         cuLastCheck();
       }
-      k_MultTranspose2<<<kMaxTh,m%TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
+      k_MultTranspose2<<<kMaxTh,m%maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
       cuLastCheck();
+      }
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));

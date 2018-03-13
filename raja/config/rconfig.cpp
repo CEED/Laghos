@@ -167,7 +167,8 @@ namespace mfem {
     struct cudaDeviceProp properties;
     cudaGetDeviceProperties(&properties, device);
 #if defined(LAGHOS_DEBUG)
-    printDevProp(properties);
+    if (Root()) 
+      printDevProp(properties);
 #endif
     maxXGridSize=properties.maxGridSize[0];
     maxXThreadsDim=properties.maxThreadsDim[0];
