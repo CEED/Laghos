@@ -119,7 +119,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      e_quad()
 {
   push(Wheat);
-
+  //printf("\n\033[31m[orders] %d %d\033[m\n",h1_fes.GetOrder(0),l2_fes.GetOrder(0));
+  
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;

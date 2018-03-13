@@ -537,7 +537,7 @@ void rForceMult(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call0(NOT_USED,id,grid,blck,
+  call0(rForceMult,id,grid,blck,
         nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 #else
   if (NUM_DIM==2)
@@ -628,7 +628,7 @@ void rForceMultTranspose(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call0(NOT_USED,id,grid,blck,
+  call0(rForceMultTranspose,id,grid,blck,
         nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 #else
   if (NUM_DIM==2)

@@ -24,7 +24,7 @@ RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 -DNDEBUG #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 #-DNDEBUG #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################
@@ -143,8 +143,9 @@ endif
 ############################
 ifneq (,$(nv))
 	CXX = nvcc
-	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) -rdc=true
+	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
+#	CXXFLAGS += -lineinfo
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
 endif
@@ -192,11 +193,11 @@ nvk gpuKT:;$(MAKE) nv=1 t=1 all
 # make all targets #
 ####################
 tgts:
-	make cln && make cpuL && mv laghos laghos.cpuL
-	make cln && make cpuLT && mv laghos laghos.cpuLT
-	make cln && make raja && mv laghos laghos.raja
 	make cln && make gpuLT && mv laghos laghos.gpuLT
 	make cln && make gpuKT && mv laghos laghos.gpuKT
+#	make cln && make cpuL && mv laghos laghos.cpuL
+#	make cln && make cpuLT && mv laghos laghos.cpuLT
+#	make cln && make raja && mv laghos laghos.raja
 
 #######################
 # TPL INCLUDES & LIBS #

@@ -279,9 +279,9 @@ void rIniGeom(const int DIM,
   const unsigned int id = (DIM<<4)|(dofs1D-2);
   assert(LOG2(DIM)<=4);
   assert(LOG2(dofs1D-2)<=4);
-  assert(quad1D==2*(dofs1D-1));
   if (quad1D!=2*(dofs1D-1))
-    return exit(printf("\033[31;1m[rIniGeom] order ERROR: -ok=p -ot=p-1, p in [1,16]\033[m\n"));
+    return exit(printf("\033[31;1m[rIniGeom] order ERROR: -ok=p -ot=p-1, p in [1,16] (%d,%d)\033[m\n",quad1D,dofs1D));
+  assert(quad1D==2*(dofs1D-1));
   static std::unordered_map<unsigned int, fIniGeom> call = {
     // 2D
     {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},

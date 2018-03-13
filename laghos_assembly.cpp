@@ -65,6 +65,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    pop();
 }
 
+// *****************************************************************************
 RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
                                    const IntegrationRule &integ_rule_,
                                    QuadratureData *quad_data_)
@@ -79,7 +80,6 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
 
 // *****************************************************************************
 RajaMassOperator::~RajaMassOperator(){
-  //delete massOperator;
 }
 
 // *****************************************************************************

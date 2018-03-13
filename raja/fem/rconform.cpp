@@ -43,6 +43,7 @@ namespace mfem {
       const int diff =(external_ldofs[i]-external_ldofs[i-1]);
       if (diff>kMaxTh) kMaxTh=diff;
     }
+    //printf("\n[RajaConformingProlongationOperator] kMaxTh=%d",kMaxTh);
     //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
@@ -61,7 +62,7 @@ namespace mfem {
   static __global__
   void k_Mult2(double *y,const double *x,const int *external_ldofs,const int N){
     const int i = blockIdx.x;
-    if (i>=N)return;
+    if (i>=N) return;
     const int j=(i>0)?external_ldofs[i-1]+1:0;
     const int end = external_ldofs[i];
     const int k = threadIdx.x;

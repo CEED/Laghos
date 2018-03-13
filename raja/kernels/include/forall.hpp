@@ -59,21 +59,6 @@ const int CUDA_BLOCK_SIZE = 256;
 #define sync __syncthreads();
 const int CUDA_BLOCK_SIZE = 256;
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
-  /* void *args[] = {
-    (void*)&N,
-    (void*)&c0,
-    (void*)&v0,
-  };
-  cuLaunchKernel(vector_op_eq,
-                 ((N+256-1)/256),1,1,
-                 256,1,1,
-                 0,0,//sharedMemBytes, hStream
-                 args);*/
-/*CUresult cuLaunchKernel(CUfunction f,
-                          unsigned int  gridDimX, unsigned int  gridDimY, unsigned int  gridDimZ,
-                          unsigned int  blockDimX, unsigned int  blockDimY, unsigned int  blockDimZ,
-                          unsigned int  sharedMemBytes, CUstream hStream,
-                          void** kernelParams, void** extra );*/
 #define cuLaunchKer(name,args) {                                      \
     cuLaunchKernel(name ## 0,                                         \
                    ((end+256-1)/256),1,1,                             \
@@ -82,6 +67,9 @@ const int CUDA_BLOCK_SIZE = 256;
                    args);                                             \
       }
 #define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
+#define call0p(name,id,grid,blck,...)                               \
+  printf("\033[32;1m[call0] name=%s grid:%d, block:%d\033[m\n",#name,grid,blck); \
+  call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define call0(name,id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 

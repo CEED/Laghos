@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    bool dot = false;
    bool mult = false;
+   bool lambda = false; // lambda test on one kernel only
    bool cuda = false;
    bool dcg = false;
    bool uvm = false;
@@ -152,6 +153,8 @@ int main(int argc, char *argv[])
                   "Enable or disable DOT test kernels.");
    args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",                  
                   "Enable or disable MULT test kernels.");
+   args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",                  
+                  "Enable or disable LAMBDA test kernels.");
    // RAJA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels if you are using RAJA.");
@@ -247,6 +250,7 @@ int main(int argc, char *argv[])
    const int pmesh_NE=pmesh->GetNE();
    MPI_Allreduce(&pmesh_NE,&global_pmesh_NE,1,MPI_INT,MPI_MIN,pmesh->GetComm());
    if (global_pmesh_NE==0) return printf("[Laghos] ERROR: pmesh->GetNE()==0!");
+   else printf("\033[32m[laghos] pmesh->GetNE()=%d\033[m\n",global_pmesh_NE);
    assert(pmesh->GetNE()>0);
 #endif
 
@@ -255,7 +259,7 @@ int main(int argc, char *argv[])
 
    // **************************************************************************
    // Mult RAP MPI test
-   if (mult) return multTest(pmesh,order_v,max_tsteps)?0:1;   
+   if (mult) return multTest(pmesh,order_v,max_tsteps)?0:1;
    
    // **************************************************************************
    //cuProfilerStart();
@@ -344,7 +348,11 @@ int main(int argc, char *argv[])
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
    d_x_gf = x_gf;
-  
+   
+   // **************************************************************************
+   // Lambda launch test
+   if (lambda) return hydrodynamics::lambdaTest(pmesh,order_v,max_tsteps)?0:1;   
+
    // Initialize the velocity.
    //dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
