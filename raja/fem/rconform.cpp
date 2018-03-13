@@ -56,12 +56,23 @@ namespace mfem {
   }
 
   // ***************************************************************************
+  // * CUDA Error Status Check
+  // ***************************************************************************
+  void cuLastCheck(){
+    cudaError_t cudaStatus = cudaGetLastError();
+    if (cudaStatus != cudaSuccess) 
+      exit(fprintf(stderr, "\n\t\033[31;1m[cuLastCheck] failed: %s\033[m\n",
+                   cudaGetErrorString(cudaStatus)));
+  }
+
+  // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
 #ifdef __NVCC__
   static __global__
-  void k_Mult2(double *y,const double *x,const int *external_ldofs,const int m){
-    const int i = threadIdx.x;
+  void k_Mult2(double *y,const double *x,const int *external_ldofs,
+               const int m, const int base){
+    const int i = base+threadIdx.x;
     const int j = (i>0)?external_ldofs[i-1]+1:0;
     const int end = external_ldofs[i];
     const int k = blockIdx.x;
@@ -89,13 +100,15 @@ namespace mfem {
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
     if (m>0){
-      assert(m<rconfig::Get().MaxXThreadsDim());
+      const int TpB = rconfig::Get().MaxXThreadsDim();
       assert(kMaxTh<rconfig::Get().MaxXGridSize());
-      k_Mult2<<<kMaxTh,m>>>(d_ydata,d_xdata,d_external_ldofs,m);
-      cudaError_t cudaStatus = cudaGetLastError();
-      if (cudaStatus != cudaSuccess) 
-        exit(fprintf(stderr, "\n\t\033[31;1m[k_Mult2] failed: %s\033[m\n",
-                     cudaGetErrorString(cudaStatus)));
+      for(int of7=0;of7<m/TpB;of7+=1){
+        const int base = of7*TpB;
+        k_Mult2<<<kMaxTh,TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+        cuLastCheck();
+      }
+      k_Mult2<<<kMaxTh,m%TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
+      cuLastCheck();
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
@@ -115,9 +128,10 @@ namespace mfem {
   // ***************************************************************************
 #ifdef __NVCC__ 
   static __global__
-  void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,const int m){
-    const int i = threadIdx.x;
-    const int j=(i>0)?external_ldofs[i-1]+1:0;
+  void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,
+                        const int m, const int base){
+    const int i = base+threadIdx.x;
+    const int j = (i>0)?external_ldofs[i-1]+1:0;
     const int end = external_ldofs[i];
     const int k = blockIdx.x;
     if (k>=(end-j)) return;
@@ -143,13 +157,15 @@ namespace mfem {
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
     if (m>0){
-      assert(m<rconfig::Get().MaxXThreadsDim());
+      const int TpB = rconfig::Get().MaxXThreadsDim();
       assert(kMaxTh<rconfig::Get().MaxXGridSize());
-      k_MultTranspose2<<<kMaxTh,m>>>(d_ydata,d_xdata,d_external_ldofs,m);
-      cudaError_t cudaStatus = cudaGetLastError();
-      if (cudaStatus != cudaSuccess) 
-        exit(fprintf(stderr, "\n\t\033[31;1m[k_MultTranspose2] failed: %s\033[m\n",
-                     cudaGetErrorString(cudaStatus)));
+      for(int of7=0;of7<m/TpB;of7+=1){
+        const int base = of7*TpB;
+        k_MultTranspose2<<<kMaxTh,TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
+        cuLastCheck();
+      }
+      k_MultTranspose2<<<kMaxTh,m%TpB>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
+      cuLastCheck();
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));

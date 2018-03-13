@@ -142,6 +142,11 @@ namespace mfem {
       Pm1AP.MultTranspose(x, y);
       pop();
     }
+    // We MUST sync after to make sure every kernel has completed
+    // or play with the -sync flag to enforce it with the push/pop
+#ifdef __NVCC__
+    cudaDeviceSynchronize();
+#endif
     gettimeofday(&et, NULL);
     const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+(et.tv_usec - st.tv_usec)/1.0e3);
     if (rconfig::Get().Root())

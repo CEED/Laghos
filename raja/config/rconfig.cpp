@@ -51,7 +51,7 @@ namespace mfem {
 
   // ***************************************************************************
   // Print device properties
-  /*void printDevProp(cudaDeviceProp devProp){
+  void printDevProp(cudaDeviceProp devProp){
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);
     printf("Name:                          %s\n",  devProp.name);
@@ -71,7 +71,7 @@ namespace mfem {
     printf("Concurrent copy and execution: %s\n",  (devProp.deviceOverlap ? "Yes" : "No"));
     printf("Number of multiprocessors:     %d\n",  devProp.multiProcessorCount);
     printf("Kernel execution timeout:      %s\n",  (devProp.kernelExecTimeoutEnabled ? "Yes" : "No"));
-    }*/
+    }
   
   // ***************************************************************************
   // *   Setup
@@ -166,7 +166,9 @@ namespace mfem {
     // Get the properties of the device
     struct cudaDeviceProp properties;
     cudaGetDeviceProperties(&properties, device);
-    //printDevProp(properties);
+#if defined(LAGHOS_DEBUG)
+    printDevProp(properties);
+#endif
     maxXGridSize=properties.maxGridSize[0];
     maxXThreadsDim=properties.maxThreadsDim[0];
     //printf("\033[32m[laghos] maxXGridSize: %d\033[m\n", maxXGridSize);
