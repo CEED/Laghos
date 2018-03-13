@@ -145,7 +145,7 @@ ifneq (,$(nv))
 	CXX = nvcc
 	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-#	CXXFLAGS += -lineinfo
+	CXXFLAGS += -lineinfo
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
 endif

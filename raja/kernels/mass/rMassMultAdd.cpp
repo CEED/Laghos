@@ -231,7 +231,7 @@ void rMassMultAdd(const int DIM,
                   double* __restrict y) {
   push(Lime);
 #ifndef __LAMBDA__
-  const int blck = 64;
+  const int blck = 256;
   const int grid = (numElements+blck-1)/blck;
 #endif
 #ifdef __TEMPLATES__
