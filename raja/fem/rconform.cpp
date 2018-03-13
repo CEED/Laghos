@@ -35,7 +35,8 @@ namespace mfem {
     external_ldofs.Sort();
 #ifdef __NVCC__
     const int HmW=Height()-Width();
-    if (HmW>0) d_external_ldofs=external_ldofs;
+    if (HmW>0)
+      d_external_ldofs=external_ldofs;
 #endif
     assert(external_ldofs.Size() == Height()-Width());
     const int m = external_ldofs.Size();
@@ -43,7 +44,6 @@ namespace mfem {
       const int diff =(external_ldofs[i]-external_ldofs[i-1]);
       if (diff>kMaxTh) kMaxTh=diff;
     }
-    //printf("\n[RajaConformingProlongationOperator] kMaxTh=%d",kMaxTh);
     //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
@@ -60,12 +60,11 @@ namespace mfem {
   // ***************************************************************************
 #ifdef __NVCC__
   static __global__
-  void k_Mult2(double *y,const double *x,const int *external_ldofs,const int N){
-    const int i = blockIdx.x;
-    if (i>=N) return;
-    const int j=(i>0)?external_ldofs[i-1]+1:0;
+  void k_Mult2(double *y,const double *x,const int *external_ldofs,const int m){
+    const int i = threadIdx.x;
+    const int j = (i>0)?external_ldofs[i-1]+1:0;
     const int end = external_ldofs[i];
-    const int k = threadIdx.x;
+    const int k = blockIdx.x;
     if (k>=(end-j)) return;
     y[j+k]=x[j-i+k];
   }
@@ -88,21 +87,17 @@ namespace mfem {
     int j = 0;
     double *d_ydata = y.GetData(); 
     const int m = external_ldofs.Size();
-#ifndef __NVCC__
-    for (int i = 0; i < m; i++){
-      const int end = external_ldofs[i];
-      std::copy(d_xdata+j-i, d_xdata+end-i, d_ydata+j);
-      j = end+1;
-    }
-#else
+#ifdef __NVCC__
     if (m>0){
-      k_Mult2<<<m,kMaxTh>>>(d_ydata,d_xdata,d_external_ldofs,m);
+      assert(m<rconfig::Get().MaxXThreadsDim());
+      assert(kMaxTh<rconfig::Get().MaxXGridSize());
+      k_Mult2<<<kMaxTh,m>>>(d_ydata,d_xdata,d_external_ldofs,m);
+      cudaError_t cudaStatus = cudaGetLastError();
+      if (cudaStatus != cudaSuccess) 
+        exit(fprintf(stderr, "\n\t\033[31;1m[k_Mult2] failed: %s\033[m\n",
+                     cudaGetErrorString(cudaStatus)));
       j = external_ldofs[m-1]+1;
     }
-#endif
-#ifndef __NVCC__
-    std::copy(d_xdata+j-m, d_xdata+Width(), d_ydata+j);
-#else
     rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
 #endif
     pop();
@@ -118,14 +113,13 @@ namespace mfem {
   // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
-#ifdef __NVCC__
+#ifdef __NVCC__ 
   static __global__
-  void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,const int N){
-    const int i = blockIdx.x;
-    if (i>=N)return;
+  void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,const int m){
+    const int i = threadIdx.x;
     const int j=(i>0)?external_ldofs[i-1]+1:0;
     const int end = external_ldofs[i];
-    const int k = threadIdx.x;
+    const int k = blockIdx.x;
     if (k>=(end-j)) return;
     y[j-i+k]=x[j+k];
   }
@@ -147,21 +141,17 @@ namespace mfem {
     int j = 0;
     double *d_ydata = y.GetData();
     const int m = external_ldofs.Size();
-#ifndef __NVCC__
-    for (int i = 0; i < m; i++){
-      const int end = external_ldofs[i];
-      std::copy(d_xdata+j, d_xdata+end, d_ydata+j-i);
-      j = end+1;
-    }
-#else
+#ifdef __NVCC__
     if (m>0){
-      k_MultTranspose2<<<m,kMaxTh>>>(d_ydata,d_xdata,d_external_ldofs,m);
+      assert(m<rconfig::Get().MaxXThreadsDim());
+      assert(kMaxTh<rconfig::Get().MaxXGridSize());
+      k_MultTranspose2<<<kMaxTh,m>>>(d_ydata,d_xdata,d_external_ldofs,m);
+      cudaError_t cudaStatus = cudaGetLastError();
+      if (cudaStatus != cudaSuccess) 
+        exit(fprintf(stderr, "\n\t\033[31;1m[k_MultTranspose2] failed: %s\033[m\n",
+                     cudaGetErrorString(cudaStatus)));
       j = external_ldofs[m-1]+1;
     }
-#endif
-#ifndef __NVCC__
-    std::copy(d_xdata+j, d_xdata+Height(), d_ydata+j-m);
-#else
     rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));
 #endif
     pop();
