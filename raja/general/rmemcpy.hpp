@@ -20,10 +20,10 @@ namespace mfem {
 	
   // ***************************************************************************
   struct rmemcpy{
-    static void* rHtoH(void*, const void*, std::size_t);
-    static void* rHtoD(void*, const void*, std::size_t);
-    static void* rDtoH(void*, const void*, std::size_t);
-    static void* rDtoD(void*, const void*, std::size_t);
+    static void* rHtoH(void*, const void*, std::size_t, const bool =false);
+    static void* rHtoD(void*, const void*, std::size_t, const bool =false);
+    static void* rDtoH(void*, const void*, std::size_t, const bool =false);
+    static void* rDtoD(void*, const void*, std::size_t, const bool =false);
   };
   
 } // mfem

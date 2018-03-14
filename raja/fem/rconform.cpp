@@ -39,14 +39,18 @@ namespace mfem {
       d_external_ldofs=external_ldofs;
 #endif
     assert(external_ldofs.Size() == Height()-Width());
+    // *************************************************************************
     const int m = external_ldofs.Size();
-    for (int i = 1; i < m; i++){
-      const int diff =(external_ldofs[i]-external_ldofs[i-1]);
-      if (diff>kMaxTh){
-        kMaxTh=diff;
-        //printf(" %d",kMaxTh);
-      }
+    // printf("\n[RajaConformingProlongationOperator] m=%d\n",m);fflush(stdout);
+    int j = 0;
+    for (int i = 0; i < m; i++) {
+      const int end = external_ldofs[i];
+      const int size = end-j;
+      if (size>kMaxTh) kMaxTh=size;
+      //printf(" %d",size);
+      j = end+1;
     }
+    //printf("\n[RajaConformingProlongationOperator] kMaxTh=%d",kMaxTh);fflush(stdout);
     //gc->PrintInfo(); 
     //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
   }
@@ -111,22 +115,26 @@ namespace mfem {
     double *d_ydata = y.GetData(); 
     const int m = external_ldofs.Size();
 #ifdef __NVCC__
-    /*push(k_DtoD,Coral);
+    /* // Test with async rDtoD
+    push(k_DtoDAsync,Coral);
     for (int i = 0; i < m; i++){
       const int end = external_ldofs[i];
-      rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double));
+      //printf("\n[k_Mult] rDtoD async size %d",end-j);
+      rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double),true); // async
       j = end+1;
     }
-    pop();
-    */
+    cudaDeviceSynchronize();
+    pop();*/
+    
     if (m>0){
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim){
         const int kTpB=64;
-        printf("\n[k_Mult] m=%d kMaxTh=%d",m,kMaxTh);
+        //printf("\n[k_Mult] m=%d kMaxTh=%d",m,kMaxTh);
         k_Mult<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
         cuLastCheck();
-      }else{      
+      }else{
+        assert((m/maxXThDim)==0);
         assert(kMaxTh<rconfig::Get().MaxXGridSize());
         for(int of7=0;of7<m/maxXThDim;of7+=1){
           const int base = of7*maxXThDim;

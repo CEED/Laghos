@@ -61,13 +61,13 @@ namespace mfem {
     RajaIdOperator(int s = 0) { height = width = s; }
     void Mult(const RajaVector &x, RajaVector &y) const  {
       push(Id=,DarkCyan);
-      //usleep(100);
+      //usleep(1);
       y=x;
       pop();
     }
     void MultTranspose(const RajaVector &x, RajaVector &y) const {
       push(Id=T,DarkCyan);
-      //usleep(100);
+      //usleep(1);
       y=x;
       pop();
     }
@@ -82,23 +82,30 @@ namespace mfem {
   bool multTest(ParMesh *pmesh, const int order, const int max_step){
     struct timeval st, et;
     assert(order>=1);
+    
     const int nb_step = (max_step>0)?max_step:128;
     const int dim = pmesh->Dimension();
+    
     const H1_FECollection fec(order, dim);
     RajaFiniteElementSpace fes(pmesh, &fec, 1);
-    HYPRE_Int glob_size = fes.GlobalTrueVSize();
+    
+    const int lsize = fes.GetVSize();
+    const int ltsize = fes.GetTrueVSize();
+    const HYPRE_Int gsize = fes.GlobalTrueVSize();
+    
     if (rconfig::Get().Root())
-      mfem::out << "Number of global dofs: " << glob_size << std::endl;
-    const int vsize = fes.GetVSize();
+      mfem::out << "Number of global dofs: " << gsize << std::endl;
     if (rconfig::Get().Root())
-      mfem::out << "Number of local dofs: " << vsize << std::endl;
+      mfem::out << "Number of local dofs: " << lsize << std::endl;
+    
     const RajaOperator &prolong = *fes.GetProlongationOperator();
     const RajaOperator &testP  = prolong;
     const RajaOperator &trialP = prolong;
-    const RajaIdOperator Id(vsize);
+    const RajaIdOperator Id(lsize);
+    
     RajaPm1APOperator Pm1AP(testP,Id,trialP);
-    RajaVector x(vsize); x=1.0;
-    RajaVector y(vsize); y=1.0;
+    RajaVector x(ltsize); x=1.0;
+    RajaVector y(lsize);
     
     MPI_Barrier(pmesh->GetComm());
     cudaDeviceSynchronize();
@@ -135,7 +142,7 @@ namespace mfem {
       pop();
       
       push(Wrk,LawnGreen);
-      usleep(1);
+      //usleep(1);
       pop();
       
       push(SkyBlue);
