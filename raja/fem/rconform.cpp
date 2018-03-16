@@ -62,6 +62,7 @@ namespace mfem {
     delete  gc;
   }
 
+#ifdef __NVCC__
   // ***************************************************************************
   // * CUDA Error Status Check
   // ***************************************************************************
@@ -75,7 +76,6 @@ namespace mfem {
   // ***************************************************************************
   // * k_Mult
   // ***************************************************************************
-#ifdef __NVCC__
   static __global__
   void k_Mult(double *y,const double *x,const int *external_ldofs,const int m){
     const int i = blockDim.x * blockIdx.x + threadIdx.x;

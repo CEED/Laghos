@@ -108,8 +108,10 @@ namespace mfem {
     RajaVector y(lsize);
     
     MPI_Barrier(pmesh->GetComm());
+#ifdef __NVCC__
     cudaDeviceSynchronize();
-    
+#endif
+
     // Do one RAP Mult/MultTranspose to set MPI's buffers
     Pm1AP.Mult(x,y);
     Pm1AP.MultTranspose(x,y);
@@ -130,8 +132,10 @@ namespace mfem {
 #endif
     
     MPI_Barrier(pmesh->GetComm());
+#ifdef __NVCC__
     cudaDeviceSynchronize();
-    
+#endif
+
     gettimeofday(&st, NULL);
     for(int i=0;i<nb_step;i++){
 #ifdef __NVCC__

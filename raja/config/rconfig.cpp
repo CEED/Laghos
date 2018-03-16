@@ -50,8 +50,9 @@ namespace mfem {
   }
 
   // ***************************************************************************
+#ifdef __NVCC__
   // Print device properties
-  void printDevProp(cudaDeviceProp devProp){
+  static void printDevProp(cudaDeviceProp devProp){
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);
     printf("Name:                          %s\n",  devProp.name);
@@ -71,8 +72,9 @@ namespace mfem {
     printf("Concurrent copy and execution: %s\n",  (devProp.deviceOverlap ? "Yes" : "No"));
     printf("Number of multiprocessors:     %d\n",  devProp.multiProcessorCount);
     printf("Kernel execution timeout:      %s\n",  (devProp.kernelExecTimeoutEnabled ? "Yes" : "No"));
-    }
-  
+  }
+#endif
+
   // ***************************************************************************
   // *   Setup
   // ***************************************************************************
@@ -134,7 +136,7 @@ namespace mfem {
 #if defined(LAGHOS_DEBUG)
     if (Root())
       printf("\033[32m[laghos] \033[31;1mLAGHOS_DEBUG\033[m\n");
-#endif // __NVVP__
+#endif
     
     // Check for Enforced Kernel Synchronization
     if (Sync() && Root())
@@ -169,7 +171,7 @@ namespace mfem {
 #if defined(LAGHOS_DEBUG)
     if (Root()) 
       printDevProp(properties);
-#endif
+#endif // LAGHOS_DEBUG
     maxXGridSize=properties.maxGridSize[0];
     maxXThreadsDim=properties.maxThreadsDim[0];
     //printf("\033[32m[laghos] maxXGridSize: %d\033[m\n", maxXGridSize);
@@ -179,7 +181,7 @@ namespace mfem {
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
     hStream=new CUstream;
     cuStreamCreate(hStream, CU_STREAM_DEFAULT);
-#endif
+#endif // __NVCC__
     if (_dot){
       dotTest(rs_levels);
       MPI_Finalize();
