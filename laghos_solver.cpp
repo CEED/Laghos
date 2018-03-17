@@ -465,7 +465,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    *cs_b  = new double[nqp_batch];
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
-   DenseTensor *Jpr_b = new DenseTensor[nqp_batch];
+   DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
