@@ -168,6 +168,17 @@ Laghos v1.0. Alternatively, one can use the latest versions of the MFEM and
 Laghos `master` branches (provided there are no conflicts. See the [MFEM
 building page](http://mfem.org/building/) for additional details.
 
+(Optional) Clone and build GLVis:
+```sh
+~> git clone git@github.com:GLVis/glvis.git ./glvis
+~> cd glvis/
+~/glvis> make
+~/glvis> cd ..
+```
+The easiest way to visualize Laghos results is to have GLVis running in a
+separate terminal. Then the `-vis` option in Laghos will stream results directly
+to the GLVis socket.
+
 Build Laghos
 ```sh
 ~> cd Laghos/
