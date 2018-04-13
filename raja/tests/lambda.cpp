@@ -23,22 +23,36 @@ namespace mfem {
 namespace hydrodynamics {
 
   // ***************************************************************************
-  bool lambdaTest(ParMesh *pmesh, const int order, const int max_step){
+  bool lambdaTest(ParMesh *pmesh, const int order_v, const int max_step){
+    const int order_e = order_v-1;
     struct timeval st, et;
     const int nb_step = (max_step>0)?max_step:100;
-    assert(order>0);
+    assert(order_v>0);
+    assert(order_e>0);
     const int dim = pmesh->Dimension();
-    const L2_FECollection L2FEC(order-1, dim, BasisType::Positive);
-    const H1_FECollection H1FEC(order, dim);
-    const RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+    const L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
+    const H1_FECollection H1FEC(order_v, dim);
+    RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
     RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
     RajaFiniteElementSpace H1compFESpace(H1FESpace.GetParMesh(), H1FESpace.FEColl(),1);
+    const int lsize = H1FESpace.GetVSize();
+    const int gsize = H1FESpace.GlobalTrueVSize();
     const int nzones = H1FESpace.GetMesh()->GetNE();
+    if (rconfig::Get().Root())
+      mfem::out << "Number of global dofs: " << gsize << std::endl;
+    if (rconfig::Get().Root())
+      mfem::out << "Number of local dofs: " << lsize << std::endl;
     const IntegrationRule &integ_rule=IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
                                                   3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
     QuadratureData quad_data(dim, nzones, integ_rule.GetNPoints());
-    RajaVector B(H1compFESpace.GetTrueVSize());
-    RajaVector X(H1compFESpace.GetTrueVSize());
+    // RajaBilinearForm::Mult
+    const int vlsize = nzones * H1compFESpace.GetLocalDofs() * H1compFESpace.GetVDim();
+    RajaVector B(vlsize);
+    RajaVector X(vlsize);
+    /*printf("\n\033[31m[lambda] localX size = %d, GetNE=%d, GetLocalDofs=%d, GetVDim=%d\033[m",
+         X.Size(),nzones,
+         H1compFESpace.GetLocalDofs(),
+         H1compFESpace.GetVDim());*/
     quad_data.dqMaps = RajaDofQuadMaps::Get(H1FESpace,integ_rule);
     quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule);
     RajaGridFunction d_rho(L2FESpace);
@@ -71,7 +85,8 @@ namespace hydrodynamics {
     rconfig::Get().Nvvp(true);
     // *************************************************************************
     gettimeofday(&st, NULL);
-    B=1.0;    
+    B=1.0;
+    X=0.0;
     for(int i=0;i<nb_step;i++){
       //massOperator->Mult(B, X);
       massInteg.MultAdd(B, X);

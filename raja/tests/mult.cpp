@@ -81,11 +81,10 @@ namespace mfem {
   // ***************************************************************************
   bool multTest(ParMesh *pmesh, const int order, const int max_step){
     struct timeval st, et;
+    const int nb_step = (max_step>0)?max_step:100;
     assert(order>=1);
     
-    const int nb_step = (max_step>0)?max_step:128;
     const int dim = pmesh->Dimension();
-    
     const H1_FECollection fec(order, dim);
     RajaFiniteElementSpace fes(pmesh, &fec, 1);
     

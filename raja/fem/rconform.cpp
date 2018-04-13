@@ -111,20 +111,20 @@ namespace mfem {
     pop();
     
     push(d_Mult_Work,Coral);
-    int j = 0;
     double *d_ydata = y.GetData(); 
-    const int m = external_ldofs.Size();
 #ifdef __NVCC__
+    int j = 0;
+    const int m = external_ldofs.Size();
     /* // Test with async rDtoD
-    push(k_DtoDAsync,Coral);
-    for (int i = 0; i < m; i++){
-      const int end = external_ldofs[i];
-      //printf("\n[k_Mult] rDtoD async size %d",end-j);
-      rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double),true); // async
-      j = end+1;
-    }
-    cudaDeviceSynchronize();
-    pop();*/
+       push(k_DtoDAsync,Coral);
+       for (int i = 0; i < m; i++){
+       const int end = external_ldofs[i];
+       //printf("\n[k_Mult] rDtoD async size %d",end-j);
+       rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double),true); // async
+       j = end+1;
+       }
+       cudaDeviceSynchronize();
+       pop();*/
     
     if (m>0){
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
@@ -197,10 +197,10 @@ namespace mfem {
     pop();
     
     push(d_MultTranspose_Work,Coral);
-    int j = 0;
     double *d_ydata = y.GetData();
-    const int m = external_ldofs.Size();
 #ifdef __NVCC__
+    int j = 0;
+    const int m = external_ldofs.Size();
     /*push(k_DtoDT,Coral);
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];

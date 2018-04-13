@@ -19,12 +19,12 @@
 #########
 CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/mfem-raja
+MFEM_DIR ?= $(HOME)/home/mfem/mfem-master
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-D__NVVP__ #-DNDEBUG #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################
@@ -125,7 +125,6 @@ CXXFLAGS += $(CXXEXTRA)
 #############
 #CXXFLAGS += -g -O1 -fno-inline -fsanitize=address -fsanitize=undefined
 #ASAN_LIB = -lasan -lubsan
-#-fsanitize=undefined -fsanitize=address -fno-omit-frame-pointer
 
 ###############################
 # RAJA compilation: make rj=1 #
