@@ -310,7 +310,7 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - A serial version in the [serial](./serial) directory.
-- [GPU version](https://github.com/dmed256/Laghos/tree/occa-dev) based on
+- [GPU version](https://github.com/CEED/Laghos/tree/occa-dev) based on
   [OCCA](http://libocca.org/).
 - A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
   [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
