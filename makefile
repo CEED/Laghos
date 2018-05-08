@@ -143,6 +143,7 @@ endif
 ifneq (,$(nv))
 	CXX = nvcc
 	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
+	CXXFLAGS += -Xptxas=-v # -maxrregcount=32
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
 	CXXFLAGS += -lineinfo
 #	CXXFLAGS += -default-stream per-thread

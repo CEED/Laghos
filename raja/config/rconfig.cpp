@@ -51,7 +51,7 @@ namespace mfem {
 
   // ***************************************************************************
 #ifdef __NVCC__
-  // Print device properties
+  __attribute__((unused))
   static void printDevProp(cudaDeviceProp devProp){
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);

@@ -104,6 +104,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data_is_current(false),
      VMassPA(H1compFESpace, integ_rule, &quad_data),
      EMassPA(L2FESpace, integ_rule, &quad_data),
+     VMassPA_prec(H1FESpace),
      ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data),
      //locCG(),
      CG_VMass(H1FESpace.GetParMesh()->GetComm()),
@@ -166,6 +167,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    VMassPA.Setup();
    EMassPA.Setup();
    
+   {
+      // Setup the preconditioner of the velocity mass operator.
+      //Vector d;
+      //#warning ComputeDiagonal
+      //(dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
+      //VMassPA_prec.SetDiagonal(d);
+   }
+   
    CG_VMass.SetOperator(VMassPA);
    CG_VMass.SetRelTol(cg_rel_tol);
    CG_VMass.SetAbsTol(0.0);
@@ -223,7 +232,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    timer.sw_force.Start();
    ForcePA.Mult(one, rhs);   
    timer.sw_force.Stop();
-   timer.dof_tstep += H1FESpace.GlobalTrueVSize();
    rhs.Neg();
 
    // Partial assembly solve for each velocity component.
@@ -252,8 +260,8 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      timer.sw_cgH1.Start();
      CG_VMass.Mult(B, X);
      timer.sw_cgH1.Stop();
-     timer.H1dof_iter += CG_VMass.GetNumIterations() *
-       H1compFESpace.GlobalTrueVSize();
+     timer.H1cg_iter += CG_VMass.GetNumIterations();
+     //printf("\n[H1cg_iter] %d",timer.H1cg_iter);
      H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
    
@@ -274,7 +282,6 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      timer.sw_force.Start();
      ForcePA.MultTranspose(v, e_rhs);
      timer.sw_force.Stop();
-     timer.dof_tstep += L2FESpace.GlobalTrueVSize();
    }
 
    if (e_source) e_rhs += *e_source;
@@ -283,7 +290,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
      timer.sw_cgL2.Start();
      CG_EMass.Mult(e_rhs, de);
      timer.sw_cgL2.Stop();
-     timer.L2dof_iter += CG_EMass.GetNumIterations() * L2FESpace.TrueVSize();
+     timer.L2cg_iter += CG_EMass.GetNumIterations();
    }
    delete e_source;
  
@@ -342,34 +349,38 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
-   double mydata[2], alldata[2];
-   mydata[0] = timer.L2dof_iter;
+   HYPRE_Int mydata[2], alldata[2];
+   mydata[0] = timer.L2cg_iter;
    mydata[1] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 2, MPI_DOUBLE, MPI_SUM, 0, H1FESpace.GetComm());
+   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0, H1FESpace.GetComm());
 
    if (IamRoot)
    {
+      const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
+                      L2gsize = L2FESpace.GlobalTrueVSize();
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
-      cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * timer.H1dof_iter / rt_max[0] << endl;
+      cout << "CG (H1) rate (megadofs="<<H1gsize<<" x cg_iterations="<<timer.H1cg_iter<<" / second): "
+           << 1e-6 * H1gsize * timer.H1cg_iter / rt_max[0] << endl;
       cout << endl;
       cout << "CG (L2) total time: " << rt_max[1] << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / rt_max[1] << endl;
+           << 1e-6 * L2gsize * timer.L2cg_iter/*alldata[0]*/ / rt_max[1] << endl;
       cout << endl;
+      // The Force operator is applied twice per time step, on the H1 and the L2
+      // vectors, respectively.
       cout << "Forces total time: " << rt_max[2] << endl;
       cout << "Forces rate (megadofs x timesteps / second): "
-           << 1e-6 * timer.dof_tstep / rt_max[2] << endl;
+           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[2] << endl;
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << 1e-6 * alldata[1] / rt_max[3] << endl;
+           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
-           << 1e-6 * H1FESpace.GlobalTrueVSize() * steps / rt_max[4] << endl;
+           << 1e-6 * H1gsize * steps / rt_max[4] << endl;
    }
 }
 
@@ -453,7 +464,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    quad_data_is_current = true;
 
    timer.sw_qdata.Stop();
-   timer.quad_tstep += nzones * nqp;
+   timer.quad_tstep += nzones;
    pop();
 }
 

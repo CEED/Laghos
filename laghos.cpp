@@ -374,7 +374,6 @@ int main(int argc, char *argv[])
    rho.ProjectGridFunction(l2_rho);
    RajaGridFunction d_rho(L2FESpace);
    d_rho = rho;
-
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -390,7 +389,19 @@ int main(int argc, char *argv[])
    d_e_gf = e_gf;
 
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+   // gamma values are projected on a function that stays constant on the moving
+   // mesh.
+   /*L2_FECollection mat_fec(0, pmesh->Dimension());
+   RajaFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   ParGridFunction mat_gf(&mat_fes);
+   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   mat_gf.ProjectCoefficient(mat_coeff);
+   GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
+   RajaGridFunction d_mat_gf_coeff(mat_fes);
+   d_mat_gf_coeff=mat_gf_coeff;*/
    
+   // Additional details, depending on the problem.
    int source = 0; bool visc=false;
    switch (problem)
    {

@@ -122,6 +122,8 @@ public:
    // of velocity, we only work with one component at a time.
    void Mult(const RajaVector &x, RajaVector &y) const;
    void EliminateRHS(RajaVector &b);
+   void ComputeDiagonal2D(Vector &diag) const;
+   void ComputeDiagonal3D(Vector &diag) const;
 };
 
 // Performs partial assembly, which corresponds to (and replaces) the use of the
@@ -145,6 +147,29 @@ public:
    void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
    void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
   ~RajaForceOperator();
+};
+
+// Scales by the inverse diagonal of the MassPAOperator.
+class DiagonalSolver : public Solver{
+private:
+  Vector diag;
+  FiniteElementSpace &FESpace;
+public:
+  DiagonalSolver(FiniteElementSpace &fes): Solver(fes.GetVSize()),
+                                           diag(),
+                                           FESpace(fes) { }
+
+  void SetDiagonal(Vector &d)
+  {
+    const Operator *P = FESpace.GetProlongationMatrix();
+    diag.SetSize(P->Width());
+    P->MultTranspose(d, diag);
+  }
+
+   virtual void Mult(const Vector &x, Vector &y) const   {
+     for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
+   }
+   virtual void SetOperator(const Operator &op) { }
 };
 
 } // namespace hydrodynamics

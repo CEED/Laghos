@@ -56,13 +56,13 @@ struct TimingData
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
    // These accumulate the total processed dofs or quad points:
-   // #dofs  * #(CG iterations) for the CG solves (H1 and L2).
-   // #dofs  * #(RK sub steps) for the Force application and assembly.
+   // #(CG iterations) for the H1 CG solves.
+   // #dofs  * #(CG iterations) for the L2 CG solve.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   long long int H1dof_iter, L2dof_iter, dof_tstep, quad_tstep;
+   int H1cg_iter, L2cg_iter, quad_tstep;
 
    TimingData()
-      : H1dof_iter(0), L2dof_iter(0), dof_tstep(0), quad_tstep(0) {}
+      : H1cg_iter(0), L2cg_iter(0), quad_tstep(0) {}
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -95,6 +95,7 @@ protected:
    // assembled in each time step and then it's used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable RajaMassOperator VMassPA, EMassPA;
+   mutable DiagonalSolver VMassPA_prec;
    mutable RajaForceOperator ForcePA;
 
    // Linear solver for energy.
@@ -110,9 +111,9 @@ protected:
    mutable RajaVector rhs_c;
    mutable RajaVector v_local,e_quad;
 
-   void ComputeMaterialProperties(int nvalues, const double gamma[],
-                                  const double rho[], const double e[],
-                                  double p[], double cs[]) const
+   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
+                                          const double rho[], const double e[],
+                                          double p[], double cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
@@ -120,7 +121,6 @@ protected:
          cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
       }
    }
-public:
 
   void UpdateQuadratureData(const RajaVector &S) const;
 
