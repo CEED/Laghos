@@ -161,6 +161,9 @@ class MassPAOperator : public Operator
 private:
    const int dim, nzones;
 
+   Array<int> *ess_tdofs;
+   mutable GridFunction x_gf, y_gf;
+
    QuadratureData *quad_data;
    FiniteElementSpace &FESpace;
 
