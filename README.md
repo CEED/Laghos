@@ -157,7 +157,7 @@ This build is optional, as MFEM can be build without METIS by specifying
 
 Clone and build the parallel version of MFEM:
 ```sh
-~> git clone git@github.com:mfem/mfem.git ./mfem
+~> git clone https://github.com/CEED/MFEM.git ./mfem
 ~> cd mfem/
 ~/mfem> git checkout laghos-v1.0
 ~/mfem> make parallel -j
@@ -170,7 +170,7 @@ building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
 ```sh
-~> git clone git@github.com:GLVis/glvis.git ./glvis
+~> git clone https://github.com/CEED/GLVis.git ./glvis
 ~> cd glvis/
 ~/glvis> make
 ~/glvis> cd ..
