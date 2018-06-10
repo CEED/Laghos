@@ -164,6 +164,9 @@ int main(int argc, char *argv[])
       }
    }
 
+   // Engine init
+   SharedPtr<Engine> engine(new mfem::raja::Engine(MPI_COMM_WORLD,"cpu"));
+
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit;
@@ -239,6 +242,9 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
+   // set engine
+   pmesh->SetEngine(*engine);
+   
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
