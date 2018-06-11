@@ -122,10 +122,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
 
    // Standard assembly for the velocity mass matrix.
-   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff, &integ_rule);
-   Mv.AddDomainIntegrator(vmi);
-   Mv.Assemble();
-
+   if (!p_assembly)
+   {
+      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff, &integ_rule);
+      Mv.AddDomainIntegrator(vmi);
+      Mv.Assemble();
+   }else{
+      dbg("Skipping VectorMassIntegrator");
+   }
+   
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
    Vector rho_vals(nqp);
@@ -170,13 +175,18 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
-   dbg("before ForceIntegrator");
-   ForceIntegrator *fi = new ForceIntegrator(quad_data);
-   fi->SetIntRule(&integ_rule);
-   Force.AddDomainIntegrator(fi);
-   // Make a dummy assembly to figure out the sparsity.
-   Force.Assemble(0);
-   Force.Finalize(0);
+   // ForceIntegrator assembles element contributions to the global force matrix.
+   // This class is used for the full assembly case; it's not used with partial assembly.
+   if (!p_assembly)
+   {
+      dbg("before ForceIntegrator");
+      ForceIntegrator *fi = new ForceIntegrator(quad_data);
+      fi->SetIntRule(&integ_rule);
+      Force.AddDomainIntegrator(fi);
+      // Make a dummy assembly to figure out the sparsity.
+      Force.Assemble(0);
+      Force.Finalize(0);
+   }
 
    if (p_assembly)
    {
