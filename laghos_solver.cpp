@@ -15,6 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
+#include "backends/raja/config/rdbg.hpp"
+#include "backends/raja/config/rnvvp.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -104,6 +106,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
+   push();
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
@@ -167,6 +170,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
+   dbg("before ForceIntegrator");
    ForceIntegrator *fi = new ForceIntegrator(quad_data);
    fi->SetIntRule(&integ_rule);
    Force.AddDomainIntegrator(fi);
@@ -194,10 +198,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    locCG.SetMaxIter(200);
    locCG.SetPrintLevel(0);
+   pop();
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
+   push();
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -337,10 +343,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    delete e_source;
 
    quad_data_is_current = false;
+   pop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
+   push();
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
@@ -350,16 +358,20 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
+   pop();
    return glob_dt_est;
 }
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
+   push();
    quad_data.dt_est = numeric_limits<double>::infinity();
+   pop();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
+   push();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -380,6 +392,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
       L2FESpace.GetElementDofs(i, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
+   pop();
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
@@ -435,7 +448,8 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
-   if (quad_data_is_current) { return; }
+   push();
+   if (quad_data_is_current) { pop(); return; }
    timer.sw_qdata.Start();
 
    const int nqp = integ_rule.GetNPoints();
@@ -622,6 +636,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    timer.sw_qdata.Stop();
    timer.quad_tstep += nzones;
+   pop();
 }
 
 } // namespace hydrodynamics

@@ -15,6 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_assembly.hpp"
+#include "backends/raja/config/rdbg.hpp"
+#include "backends/raja/config/rnvvp.hpp"
 
 #ifdef MFEM_USE_MPI
 

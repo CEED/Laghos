@@ -52,6 +52,9 @@
 
 
 #include "laghos_solver.hpp"
+#include "backends/raja/config/rdbg.hpp"
+#include "backends/raja/config/rnvvp.hpp"
+
 #include <memory>
 #include <iostream>
 #include <fstream>
@@ -242,6 +245,7 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
+   dbg("Laghos");
    // set engine
    pmesh->SetEngine(*engine);
    
@@ -294,6 +298,7 @@ int main(int argc, char *argv[])
          }
          delete pmesh;
          MPI_Finalize();
+         pop();
          return 3;
    }
 
@@ -377,7 +382,7 @@ int main(int argc, char *argv[])
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc;
+   int source = 0; bool visc = false;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
@@ -580,7 +585,7 @@ int main(int argc, char *argv[])
    delete ode_solver;
    delete pmesh;
    delete mat_gf_coeff;
-
+   pop();
    return 0;
 }
 
