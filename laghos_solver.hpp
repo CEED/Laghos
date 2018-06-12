@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "kForceOperator.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -99,6 +100,7 @@ protected:
 
    // Same as above, but done through partial assembly.
    ForcePAOperator ForcePA;
+   kForceOperator kForce;
 
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
@@ -110,7 +112,9 @@ protected:
    CGSolver locCG;
 
    mutable TimingData timer;
-
+   
+   mutable raja::RajaVector v_local,e_quad;
+   
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -123,6 +127,7 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
+   void rUpdateQuadratureData(const raja::RajaVector &S) const;
 
 public:
    LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,

@@ -326,6 +326,7 @@ int main(int argc, char *argv[])
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
+   dbg("\033[7mBlockVector S");
    BlockVector S(true_offset);
 
    // Define GridFunction objects for the position, velocity and specific
@@ -448,6 +449,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
+   dbg("\033[7mBlockVector S_old");
    BlockVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
