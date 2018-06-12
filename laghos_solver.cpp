@@ -84,7 +84,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  ParGridFunction &rho0,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
-                                                 bool visc, bool pa,
+                                                 bool visc, bool pa, bool engine_,
                                                  double cgt, int cgiter)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
@@ -94,7 +94,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
      source_type(source_type_), cfl(cfl_),
-     use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
+     use_viscosity(visc), p_assembly(pa), engine(engine_), cg_rel_tol(cgt), cg_max_iter(cgiter),
      material_pcf(material_),
      Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
      integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
@@ -197,20 +197,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       evaluator = new FastEvaluator(H1FESpace);
 
       // init
-      quad_data.dqMaps = raja::RajaDofQuadMaps::Get(H1FESpace,integ_rule);
-      quad_data.geom =
-         raja::RajaGeometry::Get(*H1FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>(),
-                                 integ_rule);
-      quad_data.rJac0inv = quad_data.geom->invJ;
+      //quad_data.dqMaps = raja::RajaDofQuadMaps::Get(H1FESpace,integ_rule);
+      //quad_data.geom = raja::RajaGeometry::Get(*H1FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>(), integ_rule);
+      //quad_data.rJac0inv = quad_data.geom->invJ;
 
       // Setup the preconditioner of the velocity mass operator.
       Vector d;
       (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
       VMassPA_prec.SetDiagonal(d);
    }
-
-   // fill in RajaDofQuadMaps
-   kForce.Setup();
    
    locCG.SetOperator(locEMassPA);
    locCG.iterative_mode = false;

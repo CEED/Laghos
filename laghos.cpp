@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
+   bool engine = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
@@ -124,6 +125,8 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
+   args.AddOption(&engine, "-ng", "--engine", "-pa", "--partial-assembly",
+                  "Activate 1D tensor-based partial assembly through the engine.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -166,10 +169,7 @@ int main(int argc, char *argv[])
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
-
-   // Engine init
-   SharedPtr<Engine> engine(new mfem::raja::Engine(MPI_COMM_WORLD,"cpu"));
-
+   
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit;
@@ -245,9 +245,10 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
-   dbg("Laghos");
-   // set engine
-   pmesh->SetEngine(*engine);
+   if (engine){
+      SharedPtr<Engine> kernels(new mfem::raja::Engine(MPI_COMM_WORLD,"cpu"));
+      pmesh->SetEngine(*kernels);
+   }
    
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
@@ -396,7 +397,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                visc, p_assembly, cg_tol, cg_max_iter);
+                                visc, p_assembly, engine, cg_tol, cg_max_iter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

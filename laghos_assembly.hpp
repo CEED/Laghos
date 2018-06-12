@@ -39,16 +39,12 @@ struct QuadratureData
    // Reference to physical Jacobian for the initial mesh. These are computed
    // only at time zero and stored here.
    DenseTensor Jac0inv;
-   raja::RajaVector rJac0inv;
 
    // Quadrature data used for full/partial assembly of the force operator. At
    // each quadrature point, it combines the stress, inverse Jacobian,
    // determinant of the Jacobian and the integration weight. It must be
    // recomputed in every time step.
    DenseTensor stressJinvT;
-   raja::RajaVector rstressJinvT;
-   raja::RajaDofQuadMaps *dqMaps;
-   raja::RajaGeometry *geom;
 
    // Quadrature data used for full/partial assembly of the mass matrices. At
    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
@@ -64,7 +60,6 @@ struct QuadratureData
    // Estimate of the minimum time step over all quadrature points. This is
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
-   raja::RajaVector dtEst;
 
    QuadratureData(int dim, int nzones, int quads_per_zone)
       : Jac0inv(dim, dim, nzones * quads_per_zone),
