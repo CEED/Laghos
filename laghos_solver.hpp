@@ -127,7 +127,6 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
-   void rUpdateQuadratureData(const raja::RajaVector &S) const;
 
 public:
    LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,

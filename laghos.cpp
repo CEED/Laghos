@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit;
-   int *nxyz = new int[dim];
+   int *nxyz = new int[dim+1];
    switch (partition_type)
    {
       case 11:
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete [] partitioning;
    }
    else
    {

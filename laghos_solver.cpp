@@ -103,7 +103,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes),
      ForcePA(&quad_data, h1_fes, l2_fes),
-     kForce(h1_fes, l2_fes, integ_rule, &quad_data),
+     kForce(h1_fes, l2_fes, integ_rule, &quad_data,engine),
      VMassPA(&quad_data, H1FESpace), VMassPA_prec(H1FESpace),
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
@@ -241,11 +241,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   //dbg("v=\n"); v.Print();
-   ParGridFunction kv;
-   kv.Resize(H1FESpace.GetVLayout());
-   kv.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   //dbg("kv=\n"); kv.Print();
+   //dbg("ParGridFunction v:\n"); v.Print();
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
 
    ParGridFunction dx, dv, de;
@@ -266,23 +262,23 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    // Solve for velocity.
    dbg("Vectors: one(%d), rhs(%d), B & X",VsizeL2,VsizeH1);
-   Vector one(VsizeL2), rhs(VsizeH1), B, X;
-   rhs.Resize(H1FESpace.GetVLayout());
-   Vector kone(VsizeL2), krhs(VsizeH1);
-   kone.Resize(L2FESpace.GetVLayout());
-   krhs.Resize(H1FESpace.GetVLayout());
-   
-   dbg("kone.Fill(1.0)");
-   one = 1.0;
-   kone.Fill(1.0);
+   Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
+   if (engine){
+      rhs.Resize(H1FESpace.GetVLayout());
+      one.Resize(L2FESpace.GetVLayout());
+      one.Fill(1.0);
+   }
    
    if (p_assembly)
    {
       timer.sw_force.Start();
-      //ForcePA.Mult(one, rhs);
-      //dbg("ForcePA rhs:\n"); rhs.Print();
-      kForce.Mult(kone, /*k*/rhs);   
-      //dbg("kForce.Mult(kone, krhs):\n"); krhs.Print();
+      if (!engine){
+         ForcePA.Mult(one, rhs);
+         //dbg("ForcePA rhs:\n"); rhs.Print();
+      }else{
+         kForce.Mult(one, rhs);   
+         //dbg("kForce.Mult(kone, krhs):\n"); krhs.Print();
+      }
       timer.sw_force.Stop();
       rhs.Neg();
 
@@ -337,15 +333,30 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
    Array<int> l2dofs;
    Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-   Vector ke_rhs(VsizeL2);
-   ke_rhs.Resize(L2FESpace.GetVLayout());
    
    if (p_assembly)
    {
       timer.sw_force.Start();
-      ForcePA.MultTranspose(v, e_rhs);
-      //dbg("kForce.MultTranspose(v, e_rhs)");
-      //kForce.MultTranspose(v, e_rhs);
+      if (!engine){
+         //dbg("ForcePA v:\n"); v.Print();
+         ForcePA.MultTranspose(v, e_rhs);
+         //dbg("ForcePA e_rhs:\n"); e_rhs.Print();
+      }else{
+         ParGridFunction kv;
+         kv.Resize(H1FESpace.GetVLayout());
+         kv.PushData(v.GetData());
+      
+         //dbg("ForcePA v:\n"); v.Print();
+         //ForcePA.MultTranspose(v, e_rhs);
+         //dbg("ForcePA e_rhs:\n"); e_rhs.Print();
+         
+         Vector ke_rhs(VsizeL2);
+         ke_rhs.Resize(L2FESpace.GetVLayout());
+         kForce.MultTranspose(kv, ke_rhs);
+         //ke_rhs.Pull();
+         e_rhs = ke_rhs;
+         //dbg("kForce.MultTranspose(v, ke_rhs):\n"); ke_rhs.Print();
+      }
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }
@@ -658,7 +669,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             {
                for (int gd = 0; gd < dim; gd++)
                {
-                  //#warning stressJinvT
                   quad_data.stressJinvT(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
                }
             }
@@ -679,69 +689,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    pop();
 }
    
-// *****************************************************************************
-void LagrangianHydroOperator::rUpdateQuadratureData(const raja::RajaVector &S) const
-{
-   if (quad_data_is_current) return;
-   push(Wheat);
-  
-   timer.sw_qdata.Start();
-   //const int nqp = integ_rule.GetNPoints();
-
-   //const int vSize = H1FESpace.GetVSize();
-   //const int eSize = L2FESpace.GetVSize();
-/*
-   const raja::Vector x = S.GetRange(0, vSize);
-   const raja::Vector v = S.GetRange(vSize, vSize);
-   raja::RajaGridFunction e(*L2FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>(),
-                            S.GetRange(2*vSize, eSize));
-
-   quad_data.geom = raja::RajaGeometry::Get(*H1FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>(),
-                                            integ_rule,x);
-   H1FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->GlobalToLocal(v, v_local);
-*/
-   assert(false);
-/*
-   e.ToQuad(integ_rule, e_quad);
-
-   const int NUM_QUAD = integ_rule.GetNPoints();
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
-   const int NUM_QUAD_1D  = ir1D.GetNPoints();
-   const int NUM_DOFS_1D  = H1FESpace.GetFE(0)->GetOrder()+1;
-
-   ElementTransformation *T = H1FESpace.GetElementTransformation(0);
-   const IntegrationPoint &ip = integ_rule.IntPoint(0);
-   const double gamma = material_pcf->Eval(*T, ip);
-   rUpdateQuadratureData(gamma,
-                         quad_data.h0,
-                         cfl,
-                         use_viscosity,
-                         dim,
-                         NUM_QUAD,
-                         NUM_QUAD_1D,
-                         NUM_DOFS_1D,
-                         nzones,
-                         quad_data.dqMaps->dofToQuad,
-                         quad_data.dqMaps->dofToQuadD,
-                         quad_data.dqMaps->quadWeights,
-                         v_local,
-                         e_quad,
-                         quad_data.rho0DetJ0w,
-                         quad_data.Jac0inv,
-                         quad_data.geom->J,
-                         quad_data.geom->invJ,
-                         quad_data.geom->detJ,
-                         quad_data.stressJinvT,
-                         quad_data.dtEst);
-
-   quad_data.dt_est = quad_data.dtEst.Min();
-   quad_data_is_current = true;
-
-   timer.sw_qdata.Stop();
-   timer.quad_tstep += nzones;
-   pop();*/
-}
-
 } // namespace hydrodynamics
 
 } // namespace mfem
