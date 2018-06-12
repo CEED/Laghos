@@ -51,7 +51,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../../mfem/raja
+MFEM_DIR = ../../mfem/engine-raja
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -105,7 +105,10 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp kForceOperator.cpp
+MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
+KERNELS_DIR = $(patsubst %/,%,$(MAKEFILE_DIR))/kernels
+
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp $(KERNELS_DIR)/kForceOperator.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
@@ -116,7 +119,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $(<F)
+	cd $(<D); $(CCC) -c $< #$(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
@@ -149,10 +152,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-clean: clean-build clean-exec
+cln clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM
+	rm -rf laghos *.o *~ *.dSYM kernels/*.o
 clean-exec:
 	rm -rf ./results
 

@@ -246,14 +246,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   dbg("v=\n");
-   v.Print();
+   //dbg("v=\n"); v.Print();
    ParGridFunction kv;
    kv.Resize(H1FESpace.GetVLayout());
    kv.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   dbg("kv=\n");
-   //kv.Fill(0.0);
-   kv.Print();
+   //dbg("kv=\n"); kv.Print();
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
 
    ParGridFunction dx, dv, de;
@@ -275,6 +272,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Solve for velocity.
    dbg("Vectors: one(%d), rhs(%d), B & X",VsizeL2,VsizeH1);
    Vector one(VsizeL2), rhs(VsizeH1), B, X;
+   rhs.Resize(H1FESpace.GetVLayout());
    Vector kone(VsizeL2), krhs(VsizeH1);
    kone.Resize(L2FESpace.GetVLayout());
    krhs.Resize(H1FESpace.GetVLayout());
@@ -286,12 +284,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      ForcePA.Mult(one, rhs);
-      dbg("ForcePA rhs:\n");
-      rhs.Print();
-      kForce.Mult(kone, krhs);   
-      dbg("kForce.Mult(kone, krhs):\n");
-      krhs.Print();
+      //ForcePA.Mult(one, rhs);
+      //dbg("ForcePA rhs:\n"); rhs.Print();
+      kForce.Mult(kone, /*k*/rhs);   
+      //dbg("kForce.Mult(kone, krhs):\n"); krhs.Print();
       timer.sw_force.Stop();
       rhs.Neg();
 
