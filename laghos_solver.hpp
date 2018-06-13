@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "kernels/kMassOperator.hpp"
 #include "kernels/kForceOperator.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -70,6 +71,7 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
+   mutable ParFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
@@ -105,6 +107,7 @@ protected:
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    mutable MassPAOperator VMassPA;
+   mutable kMassOperator kVMassPA;
    mutable DiagonalSolver VMassPA_prec;
    mutable LocalMassPAOperator locEMassPA;
 

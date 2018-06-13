@@ -88,6 +88,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  double cgt, int cgiter)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
+     H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
      ess_tdofs(essential_tdofs),
      dim(h1_fes.GetMesh()->Dimension()),
      nzones(h1_fes.GetMesh()->GetNE()),
@@ -104,7 +105,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      Force(&l2_fes, &h1_fes),
      ForcePA(&quad_data, h1_fes, l2_fes),
      kForce(h1_fes, l2_fes, integ_rule, &quad_data,engine),
-     VMassPA(&quad_data, H1FESpace), VMassPA_prec(H1FESpace),
+     VMassPA(&quad_data, H1FESpace),
+     kVMassPA(&quad_data, H1FESpace, H1compFESpace, integ_rule),
+     VMassPA_prec(H1FESpace),
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
@@ -206,6 +209,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
       VMassPA_prec.SetDiagonal(d);
    }
+     
+   if (engine) kVMassPA.Setup();
    
    locCG.SetOperator(locEMassPA);
    locCG.iterative_mode = false;
@@ -241,7 +246,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   //dbg("ParGridFunction v:\n"); v.Print();
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
 
    ParGridFunction dx, dv, de;
@@ -261,7 +265,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
 
    // Solve for velocity.
-   dbg("Vectors: one(%d), rhs(%d), B & X",VsizeL2,VsizeH1);
    Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (engine){
       rhs.Resize(H1FESpace.GetVLayout());
@@ -272,30 +275,96 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      if (!engine){
-         ForcePA.Mult(one, rhs);
-         //dbg("ForcePA rhs:\n"); rhs.Print();
-      }else{
-         kForce.Mult(one, rhs);   
-         //dbg("kForce.Mult(kone, krhs):\n"); krhs.Print();
-      }
+      if (!engine) ForcePA.Mult(one, rhs);
+      else kForce.Mult(one, rhs);
       timer.sw_force.Stop();
       rhs.Neg();
 
       Operator *cVMassPA;
-      VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
-      CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-      cg.SetPreconditioner(VMassPA_prec);
-      cg.SetOperator(*cVMassPA);
-      cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
-      cg.SetMaxIter(cg_max_iter);
-      cg.SetPrintLevel(0);
-      timer.sw_cgH1.Start();
-      cg.Mult(B, X);
-      timer.sw_cgH1.Stop();
-      timer.H1cg_iter += cg.GetNumIterations();
-      VMassPA.RecoverFEMSolution(X, rhs, dv);
+      if (!engine){
+         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+         VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
+         cg.SetPreconditioner(VMassPA_prec);
+         cg.SetOperator(*cVMassPA);
+         cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+         cg.SetMaxIter(cg_max_iter);
+         cg.SetPrintLevel(0);
+         timer.sw_cgH1.Start();
+         cg.Mult(B, X);
+         //dbg("B size=%d",B.Size());
+         //dbg("X:\n"); X.Print();
+         timer.sw_cgH1.Stop();
+         timer.H1cg_iter += cg.GetNumIterations();
+         VMassPA.RecoverFEMSolution(X, rhs, dv);
+         //dbg("rhs:\n"); rhs.Print();
+      }
+      else
+      {
+         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+         cg.SetOperator(kVMassPA);
+         cg.SetRelTol(cg_rel_tol);
+         cg.SetAbsTol(0.0);
+         cg.SetMaxIter(cg_max_iter);
+         cg.SetPrintLevel(-1);
+
+         // Partial assembly solve for each velocity component.
+         //const int size = H1compFESpace.GetVSize();
+         for (int c = 0; c < dim; c++)
+         {
+            dbg("V component #%d",c);
+            Vector rhs_c(H1compFESpace.GetVLayout());// = rhs.GetData();//Range(c*size, size);
+            //rhs_c.Resize(H1compFESpace.GetVLayout());
+#warning not good data
+            //rhs_c.MakeRef(&H1compFESpace, rhs, c*size);
+            //rhs_c.PushData(rhs.GetData());
+            rhs_c.Fill(1.0);
+               
+            Vector dv_c(H1compFESpace.GetVLayout());// = dv.GetRange(c*size, size);
+            #warning not good data
+            //dv_c.MakeRef(&H1compFESpace, dv, c*size);
+            //dv_c.PushData(dv.GetData());
+            dv_c.Fill(1.0);
+ 
+            Vector kB(H1compFESpace.GetVLayout());
+            kB.Fill(1.0);
+            dbg("kB size=%d:\n",kB.Size());kB.Print();
+            
+            Vector kX(H1compFESpace.GetVLayout());
+            #warning not good data
+            dbg("kX size=%d",kX.Size());
+            kX.Fill(1.0);
+      
+            Array<int> c_tdofs;
+            Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
+            // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+            // we must enforce v_x/y/z = 0 for the velocity components.
+            ess_bdr = 0; ess_bdr[c] = 1;
+            // Essential true dofs as if there's only one component.
+            H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+
+            //dv_c = 0.0;
+            dv_c.Fill(0.0);
+      
+            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+               GetProlongationOperator()->MultTranspose(rhs_c, kB);
+            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+               GetRestrictionOperator()->Mult(dv_c, kX);
+
+            kVMassPA.SetEssentialTrueDofs(c_tdofs);
+            kVMassPA.EliminateRHS(kB);
+
+            timer.sw_cgH1.Start();
+            cg.Mult(kB, kX);
+            //assert(false);
+            timer.sw_cgH1.Stop();
+            timer.H1cg_iter += cg.GetNumIterations();
+            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+               GetRestrictionOperator()->Mult(kX, dv_c);
+            //assert(false);
+         }
+      }
       delete cVMassPA;
+      assert(false);
    }
    else
    {
@@ -337,26 +406,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      if (!engine){
-         //dbg("ForcePA v:\n"); v.Print();
-         ForcePA.MultTranspose(v, e_rhs);
-         //dbg("ForcePA e_rhs:\n"); e_rhs.Print();
-      }else{
-         ParGridFunction kv;
-         kv.Resize(H1FESpace.GetVLayout());
-         kv.PushData(v.GetData());
-      
-         //dbg("ForcePA v:\n"); v.Print();
-         //ForcePA.MultTranspose(v, e_rhs);
-         //dbg("ForcePA e_rhs:\n"); e_rhs.Print();
-         
-         Vector ke_rhs(VsizeL2);
-         ke_rhs.Resize(L2FESpace.GetVLayout());
-         kForce.MultTranspose(kv, ke_rhs);
-         //ke_rhs.Pull();
-         e_rhs = ke_rhs;
-         //dbg("kForce.MultTranspose(v, ke_rhs):\n"); ke_rhs.Print();
-      }
+      if (!engine) ForcePA.MultTranspose(v, e_rhs);
+      else kForce.MultTranspose(v, e_rhs);      
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }
@@ -497,9 +548,8 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+   if (quad_data_is_current) { pop(); return; }
    push();
-   if (quad_data_is_current) { dbg("return"); pop(); return; }
-   dbg("\033[7mDO IT!");
    timer.sw_qdata.Start();
 
    const int nqp = integ_rule.GetNPoints();

@@ -1,0 +1,79 @@
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
+//
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
+//
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
+
+#ifndef MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP
+#define MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP
+
+#include "mfem.hpp"
+
+
+#ifdef MFEM_USE_MPI
+
+#include <memory>
+#include <iostream>
+
+namespace mfem
+{
+
+namespace hydrodynamics
+{
+
+// *****************************************************************************
+class kMassOperator : public Operator
+{
+private:
+   const int dim, nzones;
+   QuadratureData *quad_data;
+   ParFiniteElementSpace &fes;
+   ParFiniteElementSpace &cfes;
+   const IntegrationRule &ir;
+   int ess_tdofs_count;
+   Array<int> ess_tdofs;
+   raja::RajaBilinearForm *bilinearForm;
+   Operator *massOperator;
+   // For distributing X
+   //mutable Vector distX;
+   //mutable raja::RajaGridFunction x_gf, y_gf;
+public:
+   kMassOperator(QuadratureData*,
+                 ParFiniteElementSpace&,
+                 ParFiniteElementSpace&,
+                 const IntegrationRule&);
+   void Setup();
+   
+   void SetEssentialTrueDofs(Array<int>&);
+   
+   void EliminateRHS(mfem::Vector&);
+   
+   virtual void Mult(const mfem::Vector&, mfem::Vector&) const;
+
+   void ComputeDiagonal2D(Vector&) const;
+   void ComputeDiagonal3D(Vector&) const;
+
+   virtual const Operator *GetProlongation() const
+   { return fes.GetProlongationMatrix(); }
+   virtual const Operator *GetRestriction() const
+   { return fes.GetRestrictionMatrix(); }
+};
+  
+
+} // namespace hydrodynamics
+
+} // namespace mfem
+
+#endif // MFEM_USE_MPI
+
+#endif // MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP

@@ -108,7 +108,9 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 KERNELS_DIR = $(patsubst %/,%,$(MAKEFILE_DIR))/kernels
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp $(KERNELS_DIR)/kForceOperator.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
+	$(KERNELS_DIR)/kForceOperator.cpp \
+	$(KERNELS_DIR)/kMassOperator.cpp 
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
