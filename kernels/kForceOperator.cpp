@@ -90,7 +90,7 @@ void kForceOperator::Mult(const mfem::Vector &vecL2,
               l2D2Q->dofToQuad,
               h1D2Q->quadToDof,
               h1D2Q->quadToDofD,
-              (const double*)quad_data->stressJinvT.Data(),
+              quad_data->stressJinvT.Data(),
               (const double*)rgVecL2.RajaMem().ptr(),
               (double*)rgVecH1.RajaMem().ptr());
    dbg("LocalToGlobal");

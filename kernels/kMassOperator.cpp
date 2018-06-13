@@ -32,14 +32,12 @@ namespace hydrodynamics
 // *****************************************************************************
 kMassOperator::kMassOperator(QuadratureData *qd_,
                              ParFiniteElementSpace &fes_,
-                             ParFiniteElementSpace &cfes_,
                              const IntegrationRule &ir_) :
       Operator(fes_.GetVSize()),
       dim(fes_.GetMesh()->Dimension()),
       nzones(fes_.GetMesh()->GetNE()),
       quad_data(qd_),
       fes(fes_),
-      cfes(cfes_),
       ir(ir_),
       ess_tdofs_count(0),
       ess_tdofs(0),
@@ -53,11 +51,15 @@ void kMassOperator::Setup()
    raja::RajaMassIntegrator &massInteg = *(new raja::RajaMassIntegrator(engine));
    massInteg.SetIntegrationRule(ir);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
-   #warning forcing RajaBilinearForm to 'component' size
-   bilinearForm = new raja::RajaBilinearForm(cfes.Get_PFESpace().As<raja::RajaFiniteElementSpace>());
+   bilinearForm = new raja::RajaBilinearForm(fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>());
+   dbg("bilinearForm->AddDomainIntegrator");
    bilinearForm->AddDomainIntegrator(&massInteg);
+   dbg("bilinearForm->Assemble");
    bilinearForm->Assemble();
-   bilinearForm->FormOperator(Array<int>(), massOperator);
+   // ?! no constraintList: dealt with 'each velocity component'
+   dbg("bilinearForm->FormOperator");
+   bilinearForm->FormOperator(Array<int>(), massOperator); // which is a RajaConstrainedOperator
+   dbg("done");
    pop();
 }
 
@@ -65,41 +67,40 @@ void kMassOperator::Setup()
 void kMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    push(Wheat);
-  dbg("\n\033[33;7m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
-  ess_tdofs_count = dofs.Size();
+   //dbg("\n\033[33;7m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
+   ess_tdofs_count = dofs.Size();
   
-  if (ess_tdofs.Size()==0){
+   if (ess_tdofs.Size()==0){
 #ifdef MFEM_USE_MPI
-    int global_ess_tdofs_count;
-    const MPI_Comm comm = fes.GetParMesh()->GetComm();
-    MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
-                  1, MPI_INT, MPI_SUM, comm);
-    assert(global_ess_tdofs_count>0);
-    dbg("Resize of %d",global_ess_tdofs_count);
-    ess_tdofs.Resize(ess_tdofs_count);
+      int global_ess_tdofs_count;
+      const MPI_Comm comm = fes.GetParMesh()->GetComm();
+      MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
+                    1, MPI_INT, MPI_SUM, comm);
+      assert(global_ess_tdofs_count>0);
+      //dbg("Resize of %d",global_ess_tdofs_count);
+      ess_tdofs.Resize(ess_tdofs_count);
 #else
-    assert(ess_tdofs_count>0);
-    ess_tdofs.Resize(ess_tdofs_count);
+      assert(ess_tdofs_count>0);
+      ess_tdofs.Resize(ess_tdofs_count);
 #endif
-  }else assert(ess_tdofs_count<=ess_tdofs.Size());
+   }else assert(ess_tdofs_count<=ess_tdofs.Size());
 
-  assert(ess_tdofs>0);
+   assert(ess_tdofs>0);
   
-  if (ess_tdofs_count == 0) { pop(); return; }
+   if (ess_tdofs_count == 0) { pop(); return; }
   
-  {
-    dbg("rHtoD");
-    assert(ess_tdofs_count>0);
-    assert(dofs.GetData());
-    for(int i=0;i<dofs.Size();i+=1) dbg(" %d",dofs[i]);
-    raja::rmemcpy::rHtoD((void*)ess_tdofs.GetData(),
-                         dofs.GetData(),
-                         ess_tdofs_count*sizeof(int));
-    dbg("ess_tdofs:\n");
-    ess_tdofs.Print();
-    pop();
-  }
-  pop();
+   {
+      dbg("rHtoD");
+      assert(ess_tdofs_count>0);
+      assert(dofs.GetData());
+      //for(int i=0;i<dofs.Size();i+=1) dbg(" %d",dofs[i]);
+      raja::rmemcpy::rHtoD((void*)ess_tdofs.GetData(),
+                           dofs.GetData(),
+                           ess_tdofs_count*sizeof(int));
+      //dbg("ess_tdofs:\n"); ess_tdofs.Print();
+      pop();
+   }
+   pop();
 }
 
 // *****************************************************************************
@@ -117,34 +118,42 @@ void kMassOperator::EliminateRHS(mfem::Vector &b)
 void kMassOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
-   dbg("x size= %d",x.Size());
-   dbg("y size= %d",y.Size());
-   Vector kx(cfes.GetVLayout());
-   //kx.PushData(x.GetData());
-   kx.Fill(1.0);
-   dbg("kx size= %d",kx.Size());
+   //dbg("x size= %d",x.Size()); x.Print();
+   //dbg("y size= %d",y.Size());
+   
+   Vector kx(fes.GetVLayout());
+   kx.PushData(x.GetData());
+   
    raja::Vector rx = kx.Get_PVector()->As<raja::Vector>();
-
-   Vector ky(cfes.GetVLayout());
-   //ky.PushData(y.GetData());
-   dbg("ky size= %d",ky.Size());
-   ky.Fill(1.0);
+   
+   Vector ky(fes.GetVLayout());
    raja::Vector ry = ky.Get_PVector()->As<raja::Vector>();
 
    if (ess_tdofs_count)
    {
+      /*const raja::Array &constrList = ess_tdofs.Get_PArray()->As<raja::Array>();
+      raja::Vector subvec(constrList.RajaLayout());
+      vector_set_subvector(ess_tdofs.Size(),
+                           (double*)x.Get_PVector()->As<raja::Vector>().RajaMem().ptr(),
+                           (double*)subvec.RajaMem().ptr(),
+                           (int*)constrList.RajaMem().ptr());
+      */
       rx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
-  
+   
+   //dbg("kx:\n");kx.Print();
+   dbg("massOperator->Mult");
    massOperator->Mult(kx, ky);
+   //dbg("ky:\n");ky.Print();
 
    if (ess_tdofs_count)
    {
       ry.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
-  
+   //y.Pull();
    y = ky;
-   
+   //assert(false);
+   dbg("done");
    pop();
 }
 

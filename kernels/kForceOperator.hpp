@@ -42,7 +42,6 @@ private:
    const raja::RajaDofQuadMaps *l2D2Q, *h1D2Q;
    mutable Vector gVecL2, gVecH1;
 public:
-   #warning kForceOperator solve for each velocity component!!
    kForceOperator(ParFiniteElementSpace&,
                   ParFiniteElementSpace&,
                   const IntegrationRule&,

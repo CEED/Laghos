@@ -38,7 +38,6 @@ private:
    const int dim, nzones;
    QuadratureData *quad_data;
    ParFiniteElementSpace &fes;
-   ParFiniteElementSpace &cfes;
    const IntegrationRule &ir;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
@@ -49,7 +48,6 @@ private:
    //mutable raja::RajaGridFunction x_gf, y_gf;
 public:
    kMassOperator(QuadratureData*,
-                 ParFiniteElementSpace&,
                  ParFiniteElementSpace&,
                  const IntegrationRule&);
    void Setup();

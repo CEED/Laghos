@@ -121,7 +121,8 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $< #$(<F)
+	cd $(<D); $(CCC) -c $< 
+#$(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
