@@ -52,8 +52,8 @@
 
 
 #include "laghos_solver.hpp"
-#include "backends/raja/config/rdbg.hpp"
-#include "backends/raja/config/rnvvp.hpp"
+#include "backends/kernels/config/dbg.hpp"
+#include "backends/kernels/config/nvvp.hpp"
 
 #include <memory>
 #include <iostream>
@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
    delete mesh;
 
    if (engine){
-      SharedPtr<Engine> kernels(new mfem::raja::Engine(MPI_COMM_WORLD,"cpu"));
+      SharedPtr<Engine> kernels(new mfem::kernels::Engine(MPI_COMM_WORLD,"cpu"));
       pmesh->SetEngine(*kernels);
    }
    

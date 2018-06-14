@@ -15,8 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-#include "backends/raja/config/rdbg.hpp"
-#include "backends/raja/config/rnvvp.hpp"
+#include "backends/kernels/config/dbg.hpp"
+#include "backends/kernels/config/nvvp.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -200,8 +200,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       evaluator = new FastEvaluator(H1FESpace);
 
       // init
-      //quad_data.dqMaps = raja::RajaDofQuadMaps::Get(H1FESpace,integ_rule);
-      //quad_data.geom = raja::RajaGeometry::Get(*H1FESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>(), integ_rule);
+      //quad_data.dqMaps = kernels::KernelsDofQuadMaps::Get(H1FESpace,integ_rule);
+      //quad_data.geom = kernels::KernelsGeometry::Get(*H1FESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>(), integ_rule);
       //quad_data.rJac0inv = quad_data.geom->invJ;
 
       // Setup the preconditioner of the velocity mass operator.
@@ -387,12 +387,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.Fill(0.0);
 
             // *****************************************************************
-            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetProlongationOperator()->MultTranspose(rhs_c, kB);
             //dbg("kB:\n"); kB.Print();
             //-0.1307 -5.55112e-17 0.1307 -0.14772 -4.85723e-17 0.14772 -0.1307 -6.93889e-17 ...
 
-            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetRestrictionOperator()->Mult(dv_c, kX);
 
             kVMassPA.SetEssentialTrueDofs(c_tdofs);
@@ -412,7 +412,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // *****************************************************************
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
-            H1compFESpace.Get_PFESpace().As<raja::RajaFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetProlongationOperator()->Mult(kX, dv_c);
             //dbg("dv_c:\n"); dv_c.Print();
             dbg("memcpy of %d bytes)",size*sizeof(double));            

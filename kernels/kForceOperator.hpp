@@ -39,7 +39,7 @@ private:
    const ParFiniteElementSpace &h1fes, &l2fes;
    const IntegrationRule &integ_rule;
    const QuadratureData *quad_data;
-   const raja::RajaDofQuadMaps *l2D2Q, *h1D2Q;
+   const kernels::KernelsDofQuadMaps *l2D2Q, *h1D2Q;
    mutable Vector gVecL2, gVecH1;
 public:
    kForceOperator(ParFiniteElementSpace&,

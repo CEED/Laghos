@@ -16,7 +16,7 @@
 
 #include "../laghos_assembly.hpp"
 #include "kForceOperator.hpp"
-#include "backends/raja/raja.hpp"
+#include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -37,8 +37,6 @@ kForceOperator::kForceOperator(ParFiniteElementSpace &h1f,
    : Operator(l2f.GetTrueVSize(), h1f.GetTrueVSize()),
      dim(h1f.GetMesh()->Dimension()),
      nzones(h1f.GetMesh()->GetNE()),
-     //h1fes(*h1f.Get_PFESpace().As<raja::RajaFiniteElementSpace>()),
-     //l2fes(*l2f.Get_PFESpace().As<raja::RajaFiniteElementSpace>()),
      h1fes(h1f),
      l2fes(l2f),
      integ_rule(ir),
@@ -50,11 +48,9 @@ kForceOperator::kForceOperator(ParFiniteElementSpace &h1f,
    const Engine &ng = l2f.GetMesh()->GetEngine();
    gVecL2.Resize(ng.MakeLayout(l2fes.GetFE(0)->GetDof() * nzones));
    gVecH1.Resize(ng.MakeLayout(h1fes.GetVDim() *h1fes.GetFE(0)->GetDof() * nzones));
-   //const raja::RajaFiniteElementSpace &h1 = *h1fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
-   //const raja::RajaFiniteElementSpace &l2 = *l2fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
    //GetParFESpace
-   h1D2Q = raja::RajaDofQuadMaps::Get(h1fes, integ_rule);
-   l2D2Q = raja::RajaDofQuadMaps::Get(l2fes, integ_rule);
+   h1D2Q = kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule);
+   l2D2Q = kernels::KernelsDofQuadMaps::Get(l2fes, integ_rule);
 }
   
 // *****************************************************************************
@@ -65,12 +61,12 @@ kForceOperator::~kForceOperator(){}
 void kForceOperator::Mult(const mfem::Vector &vecL2,
                           mfem::Vector &vecH1) const {
    push();
-   const raja::RajaFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
-   const raja::RajaFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
-   const raja::Vector rVecL2 = vecL2.Get_PVector()->As<const raja::Vector>();
-   raja::Vector rgVecL2 = gVecL2.Get_PVector()->As<raja::Vector>();
-   raja::Vector rVecH1 = vecH1.Get_PVector()->As<raja::Vector>();
-   raja::Vector rgVecH1 = gVecH1.Get_PVector()->As<raja::Vector>();
+   const kernels::KernelsFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
+   const kernels::KernelsFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
+   const kernels::Vector rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
+   kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    dbg("GlobalToLocal");
    rl2.GlobalToLocal(rVecL2, rgVecL2);
    //dbg("rgVecL2:\n"); rgVecL2.Print();
@@ -91,8 +87,8 @@ void kForceOperator::Mult(const mfem::Vector &vecL2,
               h1D2Q->quadToDof,
               h1D2Q->quadToDofD,
               quad_data->stressJinvT.Data(),
-              (const double*)rgVecL2.RajaMem().ptr(),
-              (double*)rgVecH1.RajaMem().ptr());
+              (const double*)rgVecL2.KernelsMem().ptr(),
+              (double*)rgVecH1.KernelsMem().ptr());
    dbg("LocalToGlobal");
    rh1.LocalToGlobal(rgVecH1, rVecH1);
    pop();
@@ -108,12 +104,12 @@ void kForceOperator::MultTranspose(const Vector &vecH1,
    // push vecH1's data down to the device
    kVecH1.PushData(vecH1.GetData());
    // switch to backend mode
-   const raja::RajaFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
-   const raja::RajaFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>();
-   const raja::Vector rVecH1 = kVecH1.Get_PVector()->As<const raja::Vector>();
-   raja::Vector rgVecH1 = gVecH1.Get_PVector()->As<raja::Vector>();
-   raja::Vector rgVecL2 = gVecL2.Get_PVector()->As<raja::Vector>();
-   raja::Vector rVecL2 = kVecL2.Get_PVector()->As<raja::Vector>();
+   const kernels::KernelsFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
+   const kernels::KernelsFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
+   const kernels::Vector rVecH1 = kVecH1.Get_PVector()->As<const kernels::Vector>();
+   kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rVecL2 = kVecL2.Get_PVector()->As<kernels::Vector>();
    // **************************************************************************
    dbg("GlobalToLocal");
    rh1.GlobalToLocal(rVecH1, rgVecH1);
@@ -133,8 +129,8 @@ void kForceOperator::MultTranspose(const Vector &vecH1,
                        h1D2Q->dofToQuad,
                        h1D2Q->dofToQuadD,
                        (const double*)quad_data->stressJinvT.Data(),
-                       (const double*)rgVecH1.RajaMem().ptr(),
-                       (double*)rgVecL2.RajaMem().ptr());
+                       (const double*)rgVecH1.KernelsMem().ptr(),
+                       (double*)rgVecL2.KernelsMem().ptr());
    // **************************************************************************
    dbg("LocalToGlobal");
    rl2.LocalToGlobal(rgVecL2, rVecL2);

@@ -17,7 +17,7 @@
 #include "../laghos_assembly.hpp"
 
 #include "kMassOperator.hpp"
-#include "backends/raja/raja.hpp"
+#include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -48,17 +48,17 @@ void kMassOperator::Setup()
 {
    push(Wheat);
    const mfem::Engine &engine = fes.GetMesh()->GetEngine();
-   raja::RajaMassIntegrator &massInteg = *(new raja::RajaMassIntegrator(engine));
+   kernels::KernelsMassIntegrator &massInteg = *(new kernels::KernelsMassIntegrator(engine));
    massInteg.SetIntegrationRule(ir);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
-   bilinearForm = new raja::RajaBilinearForm(fes.Get_PFESpace().As<raja::RajaFiniteElementSpace>());
+   bilinearForm = new kernels::KernelsBilinearForm(fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>());
    dbg("bilinearForm->AddDomainIntegrator");
    bilinearForm->AddDomainIntegrator(&massInteg);
    dbg("bilinearForm->Assemble");
    bilinearForm->Assemble();
    // ?! no constraintList: dealt with 'each velocity component'
    dbg("bilinearForm->FormOperator");
-   bilinearForm->FormOperator(Array<int>(), massOperator); // which is a RajaConstrainedOperator
+   bilinearForm->FormOperator(Array<int>(), massOperator); // which is a KernelsConstrainedOperator
    dbg("done");
    pop();
 }
@@ -94,7 +94,7 @@ void kMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
       assert(ess_tdofs_count>0);
       assert(dofs.GetData());
       //for(int i=0;i<dofs.Size();i+=1) dbg(" %d",dofs[i]);
-      raja::rmemcpy::rHtoD((void*)ess_tdofs.GetData(),
+      kernels::rmemcpy::rHtoD((void*)ess_tdofs.GetData(),
                            dofs.GetData(),
                            ess_tdofs_count*sizeof(int));
       //dbg("ess_tdofs:\n"); ess_tdofs.Print();
@@ -107,7 +107,7 @@ void kMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 void kMassOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
-   raja::Vector rb = b.Get_PVector()->As<const raja::Vector>();
+   kernels::Vector rb = b.Get_PVector()->As<const kernels::Vector>();
 
    if (ess_tdofs_count > 0)
       rb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
@@ -124,19 +124,19 @@ void kMassOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
    Vector kx(fes.GetVLayout());
    kx.PushData(x.GetData());
    
-   raja::Vector rx = kx.Get_PVector()->As<raja::Vector>();
+   kernels::Vector rx = kx.Get_PVector()->As<kernels::Vector>();
    
    Vector ky(fes.GetVLayout());
-   raja::Vector ry = ky.Get_PVector()->As<raja::Vector>();
+   kernels::Vector ry = ky.Get_PVector()->As<kernels::Vector>();
 
    if (ess_tdofs_count)
    {
-      /*const raja::Array &constrList = ess_tdofs.Get_PArray()->As<raja::Array>();
-      raja::Vector subvec(constrList.RajaLayout());
+      /*const kernels::Array &constrList = ess_tdofs.Get_PArray()->As<kernels::Array>();
+      kernels::Vector subvec(constrList.KernelsLayout());
       vector_set_subvector(ess_tdofs.Size(),
-                           (double*)x.Get_PVector()->As<raja::Vector>().RajaMem().ptr(),
-                           (double*)subvec.RajaMem().ptr(),
-                           (int*)constrList.RajaMem().ptr());
+                           (double*)x.Get_PVector()->As<kernels::Vector>().KernelsMem().ptr(),
+                           (double*)subvec.KernelsMem().ptr(),
+                           (int*)constrList.KernelsMem().ptr());
       */
       rx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }

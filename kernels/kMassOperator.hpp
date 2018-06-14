@@ -41,11 +41,11 @@ private:
    const IntegrationRule &ir;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
-   raja::RajaBilinearForm *bilinearForm;
+   kernels::KernelsBilinearForm *bilinearForm;
    Operator *massOperator;
    // For distributing X
    //mutable Vector distX;
-   //mutable raja::RajaGridFunction x_gf, y_gf;
+   //mutable kernels::KernelsGridFunction x_gf, y_gf;
 public:
    kMassOperator(QuadratureData*,
                  ParFiniteElementSpace&,

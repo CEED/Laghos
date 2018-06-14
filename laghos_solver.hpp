@@ -116,7 +116,7 @@ protected:
 
    mutable TimingData timer;
    
-   mutable raja::RajaVector v_local,e_quad;
+   //mutable kernels::KernelsVector v_local,e_quad;
    
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
