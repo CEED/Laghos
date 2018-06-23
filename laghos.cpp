@@ -34,15 +34,15 @@
 //    Computing, (34) 2012, pp.B606–B641, https://doi.org/10.1137/120864672.
 //
 // Sample runs:
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.5
-//    mpirun -np 8 laghos -p 1 -m data/square01_tri.mesh  -rs 1 -tf 0.5
-//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
-//    mpirun -np 8 laghos -p 2 -m data/square01_quad.mesh -rs 3 -tf 0.8
-//    mpirun -np 8 laghos -p 2 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
+//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5
+//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.5
+//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -cfl 0.1 -tf 0.5
+//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
+//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
 //
 // Test problems:
-//    p = 1  --> Taylor-Green vortex (smooth problem).
-//    p = 2  --> Sedov blast.
+//    p = 0  --> Taylor-Green vortex (smooth problem).
+//    p = 1  --> Sedov blast.
 
 //  TODO
 //    - Force
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.5;
    double cfl = 0.1;
-   int intProblem = 1;
+   int intProblem = (int) vortex;
    bool visualization = false;
    bool visit = false;
    int vis_steps = 5;
@@ -113,8 +113,8 @@ int main(int argc, char *argv[])
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
    args.AddOption(&intProblem, "-p", "--problem",
-                  "Problem: 1 - Taylor-Green vortex (smooth problem)\n\t"
-                  "         2 - Sedov blast");
+                  "Problem: 0 - Taylor-Green vortex (smooth problem)\n\t"
+                  "         1 - Sedov blast");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
    problem = (Problem) intProblem;
 
    if (strlen(occa_config)) {
-     occa::json config = occa::json::loads(occa_config);
+     occa::json config = occa::json::parse(occa_config);
      if (!config.has("devices")) {
        std::cout << "Config file \"" << occa_config << "\" does not have 'devices'.\n";
        return 1;

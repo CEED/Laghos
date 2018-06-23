@@ -54,8 +54,8 @@ typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 #else
-typedef double* V2D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(3,0,1,2));
-typedef double* V3D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(4,0,1,2,3));
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(3,0,1,2);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(4,0,1,2,3);
 #endif
 
 typedef double* E2D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
@@ -63,15 +63,15 @@ typedef double* E3D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, L2_DOFS_1D, numElements)
 typedef double* Stress2D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 typedef double* Stress3D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 
-kernel void Mult2D(const int numElements,
-                   const L2DofToQuad_t restrict L2DofToQuad,
-                   const H1QuadToDof_t restrict H1QuadToDof,
-                   const H1QuadToDof_t restrict H1QuadToDofD,
-                   const Stress2D_t restrict stressJinvT,
-                   const E2D_t restrict e,
-                   V2D_t restrict v) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void Mult2D(const int numElements,
+                    @restrict const L2DofToQuad_t L2DofToQuad,
+                    @restrict const H1QuadToDof_t H1QuadToDof,
+                    @restrict const H1QuadToDof_t H1QuadToDofD,
+                    @restrict const Stress2D_t stressJinvT,
+                    @restrict const E2D_t e,
+                    @restrict V2D_t v) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double e_xy[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         e_xy[i] = 0;
@@ -133,15 +133,15 @@ kernel void Mult2D(const int numElements,
   }
 }
 
-kernel void MultTranspose2D(const int numElements,
-                            const L2QuadToDof_t restrict L2QuadToDof,
-                            const H1DofToQuad_t restrict H1DofToQuad,
-                            const H1DofToQuad_t restrict H1DofToQuadD,
-                            const Stress2D_t restrict stressJinvT,
-                            const V2D_t restrict v,
-                            E2D_t restrict e) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void MultTranspose2D(const int numElements,
+                             @restrict const L2QuadToDof_t L2QuadToDof,
+                             @restrict const H1DofToQuad_t H1DofToQuad,
+                             @restrict const H1DofToQuad_t H1DofToQuadD,
+                             @restrict const Stress2D_t stressJinvT,
+                             @restrict const V2D_t v,
+                             @restrict E2D_t e) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double vStress[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
       for (int i = 0; i < NUM_QUAD_2D; ++i) {
         vStress[i] = 0;
@@ -210,15 +210,15 @@ kernel void MultTranspose2D(const int numElements,
   }
 }
 
-kernel void Mult3D(const int numElements,
-                   const L2DofToQuad_t restrict L2DofToQuad,
-                   const H1QuadToDof_t restrict H1QuadToDof,
-                   const H1QuadToDof_t restrict H1QuadToDofD,
-                   const Stress3D_t restrict stressJinvT,
-                   const E3D_t restrict e,
-                   V3D_t restrict v) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void Mult3D(const int numElements,
+                    @restrict const L2DofToQuad_t L2DofToQuad,
+                    @restrict const H1QuadToDof_t H1QuadToDof,
+                    @restrict const H1QuadToDof_t H1QuadToDofD,
+                    @restrict const Stress3D_t stressJinvT,
+                    @restrict const E3D_t e,
+                    @restrict V3D_t v) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double e_xyz[NUM_QUAD_3D] @dim(NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D);
       for (int i = 0; i < NUM_QUAD_3D; ++i) {
         e_xyz[i] = 0;
@@ -319,15 +319,15 @@ kernel void Mult3D(const int numElements,
   }
 }
 
-kernel void MultTranspose3D(const int numElements,
-                            const L2QuadToDof_t restrict L2QuadToDof,
-                            const H1DofToQuad_t restrict H1DofToQuad,
-                            const H1DofToQuad_t restrict H1DofToQuadD,
-                            const Stress3D_t restrict stressJinvT,
-                            const V3D_t restrict v,
-                            E3D_t restrict e) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void MultTranspose3D(const int numElements,
+                             @restrict const L2QuadToDof_t L2QuadToDof,
+                             @restrict const H1DofToQuad_t H1DofToQuad,
+                             @restrict const H1DofToQuad_t H1DofToQuadD,
+                             @restrict const Stress3D_t stressJinvT,
+                             @restrict const V3D_t v,
+                             @restrict E3D_t e) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double vStress[NUM_QUAD_3D] @dim(NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D);
       for (int i = 0; i < NUM_QUAD_3D; ++i) {
         vStress[i] = 0;

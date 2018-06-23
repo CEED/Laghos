@@ -54,8 +54,8 @@ typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 #else
-typedef double* V2D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(3,0,1,2));
-typedef double* V3D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(4,0,1,2,3));
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(3,0,1,2);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(4,0,1,2,3);
 #endif
 
 typedef double* E2D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
@@ -63,23 +63,23 @@ typedef double* E3D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, L2_DOFS_1D, numElements)
 typedef double* Stress2D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 typedef double* Stress3D_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D, NUM_QUAD_1D, numElements);
 
-kernel void Mult2D(const int numElements,
-                   const L2DofToQuad_t restrict L2DofToQuad,
-                   const H1QuadToDof_t restrict H1QuadToDof,
-                   const H1QuadToDof_t restrict H1QuadToDofD,
-                   const Stress2D_t restrict stressJinvT,
-                   const E2D_t restrict e,
-                   V2D_t restrict v) {
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D]  @dim(NUM_QUAD_1D, L2_DOFS_1D);
-    shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
-    shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+@kernel void Mult2D(const int numElements,
+                    @restrict const L2DofToQuad_t L2DofToQuad,
+                    @restrict const H1QuadToDof_t H1QuadToDof,
+                    @restrict const H1QuadToDof_t H1QuadToDofD,
+                    @restrict const Stress2D_t stressJinvT,
+                    @restrict const E2D_t e,
+                    @restrict V2D_t v) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; @outer) {
+    @shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D]  @dim(NUM_QUAD_1D, L2_DOFS_1D);
+    @shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+    @shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
 
-    shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(MAX_DOFS_1D, NUM_QUAD_1D);
-    shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
-    shared double s_e[NUM_QUAD_2D]                @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(MAX_DOFS_1D, NUM_QUAD_1D);
+    @shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+    @shared double s_e[NUM_QUAD_2D]                @dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
-    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; inner) {
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; @inner) {
       for (int id = idBlock; id < (L2_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {
         s_L2DofToQuad[id] = L2DofToQuad[id];
       }
@@ -91,7 +91,7 @@ kernel void Mult2D(const int numElements,
 
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
-        for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
           if (dx < L2_DOFS_1D) {
             double r_x[L2_DOFS_1D];
 
@@ -107,7 +107,7 @@ kernel void Mult2D(const int numElements,
             }
           }
         }
-        for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
+        for (int qy = 0; qy < INNER_SIZE; ++qy; @inner) {
           if (qy < NUM_QUAD_1D) {
             for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
               double r_e = 0;
@@ -120,7 +120,7 @@ kernel void Mult2D(const int numElements,
         }
 
         for (int c = 0; c < NUM_DIM; ++c) {
-          for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
             if (qx < NUM_QUAD_1D) {
               double r_x[NUM_QUAD_1D];
               double r_y[NUM_QUAD_1D];
@@ -142,7 +142,7 @@ kernel void Mult2D(const int numElements,
               }
             }
           }
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
             if (dx < H1_DOFS_1D) {
               for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
                 double r_v = 0;
@@ -160,23 +160,23 @@ kernel void Mult2D(const int numElements,
   }
 }
 
-kernel void MultTranspose2D(const int numElements,
-                            const L2QuadToDof_t restrict L2QuadToDof,
-                            const H1DofToQuad_t restrict H1DofToQuad,
-                            const H1DofToQuad_t restrict H1DofToQuadD,
-                            const Stress2D_t restrict stressJinvT,
-                            const V2D_t restrict v,
-                            E2D_t restrict e) {
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
-    shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
-    shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+@kernel void MultTranspose2D(const int numElements,
+                             @restrict const L2QuadToDof_t L2QuadToDof,
+                             @restrict const H1DofToQuad_t H1DofToQuad,
+                             @restrict const H1DofToQuad_t H1DofToQuadD,
+                             @restrict const Stress2D_t stressJinvT,
+                             @restrict const V2D_t v,
+                             @restrict E2D_t e) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; @outer) {
+    @shared double s_L2QuadToDof[NUM_QUAD_1D * L2_DOFS_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
+    @shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+    @shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
 
-    shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, MAX_DOFS_1D);
-    shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
-    shared double s_v[NUM_QUAD_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_xy[MAX_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, MAX_DOFS_1D);
+    @shared double s_xDy[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+    @shared double s_v[NUM_QUAD_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
-    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; inner) {
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock; @inner) {
       for (int id = idBlock; id < (L2_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {
         s_L2QuadToDof[id] = L2QuadToDof[id];
       }
@@ -188,13 +188,13 @@ kernel void MultTranspose2D(const int numElements,
 
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
-        for (int qBlock = 0; qBlock < INNER_SIZE; ++qBlock; inner) {
+        for (int qBlock = 0; qBlock < INNER_SIZE; ++qBlock; @inner) {
           for (int q = qBlock; q < NUM_QUAD; ++q) {
             s_v[q] = 0;
           }
         }
         for (int c = 0; c < NUM_DIM; ++c) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
             if (dx < H1_DOFS_1D) {
               double r_v[H1_DOFS_1D];
 
@@ -213,7 +213,7 @@ kernel void MultTranspose2D(const int numElements,
               }
             }
           }
-          for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
             if (qx < NUM_QUAD_1D) {
               for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
                 double Dxy = 0;
@@ -228,7 +228,7 @@ kernel void MultTranspose2D(const int numElements,
             }
           }
         }
-        for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+        for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
           if (qx < NUM_QUAD_1D) {
             double r_x[NUM_QUAD_1D];
 
@@ -244,7 +244,7 @@ kernel void MultTranspose2D(const int numElements,
             }
           }
         }
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
+        for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
           if (dy < L2_DOFS_1D) {
             for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
               double r_e = 0;
@@ -260,26 +260,26 @@ kernel void MultTranspose2D(const int numElements,
   }
 }
 
-kernel void Mult3D(const int numElements,
-                   const L2DofToQuad_t restrict L2DofToQuad,
-                   const H1QuadToDof_t restrict H1QuadToDof,
-                   const H1QuadToDof_t restrict H1QuadToDofD,
-                   const Stress3D_t restrict stressJinvT,
-                   const E3D_t restrict e,
-                   V3D_t restrict v) {
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D]  @dim(NUM_QUAD_1D, L2_DOFS_1D);
-    shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
-    shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+@kernel void Mult3D(const int numElements,
+                    @restrict const L2DofToQuad_t L2DofToQuad,
+                    @restrict const H1QuadToDof_t H1QuadToDof,
+                    @restrict const H1QuadToDof_t H1QuadToDofD,
+                    @restrict const Stress3D_t stressJinvT,
+                    @restrict const E3D_t e,
+                    @restrict V3D_t v) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; @outer) {
+    @shared double s_L2DofToQuad[NUM_QUAD_1D * L2_DOFS_1D]  @dim(NUM_QUAD_1D, L2_DOFS_1D);
+    @shared double s_H1QuadToDof[H1_DOFS_1D  * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
+    @shared double s_H1QuadToDofD[H1_DOFS_1D * NUM_QUAD_1D] @dim(H1_DOFS_1D , NUM_QUAD_1D);
 
-    shared double s_Dxyz[INNER_SIZE_2D] @dim(INNER_SIZE, INNER_SIZE);
-    shared double s_xDyz[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
-    shared double s_xyDz[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_Dxyz[INNER_SIZE_2D] @dim(INNER_SIZE, INNER_SIZE);
+    @shared double s_xDyz[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_xyDz[NUM_QUAD_2D] @dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
-    exclusive double r_z[NUM_QUAD_1D];
+    @exclusive double r_z[NUM_QUAD_1D];
 
-    for (int y = 0; y < INNER_SIZE; ++y; inner) {
-      for (int x = 0; x < INNER_SIZE; ++x; inner) {
+    for (int y = 0; y < INNER_SIZE; ++y; @inner) {
+      for (int x = 0; x < INNER_SIZE; ++x; @inner) {
         const int id = (y * INNER_SIZE) + x;
         for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
           s_L2DofToQuad[i] = L2DofToQuad[i];
@@ -293,8 +293,8 @@ kernel void Mult3D(const int numElements,
 
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
               // Calculate D -> Q in the Z axis
               const double r_e0 = e(dx, dy, 0, el);
@@ -314,16 +314,16 @@ kernel void Mult3D(const int numElements,
         // For each xy plane
         for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
           // Fill xy plane at given z position
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+            for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
               if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
                 s_Dxyz(dx, dy) = r_z[qz];
               }
             }
           }
           // Calculate Dxyz, xDyz, xyDz in plane
-          for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
-            for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          for (int qy = 0; qy < INNER_SIZE; ++qy; @inner) {
+            for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                 double q_e = 0;
                 for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
@@ -341,8 +341,8 @@ kernel void Mult3D(const int numElements,
         for (int c = 0; c < NUM_DIM; ++c) {
           for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
             // Fill xy plane at given z position
-            for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
-              for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+            for (int qy = 0; qy < INNER_SIZE; ++qy; @inner) {
+              for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
                 if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                   double r_Dxyz = 0;
                   double r_xDyz = 0;
@@ -362,8 +362,8 @@ kernel void Mult3D(const int numElements,
               }
             }
             // Finalize solution in xy plane
-            for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-              for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+            for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+              for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
                 if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                   double r_v = 0;
                   for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -388,27 +388,27 @@ kernel void Mult3D(const int numElements,
   }
 }
 
-kernel void MultTranspose3D(const int numElements,
-                            const L2QuadToDof_t restrict L2QuadToDof,
-                            const H1DofToQuad_t restrict H1DofToQuad,
-                            const H1DofToQuad_t restrict H1DofToQuadD,
-                            const Stress3D_t restrict stressJinvT,
-                            const V3D_t restrict v,
-                            E3D_t restrict e) {
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
-    shared double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
-    shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
-    shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+@kernel void MultTranspose3D(const int numElements,
+                             @restrict const L2QuadToDof_t L2QuadToDof,
+                             @restrict const H1DofToQuad_t H1DofToQuad,
+                             @restrict const H1DofToQuad_t H1DofToQuadD,
+                             @restrict const Stress3D_t stressJinvT,
+                             @restrict const V3D_t v,
+                             @restrict E3D_t e) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; @outer) {
+    @shared double s_L2QuadToDof[L2_DOFS_1D * NUM_QUAD_1D]  @dim(L2_DOFS_1D , NUM_QUAD_1D);
+    @shared double s_H1DofToQuad[H1_DOFS_1D  * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
+    @shared double s_H1DofToQuadD[H1_DOFS_1D * NUM_QUAD_1D] @dim(NUM_QUAD_1D, H1_DOFS_1D);
 
-    shared double s_xyz[NUM_QUAD_2D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
-    shared double s_xyDz[NUM_QUAD_2D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
-    shared double s_v[NUM_QUAD_2D]              @dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_xyz[NUM_QUAD_2D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_xyDz[NUM_QUAD_2D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D, NUM_QUAD_1D);
+    @shared double s_v[NUM_QUAD_2D]              @dim(NUM_QUAD_1D, NUM_QUAD_1D);
 
-    exclusive double r_xyz[NUM_QUAD_1D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D);
-    exclusive double r_xyDz[NUM_QUAD_1D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D);
+    @exclusive double r_xyz[NUM_QUAD_1D * NUM_DIM]  @dim(NUM_DIM, NUM_QUAD_1D);
+    @exclusive double r_xyDz[NUM_QUAD_1D * NUM_DIM] @dim(NUM_DIM, NUM_QUAD_1D);
 
-    for (int y = 0; y < INNER_SIZE; ++y; inner) {
-      for (int x = 0; x < INNER_SIZE; ++x; inner) {
+    for (int y = 0; y < INNER_SIZE; ++y; @inner) {
+      for (int x = 0; x < INNER_SIZE; ++x; @inner) {
         const int id = (y * INNER_SIZE) + x;
         for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
           s_L2QuadToDof[i] = L2QuadToDof[i];
@@ -421,8 +421,8 @@ kernel void MultTranspose3D(const int numElements,
     }
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
             if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
               double r_v[NUM_DIM][H1_DOFS_1D];
               for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
@@ -447,8 +447,8 @@ kernel void MultTranspose3D(const int numElements,
         }
         for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
           // Finalize solution in xy plane
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+            for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
               if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                 for (int c = 0; c < NUM_DIM; ++c) {
                   s_xyz(c, dx, dy)  = r_xyz(c, qz);
@@ -458,8 +458,8 @@ kernel void MultTranspose3D(const int numElements,
             }
           }
           // Finalize solution in xy plane
-          for (int qy = 0; qy < INNER_SIZE; ++qy; inner) {
-            for (int qx = 0; qx < INNER_SIZE; ++qx; inner) {
+          for (int qy = 0; qy < INNER_SIZE; ++qy; @inner) {
+            for (int qx = 0; qx < INNER_SIZE; ++qx; @inner) {
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                 double r_qv = 0;
                 for (int c = 0; c < NUM_DIM; ++c) {
@@ -491,8 +491,8 @@ kernel void MultTranspose3D(const int numElements,
               }
             }
           }
-          for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-            for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+          for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+            for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
               if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
                 double r_e = 0;
                 for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -507,8 +507,8 @@ kernel void MultTranspose3D(const int numElements,
             }
           }
         }
-        for (int dy = 0; dy < INNER_SIZE; ++dy; inner) {
-          for (int dx = 0; dx < INNER_SIZE; ++dx; inner) {
+        for (int dy = 0; dy < INNER_SIZE; ++dy; @inner) {
+          for (int dx = 0; dx < INNER_SIZE; ++dx; @inner) {
             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
               for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
                 double r_e = 0;

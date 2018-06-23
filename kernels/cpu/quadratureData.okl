@@ -16,44 +16,48 @@
 
 #include "occa://mfem/fem/defines.okl"
 
+#ifndef M_PI
+#  define M_PI 3.14159265358979323846264338327950288
+#endif
+
 #if VDIM_ORDERING == ORDERING_BY_VDIM
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 #else
-typedef double* V2D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(3,0,1,2));
-typedef double* V3D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(4,0,1,2,3));
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(3,0,1,2);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(4,0,1,2,3);
 #endif
 
 typedef double* QJacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
-kernel void InitQuadratureData(const int numElements,
-                               const QLocal_t restrict rho0,
-                               const QLocal_t restrict detJ,
-                               const double * restrict quadWeights,
-                               QLocal_t restrict rho0DetJ0w) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int q = 0; q < NUM_QUAD; ++q; inner) {
+@kernel void InitQuadratureData(const int numElements,
+                                @restrict const QLocal_t rho0,
+                                @restrict const QLocal_t detJ,
+                                @restrict const double * quadWeights,
+                                @restrict QLocal_t rho0DetJ0w) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int q = 0; q < NUM_QUAD; ++q; @inner) {
       rho0DetJ0w(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
     }
   }
 }
 
-kernel void UpdateQuadratureData2D(const int numElements,
-                                   const DofToQuad_t restrict dofToQuad,
-                                   const DofToQuad_t restrict dofToQuadD,
-                                   const double * restrict quadWeights,
-                                   const V2D_t restrict v,
-                                   const QLocal_t restrict e,
-                                   const QLocal_t restrict rho0DetJ0w,
-                                   const QJacobian_t restrict invJ0,
-                                   const QJacobian_t restrict J,
-                                   const QJacobian_t restrict invJ,
-                                   const QLocal_t restrict detJ,
-                                   Stress_t restrict stressJinvT,
-                                   QLocal_t restrict dtEst) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void UpdateQuadratureData2D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V2D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double s_gradv[4 * NUM_QUAD_2D] @dim(2, 2, NUM_QUAD_2D);
 
       for (int i = 0; i < (4 * NUM_QUAD_2D); ++i) {
@@ -196,21 +200,21 @@ kernel void UpdateQuadratureData2D(const int numElements,
   }
 }
 
-kernel void UpdateQuadratureData3D(const int numElements,
-                                   const DofToQuad_t restrict dofToQuad,
-                                   const DofToQuad_t restrict dofToQuadD,
-                                   const double * restrict quadWeights,
-                                   const V3D_t restrict v,
-                                   const QLocal_t restrict e,
-                                   const QLocal_t restrict rho0DetJ0w,
-                                   const QJacobian_t restrict invJ0,
-                                   const QJacobian_t restrict J,
-                                   const QJacobian_t restrict invJ,
-                                   const QLocal_t restrict detJ,
-                                   Stress_t restrict stressJinvT,
-                                   QLocal_t restrict dtEst) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int dummy = 0; dummy < 1; ++dummy; inner) {
+@kernel void UpdateQuadratureData3D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V3D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int dummy = 0; dummy < 1; ++dummy; @inner) {
       double s_gradv[9 * NUM_QUAD_3D] @dim(3, 3, NUM_QUAD_3D);
 
       for (int i = 0; i < (9 * NUM_QUAD_3D); ++i) {
@@ -343,12 +347,12 @@ kernel void UpdateQuadratureData3D(const int numElements,
 
           double phi = 0;
           if (r <= -1.0) {
-            phi = OCCA_PI / 3.0;
+            phi = M_PI / 3.0;
           } else if (r < 1.0) {
             phi = acos(r) / 3.0;
           }
 
-          minEig = q_ + (2.0 * p * cos(phi + (2.0 * OCCA_PI / 3.0)));
+          minEig = q_ + (2.0 * p * cos(phi + (2.0 * M_PI / 3.0)));
           const double eig3 = q_ + (2.0 * p * cos(phi));
           const double eig2 = 3.0 * q_ - minEig - eig3;
           double maxNorm = 0;

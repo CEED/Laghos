@@ -16,61 +16,65 @@
 
 #include "occa://mfem/fem/defines.okl"
 
+#ifndef M_PI
+#  define M_PI 3.14159265358979323846264338327950288
+#endif
+
 #if VDIM_ORDERING == ORDERING_BY_VDIM
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 #else
-typedef double* V2D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(3,0,1,2));
-typedef double* V3D_t @(dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements), idxOrder(4,0,1,2,3));
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(3,0,1,2);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(4,0,1,2,3);
 #endif
 
 typedef double* QJacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
-kernel void InitQuadratureData(const int numElements,
-                               const QLocal_t restrict rho0,
-                               const QLocal_t restrict detJ,
-                               const double * restrict quadWeights,
-                               QLocal_t restrict rho0DetJ0w) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    for (int q = 0; q < NUM_QUAD; ++q; inner) {
+@kernel void InitQuadratureData(const int numElements,
+                                @restrict const QLocal_t rho0,
+                                @restrict const QLocal_t detJ,
+                                @restrict const double * quadWeights,
+                                @restrict QLocal_t rho0DetJ0w) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int q = 0; q < NUM_QUAD; ++q; @inner) {
       rho0DetJ0w(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
     }
   }
 }
 
-kernel void UpdateQuadratureData2D(const int numElements,
-                                   const DofToQuad_t restrict dofToQuad,
-                                   const DofToQuad_t restrict dofToQuadD,
-                                   const double * restrict quadWeights,
-                                   const V2D_t restrict v,
-                                   const QLocal_t restrict e,
-                                   const QLocal_t restrict rho0DetJ0w,
-                                   const QJacobian_t restrict invJ0,
-                                   const QJacobian_t restrict J,
-                                   const QJacobian_t restrict invJ,
-                                   const QLocal_t restrict detJ,
-                                   Stress_t restrict stressJinvT,
-                                   QLocal_t restrict dtEst) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    shared double s_dofToQuad[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    shared double s_dofToQuadD[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+@kernel void UpdateQuadratureData2D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V2D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    @shared double s_dofToQuad[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    @shared double s_dofToQuadD[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
-    shared double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D]  @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
-    shared double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    @shared double s_xy[NUM_DIM * NUM_QUAD_DOFS_1D]  @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+    @shared double s_xDy[NUM_DIM * NUM_QUAD_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
 
-    shared double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D] @dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
+    @shared double s_gradv[NUM_DIM * NUM_DIM * NUM_QUAD_2D] @dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
 
-    exclusive double r_v[NUM_DIM * NUM_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D);
+    @exclusive double r_v[NUM_DIM * NUM_DOFS_1D] @dim(NUM_DIM, NUM_DOFS_1D);
 
-    for (int x = 0; x < NUM_MAX_1D; ++x; inner) {
+    for (int x = 0; x < NUM_MAX_1D; ++x; @inner) {
       for (int id = x; id < NUM_QUAD_DOFS_1D; id += NUM_MAX_1D) {
         s_dofToQuad[id]  = dofToQuad[id];
         s_dofToQuadD[id] = dofToQuadD[id];
       }
     }
 
-    for (int dx = 0; dx < NUM_MAX_1D; ++dx; inner) {
+    for (int dx = 0; dx < NUM_MAX_1D; ++dx; @inner) {
       if (dx < NUM_DOFS_1D) {
         for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
           for (int vi = 0; vi < NUM_DIM; ++vi) {
@@ -104,7 +108,7 @@ kernel void UpdateQuadratureData2D(const int numElements,
       }
     }
 
-    for (int qy = 0; qy < NUM_MAX_1D; ++qy; inner) {
+    for (int qy = 0; qy < NUM_MAX_1D; ++qy; @inner) {
       if (qy < NUM_QUAD_1D) {
         for (int qx = 0; qx < NUM_MAX_1D; ++qx) {
           double gradX[NUM_DIM];
@@ -127,7 +131,7 @@ kernel void UpdateQuadratureData2D(const int numElements,
       }
     }
 
-    for (int qBlock = 0; qBlock < NUM_MAX_1D; ++qBlock; inner) {
+    for (int qBlock = 0; qBlock < NUM_MAX_1D; ++qBlock; @inner) {
       for (int q = qBlock; q < NUM_QUAD; q += NUM_MAX_1D) {
         double q_gradv[NUM_DIM * NUM_DIM]  @dim(NUM_DIM, NUM_DIM);
         double q_stress[NUM_DIM * NUM_DIM] @dim(NUM_DIM, NUM_DIM);
@@ -232,25 +236,25 @@ kernel void UpdateQuadratureData2D(const int numElements,
   }
 }
 
-kernel void UpdateQuadratureData3D(const int numElements,
-                                   const DofToQuad_t restrict dofToQuad,
-                                   const DofToQuad_t restrict dofToQuadD,
-                                   const double * restrict quadWeights,
-                                   const V3D_t restrict v,
-                                   const QLocal_t restrict e,
-                                   const QLocal_t restrict rho0DetJ0w,
-                                   const QJacobian_t restrict invJ0,
-                                   const QJacobian_t restrict J,
-                                   const QJacobian_t restrict invJ,
-                                   const QLocal_t restrict detJ,
-                                   Stress_t restrict stressJinvT,
-                                   QLocal_t restrict dtEst) {
-  for (int el = 0; el < numElements; ++el; outer) {
-    shared double s_dofToQuad[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    shared double s_dofToQuadD[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+@kernel void UpdateQuadratureData3D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V3D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    @shared double s_dofToQuad[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+    @shared double s_dofToQuadD[NUM_QUAD_DOFS_1D] @dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
-    for (int y = 0; y < NUM_QUAD_1D; ++y; inner) {
-      for (int x = 0; x < NUM_QUAD_1D; ++x; inner) {
+    for (int y = 0; y < NUM_QUAD_1D; ++y; @inner) {
+      for (int x = 0; x < NUM_QUAD_1D; ++x; @inner) {
         const int id = (y * NUM_QUAD_1D) + x;
         for (int i = id; i < (NUM_DOFS_1D * NUM_QUAD_1D); i += NUM_QUAD_2D) {
           s_dofToQuad[id]  = dofToQuad[id];
@@ -260,8 +264,8 @@ kernel void UpdateQuadratureData3D(const int numElements,
     }
 
     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-      for (int qy = 0; qy < NUM_QUAD_1D; ++qy; inner) {
-        for (int qx = 0; qx < NUM_QUAD_1D; ++qx; inner) {
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy; @inner) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx; @inner) {
           const int q = qx + qy*NUM_QUAD_1D + qz*NUM_QUAD_2D;
           double gradv[9]  @dim(3, 3);
           double q_gradv[9]  @dim(3, 3);
@@ -377,12 +381,12 @@ kernel void UpdateQuadratureData3D(const int numElements,
 
             double phi = 0;
             if (r <= -1.0) {
-              phi = OCCA_PI / 3.0;
+              phi = M_PI / 3.0;
             } else if (r < 1.0) {
               phi = acos(r) / 3.0;
             }
 
-            minEig = q_ + (2.0 * p * cos(phi + (2.0 * OCCA_PI / 3.0)));
+            minEig = q_ + (2.0 * p * cos(phi + (2.0 * M_PI / 3.0)));
             const double eig3 = q_ + (2.0 * p * cos(phi));
             const double eig2 = 3.0 * q_ - minEig - eig3;
             double maxNorm = 0;

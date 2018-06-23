@@ -19,14 +19,18 @@
 namespace mfem {
   namespace hydrodynamics {
     enum Problem {
-      vortex = 1,
-      sedov  = 2
+      vortex = 0,
+      sedov  = 1,
+      shockTube = 2,
+      triplePoint = 3
     };
 
     static occa::properties GetProblemProperties() {
       occa::properties props;
       props["defines/VORTEX_PROBLEM"] = vortex;
-      props["defines/SEDOV_PROBLEM"]  = sedov;
+      props["defines/SEDOV_PROBLEM"] = sedov;
+      props["defines/SHOCK_TUBE_PROBLEM"] = shockTube;
+      props["defines/TRIPLE_POINT_PROBLEM"] = triplePoint;
       return props;
     }
   }

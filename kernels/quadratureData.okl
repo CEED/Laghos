@@ -16,8 +16,8 @@
 
 #include "occa://mfem/fem/defines.okl"
 
-#if OCCA_USING_CPU
-#  include "occa://laghos/cpu/quadratureData.okl"
-#else
+#ifdef OCCA_USING_GPU
 #  include "occa://laghos/gpu/quadratureData.okl"
+#else
+#  include "occa://laghos/cpu/quadratureData.okl"
 #endif
