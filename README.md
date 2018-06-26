@@ -214,7 +214,7 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 ### MFEM
 -   `git clone git@github.com:mfem/mfem.git`
 -   `cd mfem`
--   ```sh make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0```
+-   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0``
 -   `make status` to verify that all the include paths are correct
 -   `make -j`
 -   `cd ..`
