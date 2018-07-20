@@ -128,7 +128,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -ldl
 
 all: laghos
 
