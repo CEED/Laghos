@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
-   args.AddOption(&engine, "-ng", "--engine", "-pa", "--partial-assembly",
+   args.AddOption(&engine, "-ng", "--engine", "-no-ng", "--no-engine",
                   "Activate 1D tensor-based partial assembly through the engine.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
