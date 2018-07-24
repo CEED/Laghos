@@ -158,7 +158,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 cln clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM kernels/*.o
+	rm -rf laghos *.o *.so *~ *.dSYM kernels/*.o
 clean-exec:
 	rm -rf ./results
 
