@@ -31,7 +31,7 @@ namespace mfem
 namespace hydrodynamics
 {
 
-class kForceOperator : public Operator
+class kForcePAOperator : public Operator
 {
 private:
    const int dim;
@@ -42,14 +42,14 @@ private:
    const kernels::KernelsDofQuadMaps *l2D2Q, *h1D2Q;
    mutable Vector gVecL2, gVecH1;
 public:
-   kForceOperator(ParFiniteElementSpace&,
-                  ParFiniteElementSpace&,
-                  const IntegrationRule&,
-                  const QuadratureData*,
-                  const bool);
+   kForcePAOperator(ParFiniteElementSpace&,
+                    ParFiniteElementSpace&,
+                    const IntegrationRule&,
+                    const QuadratureData*,
+                    const bool);
    void Mult(const Vector&, Vector&) const;
    void MultTranspose(const Vector&, Vector&) const;
-  ~kForceOperator();
+  ~kForcePAOperator();
 };
 
 } // namespace hydrodynamics

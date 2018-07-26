@@ -16,7 +16,7 @@
 
 #include "../laghos_assembly.hpp"
 
-#include "kMassOperator.hpp"
+#include "kMassPAOperator.hpp"
 #include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -30,9 +30,9 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-kMassOperator::kMassOperator(QuadratureData *qd_,
-                             ParFiniteElementSpace &fes_,
-                             const IntegrationRule &ir_) :
+kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
+                                 ParFiniteElementSpace &fes_,
+                                 const IntegrationRule &ir_) :
       Operator(fes_.GetVSize()),
       dim(fes_.GetMesh()->Dimension()),
       nzones(fes_.GetMesh()->GetNE()),
@@ -44,7 +44,7 @@ kMassOperator::kMassOperator(QuadratureData *qd_,
       bilinearForm(NULL) { }
 
 // *****************************************************************************
-void kMassOperator::Setup()
+void kMassPAOperator::Setup()
 {
    push(Wheat);
    const mfem::Engine &engine = fes.GetMesh()->GetEngine();
@@ -64,7 +64,7 @@ void kMassOperator::Setup()
 }
 
 // *************************************************************************
-void kMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
+void kMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    push(Wheat);
    //dbg("\n\033[33;7m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
@@ -104,7 +104,7 @@ void kMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 }
 
 // *****************************************************************************
-void kMassOperator::EliminateRHS(mfem::Vector &b)
+void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
    kernels::Vector rb = b.Get_PVector()->As<const kernels::Vector>();
@@ -115,7 +115,7 @@ void kMassOperator::EliminateRHS(mfem::Vector &b)
 }
 
 // *************************************************************************
-void kMassOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
+void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
    //dbg("x size= %d",x.Size()); x.Print();

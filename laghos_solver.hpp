@@ -20,7 +20,7 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 #include "kernels/kMassOperator.hpp"
-#include "kernels/kForceOperator.hpp"
+#include "kernels/kForcePAOperator.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -102,12 +102,12 @@ protected:
 
    // Same as above, but done through partial assembly.
    ForcePAOperator ForcePA;
-   kForceOperator kForce;
+   kForcePAOperator kForcePA;
 
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    mutable MassPAOperator VMassPA;
-   mutable kMassOperator kVMassPA;
+   mutable kMassPAOperator kVMassPA;
    mutable DiagonalSolver VMassPA_prec;
    mutable LocalMassPAOperator locEMassPA;
 

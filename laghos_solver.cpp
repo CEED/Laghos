@@ -104,9 +104,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes),
      ForcePA(&quad_data, h1_fes, l2_fes),
-     kForce(h1_fes, l2_fes, integ_rule, &quad_data,engine),
+     kForcePA(h1_fes, l2_fes, integ_rule, &quad_data,engine),
      VMassPA(&quad_data, H1FESpace),
-     kVMassPA(&quad_data, H1compFESpace, integ_rule),//H1compFESpace
+     kVMassPA(&quad_data, H1compFESpace, integ_rule),
      VMassPA_prec(H1FESpace),
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
@@ -199,17 +199,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))));
       evaluator = new FastEvaluator(H1FESpace);
 
-      // init
-      //quad_data.dqMaps = kernels::KernelsDofQuadMaps::Get(H1FESpace,integ_rule);
-      //quad_data.geom = kernels::KernelsGeometry::Get(*H1FESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>(), integ_rule);
-      //quad_data.rJac0inv = quad_data.geom->invJ;
-
       // Setup the preconditioner of the velocity mass operator.
       Vector d;
       (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
       VMassPA_prec.SetDiagonal(d);
    }
-     
+   
    if (engine) kVMassPA.Setup();
    
    locCG.SetOperator(locEMassPA);
@@ -278,7 +273,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       timer.sw_force.Start();
       if (!engine) ForcePA.Mult(one, rhs);
-      else kForce.Mult(one, rhs);
+      else kForcePA.Mult(one, rhs);
       timer.sw_force.Stop();
       rhs.Neg();
       //dbg("rhs:\n"); rhs.Print();
@@ -473,7 +468,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       timer.sw_force.Start();
       if (!engine) ForcePA.MultTranspose(v, e_rhs);
-      else kForce.MultTranspose(v, e_rhs);      
+      else kForcePA.MultTranspose(v, e_rhs);      
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }

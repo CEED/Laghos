@@ -15,7 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "../laghos_assembly.hpp"
-#include "kForceOperator.hpp"
+#include "kForcePAOperator.hpp"
 #include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -29,11 +29,11 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-kForceOperator::kForceOperator(ParFiniteElementSpace &h1f,
-                               ParFiniteElementSpace &l2f,
-                               const IntegrationRule &ir,
-                               const QuadratureData *qd,
-                               const bool engine)
+kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
+                                   ParFiniteElementSpace &l2f,
+                                   const IntegrationRule &ir,
+                                   const QuadratureData *qd,
+                                   const bool engine)
    : Operator(l2f.GetTrueVSize(), h1f.GetTrueVSize()),
      dim(h1f.GetMesh()->Dimension()),
      nzones(h1f.GetMesh()->GetNE()),
@@ -42,7 +42,7 @@ kForceOperator::kForceOperator(ParFiniteElementSpace &h1f,
      integ_rule(ir),
      quad_data(qd),
      gVecL2(l2fes.GetFE(0)->GetDof() * nzones),
-     gVecH1(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones) {
+   gVecH1(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones) {
    if (!engine) return;
    // push down to device the two vectors gVecL2 & gVecH1
    const Engine &ng = l2f.GetMesh()->GetEngine();
@@ -54,12 +54,12 @@ kForceOperator::kForceOperator(ParFiniteElementSpace &h1f,
 }
   
 // *****************************************************************************
-kForceOperator::~kForceOperator(){}
+kForcePAOperator::~kForcePAOperator(){}
 
 
 // *************************************************************************
-void kForceOperator::Mult(const mfem::Vector &vecL2,
-                          mfem::Vector &vecH1) const {
+void kForcePAOperator::Mult(const mfem::Vector &vecL2,
+                            mfem::Vector &vecH1) const {
    push();
    const kernels::KernelsFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
    const kernels::KernelsFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
@@ -95,8 +95,8 @@ void kForceOperator::Mult(const mfem::Vector &vecL2,
 }
 
 // *************************************************************************
-void kForceOperator::MultTranspose(const Vector &vecH1,
-                                   Vector &vecL2) const {
+void kForcePAOperator::MultTranspose(const Vector &vecH1,
+                                     Vector &vecL2) const {
    push();
    // vecH1 & vecL2 are now on the host, wrap them with k*
    Vector kVecH1(h1fes.GetVLayout());

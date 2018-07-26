@@ -32,7 +32,7 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-class kMassOperator : public Operator
+class kMassPAOperator : public Operator
 {
 private:
    const int dim, nzones;
@@ -43,13 +43,10 @@ private:
    Array<int> ess_tdofs;
    kernels::KernelsBilinearForm *bilinearForm;
    Operator *massOperator;
-   // For distributing X
-   //mutable Vector distX;
-   //mutable kernels::KernelsGridFunction x_gf, y_gf;
 public:
-   kMassOperator(QuadratureData*,
-                 ParFiniteElementSpace&,
-                 const IntegrationRule&);
+   kMassPAOperator(QuadratureData*,
+                   ParFiniteElementSpace&,
+                   const IntegrationRule&);
    void Setup();
    
    void SetEssentialTrueDofs(Array<int>&);
