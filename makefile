@@ -50,8 +50,14 @@ endef
 PREFIX = ./bin
 INSTALL = /usr/bin/install
 
+# Set okrtc path
+OKRTC_DIR ?= ~/usr/local/okrtc
+ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
+	OKRTC ?= $(OKRTC_DIR)/bin/okrtc
+endif
+
 # Use the MFEM build directory
-MFEM_DIR = ../../mfem/kernels
+MFEM_DIR = /home/camier1/home/mfem/kernels
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -106,13 +112,19 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
-KERNELS_DIR = $(patsubst %/,%,$(MAKEFILE_DIR))/kernels
+KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
+# Source files setup
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
 	$(KERNELS_DIR)/kForceOperator.cpp \
-	$(KERNELS_DIR)/kMassOperator.cpp 
+	$(KERNELS_DIR)/kMassOperator.cpp
+# Kernel files setup
+KERNELS_RTC_DIRS = $(KERNELS_DIR)/force
+KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))
+
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
+OBJECT_KERNELS = $(KERNELS_RTC_SRC_FILES:.cpp=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 # Targets
@@ -121,16 +133,17 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $< 
-#$(<F)
+	cd $(<D); $(CCC) -c $(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -ldl
+laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
+	$(CCC) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS) -ldl
 
 all: laghos
+
+go:;@dbg=1 ./laghos -cfl 0.1 -ng
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -140,6 +153,11 @@ debug:
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
+$(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
+
+rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
+$(OBJECT_KERNELS): %.o: %.cpp makefile
+	$(OKRTC) $(CCC) -I/home/camier1/home/okrtc/include -o $(@) -c -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)
@@ -158,7 +176,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 cln clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *.so *~ *.dSYM kernels/*.o
+	rm -rf laghos *.o *.so *~ *.dSYM kernels/*.o $(OBJECT_KERNELS)
 clean-exec:
 	rm -rf ./results
 
