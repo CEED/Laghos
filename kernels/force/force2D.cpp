@@ -22,86 +22,70 @@ void rForceMult2D(const int NUM_DIM,
                   const int L2_DOFS_1D,
                   const int H1_DOFS_1D,
                   const int numElements,
-                  const double* __restrict__ L2DofToQuad,
-                  const double* __restrict__ H1QuadToDof,
-                  const double* __restrict__ H1QuadToDofD,
-                  const double* __restrict__ stressJinvT,
-                  const double* __restrict__ e,
-                  double* __restrict__ v){
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   forall(el,numElements,{
-         double e_xy[NUM_QUAD_2D];
-         for (int i = 0; i < NUM_QUAD_2D; ++i)
-         {
-            e_xy[i] = 0;
-         }
-         for (int dy = 0; dy < L2_DOFS_1D; ++dy)
-         {
-            double e_x[NUM_QUAD_1D];
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-            {
-               e_x[qy] = 0;
-            }
-            for (int dx = 0; dx < L2_DOFS_1D; ++dx)
-            {
-               const double r_e = e[ijkN(dx,dy,el,L2_DOFS_1D)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-               {
-                  e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
-               }
-            }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-            {
-               const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-               {
-                  e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
-               }
-            }
-         }
-         for (int c = 0; c < 2; ++c)
-         {
-            for (int dy = 0; dy < H1_DOFS_1D; ++dy)
-            {
-               for (int dx = 0; dx < H1_DOFS_1D; ++dx)
-               {
-                  v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] = 0.0;
-               }
-            }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-            {
-               double Dxy[H1_DOFS_1D];
-               double xy[H1_DOFS_1D];
-               for (int dx = 0; dx < H1_DOFS_1D; ++dx)
-               {
-                  Dxy[dx] = 0.0;
-                  xy[dx]  = 0.0;
-               }
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-               {
-                  const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                     stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
-                  const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                     stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
-                  for (int dx = 0; dx < H1_DOFS_1D; ++dx)
-                  {
-                     Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
-                     xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
-                  }
-               }
-               for (int dy = 0; dy < H1_DOFS_1D; ++dy)
-               {
-                  const double wy  = H1QuadToDof[ijN(dy,qy,H1_DOFS_1D)];
-                  const double wDy = H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)];
-                  for (int dx = 0; dx < H1_DOFS_1D; ++dx)
-                  {
-                     v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
-                  }
-               }
-            }
-         }
+                  const double* __restrict L2DofToQuad,
+                  const double* __restrict H1QuadToDof,
+                  const double* __restrict H1QuadToDofD,
+                  const double* __restrict stressJinvT,
+                  const double* __restrict e,
+                  double* __restrict v) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  forall(el,numElements, {
+    double e_xy[NUM_QUAD_2D];
+    for (int i = 0; i < NUM_QUAD_2D; ++i) {
+      e_xy[i] = 0;
+    }
+    for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+      double e_x[NUM_QUAD_1D];
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        e_x[qy] = 0;
       }
-      );
+      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        const double r_e = e[ijkN(dx,dy,el,L2_DOFS_1D)];
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
+        }
+      }
+    }
+    for (int c = 0; c < 2; ++c) {
+      for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+        for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+          v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] = 0.0;
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        double Dxy[H1_DOFS_1D];
+        double xy[H1_DOFS_1D];
+        for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+          Dxy[dx] = 0.0;
+          xy[dx]  = 0.0;
+        }
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
+                             stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
+          const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
+                             stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
+            xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
+          }
+        }
+        for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+          const double wy  = H1QuadToDof[ijN(dy,qy,H1_DOFS_1D)];
+          const double wDy = H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)];
+          for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+            v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
+          }
+        }
+      }
+    }
+  }
+        );
 }
 
 // *****************************************************************************
@@ -111,100 +95,80 @@ void rForceMultTranspose2D(const int NUM_DIM,
                            const int L2_DOFS_1D,
                            const int H1_DOFS_1D,
                            const int numElements,
-                           const double* __restrict__ L2QuadToDof,
-                           const double* __restrict__ H1DofToQuad,
-                           const double* __restrict__ H1DofToQuadD,
-                           const double* __restrict__ stressJinvT,
-                           const double* __restrict__ v,
-                           double* __restrict__ e)
-{
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   forall(el,numElements,{
-         double vStress[NUM_QUAD_2D];
-         for (int i = 0; i < NUM_QUAD_2D; ++i)
-         {
-            vStress[i] = 0;
-         }
-         for (int c = 0; c < NUM_DIM; ++c)
-         {
-            double v_Dxy[NUM_QUAD_2D];
-            double v_xDy[NUM_QUAD_2D];
-            for (int i = 0; i < NUM_QUAD_2D; ++i)
-            {
-               v_Dxy[i] = v_xDy[i] = 0;
-            }
-            for (int dy = 0; dy < H1_DOFS_1D; ++dy)
-            {
-               double v_x[NUM_QUAD_1D];
-               double v_Dx[NUM_QUAD_1D];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-               {
-                  v_x[qx] = v_Dx[qx] = 0;
-               }
-
-               for (int dx = 0; dx < H1_DOFS_1D; ++dx)
-               {
-                  const double r_v = v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-                  {
-                     v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-                     v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
-                  }
-               }
-               for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-               {
-                  const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-                  const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-                  {
-                     v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] += v_Dx[qx] * wy;
-                     v_xDy[ijN(qx,qy,NUM_QUAD_1D)] += v_x[qx]  * wDy;
-                  }
-               }
-            }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-            {
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-               {
-                  vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
-                     ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] *
-                       stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]) +
-                      (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] *
-                       stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]));
-               }
-            }
-         }
-         for (int dy = 0; dy < L2_DOFS_1D; ++dy)
-         {
-            for (int dx = 0; dx < L2_DOFS_1D; ++dx)
-            {
-               e[ijkN(dx,dy,el,L2_DOFS_1D)] = 0;
-            }
-         }
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
-         {
-            double e_x[L2_DOFS_1D];
-            for (int dx = 0; dx < L2_DOFS_1D; ++dx)
-            {
-               e_x[dx] = 0;
-            }
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-            {
-               const double r_v = vStress[ijN(qx,qy,NUM_QUAD_1D)];
-               for (int dx = 0; dx < L2_DOFS_1D; ++dx)
-               {
-                  e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
-               }
-            }
-            for (int dy = 0; dy < L2_DOFS_1D; ++dy)
-            {
-               const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
-               for (int dx = 0; dx < L2_DOFS_1D; ++dx)
-               {
-                  e[ijkN(dx,dy,el,L2_DOFS_1D)] += e_x[dx] * w;
-               }
-            }
-         }
+                           const double* __restrict L2QuadToDof,
+                           const double* __restrict H1DofToQuad,
+                           const double* __restrict H1DofToQuadD,
+                           const double* __restrict stressJinvT,
+                           const double* __restrict v,
+                           double* __restrict e) {
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  forall(el,numElements, {
+    double vStress[NUM_QUAD_2D];
+    for (int i = 0; i < NUM_QUAD_2D; ++i) {
+      vStress[i] = 0;
+    }
+    for (int c = 0; c < NUM_DIM; ++c) {
+      double v_Dxy[NUM_QUAD_2D];
+      double v_xDy[NUM_QUAD_2D];
+      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+        v_Dxy[i] = v_xDy[i] = 0;
       }
-      );
+      for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
+        double v_x[NUM_QUAD_1D];
+        double v_Dx[NUM_QUAD_1D];
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          v_x[qx] = v_Dx[qx] = 0;
+        }
+
+        for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
+          const double r_v = v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+            v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+          }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+          const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] += v_Dx[qx] * wy;
+            v_xDy[ijN(qx,qy,NUM_QUAD_1D)] += v_x[qx]  * wDy;
+          }
+        }
+      }
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
+            ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] *
+              stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]) +
+             (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] *
+              stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]));
+        }
+      }
+    }
+    for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        e[ijkN(dx,dy,el,L2_DOFS_1D)] = 0;
+      }
+    }
+    for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+      double e_x[L2_DOFS_1D];
+      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+        e_x[dx] = 0;
+      }
+      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+        const double r_v = vStress[ijN(qx,qy,NUM_QUAD_1D)];
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
+        }
+      }
+      for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
+        const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
+        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
+          e[ijkN(dx,dy,el,L2_DOFS_1D)] += e_x[dx] * w;
+        }
+      }
+    }
+  }
+        );
 }

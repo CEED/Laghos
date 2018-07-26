@@ -13,11 +13,8 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_KERNELS_KERNELS_KERNELS
-#define MFEM_KERNELS_KERNELS_KERNELS
-
-// *****************************************************************************
-//#define __LAMBDA__
+#ifndef LAGHOS_KERNELS_KERNELS_HPP
+#define LAGHOS_KERNELS_KERNELS_HPP
 
 // *****************************************************************************
 #include <math.h>
@@ -26,8 +23,6 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
-//#include <unordered_map>
-
 
 // *****************************************************************************
 #ifdef __NVCC__
@@ -41,18 +36,11 @@
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
 #include "RAJA/policy/cuda.hpp"
-#endif
-
-// *****************************************************************************
-//#include "../config/dbg.hpp"
-//#include "../config/nvvp.hpp"
-//#include "../config/config.hpp"
-//#include "../general/memcpy.hpp"
-//#include "../general/malloc.hpp"
+#endif // __RAJA__
 
 // *****************************************************************************
 #include "force/force.hpp"
 #include "include/forall.hpp"
 #include "include/offsets.hpp"
 
-#endif // MFEM_KERNELS_KERNELS_KERNELS
+#endif // LAGHOS_KERNELS_KERNELS_HPP

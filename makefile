@@ -155,9 +155,9 @@ $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 $(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
 
-rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
+#rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
 $(OBJECT_KERNELS): %.o: %.cpp makefile
-	$(OKRTC) $(CCC) -I/home/camier1/home/okrtc/include -o $(@) -c -I$(realpath $(dir $(<))) $(<)
+	dbg=1 $(OKRTC) $(CCC) -I/home/camier1/home/okrtc/include -o $(@) -c -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)

@@ -13,76 +13,21 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#ifndef MFEM_KERNELS_FORCE
-#define MFEM_KERNELS_FORCE
+#ifndef LAGHOS_KERNELS_FORCE_HPP
+#define LAGHOS_KERNELS_FORCE_HPP
 
-
-// *****************************************************************************
-void rForceMult2D(const int, const int, const int, const int,
-                  const int, const int, const double*,
-                  const double*, const double*, const double*, const double*,
-                  double* );
-
-void rForceMultTranspose2D(const int ,const int ,
-                           const int ,const int ,
-                           const int ,  const int ,
-                           const double*  , const double*  ,
-                           const double*  , const double*  ,
-                           const double*  , double* );
-
-void rForceMult3D(const int ,
-                  const int ,
-                  const int ,
-                  const int ,
-                  const int ,
-                  const int ,
-                  const double*  ,
-                  const double*  ,
-                  const double*  ,
-                  const double*  ,
-                  const double* ,
-                  double* );
-
-void rForceMultTranspose3D(const int ,
-                           const int ,
-                           const int ,
-                           const int ,
-                           const int ,
-                           const int ,
-                           const double*  ,
-                           const double*  ,
-                           const double*  ,
-                           const double*  ,
-                           const double*  ,
-                           double*  );
-
-
-// kForce **********************************************************************
 void rForceMult(const int NUM_DIM,
                 const int NUM_DOFS_1D,
                 const int NUM_QUAD_1D,
                 const int L2_DOFS_1D,
                 const int H1_DOFS_1D,
                 const int nzones,
-                const double*  L2DofToQuad,
-                const double*  H1QuadToDof,
-                const double*  H1QuadToDofD,
-                const double*  stressJinvT,
-                const double*  e,
-                double*  v);
-
-void rForceMultS(const int NUM_DIM,
-                 const int NUM_DOFS_1D,
-                 const int NUM_QUAD_1D,
-                 const int L2_DOFS_1D,
-                 const int H1_DOFS_1D,
-                 const int nzones,
-                 const double*  L2DofToQuad,
-                 const double*  H1QuadToDof,
-                 const double*  H1QuadToDofD,
-                 const double*  stressJinvT,
-                 const double*  e,
-                 double*  v);
+                const double* L2QuadToDof,
+                const double* H1DofToQuad,
+                const double* H1DofToQuadD,
+                const double* stressJinvT,
+                const double* e,
+                double* v);
 
 void rForceMultTranspose(const int NUM_DIM,
                          const int NUM_DOFS_1D,
@@ -90,24 +35,11 @@ void rForceMultTranspose(const int NUM_DIM,
                          const int L2_DOFS_1D,
                          const int H1_DOFS_1D,
                          const int nzones,
-                         const double*  L2QuadToDof,
-                         const double*  H1DofToQuad,
-                         const double*  H1DofToQuadD,
-                         const double*  stressJinvT,
-                         const double*  v,
-                         double*  e);
+                         const double* L2QuadToDof,
+                         const double* H1DofToQuad,
+                         const double* H1DofToQuadD,
+                         const double* stressJinvT,
+                         const double* v,
+                         double* e);
 
-void rForceMultTransposeS(const int NUM_DIM,
-                          const int NUM_DOFS_1D,
-                          const int NUM_QUAD_1D,
-                          const int L2_DOFS_1D,
-                          const int H1_DOFS_1D,
-                          const int nzones,
-                          const double*  L2QuadToDof,
-                          const double*  H1DofToQuad,
-                          const double*  H1DofToQuadD,
-                          const double*  stressJinvT,
-                          const double*  v,
-                          double*  e);
-
-#endif // MFEM_KERNELS_FORCE
+#endif // LAGHOS_KERNELS_FORCE_HPP

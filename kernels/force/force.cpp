@@ -16,6 +16,24 @@
 #include "../kernels.hpp"
 
 // *****************************************************************************
+void rForceMult2D(const int, const int, const int, const int, const int,
+                  const int, const double*, const double*, const double*,
+                  const double*, const double*, double*);
+
+void rForceMultTranspose2D(const int, const int, const int, const int,
+                           const int,  const int, const double*, const double*,
+                           const double*, const double*, const double*, double*);
+
+void rForceMult3D(const int, const int, const int, const int, const int,
+                  const int, const double*, const double*, const double*,
+                  const double*, const double*, double* );
+
+void rForceMultTranspose3D(const int, const int, const int, const int,
+                           const int,
+                           const int, const double*, const double*, const double*,
+                           const double*, const double*, double*);
+
+// *****************************************************************************
 void rForceMult(const int NUM_DIM,
                 const int NUM_DOFS_1D,
                 const int NUM_QUAD_1D,
@@ -27,21 +45,20 @@ void rForceMult(const int NUM_DIM,
                 const double* H1DofToQuadD,
                 const double* stressJinvT,
                 const double* e,
-                double* v)
-{
-   if (NUM_DIM==2)
-     call0(rForceMult2D,id,grid,blck,
-           NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
-           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
-   if (NUM_DIM==3)
-     call0(rForceMult3D,id,grid,blck,
-           NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
-           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
-   if (NUM_DIM!=2 && NUM_DIM!=3)
-   {
-     exit(printf("\n[rForceMult] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
-   }
+                double* v) {
+  if (NUM_DIM==2)
+    call0(rForceMult2D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
 
+  if (NUM_DIM==3)
+    call0(rForceMult3D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
+
+  if (NUM_DIM!=2 && NUM_DIM!=3) {
+    exit(printf("\n[rForceMult] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
+  }
 }
 
 // *****************************************************************************
@@ -56,18 +73,19 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* H1DofToQuadD,
                          const double* stressJinvT,
                          const double* v,
-                         double* e){
-   if (NUM_DIM==2)
-     call0(rForceMultTranspose2D,id,grid,blck,
-           NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
-           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
-   
-   if (NUM_DIM==3)
-     call0(rForceMultTranspose3D,id,grid,blck,
-           NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
-           nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
-   
-   if (NUM_DIM!=2 && NUM_DIM!=3)
-     exit(printf("\n[rForceMultTranspose] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
+                         double* e) {
+  if (NUM_DIM==2)
+    call0(rForceMultTranspose2D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+
+  if (NUM_DIM==3)
+    call0(rForceMultTranspose3D,id,grid,blck,
+          NUM_DIM,NUM_DOFS_1D,NUM_QUAD_1D,L2_DOFS_1D,H1_DOFS_1D,
+          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+
+  if (NUM_DIM!=2 && NUM_DIM!=3) {
+    exit(printf("\n[rForceMultTranspose] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
+  }
 }
 
