@@ -19,7 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
-#include "kernels/kMassOperator.hpp"
+#include "kernels/kMassPAOperator.hpp"
 #include "kernels/kForcePAOperator.hpp"
 
 #ifdef MFEM_USE_MPI

@@ -116,8 +116,8 @@ KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
 # Source files setup
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
-	$(KERNELS_DIR)/kForceOperator.cpp \
-	$(KERNELS_DIR)/kMassOperator.cpp
+	$(KERNELS_DIR)/kForcePAOperator.cpp \
+	$(KERNELS_DIR)/kMassPAOperator.cpp
 # Kernel files setup
 KERNELS_RTC_DIRS = $(KERNELS_DIR)/force
 KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))
