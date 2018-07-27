@@ -218,7 +218,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   dbg("\033[7mLagrangianHydroOperator::Mult");
+   dbg("\033[7m[LagrangianHydroOperator] Mult");
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -241,13 +241,29 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
+   //dbg("v:\n"); v.Print();
+   // 0 1 1.22465e-16 0 6.12323e-17 7.4988e-33 -0 -1
+   // -1.22465e-16 0.707107 0.707107 4.32978e-17 0 0.707107 8.65956e-17 4.32978e-17
+   // ...
+   // 0.270598 4.68652e-17 -0.353553 0.146447 -0.853553 0.353553 -0.146447 -0.353553
+   // -0.853553 0.353553 0.853553 0.353553 -0.353553 -0.146447 -0.353553 0.853553
+   // 0.353553 0.146447
+
+
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
+   //dbg("e:\n"); e.Print();
+   // 2.37913 1.97674 1.97674 1.57434 1.5 1.90239 1.09761 1.5
+   // 1.5 1.09761 1.90239 1.5 0.620872 1.02326 1.02326 1.42566
+   //assert(__FILE__&&__LINE__&&false);
 
    ParGridFunction dx, dv, de;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
+   //dbg("dx:\n"); dx.Print(); assert(__FILE__&&__LINE__&&false);
+   
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
-   //dbg("dv:\n"); dv.Print();
+   //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
    de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   //dbg("de:\n"); de.Print(); assert(__FILE__&&__LINE__&&false);
 
    // Set dx_dt = v (explicit).
    dx = v;
@@ -268,78 +284,44 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       one.Resize(L2FESpace.GetVLayout());
       one.Fill(1.0);//one.Push();
    }
+   //dbg("one:\n"); one.Print(); assert(__FILE__&&__LINE__&&false);
    
    if (p_assembly)
    {
       timer.sw_force.Start();
       if (!engine) ForcePA.Mult(one, rhs);
-      else kForcePA.Mult(one, rhs);
-      timer.sw_force.Stop();
-      rhs.Neg();
-      //dbg("rhs:\n"); rhs.Print();
-      // @1.0 ng: 6.85714 6.85714  2.77556e-16 6.85714 -0           -6.85714 -1.11022e-16 -6.85714
-      // @1.0:    6.85714 6.85714 -4.44089e-16 6.85714 -8.88178e-16 -6.85714 -0           -6.85714
+      else {
+         dbg("\033[7m[LagrangianHydroOperator] kForcePA.Mult");
+         kForcePA.Mult(one, rhs);
+      }
+      timer.sw_force.Stop();rhs.Pull();
+      //dbg("rhs:\n"); rhs.Print(); assert(__FILE__&&__LINE__&&false);
+      //-6.85714 -6.85714 4.44089e-16 -6.85714 1.33227e-15 6.85714 0 6.85714
+      // 6.85714 -6.85714 8.88178e-16 8.88178e-16 -6.85714 -6.85714 6.85714 8.88178e-16
 
-      //-0.1307 -4.16334e-17 0.1307 -0.14772 -6.245e-17 0.14772 -0.1307 -9.71445e-17
-      //0.1307 0.0378933 -1.11022e-16 0.0757866 -0.40912 -0.0378933 0.40912 -0.0757866
-      //-0 0.0378933 -0.40912 0.40912 -0.0378933 0.151573 -0.151573 0.151573
-      //-0.151573 -0.1307 -0.14772 -0.1307 -1.11022e-16 -1.38778e-17 -1.52656e-16 0.1307
-      //0.14772 0.1307 -0.40912 0.0757866 -2.22045e-16 0.0378933 -0.40912 0.0378933
-      //-1.66533e-16 -0.0757866 0.40912 -0.0378933 -0.0378933 0.40912 0.151573 0.151573
-      //-0.151573 -0.151573
+      rhs.Neg();
+      //dbg("rhs:\n"); rhs.Print(); assert(__FILE__&&__LINE__&&false);
+      // -0.064224 -3.46945e-17 0.064224 -0.0796075 -2.42861e-17 0.0796075 -0.064224 -4.16334e-17
+      // 0.064224 0.00579094 -6.59195e-17 0.0115819 -0.104028 -0.00579094 0.104028 -0.0115819
+      // ...
+      // -0.0149034 0.18157 0.0298068 0.0298068 -0.0298068 -0.0298068 0.0298068 0.0298068
+      // 0.0298068 0.0298068 0.0298068 0.0298068 -0.0298068 -0.0298068 -0.0298068 -0.0298068
+      // -0.0298068 -0.0298068
 
       if (!engine)
       {
          Operator *cVMassPA;
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-         //dbg("before FormLinearSystem dv:\n"); dv.Print();
-         //dbg("before FormLinearSystem rhs:\n"); rhs.Print();
          VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
-         //dbg("after FormLinearSystemB(%d):\n",B.Size()); B.Print();
-         //cg.SetPreconditioner(VMassPA_prec);
          cg.SetOperator(*cVMassPA);
          cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
          cg.SetMaxIter(cg_max_iter);
          cg.SetPrintLevel(0);
          timer.sw_cgH1.Start();
-         
-         //dbg("X(%d):\n",X.Size()); X.Print();
-         //0 0 0 0 0 0 0 0
-
-         //dbg("B(%d):\n",B.Size()); B.Print();
-         //0 -4.16334e-17 0 0 -6.245e-17 0 0 -9.71445e-17
-
-         // ********************************************************************
          cg.Mult(B, X);
-         // r: 0 0 0 0 0 0 0 0
-         // r: 0 -4.16334e-17 0 0 -6.245e-17 0 0 -9.71445e-17
-         // z: 0 -1.89735e-19 0 0 -7.04731e-19 0 0 1.6263e-19
-         // den=0.016337
-         // d: 0 -4.16334e-17 0 0 -6.245e-17 0 0 -9.71445e-17
-         // x: 0 0.0378933 -1.11022e-16 0.0757866 0 -0.0378933 0 -0.0757866
-
-        
-         //dbg("X:\n"); X.Print();
-         //0 -3.5549e-15 0 0 -4.90696e-15 0 0 -8.90767e-15
-         //0 1.7052 -8.6747e-15 1.7052 0 -1.7052 0 -1.7052
-         //-1.31731e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052
-         //-1.7052 0 0 0 -8.78448e-15 -1.08434e-15 -1.26413e-14 0
-         //0 0 0 1.7052 -1.62516e-14 1.7052 0 1.7052
-         //-1.34512e-14 -1.7052 0 -1.7052 -1.7052 0 1.7052 1.7052
-         //-1.7052 -1.7052
-
          timer.sw_cgH1.Stop();
          timer.H1cg_iter += cg.GetNumIterations();
          VMassPA.RecoverFEMSolution(X, rhs, dv);
-         //dbg("dv:\n"); dv.Print();
-         //0 -3.5549e-15 0 0 -4.90696e-15 0 0 -8.90767e-15
-         //0 1.7052 -8.6747e-15 1.7052 0 -1.7052 0 -1.7052
-         //-1.31731e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052
-         //-1.7052 0 0 0 -8.78448e-15 -1.08434e-15 -1.26413e-14 0
-         //0 0 0 1.7052 -1.62516e-14 1.7052 0 1.7052
-         //-1.34512e-14 -1.7052 0 -1.7052 -1.7052 0 1.7052 1.7052
-         //-1.7052 -1.7052
-         //assert(false);
          delete cVMassPA;
       }
       else
@@ -359,17 +341,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dbg("V component #%d",c);
             Vector rhs_c(H1compFESpace.GetVLayout());
             rhs_c.PushData(rhs.GetData()+c*size);
-            //dbg("rhs_c:\n"); rhs_c.Print();
             
             Vector dv_c(H1compFESpace.GetVLayout());
             dv_c.PushData(dv.GetData()+c*size);            
-            //dbg("dv_c(%ld):\n",dv_c.Size()); dv_c.Print();
  
             Vector kB(H1compFESpace.GetVLayout());
-            //dbg("kB size=%d:\n",kB.Size());kB.Print();
             
             Vector kX(H1compFESpace.GetVLayout());
-            //dbg("kX size=%d",kX.Size());
       
             Array<int> c_tdofs;
             Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -384,8 +362,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // *****************************************************************
             H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetProlongationOperator()->MultTranspose(rhs_c, kB);
-            //dbg("kB:\n"); kB.Print();
-            //-0.1307 -5.55112e-17 0.1307 -0.14772 -4.85723e-17 0.14772 -0.1307 -6.93889e-17 ...
 
             H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetRestrictionOperator()->Mult(dv_c, kX);
@@ -395,36 +371,18 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
             // *****************************************************************
             timer.sw_cgH1.Start();
-            //dbg("kB:\n"); kB.Print();
-            //0 -4.16334e-17 0 0 -6.245e-17 0 0 -9.71445e-17
-
-            // *****************************************************************
             cg.Mult(kB, kX); // linalg/solver.cpp
-            // then den differs because DOT differs: we don't have all components          
-            //dbg("kX:\n"); kX.Print();
-            //assert(false);
+            // then den differs because DOT differs: we don't have all components
 
             // *****************************************************************
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
             H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetProlongationOperator()->Mult(kX, dv_c);
-            //dbg("dv_c:\n"); dv_c.Print();
-            dbg("memcpy of %d bytes)",size*sizeof(double));            
+            dbg("memcpy of %d bytes",size*sizeof(double));            
             memcpy(dv.GetData()+c*size, dv_c.GetData(), size*sizeof(double));
-            //dbg("dv:\n"); dv.Print();
-            //assert(false);
+            //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
          }
-         //dbg("dv:\n"); dv.Print();
-         //assert(false);
-         // Should be:
-         //0 -3.5549e-15 0 0 -4.90696e-15 0 0 -8.90767e-15
-         //0 1.7052 -8.6747e-15 1.7052 0 -1.7052 0 -1.7052
-         //-1.31731e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052
-         //-1.7052 0 0 0 -8.78448e-15 -1.08434e-15 -1.26413e-14 0
-         //0 0 0 1.7052 -1.62516e-14 1.7052 0 1.7052
-         //-1.34512e-14 -1.7052 0 -1.7052 -1.7052 0 1.7052 1.7052
-         //-1.7052 -1.7052
       } // engine
    }
    else // p_assembly

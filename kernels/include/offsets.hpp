@@ -27,7 +27,7 @@
 #define   ijklNM(i,j,k,l,N,M) (i)+(N)*((j)+(N)*((k)+(M)*(l)))
 #define  _ijklNM(i,j,k,l,N,M) (j)+(N)*((k)+(N)*((l)+(M)*(i)))
 #define   ijklmNM(i,j,k,l,m,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*(m))))
-#define __ijklmNM(i,j,k,l,m,N,M) (k)+(M)*((l)+(M)*((m)+(N*N)*((i)+(N)*j)))
+#define __ijklmNM(i,j,qx,qy,e,D,Q,E) (qx)+(Q)*((qy)+(Q)*((e)+(E)*((i)+(D)*j)))
 
 #define _ijklmNM(i,j,k,l,m,N,M) (j)+(N)*((k)+(N)*((l)+(N)*((m)+(M)*(i))))
 #define ijklmnNM(i,j,k,l,m,n,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*((m)+(M)*(n)))))

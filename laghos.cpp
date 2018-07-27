@@ -265,11 +265,14 @@ int main(int argc, char *argv[])
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
+   dbg("\033[7mL2FESpace:");
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+   dbg("\033[7mH1FESpace:");
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
+   dbg("\033[7mBoundary conditions:");
    Array<int> ess_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -285,6 +288,7 @@ int main(int argc, char *argv[])
 
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
+   dbg("\033[7mODE solver:");
    switch (ode_solver_type)
    {
       case 1: ode_solver = new ForwardEulerSolver; break;
@@ -303,6 +307,7 @@ int main(int argc, char *argv[])
          return 3;
    }
 
+   dbg("\033[7mGlobalTrueVSize:");
    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
 
@@ -322,18 +327,19 @@ int main(int argc, char *argv[])
    // - 1 -> velocity
    // - 2 -> specific internal energy
 
+   dbg("\033[7mBlockVector:");
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   dbg("\033[7mBlockVector S");
    BlockVector S(true_offset);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
+   dbg("\033[7mParGridFunction:");
    ParGridFunction x_gf, v_gf, e_gf;
    x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
@@ -341,9 +347,11 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
+   dbg("\033[7mInitialize x_gf:");
    pmesh->SetNodalGridFunction(&x_gf);
 
    // Initialize the velocity.
+   dbg("\033[7mInitialize the velocity:");
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
@@ -353,6 +361,7 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
+   dbg("\033[7mInitialize density & internal energy:");
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -376,6 +385,7 @@ int main(int argc, char *argv[])
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
    // mesh.
+   dbg("\033[7mPiecewise constant ideal gas coefficient:");
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
@@ -445,6 +455,7 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
+   dbg("\033[7mPerform time-integration:");
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
@@ -468,6 +479,7 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
+      //assert(__FILE__&&__LINE__&&false);
       steps++;
 
       // Adaptive time step control.

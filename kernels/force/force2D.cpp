@@ -67,9 +67,9 @@ void rForceMult2D(const int NUM_DIM,
         }
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                             stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
+             stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)];
           const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                             stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
+             stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)];
           for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
             Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
             xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
@@ -140,9 +140,9 @@ void rForceMultTranspose2D(const int NUM_DIM,
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
           vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
             ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] *
-              stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]) +
+              stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)]) +
              (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] *
-              stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)]));
+              stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)]));
         }
       }
     }

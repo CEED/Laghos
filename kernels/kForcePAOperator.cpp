@@ -47,7 +47,7 @@ kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
    // push down to device the two vectors gVecL2 & gVecH1
    const Engine &ng = l2f.GetMesh()->GetEngine();
    gVecL2.Resize(ng.MakeLayout(l2fes.GetFE(0)->GetDof() * nzones));
-   gVecH1.Resize(ng.MakeLayout(h1fes.GetVDim() *h1fes.GetFE(0)->GetDof() * nzones));
+   gVecH1.Resize(ng.MakeLayout(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones));
    //GetParFESpace
    h1D2Q = kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule);
    l2D2Q = kernels::KernelsDofQuadMaps::Get(l2fes, integ_rule);
@@ -68,6 +68,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
    kernels::Vector rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    dbg("GlobalToLocal");
+   //dbg("rVecL2:\n"); rVecL2.Print();
    rl2.GlobalToLocal(rVecL2, rgVecL2);
    //dbg("rgVecL2:\n"); rgVecL2.Print();
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
@@ -91,6 +92,8 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               (double*)rgVecH1.KernelsMem().ptr());
    dbg("LocalToGlobal");
    rh1.LocalToGlobal(rgVecH1, rVecH1);
+   //dbg("rVecH1:\n"); rVecH1.Print();
+   //dbg("vecH1:\n"); vecH1.Print();
    pop();
 }
 
