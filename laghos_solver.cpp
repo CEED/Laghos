@@ -535,6 +535,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
    delete tensors1D;
+   delete ForcePA;
+   delete VMassPA;
 }
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const

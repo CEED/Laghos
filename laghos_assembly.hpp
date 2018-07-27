@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "laghos_abstracts.hpp"
+#include "laghos_abc.hpp"
 
 #ifdef MFEM_USE_MPI
 
