@@ -16,6 +16,7 @@
 
 #include "../laghos_assembly.hpp"
 #include "kForcePAOperator.hpp"
+#include "kernels.hpp"
 #include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
