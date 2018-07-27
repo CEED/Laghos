@@ -15,8 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-#include "backends/kernels/config/dbg.hpp"
-#include "backends/kernels/config/nvvp.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -113,7 +111,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
 {
-   push();
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
@@ -217,12 +214,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    locCG.SetMaxIter(200);
    locCG.SetPrintLevel(0);
-   pop();
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   dbg("\033[7m[LagrangianHydroOperator] Mult");
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -246,7 +241,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
-   
+
    ParGridFunction dx, dv, de;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
@@ -394,7 +389,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
    Array<int> l2dofs;
    Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-   
    if (p_assembly)
    {
       timer.sw_force.Start();
@@ -434,12 +428,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    delete e_source;
 
    quad_data_is_current = false;
-   pop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
-   push();
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
@@ -449,20 +441,16 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
-   pop();
    return glob_dt_est;
 }
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
-   push();
    quad_data.dt_est = numeric_limits<double>::infinity();
-   pop();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
-   push();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -483,7 +471,6 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
       L2FESpace.GetElementDofs(i, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
-   pop();
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
@@ -541,8 +528,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
-   if (quad_data_is_current) { pop(); return; }
-   push();
+   if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
 
    const int nqp = integ_rule.GetNPoints();
@@ -573,7 +559,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
-   //int i_stressJinvT = 0;
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
@@ -712,9 +697,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             {
                for (int gd = 0; gd < dim; gd++)
                {
-                  //#warning stressJinvT @ 1.0
-                  //quad_data.stressJinvT(vd)(z_id*nqp + q, gd) = 1.0;//stressJiT(vd, gd);
-                  quad_data.stressJinvT(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
+                  quad_data.stressJinvT(vd)(z_id*nqp + q, gd) =
+                     stressJiT(vd, gd);
                }
             }
          }
@@ -731,9 +715,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    timer.sw_qdata.Stop();
    timer.quad_tstep += nzones;
-   pop();
 }
-   
+
 } // namespace hydrodynamics
 
 } // namespace mfem

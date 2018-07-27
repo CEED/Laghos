@@ -154,6 +154,7 @@ public:
 
    virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
    virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
+
    ~ForcePAOperator() { }
 };
 
