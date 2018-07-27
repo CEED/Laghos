@@ -14,8 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#ifndef MFEM_LAGHOS_KERNEL_FORCE_OPERATOR_HPP
-#define MFEM_LAGHOS_KERNEL_FORCE_OPERATOR_HPP
+#ifndef MFEM_LAGHOS_KERNEL_FORCE_PA_OPERATOR_HPP
+#define MFEM_LAGHOS_KERNEL_FORCE_PA_OPERATOR_HPP
 
 #include "mfem.hpp"
 
@@ -37,10 +37,18 @@ private:
    const int dim;
    const int nzones;
    const ParFiniteElementSpace &h1fes, &l2fes;
+   const kernels::KernelsFiniteElementSpace &h1k, &l2k;
    const IntegrationRule &integ_rule;
+   const IntegrationRule &ir1D;
+   const int NUM_DOFS_1D;
+   const int NUM_QUAD_1D;
+   const int L2_DOFS_1D;
+   const int H1_DOFS_1D;
    const QuadratureData *quad_data;
+   const int h1sz;
+   const int l2sz;
    const kernels::KernelsDofQuadMaps *l2D2Q, *h1D2Q;
-   mutable Vector gVecL2, gVecH1;
+   mutable mfem::Vector gVecL2, gVecH1;
 public:
    kForcePAOperator(ParFiniteElementSpace&,
                     ParFiniteElementSpace&,
@@ -58,4 +66,4 @@ public:
 
 #endif // MFEM_USE_MPI
 
-#endif // MFEM_LAGHOS_KERNEL_FORCE_OPERATOR_HPP
+#endif // MFEM_LAGHOS_KERNEL_FORCE_PA_OPERATOR_HPP

@@ -34,51 +34,47 @@ kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
                                    ParFiniteElementSpace &l2f,
                                    const IntegrationRule &ir,
                                    const QuadratureData *qd,
-                                   const bool engine)
-   : Operator(l2f.GetTrueVSize(), h1f.GetTrueVSize()),
-     dim(h1f.GetMesh()->Dimension()),
-     nzones(h1f.GetMesh()->GetNE()),
-     h1fes(h1f),
-     l2fes(l2f),
-     integ_rule(ir),
-     quad_data(qd),
-     gVecL2(l2fes.GetFE(0)->GetDof() * nzones),
-   gVecH1(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones) {
+                                   const bool engine) :
+   Operator(l2f.GetTrueVSize(), h1f.GetTrueVSize()),
+   dim(h1f.GetMesh()->Dimension()),
+   nzones(h1f.GetMesh()->GetNE()),
+   h1fes(h1f),
+   l2fes(l2f),
+   h1k(*h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()),
+   l2k(*l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()),
+   integ_rule(ir),
+   ir1D(IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder())),
+   NUM_DOFS_1D(h1fes.GetFE(0)->GetOrder()+1),
+   NUM_QUAD_1D(ir1D.GetNPoints()),
+   L2_DOFS_1D(l2fes.GetFE(0)->GetOrder()+1),
+   H1_DOFS_1D(h1fes.GetFE(0)->GetOrder()+1),
+   quad_data(qd),
+   h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
+   l2sz(l2fes.GetFE(0)->GetDof() * nzones),
+   h1D2Q(kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule)),
+   l2D2Q(kernels::KernelsDofQuadMaps::Get(l2fes, integ_rule)),
+   gVecL2(h1sz),
+   gVecH1(l2sz)
+{
    if (!engine) return;
-   // push down to device the two vectors gVecL2 & gVecH1
+   // register with the engine the two vectors gVecL2 & gVecH1
    const Engine &ng = l2f.GetMesh()->GetEngine();
-   gVecL2.Resize(ng.MakeLayout(l2fes.GetFE(0)->GetDof() * nzones));
-   gVecH1.Resize(ng.MakeLayout(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones));
-   //GetParFESpace
-   h1D2Q = kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule);
-   l2D2Q = kernels::KernelsDofQuadMaps::Get(l2fes, integ_rule);
+   gVecL2.Resize(ng.MakeLayout(l2sz));
+   gVecH1.Resize(ng.MakeLayout(h1sz));
 }
   
 // *****************************************************************************
 kForcePAOperator::~kForcePAOperator(){}
 
-
-// *************************************************************************
+// *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
    push();
-   const kernels::KernelsFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
-   const kernels::KernelsFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
    const kernels::Vector rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
-   dbg("GlobalToLocal");
-   //dbg("rVecL2:\n"); rVecL2.Print();
-   rl2.GlobalToLocal(rVecL2, rgVecL2);
-   //dbg("rgVecL2:\n"); rgVecL2.Print();
-   const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
-   const int NUM_QUAD_1D  = ir1D.GetNPoints();
-   const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
-   const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   dbg("rForceMult");
-   dbg("rForceMult: dim=%d, NUM_DOFS_1D=%d, NUM_QUAD_1D=%d, nzones=%d",dim,NUM_DOFS_1D,NUM_QUAD_1D, nzones);
+   l2k.GlobalToLocal(rVecL2, rgVecL2);
    rForceMult(dim,
               NUM_DOFS_1D,
               NUM_QUAD_1D,
@@ -91,10 +87,8 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               quad_data->stressJinvT.Data(),
               (const double*)rgVecL2.KernelsMem().ptr(),
               (double*)rgVecH1.KernelsMem().ptr());
-   dbg("LocalToGlobal");
-   rh1.LocalToGlobal(rgVecH1, rVecH1);
-   //dbg("rVecH1:\n"); rVecH1.Print();
-   //dbg("vecH1:\n"); vecH1.Print();
+   h1k.LocalToGlobal(rgVecH1, rVecH1);
+   //vecH1=kVecH1;
    pop();
 }
 
@@ -107,16 +101,13 @@ void kForcePAOperator::MultTranspose(const Vector &vecH1,
    Vector kVecL2(l2fes.GetVLayout());
    // push vecH1's data down to the device
    kVecH1.PushData(vecH1.GetData());
-   // switch to backend mode
-   const kernels::KernelsFiniteElementSpace &rl2 = *l2fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
-   const kernels::KernelsFiniteElementSpace &rh1 = *h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>();
    const kernels::Vector rVecH1 = kVecH1.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rVecL2 = kVecL2.Get_PVector()->As<kernels::Vector>();
    // **************************************************************************
    dbg("GlobalToLocal");
-   rh1.GlobalToLocal(rVecH1, rgVecH1);
+   h1k.GlobalToLocal(rVecH1, rgVecH1);
    // **************************************************************************
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
@@ -137,7 +128,7 @@ void kForcePAOperator::MultTranspose(const Vector &vecH1,
                        (double*)rgVecL2.KernelsMem().ptr());
    // **************************************************************************
    dbg("LocalToGlobal");
-   rl2.LocalToGlobal(rgVecL2, rVecL2);
+   l2k.LocalToGlobal(rgVecL2, rVecL2);
    // back to the host argument
    vecL2 = kVecL2;
    pop();

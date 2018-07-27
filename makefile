@@ -143,8 +143,8 @@ laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 
 all: laghos
 
-go:;@./laghos -cfl 0.1 -rs 2
-ng:;@dbg=1 ./laghos -cfl 0.1 -rs 2 -ng
+go:;@./laghos -cfl 0.1 -rs 0
+ng:;@dbg=1 ./laghos -cfl 0.1 -rs 0 -ng
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"

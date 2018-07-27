@@ -14,8 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#ifndef MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP
-#define MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP
+#ifndef MFEM_LAGHOS_KERNEL_MASS_PA_OPERATOR_HPP
+#define MFEM_LAGHOS_KERNEL_MASS_PA_OPERATOR_HPP
 
 #include "mfem.hpp"
 
@@ -71,4 +71,4 @@ public:
 
 #endif // MFEM_USE_MPI
 
-#endif // MFEM_LAGHOS_KERNEL_MASS_OPERATOR_HPP
+#endif // MFEM_LAGHOS_KERNEL_MASS_PA_OPERATOR_HPP

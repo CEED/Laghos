@@ -241,29 +241,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   //dbg("v:\n"); v.Print();
-   // 0 1 1.22465e-16 0 6.12323e-17 7.4988e-33 -0 -1
-   // -1.22465e-16 0.707107 0.707107 4.32978e-17 0 0.707107 8.65956e-17 4.32978e-17
-   // ...
-   // 0.270598 4.68652e-17 -0.353553 0.146447 -0.853553 0.353553 -0.146447 -0.353553
-   // -0.853553 0.353553 0.853553 0.353553 -0.353553 -0.146447 -0.353553 0.853553
-   // 0.353553 0.146447
-
-
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
-   //dbg("e:\n"); e.Print();
-   // 2.37913 1.97674 1.97674 1.57434 1.5 1.90239 1.09761 1.5
-   // 1.5 1.09761 1.90239 1.5 0.620872 1.02326 1.02326 1.42566
-   //assert(__FILE__&&__LINE__&&false);
-
+   
    ParGridFunction dx, dv, de;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
-   //dbg("dx:\n"); dx.Print(); assert(__FILE__&&__LINE__&&false);
-   
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
-   //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
    de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
-   //dbg("de:\n"); de.Print(); assert(__FILE__&&__LINE__&&false);
 
    // Set dx_dt = v (explicit).
    dx = v;
@@ -284,7 +267,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       one.Resize(L2FESpace.GetVLayout());
       one.Fill(1.0);//one.Push();
    }
-   //dbg("one:\n"); one.Print(); assert(__FILE__&&__LINE__&&false);
    
    if (p_assembly)
    {
@@ -295,18 +277,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          kForcePA.Mult(one, rhs);
       }
       timer.sw_force.Stop();rhs.Pull();
-      //dbg("rhs:\n"); rhs.Print(); assert(__FILE__&&__LINE__&&false);
-      //-6.85714 -6.85714 4.44089e-16 -6.85714 1.33227e-15 6.85714 0 6.85714
-      // 6.85714 -6.85714 8.88178e-16 8.88178e-16 -6.85714 -6.85714 6.85714 8.88178e-16
-
       rhs.Neg();
-      //dbg("rhs:\n"); rhs.Print(); assert(__FILE__&&__LINE__&&false);
-      // -0.064224 -3.46945e-17 0.064224 -0.0796075 -2.42861e-17 0.0796075 -0.064224 -4.16334e-17
-      // 0.064224 0.00579094 -6.59195e-17 0.0115819 -0.104028 -0.00579094 0.104028 -0.0115819
-      // ...
-      // -0.0149034 0.18157 0.0298068 0.0298068 -0.0298068 -0.0298068 0.0298068 0.0298068
-      // 0.0298068 0.0298068 0.0298068 0.0298068 -0.0298068 -0.0298068 -0.0298068 -0.0298068
-      // -0.0298068 -0.0298068
 
       if (!engine)
       {
