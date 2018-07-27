@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-
+#include "laghos_abstracts.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -128,7 +128,7 @@ public:
 
 // Performs partial assembly, which corresponds to (and replaces) the use of the
 // LagrangianHydroOperator::Force global matrix.
-class ForcePAOperator : public Operator
+class ForcePAOperator : public AbcForcePAOperator
 {
 private:
    const int dim, nzones;
@@ -158,7 +158,7 @@ public:
 };
 
 // Performs partial assembly for the velocity mass matrix.
-class MassPAOperator : public Operator
+class MassPAOperator : public AbcMassPAOperator
 {
 private:
    const int dim, nzones;
@@ -173,14 +173,14 @@ private:
 
 public:
    MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : Operator(fes.GetVSize()),
+      : AbcMassPAOperator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
         quad_data(quad_data_), FESpace(fes)
    { }
 
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
-
+   void Setup() {}
    void ComputeDiagonal2D(Vector &diag) const;
    void ComputeDiagonal3D(Vector &diag) const;
 

@@ -101,13 +101,11 @@ protected:
    mutable MixedBilinearForm Force;
 
    // Same as above, but done through partial assembly.
-   ForcePAOperator ForcePA;
-   kForcePAOperator kForcePA;
+   AbcForcePAOperator *ForcePA;
 
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
-   mutable MassPAOperator VMassPA;
-   mutable kMassPAOperator kVMassPA;
+   AbcMassPAOperator *VMassPA;
    mutable DiagonalSolver VMassPA_prec;
    mutable LocalMassPAOperator locEMassPA;
 

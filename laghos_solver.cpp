@@ -85,8 +85,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa, bool engine_,
-                                                 double cgt, int cgiter)
-   : TimeDependentOperator(size),
+                                                 double cgt, int cgiter) :
+     TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
      ess_tdofs(essential_tdofs),
@@ -103,10 +103,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes),
-     ForcePA(&quad_data, h1_fes, l2_fes),
-     kForcePA(h1_fes, l2_fes, integ_rule, &quad_data,engine),
-     VMassPA(&quad_data, H1FESpace),
-     kVMassPA(&quad_data, H1compFESpace, integ_rule),
+     ForcePA((!engine)?
+             static_cast<AbcForcePAOperator*>(new  ForcePAOperator(&quad_data, h1_fes, l2_fes)):
+             static_cast<AbcForcePAOperator*>(new kForcePAOperator(&quad_data, h1_fes, l2_fes, integ_rule, engine))),
+     VMassPA((!engine)?
+             static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, H1FESpace)):
+             static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, H1compFESpace, integ_rule))),
      VMassPA_prec(H1FESpace),
      locEMassPA(&quad_data, l2_fes),
      locCG(), timer()
@@ -133,7 +135,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       Mv.AddDomainIntegrator(vmi);
       Mv.Assemble();
    }
-   
+
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
    Vector rho_vals(nqp);
@@ -200,12 +202,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       evaluator = new FastEvaluator(H1FESpace);
 
       // Setup the preconditioner of the velocity mass operator.
-      Vector d;
-      (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
-      VMassPA_prec.SetDiagonal(d);
+      if (!engine){
+         Vector d;
+         (dim == 2) ? VMassPA->ComputeDiagonal2D(d) : VMassPA->ComputeDiagonal3D(d);
+         VMassPA_prec.SetDiagonal(d);
+      }
    }
    
-   if (engine) kVMassPA.Setup();
+   if (engine) VMassPA->Setup();
    
    locCG.SetOperator(locEMassPA);
    locCG.iterative_mode = false;
@@ -271,11 +275,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      if (!engine) ForcePA.Mult(one, rhs);
-      else {
-         dbg("\033[7m[LagrangianHydroOperator] kForcePA.Mult");
-         kForcePA.Mult(one, rhs);
-      }
+      ForcePA->Mult(one, rhs);
       timer.sw_force.Stop();rhs.Pull();
       rhs.Neg();
 
@@ -283,7 +283,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       {
          Operator *cVMassPA;
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
-         VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
+         VMassPA->FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
          cg.SetOperator(*cVMassPA);
          cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
          cg.SetMaxIter(cg_max_iter);
@@ -292,14 +292,14 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
          timer.H1cg_iter += cg.GetNumIterations();
-         VMassPA.RecoverFEMSolution(X, rhs, dv);
+         VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
       }
       else
       {
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
          //cg.SetPreconditioner(VMassPA_prec);
-         cg.SetOperator(kVMassPA);
+         cg.SetOperator(*VMassPA);
          cg.SetRelTol(cg_rel_tol);
          cg.SetAbsTol(0.0);
          cg.SetMaxIter(cg_max_iter);
@@ -307,6 +307,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
          // Partial assembly solve for each velocity component
          const int size = H1compFESpace.GetVSize();
+         kMassPAOperator *kVMassPA = static_cast<kMassPAOperator*>(VMassPA);
+
          for (int c = 0; c < dim; c++)
          {
             dbg("V component #%d",c);
@@ -337,8 +339,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
                GetRestrictionOperator()->Mult(dv_c, kX);
 
-            kVMassPA.SetEssentialTrueDofs(c_tdofs);
-            kVMassPA.EliminateRHS(kB);
+            kVMassPA->SetEssentialTrueDofs(c_tdofs);
+            kVMassPA->EliminateRHS(kB);
 
             // *****************************************************************
             timer.sw_cgH1.Start();
@@ -396,8 +398,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      if (!engine) ForcePA.MultTranspose(v, e_rhs);
-      else kForcePA.MultTranspose(v, e_rhs);      
+      ForcePA->MultTranspose(v, e_rhs);  
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }

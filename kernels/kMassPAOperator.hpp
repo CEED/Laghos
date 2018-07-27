@@ -19,7 +19,6 @@
 
 #include "mfem.hpp"
 
-
 #ifdef MFEM_USE_MPI
 
 #include <memory>
@@ -32,7 +31,7 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-class kMassPAOperator : public Operator
+class kMassPAOperator : public AbcMassPAOperator
 {
 private:
    const int dim, nzones;
@@ -47,7 +46,7 @@ public:
    kMassPAOperator(QuadratureData*,
                    ParFiniteElementSpace&,
                    const IntegrationRule&);
-   void Setup();
+   virtual void Setup();
    
    void SetEssentialTrueDofs(Array<int>&);
    
@@ -55,8 +54,8 @@ public:
    
    virtual void Mult(const mfem::Vector&, mfem::Vector&) const;
 
-   void ComputeDiagonal2D(Vector&) const;
-   void ComputeDiagonal3D(Vector&) const;
+   virtual void ComputeDiagonal2D(Vector&) const {};
+   virtual void ComputeDiagonal3D(Vector&) const {};
 
    virtual const Operator *GetProlongation() const
    { return fes.GetProlongationMatrix(); }

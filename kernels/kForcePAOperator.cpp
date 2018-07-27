@@ -17,7 +17,6 @@
 #include "../laghos_assembly.hpp"
 #include "kForcePAOperator.hpp"
 #include "kernels.hpp"
-#include "backends/kernels/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -30,14 +29,14 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
+kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
+                                   ParFiniteElementSpace &h1f,
                                    ParFiniteElementSpace &l2f,
                                    const IntegrationRule &ir,
-                                   const QuadratureData *qd,
                                    const bool engine) :
-   Operator(l2f.GetTrueVSize(), h1f.GetTrueVSize()),
    dim(h1f.GetMesh()->Dimension()),
    nzones(h1f.GetMesh()->GetNE()),
+   quad_data(qd),
    h1fes(h1f),
    l2fes(l2f),
    h1k(*h1fes.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()),
@@ -48,7 +47,6 @@ kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
    NUM_QUAD_1D(ir1D.GetNPoints()),
    L2_DOFS_1D(l2fes.GetFE(0)->GetOrder()+1),
    H1_DOFS_1D(h1fes.GetFE(0)->GetOrder()+1),
-   quad_data(qd),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
    h1D2Q(kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule)),
@@ -57,14 +55,10 @@ kForcePAOperator::kForcePAOperator(ParFiniteElementSpace &h1f,
    gVecH1(l2sz)
 {
    if (!engine) return;
-   // register with the engine the two vectors gVecL2 & gVecH1
    const Engine &ng = l2f.GetMesh()->GetEngine();
    gVecL2.Resize(ng.MakeLayout(l2sz));
    gVecH1.Resize(ng.MakeLayout(h1sz));
 }
-  
-// *****************************************************************************
-kForcePAOperator::~kForcePAOperator(){}
 
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
@@ -88,13 +82,12 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               (const double*)rgVecL2.KernelsMem().ptr(),
               (double*)rgVecH1.KernelsMem().ptr());
    h1k.LocalToGlobal(rgVecH1, rVecH1);
-   //vecH1=kVecH1;
    pop();
 }
 
 // *************************************************************************
-void kForcePAOperator::MultTranspose(const Vector &vecH1,
-                                     Vector &vecL2) const {
+void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
+                                     mfem::Vector &vecL2) const {
    push();
    // vecH1 & vecL2 are now on the host, wrap them with k*
    Vector kVecH1(h1fes.GetVLayout());
@@ -105,15 +98,7 @@ void kForcePAOperator::MultTranspose(const Vector &vecH1,
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rVecL2 = kVecL2.Get_PVector()->As<kernels::Vector>();
-   // **************************************************************************
-   dbg("GlobalToLocal");
    h1k.GlobalToLocal(rVecH1, rgVecH1);
-   // **************************************************************************
-   const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
-   const int NUM_QUAD_1D  = ir1D.GetNPoints();
-   const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
-   const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    rForceMultTranspose(dim,
                        NUM_DOFS_1D,
                        NUM_QUAD_1D,
@@ -126,7 +111,6 @@ void kForcePAOperator::MultTranspose(const Vector &vecH1,
                        (const double*)quad_data->stressJinvT.Data(),
                        (const double*)rgVecH1.KernelsMem().ptr(),
                        (double*)rgVecL2.KernelsMem().ptr());
-   // **************************************************************************
    dbg("LocalToGlobal");
    l2k.LocalToGlobal(rgVecL2, rVecL2);
    // back to the host argument

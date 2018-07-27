@@ -19,7 +19,6 @@
 
 #include "mfem.hpp"
 
-
 #ifdef MFEM_USE_MPI
 
 #include <memory>
@@ -31,11 +30,12 @@ namespace mfem
 namespace hydrodynamics
 {
 
-class kForcePAOperator : public Operator
+class kForcePAOperator : public AbcForcePAOperator
 {
 private:
    const int dim;
    const int nzones;
+   const QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
    const kernels::KernelsFiniteElementSpace &h1k, &l2k;
    const IntegrationRule &integ_rule;
@@ -44,20 +44,18 @@ private:
    const int NUM_QUAD_1D;
    const int L2_DOFS_1D;
    const int H1_DOFS_1D;
-   const QuadratureData *quad_data;
    const int h1sz;
    const int l2sz;
    const kernels::KernelsDofQuadMaps *l2D2Q, *h1D2Q;
    mutable mfem::Vector gVecL2, gVecH1;
 public:
-   kForcePAOperator(ParFiniteElementSpace&,
+   kForcePAOperator(const QuadratureData*,
+                    ParFiniteElementSpace&,
                     ParFiniteElementSpace&,
                     const IntegrationRule&,
-                    const QuadratureData*,
                     const bool);
    void Mult(const Vector&, Vector&) const;
    void MultTranspose(const Vector&, Vector&) const;
-  ~kForcePAOperator();
 };
 
 } // namespace hydrodynamics
