@@ -113,7 +113,7 @@ Other computational motives in Laghos include the following:
   and the internal energy (discontinuous thermodynamic space) are given
   by the `-ok` and `-ot` input parameters, respectively.
 
-## Building
+## Building on CPU
 
 Laghos has the following external dependencies:
 
@@ -186,6 +186,65 @@ Build Laghos
 ```
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
+
+
+## Building on GPU with cuda, or RAJA
+
+### Environment setup
+```sh
+export MPI_PATH=~/usr/local/openmpi/3.0.0
+```
+
+### Hypre
+- <https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods/download/hypre-2.11.2.tar.gz>
+- `tar xzvf hypre-2.11.2.tar.gz`
+- ` cd hypre-2.11.2/src`
+- `./configure --disable-fortran --with-MPI --with-MPI-include=$MPI_PATH/include --with-MPI-lib-dirs=$MPI_PATH/lib`
+- `make -j`
+- `cd ../..`
+
+### Metis
+-   <http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/metis-5.1.0.tar.gz>
+-   `tar xzvf metis-5.1.0.tar.gz`
+-   `cd metis-5.1.0`
+-   ``make config shared=1 prefix=`pwd` ``
+-   `make && make install`
+-   `cd ..`
+
+### MFEM
+-   `git clone git@github.com:mfem/mfem.git`
+-   `cd mfem`
+-   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0``
+-   `make status` to verify that all the include paths are correct
+-   `make -j`
+-   `cd ..`
+
+### Laghos
+-   `git clone git@github.com:CEED/Laghos.git`
+-   `cd Laghos`
+-   `git checkout raja-dev`
+-   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
+-   `make` to build for the CPU version
+-   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
+-   `cp ./laghos ./laghos.cpu`
+-   `make clean && make cuda`
+-   `./laghos -cfl 0.1` should give you again again `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
+-   `cp ./laghos ./laghos.gpu`
+-   if you set up the RAJA_DIR path in the `makefile`, you can `make clean && make raja`, `cp ./laghos ./laghos.raja`
+
+### Options
+-   -m <string>: Mesh file to use
+-   -ok <int>: Order (degree) of the kinematic finite element space
+-   -rs <int>: Number of times to refine the mesh uniformly in serial
+-   -p <int>: Problem setup to use, Sedov problem is '1'
+-   -cfl <double>: CFL-condition number
+-   -ms <int>: Maximum number of steps (negative means no restriction)
+-   -mult: Enable or disable MULT test kernels
+-   -cuda: Enable or disable CUDA kernels if you are using RAJA
+-   -uvm: Enable or disable Unified Memory
+-   -aware: Enable or disable MPI CUDA Aware
+-   -hcpo: Enable or disable Host Conforming Prolongation Operations,
+    which transfers ALL the data to the host before communications
 
 ## Running
 
