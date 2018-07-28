@@ -262,9 +262,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (engine){
       rhs.Resize(H1FESpace.GetVLayout());
-      rhs.Fill(0.0);
       one.Resize(L2FESpace.GetVLayout());
-      one.Fill(1.0);//one.Push();
+      one.Fill(1.0);
    }
    
    if (p_assembly)
@@ -328,10 +327,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.Fill(0.0);
 
             // *****************************************************************
-            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
                GetProlongationOperator()->MultTranspose(rhs_c, kB);
 
-            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
                GetRestrictionOperator()->Mult(dv_c, kX);
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
@@ -345,10 +344,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // *****************************************************************
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
-            H1compFESpace.Get_PFESpace().As<kernels::KernelsFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
                GetProlongationOperator()->Mult(kX, dv_c);
             dbg("memcpy of %d bytes",size*sizeof(double));            
-            memcpy(dv.GetData()+c*size, dv_c.GetData(), size*sizeof(double));
+            memcpy(dv.GetData()+c*size, dv_c.GetData(), size*sizeof(double));            
             //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
          }
       } // engine

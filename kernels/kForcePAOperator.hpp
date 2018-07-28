@@ -37,7 +37,7 @@ private:
    const int nzones;
    const QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
-   const kernels::KernelsFiniteElementSpace &h1k, &l2k;
+   const kernels::kFiniteElementSpace &h1k, &l2k;
    const IntegrationRule &integ_rule;
    const IntegrationRule &ir1D;
    const int NUM_DOFS_1D;

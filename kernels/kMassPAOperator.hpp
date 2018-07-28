@@ -40,7 +40,7 @@ private:
    const IntegrationRule &ir;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
-   kernels::KernelsBilinearForm *bilinearForm;
+   kernels::kBilinearForm *bilinearForm;
    Operator *massOperator;
 public:
    kMassPAOperator(QuadratureData*,
