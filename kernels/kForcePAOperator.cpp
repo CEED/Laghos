@@ -34,7 +34,7 @@ kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
                                    ParFiniteElementSpace &l2f,
                                    const IntegrationRule &ir,
                                    const bool engine) :
-   AbcForcePAOperator(*h1f.GetTrueVLayout()),
+   AbcForcePAOperator(*l2f.GetTrueVLayout()),
    dim(h1f.GetMesh()->Dimension()),
    nzones(h1f.GetMesh()->GetNE()),
    quad_data(qd),
@@ -64,7 +64,7 @@ kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
-   push();
+   push();   
    const kernels::Vector rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
@@ -90,6 +90,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
    push();
+   dbg("\033[31;1;7m****kForcePAOperator::MultTranspose ****\033[m");
    const kernels::Vector rVecH1 = vecH1.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
