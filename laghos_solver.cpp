@@ -262,7 +262,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Solve for velocity.
    Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (engine){
-      rhs.Resize(H1FESpace.GetVLayout());
+      rhs.Resize(H1FESpace.GetTrueVLayout());
+      rhs.Fill(0.0);
       one.Resize(L2FESpace.GetVLayout());
       one.Fill(1.0);
    }
@@ -271,7 +272,16 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       timer.sw_force.Start();
       ForcePA->Mult(one, rhs);
-      timer.sw_force.Stop();rhs.Pull();
+      timer.sw_force.Stop();
+      //dbg("rhs:\n"); rhs.Print();assert(__FILE__&&__LINE__&&false);
+      //0.1307 5.55112e-17 -0.1307 0.14772 4.85723e-17 -0.14772 0.1307 6.93889e-17
+      //-0.1307 -0.0378933 5.55112e-17 -0.0757866 0.40912 0.0378933 -0.40912 0.0757866
+      //5.55112e-17 -0.0378933 0.40912 -0.40912 0.0378933 -0.151573 0.151573 -0.151573
+      //0.151573 0.1307 0.14772 0.1307 8.32667e-17 2.08167e-17 1.66533e-16 -0.1307
+      //-0.14772 -0.1307 0.40912 -0.0757866 2.22045e-16 -0.0378933 0.40912 -0.0378933
+      //1.66533e-16 0.0757866 -0.40912 0.0378933 0.0378933 -0.40912 -0.151573 -0.151573
+      //0.151573 0.151573
+      //rhs.Pull();
       rhs.Neg();
 
       if (!engine)
@@ -314,9 +324,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.PushData(dv.GetData()+c*size);            
  
             mfem::Vector kB_c(H1compFESpace.GetTrueVLayout());
+            kB_c.Fill(0.0);
             //dbg("\033[31;1mV kB_c #%d",kB_c.Size());assert(__FILE__&&__LINE__&&false);
             mfem::Vector kX_c(H1compFESpace.GetTrueVLayout());
-      
+            kX_c.Fill(0.0);
+            
             Array<int> c_tdofs;
             Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
@@ -328,6 +340,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.Fill(0.0);
 
             // *****************************************************************
+            //dbg("rhs_c:\n"); rhs_c.Print();assert(__FILE__&&__LINE__&&false);
+            //-0.1307 -5.55112e-17 0.1307 -0.14772 -4.85723e-17 0.14772 -0.1307 -6.93889e-17
+            //0.1307 0.0378933 -5.55112e-17 0.0757866 -0.40912 -0.0378933 0.40912 -0.0757866
+            //-5.55112e-17 0.0378933 -0.40912 0.40912 -0.0378933 0.151573 -0.151573 0.151573
+            //-0.151573
+
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
                GetProlongationOperator()->MultTranspose(rhs_c, kB_c);
 
@@ -347,7 +365,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 //#warning kB_c=0.0
             //dbg("\033[32;1;7m**** kB_c=0.0 ****\033[m");
             //kB_c = 0.0;
-            //kB_c.Fill(0.0);
+            //kB_c.Fill(0.1234);
+            //kX_c.Fill(0.0);
             dbg("\033[32;1;7m**** Mult ****\033[m");
             cg.Mult(kB_c, kX_c); // linalg/solver.cpp
 //#warning kX_c=1.0
@@ -419,13 +438,24 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
    Array<int> l2dofs;
    Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+   
+   if (engine){
+      v.Resize(H1FESpace.GetTrueVLayout());
+      v.Pull();
+      e_rhs.Resize(L2FESpace.GetTrueVLayout());
+      e_rhs.Pull(false);
+   }
+   
    if (p_assembly)
    {
       timer.sw_force.Start();
+      dbg("\033[32;1m[LagrangianHydroOperator::Mult] ForcePA->MultTranspose\033[m");
       ForcePA->MultTranspose(v, e_rhs);  
+      dbg("\033[32;1m[LagrangianHydroOperator::Mult] done\033[m");
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }
+      dbg("\033[32;1m[LagrangianHydroOperator::Mult] locCG, for all zones\033[m");
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
@@ -437,7 +467,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
          de.SetSubVector(l2dofs, loc_de);
       }
-   }
+      dbg("\033[32;1m[LagrangianHydroOperator::Mult] locCG done\033[m");
+  }
    else
    {
       timer.sw_force.Start();

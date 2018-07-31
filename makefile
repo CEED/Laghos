@@ -51,7 +51,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Set okrtc path
-OKRTC_DIR ?= ~/usr/local/okrtc
+#OKRTC_DIR ?= ~/usr/local/okrtc
 ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
 	OKRTC ?= $(OKRTC_DIR)/bin/okrtc
 endif
@@ -133,7 +133,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $(<F)
+	cd $(<D); $(CCC) -c $< #$(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
