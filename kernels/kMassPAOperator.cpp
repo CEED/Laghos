@@ -34,14 +34,14 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
    AbcMassPAOperator(*fes_.GetTrueVLayout()),
-      dim(fes_.GetMesh()->Dimension()),
-      nzones(fes_.GetMesh()->GetNE()),
-      quad_data(qd_),
-      fes(fes_),
-      ir(ir_),
-      ess_tdofs_count(0),
-      ess_tdofs(0),
-      bilinearForm(NULL) { }
+   dim(fes_.GetMesh()->Dimension()),
+   nzones(fes_.GetMesh()->GetNE()),
+   quad_data(qd_),
+   fes(fes_),
+   ir(ir_),
+   ess_tdofs_count(0),
+   ess_tdofs(0),
+   bilinearForm(NULL){ }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()
@@ -121,16 +121,13 @@ void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
    push();
    
    dbg("\033[32;1;7m[kMassPAOperator::Mult] mx\033[m");
-   const kernels::Vector &kx = x.Get_PVector()->As<kernels::Vector>();
+   const kernels::Vector &kx = x.Get_PVector()->As<const kernels::Vector>();
+
    kernels::Vector kz(kx.GetLayout().As<kernels::Layout>());
    kz.Assign<double>(kx);
-   //x.Pull();
    
    dbg("\033[32;1;7m[kMassPAOperator::Mult] my\033[m");
-   //mfem::Vector my(fes.GetVLayout());
    kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
-   //assert(false);
-   //y.Pull(false);
 
    if (ess_tdofs_count){
       dbg("\033[32;1;7m[kMassPAOperator::Mult] kx.SetSubVector\033[m");
@@ -138,7 +135,7 @@ void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
    }
    
    dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->Mult\033[m");
-   massOperator->Mult(kz.Wrap(), y); // linalg/operator => linalg/constrained => linalg/prolong
+   massOperator->Mult(kz.Wrap(), y); // linalg/operator => constrained => prolong
    
    if (ess_tdofs_count){
       //assert(false);
@@ -147,8 +144,6 @@ void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
    }
    
    dbg("\033[32;1;7m[kMassPAOperator::Mult] y = my;\033[m");
-   //y.Push();
-   //y = my;
    //dbg("y:\n"); y.Print();assert(__FILE__&&__LINE__&&false);
    pop();
 }
