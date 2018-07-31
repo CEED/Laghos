@@ -39,7 +39,7 @@ private:
    ParFiniteElementSpace &fes;
    const IntegrationRule &ir;
    int ess_tdofs_count;
-   Array<int> ess_tdofs;
+   mfem::Array<int> ess_tdofs;
    kernels::kBilinearForm *bilinearForm;
    Operator *massOperator;
 public:
@@ -48,7 +48,7 @@ public:
                    const IntegrationRule&);
    virtual void Setup();
    
-   void SetEssentialTrueDofs(Array<int>&);
+   void SetEssentialTrueDofs(mfem::Array<int>&);
    
    void EliminateRHS(mfem::Vector&);
    

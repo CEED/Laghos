@@ -305,16 +305,15 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
          for (int c = 0; c < dim; c++)
          {
-            dbg("V component #%d",c);
-            Vector rhs_c(H1compFESpace.GetVLayout());
+            dbg("\033[31;1mV component #%d",c);
+            mfem::Vector rhs_c(H1compFESpace.GetVLayout());
             rhs_c.PushData(rhs.GetData()+c*size);
             
-            Vector dv_c(H1compFESpace.GetVLayout());
+            mfem::Vector dv_c(H1compFESpace.GetVLayout());
             dv_c.PushData(dv.GetData()+c*size);            
  
-            Vector kB(H1compFESpace.GetVLayout());
-            
-            Vector kX(H1compFESpace.GetVLayout());
+            mfem::Vector kB(H1compFESpace.GetVLayout());
+            mfem::Vector kX(H1compFESpace.GetVLayout());
       
             Array<int> c_tdofs;
             Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -335,10 +334,30 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(kB);
+            //dbg("kB:\n"); kB.Print();assert(__FILE__&&__LINE__&&false);
+            //0 -5.55112e-17 0 0 -4.85723e-17 0 0 -6.93889e-17
+            //0 0.0378933 -5.55112e-17 0.0757866 0 -0.0378933 0 -0.0757866
+            //-5.55112e-17 0.0378933 0 0 -0.0378933 0.151573 -0.151573 0.151573
+            //-0.151573
 
             // *****************************************************************
             timer.sw_cgH1.Start();
+//#warning kB=0.0
+            //dbg("\033[32;1;7m**** kB=0.0 ****\033[m");
+            //kB = 0.0;
+            //kB.Fill(0.0);
+            dbg("\033[32;1;7m**** Mult ****\033[m");
             cg.Mult(kB, kX); // linalg/solver.cpp
+//#warning kX=1.0
+            //dbg("\033[31;1;7m**** kX=1.0 ****\033[m");
+            //kX=1.0;
+            //kX.Fill(1.0);
+            dbg("\033[31;1m*****************************************************************\033[m\n");
+            //dbg("kX:\n"); kX.Print();assert(__FILE__&&__LINE__&&false);
+            // 0 -4.83134e-15 0 0 -3.82263e-15 0 0 -6.40967e-15
+            // 0 1.7052 -4.77645e-15 1.7052 0 -1.7052 0 -1.7052
+            // -4.996e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052 -1.7052 
+
             // then den differs because DOT differs: we don't have all components
 
             // *****************************************************************
@@ -346,9 +365,19 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             timer.H1cg_iter += cg.GetNumIterations();
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
                GetProlongationOperator()->Mult(kX, dv_c);
+            //dbg("dv_c:\n"); dv_c.Print();assert(__FILE__&&__LINE__&&false);
+
+            
             dbg("memcpy of %d bytes",size*sizeof(double));            
             memcpy(dv.GetData()+c*size, dv_c.GetData(), size*sizeof(double));            
             //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
+            //0 -4.83134e-15 0 0 -3.82263e-15 0 0 -6.40967e-15
+            //0 1.7052 -4.77645e-15 1.7052 0 -1.7052 0 -1.7052
+            //-4.996e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052
+            //-1.7052 0 0 0 0 0 0 0
+            //0 0 0 0 0 0 0 0
+            //0 0 0 0 0 0 0 0
+            //0 0
          }
       } // engine
    }

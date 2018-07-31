@@ -64,7 +64,7 @@ void kMassPAOperator::Setup()
 }
 
 // *************************************************************************
-void kMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
+void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
    push(Wheat);
    //dbg("\n\033[33;7m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
@@ -105,10 +105,13 @@ void kMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
-   kernels::Vector rb = b.Get_PVector()->As<const kernels::Vector>();
-
-   if (ess_tdofs_count > 0)
+   if (ess_tdofs_count > 0){
+      mfem::Vector mb(fes.GetVLayout());//massOperator->InLayout());
+      mb.PushData(b.GetData());
+      kernels::Vector rb = mb.Get_PVector()->As<const kernels::Vector>();
       rb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      b=mb;
+   }
    pop();
 }
 
@@ -116,27 +119,43 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
+   /*dbg("\033[32;1;7m****kMassPAOperator::Mult ****\033[m");
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] x.Size()=%d\033[m",x.Size());
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] y.Size()=%d\033[m",y.Size());
+   const std::size_t isz = massOperator->InLayout()->Size();
+   const std::size_t osz = massOperator->OutLayout()->Size();
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->InLayout()=%d\033[m",isz);
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->OutLayout()=%d\033[m",osz);
+   mfem::Vector mx(fes.GetVLayout());//isz);
+   mx.Pull(); //mx.PushData(x.GetData());
+   mfem::Vector my(fes.GetVLayout());//osz);
+   my.Pull(false);*/
+
+   mfem::Vector mx(fes.GetVLayout());
+   mx.PushData(x.GetData());
+   kernels::Vector kx = mx.Get_PVector()->As<kernels::Vector>();
    
-   mfem::Vector kx(fes.GetVLayout());
-   kx.PushData(x.GetData());
-   
-   kernels::Vector rx = kx.Get_PVector()->As<kernels::Vector>();
-   
-   Vector ky(fes.GetVLayout());
-   kernels::Vector ry = ky.Get_PVector()->As<kernels::Vector>();
+   Vector my(fes.GetVLayout());
+   kernels::Vector ky = my.Get_PVector()->As<kernels::Vector>();
 
    if (ess_tdofs_count)
    {
-      rx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      kx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    
-   massOperator->Mult(kx, ky);
-
+   massOperator->Mult(mx, my);
+   //ky.KernelsMem().copyFrom(my.GetData(), ky.Size() * sizeof(double));
+   my.Push();
+   
    if (ess_tdofs_count)
    {
-      ry.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
-   y = ky;
+   //ky.Fill(0.0);
+   
+   y = my;
+   //dbg("y:\n"); y.Print();assert(__FILE__&&__LINE__&&false);
+   
    pop();
 }
 

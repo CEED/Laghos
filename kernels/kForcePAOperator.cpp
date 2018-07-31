@@ -49,8 +49,8 @@ kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
    H1_DOFS_1D(h1fes.GetFE(0)->GetOrder()+1),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
-   h1D2Q(kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule)),
    l2D2Q(kernels::KernelsDofQuadMaps::Get(l2fes, integ_rule)),
+   h1D2Q(kernels::KernelsDofQuadMaps::Get(h1fes, integ_rule)),
    gVecL2(h1sz),
    gVecH1(l2sz)
 {
@@ -64,10 +64,14 @@ kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
    push();
+   dbg("\033[31;1;7m****kForcePAOperator::Mult ****\033[m");
+   //mfem::Vector kVecL2(l2fes.GetVLayout());
+   //kVecL2.PushData(vecL2.GetData());
+   //Vector kVecH1(h1fes.GetVLayout());
    const kernels::Vector rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
-   kernels::Vector rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    l2k.GlobalToLocal(rVecL2, rgVecL2);
    rForceMult(dim,
               NUM_DOFS_1D,
@@ -82,6 +86,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               (const double*)rgVecL2.KernelsMem().ptr(),
               (double*)rgVecH1.KernelsMem().ptr());
    h1k.LocalToGlobal(rgVecH1, rVecH1);
+   //vecH1=kVecH1;
    pop();
 }
 
@@ -89,6 +94,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
    push();
+   dbg("\033[31;1;7m****kForcePAOperator::MultTranspose ****\033[m");
    // vecH1 & vecL2 are now on the host, wrap them with k*
    Vector kVecH1(h1fes.GetVLayout());
    Vector kVecL2(l2fes.GetVLayout());
@@ -111,7 +117,6 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        (const double*)quad_data->stressJinvT.Data(),
                        (const double*)rgVecH1.KernelsMem().ptr(),
                        (double*)rgVecL2.KernelsMem().ptr());
-   dbg("LocalToGlobal");
    l2k.LocalToGlobal(rgVecL2, rVecL2);
    // back to the host argument
    vecL2 = kVecL2;

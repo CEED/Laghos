@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete [] partitioning;
    }
    else
    {
@@ -312,7 +312,10 @@ int main(int argc, char *argv[])
 
    int Vsize_l2 = L2FESpace.GetVSize();
    int Vsize_h1 = H1FESpace.GetVSize();
-
+   
+   cout << "[" << myid << "] Number of kinematic (position, velocity) LOCAL dofs: " << Vsize_h1 << endl;
+   cout << "[" << myid << "] Number of specific internal energy LOCAL dofs: " << Vsize_l2 << endl;
+   
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
    // - 1 -> velocity
