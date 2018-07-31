@@ -174,7 +174,7 @@ private:
 
 public:
    MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : AbcMassPAOperator(fes.GetVSize()),
+      : AbcMassPAOperator(*fes.GetVLayout()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
         quad_data(quad_data_), FESpace(fes)
    { }

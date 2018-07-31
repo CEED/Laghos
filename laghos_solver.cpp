@@ -219,7 +219,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    dS_dt = 0.0;
-
+   
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
@@ -237,7 +237,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    const size_t VsizeL2 = L2FESpace.GetVSize();
    const size_t VsizeH1 = H1FESpace.GetVSize();
-
+   dbg("\033[31;1m[LagrangianHydroOperator::Mult] VsizeL2=%d, VsizeH1=%d",VsizeL2, VsizeH1);fflush(0);
+ 
    ParGridFunction v, e;
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
    e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
@@ -312,8 +313,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             mfem::Vector dv_c(H1compFESpace.GetVLayout());
             dv_c.PushData(dv.GetData()+c*size);            
  
-            mfem::Vector kB(H1compFESpace.GetVLayout());
-            mfem::Vector kX(H1compFESpace.GetVLayout());
+            mfem::Vector kB_c(H1compFESpace.GetTrueVLayout());
+            //dbg("\033[31;1mV kB_c #%d",kB_c.Size());assert(__FILE__&&__LINE__&&false);
+            mfem::Vector kX_c(H1compFESpace.GetTrueVLayout());
       
             Array<int> c_tdofs;
             Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -327,14 +329,14 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
             // *****************************************************************
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetProlongationOperator()->MultTranspose(rhs_c, kB);
+               GetProlongationOperator()->MultTranspose(rhs_c, kB_c);
 
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetRestrictionOperator()->Mult(dv_c, kX);
+               GetRestrictionOperator()->Mult(dv_c, kX_c);
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
-            kVMassPA->EliminateRHS(kB);
-            //dbg("kB:\n"); kB.Print();assert(__FILE__&&__LINE__&&false);
+            kVMassPA->EliminateRHS(kB_c);
+            //dbg("kB_c:\n"); kB_c.Print();assert(__FILE__&&__LINE__&&false);
             //0 -5.55112e-17 0 0 -4.85723e-17 0 0 -6.93889e-17
             //0 0.0378933 -5.55112e-17 0.0757866 0 -0.0378933 0 -0.0757866
             //-5.55112e-17 0.0378933 0 0 -0.0378933 0.151573 -0.151573 0.151573
@@ -342,18 +344,18 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
             // *****************************************************************
             timer.sw_cgH1.Start();
-//#warning kB=0.0
-            //dbg("\033[32;1;7m**** kB=0.0 ****\033[m");
-            //kB = 0.0;
-            //kB.Fill(0.0);
+//#warning kB_c=0.0
+            //dbg("\033[32;1;7m**** kB_c=0.0 ****\033[m");
+            //kB_c = 0.0;
+            //kB_c.Fill(0.0);
             dbg("\033[32;1;7m**** Mult ****\033[m");
-            cg.Mult(kB, kX); // linalg/solver.cpp
-//#warning kX=1.0
-            //dbg("\033[31;1;7m**** kX=1.0 ****\033[m");
-            //kX=1.0;
-            //kX.Fill(1.0);
+            cg.Mult(kB_c, kX_c); // linalg/solver.cpp
+//#warning kX_c=1.0
+            //dbg("\033[31;1;7m**** kX_c=1.0 ****\033[m");
+            //kX_c=1.0;
+            //kX_c.Fill(1.0);
             dbg("\033[31;1m*****************************************************************\033[m\n");
-            //dbg("kX:\n"); kX.Print();assert(__FILE__&&__LINE__&&false);
+            //dbg("kX_c:\n"); kX_c.Print();assert(__FILE__&&__LINE__&&false);
             // 0 -4.83134e-15 0 0 -3.82263e-15 0 0 -6.40967e-15
             // 0 1.7052 -4.77645e-15 1.7052 0 -1.7052 0 -1.7052
             // -4.996e-15 1.7052 0 0 -1.7052 1.7052 -1.7052 1.7052 -1.7052 
@@ -364,7 +366,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetProlongationOperator()->Mult(kX, dv_c);
+               GetProlongationOperator()->Mult(kX_c, dv_c);
             //dbg("dv_c:\n"); dv_c.Print();assert(__FILE__&&__LINE__&&false);
 
             

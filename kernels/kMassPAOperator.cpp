@@ -33,7 +33,7 @@ namespace hydrodynamics
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
-      AbcMassPAOperator(fes_.GetVSize()),
+   AbcMassPAOperator(*fes_.GetTrueVLayout()),
       dim(fes_.GetMesh()->Dimension()),
       nzones(fes_.GetMesh()->GetNE()),
       quad_data(qd_),
@@ -77,7 +77,7 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
       assert(global_ess_tdofs_count>0);
-      //dbg("Resize of %d",global_ess_tdofs_count);
+      dbg("Resize of %d",global_ess_tdofs_count);
       ess_tdofs.Resize(ess_tdofs_count);
 #else
       assert(ess_tdofs_count>0);
@@ -119,43 +119,37 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
-   /*dbg("\033[32;1;7m****kMassPAOperator::Mult ****\033[m");
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] x.Size()=%d\033[m",x.Size());
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] y.Size()=%d\033[m",y.Size());
-   const std::size_t isz = massOperator->InLayout()->Size();
-   const std::size_t osz = massOperator->OutLayout()->Size();
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->InLayout()=%d\033[m",isz);
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->OutLayout()=%d\033[m",osz);
-   mfem::Vector mx(fes.GetVLayout());//isz);
-   mx.Pull(); //mx.PushData(x.GetData());
-   mfem::Vector my(fes.GetVLayout());//osz);
-   my.Pull(false);*/
-
-   mfem::Vector mx(fes.GetVLayout());
-   mx.PushData(x.GetData());
-   kernels::Vector kx = mx.Get_PVector()->As<kernels::Vector>();
    
-   Vector my(fes.GetVLayout());
-   kernels::Vector ky = my.Get_PVector()->As<kernels::Vector>();
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] mx\033[m");
+   const kernels::Vector &kx = x.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector kz(kx.GetLayout().As<kernels::Layout>());
+   kz.Assign<double>(kx);
+   //x.Pull();
+   
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] my\033[m");
+   //mfem::Vector my(fes.GetVLayout());
+   kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
+   //assert(false);
+   //y.Pull(false);
 
-   if (ess_tdofs_count)
-   {
-      kx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   if (ess_tdofs_count){
+      dbg("\033[32;1;7m[kMassPAOperator::Mult] kx.SetSubVector\033[m");
+      kz.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    
-   massOperator->Mult(mx, my);
-   //ky.KernelsMem().copyFrom(my.GetData(), ky.Size() * sizeof(double));
-   my.Push();
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->Mult\033[m");
+   massOperator->Mult(kz.Wrap(), y); // linalg/operator => linalg/constrained => linalg/prolong
    
-   if (ess_tdofs_count)
-   {
-      ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   if (ess_tdofs_count){
+      //assert(false);
+      dbg("\033[32;1;7m[kMassPAOperator::Mult] yx.SetSubVector\033[m");
+      ky.MapSubVector(ess_tdofs, kx, ess_tdofs_count);
    }
-   //ky.Fill(0.0);
    
-   y = my;
+   dbg("\033[32;1;7m[kMassPAOperator::Mult] y = my;\033[m");
+   //y.Push();
+   //y = my;
    //dbg("y:\n"); y.Print();assert(__FILE__&&__LINE__&&false);
-   
    pop();
 }
 

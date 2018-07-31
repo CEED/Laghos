@@ -33,7 +33,7 @@ public:
 // Abstract base class AbcMassPAOperator ***************************************
 class AbcMassPAOperator : public Operator{
 public:
-   AbcMassPAOperator(int size):Operator(size){}
+   AbcMassPAOperator(PLayout &lyt):Operator(lyt){}
    virtual void Setup() =0;
    virtual void ComputeDiagonal2D(Vector&) const =0;
    virtual void ComputeDiagonal3D(Vector&) const =0;
