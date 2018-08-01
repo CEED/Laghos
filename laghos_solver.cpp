@@ -218,7 +218,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   push();
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -407,7 +406,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 
-   dbg("Solve for energy, assemble the energy source if such exists.");
+   // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
@@ -470,7 +469,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
-   push();
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
@@ -491,7 +489,6 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
-   push();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -572,7 +569,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
-   push();
    const int nqp = integ_rule.GetNPoints();
 
    ParGridFunction x, v, e;

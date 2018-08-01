@@ -33,8 +33,7 @@ namespace hydrodynamics
 class kForcePAOperator : public AbcForcePAOperator
 {
 private:
-   const int dim;
-   const int nzones;
+   const int dim, nzones;
    const QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
    const kernels::kFiniteElementSpace &h1k, &l2k;

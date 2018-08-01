@@ -149,7 +149,7 @@ private:
 public:
    ForcePAOperator(QuadratureData *quad_data_,
                    ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes)
-      : AbcForcePAOperator(h1fes.GetVSize()),
+      : AbcForcePAOperator(),
         dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
         quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
 

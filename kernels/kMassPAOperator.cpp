@@ -33,15 +33,15 @@ namespace hydrodynamics
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
-      AbcMassPAOperator(*fes_.GetTrueVLayout()),
-      dim(fes_.GetMesh()->Dimension()),
-      nzones(fes_.GetMesh()->GetNE()),
-      quad_data(qd_),
-      fes(fes_),
-      ir(ir_),
-      ess_tdofs_count(0),
-      ess_tdofs(0),
-      bilinearForm(NULL) { }
+   AbcMassPAOperator(*fes_.GetTrueVLayout()),
+   dim(fes_.GetMesh()->Dimension()),
+   nzones(fes_.GetMesh()->GetNE()),
+   quad_data(qd_),
+   fes(fes_),
+   ir(ir_),
+   ess_tdofs_count(0),
+   ess_tdofs(0),
+   bilinearForm(new kernels::kBilinearForm(fes.Get_PFESpace().As<kernels::kFiniteElementSpace>())) { }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()
@@ -51,15 +51,9 @@ void kMassPAOperator::Setup()
    kernels::KernelsMassIntegrator &massInteg = *(new kernels::KernelsMassIntegrator(engine));
    massInteg.SetIntegrationRule(ir);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
-   bilinearForm = new kernels::kBilinearForm(fes.Get_PFESpace().As<kernels::kFiniteElementSpace>());
-   dbg("bilinearForm->AddDomainIntegrator");
    bilinearForm->AddDomainIntegrator(&massInteg);
-   dbg("bilinearForm->Assemble");
    bilinearForm->Assemble();
-   // ?! no constraintList: dealt with 'each velocity component'
-   dbg("bilinearForm->FormOperator");
-   bilinearForm->FormOperator(Array<int>(), massOperator); // which is a KernelsConstrainedOperator
-   dbg("done");
+   bilinearForm->FormOperator(Array<int>(), massOperator);
    pop();
 }
 
@@ -67,9 +61,11 @@ void kMassPAOperator::Setup()
 void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
    push(Wheat);
+   dbg("ess_tdofs_count=%d, ess_tdofs.Size()=%d & dofs.Size()=%d",ess_tdofs_count, ess_tdofs.Size(), dofs.Size());
    ess_tdofs_count = dofs.Size();
   
    if (ess_tdofs.Size()==0){
+      dbg("ess_tdofs.Size()==0");
 #ifdef MFEM_USE_MPI
       int global_ess_tdofs_count;
       const MPI_Comm comm = fes.GetParMesh()->GetComm();
@@ -81,7 +77,7 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       assert(ess_tdofs_count>0);
       ess_tdofs.Resize(ess_tdofs_count);
 #endif
-   }else assert(ess_tdofs_count<=ess_tdofs.Size());
+   }//else assert(ess_tdofs_count<=ess_tdofs.Size());
 
    assert(ess_tdofs>0);
   
@@ -103,11 +99,8 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
    if (ess_tdofs_count > 0){
-      mfem::Vector mb(fes.GetVLayout());//massOperator->InLayout());
-      mb.PushData(b.GetData());
-      kernels::Vector rb = mb.Get_PVector()->As<const kernels::Vector>();
-      rb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-      b=mb;
+      kernels::Vector kb = b.Get_PVector()->As<kernels::Vector>();
+      kb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    pop();
 }
@@ -117,31 +110,24 @@ void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
 
-   mfem::Vector mx(fes.GetVLayout());
+   mfem::Vector mx(fes.GetTrueVLayout());
    mx.PushData(x.GetData());
-   kernels::Vector kx = mx.Get_PVector()->As<kernels::Vector>();
    
-   Vector my(fes.GetVLayout());
-   kernels::Vector ky = my.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector &kx = mx.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
 
    if (ess_tdofs_count)
    {
       kx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    
-   massOperator->Mult(mx, my);
-   //ky.KernelsMem().copyFrom(my.GetData(), ky.Size() * sizeof(double));
-   my.Push();
+   massOperator->Mult(mx, y);
    
    if (ess_tdofs_count)
    {
       ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
-   //ky.Fill(0.0);
-   
-   y = my;
-   //dbg("y:\n"); y.Print();assert(__FILE__&&__LINE__&&false);
-   
+      
    pop();
 }
 

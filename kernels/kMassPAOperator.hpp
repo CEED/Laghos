@@ -47,16 +47,11 @@ public:
                    ParFiniteElementSpace&,
                    const IntegrationRule&);
    virtual void Setup();
-   
    void SetEssentialTrueDofs(mfem::Array<int>&);
-   
    void EliminateRHS(mfem::Vector&);
-   
    virtual void Mult(const mfem::Vector&, mfem::Vector&) const;
-
    virtual void ComputeDiagonal2D(Vector&) const {};
    virtual void ComputeDiagonal3D(Vector&) const {};
-
    virtual const Operator *GetProlongation() const
    { return fes.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const

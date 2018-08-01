@@ -144,11 +144,13 @@ laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 all: laghos
 
 go:;@./laghos -cfl 0.1 -rs 0
-pgo:;@mpirun -n 2 ./laghos -cfl 0.1 -rs 0
+pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
 
 ng:;@dbg=1 ./laghos -cfl 0.1 -rs 0 -ng
 vng:;@dbg=1 valgrind ./laghos -cfl 0.1 -rs 0 -ng
 png:;@dbg=1 mpirun -n 2 ./laghos -cfl 0.1 -rs 0 -ng
+#png:;@dbg=1 mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
+#png:;@dbg=1 mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
 vpng:;@dbg=1 valgrind mpirun -n 2 ./laghos -cfl 0.1 -rs 0 -ng
 
 opt:
