@@ -30,7 +30,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-// *****************************************************************************
 class kForcePAOperator : public AbcForcePAOperator
 {
 private:

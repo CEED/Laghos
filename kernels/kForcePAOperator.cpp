@@ -34,7 +34,7 @@ kForcePAOperator::kForcePAOperator(const QuadratureData *qd,
                                    ParFiniteElementSpace &l2f,
                                    const IntegrationRule &ir,
                                    const bool engine) :
-   AbcForcePAOperator(*l2f.GetTrueVLayout()),
+   //AbcForcePAOperator(*l2f.GetTrueVLayout()),
    dim(h1f.GetMesh()->Dimension()),
    nzones(h1f.GetMesh()->GetNE()),
    quad_data(qd),
@@ -91,10 +91,15 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
    push();
    dbg("\033[31;1;7m****kForcePAOperator::MultTranspose ****\033[m");
-   const kernels::Vector rVecH1 = vecH1.Get_PVector()->As<const kernels::Vector>();
+   // vecH1 & vecL2 are now on the host, wrap them with k*
+   Vector kVecH1(h1fes.GetVLayout());
+   Vector kVecL2(l2fes.GetVLayout());
+   // push vecH1's data down to the device
+   kVecH1.PushData(vecH1.GetData());
+   const kernels::Vector rVecH1 = kVecH1.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    kernels::Vector rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
-   kernels::Vector rVecL2 = vecL2.Get_PVector()->As<kernels::Vector>();
+   kernels::Vector rVecL2 = kVecL2.Get_PVector()->As<kernels::Vector>();
    h1k.GlobalToLocal(rVecH1, rgVecH1);
    rForceMultTranspose(dim,
                        NUM_DOFS_1D,
@@ -109,6 +114,8 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        (const double*)rgVecH1.KernelsMem().ptr(),
                        (double*)rgVecL2.KernelsMem().ptr());
    l2k.LocalToGlobal(rgVecL2, rVecL2);
+   // back to the host argument
+   vecL2 = kVecL2;
    pop();
 }
 

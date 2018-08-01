@@ -33,15 +33,15 @@ namespace hydrodynamics
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
-   AbcMassPAOperator(*fes_.GetTrueVLayout()),
-   dim(fes_.GetMesh()->Dimension()),
-   nzones(fes_.GetMesh()->GetNE()),
-   quad_data(qd_),
-   fes(fes_),
-   ir(ir_),
-   ess_tdofs_count(0),
-   ess_tdofs(0),
-   bilinearForm(NULL) { }
+      AbcMassPAOperator(fes_.GetVSize()),
+      dim(fes_.GetMesh()->Dimension()),
+      nzones(fes_.GetMesh()->GetNE()),
+      quad_data(qd_),
+      fes(fes_),
+      ir(ir_),
+      ess_tdofs_count(0),
+      ess_tdofs(0),
+      bilinearForm(NULL) { }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()
@@ -103,8 +103,11 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
    if (ess_tdofs_count > 0){
-      kernels::Vector rb = b.Get_PVector()->As<kernels::Vector>();
+      mfem::Vector mb(fes.GetVLayout());//massOperator->InLayout());
+      mb.PushData(b.GetData());
+      kernels::Vector rb = mb.Get_PVector()->As<const kernels::Vector>();
       rb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      b=mb;
    }
    pop();
 }
@@ -114,70 +117,31 @@ void kMassPAOperator::Mult(const mfem::Vector &x, mfem::Vector &y) const
 {
    push();
 
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] mx\033[m");
-   //dbg("\033[32;1;7mx:\n"); x.Print();
-   //0 0 0 0 0 0 0 0
-   //0 0 0 0 0 0 0 0
-   //0 0 0 0 0 0 0 0
-   //0
+   mfem::Vector mx(fes.GetVLayout());
+   mx.PushData(x.GetData());
+   kernels::Vector kx = mx.Get_PVector()->As<kernels::Vector>();
    
-   //0 -5.55112e-17 0 0 -4.85723e-17 0 0 -6.93889e-17
-   //0 0.0378933 -5.55112e-17 0.0757866 0 -0.0378933 0 -0.0757866
-   //-5.55112e-17 0.0378933 0 0 -0.0378933 0.151573 -0.151573 0.151573
-   //-0.151573
-   
-   //0 -5.39619e-17 0 0 -4.18756e-17 0 0 -7.23408e-17
-   //0 0.0158197 -5.32377e-17 0.00914027 0 -0.0158197 0 -0.00914027
-   //-5.61346e-17 0.0158197 0 0 -0.0158197 -0.00421859 0.00421859 -0.00421859
-   //0.00421859
+   Vector my(fes.GetVLayout());
+   kernels::Vector ky = my.Get_PVector()->As<kernels::Vector>();
 
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] kx\033[m");
-   const kernels::Vector &kx = x.Get_PVector()->As<const kernels::Vector>();
-   
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] z\033[m");
-   Vector z(kx.GetLayout());
-   z.Resize(kx.Size());//(kx.GetLayout().As<kernels::Layout>());
-   z=x;
-   z.Push();
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] kz\033[m");
-   kernels::Vector &kz = z.Get_PVector()->As<kernels::Vector>();
-   //kz.Assign<double>(kx);
-   
-   dbg("\033[32;1;7m[kMassPAOperator::Mult] ky\033[m");
-   kernels::Vector ky = y.Get_PVector()->As<kernels::Vector>();
-   if (ess_tdofs_count){
-      //dbg("\033[32;1;7m[kMassPAOperator::Mult] kx.SetSubVector\033[m");
-      kz.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   if (ess_tdofs_count)
+   {
+      kx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
    
-   //dbg("\033[32;1;7m[kMassPAOperator::Mult] massOperator->Mult\033[m");
-   massOperator->Mult(kz.Wrap(), y); // linalg/operator => constrained => prolong
+   massOperator->Mult(mx, my);
+   //ky.KernelsMem().copyFrom(my.GetData(), ky.Size() * sizeof(double));
+   my.Push();
    
-   if (ess_tdofs_count){
-      //assert(false);
-      //dbg("\033[32;1;7m[kMassPAOperator::Mult] yx.SetSubVector\033[m");
-      ky.MapSubVector(ess_tdofs, kx, ess_tdofs_count);
-      //ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   if (ess_tdofs_count)
+   {
+      ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
    }
-   y.Push();
-   //dbg("\033[32;1;7m[kMassPAOperator::Mult] y = my;\033[m");
-   //dbg("\033[32;1;7my:\n"); y.Print();//assert(__FILE__&&__LINE__&&false);
-/*
-  0 0 0 0 0 0 0 0
-  0 0 0 0 0 0 0 0
-  0 0 0 0 0 0 0 0
-  0
-  
-  0 -1.6263e-19 0 0 -5.42101e-19 0 0 1.6263e-19
-  0 0.00168415 -2.1684e-19 0.00505244 0 -0.00168415 0 -0.00505244
-  0 0.00168415 0 0 -0.00168415 0.011789 -0.011789 0.011789
-  -0.011789
-  
-  0 -6.23416e-19 0 0 -8.40257e-19 0 0 -3.45589e-19
-  0 0.000203117 -2.44115e-18 0.000109371 0 -0.000203117 0 -0.000109371
-  -2.60717e-18 0.000203117 0 0 -0.000203117 -7.8122e-05 7.8122e-05 -7.8122e-05
-  7.8122e-05
-*/
+   //ky.Fill(0.0);
+   
+   y = my;
+   //dbg("y:\n"); y.Print();assert(__FILE__&&__LINE__&&false);
+   
    pop();
 }
 

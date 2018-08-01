@@ -149,8 +149,7 @@ private:
 public:
    ForcePAOperator(QuadratureData *quad_data_,
                    ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes)
-      : AbcForcePAOperator(h1fes.GetVSize()),
-        dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
+      : dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
         quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
 
    virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
@@ -175,7 +174,7 @@ private:
 
 public:
    MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
-      : AbcMassPAOperator(*fes.GetVLayout()),
+      : AbcMassPAOperator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
         quad_data(quad_data_), FESpace(fes)
    { }

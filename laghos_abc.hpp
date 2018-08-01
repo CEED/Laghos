@@ -26,8 +26,6 @@ namespace hydrodynamics
 // Abstract base class AbcForcePAOperator **************************************
 class AbcForcePAOperator : public Operator{
 public:
-   AbcForcePAOperator(int sz):Operator(sz){}
-   AbcForcePAOperator(PLayout &lyt):Operator(lyt){}
    virtual void Mult(const Vector&, Vector&) const =0;
    virtual void MultTranspose(const Vector&, Vector&) const =0;
 };
@@ -35,7 +33,7 @@ public:
 // Abstract base class AbcMassPAOperator ***************************************
 class AbcMassPAOperator : public Operator{
 public:
-   AbcMassPAOperator(PLayout &lyt):Operator(lyt){}
+   AbcMassPAOperator(int size):Operator(size){}
    virtual void Setup() =0;
    virtual void ComputeDiagonal2D(Vector&) const =0;
    virtual void ComputeDiagonal3D(Vector&) const =0;
