@@ -218,6 +218,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
+   push();
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -264,6 +265,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       rhs.Resize(H1FESpace.GetVLayout());
       one.Resize(L2FESpace.GetVLayout());
       one.Fill(1.0);
+      one.Push();
    }
    
    if (p_assembly)
@@ -312,8 +314,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             mfem::Vector dv_c(H1compFESpace.GetVLayout());
             dv_c.PushData(dv.GetData()+c*size);            
  
-            mfem::Vector kB(H1compFESpace.GetVLayout());
-            mfem::Vector kX(H1compFESpace.GetVLayout());
+            mfem::Vector kB_c(H1compFESpace.GetTrueVLayout());
+            mfem::Vector kX_c(H1compFESpace.GetTrueVLayout());
       
             Array<int> c_tdofs;
             Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
@@ -327,13 +329,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
             // *****************************************************************
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetProlongationOperator()->MultTranspose(rhs_c, kB);
+               GetProlongationOperator()->MultTranspose(rhs_c, kB_c);
 
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetRestrictionOperator()->Mult(dv_c, kX);
+               GetRestrictionOperator()->Mult(dv_c, kX_c);
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
-            kVMassPA->EliminateRHS(kB);
+            kVMassPA->EliminateRHS(kB_c);
             //dbg("kB:\n"); kB.Print();assert(__FILE__&&__LINE__&&false);
             //0 -5.55112e-17 0 0 -4.85723e-17 0 0 -6.93889e-17
             //0 0.0378933 -5.55112e-17 0.0757866 0 -0.0378933 0 -0.0757866
@@ -347,7 +349,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             //kB = 0.0;
             //kB.Fill(0.0);
             dbg("\033[32;1;7m**** Mult ****\033[m");
-            cg.Mult(kB, kX); // linalg/solver.cpp
+            cg.Mult(kB_c, kX_c); // linalg/solver.cpp
 //#warning kX=1.0
             //dbg("\033[31;1;7m**** kX=1.0 ****\033[m");
             //kX=1.0;
@@ -364,7 +366,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
             H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
-               GetProlongationOperator()->Mult(kX, dv_c);
+               GetProlongationOperator()->Mult(kX_c, dv_c);
             //dbg("dv_c:\n"); dv_c.Print();assert(__FILE__&&__LINE__&&false);
 
             
@@ -417,20 +419,19 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
    Array<int> l2dofs;
    Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-   
-   /*if (engine){
-      v.Resize(H1FESpace.GetVLayout());
-      //v.Push();
+   Vector kv;
+   if (engine){
+      kv.Resize(H1FESpace.GetVLayout());
+      kv.PushData(v.GetData());
       e_rhs.Resize(L2FESpace.GetVLayout());
-      //e_rhs.Push(false);
-   }*/
+   }
    
    if (p_assembly)
    {
       timer.sw_force.Start();
-      ForcePA->MultTranspose(v, e_rhs);  
+      if (!engine) ForcePA->MultTranspose(v, e_rhs);
+      else ForcePA->MultTranspose(kv, e_rhs);
       timer.sw_force.Stop();
-
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
       {
@@ -464,10 +465,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    delete e_source;
 
    quad_data_is_current = false;
+   pop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
+   push();
    Vector* sptr = (Vector*) &S;
    ParGridFunction x;
    x.MakeRef(&H1FESpace, *sptr, 0);
@@ -477,6 +480,7 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
+   pop();
    return glob_dt_est;
 }
 
@@ -487,6 +491,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
+   push();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -507,6 +512,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
       L2FESpace.GetElementDofs(i, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
+   pop();
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
@@ -566,7 +572,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
-
+   push();
    const int nqp = integ_rule.GetNPoints();
 
    ParGridFunction x, v, e;
@@ -748,7 +754,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] cs_b;
    delete [] Jpr_b;
    quad_data_is_current = true;
-
+   pop();
    timer.sw_qdata.Stop();
    timer.quad_tstep += nzones;
 }

@@ -33,7 +33,7 @@ namespace hydrodynamics
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
-      AbcMassPAOperator(fes_.GetVSize()),
+      AbcMassPAOperator(*fes_.GetTrueVLayout()),
       dim(fes_.GetMesh()->Dimension()),
       nzones(fes_.GetMesh()->GetNE()),
       quad_data(qd_),

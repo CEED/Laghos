@@ -464,10 +464,11 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
+      dbg("ode_solver Step");
       ode_solver->Step(S, t, dt);
       steps++;
 
-      // Adaptive time step control.
+      dbg("Adaptive time step control.");
       const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
