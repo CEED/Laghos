@@ -391,7 +391,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    push(Wheat);
   
    timer.sw_qdata.Start();
-   const int nqp = integ_rule.GetNPoints();
+   //const int nqp = integ_rule.GetNPoints();
 
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
@@ -414,9 +414,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    ElementTransformation *T = H1FESpace.GetElementTransformation(0);
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
-     
+
+#warning rUpdateQuadratureDataS
    if (rconfig::Get().Share())
-     rUpdateQuadratureDataS(gamma,
+      rUpdateQuadratureData/*S*/(gamma,
                             quad_data.h0,
                             cfl,
                             use_viscosity,

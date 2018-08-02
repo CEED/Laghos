@@ -100,6 +100,148 @@ void rGridFuncToQuad2S(
          );
 #endif
 }
+
+// *****************************************************************************
+#warning rGridFuncToQuad3S to debug
+#ifdef __TEMPLATES__
+template<const int NUM_VDIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel
+#endif
+void rGridFuncToQuad3S(
+#ifndef __TEMPLATES__
+                        const int NUM_VDIM,
+                        const int NUM_DOFS_1D,
+                        const int NUM_QUAD_1D,
+#endif
+                        const int numElements,
+                        const double* restrict dofToQuad,
+                        const int* restrict l2gMap,
+                        const double* restrict gf,
+                        double* restrict out) {
+  const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
+  const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
+   // Iterate over elements
+   //for (int e = 0; e < numElements; ++e; @outer) {
+#ifdef __LAMBDA__
+  forallS(e,numElements,1,
+#else
+  const int idx = blockIdx.x;
+  const int e = idx * 1;
+  if (e < numElements)
+#endif
+  {
+     // Store dof <--> quad mappings
+     share double s_dofToQuad[NUM_QUAD_DOFS_1D];// @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+
+     // Store xy planes in @shared memory
+     share double s_z[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
+
+     // Store z axis as registers
+     /*exclusive*/ double r_qz[NUM_QUAD_1D];
+
+     sync;
+#ifdef __LAMBDA__
+     for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) {
+#else
+        //{ const int y = threadIdx.x;
+#endif
+        sync;
+#ifdef __LAMBDA__
+        for (int x = 0; x < NUM_MAX_1D; ++x/*; @inner*/) {
+#else
+           //{ const int x = threadIdx.x;
+#endif
+           const int id = (y * NUM_MAX_1D) + x;
+           // Fetch Q <--> D maps
+           if (id < NUM_QUAD_DOFS_1D) {
+              s_dofToQuad[id] = dofToQuad[id];
+           }
+           // Initialize our Z axis
+           for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+              r_qz[qz] = 0;
+           }
+        }
+     }
+
+     sync;
+#ifdef __LAMBDA__
+     for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+#else
+        //{ const int dy = threadIdx.x;
+#endif
+        sync;
+#ifdef __LAMBDA__
+        for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+#else
+           //{ const int dx = threadIdx.x;
+#endif
+           if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
+              for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+                 const double val = gf[l2gMap[ijklN(dx, dy, dz,e,NUM_DOFS_1D)]];
+                 // Calculate D -> Q in the Z axis
+                 for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+                    r_qz[qz] += val * s_dofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
+                 }
+              }
+           }
+        }
+     }
+     // For each xy plane
+     for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+        // Fill xy plane at given z position
+        sync;
+#ifdef __LAMBDA__
+        for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+#else
+           //{ const int dy = threadIdx.x;
+#endif
+           sync;
+#ifdef __LAMBDA__
+           for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+#else
+              //{ const int dy = threadIdx.x;
+#endif
+              if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
+                 s_z[ijN(dx, dy,NUM_DOFS_1D)] = r_qz[qz];
+              }
+           }
+        }
+        // Calculate Dxyz, xDyz, xyDz in plane
+        sync;
+#ifdef __LAMBDA__
+        for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+#else
+           //{ const int qy = threadIdx.x;
+#endif
+           sync;
+#ifdef __LAMBDA__
+           for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+#else
+              //{ const int qx = threadIdx.x;
+#endif
+              if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
+                 double val = 0;
+                 for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                    const double wy = s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
+                    for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+                       const double wx = s_dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+                       val += wx * wy * s_z[ijN(dx,dy,NUM_DOFS_1D)];
+                    }
+                 }
+                 out[ijklN(qx, qy, qz, e,NUM_QUAD_1D)] = val;
+              }
+           }
+        }
+     }
+  }
+#ifdef __LAMBDA__
+           );
+#endif
+}
+
+
 // *****************************************************************************
 typedef void (*fGridFuncToQuad)(const int numElements,
                                 const double* restrict dofToQuad,
@@ -108,15 +250,16 @@ typedef void (*fGridFuncToQuad)(const int numElements,
                                 double* restrict out);
 // *****************************************************************************
 void rGridFuncToQuadS(const int DIM,
-                     const int NUM_VDIM,
-                     const int NUM_DOFS_1D,
-                     const int NUM_QUAD_1D,
-                     const int numElements,
-                     const double* dofToQuad,
-                     const int* l2gMap,
-                     const double* gf,
-                     double* __restrict out) {
-  push(Green);
+                      const int NUM_VDIM,
+                      const int NUM_DOFS_1D,
+                      const int NUM_QUAD_1D,
+                      const int numElements,
+                      const double* dofToQuad,
+                      const int* l2gMap,
+                      const double* gf,
+                      double* __restrict out) {
+   push(Green);
+   assert(false);
 #ifndef __LAMBDA__
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
   const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
@@ -148,7 +291,7 @@ void rGridFuncToQuadS(const int DIM,
     {0x21E,&rGridFuncToQuad2S<1,15,30>},
     {0x21F,&rGridFuncToQuad2S<1,16,32>},
     // 3D
-/*    {0x310,&rGridFuncToQuad3S<1,1,2>},
+    {0x310,&rGridFuncToQuad3S<1,1,2>},
     {0x311,&rGridFuncToQuad3S<1,2,4>},
     {0x312,&rGridFuncToQuad3S<1,3,6>},
     {0x313,&rGridFuncToQuad3S<1,4,8>},
@@ -164,7 +307,6 @@ void rGridFuncToQuadS(const int DIM,
     {0x31D,&rGridFuncToQuad3S<1,14,28>},
     {0x31E,&rGridFuncToQuad3S<1,15,30>},
     {0x31F,&rGridFuncToQuad3S<1,16,32>},
-*/
   };
   if (!call[id]){
     printf("\n[rGridFuncToQuad] id \033[33m0x%X\033[m ",id);
@@ -179,7 +321,10 @@ void rGridFuncToQuadS(const int DIM,
     call0(rGridFuncToQuad2S,id,grid,blck,
           NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
           numElements,dofToQuad,l2gMap,gf,out);
-  if (DIM==3) assert(false);
+  if (DIM==3)
+    call0(rGridFuncToQuad3S,id,grid,blck,
+          NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,l2gMap,gf,out);
 #endif
   pop();
 }

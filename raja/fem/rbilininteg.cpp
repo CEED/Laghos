@@ -475,7 +475,7 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
   const int dofs1D = trialFESpace->GetFE(0)->GetOrder() + 1;
   if (rconfig::Get().Share())
-    rMassMultAddS(dim,
+     rMassMultAdd/*S*/(dim,
                   dofs1D,
                   quad1D,
                   mesh->GetNE(),

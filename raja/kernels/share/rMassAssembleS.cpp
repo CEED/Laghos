@@ -18,7 +18,7 @@
 // *****************************************************************************
 extern "C" kernel
 void rMassAssemble2S0(const int numElements,
-                      const int NUM_QUAD_2D,
+                      const int NUM_QUAD,
                       const double COEFF,
                       const double* quadWeights,
                       const double* J,
@@ -42,13 +42,13 @@ void rMassAssemble2S0(const int numElements,
 #else
        { const int qOff = threadIdx.y;
 #endif
-          for (int q = qOff; q < NUM_QUAD_2D; q += A2_QUAD_BATCH) {
-            const double J11 = J[ijklNM(0, 0, q, e,2,NUM_QUAD_2D)];
-            const double J12 = J[ijklNM(1, 0, q, e,2,NUM_QUAD_2D)];
-            const double J21 = J[ijklNM(0, 1, q, e,2,NUM_QUAD_2D)];
-            const double J22 = J[ijklNM(1, 1, q, e,2,NUM_QUAD_2D)];
+          for (int q = qOff; q < NUM_QUAD; q += A2_QUAD_BATCH) {
+            const double J11 = J[ijklNM(0, 0, q, e,2,NUM_QUAD)];
+            const double J12 = J[ijklNM(1, 0, q, e,2,NUM_QUAD)];
+            const double J21 = J[ijklNM(0, 1, q, e,2,NUM_QUAD)];
+            const double J22 = J[ijklNM(1, 1, q, e,2,NUM_QUAD)];
 
-            oper[ijN(q,e,NUM_QUAD_2D)] = quadWeights[q] * COEFF * ((J11 * J22) - (J21 * J12));
+            oper[ijN(q,e,NUM_QUAD)] = quadWeights[q] * COEFF * ((J11 * J22) - (J21 * J12));
           }
         }
       }
@@ -58,6 +58,60 @@ void rMassAssemble2S0(const int numElements,
   );
 #endif
 }
+
+// *****************************************************************************
+extern "C" kernel
+void rMassAssemble3S0(const int numElements,
+                      const int NUM_QUAD,
+                      const double COEFF,
+                      const double* restrict quadWeights,
+                      const double* restrict J,
+                      double* __restrict oper) {
+   //for (int eOff = 0; eOff < numElements; eOff += A3_ELEMENT_BATCH; @outer) {
+#ifdef __LAMBDA__
+   forallS(eOff,numElements,A3_ELEMENT_BATCH,
+#else
+  const int idx = blockIdx.x;
+  const int eOff = idx * A3_ELEMENT_BATCH;
+  if (eOff < numElements)
+#endif
+  {
+#ifdef __LAMBDA__
+     for (int e = eOff; e < (eOff + A3_ELEMENT_BATCH); ++e/*; @inner*/) {
+#else
+        //{ const int e = threadIdx.x;
+#endif
+       if (e < numElements) {
+#ifdef __LAMBDA__
+          for (int qOff = 0; qOff < A3_QUAD_BATCH; ++qOff/*; @inner*/) {
+#else
+             //{ const int qOff = threadIdx.y;
+#endif
+             for (int q = qOff; q < NUM_QUAD; q += A3_QUAD_BATCH) {
+                const double J11 = J[ijklNM(0, 0, q, e,3,NUM_QUAD)];
+                const double J12 = J[ijklNM(1, 0, q, e,3,NUM_QUAD)];
+                const double J13 = J[ijklNM(2, 0, q, e,3,NUM_QUAD)];
+                const double J21 = J[ijklNM(0, 1, q, e,3,NUM_QUAD)];
+                const double J22 = J[ijklNM(1, 1, q, e,3,NUM_QUAD)];
+                const double J23 = J[ijklNM(2, 1, q, e,3,NUM_QUAD)];
+                const double J31 = J[ijklNM(0, 2, q, e,3,NUM_QUAD)];
+                const double J32 = J[ijklNM(1, 2, q, e,3,NUM_QUAD)];
+                const double J33 = J[ijklNM(2, 2, q, e,3,NUM_QUAD)];
+
+                const double detJ = ((J11 * J22 * J33) + (J12 * J23 * J31) + (J13 * J21 * J32) -
+                                     (J13 * J22 * J31) - (J12 * J21 * J33) - (J11 * J23 * J32));
+                 
+                oper[ijN(q, e,NUM_QUAD)] = quadWeights[q] * COEFF * detJ;
+             }
+          }
+       }
+     }
+  }
+#ifdef __LAMBDA__
+           );
+#endif
+}
+  
 // *****************************************************************************
 static void rMassAssemble2S(const int NUM_QUAD_2D,
                             const int numElements,
@@ -74,6 +128,23 @@ static void rMassAssemble2S(const int NUM_QUAD_2D,
 #endif
   cuKerGBS(rMassAssemble2S,blocks,threads,numElements,NUM_QUAD_2D,COEFF,quadWeights,J,oper);
 }
+          
+// *****************************************************************************
+static void rMassAssemble3S(const int NUM_QUAD_3D,
+                            const int numElements,
+                            const double COEFF,
+                            const double* quadWeights,
+                            const double* J,
+                            double* __restrict oper) {
+#ifndef __LAMBDA__
+  const int gX = ((numElements+A3_ELEMENT_BATCH-1)/A3_ELEMENT_BATCH);
+  const int tX = A3_ELEMENT_BATCH;
+  const int tY = A3_QUAD_BATCH;
+  dim3 threads(tX, tY, 1);
+  dim3 blocks(gX, 1, 1);
+#endif
+  cuKerGBS(rMassAssemble3S,blocks,threads,numElements,NUM_QUAD_3D,COEFF,quadWeights,J,oper);
+}
 
 // *****************************************************************************
 void rMassAssembleS(const int dim,
@@ -83,10 +154,10 @@ void rMassAssembleS(const int dim,
                     const double* J,
                     const double COEFF,
                     double* __restrict oper) {
-  assert(false);
   push(Green);
+  assert(false);
   if (dim==1) {assert(false);}
   if (dim==2) rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
-  if (dim==3) {assert(false);}
+  if (dim==3) rMassAssemble3S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper);
   pop();
 }

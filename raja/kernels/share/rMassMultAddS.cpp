@@ -74,7 +74,7 @@ void rMassMultAdd2S(
         for (int dx = 0; dx < NUM_MAX_1D; ++dx) {
 #else
         {
-          const int dx = threadIdx.x;
+           const int dx = threadIdx.x;
 #endif
         
           if (dx < NUM_DOFS_1D) {
@@ -157,7 +157,173 @@ void rMassMultAdd2S(
           );
 #endif
 }
+ 
+// *****************************************************************************
+#warning rMassMultAdd3S to debug
+#ifdef __TEMPLATES__
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D> kernel
+#endif
+void rMassMultAdd3S(
+#ifndef __TEMPLATES__
+                    const int NUM_DOFS_1D,
+                    const int NUM_QUAD_1D,
+#endif
+                    const int numElements,
+                    const double* restrict dofToQuad,
+                    const double* restrict dofToQuadD,
+                    const double* restrict quadToDof,
+                    const double* restrict quadToDofD,
+                    const double* restrict oper,
+                    const double* restrict solIn,
+                    double* restrict solOut) {
+   //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
+   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+   const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
+  // Iterate over elements
+  // for (int e = 0; e < numElements; ++e; @outer) {
+#ifdef __LAMBDA__
+   forallS(e,numElements,1,
+#endif
+   {
+      // Store dof <--> quad mappings
+      share double s_dofToQuad[NUM_QUAD_DOFS_1D];// @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+      share double s_quadToDof[NUM_QUAD_DOFS_1D];// @dim(NUM_DOFS_1D, NUM_QUAD_1D);
 
+      // Store xy planes in @shared memory
+      share double s_xy[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
+
+      // Store z axis as registers
+      /*exclusive*/ double r_z[NUM_QUAD_1D];
+      /*exclusive*/ double r_z2[NUM_DOFS_1D];
+
+#ifdef __LAMBDA__
+      for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) 
+#endif
+      {
+         sync;
+#ifdef __LAMBDA__
+         for (int x = 0; x < NUM_MAX_1D; ++x/*; @inner*/) 
+#endif
+         {
+            const int id = (y * NUM_MAX_1D) + x;
+            // Fetch Q <--> D maps
+            if (id < NUM_QUAD_DOFS_1D) {
+               s_dofToQuad[id]  = dofToQuad[id];
+               s_quadToDof[id]  = quadToDof[id];
+            }
+            // Initialize our Z axis
+            for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+               r_z[qz] = 0;
+            }
+            for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+               r_z2[dz] = 0;
+            }
+         }
+      }
+        
+      sync;
+#ifdef __LAMBDA__
+      for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+#endif
+#ifdef __LAMBDA__
+         for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+#endif
+            if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
+               for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+                  const double s = solIn[ijklN(dx,dy,dz,e,NUM_DOFS_1D)];
+                  // Calculate D -> Q in the Z axis
+                  for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+                     r_z[qz] += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
+                  }
+               }
+            }
+         }
+      }
+      // For each xy plane
+      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+         // Fill xy plane at given z position
+#ifdef __LAMBDA__
+         for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+#endif
+#ifdef __LAMBDA__
+            for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+#endif
+               if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
+                  s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/ = r_z[qz];
+               }
+            }
+         }
+         // Calculate Dxyz, xDyz, xyDz in plane
+#ifdef __LAMBDA__
+         for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+#endif
+#ifdef __LAMBDA__
+            for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+#endif
+               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
+                  double s = 0;
+                  for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                     const double wy = s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)]/*(qy, dy)*/;
+                     for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+                        const double wx = s_dofToQuad[ijN(qx, dx,NUM_QUAD_1D)]/*(qx, dx)*/;
+                        s += wx * wy * s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/;
+                     }
+                  }
+
+                  s *= oper[ijklN(qx, qy, qz,e,NUM_QUAD_1D)]/*(qx, qy, qz, e)*/;
+
+                  for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+                     const double wz  = s_quadToDof[ijN(dz, qz,NUM_QUAD_1D)]/*(dz, qz)*/;
+                     r_z2[dz] += wz * s;
+                  }
+               }
+            }
+         }
+      }
+      // Iterate over xy planes to compute solution
+      for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+         // Place xy plane in @shared memory
+#ifdef __LAMBDA__
+         for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+#endif
+#ifdef __LAMBDA__
+            for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+#endif
+               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
+                  s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/ = r_z2[dz];
+               }
+            }
+         }
+         // Finalize solution in xy plane
+#ifdef __LAMBDA__
+         for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+#endif
+#ifdef __LAMBDA__
+            for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+#endif
+               if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
+                  double solZ = 0;
+                  for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                     const double wy = s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)]/*(dy, qy)*/;
+                     for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                        const double wx = s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]/*(dx, qx)*/;
+                        solZ += wx * wy * s_xy[ijN(qx, qx,NUM_DOFS_1D)]/*(qx, qy)*/;
+                     }
+                  }
+                  solOut[ijklN(dx, dy, dz,e,NUM_DOFS_1D)]/*(dx, dy, dz, e)*/ += solZ;
+               }
+            }
+         }
+      }
+   }
+#ifdef __LAMBDA__
+           );
+#endif
+}
+
+      
 // *****************************************************************************
 typedef void (*fMassMultAdd)(const int numElements,
                              const double* dofToQuad,
@@ -181,6 +347,7 @@ void rMassMultAddS(const int DIM,
                    const double* x,
                    double* __restrict y) {
   push(Green);
+  assert(false);
 #ifndef __LAMBDA__
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
@@ -210,8 +377,7 @@ void rMassMultAddS(const int DIM,
     {0x20D0E,&rMassMultAdd2S<14,28>},  {0x20E0E,&rMassMultAdd2S<15,28>},
     {0x20E0F,&rMassMultAdd2S<15,30>},  {0x20F0F,&rMassMultAdd2S<16,30>},
     {0x20F10,&rMassMultAdd2S<16,32>},  {0x21010,&rMassMultAdd2S<17,32>},
-    // 3D
-/*
+    // 3D    
     {0x30001,&rMassMultAdd3S<1,2>},    {0x30101,&rMassMultAdd3S<2,2>},
     {0x30102,&rMassMultAdd3S<2,4>},    {0x30202,&rMassMultAdd3S<3,4>},
     {0x30203,&rMassMultAdd3S<3,6>},    {0x30303,&rMassMultAdd3S<4,6>},
@@ -228,7 +394,7 @@ void rMassMultAddS(const int DIM,
     {0x30D0E,&rMassMultAdd3S<14,28>},  {0x30E0E,&rMassMultAdd3S<15,28>},
     {0x30E0F,&rMassMultAdd3S<15,30>},  {0x30F0F,&rMassMultAdd3S<16,30>},
     {0x30F10,&rMassMultAdd3S<16,32>},  {0x31010,&rMassMultAdd3S<17,32>},
-*/
+    
   };
   if(!call[id]){
     printf("\n[rMassMultAddS] id \033[33m0x%X\033[m ",id);
@@ -243,7 +409,10 @@ void rMassMultAddS(const int DIM,
     call0(rMassMultAdd2S,id,grid,blck,
           NUM_DOFS_1D,NUM_QUAD_1D,
           numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y); 
-  if (DIM==3) assert(false);
+  if (DIM==3) 
+    call0(rMassMultAdd3S,id,grid,blck,
+          NUM_DOFS_1D,NUM_QUAD_1D,
+          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y); 
 #endif
   pop();
 }

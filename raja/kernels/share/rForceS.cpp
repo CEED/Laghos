@@ -371,7 +371,6 @@ void rForceMult3S(
                   const double* restrict e,
                   double* restrict v) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  //const int MAX_DOFS_1D = (L2_DOFS_1D > H1_DOFS_1D)?L2_DOFS_1D:H1_DOFS_1D;
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD_1D;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
@@ -393,18 +392,13 @@ void rForceMult3S(
     share double s_xDyz[NUM_QUAD_2D];
     share double s_xyDz[NUM_QUAD_2D];
 
-    double r_z[NUM_QUAD_1D];
-
+    /*exclusive*/ double r_z[256][NUM_QUAD_1D];
+    int xdx = 0;
 #ifdef __LAMBDA__
     for (int y = 0; y < INNER_SIZE; ++y/*; inner*/) {
-#else
-    { const int y = 0 + threadIdx.x;
 #endif
-      sync;
 #ifdef __LAMBDA__      
       for (int x = 0; x < INNER_SIZE; ++x/*; inner*/) {
-#else
-      { const int x = 0 + threadIdx.x;
 #endif
         const int id = (y * INNER_SIZE) + x;
         for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
@@ -419,38 +413,34 @@ void rForceMult3S(
 
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
-        sync;
+         xdx=0;
 #ifdef __LAMBDA__
         for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
-#else
-        { const int dy = 0 + threadIdx.x;
 #endif
-          sync;
 #ifdef __LAMBDA__
           for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
-#else
-          { const int dx = 0 + threadIdx.x;
 #endif
             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
               // Calculate D -> Q in the Z axis
               const double r_e0 = e[ijklN(dx, dy, 0, el,L2_DOFS_1D)];
               for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                r_z[qz] = r_e0 * s_L2DofToQuad[ijN(qz, 0,NUM_QUAD_1D)];
+                r_z[xdx][qz] = r_e0 * s_L2DofToQuad[ijN(qz, 0,NUM_QUAD_1D)];
               }
 
               for (int dz = 1; dz < L2_DOFS_1D; ++dz) {
                 const double r_e = e[ijklN(dx, dy, dz, el,L2_DOFS_1D)];
                 for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                  r_z[qz] += r_e * s_L2DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
+                  r_z[xdx][qz] += r_e * s_L2DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
                 }
               }
             }
+            ++xdx;
           }
         }
         // For each xy plane
         for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+           xdx=0;
           // Fill xy plane at given z position
-          sync;
 #ifdef __LAMBDA__
           for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
 #else
@@ -460,14 +450,16 @@ void rForceMult3S(
 #ifdef __LAMBDA__
             for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-            { const int dx = 0 + threadIdx.x;
+            { const int dx = 0 + threadIdx.y;
 #endif
               if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
-                s_Dxyz[ijN(dx, dy,INNER_SIZE)] = r_z[qz];
+                s_Dxyz[ijN(dx, dy,INNER_SIZE)] = r_z[xdx][qz];
               }
+              ++xdx;
             }
           }
           // Calculate Dxyz, xDyz, xyDz in plane
+            xdx=0;
           sync;
 #ifdef __LAMBDA__
           for (int qy = 0; qy < INNER_SIZE; ++qy/*; inner*/) {
@@ -478,7 +470,7 @@ void rForceMult3S(
 #ifdef __LAMBDA__
             for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
-            { const int qx = 0 + threadIdx.x;
+            { const int qx = 0 + threadIdx.y;
 #endif
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                 double q_e = 0;
@@ -489,14 +481,16 @@ void rForceMult3S(
                   }
                   q_e += q_ex * s_L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
                 }
-                r_z[qz] = q_e;
+                r_z[xdx][qz] = q_e;
               }
+              ++xdx;
             }
           }
         }
         for (int c = 0; c < NUM_DIM; ++c) {
           for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
             // Fill xy plane at given z position
+             xdx=0;
             sync;
 #ifdef __LAMBDA__
             for (int qy = 0; qy < INNER_SIZE; ++qy/*; inner*/) {
@@ -507,14 +501,14 @@ void rForceMult3S(
 #ifdef __LAMBDA__
               for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
-              { const int qx = 0 + threadIdx.x;
+              { const int qx = 0 + threadIdx.y;
 #endif
                 if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                   double r_Dxyz = 0;
                   double r_xDyz = 0;
                   double r_xyDz = 0;
                   for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                    const double r_e = r_z[qz];
+                    const double r_e = r_z[xdx][qz];
                     const double wz  = s_H1QuadToDof[ijN(dz, qz,H1_DOFS_1D)];
                     const double wDz = s_H1QuadToDofD[ijN(dz, qz,H1_DOFS_1D)];
                     r_Dxyz += r_e * wz  * stressJinvT[ijklmnNM(0, c, qx, qy, qz, el,NUM_DIM,NUM_QUAD_1D)];
@@ -525,9 +519,11 @@ void rForceMult3S(
                   s_xDyz[ijN(qx, qy,NUM_QUAD_1D)] = r_xDyz;
                   s_xyDz[ijN(qx, qy,NUM_QUAD_1D)] = r_xyDz;
                 }
+                ++xdx;
               }
             }
             // Finalize solution in xy plane
+              xdx=0;
             sync;
 #ifdef __LAMBDA__
             for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
@@ -538,7 +534,7 @@ void rForceMult3S(
 #ifdef __LAMBDA__
               for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-              { const int dx = 0 + threadIdx.x;
+              { const int dx = 0 + threadIdx.y;
 #endif
                 if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                   double r_v = 0;
@@ -553,8 +549,9 @@ void rForceMult3S(
                               (wx  * wy  * s_xyDz[ijN(qx, qy,NUM_QUAD_1D)]));
                     }
                   }
-                  v[ijklmNM(c, dx, dy, dz, el,NUM_DOFS_1D,numElements)] = r_v;
+                  v[_ijklmNM(dx,dy,dz,el,c,H1_DOFS_1D,numElements)] = r_v;
                 }
+                ++xdx;
               }
             }
           }
@@ -591,14 +588,12 @@ void rForceMultTranspose3S(
                            const double* restrict v,
                            double* restrict e) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  //const int NUM_QUAD = NUM_QUAD_2D;
-  //const int MAX_DOFS_1D = (L2_DOFS_1D > H1_DOFS_1D)?L2_DOFS_1D:H1_DOFS_1D;
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD_1D;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
 #ifdef __LAMBDA__
-  forallS(elBlock,numElements,ELEMENT_BATCH,
-  //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
+  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) 
+     //forallS(elBlock,numElements,ELEMENT_BATCH,
 #else
   const int idx = blockIdx.x;
   const int elBlock = idx * ELEMENT_BATCH;
@@ -613,9 +608,9 @@ void rForceMultTranspose3S(
     share double s_xyDz[NUM_QUAD_2D * NUM_DIM];
     share double s_v[NUM_QUAD_2D];
 
-    /*exclusive*/ double r_xyz[NUM_QUAD_1D * NUM_DIM];
-    /*exclusive*/ double r_xyDz[NUM_QUAD_1D * NUM_DIM];
-
+    /*exclusive*/ double r_xyz[256][NUM_QUAD_1D * NUM_DIM];
+    /*exclusive*/ double r_xyDz[256][NUM_QUAD_1D * NUM_DIM];
+    int xdx = 0;
 #ifdef __LAMBDA__
     for (int y = 0; y < INNER_SIZE; ++y/*; inner*/) {
 #else
@@ -625,7 +620,7 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
       for (int x = 0; x < INNER_SIZE; ++x/*; inner*/) {
 #else
-      { const int x = threadIdx.x;
+      { const int x = threadIdx.y;
 #endif
         const int id = (y * INNER_SIZE) + x;
         for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
@@ -637,8 +632,10 @@ void rForceMultTranspose3S(
         }
       }
     }
+      
     for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
       if (el < numElements) {
+         xdx = 0;
         sync;
 #ifdef __LAMBDA__      
         for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
@@ -649,13 +646,13 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
         for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-          { const int dx = threadIdx.x;
+          { const int dx = threadIdx.y;
 #endif
             if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
               double r_v[NUM_DIM][H1_DOFS_1D];
               for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
                 for (int c = 0; c < NUM_DIM; ++c) {
-                  r_v[c][dz] = v[ijklmNM(c, dx, dy, dz, el,H1_DOFS_1D,numElements)];
+                   r_v[c][dz] = v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)];
                 }
               }
               for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
@@ -663,17 +660,19 @@ void rForceMultTranspose3S(
                   double xyz  = 0;
                   double xyDz = 0;
                   for (int dz = 0; dz < H1_DOFS_1D; ++dz) {
-                    xyz  += r_v[c][dz] * s_H1DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
-                    xyDz += r_v[c][dz] * s_H1DofToQuadD[ijN(qz, dz,NUM_QUAD_1D)];
+                    xyz  += r_v[c][dz] * s_H1DofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
+                    xyDz += r_v[c][dz] * s_H1DofToQuadD[ijN(qz,dz,NUM_QUAD_1D)];
                   }
-                  r_xyz[ijN(c, qz,NUM_DIM)]  = xyz;
-                  r_xyDz[ijN(c, qz,NUM_DIM)] = xyDz;
+                  r_xyz[xdx][ijN(c,qz,NUM_DIM)]  = xyz;
+                  r_xyDz[xdx][ijN(c,qz,NUM_DIM)] = xyDz;
                 }
               }
             }
+            ++xdx;
           }
         }
         for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+           xdx=0;
           // Finalize solution in xy plane
           sync;
 #ifdef __LAMBDA__      
@@ -685,16 +684,18 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
           for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-            { const int dx = threadIdx.x;
+            { const int dx = threadIdx.y;
 #endif
               if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                 for (int c = 0; c < NUM_DIM; ++c) {
-                  s_xyz[ijkN(c, dx, dy,NUM_QUAD_1D)]  = r_xyz[ijN(c, qz,NUM_DIM)];
-                  s_xyDz[ijkN(c, dx, dy,NUM_QUAD_1D)] = r_xyDz[ijN(c, qz,NUM_DIM)];
+                   s_xyz[ijkNM(c,dx,dy,NUM_DIM,NUM_QUAD_1D)]  = r_xyz[xdx][ijN(c,qz,NUM_DIM)];
+                   s_xyDz[ijkNM(c,dx,dy,NUM_DIM,NUM_QUAD_1D)] = r_xyDz[xdx][ijN(c,qz,NUM_DIM)];
                 }
               }
+              xdx++;
             }
           }
+          xdx=0;
           // Finalize solution in xy plane
           sync;
 #ifdef __LAMBDA__      
@@ -706,7 +707,7 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
           for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) {
 #else
-            { const int qx = threadIdx.x;
+            { const int qx = threadIdx.y;
 #endif
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                 double r_qv = 0;
@@ -723,9 +724,9 @@ void rForceMultTranspose3S(
                     for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
                       const double wx  = s_H1DofToQuad[ijN(qx, dx,NUM_QUAD_1D)];
                       const double wDx = s_H1DofToQuadD[ijN(qx, dx,NUM_QUAD_1D)];
-                      Dxz += wDx * s_xyz[ijkN(c, dx, dy,NUM_DIM)];
-                      xz  += wx  * s_xyz[ijkN(c, dx, dy,NUM_DIM)];
-                      xDz += wx  * s_xyDz[ijkN(c, dx, dy,NUM_DIM)];
+                      Dxz += wDx * s_xyz[ijkNM(c, dx, dy,NUM_DIM,NUM_QUAD_1D)];
+                      xz  += wx  * s_xyz[ijkNM(c, dx, dy,NUM_DIM,NUM_QUAD_1D)];
+                      xDz += wx  * s_xyDz[ijkNM(c, dx, dy,NUM_DIM,NUM_QUAD_1D)];
                     }
                     Dxyz += wy  * Dxz;
                     xDyz += wDy * xz;
@@ -737,8 +738,10 @@ void rForceMultTranspose3S(
                 }
                 s_v[ijN(qx, qy,NUM_QUAD_1D)] = r_qv;
               }
+              ++xdx;
             }
           }
+          xdx=0;
           sync;
 #ifdef __LAMBDA__      
           for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
@@ -749,7 +752,7 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
           for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-            { const int dx = threadIdx.x;
+            { const int dx = threadIdx.y;
 #endif
               if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
                 double r_e = 0;
@@ -760,11 +763,13 @@ void rForceMultTranspose3S(
                   }
                   r_e += r_ex * s_L2QuadToDof[ijN(dy, qy,L2_DOFS_1D)];
                 }
-                r_xyz[qz] = r_e;
+                r_xyz[xdx][qz] = r_e;
               }
+              xdx++;
             }
           }
         }
+          xdx=0;
           sync;
 #ifdef __LAMBDA__      
           for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/) {
@@ -775,25 +780,28 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
           for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/) {
 #else
-          { const int dx = threadIdx.x;
+          { const int dx = threadIdx.y;
 #endif
             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
               for (int dz = 0; dz < L2_DOFS_1D; ++dz) {
                 double r_e = 0;
                 for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                  r_e += r_xyz[qz] * s_L2QuadToDof[ijN(dz, qz,L2_DOFS_1D)];
+                  r_e += r_xyz[xdx][qz] * s_L2QuadToDof[ijN(dz,qz,L2_DOFS_1D)];
                 }
-                e[ijklN(dx, dy, dz, el,L2_DOFS_1D)] = r_e;
+                e[ijklN(dx,dy,dz,el,L2_DOFS_1D)] = r_e;
               }
             }
+            ++xdx;
           }
         }
       }
     }
   }
+/*
 #ifdef __LAMBDA__
           );
 #endif
+*/
 }
 
 

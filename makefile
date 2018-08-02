@@ -19,12 +19,12 @@
 #########
 CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/mfem-master
+MFEM_DIR ?= $(HOME)/home/mfem/master
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 -g -Wall #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################
@@ -143,9 +143,9 @@ endif
 ifneq (,$(nv))
 	CXX = nvcc
 	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
-	CXXFLAGS += -Xptxas=-v # -maxrregcount=32
+#	CXXFLAGS += -Xptxas=-v # -maxrregcount=32
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-	CXXFLAGS += -lineinfo
+#	CXXFLAGS += -lineinfo
 #	CXXFLAGS += -default-stream per-thread
 ifneq (,$(l))	
 	CXXFLAGS += --expt-extended-lambda
@@ -199,6 +199,16 @@ tgts:
 #	make cln && make cpuL && mv laghos laghos.cpuL
 #	make cln && make cpuLT && mv laghos laghos.cpuLT
 #	make cln && make raja && mv laghos laghos.raja
+
+######
+# GO #
+######
+go:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100
+gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1
+
+gos:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100 -share
+gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1 -share
+#--track-origins=yes
 
 #######################
 # TPL INCLUDES & LIBS #
