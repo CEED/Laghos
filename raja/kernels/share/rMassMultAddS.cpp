@@ -299,7 +299,7 @@ void rMassMultAdd3S(
             for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
 #endif
                if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
-                  s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/ = r_z2[exclusive][dz];
+                  s_xy[ijN(qx, qy,NUM_QUAD_1D)]/*(qx, qy)*/ = r_z2[exclusive][dz];
                }
                ++exclusive;
             }
@@ -318,7 +318,7 @@ void rMassMultAdd3S(
                      const double wy = s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)]/*(dy, qy)*/;
                      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
                         const double wx = s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]/*(dx, qx)*/;
-                        solZ += wx * wy * s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/;
+                        solZ += wx * wy * s_xy[ijN(qx, qy,NUM_QUAD_1D)]/*(qx, qy)*/;
                      }
                   }
                   solOut[ijklN(dx,dy,dz,e,NUM_DOFS_1D)] += solZ;

@@ -415,7 +415,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
 
-//#warning rUpdateQuadratureDataS
    if (rconfig::Get().Share())
       rUpdateQuadratureDataS(gamma,
                              quad_data.h0,

@@ -476,7 +476,17 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
   const int dofs1D = trialFESpace->GetFE(0)->GetOrder() + 1;
 #warning rMassMultAdd
   if (rconfig::Get().Share())
-     rMassMultAdd/*S*/(dim,
+     rMassMultAddS(dim,
+                   dofs1D,
+                   quad1D,
+                   mesh->GetNE(),
+                   maps->dofToQuad,
+                   maps->dofToQuadD,
+                   maps->quadToDof,
+                   maps->quadToDofD,
+                   op,x,y);
+  else
+     rMassMultAdd(dim,
                   dofs1D,
                   quad1D,
                   mesh->GetNE(),
@@ -485,16 +495,6 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y) {
                   maps->quadToDof,
                   maps->quadToDofD,
                   op,x,y);
-  else
-    rMassMultAdd(dim,
-                 dofs1D,
-                 quad1D,
-                 mesh->GetNE(),
-                 maps->dofToQuad,
-                 maps->dofToQuadD,
-                 maps->quadToDof,
-                 maps->quadToDofD,
-                 op,x,y);
   pop();
 }
 }
