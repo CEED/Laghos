@@ -415,29 +415,29 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
 
-#warning rUpdateQuadratureDataS
+//#warning rUpdateQuadratureDataS
    if (rconfig::Get().Share())
-      rUpdateQuadratureData/*S*/(gamma,
-                            quad_data.h0,
-                            cfl,
-                            use_viscosity,
-                            dim,
-                            NUM_QUAD,
-                            NUM_QUAD_1D,
-                            NUM_DOFS_1D,
-                            nzones,
-                            quad_data.dqMaps->dofToQuad,
-                            quad_data.dqMaps->dofToQuadD,
-                            quad_data.dqMaps->quadWeights,
-                            v_local,
-                            e_quad,
-                            quad_data.rho0DetJ0w,
-                            quad_data.Jac0inv,
-                            quad_data.geom->J,
-                            quad_data.geom->invJ,
-                            quad_data.geom->detJ,
-                            quad_data.stressJinvT,
-                            quad_data.dtEst);     
+      rUpdateQuadratureDataS(gamma,
+                             quad_data.h0,
+                             cfl,
+                             use_viscosity,
+                             dim,
+                             NUM_QUAD,
+                             NUM_QUAD_1D,
+                             NUM_DOFS_1D,
+                             nzones,
+                             quad_data.dqMaps->dofToQuad,
+                             quad_data.dqMaps->dofToQuadD,
+                             quad_data.dqMaps->quadWeights,
+                             v_local,
+                             e_quad,
+                             quad_data.rho0DetJ0w,
+                             quad_data.Jac0inv,
+                             quad_data.geom->J,
+                             quad_data.geom->invJ,
+                             quad_data.geom->detJ,
+                             quad_data.stressJinvT,
+                             quad_data.dtEst);     
    else
      rUpdateQuadratureData(gamma,
                            quad_data.h0,

@@ -124,8 +124,8 @@ void rGridFuncToQuad3S(
    // Iterate over elements
    //for (int e = 0; e < numElements; ++e; @outer) {
 #ifdef __LAMBDA__
-  //forall(e,numElements,
-  for(int e=0;e<numElements;e++)
+  forall(e,numElements,
+         //for(int e=0;e<numElements;e++)
 #else
   const int idx = blockIdx.x;
   const int e = idx ;
@@ -240,11 +240,9 @@ void rGridFuncToQuad3S(
         }
      }
   }
-     /*
 #ifdef __LAMBDA__
            );
 #endif
-     */
 }
 
 

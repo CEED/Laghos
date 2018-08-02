@@ -264,7 +264,7 @@ void rUpdateQuadratureData2S(
 #endif
 }
 
-#warning rUpdateQuadratureData3S to debug
+//#warning rUpdateQuadratureData3S to debug
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DIM,
@@ -298,12 +298,11 @@ void rUpdateQuadratureData3S(
                              double* restrict dtEst) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
-  //const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
-  //for (int el = 0; el < numElements; ++el; outer) {
 #ifdef __LAMBDA__
-  //forall(el,numElements,
-  for(int el=0;el<numElements;el++){
+  forall(el,numElements,
+  //for(int el=0;el<numElements;el++){
 #endif
+  {
      share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
      share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
      
@@ -569,6 +568,10 @@ void rUpdateQuadratureData3S(
         }
      }
   }
+#ifdef __LAMBDA__
+           );
+#endif
+ 
 }
 
 // *****************************************************************************
@@ -613,7 +616,6 @@ void rUpdateQuadratureDataS(const double GAMMA,
                             double* restrict stressJinvT,
                             double* restrict dtEst){
   push(Green);
-  assert(false);
 #ifndef __LAMBDA__
   const int grid = nzones;
   const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;

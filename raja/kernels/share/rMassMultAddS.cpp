@@ -177,15 +177,13 @@ void rMassMultAdd3S(
                     const double* restrict oper,
                     const double* restrict solIn,
                     double* restrict solOut) {
-   assert(false);
-   //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
    const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
    const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
    const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
   // Iterate over elements
-  // for (int e = 0; e < numElements; ++e; @outer) {
 #ifdef __LAMBDA__
-   forallS(e,numElements,1,
+   for (int e = 0; e < numElements; ++e/*; @outer*/) 
+      //forallS(e,numElements,1,
 #endif
    {
       // Store dof <--> quad mappings
@@ -196,8 +194,9 @@ void rMassMultAdd3S(
       share double s_xy[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
 
       // Store z axis as registers
-      /*exclusive*/ double r_z[NUM_QUAD_1D];
-      /*exclusive*/ double r_z2[NUM_DOFS_1D];
+      /*exclusive*/ double r_z[256][NUM_QUAD_1D];
+      /*exclusive*/ double r_z2[256][NUM_DOFS_1D];
+      int exclusive = 0;
 
 #ifdef __LAMBDA__
       for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) 
@@ -216,14 +215,15 @@ void rMassMultAdd3S(
             }
             // Initialize our Z axis
             for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-               r_z[qz] = 0;
+               r_z[exclusive][qz] = 0;
             }
             for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-               r_z2[dz] = 0;
+               r_z2[exclusive][dz] = 0;
             }
+            ++exclusive;
          }
       }
-        
+      exclusive=0;
       sync;
 #ifdef __LAMBDA__
       for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
@@ -236,15 +236,17 @@ void rMassMultAdd3S(
                   const double s = solIn[ijklN(dx,dy,dz,e,NUM_DOFS_1D)];
                   // Calculate D -> Q in the Z axis
                   for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                     r_z[qz] += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
+                     r_z[exclusive][qz] += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
                   }
                }
             }
+            ++exclusive;
          }
       }
       // For each xy plane
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
          // Fill xy plane at given z position
+         exclusive=0;
 #ifdef __LAMBDA__
          for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
 #endif
@@ -252,11 +254,13 @@ void rMassMultAdd3S(
             for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
 #endif
                if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
-                  s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/ = r_z[qz];
+                  s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/ = r_z[exclusive][qz];
                }
+               ++exclusive;
             }
          }
          // Calculate Dxyz, xDyz, xyDz in plane
+         exclusive=0;
 #ifdef __LAMBDA__
          for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
 #endif
@@ -276,16 +280,18 @@ void rMassMultAdd3S(
                   s *= oper[ijklN(qx, qy, qz,e,NUM_QUAD_1D)]/*(qx, qy, qz, e)*/;
 
                   for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-                     const double wz  = s_quadToDof[ijN(dz, qz,NUM_QUAD_1D)]/*(dz, qz)*/;
-                     r_z2[dz] += wz * s;
+                     const double wz  = s_quadToDof[ijN(dz, qz,NUM_DOFS_1D)]/*(dz, qz)*/;
+                     r_z2[exclusive][dz] += wz * s;
                   }
                }
+               ++exclusive;
             }
          }
       }
       // Iterate over xy planes to compute solution
       for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
          // Place xy plane in @shared memory
+         exclusive=0;
 #ifdef __LAMBDA__
          for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
 #endif
@@ -293,11 +299,13 @@ void rMassMultAdd3S(
             for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
 #endif
                if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
-                  s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/ = r_z2[dz];
+                  s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/ = r_z2[exclusive][dz];
                }
+               ++exclusive;
             }
          }
          // Finalize solution in xy plane
+         exclusive=0;
 #ifdef __LAMBDA__
          for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
 #endif
@@ -310,18 +318,20 @@ void rMassMultAdd3S(
                      const double wy = s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)]/*(dy, qy)*/;
                      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
                         const double wx = s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]/*(dx, qx)*/;
-                        solZ += wx * wy * s_xy[ijN(qx, qx,NUM_DOFS_1D)]/*(qx, qy)*/;
+                        solZ += wx * wy * s_xy[ijN(qx, qy,NUM_DOFS_1D)]/*(qx, qy)*/;
                      }
                   }
-                  solOut[ijklN(dx, dy, dz,e,NUM_DOFS_1D)]/*(dx, dy, dz, e)*/ += solZ;
+                  solOut[ijklN(dx,dy,dz,e,NUM_DOFS_1D)] += solZ;
                }
+               ++exclusive;
             }
          }
       }
-   }
+   }/*
 #ifdef __LAMBDA__
            );
 #endif
+    */
 }
 
       
@@ -348,7 +358,6 @@ void rMassMultAddS(const int DIM,
                    const double* x,
                    double* __restrict y) {
   push(Green);
-  assert(false);
 #ifndef __LAMBDA__
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
