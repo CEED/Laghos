@@ -549,7 +549,7 @@ void rForceMult3S(
                               (wx  * wy  * s_xyDz[ijN(qx, qy,NUM_QUAD_1D)]));
                     }
                   }
-                  v[_ijklmNM(dx,dy,dz,el,c,H1_DOFS_1D,numElements)] = r_v;
+                  v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)] = r_v;
                 }
                 ++xdx;
               }
@@ -592,8 +592,8 @@ void rForceMultTranspose3S(
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
 #ifdef __LAMBDA__
-  for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) 
-     //forallS(elBlock,numElements,ELEMENT_BATCH,
+  //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) 
+  forallS(elBlock,numElements,ELEMENT_BATCH,
 #else
   const int idx = blockIdx.x;
   const int elBlock = idx * ELEMENT_BATCH;
@@ -797,11 +797,9 @@ void rForceMultTranspose3S(
       }
     }
   }
-/*
 #ifdef __LAMBDA__
           );
 #endif
-*/
 }
 
 
