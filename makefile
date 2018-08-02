@@ -203,10 +203,10 @@ tgts:
 ######
 # GO #
 ######
-go:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100
+go:;@./laghos -ok 3 -ot 2 -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100
 gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1
 
-gos:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100 -share
+gos:;@./laghos -ok 3 -ot 2 -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100 -share
 gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1 -share
 #--track-origins=yes
 
