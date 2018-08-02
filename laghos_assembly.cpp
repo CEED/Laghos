@@ -200,7 +200,6 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-#warning rForceMultS
    if (rconfig::Get().Share())
       rForceMultS(dim,
                  NUM_DOFS_1D,

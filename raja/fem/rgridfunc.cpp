@@ -27,7 +27,7 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
   quadValues.SetSize(numQuad * elements);
 #warning ToQuad
   if (rconfig::Get().Share()){
-     rGridFuncToQuad/*S*/(dim,vdim,dofs1D,quad1D,elements,
+     rGridFuncToQuadS(dim,vdim,dofs1D,quad1D,elements,
                           maps->dofToQuad,
                           fes.GetLocalToGlobalMap(),
                           ptr(),

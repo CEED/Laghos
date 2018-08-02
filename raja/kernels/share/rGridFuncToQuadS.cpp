@@ -102,7 +102,6 @@ void rGridFuncToQuad2S(
 }
 
 // *****************************************************************************
-#warning rGridFuncToQuad3S to debug
 #ifdef __TEMPLATES__
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
@@ -125,27 +124,26 @@ void rGridFuncToQuad3S(
    // Iterate over elements
    //for (int e = 0; e < numElements; ++e; @outer) {
 #ifdef __LAMBDA__
-  forallS(e,numElements,1,
+  //forall(e,numElements,
+  for(int e=0;e<numElements;e++)
 #else
   const int idx = blockIdx.x;
-  const int e = idx * 1;
+  const int e = idx ;
   if (e < numElements)
 #endif
   {
      // Store dof <--> quad mappings
      share double s_dofToQuad[NUM_QUAD_DOFS_1D];// @dim(NUM_QUAD_1D, NUM_DOFS_1D);
-
      // Store xy planes in @shared memory
      share double s_z[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
-
      // Store z axis as registers
-     /*exclusive*/ double r_qz[NUM_QUAD_1D];
-
+     /*exclusive*/ double r_qz[256][NUM_QUAD_1D];
+     int xdx = 0;
      sync;
 #ifdef __LAMBDA__
      for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) {
 #else
-        //{ const int y = threadIdx.x;
+        { const int y = threadIdx.x;
 #endif
         sync;
 #ifdef __LAMBDA__
@@ -160,11 +158,13 @@ void rGridFuncToQuad3S(
            }
            // Initialize our Z axis
            for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-              r_qz[qz] = 0;
+              r_qz[xdx][qz] = 0;
            }
+           ++xdx;
         }
      }
 
+        xdx=0;
      sync;
 #ifdef __LAMBDA__
      for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
@@ -179,18 +179,20 @@ void rGridFuncToQuad3S(
 #endif
            if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
               for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-                 const double val = gf[l2gMap[ijklN(dx, dy, dz,e,NUM_DOFS_1D)]];
+                 const double val = gf[l2gMap[ijklN(dx,dy,dz,e,NUM_DOFS_1D)]];
                  // Calculate D -> Q in the Z axis
                  for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                    r_qz[qz] += val * s_dofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
+                    r_qz[xdx][qz] += val * s_dofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
                  }
               }
            }
+           ++xdx;
         }
      }
      // For each xy plane
      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
         // Fill xy plane at given z position
+        xdx=0;
         sync;
 #ifdef __LAMBDA__
         for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
@@ -204,11 +206,13 @@ void rGridFuncToQuad3S(
               //{ const int dy = threadIdx.x;
 #endif
               if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
-                 s_z[ijN(dx, dy,NUM_DOFS_1D)] = r_qz[qz];
+                 s_z[ijN(dx, dy,NUM_DOFS_1D)] = r_qz[xdx][qz];
               }
+              ++xdx;
            }
         }
         // Calculate Dxyz, xDyz, xyDz in plane
+        xdx=0;
         sync;
 #ifdef __LAMBDA__
         for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
@@ -236,9 +240,11 @@ void rGridFuncToQuad3S(
         }
      }
   }
+     /*
 #ifdef __LAMBDA__
            );
 #endif
+     */
 }
 
 
@@ -259,7 +265,6 @@ void rGridFuncToQuadS(const int DIM,
                       const double* gf,
                       double* __restrict out) {
    push(Green);
-   assert(false);
 #ifndef __LAMBDA__
   const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
   const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;

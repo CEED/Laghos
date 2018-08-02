@@ -159,7 +159,7 @@ void rMassMultAdd2S(
 }
  
 // *****************************************************************************
-#warning rMassMultAdd3S to debug
+//#warning rMassMultAdd3S to debug, not used for Laghos
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
@@ -177,6 +177,7 @@ void rMassMultAdd3S(
                     const double* restrict oper,
                     const double* restrict solIn,
                     double* restrict solOut) {
+   assert(false);
    //const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
    const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
    const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
