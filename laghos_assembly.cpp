@@ -36,7 +36,7 @@ void QuadratureData::Setup(int dim,
                            int nzones,
                            int nqp)
 {
-  push(Wheat);
+   push(Wheat);
    rho0DetJ0w.SetSize(nqp * nzones);
    stressJinvT.SetSize(dim * dim * nqp * nzones);
    dtEst.SetSize(nqp * nzones);
@@ -51,7 +51,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    const int ip_cnt = integ_rule.GetNPoints();
    Vector shape(fe.GetDof());
    Vector rho0DetJ0w = quad_data.rho0DetJ0w;
-   
+
    elvect.SetSize(fe.GetDof());
    elvect = 0.0;
 
@@ -79,7 +79,8 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
      y_gf(fes) {}
 
 // *****************************************************************************
-RajaMassOperator::~RajaMassOperator(){
+RajaMassOperator::~RajaMassOperator()
+{
 }
 
 // *****************************************************************************
@@ -100,69 +101,73 @@ void RajaMassOperator::Setup()
 // *************************************************************************
 void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
-  push(Wheat);
-  dbg("\n\033[33;1m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
-  ess_tdofs_count = dofs.Size();
-  
-  if (ess_tdofs.Size()==0){
-#ifdef MFEM_USE_MPI
-    int global_ess_tdofs_count;
-    const MPI_Comm comm = fes.GetParMesh()->GetComm();
-    MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
-                  1, MPI_INT, MPI_SUM, comm);
-    assert(global_ess_tdofs_count>0);
-    ess_tdofs.allocate(global_ess_tdofs_count);
-#else
-    assert(ess_tdofs_count>0);
-    ess_tdofs.allocate(ess_tdofs_count);
-#endif
-  }else assert(ess_tdofs_count<=ess_tdofs.Size());
+   push(Wheat);
+   dbg("\n\033[33;1m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
+   ess_tdofs_count = dofs.Size();
 
-  assert(ess_tdofs>0);
-  
-  if (ess_tdofs_count == 0) { pop(); return; }
-  
-  {
-    push(H2D:ess_tdofs,Red);
-    assert(ess_tdofs_count>0);
-    assert(dofs.GetData());
-    rHtoD(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
-    pop();
-  }
-  pop();
+   if (ess_tdofs.Size()==0)
+   {
+#ifdef MFEM_USE_MPI
+      int global_ess_tdofs_count;
+      const MPI_Comm comm = fes.GetParMesh()->GetComm();
+      MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
+                    1, MPI_INT, MPI_SUM, comm);
+      assert(global_ess_tdofs_count>0);
+      ess_tdofs.allocate(global_ess_tdofs_count);
+#else
+      assert(ess_tdofs_count>0);
+      ess_tdofs.allocate(ess_tdofs_count);
+#endif
+   }
+   else { assert(ess_tdofs_count<=ess_tdofs.Size()); }
+
+   assert(ess_tdofs>0);
+
+   if (ess_tdofs_count == 0) { pop(); return; }
+
+   {
+      push(H2D:ess_tdofs,Red);
+      assert(ess_tdofs_count>0);
+      assert(dofs.GetData());
+      rHtoD(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+      pop();
+   }
+   pop();
 }
 
 // *****************************************************************************
 void RajaMassOperator::EliminateRHS(RajaVector &b)
 {
-  push(Wheat);
-  if (ess_tdofs_count > 0)
-    b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-  pop();
+   push(Wheat);
+   if (ess_tdofs_count > 0)
+   {
+      b.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   }
+   pop();
 }
 
 // *************************************************************************
 void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 {
-  push(Wheat);
-   
-  distX = x;
-   
-  if (ess_tdofs_count)
-  {
-    distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-  }
+   push(Wheat);
 
-  massOperator->Mult(distX, y);
+   distX = x;
 
-  if (ess_tdofs_count)
-  {
-    y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
-  }
-  pop();
+   if (ess_tdofs_count)
+   {
+      distX.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   }
+
+   massOperator->Mult(distX, y);
+
+   if (ess_tdofs_count)
+   {
+      y.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+   }
+   pop();
 }
 
-  
+
 // *****************************************************************************
 // * RajaForceOperator
 // *****************************************************************************
@@ -179,9 +184,9 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
      quad_data(quad_data_),
      gVecL2(l2fes.GetLocalDofs() * nzones),
      gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) { }
-  
+
 // *****************************************************************************
-RajaForceOperator::~RajaForceOperator(){}
+RajaForceOperator::~RajaForceOperator() {}
 
 // *************************************************************************
 void RajaForceOperator::Setup()
@@ -192,16 +197,31 @@ void RajaForceOperator::Setup()
 
 // *************************************************************************
 void RajaForceOperator::Mult(const RajaVector &vecL2,
-                             RajaVector &vecH1) const {
+                             RajaVector &vecH1) const
+{
    push(Wheat);
    l2fes.GlobalToLocal(vecL2, gVecL2);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
+   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT,
+                                              integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    if (rconfig::Get().Share())
       rForceMultS(dim,
+                  NUM_DOFS_1D,
+                  NUM_QUAD_1D,
+                  L2_DOFS_1D,
+                  H1_DOFS_1D,
+                  nzones,
+                  l2D2Q->dofToQuad,
+                  h1D2Q->quadToDof,
+                  h1D2Q->quadToDofD,
+                  quad_data->stressJinvT,
+                  gVecL2,
+                  gVecH1);
+   else
+      rForceMult(dim,
                  NUM_DOFS_1D,
                  NUM_QUAD_1D,
                  L2_DOFS_1D,
@@ -213,35 +233,37 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
                  quad_data->stressJinvT,
                  gVecL2,
                  gVecH1);
-   else
-     rForceMult(dim,
-                NUM_DOFS_1D,
-                NUM_QUAD_1D,
-                L2_DOFS_1D,
-                H1_DOFS_1D,
-                nzones,
-                l2D2Q->dofToQuad,
-                h1D2Q->quadToDof,
-                h1D2Q->quadToDofD,
-                quad_data->stressJinvT,
-                gVecL2,
-                gVecH1);
    h1fes.LocalToGlobal(gVecH1, vecH1);
    pop();
 }
 
 // *************************************************************************
 void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
-                                      RajaVector &vecL2) const {
+                                      RajaVector &vecL2) const
+{
    push(Wheat);
    h1fes.GlobalToLocal(vecH1, gVecH1);
    const int NUM_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
+   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT,
+                                              integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
    if (rconfig::Get().Share())
       rForceMultTransposeS(dim,
+                           NUM_DOFS_1D,
+                           NUM_QUAD_1D,
+                           L2_DOFS_1D,
+                           H1_DOFS_1D,
+                           nzones,
+                           l2D2Q->quadToDof,
+                           h1D2Q->dofToQuad,
+                           h1D2Q->dofToQuadD,
+                           quad_data->stressJinvT,
+                           gVecH1,
+                           gVecL2);
+   else
+      rForceMultTranspose(dim,
                           NUM_DOFS_1D,
                           NUM_QUAD_1D,
                           L2_DOFS_1D,
@@ -253,19 +275,6 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
                           quad_data->stressJinvT,
                           gVecH1,
                           gVecL2);
-   else
-     rForceMultTranspose(dim,
-                         NUM_DOFS_1D,
-                         NUM_QUAD_1D,
-                         L2_DOFS_1D,
-                         H1_DOFS_1D,
-                         nzones,
-                         l2D2Q->quadToDof,
-                         h1D2Q->dofToQuad,
-                         h1D2Q->dofToQuadD,
-                         quad_data->stressJinvT,
-                         gVecH1,
-                         gVecL2);
    l2fes.LocalToGlobal(gVecL2, vecL2);
    pop();
 }

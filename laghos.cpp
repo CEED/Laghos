@@ -68,10 +68,10 @@ void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
 {
-    // Initialize MPI.
-   MPI_Session mpi(argc, argv); 
+   // Initialize MPI.
+   MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
-   
+
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 #if defined(__NVCC__) and not defined(__RAJA__)
    cuda=true;
 #endif
-   
+
    const char *basename = "results/Laghos";
    OptionsParser args(argc, argv);
    // Standard Options *********************************************************
@@ -151,9 +151,9 @@ int main(int argc, char *argv[])
    // Tests Options ************************************************************
    args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
                   "Enable or disable DOT test kernels.");
-   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",                  
+   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
                   "Enable or disable MULT test kernels.");
-   args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",                  
+   args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",
                   "Enable or disable LAMBDA test kernels.");
    // RAJA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
@@ -182,14 +182,14 @@ int main(int argc, char *argv[])
    {
       if (mpi.Root()) { args.PrintUsage(cout); }
       return 1;
-   }   
+   }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
                         cuda,dcg,uvm,aware,share,occa,hcpo,sync,dot,rs_levels);
-   
+
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
-   
+
    // Parallel partitioning of the mesh.
    // **************************************************************************
    ParMesh *pmesh = NULL;
@@ -220,7 +220,9 @@ int main(int argc, char *argv[])
    if (product == num_tasks)
    {
       if (myid == 0)
-        printf("\033[32m[laghos] \033[32;1mCartesian\033[m\033[32m partitioning will be used\033[m\n");
+      {
+         printf("\033[32m[laghos] \033[32;1mCartesian\033[m\033[32m partitioning will be used\033[m\n");
+      }
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete[] partitioning;
@@ -229,7 +231,7 @@ int main(int argc, char *argv[])
    {
       if (myid == 0)
       {
-        printf("\033[32m[laghos] Non-Cartesian partitioning through METIS will be used\033[m\n");
+         printf("\033[32m[laghos] Non-Cartesian partitioning through METIS will be used\033[m\n");
 #ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;
@@ -249,22 +251,22 @@ int main(int argc, char *argv[])
    int global_pmesh_NE;
    const int pmesh_NE=pmesh->GetNE();
    MPI_Allreduce(&pmesh_NE,&global_pmesh_NE,1,MPI_INT,MPI_MIN,pmesh->GetComm());
-   if (global_pmesh_NE==0) return printf("[Laghos] ERROR: pmesh->GetNE()==0!");
-   else printf("\033[32m[laghos] pmesh->GetNE()=%d\033[m\n",global_pmesh_NE);
+   if (global_pmesh_NE==0) { return printf("[Laghos] ERROR: pmesh->GetNE()==0!"); }
+   else { printf("\033[32m[laghos] pmesh->GetNE()=%d\033[m\n",global_pmesh_NE); }
    assert(pmesh->GetNE()>0);
 #endif
 
    // Refine the mesh further in parallel to increase the resolution.
-   for (int lev = 0; lev < rp_levels; lev++) pmesh->UniformRefinement();
+   for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    // **************************************************************************
    // Mult RAP MPI test
-   if (mult) return multTest(pmesh,order_v,max_tsteps)?0:1;
-   
+   if (mult) { return multTest(pmesh,order_v,max_tsteps)?0:1; }
+
    // **************************************************************************
    //cuProfilerStart();
    push(Tan);
-   
+
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -290,21 +292,22 @@ int main(int argc, char *argv[])
 
    // Define the explicit ODE solver used for time integration.
    RajaODESolver *ode_solver = NULL;
-   switch (ode_solver_type) {
-   case 1: ode_solver = new RajaForwardEulerSolver; break;
-   case 2: ode_solver = new RajaRK2Solver(0.5); break;
-   case 3: ode_solver = new RajaRK3SSPSolver; break;
-   case 4: ode_solver = new RajaRK4Solver; break;
-   case 6: ode_solver = new RajaRK6Solver; break;
-   default:
-     if (myid == 0)
-     {
-       cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-     }
-     delete pmesh;
-     MPI_Finalize();
-     pop();
-     return 3;
+   switch (ode_solver_type)
+   {
+      case 1: ode_solver = new RajaForwardEulerSolver; break;
+      case 2: ode_solver = new RajaRK2Solver(0.5); break;
+      case 3: ode_solver = new RajaRK3SSPSolver; break;
+      case 4: ode_solver = new RajaRK4Solver; break;
+      case 6: ode_solver = new RajaRK6Solver; break;
+      default:
+         if (myid == 0)
+         {
+            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+         }
+         delete pmesh;
+         MPI_Finalize();
+         pop();
+         return 3;
    }
 
    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
@@ -343,15 +346,15 @@ int main(int argc, char *argv[])
    RajaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
    RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
    RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
- 
+
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
    pmesh->SetNodalGridFunction(&x_gf);
    d_x_gf = x_gf;
-   
+
    // **************************************************************************
    // Lambda launch test
-   if (lambda) return hydrodynamics::lambdaTest(pmesh,order_v,max_tsteps)?0:1;   
+   if (lambda) { return hydrodynamics::lambdaTest(pmesh,order_v,max_tsteps)?0:1; }
 
    // Initialize the velocity.
    //dbg()<<"[7mInitialize the velocity";
@@ -400,7 +403,7 @@ int main(int argc, char *argv[])
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
    RajaGridFunction d_mat_gf_coeff(mat_fes);
    d_mat_gf_coeff=mat_gf_coeff;*/
-   
+
    // Additional details, depending on the problem.
    int source = 0; bool visc=false;
    switch (problem)
@@ -510,7 +513,7 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
-      
+
 
       if (last_step || (ti % vis_steps) == 0)
       {

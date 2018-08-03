@@ -87,7 +87,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
                                                  double cgt, int cgiter)
-: RajaTimeDependentOperator(size),
+   : RajaTimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
      ess_tdofs(essential_tdofs),
@@ -119,9 +119,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
      e_quad()
 {
-  push(Wheat);
-  //printf("\n\033[31m[orders] %d %d\033[m\n",h1_fes.GetOrder(0),l2_fes.GetOrder(0));
-  
+   push(Wheat);
+   //printf("\n\033[31m[orders] %d %d\033[m\n",h1_fes.GetOrder(0),l2_fes.GetOrder(0));
+
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;
@@ -166,7 +166,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    ForcePA.Setup();
    VMassPA.Setup();
    EMassPA.Setup();
-   
+
    {
       // Setup the preconditioner of the velocity mass operator.
       //Vector d;
@@ -174,13 +174,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       //(dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
       //VMassPA_prec.SetDiagonal(d);
    }
-   
+
    CG_VMass.SetOperator(VMassPA);
    CG_VMass.SetRelTol(cg_rel_tol);
    CG_VMass.SetAbsTol(0.0);
    CG_VMass.SetMaxIter(cg_max_iter);
    CG_VMass.SetPrintLevel(-1);
-   
+
    CG_EMass.SetOperator(EMassPA);
    CG_EMass.iterative_mode = false;
    CG_EMass.SetRelTol(1e-8);
@@ -208,7 +208,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
    pop();
-   
+
    UpdateQuadratureData(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -227,44 +227,44 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 
    // Set dx_dt = v (explicit)
    dx = v;
-   
+
    // Solve for velocity.
    timer.sw_force.Start();
-   ForcePA.Mult(one, rhs);   
+   ForcePA.Mult(one, rhs);
    timer.sw_force.Stop();
    rhs.Neg();
 
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
-   
+
    for (int c = 0; c < dim; c++)
    {
-     rhs_c = rhs.GetRange(c*size, size);
-     RajaVector dv_c = dv.GetRange(c*size, size);
-     Array<int> c_tdofs;
-     Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
-     // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-     // we must enforce v_x/y/z = 0 for the velocity components.
-     ess_bdr = 0; ess_bdr[c] = 1;
-     // Essential true dofs as if there's only one component.
-     H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+      rhs_c = rhs.GetRange(c*size, size);
+      RajaVector dv_c = dv.GetRange(c*size, size);
+      Array<int> c_tdofs;
+      Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+      // we must enforce v_x/y/z = 0 for the velocity components.
+      ess_bdr = 0; ess_bdr[c] = 1;
+      // Essential true dofs as if there's only one component.
+      H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
-     dv_c = 0.0;
-      
-     H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
-     H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
-      
-     VMassPA.SetEssentialTrueDofs(c_tdofs);
-     VMassPA.EliminateRHS(B);
+      dv_c = 0.0;
 
-     timer.sw_cgH1.Start();
-     CG_VMass.Mult(B, X);
-     timer.sw_cgH1.Stop();
-     timer.H1cg_iter += CG_VMass.GetNumIterations();
-     //printf("\n[H1cg_iter] %d",timer.H1cg_iter);
-     H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
+      H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
+      H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
+
+      VMassPA.SetEssentialTrueDofs(c_tdofs);
+      VMassPA.EliminateRHS(B);
+
+      timer.sw_cgH1.Start();
+      CG_VMass.Mult(B, X);
+      timer.sw_cgH1.Stop();
+      timer.H1cg_iter += CG_VMass.GetNumIterations();
+      //printf("\n[H1cg_iter] %d",timer.H1cg_iter);
+      H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
-   
+
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
@@ -279,35 +279,35 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    }
    Array<int> l2dofs;
    {
-     timer.sw_force.Start();
-     ForcePA.MultTranspose(v, e_rhs);
-     timer.sw_force.Stop();
+      timer.sw_force.Start();
+      ForcePA.MultTranspose(v, e_rhs);
+      timer.sw_force.Stop();
    }
 
-   if (e_source) e_rhs += *e_source;
-   
+   if (e_source) { e_rhs += *e_source; }
+
    {
-     timer.sw_cgL2.Start();
-     CG_EMass.Mult(e_rhs, de);
-     timer.sw_cgL2.Stop();
-     timer.L2cg_iter += CG_EMass.GetNumIterations();
+      timer.sw_cgL2.Start();
+      CG_EMass.Mult(e_rhs, de);
+      timer.sw_cgL2.Stop();
+      timer.L2cg_iter += CG_EMass.GetNumIterations();
    }
    delete e_source;
- 
+
    quad_data_is_current = false;
    pop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
-  push(Wheat);  
-  UpdateQuadratureData(S);
+   push(Wheat);
+   UpdateQuadratureData(S);
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
    pop();
    return glob_dt_est;
-} 
+}
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
@@ -316,27 +316,27 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
-  push(RosyBrown);
-  rho.SetSpace(&L2FESpace);
+   push(RosyBrown);
+   rho.SetSpace(&L2FESpace);
 
-  DenseMatrix Mrho(l2dofs_cnt);
-  Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
-  Array<int> dofs(l2dofs_cnt);
-  DenseMatrixInverse inv(&Mrho);
-  MassIntegrator mi(&integ_rule);
-  DensityIntegrator di(quad_data,integ_rule);
-  for (int i = 0; i < nzones; i++)
-  {
-    di.AssembleRHSElementVect(*L2FESpace.GetFE(i),
-                              *L2FESpace.GetElementTransformation(i), rhs);
-    mi.AssembleElementMatrix(*L2FESpace.GetFE(i),
-                             *L2FESpace.GetElementTransformation(i), Mrho);
-    inv.Factor();
-    inv.Mult(rhs, rho_z);
-    L2FESpace.GetElementDofs(i, dofs);
-    rho.SetSubVector(dofs, rho_z);
-  }
-  pop();
+   DenseMatrix Mrho(l2dofs_cnt);
+   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Array<int> dofs(l2dofs_cnt);
+   DenseMatrixInverse inv(&Mrho);
+   MassIntegrator mi(&integ_rule);
+   DensityIntegrator di(quad_data,integ_rule);
+   for (int i = 0; i < nzones; i++)
+   {
+      di.AssembleRHSElementVect(*L2FESpace.GetFE(i),
+                                *L2FESpace.GetElementTransformation(i), rhs);
+      mi.AssembleElementMatrix(*L2FESpace.GetFE(i),
+                               *L2FESpace.GetElementTransformation(i), Mrho);
+      inv.Factor();
+      inv.Mult(rhs, rho_z);
+      L2FESpace.GetElementDofs(i, dofs);
+      rho.SetSubVector(dofs, rho_z);
+   }
+   pop();
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
@@ -387,9 +387,9 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 // *****************************************************************************
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
-   if (quad_data_is_current) return;
+   if (quad_data_is_current) { return; }
    push(Wheat);
-  
+
    timer.sw_qdata.Start();
 
    const int vSize = H1FESpace.GetVSize();
@@ -400,13 +400,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
 
    quad_data.geom = rconfig::Get().Occa() ?
-     RajaGeometry::Get(H1FESpace,integ_rule):
-     RajaGeometry::Get(H1FESpace,integ_rule,x);
+                    RajaGeometry::Get(H1FESpace,integ_rule):
+                    RajaGeometry::Get(H1FESpace,integ_rule,x);
    H1FESpace.GlobalToLocal(v, v_local);
    e.ToQuad(integ_rule, e_quad);
 
    const int NUM_QUAD = integ_rule.GetNPoints();
-   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder());
+   const IntegrationRule &ir1D = IntRules.Get(Geometry::SEGMENT,
+                                              integ_rule.GetOrder());
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int NUM_DOFS_1D  = H1FESpace.GetFE(0)->GetOrder()+1;
 
@@ -434,29 +435,29 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
                              quad_data.geom->invJ,
                              quad_data.geom->detJ,
                              quad_data.stressJinvT,
-                             quad_data.dtEst);     
+                             quad_data.dtEst);
    else
-     rUpdateQuadratureData(gamma,
-                           quad_data.h0,
-                           cfl,
-                           use_viscosity,
-                           dim,
-                           NUM_QUAD,
-                           NUM_QUAD_1D,
-                           NUM_DOFS_1D,
-                           nzones,
-                           quad_data.dqMaps->dofToQuad,
-                           quad_data.dqMaps->dofToQuadD,
-                           quad_data.dqMaps->quadWeights,
-                           v_local,
-                           e_quad,
-                           quad_data.rho0DetJ0w,
-                           quad_data.Jac0inv,
-                           quad_data.geom->J,
-                           quad_data.geom->invJ,
-                           quad_data.geom->detJ,
-                           quad_data.stressJinvT,
-                           quad_data.dtEst);
+      rUpdateQuadratureData(gamma,
+                            quad_data.h0,
+                            cfl,
+                            use_viscosity,
+                            dim,
+                            NUM_QUAD,
+                            NUM_QUAD_1D,
+                            NUM_DOFS_1D,
+                            nzones,
+                            quad_data.dqMaps->dofToQuad,
+                            quad_data.dqMaps->dofToQuadD,
+                            quad_data.dqMaps->quadWeights,
+                            v_local,
+                            e_quad,
+                            quad_data.rho0DetJ0w,
+                            quad_data.Jac0inv,
+                            quad_data.geom->J,
+                            quad_data.geom->invJ,
+                            quad_data.geom->detJ,
+                            quad_data.stressJinvT,
+                            quad_data.dtEst);
 
    quad_data.dt_est = quad_data.dtEst.Min();
    quad_data_is_current = true;

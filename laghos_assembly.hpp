@@ -79,17 +79,17 @@ private:
    const QuadratureData &quad_data;
    const IntegrationRule &integ_rule;
 public:
-  DensityIntegrator(const QuadratureData &qd,
-                    const IntegrationRule &ir) : quad_data(qd),
-                                                 integ_rule(ir) {}
+   DensityIntegrator(const QuadratureData &qd,
+                     const IntegrationRule &ir) : quad_data(qd),
+      integ_rule(ir) {}
 
-  void AssembleRHSElementVect(const FiniteElement &fe,
-                              ElementTransformation &Tr,
-                              Vector &elvect);
-  
-  void AssembleRHSElementVect(const FiniteElement &el,
-                              FaceElementTransformations &Tr,
-                              Vector &elvect){assert(false);}
+   void AssembleRHSElementVect(const FiniteElement &fe,
+                               ElementTransformation &Tr,
+                               Vector &elvect);
+
+   void AssembleRHSElementVect(const FiniteElement &el,
+                               FaceElementTransformations &Tr,
+                               Vector &elvect) {assert(false);}
 
 };
 
@@ -115,7 +115,7 @@ public:
    RajaMassOperator(RajaFiniteElementSpace &fes_,
                     const IntegrationRule &integ_rule_,
                     QuadratureData *quad_data_);
-  ~RajaMassOperator();
+   ~RajaMassOperator();
    void Setup();
    void SetEssentialTrueDofs(Array<int> &dofs);
    // Can be used for both velocity and specific internal energy. For the case
@@ -131,13 +131,13 @@ public:
 class RajaForceOperator : public RajaOperator
 {
 private:
-  const int dim;
-  const int nzones;
-  const RajaFiniteElementSpace &h1fes, &l2fes;
-  const IntegrationRule &integ_rule;
-  const QuadratureData *quad_data;
-  const RajaDofQuadMaps *l2D2Q, *h1D2Q;
-  mutable RajaVector gVecL2, gVecH1;
+   const int dim;
+   const int nzones;
+   const RajaFiniteElementSpace &h1fes, &l2fes;
+   const IntegrationRule &integ_rule;
+   const QuadratureData *quad_data;
+   const RajaDofQuadMaps *l2D2Q, *h1D2Q;
+   mutable RajaVector gVecL2, gVecH1;
 public:
    RajaForceOperator(RajaFiniteElementSpace &h1fes_,
                      RajaFiniteElementSpace &l2fes_,
@@ -146,28 +146,30 @@ public:
    void Setup();
    void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
    void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
-  ~RajaForceOperator();
+   ~RajaForceOperator();
 };
 
 // Scales by the inverse diagonal of the MassPAOperator.
-class DiagonalSolver : public Solver{
+class DiagonalSolver : public Solver
+{
 private:
-  Vector diag;
-  FiniteElementSpace &FESpace;
+   Vector diag;
+   FiniteElementSpace &FESpace;
 public:
-  DiagonalSolver(FiniteElementSpace &fes): Solver(fes.GetVSize()),
-                                           diag(),
-                                           FESpace(fes) { }
+   DiagonalSolver(FiniteElementSpace &fes): Solver(fes.GetVSize()),
+      diag(),
+      FESpace(fes) { }
 
-  void SetDiagonal(Vector &d)
-  {
-    const Operator *P = FESpace.GetProlongationMatrix();
-    diag.SetSize(P->Width());
-    P->MultTranspose(d, diag);
-  }
+   void SetDiagonal(Vector &d)
+   {
+      const Operator *P = FESpace.GetProlongationMatrix();
+      diag.SetSize(P->Width());
+      P->MultTranspose(d, diag);
+   }
 
-   virtual void Mult(const Vector &x, Vector &y) const   {
-     for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
+   virtual void Mult(const Vector &x, Vector &y) const
+   {
+      for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
    }
    virtual void SetOperator(const Operator &op) { }
 };

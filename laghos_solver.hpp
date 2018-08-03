@@ -101,7 +101,7 @@ protected:
    // Linear solver for energy.
    //RajaCGSolver locCG;
    RajaCGSolver CG_VMass,CG_EMass;
-  
+
    mutable TimingData timer;
 
    // Device vectors we want to keep
@@ -122,7 +122,7 @@ protected:
       }
    }
 
-  void UpdateQuadratureData(const RajaVector &S) const;
+   void UpdateQuadratureData(const RajaVector &S) const;
 
 public:
    LagrangianHydroOperator(int size, RajaFiniteElementSpace &h1_fes,
@@ -146,7 +146,7 @@ public:
 
    void PrintTimingData(bool IamRoot, int steps);
 
-  ~LagrangianHydroOperator();
+   ~LagrangianHydroOperator();
 };
 
 class TaylorCoefficient : public Coefficient
