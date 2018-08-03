@@ -60,9 +60,9 @@ void rForceMult2S(
     share double s_e[NUM_QUAD_2D];
 
 #ifdef __LAMBDA__
-    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock/*;inner*/)
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock)
 #else
-    const int idBlock = 0 + threadIdx.x;
+    const int idBlock = threadIdx.x;
 #endif
     {
       for (int id = idBlock; id < (L2_DOFS_1D * NUM_QUAD_1D); id += INNER_SIZE) {
@@ -77,9 +77,9 @@ void rForceMult2S(
       if (el < numElements) {
         sync;
 #ifdef __LAMBDA__
-        for (int dx = 0; dx < INNER_SIZE; ++dx/*;inner*/) 
+        for (int dx = 0; dx < INNER_SIZE; ++dx) 
 #else
-        const int dx = 0 + threadIdx.x;
+        const int dx = threadIdx.x;
 #endif
         {
           if (dx < L2_DOFS_1D) {
@@ -98,9 +98,9 @@ void rForceMult2S(
         }
         sync;
 #ifdef __LAMBDA__
-        for (int qy = 0; qy < INNER_SIZE; ++qy/*;inner*/) 
+        for (int qy = 0; qy < INNER_SIZE; ++qy) 
 #else
-        const int qy = 0 + threadIdx.x;
+        const int qy = threadIdx.x;
 #endif
         {
           if (qy < NUM_QUAD_1D) {
@@ -117,9 +117,9 @@ void rForceMult2S(
         for (int c = 0; c < NUM_DIM; ++c) {
           sync;
 #ifdef __LAMBDA__
-          for (int qx = 0; qx < INNER_SIZE; ++qx/*;inner*/)
+          for (int qx = 0; qx < INNER_SIZE; ++qx)
 #else
-          const int qx = 0 + threadIdx.x;
+          const int qx = threadIdx.x;
 #endif
           {
             if (qx < NUM_QUAD_1D) {
@@ -145,9 +145,9 @@ void rForceMult2S(
           }
           sync;
 #ifdef __LAMBDA__
-          for (int dx = 0; dx < INNER_SIZE; ++dx/*;inner*/) 
+          for (int dx = 0; dx < INNER_SIZE; ++dx) 
 #else
-          const int dx = 0 + threadIdx.x;
+          const int dx = threadIdx.x;
 #endif
           {
             if (dx < H1_DOFS_1D) {
@@ -217,7 +217,7 @@ void rForceMultTranspose2S(
     share double s_v[NUM_QUAD_1D  * NUM_QUAD_1D];
 
 #ifdef __LAMBDA__
-    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock/*; inner*/) 
+    for (int idBlock = 0; idBlock < INNER_SIZE; ++idBlock) 
 #else
     const int idBlock = 0 + threadIdx.x;
 #endif
@@ -235,7 +235,7 @@ void rForceMultTranspose2S(
       if (el < numElements) {
         sync;
 #ifdef __LAMBDA__
-        for (int qBlock = 0; qBlock < INNER_SIZE; ++qBlock/*; inner*/) 
+        for (int qBlock = 0; qBlock < INNER_SIZE; ++qBlock) 
 #else
         const int qBlock = threadIdx.x;
 #endif
@@ -247,7 +247,7 @@ void rForceMultTranspose2S(
         for (int c = 0; c < NUM_DIM; ++c) {
           sync;
 #ifdef __LAMBDA__
-          for (int dx = 0; dx < INNER_SIZE; ++dx/*; inner*/)
+          for (int dx = 0; dx < INNER_SIZE; ++dx)
 #else
           const int dx = threadIdx.x;
 #endif
@@ -272,7 +272,7 @@ void rForceMultTranspose2S(
           }
           sync;
 #ifdef __LAMBDA__
-          for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/)
+          for (int qx = 0; qx < INNER_SIZE; ++qx)
 #else
             const int qx = threadIdx.x;
 #endif
@@ -293,7 +293,7 @@ void rForceMultTranspose2S(
         }
         sync;
 #ifdef __LAMBDA__
-        for (int qx = 0; qx < INNER_SIZE; ++qx/*; inner*/) 
+        for (int qx = 0; qx < INNER_SIZE; ++qx) 
 #else
           const int qx = threadIdx.x;
 #endif
@@ -314,7 +314,7 @@ void rForceMultTranspose2S(
         }
         sync;
 #ifdef __LAMBDA__
-        for (int dy = 0; dy < INNER_SIZE; ++dy/*; inner*/)
+        for (int dy = 0; dy < INNER_SIZE; ++dy)
 #else
           const int dy = threadIdx.x;
 #endif
@@ -377,7 +377,6 @@ void rForceMult3S(
   const int INNER_SIZE_2D = (INNER_SIZE * INNER_SIZE);
 #ifdef __LAMBDA__
   forallS(elBlock,numElements,ELEMENT_BATCH,
-  //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH; outer) {
 #else
   const int idx = blockIdx.x;
   const int elBlock = idx * ELEMENT_BATCH;
@@ -609,7 +608,6 @@ void rForceMultTranspose3S(
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
 #ifdef __LAMBDA__
-  //for (int elBlock = 0; elBlock < numElements; elBlock += ELEMENT_BATCH/*; outer*/) 
   forallS(elBlock,numElements,ELEMENT_BATCH,
 #else
   const int idx = blockIdx.x;
@@ -842,12 +840,13 @@ void rForceMultS(const int NUM_DIM,
                  const double* restrict e,
                  double* restrict v) {
   push(Green);
+  if (NUM_DIM==1) assert(false);
 #ifndef __LAMBDA__
   const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD_1D;
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
   const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
-  const int blck = INNER_SIZE;
+  const dim3 blck(INNER_SIZE,INNER_SIZE,1);
 #endif
 #ifdef __TEMPLATES__
   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
@@ -887,9 +886,9 @@ void rForceMultS(const int NUM_DIM,
     {0x3A,&rForceMult3S<3,12,22,11,12>},
     {0x3B,&rForceMult3S<3,13,24,12,13>},
     {0x3C,&rForceMult3S<3,14,26,13,14>},
-    // {0x3D,&rForceMult3S<3,15,28,14,15>}, // transpose uses too much shared data
-    // {0x3E,&rForceMult3S<3,16,30,15,16>},
-    // {0x3F,&rForceMult3S<3,17,32,16,17>},
+    {0x3D,&rForceMult3S<3,15,28,14,15>}, // transpose uses too much shared data
+    {0x3E,&rForceMult3S<3,16,30,15,16>},
+    {0x3F,&rForceMult3S<3,17,32,16,17>},
   };
   if (!call[id]){
     printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
