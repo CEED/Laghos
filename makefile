@@ -203,7 +203,7 @@ tgts:
 ######
 # GO #
 ######
-ORDERS = -ok 9 -ot 8
+ORDERS = -ok 3 -ot 2
 go:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50
 gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1
 
