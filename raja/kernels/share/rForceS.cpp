@@ -447,6 +447,7 @@ void rForceMult3S(
           // For each xy plane
           for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
              exclusive_reset;
+             sync;
              // Fill xy plane at given z position
 #ifdef __LAMBDA__
              for (int dy = 0; dy < INNER_SIZE; ++dy){
@@ -528,6 +529,7 @@ void rForceMult3S(
                 }
                 // Finalize solution in xy plane
                 exclusive_reset;
+                sync;
 #ifdef __LAMBDA__
                 for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
@@ -638,6 +640,7 @@ void rForceMultTranspose3S(
      for (int el = elBlock; el < (elBlock + ELEMENT_BATCH); ++el) {
         if (el < numElements) {
            exclusive_reset;
+           sync;
 #ifdef __LAMBDA__      
            for (int dy = 0; dy < INNER_SIZE; ++dy)
 #else
@@ -675,6 +678,7 @@ void rForceMultTranspose3S(
            }
            for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
               exclusive_reset;
+              sync;
               // Finalize solution in xy plane
 #ifdef __LAMBDA__      
               for (int dy = 0; dy < INNER_SIZE; ++dy)
@@ -745,6 +749,7 @@ void rForceMultTranspose3S(
                  }
               }
               exclusive_reset;
+              sync;
 #ifdef __LAMBDA__      
               for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
@@ -771,6 +776,7 @@ void rForceMultTranspose3S(
                  }
               }
               exclusive_reset;
+              sync;
 #ifdef __LAMBDA__      
               for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
@@ -833,7 +839,7 @@ void rForceMultS(const int NUM_DIM,
   assert(LOG2(NUM_DIM)<=4);
   assert(LOG2(NUM_DOFS_1D-2)<=4);
   static std::unordered_map<unsigned int, fForceMult2S> call = {
-/*    {0x20,&rForceMult2S<2,2,2,1,2>},
+    {0x20,&rForceMult2S<2,2,2,1,2>},
     {0x21,&rForceMult2S<2,3,4,2,3>},
     {0x22,&rForceMult2S<2,4,6,3,4>},
     {0x23,&rForceMult2S<2,5,8,4,5>},
@@ -852,8 +858,8 @@ void rForceMultS(const int NUM_DIM,
     // 3D
     {0x30,&rForceMult3S<3,2,2,1,2>},
     {0x31,&rForceMult3S<3,3,4,2,3>},
-*/   {0x32,&rForceMult3S<3,4,6,3,4>},
-/*    {0x33,&rForceMult3S<3,5,8,4,5>},
+    {0x32,&rForceMult3S<3,4,6,3,4>},
+    {0x33,&rForceMult3S<3,5,8,4,5>},
     {0x34,&rForceMult3S<3,6,10,5,6>},
     {0x35,&rForceMult3S<3,7,12,6,7>},
     {0x36,&rForceMult3S<3,8,14,7,8>},
@@ -866,7 +872,6 @@ void rForceMultS(const int NUM_DIM,
     {0x3D,&rForceMult3S<3,15,28,14,15>},
     {0x3E,&rForceMult3S<3,16,30,15,16>},
     {0x3F,&rForceMult3S<3,17,32,16,17>},
-*/
   };
   if (!call[id]){
     printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
@@ -929,7 +934,7 @@ void rForceMultTransposeS(const int NUM_DIM,
   const unsigned int id = ((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
   static std::unordered_map<unsigned long long, fForceMultTransposeS> call = {
     // 2D
-/*    {0x20,&rForceMultTranspose2S<2,2,2,1,2>},
+    {0x20,&rForceMultTranspose2S<2,2,2,1,2>},
     {0x21,&rForceMultTranspose2S<2,3,4,2,3>},
     {0x22,&rForceMultTranspose2S<2,4,6,3,4>},
     {0x23,&rForceMultTranspose2S<2,5,8,4,5>},
@@ -946,10 +951,10 @@ void rForceMultTransposeS(const int NUM_DIM,
     {0x2E,&rForceMultTranspose2S<2,16,30,15,16>},
     {0x2F,&rForceMultTranspose2S<2,17,32,16,17>},
     // 3D
-    */    {0x30,&rForceMultTranspose3S<3,2,2,1,2>},
+    {0x30,&rForceMultTranspose3S<3,2,2,1,2>},
     {0x31,&rForceMultTranspose3S<3,3,4,2,3>},
     {0x32,&rForceMultTranspose3S<3,4,6,3,4>},
-/*    {0x33,&rForceMultTranspose3S<3,5,8,4,5>},
+    {0x33,&rForceMultTranspose3S<3,5,8,4,5>},
     {0x34,&rForceMultTranspose3S<3,6,10,5,6>},
     {0x35,&rForceMultTranspose3S<3,7,12,6,7>},
     {0x36,&rForceMultTranspose3S<3,8,14,7,8>},
@@ -959,7 +964,6 @@ void rForceMultTransposeS(const int NUM_DIM,
     {0x3A,&rForceMultTranspose3S<3,12,22,11,12>},
     {0x3B,&rForceMultTranspose3S<3,13,24,12,13>},
     {0x3C,&rForceMultTranspose3S<3,14,26,13,14>},
-*/
     //{0x3D,&rForceMultTranspose3S<3,15,28,14,15>}, // uses too much shared data
     //{0x3E,&rForceMultTranspose3S<3,16,30,15,16>},
     //{0x3F,&rForceMultTranspose3S<3,17,32,16,17>},
