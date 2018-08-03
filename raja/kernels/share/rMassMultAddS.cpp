@@ -46,12 +46,12 @@ void rMassMultAdd2S(
 #endif
   {    
     // Store dof <--> quad mappings
-    share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-    share double s_quadToDof[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
+    share double s_dofToQuad[NUM_QUAD_DOFS_1D];
+    share double s_quadToDof[NUM_QUAD_DOFS_1D];
 
     // Store xy planes in shared memory
-    share double s_xy[NUM_QUAD_DOFS_1D];//@dim(NUM_DOFS_1D, NUM_QUAD_1D);
-    share double s_xy2[NUM_QUAD_2D];//@dim(NUM_QUAD_1D, NUM_QUAD_1D);
+    share double s_xy[NUM_QUAD_DOFS_1D];
+    share double s_xy2[NUM_QUAD_2D];
 
     double r_x[NUM_MAX_1D];
 
@@ -178,7 +178,6 @@ void rMassMultAdd3S(
    const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
   // Iterate over elements
 #ifdef __LAMBDA__
-   //for (int e = 0; e < numElements; ++e/*; @outer*/)
    forall(e,numElements,
 #else
    const int e = blockIdx.x;
@@ -186,11 +185,11 @@ void rMassMultAdd3S(
 #endif
    {
       // Store dof <--> quad mappings
-      share double s_dofToQuad[NUM_QUAD_DOFS_1D];// @dim(NUM_QUAD_1D, NUM_DOFS_1D);
-      share double s_quadToDof[NUM_QUAD_DOFS_1D];// @dim(NUM_DOFS_1D, NUM_QUAD_1D);
+      share double s_dofToQuad[NUM_QUAD_DOFS_1D];
+      share double s_quadToDof[NUM_QUAD_DOFS_1D];
 
       // Store xy planes in @shared memory
-      share double s_xy[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
+      share double s_xy[NUM_MAX_2D];
 
       // Store z axis as registers
       exclusive(double,r_z,NUM_QUAD_1D);
@@ -240,7 +239,7 @@ void rMassMultAdd3S(
                   const double s = solIn[ijklN(dx,dy,dz,e,NUM_DOFS_1D)];
                   // Calculate D -> Q in the Z axis
                   for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                     exclusive_set(r_z,qz) += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
+                     exclusive_set(r_z,qz) += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
                   }
                }
             }
@@ -339,10 +338,10 @@ void rMassMultAdd3S(
                if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
                   double solZ = 0;
                   for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-                     const double wy = s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)]/*(dy, qy)*/;
+                     const double wy = s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)];
                      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-                        const double wx = s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]/*(dx, qx)*/;
-                        solZ += wx * wy * s_xy[ijN(qx, qy,NUM_QUAD_1D)]/*(qx, qy)*/;
+                        const double wx = s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)];
+                        solZ += wx * wy * s_xy[ijN(qx, qy,NUM_QUAD_1D)];
                      }
                   }
                   solOut[ijklN(dx,dy,dz,e,NUM_DOFS_1D)] += solZ;

@@ -131,9 +131,9 @@ void rGridFuncToQuad3S(
 #endif
   {
      // Store dof <--> quad mappings
-     share double s_dofToQuad[NUM_QUAD_DOFS_1D];// @dim(NUM_QUAD_1D, NUM_DOFS_1D);
+     share double s_dofToQuad[NUM_QUAD_DOFS_1D];
      // Store xy planes in @shared memory
-     share double s_z[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
+     share double s_z[NUM_MAX_2D];
      // Store z axis as registers
      exclusive(double,r_qz,NUM_QUAD_1D);
      exclusive_decl;

@@ -67,7 +67,6 @@ void rMassAssemble3S0(const int numElements,
                       const double* restrict quadWeights,
                       const double* restrict J,
                       double* __restrict oper) {
-   //for (int eOff = 0; eOff < numElements; eOff += A3_ELEMENT_BATCH; @outer) {
 #ifdef __LAMBDA__
    forallS(eOff,numElements,A3_ELEMENT_BATCH,
 #else
@@ -77,14 +76,14 @@ void rMassAssemble3S0(const int numElements,
 #endif
   {
 #ifdef __LAMBDA__
-     for (int e = eOff; e < (eOff + A3_ELEMENT_BATCH); ++e/*; @inner*/) 
+     for (int e = eOff; e < (eOff + A3_ELEMENT_BATCH); ++e) 
 #else
      const int e = threadIdx.x;
 #endif
      {
         if (e < numElements) {
 #ifdef __LAMBDA__
-           for (int qOff = 0; qOff < A3_QUAD_BATCH; ++qOff/*; @inner*/)
+           for (int qOff = 0; qOff < A3_QUAD_BATCH; ++qOff)
 #else
             const int qOff = threadIdx.y;
 #endif
