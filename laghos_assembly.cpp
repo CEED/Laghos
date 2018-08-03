@@ -240,9 +240,8 @@ void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
    const int NUM_QUAD_1D  = ir1D.GetNPoints();
    const int L2_DOFS_1D = l2fes.GetFE(0)->GetOrder()+1;
    const int H1_DOFS_1D = h1fes.GetFE(0)->GetOrder()+1;
-#warning rForceMultTranspose
    if (rconfig::Get().Share())
-      rForceMultTranspose/*S*/(dim,
+      rForceMultTransposeS(dim,
                           NUM_DOFS_1D,
                           NUM_QUAD_1D,
                           L2_DOFS_1D,

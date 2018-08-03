@@ -394,17 +394,15 @@ void rForceMult3S(
     exclusive(double,r_z,NUM_QUAD_1D);
     exclusive_decl;
 #ifdef __LAMBDA__
-    for (int y = 0; y < INNER_SIZE; ++y)
+    for (int y = 0; y < INNER_SIZE; ++y){
 #else
-    const int y = threadIdx.y;
+    { const int y = threadIdx.y;
 #endif
-    {
 #ifdef __LAMBDA__      
-      for (int x = 0; x < INNER_SIZE; ++x)
+       for (int x = 0; x < INNER_SIZE; ++x){
 #else
-      const int x = threadIdx.x;
+       { const int x = threadIdx.x;
 #endif
-      {
          const int id = (y * INNER_SIZE) + x;
          for (int i = id; i < (L2_DOFS_1D * NUM_QUAD_1D); i += (INNER_SIZE*INNER_SIZE)) {
             s_L2DofToQuad[i] = L2DofToQuad[i];
@@ -421,72 +419,66 @@ void rForceMult3S(
        if (el < numElements) {
           exclusive_reset;
 #ifdef __LAMBDA__
-        for (int dy = 0; dy < INNER_SIZE; ++dy)
+       for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
-        const int dy = threadIdx.y;
+       { const int dy = threadIdx.y;
 #endif
-        {
 #ifdef __LAMBDA__
-           for (int dx = 0; dx < INNER_SIZE; ++dx)
+          for (int dx = 0; dx < INNER_SIZE; ++dx){
 #else
-           const int dx = threadIdx.x;
+          { const int dx = threadIdx.x;
 #endif
-           {
-              if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
-                 // Calculate D -> Q in the Z axis
-                 const double r_e0 = e[ijklN(dx, dy, 0, el,L2_DOFS_1D)];
-                 for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                    exclusive_set(r_z,qz) = r_e0 * s_L2DofToQuad[ijN(qz, 0,NUM_QUAD_1D)];
-                 }
+             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
+                // Calculate D -> Q in the Z axis
+                const double r_e0 = e[ijklN(dx, dy, 0, el,L2_DOFS_1D)];
+                for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+                   exclusive_set(r_z,qz) = r_e0 * s_L2DofToQuad[ijN(qz, 0,NUM_QUAD_1D)];
+                }
 
-                 for (int dz = 1; dz < L2_DOFS_1D; ++dz) {
-                    const double r_e = e[ijklN(dx, dy, dz, el,L2_DOFS_1D)];
-                    for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                       exclusive_set(r_z,qz) += r_e * s_L2DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
-                    }
-                 }
-              }
-              exclusive_inc;
-           }
+                for (int dz = 1; dz < L2_DOFS_1D; ++dz) {
+                   const double r_e = e[ijklN(dx, dy, dz, el,L2_DOFS_1D)];
+                   for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
+                      exclusive_set(r_z,qz) += r_e * s_L2DofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
+                   }
+                }
+             }
+             exclusive_inc;
+          }
         }
         // For each xy plane
         for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
            exclusive_reset;
           // Fill xy plane at given z position
 #ifdef __LAMBDA__
-          for (int dy = 0; dy < INNER_SIZE; ++dy)
+           for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
-          const int dy = threadIdx.x;
+           { const int dy = threadIdx.y;
 #endif
-          {
 #ifdef __LAMBDA__
-            for (int dx = 0; dx < INNER_SIZE; ++dx)
+           for (int dx = 0; dx < INNER_SIZE; ++dx) {
 #else
-            const int dx = threadIdx.y;
+           { const int dx = threadIdx.x;
 #endif
-            {
-               if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
-                  s_Dxyz[ijN(dx, dy,INNER_SIZE)] = exclusive_set(r_z,qz);
-               }
-               exclusive_inc;
-            }
+              if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
+                 s_Dxyz[ijN(dx, dy,INNER_SIZE)] = exclusive_set(r_z,qz);
+              }
+              exclusive_inc;
+           }
           }
           // Calculate Dxyz, xDyz, xyDz in plane
           exclusive_reset;
           sync;
 #ifdef __LAMBDA__
-          for (int qy = 0; qy < INNER_SIZE; ++qy)
+          for (int qy = 0; qy < INNER_SIZE; ++qy){
 #else
-          const int qy = threadIdx.x;
+          { const int qy = threadIdx.y;
 #endif
-          {
 #ifdef __LAMBDA__
-            for (int qx = 0; qx < INNER_SIZE; ++qx)
+           for (int qx = 0; qx < INNER_SIZE; ++qx){ 
 #else
-            const int qx = threadIdx.y;
+           { const int qx = threadIdx.x;
 #endif
-            {
-               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
+              if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                   double q_e = 0;
                   for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
                      double q_ex = 0;
@@ -507,17 +499,15 @@ void rForceMult3S(
             // Fill xy plane at given z position
              exclusive_reset;
 #ifdef __LAMBDA__
-            for (int qy = 0; qy < INNER_SIZE; ++qy)
+          for (int qy = 0; qy < INNER_SIZE; ++qy){
 #else
-            const int qy = threadIdx.x;
+           { const int qy = threadIdx.y;
 #endif
-            {
 #ifdef __LAMBDA__
-              for (int qx = 0; qx < INNER_SIZE; ++qx)
+              for (int qx = 0; qx < INNER_SIZE; ++qx){ 
 #else
-              const int qx = threadIdx.y;
+              { const int qx = threadIdx.x;
 #endif
-              {
                  if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                     double r_Dxyz = 0;
                     double r_xDyz = 0;
@@ -541,17 +531,15 @@ void rForceMult3S(
             exclusive_reset;
             sync;
 #ifdef __LAMBDA__
-            for (int dy = 0; dy < INNER_SIZE; ++dy)
+            for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
-            const int dy = 0 + threadIdx.x;
+            { const int dy = 0 + threadIdx.y;
 #endif
-            {
 #ifdef __LAMBDA__
-              for (int dx = 0; dx < INNER_SIZE; ++dx)
+               for (int dx = 0; dx < INNER_SIZE; ++dx){
 #else
-              const int dx = 0 + threadIdx.y;
+                { const int dx = 0 + threadIdx.x;
 #endif
-              {
                  if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
                     double r_v = 0;
                     for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -704,7 +692,7 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
           for (int dx = 0; dx < INNER_SIZE; ++dx)
 #else
-          const int dx = threadIdx.y;
+          const int dx = threadIdx.x;
 #endif
           {
              if ((dx < H1_DOFS_1D) && (dy < H1_DOFS_1D)) {
@@ -728,7 +716,7 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
             for (int qx = 0; qx < INNER_SIZE; ++qx)
 #else
-            const int qx = threadIdx.y;
+            const int qx = threadIdx.x;
 #endif
             {
                if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
@@ -796,13 +784,13 @@ void rForceMultTranspose3S(
 #ifdef __LAMBDA__      
         for (int dy = 0; dy < INNER_SIZE; ++dy){
 #else
-         {const int dy = threadIdx.x;
+         {const int dy = threadIdx.y;
 #endif
           sync;
 #ifdef __LAMBDA__      
           for (int dx = 0; dx < INNER_SIZE; ++dx)
 #else
-          const int dx = threadIdx.y;
+          const int dx = threadIdx.x;
 #endif
           {
             if ((dx < L2_DOFS_1D) && (dy < L2_DOFS_1D)) {
@@ -886,7 +874,7 @@ void rForceMultS(const int NUM_DIM,
     {0x3A,&rForceMult3S<3,12,22,11,12>},
     {0x3B,&rForceMult3S<3,13,24,12,13>},
     {0x3C,&rForceMult3S<3,14,26,13,14>},
-    {0x3D,&rForceMult3S<3,15,28,14,15>}, // transpose uses too much shared data
+    {0x3D,&rForceMult3S<3,15,28,14,15>},
     {0x3E,&rForceMult3S<3,16,30,15,16>},
     {0x3F,&rForceMult3S<3,17,32,16,17>},
   };
@@ -941,7 +929,7 @@ void rForceMultTransposeS(const int NUM_DIM,
   const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
   const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;
   const int grid = ((nzones+ELEMENT_BATCH-1)/ELEMENT_BATCH);
-  const int blck = INNER_SIZE;
+  const dim3 blck(INNER_SIZE,INNER_SIZE,1);
 #endif
 #ifdef __TEMPLATES__
   assert(NUM_DOFS_1D==H1_DOFS_1D);
