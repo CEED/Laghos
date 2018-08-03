@@ -122,10 +122,8 @@ void rGridFuncToQuad3S(
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
   const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
    // Iterate over elements
-   //for (int e = 0; e < numElements; ++e; @outer) {
 #ifdef __LAMBDA__
   forall(e,numElements,
-         //for(int e=0;e<numElements;e++)
 #else
   const int idx = blockIdx.x;
   const int e = idx ;
@@ -141,17 +139,15 @@ void rGridFuncToQuad3S(
      exclusive_decl;
      sync;
 #ifdef __LAMBDA__
-     for (int y = 0; y < NUM_MAX_1D; ++y) 
+     for (int y = 0; y < NUM_MAX_1D; ++y){
 #else
-     const int y = threadIdx.y;
+     { const int y = threadIdx.y;
 #endif
-     {
 #ifdef __LAMBDA__
-        for (int x = 0; x < NUM_MAX_1D; ++x)
+        for (int x = 0; x < NUM_MAX_1D; ++x){
 #else
-        const int x = threadIdx.x;
+        { const int x = threadIdx.x;
 #endif
-        {
            const int id = (y * NUM_MAX_1D) + x;
            // Fetch Q <--> D maps
            if (id < NUM_QUAD_DOFS_1D) {
@@ -168,17 +164,15 @@ void rGridFuncToQuad3S(
      exclusive_reset;
      sync;
 #ifdef __LAMBDA__
-     for (int dy = 0; dy < NUM_MAX_1D; ++dy) 
+     for (int dy = 0; dy < NUM_MAX_1D; ++dy) {
 #else
-     const int dy = threadIdx.y;
+     { const int dy = threadIdx.y;
 #endif
-     {
 #ifdef __LAMBDA__
-        for (int dx = 0; dx < NUM_MAX_1D; ++dx) 
+        for (int dx = 0; dx < NUM_MAX_1D; ++dx) {
 #else
-        const int dx = threadIdx.x;
+        { const int dx = threadIdx.x;
 #endif
-        {
            if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
               for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
                  const double val = gf[l2gMap[ijklN(dx,dy,dz,e,NUM_DOFS_1D)]];
@@ -195,18 +189,17 @@ void rGridFuncToQuad3S(
      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
         // Fill xy plane at given z position
         exclusive_reset;
+        sync;
 #ifdef __LAMBDA__
-        for (int dy = 0; dy < NUM_MAX_1D; ++dy)
+        for (int dy = 0; dy < NUM_MAX_1D; ++dy){
 #else
-        const int dy = threadIdx.y;
+        { const int dy = threadIdx.y;
 #endif
-        {
 #ifdef __LAMBDA__
-           for (int dx = 0; dx < NUM_MAX_1D; ++dx)
+           for (int dx = 0; dx < NUM_MAX_1D; ++dx){
 #else
-            const int dx = threadIdx.x;
+           { const int dx = threadIdx.x;
 #endif
-           {
               if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
                  s_z[ijN(dx, dy,NUM_DOFS_1D)] = exclusive_set(r_qz,qz);
               }
@@ -217,17 +210,15 @@ void rGridFuncToQuad3S(
         exclusive_reset;
         sync;
 #ifdef __LAMBDA__
-        for (int qy = 0; qy < NUM_MAX_1D; ++qy)
+        for (int qy = 0; qy < NUM_MAX_1D; ++qy){
 #else
-        const int qy = threadIdx.y;
+        { const int qy = threadIdx.y;
 #endif
-        {
 #ifdef __LAMBDA__
-           for (int qx = 0; qx < NUM_MAX_1D; ++qx)
+           for (int qx = 0; qx < NUM_MAX_1D; ++qx){
 #else
-           const int qx = threadIdx.x;
+           { const int qx = threadIdx.x;
 #endif
-           {
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                  double val = 0;
                  for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
@@ -267,8 +258,11 @@ void rGridFuncToQuadS(const int DIM,
                       double* __restrict out) {
    push(Green);
 #ifndef __LAMBDA__
-  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
-  const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+   if (DIM==1) assert(false);
+   const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:1;
+   const int grid = ((numElements+MX_ELEMENT_BATCH-1)/MX_ELEMENT_BATCH);
+   const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+   const dim3 blck(b1d,b1d,1);
 #endif
 #ifdef __TEMPLATES__
   const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);

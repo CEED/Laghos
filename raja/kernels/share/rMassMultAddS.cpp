@@ -383,10 +383,10 @@ void rMassMultAddS(const int DIM,
    push(Green);
 #ifndef __LAMBDA__
    if (DIM==1) assert(false);
-   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+   const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
    const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:1;
    const int grid = ((numElements+MX_ELEMENT_BATCH-1)/MX_ELEMENT_BATCH);
-   const dim3 blck(NUM_MAX_1D,NUM_MAX_1D,1);
+   const dim3 blck(b1d,b1d,1);
 #endif
 #ifdef __TEMPLATES__
   assert(LOG2(DIM)<=4);
