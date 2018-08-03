@@ -24,7 +24,7 @@ RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 -g -Wall #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 
 ###################
@@ -202,11 +202,11 @@ tgts:
 
 ######
 # GO #
-######
-go:;@./laghos -ok 3 -ot 2 -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100
+######-ok 3 -ot 2
+go:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 50
 gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1
 
-gos:;@./laghos -ok 3 -ot 2 -cfl 0.1 --mesh data/cube01_hex.mesh -ms 100 -share
+gos:;@./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 50 -share
 gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 --mesh data/cube01_hex.mesh -ms 1 -share
 #--track-origins=yes
 

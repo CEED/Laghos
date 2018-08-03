@@ -301,17 +301,25 @@ void rUpdateQuadratureData3S(
 #ifdef __LAMBDA__
   forall(el,numElements,
   //for(int el=0;el<numElements;el++){
+#else
+   const int el = blockIdx.x;
 #endif
   {
      share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
      share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
      
 #ifdef __LAMBDA__
-     for (int y = 0; y < NUM_QUAD_1D; ++y/*; inner*/) {
+     for (int y = 0; y < NUM_QUAD_1D; ++y)
+#else
+     const int y =  threadIdx.y;
 #endif
+     {
 #ifdef __LAMBDA__
-        for (int x = 0; x < NUM_QUAD_1D; ++x/*; inner*/) {
+        for (int x = 0; x < NUM_QUAD_1D; ++x)
+#else
+        const int x = threadIdx.x;
 #endif
+        {
            const int id = (y * NUM_QUAD_1D) + x;
            for (int i = id; i < (NUM_DOFS_1D * NUM_QUAD_1D); i += NUM_QUAD_2D) {
               s_dofToQuad[id]  = dofToQuad[id];
@@ -319,14 +327,20 @@ void rUpdateQuadratureData3S(
            }
         }
      }
-
-#ifdef __LAMBDA__
+     sync;
      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-#endif
 #ifdef __LAMBDA__
-        for (int qy = 0; qy < NUM_QUAD_1D; ++qy/*; inner*/) {
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+#else
+        const int qy = threadIdx.y;
 #endif
-           for (int qx = 0; qx < NUM_QUAD_1D; ++qx/*; inner*/) {
+        {
+#ifdef __LAMBDA__
+           for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+#else
+           const int qx = 0 + threadIdx.x;
+#endif
+           {
               const int q = qx + qy*NUM_QUAD_1D + qz*NUM_QUAD_2D;
               double gradv[9];//@dim(3, 3);
               double q_gradv[9];//@dim(3, 3);

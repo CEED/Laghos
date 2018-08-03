@@ -77,17 +77,19 @@ void rMassAssemble3S0(const int numElements,
 #endif
   {
 #ifdef __LAMBDA__
-     for (int e = eOff; e < (eOff + A3_ELEMENT_BATCH); ++e/*; @inner*/) {
+     for (int e = eOff; e < (eOff + A3_ELEMENT_BATCH); ++e/*; @inner*/) 
 #else
-        //{ const int e = threadIdx.x;
+     const int e = threadIdx.x;
 #endif
-       if (e < numElements) {
+     {
+        if (e < numElements) {
 #ifdef __LAMBDA__
-          for (int qOff = 0; qOff < A3_QUAD_BATCH; ++qOff/*; @inner*/) {
+           for (int qOff = 0; qOff < A3_QUAD_BATCH; ++qOff/*; @inner*/)
 #else
-             //{ const int qOff = threadIdx.y;
+            const int qOff = threadIdx.y;
 #endif
-             for (int q = qOff; q < NUM_QUAD; q += A3_QUAD_BATCH) {
+           {
+              for (int q = qOff; q < NUM_QUAD; q += A3_QUAD_BATCH) {
                 const double J11 = J[ijklNM(0, 0, q, e,3,NUM_QUAD)];
                 const double J12 = J[ijklNM(1, 0, q, e,3,NUM_QUAD)];
                 const double J13 = J[ijklNM(2, 0, q, e,3,NUM_QUAD)];

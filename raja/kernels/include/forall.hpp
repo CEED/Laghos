@@ -23,8 +23,23 @@
 #define A2_ELEMENT_BATCH 1
 #define A2_QUAD_BATCH 1
 
-#define A3_ELEMENT_BATCH 1
-#define A3_QUAD_BATCH 1
+#define A3_QUAD_BATCH 1 // closestMultipleWarpBatch(quadND, 512);
+#define A3_ELEMENT_BATCH 1 // closestMultipleWarpBatch(a3QuadBatch, 512);
+static int closestMultipleWarpBatch(const int multiple, const int maxSize) {
+   if (multiple > maxSize) {
+      return maxSize;
+   }
+   int batch = (32 / multiple);
+   int minDiff = 32 - (multiple * batch);
+   for (int i = 64; i <= maxSize; i += 32) {
+      const int newDiff = i - (multiple * (i / multiple));
+      if (newDiff < minDiff) {
+         batch = (i / multiple);
+         minDiff = newDiff;
+      }
+   }
+   return batch;
+}
 
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
@@ -61,6 +76,13 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel __global__
 #define share __shared__
 #define sync __syncthreads();
+
+#define exclusive_inc
+#define exclusive_decl
+#define exclusive_reset
+#define exclusive_set(name,idx) name[idx]
+#define exclusive(type,name,size) type name[size]
+
 const int CUDA_BLOCK_SIZE = 256;
 #define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
 #define cuLaunchKer(name,args) {                                      \
@@ -84,6 +106,13 @@ const int CUDA_BLOCK_SIZE = 256;
 #define kernel
 #define sync
 #define share
+
+#define exclusive_inc
+#define exclusive_decl
+#define exclusive_reset
+#define exclusive_set(name,idx) name[idx]
+#define exclusive(type,name,size) type name[size]
+
 template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
@@ -117,6 +146,11 @@ void cuda_forallT(const int end,
 #define sync
 #define share
 #define kernel
+#define exclusive(type,name,size) type name[256][size]
+#define exclusive_decl int xdx = 0
+#define exclusive_reset xdx = 0
+#define exclusive_set(name,idx) name[xdx][idx]
+#define exclusive_inc ++xdx
 class ReduceSum{
 public:
   double s;

@@ -137,20 +137,21 @@ void rGridFuncToQuad3S(
      // Store xy planes in @shared memory
      share double s_z[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
      // Store z axis as registers
-     /*exclusive*/ double r_qz[256][NUM_QUAD_1D];
-     int xdx = 0;
+     exclusive(double,r_qz,NUM_QUAD_1D);
+     exclusive_decl;
      sync;
 #ifdef __LAMBDA__
-     for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) {
+     for (int y = 0; y < NUM_MAX_1D; ++y) 
 #else
-        { const int y = threadIdx.x;
+     const int y = threadIdx.y;
 #endif
-        sync;
+     {
 #ifdef __LAMBDA__
-        for (int x = 0; x < NUM_MAX_1D; ++x/*; @inner*/) {
+        for (int x = 0; x < NUM_MAX_1D; ++x)
 #else
-           //{ const int x = threadIdx.x;
+        const int x = threadIdx.x;
 #endif
+        {
            const int id = (y * NUM_MAX_1D) + x;
            // Fetch Q <--> D maps
            if (id < NUM_QUAD_DOFS_1D) {
@@ -158,73 +159,75 @@ void rGridFuncToQuad3S(
            }
            // Initialize our Z axis
            for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-              r_qz[xdx][qz] = 0;
+              exclusive_set(r_qz,qz) = 0;
            }
-           ++xdx;
+           exclusive_inc;
         }
      }
 
-        xdx=0;
+     exclusive_reset;
      sync;
 #ifdef __LAMBDA__
-     for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+     for (int dy = 0; dy < NUM_MAX_1D; ++dy) 
 #else
-        //{ const int dy = threadIdx.x;
+     const int dy = threadIdx.y;
 #endif
-        sync;
+     {
 #ifdef __LAMBDA__
-        for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+        for (int dx = 0; dx < NUM_MAX_1D; ++dx) 
 #else
-           //{ const int dx = threadIdx.x;
+        const int dx = threadIdx.x;
 #endif
+        {
            if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
               for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
                  const double val = gf[l2gMap[ijklN(dx,dy,dz,e,NUM_DOFS_1D)]];
                  // Calculate D -> Q in the Z axis
                  for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                    r_qz[xdx][qz] += val * s_dofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
+                    exclusive_set(r_qz,qz) += val * s_dofToQuad[ijN(qz, dz,NUM_QUAD_1D)];
                  }
               }
            }
-           ++xdx;
+           exclusive_inc;
         }
      }
      // For each xy plane
      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
         // Fill xy plane at given z position
-        xdx=0;
-        sync;
+        exclusive_reset;
 #ifdef __LAMBDA__
-        for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+        for (int dy = 0; dy < NUM_MAX_1D; ++dy)
 #else
-           //{ const int dy = threadIdx.x;
+        const int dy = threadIdx.y;
 #endif
-           sync;
+        {
 #ifdef __LAMBDA__
-           for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+           for (int dx = 0; dx < NUM_MAX_1D; ++dx)
 #else
-              //{ const int dy = threadIdx.x;
+            const int dx = threadIdx.x;
 #endif
+           {
               if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
-                 s_z[ijN(dx, dy,NUM_DOFS_1D)] = r_qz[xdx][qz];
+                 s_z[ijN(dx, dy,NUM_DOFS_1D)] = exclusive_set(r_qz,qz);
               }
-              ++xdx;
+              exclusive_inc;
            }
         }
         // Calculate Dxyz, xDyz, xyDz in plane
-        xdx=0;
+        exclusive_reset;
         sync;
 #ifdef __LAMBDA__
-        for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+        for (int qy = 0; qy < NUM_MAX_1D; ++qy)
 #else
-           //{ const int qy = threadIdx.x;
+        const int qy = threadIdx.y;
 #endif
-           sync;
+        {
 #ifdef __LAMBDA__
-           for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+           for (int qx = 0; qx < NUM_MAX_1D; ++qx)
 #else
-              //{ const int qx = threadIdx.x;
+           const int qx = threadIdx.x;
 #endif
+           {
               if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                  double val = 0;
                  for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {

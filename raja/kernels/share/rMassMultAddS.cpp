@@ -58,7 +58,7 @@ void rMassMultAdd2S(
 #ifdef __LAMBDA__
     for (int x = 0; x < NUM_MAX_1D; ++x/*;inner*/)
 #else
-      const int x = threadIdx.x;
+    const int x = threadIdx.x;
 #endif
     {
       for (int id = x; id < NUM_QUAD_DOFS_1D; id += NUM_MAX_1D) {
@@ -69,37 +69,34 @@ void rMassMultAdd2S(
 
     for (int e = eOff; e < (eOff + M2_ELEMENT_BATCH); ++e) {
       if (e < numElements) {
+#ifdef __LAMBDA__
+         for (int dx = 0; dx < NUM_MAX_1D; ++dx){
+#else
+         {const int dx = threadIdx.x;
+#endif
+            if (dx < NUM_DOFS_1D) {
+               for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                  s_xy[ijN(dx, qy,NUM_DOFS_1D)] = 0;
+               }
+               for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                  r_x[dy] = solIn[ijkN(dx, dy, e,NUM_DOFS_1D)];
+               }
+               for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                  double xy = 0;
+                  for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                     xy += r_x[dy] * s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
+                  }
+                  s_xy[ijN(dx, qy,NUM_DOFS_1D)] = xy;
+               }
+            }
+         }
         sync;
 #ifdef __LAMBDA__
-        for (int dx = 0; dx < NUM_MAX_1D; ++dx) {
+        for (int qy = 0; qy < NUM_MAX_1D; ++qy)
 #else
-        {
-           const int dx = threadIdx.x;
+        const int qy = threadIdx.x;
 #endif
-        
-          if (dx < NUM_DOFS_1D) {
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-              s_xy[ijN(dx, qy,NUM_DOFS_1D)] = 0;
-            }
-            for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-              r_x[dy] = solIn[ijkN(dx, dy, e,NUM_DOFS_1D)];
-            }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-              double xy = 0;
-              for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-                xy += r_x[dy] * s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
-              }
-              s_xy[ijN(dx, qy,NUM_DOFS_1D)] = xy;
-            }
-          }
-        }
-        sync;
-#ifdef __LAMBDA__
-        for (int qy = 0; qy < NUM_MAX_1D; ++qy){
-#else
         {
-          const int qy = threadIdx.x;
-#endif
           if (qy < NUM_QUAD_1D) {
             for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
               double s = 0;
@@ -112,43 +109,43 @@ void rMassMultAdd2S(
         }
         sync;
 #ifdef __LAMBDA__
-        for (int qx = 0; qx < NUM_MAX_1D; ++qx){
+        for (int qx = 0; qx < NUM_MAX_1D; ++qx)
 #else
-        {
-          const int qx = threadIdx.x;
+        const int qx = threadIdx.x;
 #endif
-          if (qx < NUM_QUAD_1D) {
-            for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-              s_xy[ijN(dy, qx,NUM_DOFS_1D)] = 0;
-            }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-              r_x[qy] = s_xy2[ijN(qx, qy,NUM_QUAD_1D)];
-            }
-            for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-              double s = 0;
-              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-                s += r_x[qy] * s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)];
+        {
+           if (qx < NUM_QUAD_1D) {
+              for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                 s_xy[ijN(dy, qx,NUM_DOFS_1D)] = 0;
               }
-              s_xy[ijN(dy, qx,NUM_DOFS_1D)] = s;
-            }
-          }
+              for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                 r_x[qy] = s_xy2[ijN(qx, qy,NUM_QUAD_1D)];
+              }
+              for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                 double s = 0;
+                 for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+                    s += r_x[qy] * s_quadToDof[ijN(dy, qy,NUM_DOFS_1D)];
+                 }
+                 s_xy[ijN(dy, qx,NUM_DOFS_1D)] = s;
+              }
+           }
         }
         sync;
 #ifdef __LAMBDA__
-        for (int dx = 0; dx < NUM_MAX_1D; ++dx){
+        for (int dx = 0; dx < NUM_MAX_1D; ++dx)
 #else
-        {
-            const int dx = threadIdx.x;
+        const int dx = threadIdx.x;
 #endif
-            if (dx < NUM_DOFS_1D) {
-            for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-              double s = 0;
-              for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-                s += (s_xy[ijN(dy, qx,NUM_DOFS_1D)] * s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]);
+        {
+           if (dx < NUM_DOFS_1D) {
+              for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+                 double s = 0;
+                 for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                    s += (s_xy[ijN(dy, qx,NUM_DOFS_1D)] * s_quadToDof[ijN(dx, qx,NUM_DOFS_1D)]);
+                 }
+                 solOut[ijkN(dx, dy, e,NUM_DOFS_1D)] += s;
               }
-              solOut[ijkN(dx, dy, e,NUM_DOFS_1D)] += s;
-            }
-          }
+           }
         }
       }
     }
@@ -159,7 +156,6 @@ void rMassMultAdd2S(
 }
  
 // *****************************************************************************
-//#warning rMassMultAdd3S to debug, not used for Laghos
 #ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
@@ -182,8 +178,10 @@ void rMassMultAdd3S(
    const int NUM_MAX_2D = NUM_MAX_1D*NUM_MAX_1D;
   // Iterate over elements
 #ifdef __LAMBDA__
-   for (int e = 0; e < numElements; ++e/*; @outer*/) 
-      //forallS(e,numElements,1,
+   //for (int e = 0; e < numElements; ++e/*; @outer*/)
+   forallS(e,numElements,1,
+#else
+   const int e = blockIdx.x;
 #endif
    {
       // Store dof <--> quad mappings
@@ -194,17 +192,21 @@ void rMassMultAdd3S(
       share double s_xy[NUM_MAX_2D];// @dim(NUM_MAX_1D, NUM_MAX_1D);
 
       // Store z axis as registers
-      /*exclusive*/ double r_z[256][NUM_QUAD_1D];
-      /*exclusive*/ double r_z2[256][NUM_DOFS_1D];
-      int exclusive = 0;
+      exclusive(double,r_z,NUM_QUAD_1D);
+      exclusive(double,r_z2,NUM_DOFS_1D);
+      exclusive_decl;
 
 #ifdef __LAMBDA__
-      for (int y = 0; y < NUM_MAX_1D; ++y/*; @inner*/) 
+      for (int y = 0; y < NUM_MAX_1D; ++y)
+#else
+      const int y = threadIdx.y;
 #endif
       {
          sync;
 #ifdef __LAMBDA__
-         for (int x = 0; x < NUM_MAX_1D; ++x/*; @inner*/) 
+         for (int x = 0; x < NUM_MAX_1D; ++x)
+#else
+         const int x = threadIdx.x;
 #endif
          {
             const int id = (y * NUM_MAX_1D) + x;
@@ -215,103 +217,137 @@ void rMassMultAdd3S(
             }
             // Initialize our Z axis
             for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-               r_z[exclusive][qz] = 0;
+               exclusive_set(r_z,qz) = 0;
             }
             for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-               r_z2[exclusive][dz] = 0;
+               exclusive_set(r_z2,dz) = 0;
             }
-            ++exclusive;
+            exclusive_inc;
          }
       }
-      exclusive=0;
+      exclusive_reset;
       sync;
 #ifdef __LAMBDA__
-      for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+      for (int dy = 0; dy < NUM_MAX_1D; ++dy) 
+#else
+      const int dy = threadIdx.y;         
 #endif
+      {
 #ifdef __LAMBDA__
-         for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+         for (int dx = 0; dx < NUM_MAX_1D; ++dx) 
+#else
+         const int dx = threadIdx.x;
 #endif
+         {
             if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
                for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
                   const double s = solIn[ijklN(dx,dy,dz,e,NUM_DOFS_1D)];
                   // Calculate D -> Q in the Z axis
                   for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
-                     r_z[exclusive][qz] += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
+                     exclusive_set(r_z,qz) += s * s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];//(qz, dz);
                   }
                }
             }
-            ++exclusive;
+            exclusive_inc;
          }
       }
       // For each xy plane
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
          // Fill xy plane at given z position
-         exclusive=0;
+         exclusive_reset;
+         sync;
 #ifdef __LAMBDA__
-         for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+         for (int dy = 0; dy < NUM_MAX_1D; ++dy) 
+#else
+         const int dy = threadIdx.y;
 #endif
+         {
 #ifdef __LAMBDA__
-            for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+            for (int dx = 0; dx < NUM_MAX_1D; ++dx)
+#else
+            int dx = 0 + threadIdx.x;
 #endif
+            {
                if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
-                  s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/ = r_z[exclusive][qz];
+                  s_xy[ijN(dx, dy,NUM_DOFS_1D)] = exclusive_set(r_z,qz);
                }
-               ++exclusive;
+               exclusive_inc;
             }
          }
          // Calculate Dxyz, xDyz, xyDz in plane
-         exclusive=0;
+         exclusive_reset;
+         sync;
 #ifdef __LAMBDA__
-         for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+         for (int qy = 0; qy < NUM_MAX_1D; ++qy) 
+#else
+         const int qy = threadIdx.y;
 #endif
+         {
 #ifdef __LAMBDA__
-            for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+            for (int qx = 0; qx < NUM_MAX_1D; ++qx) 
+#else
+            const int qx = 0 + threadIdx.x;
 #endif
+            {
                if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
                   double s = 0;
                   for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-                     const double wy = s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)]/*(qy, dy)*/;
+                     const double wy = s_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
                      for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-                        const double wx = s_dofToQuad[ijN(qx, dx,NUM_QUAD_1D)]/*(qx, dx)*/;
-                        s += wx * wy * s_xy[ijN(dx, dy,NUM_DOFS_1D)]/*(dx, dy)*/;
+                        const double wx = s_dofToQuad[ijN(qx, dx,NUM_QUAD_1D)];
+                        s += wx * wy * s_xy[ijN(dx, dy,NUM_DOFS_1D)];
                      }
                   }
 
-                  s *= oper[ijklN(qx, qy, qz,e,NUM_QUAD_1D)]/*(qx, qy, qz, e)*/;
+                  s *= oper[ijklN(qx, qy, qz,e,NUM_QUAD_1D)];
 
                   for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
-                     const double wz  = s_quadToDof[ijN(dz, qz,NUM_DOFS_1D)]/*(dz, qz)*/;
-                     r_z2[exclusive][dz] += wz * s;
+                     const double wz  = s_quadToDof[ijN(dz, qz,NUM_DOFS_1D)];
+                     exclusive_set(r_z2,dz) += wz * s;
                   }
                }
-               ++exclusive;
+               exclusive_inc;
             }
          }
       }
       // Iterate over xy planes to compute solution
       for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
          // Place xy plane in @shared memory
-         exclusive=0;
+         exclusive_reset;
+         sync;
 #ifdef __LAMBDA__
-         for (int qy = 0; qy < NUM_MAX_1D; ++qy/*; @inner*/) {
+         for (int qy = 0; qy < NUM_MAX_1D; ++qy)
+#else
+         const int qy = threadIdx.y;
 #endif
+         {
 #ifdef __LAMBDA__
-            for (int qx = 0; qx < NUM_MAX_1D; ++qx/*; @inner*/) {
+            for (int qx = 0; qx < NUM_MAX_1D; ++qx)
+#else
+            const int qx = threadIdx.x;
 #endif
+            {
                if ((qx < NUM_QUAD_1D) && (qy < NUM_QUAD_1D)) {
-                  s_xy[ijN(qx, qy,NUM_QUAD_1D)]/*(qx, qy)*/ = r_z2[exclusive][dz];
+                  s_xy[ijN(qx, qy,NUM_QUAD_1D)] = exclusive_set(r_z2,dz);
                }
-               ++exclusive;
+               exclusive_inc;
             }
          }
          // Finalize solution in xy plane
-         exclusive=0;
+         exclusive_reset;
+         sync;
 #ifdef __LAMBDA__
-         for (int dy = 0; dy < NUM_MAX_1D; ++dy/*; @inner*/) {
+         for (int dy = 0; dy < NUM_MAX_1D; ++dy)
+#else
+         const int dy = threadIdx.y;
 #endif
+         {
 #ifdef __LAMBDA__
-            for (int dx = 0; dx < NUM_MAX_1D; ++dx/*; @inner*/) {
+            for (int dx = 0; dx < NUM_MAX_1D; ++dx)
+#else
+            int dx = 0 + threadIdx.x;
 #endif
+            {
                if ((dx < NUM_DOFS_1D) && (dy < NUM_DOFS_1D)) {
                   double solZ = 0;
                   for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -323,15 +359,14 @@ void rMassMultAdd3S(
                   }
                   solOut[ijklN(dx,dy,dz,e,NUM_DOFS_1D)] += solZ;
                }
-               ++exclusive;
+               exclusive_inc;
             }
          }
       }
-   }/*
+   }
 #ifdef __LAMBDA__
            );
 #endif
-    */
 }
 
       
@@ -357,13 +392,18 @@ void rMassMultAddS(const int DIM,
                    const double* op,
                    const double* x,
                    double* __restrict y) {
-  push(Green);
+   push(Green);
 #ifndef __LAMBDA__
+   if (DIM==1) assert(false);
   const int NUM_MAX_1D = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
-  const int grid = ((numElements+M2_ELEMENT_BATCH-1)/M2_ELEMENT_BATCH);
+  const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:A3_ELEMENT_BATCH;
+  const int grid = ((numElements+MX_ELEMENT_BATCH-1)/MX_ELEMENT_BATCH);
   const int blck = NUM_MAX_1D;
+#else
+#warning __LAMBDA__
 #endif
 #ifdef __TEMPLATES__
+#warning __TEMPLATES__
   assert(LOG2(DIM)<=4);
   assert((NUM_QUAD_1D&1)==0);
   assert(LOG2(NUM_DOFS_1D-1)<=8);
