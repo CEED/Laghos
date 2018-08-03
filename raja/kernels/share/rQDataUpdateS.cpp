@@ -264,7 +264,6 @@ void rUpdateQuadratureData2S(
 #endif
 }
 
-//#warning rUpdateQuadratureData3S to debug
 // *****************************************************************************
 #ifdef __TEMPLATES__
 template<const int NUM_DIM,
@@ -300,26 +299,24 @@ void rUpdateQuadratureData3S(
   const int NUM_QUAD_DOFS_1D = (NUM_QUAD_1D * NUM_DOFS_1D);
 #ifdef __LAMBDA__
   forall(el,numElements,
-  //for(int el=0;el<numElements;el++){
 #else
    const int el = blockIdx.x;
+   if (el < numElements) 
 #endif
   {
-     share double s_dofToQuad[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
-     share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
+     share double s_dofToQuad[NUM_QUAD_DOFS_1D];
+     share double s_dofToQuadD[NUM_QUAD_DOFS_1D];
      
 #ifdef __LAMBDA__
-     for (int y = 0; y < NUM_QUAD_1D; ++y)
+     for (int y = 0; y < NUM_QUAD_1D; ++y){
 #else
-     const int y =  threadIdx.y;
+     { const int y = threadIdx.y;
 #endif
-     {
 #ifdef __LAMBDA__
-        for (int x = 0; x < NUM_QUAD_1D; ++x)
+        for (int x = 0; x < NUM_QUAD_1D; ++x){
 #else
-        const int x = threadIdx.x;
+        { const int x = threadIdx.x;
 #endif
-        {
            const int id = (y * NUM_QUAD_1D) + x;
            for (int i = id; i < (NUM_DOFS_1D * NUM_QUAD_1D); i += NUM_QUAD_2D) {
               s_dofToQuad[id]  = dofToQuad[id];
@@ -330,21 +327,19 @@ void rUpdateQuadratureData3S(
      sync;
      for (int qz = 0; qz < NUM_QUAD_1D; ++qz) {
 #ifdef __LAMBDA__
-        for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy){
 #else
-        const int qy = threadIdx.y;
+        { const int qy = threadIdx.y;
 #endif
-        {
 #ifdef __LAMBDA__
-           for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+           for (int qx = 0; qx < NUM_QUAD_1D; ++qx){
 #else
-           const int qx = 0 + threadIdx.x;
+           { const int qx = 0 + threadIdx.x;
 #endif
-           {
               const int q = qx + qy*NUM_QUAD_1D + qz*NUM_QUAD_2D;
-              double gradv[9];//@dim(3, 3);
-              double q_gradv[9];//@dim(3, 3);
-              double q_stress[9];//@dim(3, 3);
+              double gradv[9];
+              double q_gradv[9];
+              double q_stress[9];
 
               // Brute-force convertion of dof -> quad for now
               for (int i = 0; i < 9; ++i) {
@@ -364,24 +359,24 @@ void rUpdateQuadratureData3S(
                        x[vi] = Dx[vi] = 0;
                     }
                     for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-                       const double wx  = s_dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]/*(qx, dx)*/;
-                       const double wDx = s_dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)]/*(qx, dx)*/;
+                       const double wx  = s_dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+                       const double wDx = s_dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
                        for (int vi = 0; vi < 3; ++vi) {
-                          const double r_v = v[_ijklmNM(vi,dx,dy,dz,el,NUM_DOFS_1D,numElements)]/*(vi, dx, dy, dz, el)*/;
+                          const double r_v = v[_ijklmNM(vi,dx,dy,dz,el,NUM_DOFS_1D,numElements)];
                           x[vi]  += wx  * r_v;
                           Dx[vi] += wDx * r_v;
                        }
                     }
-                    const double wy  = s_dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]/*(qy, dy)*/;
-                    const double wDy = s_dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)]/*(qy, dy)*/;
+                    const double wy  = s_dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+                    const double wDy = s_dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
                     for (int vi = 0; vi < 3; ++vi) {
                        xy[vi]  += wy  * x[vi];
                        Dxy[vi] += wy  * Dx[vi];
                        xDy[vi] += wDy * x[vi];
                     }
                  }
-                 const double wz  = s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)]/*(qz, dz)*/;
-                 const double wDz = s_dofToQuadD[ijN(qz,dz,NUM_QUAD_1D)]/*(qz, dz)*/;
+                 const double wz  = s_dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
+                 const double wDz = s_dofToQuadD[ijN(qz,dz,NUM_QUAD_1D)];
                  for (int vi = 0; vi < 3; ++vi) {
                     gradv[ijN(vi,0,3)] += wz  * Dxy[vi];
                     gradv[ijN(vi,1,3)] += wz  * xDy[vi];
@@ -389,7 +384,7 @@ void rUpdateQuadratureData3S(
                  }
               }
 
-              const double invJ_00 = invJ[ijklNM(0, 0, q, el,NUM_DIM,NUM_QUAD)];/*(0, 0, q, el)*/
+              const double invJ_00 = invJ[ijklNM(0, 0, q, el,NUM_DIM,NUM_QUAD)];
               const double invJ_10 = invJ[ijklNM(1, 0, q, el,NUM_DIM,NUM_QUAD)];
               const double invJ_20 = invJ[ijklNM(2, 0, q, el,NUM_DIM,NUM_QUAD)];
               const double invJ_01 = invJ[ijklNM(0, 1, q, el,NUM_DIM,NUM_QUAD)];
@@ -411,10 +406,10 @@ void rUpdateQuadratureData3S(
               q_gradv[ijN(1,2,3)] = ((gradv[ijN(0,2,3)] * invJ_10) + (gradv[ijN(1,2,3)] * invJ_11) + (gradv[ijN(2,2,3)] * invJ_12));
               q_gradv[ijN(2,2,3)] = ((gradv[ijN(0,2,3)] * invJ_20) + (gradv[ijN(1,2,3)] * invJ_21) + (gradv[ijN(2,2,3)] * invJ_22));
 
-              const double q_Jw = detJ[ijN(q,el,NUM_QUAD)]/*(q, el)*/ * quadWeights[q];
+              const double q_Jw = detJ[ijN(q,el,NUM_QUAD)] * quadWeights[q];
 
-              const double q_rho = rho0DetJ0w[ijN(q,el,NUM_QUAD)]/*(q, el)*/ / q_Jw;
-              const double q_e   = fmax(0.0, e[ijN(q,el,NUM_QUAD)]/*(q, el)*/);
+              const double q_rho = rho0DetJ0w[ijN(q,el,NUM_QUAD)] / q_Jw;
+              const double q_e   = fmax(0.0, e[ijN(q,el,NUM_QUAD)]);
 
               const double s = -(GAMMA - 1.0) * q_rho * q_e;
               q_stress[ijN(0, 0,3)] = s; q_stress[ijN(1, 0,3)] = 0; q_stress[ijN(2, 0,3)] = 0;
@@ -632,7 +627,8 @@ void rUpdateQuadratureDataS(const double GAMMA,
   push(Green);
 #ifndef __LAMBDA__
   const int grid = nzones;
-  const int blck = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
+  const dim3 blck(b1d,b1d,1);
 #endif
 #ifdef __TEMPLATES__
   assert(LOG2(NUM_DIM)<=4);
@@ -681,7 +677,7 @@ void rUpdateQuadratureDataS(const double GAMMA,
     fflush(stdout);
   }
   assert(call[id]);
-  call0(rUpdateQuadratureData2S,id,grid,blck,
+  call0(rUpdateQuadratureData,id,grid,blck,
         GAMMA,H0,CFL,USE_VISCOSITY,
         nzones,dofToQuad,dofToQuadD,quadWeights,
         v,e,rho0DetJ0w,invJ0,J,invJ,detJ,

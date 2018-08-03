@@ -398,7 +398,7 @@ void rMassMultAddS(const int DIM,
     // 2D
     {0x20001,&rMassMultAdd2S<1,2>},    {0x20101,&rMassMultAdd2S<2,2>},
     {0x20102,&rMassMultAdd2S<2,4>},    {0x20202,&rMassMultAdd2S<3,4>},
-/*    {0x20203,&rMassMultAdd2S<3,6>},    {0x20303,&rMassMultAdd2S<4,6>},
+    {0x20203,&rMassMultAdd2S<3,6>},    {0x20303,&rMassMultAdd2S<4,6>},
     {0x20304,&rMassMultAdd2S<4,8>},    {0x20404,&rMassMultAdd2S<5,8>},
     {0x20405,&rMassMultAdd2S<5,10>},   {0x20505,&rMassMultAdd2S<6,10>},
     {0x20506,&rMassMultAdd2S<6,12>},   {0x20606,&rMassMultAdd2S<7,12>},
@@ -412,11 +412,10 @@ void rMassMultAddS(const int DIM,
     {0x20D0E,&rMassMultAdd2S<14,28>},  {0x20E0E,&rMassMultAdd2S<15,28>},
     {0x20E0F,&rMassMultAdd2S<15,30>},  {0x20F0F,&rMassMultAdd2S<16,30>},
     {0x20F10,&rMassMultAdd2S<16,32>},  {0x21010,&rMassMultAdd2S<17,32>},
-*/
      // 3D    
     {0x30001,&rMassMultAdd3S<1,2>},    {0x30101,&rMassMultAdd3S<2,2>},
     {0x30102,&rMassMultAdd3S<2,4>},    {0x30202,&rMassMultAdd3S<3,4>},
-/*    {0x30203,&rMassMultAdd3S<3,6>},    {0x30303,&rMassMultAdd3S<4,6>},
+    {0x30203,&rMassMultAdd3S<3,6>},    {0x30303,&rMassMultAdd3S<4,6>},
     {0x30304,&rMassMultAdd3S<4,8>},    {0x30404,&rMassMultAdd3S<5,8>},
     {0x30405,&rMassMultAdd3S<5,10>},   {0x30505,&rMassMultAdd3S<6,10>},
     {0x30506,&rMassMultAdd3S<6,12>},   {0x30606,&rMassMultAdd3S<7,12>},
@@ -430,7 +429,6 @@ void rMassMultAddS(const int DIM,
     {0x30D0E,&rMassMultAdd3S<14,28>},  {0x30E0E,&rMassMultAdd3S<15,28>},
     {0x30E0F,&rMassMultAdd3S<15,30>},  {0x30F0F,&rMassMultAdd3S<16,30>},
     {0x30F10,&rMassMultAdd3S<16,32>},  {0x31010,&rMassMultAdd3S<17,32>},
-*/
   };
   if(!call[id]){
     printf("\n[rMassMultAddS] id \033[33m0x%X\033[m ",id);
