@@ -25,6 +25,7 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
   const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
   quadValues.SetSize(numQuad * elements);
+#warning SHARE rGridFuncToQuadS
   if (rconfig::Get().Share()){
      rGridFuncToQuadS(dim,vdim,dofs1D,quad1D,elements,
                       maps->dofToQuad,
