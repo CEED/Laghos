@@ -41,7 +41,7 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
    ir(ir_),
    ess_tdofs_count(0),
    ess_tdofs(0),
-   bilinearForm(new kernels::kBilinearForm(fes.Get_PFESpace().As<kernels::kFiniteElementSpace>())) { }
+   bilinearForm(new kernels::kBilinearForm(&fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>())) { }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()

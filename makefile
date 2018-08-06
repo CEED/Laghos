@@ -57,7 +57,7 @@ ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
 endif
 
 # Use the MFEM build directory
-MFEM_DIR = /home/camier1/home/mfem/kernels
+MFEM_DIR ?= ~/home/mfem/kernels
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory

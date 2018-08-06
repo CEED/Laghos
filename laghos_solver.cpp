@@ -327,10 +327,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.Fill(0.0);
 
             // *****************************************************************
-            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->MultTranspose(rhs_c, kB_c);
 
-            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetRestrictionOperator()->Mult(dv_c, kX_c);
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
@@ -364,7 +364,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // *****************************************************************
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += cg.GetNumIterations();
-            H1compFESpace.Get_PFESpace().As<kernels::kFiniteElementSpace>()->
+            H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->Mult(kX_c, dv_c);
             //dbg("dv_c:\n"); dv_c.Print();assert(__FILE__&&__LINE__&&false);
 
