@@ -18,11 +18,19 @@
 
 namespace mfem {
   namespace hydrodynamics {
-    enum Problem {
-      vortex = 0,
-      sedov  = 1,
-      shockTube = 2,
+    enum ProblemOption {
+      vortex      = 0,
+      sedov       = 1,
+      shockTube   = 2,
       triplePoint = 3
+    };
+
+    enum ODESolverOption {
+      ForwardEuler = 1,
+      RK2          = 2,
+      RK3          = 3,
+      RK4          = 4,
+      RK6          = 6
     };
 
     static occa::properties GetProblemProperties() {

@@ -21,122 +21,11 @@
 using namespace std;
 
 namespace mfem {
-  Timer::Timer(const std::string &name_) :
-    name(name_),
-    disabled(false),
-    startTime(0),
-    timeTaken(0),
-    iterations(0),
-    dofs(0) {}
-
-  void Timer::disable() {
-    disabled = true;
-  }
-
-  void Timer::enable() {
-    disabled = false;
-  }
-
-  void Timer::tic() {
-    startTime = occa::sys::currentTime();
-  }
-
-  void Timer::toc() {
-    if (!disabled) {
-      toc(occa::getDevice());
-    }
-  }
-
-  void Timer::toc(occa::device &device) {
-    if (!disabled) {
-      device.finish();
-      const double endTime = occa::sys::currentTime();
-      timeTaken += (endTime - startTime);
-      ++iterations;
-    }
-  }
-
-  void Timer::addDofs(const long dofs_) {
-    dofs += dofs_;
-  }
-
-  void Timer::print(const int nameFieldLength) {
-    if (!disabled) {
-      int mpi_rank, num_procs;
-      MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-      MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-
-      double maxTimeTaken;
-      long totalDofs;
-      if (num_procs > 1) {
-        MPI_Reduce(&timeTaken , &maxTimeTaken   , 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&dofs      , &totalDofs      , 1, MPI_LONG  , MPI_SUM, 0, MPI_COMM_WORLD);
-      } else {
-        maxTimeTaken = timeTaken;
-        totalDofs = dofs;
-      }
-      if (mpi_rank == 0) {
-        std::string tab(nameFieldLength - (int) name.size(), ' ');
-        std::cout << '\n'
-                  << name << tab << " | Time Taken  | " << maxTimeTaken << '\n'
-                  << name << tab << " | Calls       | " << iterations << '\n'
-                  << name << tab << " | Calls / Sec | " << (iterations / maxTimeTaken) << '\n'
-                  << name << tab << " | MDofs       | " << (1e-6 * totalDofs) << '\n'
-                  << name << tab << " | MDofs / Sec | " << (1e-6 * totalDofs / maxTimeTaken) << '\n';
-      }
-    }
-  }
-
-
-  HydroTimers::HydroTimers() :
-    mult("LagrangianHydroOperator Mult"),
-    cgH1("CG(H1)"),
-    cgL2("CG(L2)"),
-    force("Force Mult"),
-    forceT("Force Mult Transpose"),
-    quadratureData("Update Quadrature Data") {}
-
-  void HydroTimers::disable() {
-    mult.disable();
-    cgH1.disable();
-    cgL2.disable();
-    force.disable();
-    forceT.disable();
-    quadratureData.disable();
-  }
-
-  void HydroTimers::enable() {
-    mult.enable();
-    cgH1.enable();
-    cgL2.enable();
-    force.enable();
-    forceT.enable();
-    quadratureData.enable();
-  }
-
-  void HydroTimers::print() {
-    int maxNameLength = 0;
-    std::string names[6] = {mult.name,
-                           cgH1.name, cgL2.name,
-                           force.name, forceT.name,
-                           quadratureData.name};
-    for (int i = 0; i < 6; ++i) {
-      maxNameLength = std::max<int>(maxNameLength, names[i].size());
-    }
-
-    mult.print(maxNameLength);
-    cgH1.print(maxNameLength);
-    cgL2.print(maxNameLength);
-    force.print(maxNameLength);
-    forceT.print(maxNameLength);
-    quadratureData.print(maxNameLength);
-  }
-
-
-  namespace miniapps {
+  namespace hydrodynamics {
     void VisualizeField(socketstream &sock, const char *vishost, int visport,
                         ParGridFunction &gf, const char *title,
-                        int x, int y, int w, int h, bool vec) {
+                        int x, int y, int w, int h, bool vec)
+    {
       ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
       MPI_Comm comm = pmesh.GetComm();
 
@@ -147,47 +36,52 @@ namespace mfem {
       bool newly_opened = false;
       int connection_failed;
 
-      do {
-        if (myid == 0) {
-          if (!sock.is_open() || !sock) {
-            sock.open(vishost, visport);
-            sock.precision(8);
-            newly_opened = true;
-          }
-          sock << "solution\n";
-        }
+      do
+        {
+          if (myid == 0)
+            {
+              if (!sock.is_open() || !sock)
+                {
+                  sock.open(vishost, visport);
+                  sock.precision(8);
+                  newly_opened = true;
+                }
+              sock << "solution\n";
+            }
 
-        pmesh.PrintAsOne(sock);
-        gf.SaveAsOne(sock);
+          pmesh.PrintAsOne(sock);
+          gf.SaveAsOne(sock);
 
-        if (myid == 0 && newly_opened) {
-          sock << "window_title '" << title << "'\n"
-               << "window_geometry "
-               << x << " " << y << " " << w << " " << h << "\n"
-               << "keys maaAc";
-          if ( vec ) { sock << "vvv"; }
-          sock << endl;
-        }
+          if (myid == 0 && newly_opened)
+            {
+              sock << "window_title '" << title << "'\n"
+                   << "window_geometry "
+                   << x << " " << y << " " << w << " " << h << "\n"
+                   << "keys maaAcl";
+              if ( vec ) { sock << "vvv"; }
+              sock << endl;
+            }
 
-        if (myid == 0) {
-          connection_failed = !sock && !newly_opened;
+          if (myid == 0)
+            {
+              connection_failed = !sock && !newly_opened;
+            }
+          MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
         }
-        MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
-      }
       while (connection_failed);
     }
 
-  } // namespace miniapps
-
-  namespace hydrodynamics {
-    LagrangianHydroOperator::LagrangianHydroOperator(Problem problem_,
+    LagrangianHydroOperator::LagrangianHydroOperator(ProblemOption problem_,
                                                      OccaFiniteElementSpace &o_H1FESpace_,
                                                      OccaFiniteElementSpace &o_L2FESpace_,
-                                                     Array<int> &ess_tdofs_,
+                                                     Array<int> &essential_tdofs_,
                                                      OccaGridFunction &rho0,
                                                      double cfl_,
-                                                     double gamma_,
-                                                     bool use_viscosity_)
+                                                     Coefficient *material_,
+                                                     bool use_viscosity_,
+                                                     double cg_tol_,
+                                                     int cg_max_iter_,
+                                                     occa::properties &props)
     : TimeDependentOperator(o_L2FESpace_.GetVSize() + 2*o_H1FESpace_.GetVSize()),
       problem(problem_),
       device(o_H1FESpace_.GetDevice()),
@@ -198,24 +92,27 @@ namespace mfem {
                       1),
       H1FESpace(*((ParFiniteElementSpace*) o_H1FESpace.GetFESpace())),
       L2FESpace(*((ParFiniteElementSpace*) o_L2FESpace.GetFESpace())),
-      ess_tdofs(ess_tdofs_),
+      essential_tdofs(essential_tdofs_),
       dim(H1FESpace.GetMesh()->Dimension()),
       elements(H1FESpace.GetMesh()->GetNE()),
       l2dofs_cnt(L2FESpace.GetFE(0)->GetDof()),
       h1dofs_cnt(H1FESpace.GetFE(0)->GetDof()),
       cfl(cfl_),
-      gamma(gamma_),
       use_viscosity(use_viscosity_),
       Mv(&H1FESpace),
       Me_inv(l2dofs_cnt, l2dofs_cnt, elements),
       integ_rule(IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
                               3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1)),
+      cg_max_iter(cg_max_iter_),
+      cg_rel_tol(cg_tol_),
+      cg_abs_tol(0.0),
+      cg_print_level(0),
       quad_data(dim, elements, integ_rule.GetNPoints()),
       quad_data_is_current(false),
       VMass(o_H1compFESpace, integ_rule, &quad_data),
       EMass(o_L2FESpace, integ_rule, &quad_data),
       Force(o_H1FESpace, o_L2FESpace, integ_rule, &quad_data),
-      timers() {
+      timer() {
 
       Vector rho0_ = rho0;
       GridFunction rho0_gf(&L2FESpace, rho0_.GetData());
@@ -280,9 +177,9 @@ namespace mfem {
 
       SetProperties(o_H1FESpace, integ_rule, quad_data.props);
       quad_data.props["defines/H0"]            = quad_data.h0;
-      quad_data.props["defines/GAMMA"]         = gamma;
       quad_data.props["defines/CFL"]           = cfl;
       quad_data.props["defines/USE_VISCOSITY"] = use_viscosity;
+      quad_data.props += props;
 
       occa::kernel initKernel = device.buildKernel("occa://laghos/quadratureData.okl",
                                                    "InitQuadratureData",
@@ -302,15 +199,9 @@ namespace mfem {
       Force.Setup();
       VMass.Setup();
       EMass.Setup();
-
-      cg_print_level = 0;
-      cg_max_iters   = 200;
-      cg_rel_tol     = 1e-16;
-      cg_abs_tol     = 0;
     }
 
     void LagrangianHydroOperator::Mult(const OccaVector &S, OccaVector &dS_dt) const {
-      timers.mult.tic();
       dS_dt = 0.0;
 
       // Make sure that the mesh positions correspond to the ones in S. This is
@@ -345,10 +236,9 @@ namespace mfem {
       OccaVector rhs(Vsize_h1);
       one = 1.0;
 
-      timers.force.tic();
+      timer.sw_force.Start();
       Force.Mult(one, rhs);
-      timers.force.toc();
-      timers.force.addDofs(o_H1FESpace.GetTrueVSize());
+      timer.sw_force.Stop();
       rhs.Neg();
 
       OccaVector B(o_H1compFESpace.GetTrueVSize());
@@ -379,18 +269,17 @@ namespace mfem {
         VMass.EliminateRHS(B);
 
         {
-          TCGSolver<OccaVector> cg(H1FESpace.GetParMesh()->GetComm());
+          OccaCGSolver cg(H1FESpace.GetParMesh()->GetComm());
           cg.SetOperator(VMass);
-          cg.SetRelTol(sqrt(cg_rel_tol));
-          cg.SetAbsTol(sqrt(cg_abs_tol));
-          cg.SetMaxIter(cg_max_iters);
-          cg.SetPrintLevel(cg_print_level);
+          cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+          cg.SetMaxIter(cg_max_iter);
+          cg.SetPrintLevel(0);
+          timer.sw_cgH1.Start();
 
-          timers.cgH1.tic();
           cg.Mult(B, X);
-          timers.cgH1.toc();
-          timers.cgH1.addDofs(cg.GetNumIterations()
-                              * o_H1compFESpace.GetTrueVSize());
+
+          timer.sw_cgH1.Stop();
+          timer.H1cg_iter += cg.GetNumIterations();
         }
 
         o_H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
@@ -408,33 +297,31 @@ namespace mfem {
       }
 
       OccaVector forceRHS(Vsize_l2);
-      timers.forceT.tic();
+      timer.sw_force.Start();
       Force.MultTranspose(v, forceRHS);
-      timers.forceT.toc();
-      timers.forceT.addDofs(o_L2FESpace.GetTrueVSize());
+      timer.sw_force.Stop();
 
       if (e_source) {
         forceRHS += *e_source;
       }
 
       {
-        TCGSolver<OccaVector> cg(L2FESpace.GetParMesh()->GetComm());
+        // TODO: Local element-wise CG
+        OccaCGSolver cg(L2FESpace.GetParMesh()->GetComm());
         cg.SetOperator(EMass);
         cg.SetRelTol(sqrt(cg_rel_tol));
         cg.SetAbsTol(sqrt(cg_abs_tol));
-        cg.SetMaxIter(cg_max_iters);
+        cg.SetMaxIter(cg_max_iter);
         cg.SetPrintLevel(cg_print_level);
 
-        timers.cgL2.tic();
+        timer.sw_cgL2.Start();
         cg.Mult(forceRHS, de);
-        timers.cgL2.toc();
-        timers.cgL2.addDofs(cg.GetNumIterations()
-                            * L2FESpace.TrueVSize());
+        timer.sw_cgL2.Stop();
+        timer.L2dof_iter += cg.GetNumIterations() * l2dofs_cnt;
       }
 
       delete e_source;
       quad_data_is_current = false;
-      timers.mult.toc();
     }
 
     double LagrangianHydroOperator::GetTimeStepEstimate(const OccaVector &S) const {
@@ -482,6 +369,51 @@ namespace mfem {
         rho.SetSubVector(dofs, rho_z);
       }
     }
+    void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
+    {
+      double my_rt[5], rt_max[5];
+      my_rt[0] = timer.sw_cgH1.RealTime();
+      my_rt[1] = timer.sw_cgL2.RealTime();
+      my_rt[2] = timer.sw_force.RealTime();
+      my_rt[3] = timer.sw_qdata.RealTime();
+      my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
+      MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
+
+      HYPRE_Int mydata[2], alldata[2];
+      mydata[0] = timer.L2dof_iter;
+      mydata[1] = timer.quad_tstep;
+      MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0,
+                 H1FESpace.GetComm());
+
+      if (IamRoot)
+        {
+          const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
+            L2gsize = L2FESpace.GlobalTrueVSize();
+          using namespace std;
+          cout << endl;
+          cout << "CG (H1) total time: " << rt_max[0] << endl;
+          cout << "CG (H1) rate (megadofs x cg_iterations / second): "
+               << 1e-6 * H1gsize * timer.H1cg_iter / rt_max[0] << endl;
+          cout << endl;
+          cout << "CG (L2) total time: " << rt_max[1] << endl;
+          cout << "CG (L2) rate (megadofs x cg_iterations / second): "
+               << 1e-6 * alldata[0] / rt_max[1] << endl;
+          cout << endl;
+          // The Force operator is applied twice per time step, on the H1 and the L2
+          // vectors, respectively.
+          cout << "Forces total time: " << rt_max[2] << endl;
+          cout << "Forces rate (megadofs x timesteps / second): "
+               << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[2] << endl;
+          cout << endl;
+          cout << "UpdateQuadData total time: " << rt_max[3] << endl;
+          cout << "UpdateQuadData rate (megaquads x timesteps / second): "
+               << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
+          cout << endl;
+          cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
+          cout << "Major kernels total rate (megadofs x time steps / second): "
+               << 1e-6 * H1gsize * steps / rt_max[4] << endl;
+        }
+    }
 
     LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
@@ -490,6 +422,7 @@ namespace mfem {
         return;
       }
 
+      timer.sw_qdata.Start();
       quad_data_is_current = true;
 
       const int vSize = o_H1FESpace.GetVSize();
@@ -502,7 +435,6 @@ namespace mfem {
                                          o_H1FESpace,
                                          integ_rule);
 
-      timers.quadratureData.tic();
       OccaVector v2(device,
                     o_H1FESpace.GetVDim() * o_H1FESpace.GetLocalDofs() * elements);
       o_H1FESpace.GlobalToLocal(v, v2);
@@ -523,11 +455,11 @@ namespace mfem {
                    quad_data.geom.detJ,
                    quad_data.stressJinvT,
                    quad_data.dtEst);
-      timers.quadratureData.toc();
-      timers.quadratureData.addDofs(o_H1FESpace.GetMesh()->GetNE() *
-                                    integ_rule.GetNPoints());
 
       quad_data.dt_est = quad_data.dtEst.Min();
+
+      timer.sw_qdata.Stop();
+      timer.quad_tstep += elements;
     }
   } // namespace hydrodynamics
 } // namespace mfem

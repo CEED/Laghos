@@ -37,25 +37,18 @@ namespace mfem {
       // only at time zero and stored here.
       OccaVector Jac0inv;
 
-      // Quadrature data used for full/partial assembly of the mass matrices. At
-      // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation.
-      OccaVector rho0DetJ0w;
-
       // Quadrature data used for full/partial assembly of the force operator. At
       // each quadrature point, it combines the stress, inverse Jacobian,
       // determinant of the Jacobian and the integration weight. It must be
       // recomputed in every time step.
       OccaVector stressJinvT;
 
-      // Occa stuff
-      occa::properties props;
-
-      OccaDofQuadMaps dqMaps;
-      OccaGeometry geom;
-      OccaVector dtEst;
+      // Quadrature data used for full/partial assembly of the mass matrices. At
+      // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+      // quadrature point. Note the at any other time, we can compute
+      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+      // conservation.
+      OccaVector rho0DetJ0w;
 
       // Initial length scale. This represents a notion of local mesh size. We
       // assume that all initial zones have similar size.
@@ -64,6 +57,13 @@ namespace mfem {
       // Estimate of the minimum time step over all quadrature points. This is
       // recomputed at every time step to achieve adaptive time stepping.
       double dt_est;
+
+      // Occa stuff
+      occa::properties props;
+
+      OccaDofQuadMaps dqMaps;
+      OccaGeometry geom;
+      OccaVector dtEst;
 
       QuadratureData(int dim,
                      int elements,

@@ -20,6 +20,16 @@
 #  define M_PI 3.14159265358979323846264338327950288
 #endif
 
+#ifndef GAMMA
+#  if defined(VORTEX_PROBLEM)
+#    define GAMMA(q, el) (5.0 / 3.0)
+#  elif defined(SEDOV_PROBLEM) || defined(SHOCK_TUBE_PROBLEM)
+#    define GAMMA(q, el) 1.4
+#  else
+#    error "Cannot handle this problem ... yet!"
+#  endif
+#endif
+
 #if VDIM_ORDERING == ORDERING_BY_VDIM
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
@@ -144,13 +154,14 @@ typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
         q_gradv(0, 1) = ((s_gradv(0, 1, q) * invJ_00) + (s_gradv(1, 1, q) * invJ_01));
         q_gradv(1, 1) = ((s_gradv(0, 1, q) * invJ_10) + (s_gradv(1, 1, q) * invJ_11));
 
+        const double q_gamma = GAMMA(q, el);
         const double q_Jw = detJ(q, el) * quadWeights[q];
 
         const double q_rho = rho0DetJ0w(q, el) / q_Jw;
         const double q_e   = max(0.0, e(q, el));
 
         // TODO: Input OccaVector eos(q,e) -> (stress, soundSpeed)
-        const double s = -(GAMMA - 1.0) * q_rho * q_e;
+        const double s = -(q_gamma - 1.0) * q_rho * q_e;
         q_stress(0, 0) = s; q_stress(1, 0) = 0;
         q_stress(0, 1) = 0; q_stress(1, 1) = s;
 
@@ -207,7 +218,7 @@ typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
         const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
 
         // TODO: soundSpeed will be an input as well (function call or values per q)
-        const double soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
+        const double soundSpeed = sqrt(q_gamma * (q_gamma - 1.0) * q_e);
         dtEst(q, el) = CFL * q_h / soundSpeed;
 
         if (USE_VISCOSITY) {
@@ -330,12 +341,13 @@ typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
           q_gradv(1, 2) = ((gradv(0, 2) * invJ_10) + (gradv(1, 2) * invJ_11) + (gradv(2, 2) * invJ_12));
           q_gradv(2, 2) = ((gradv(0, 2) * invJ_20) + (gradv(1, 2) * invJ_21) + (gradv(2, 2) * invJ_22));
 
+          const double q_gamma = GAMMA(q, el);
           const double q_Jw = detJ(q, el) * quadWeights[q];
 
           const double q_rho = rho0DetJ0w(q, el) / q_Jw;
           const double q_e   = max(0.0, e(q, el));
 
-          const double s = -(GAMMA - 1.0) * q_rho * q_e;
+          const double s = -(q_gamma - 1.0) * q_rho * q_e;
           q_stress(0, 0) = s; q_stress(1, 0) = 0; q_stress(2, 0) = 0;
           q_stress(0, 1) = 0; q_stress(1, 1) = s; q_stress(2, 1) = 0;
           q_stress(0, 2) = 0; q_stress(1, 2) = 0; q_stress(2, 2) = s;
@@ -447,7 +459,7 @@ typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
 
           const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY) + (physDirZ * physDirZ));
 
-          const double soundSpeed = sqrt(GAMMA * (GAMMA - 1.0) * q_e);
+          const double soundSpeed = sqrt(q_gamma * (q_gamma - 1.0) * q_e);
           dtEst(q, el) = CFL * q_h / soundSpeed;
 
           if (USE_VISCOSITY) {

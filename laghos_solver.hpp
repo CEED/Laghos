@@ -28,49 +28,7 @@
 #include <fstream>
 
 namespace mfem {
-  class Timer {
-  private:
-    bool disabled;
-
-    double startTime;
-    double timeTaken;
-
-    long iterations;
-    long dofs;
-
-  public:
-    std::string name;
-
-    Timer(const std::string &name_);
-
-    void disable();
-    void enable();
-
-    void tic();
-    void toc();
-    void toc(occa::device &device);
-    void addDofs(const long dofs_);
-
-    void print(const int nameFieldLength);
-  };
-
-  class HydroTimers {
-  public:
-    Timer mult;
-    Timer cgH1, cgL2;
-    Timer force, forceT;
-    Timer quadratureData;
-
-    HydroTimers();
-
-    void disable();
-    void enable();
-
-    void print();
-  };
-
-  namespace miniapps {
-
+  namespace hydrodynamics {
     /// Visualize the given parallel grid function, using a GLVis server on the
     /// specified host and port. Set the visualization window title, and optionally,
     /// its geometry.
@@ -79,20 +37,33 @@ namespace mfem {
                         int x = 0, int y = 0, int w = 400, int h = 400,
                         bool vec = false);
 
-  } // namespace miniapps
-
-  namespace hydrodynamics {
-
     // These are defined in laghos.cpp
     double rho0(const Vector &);
     void v0(const Vector &, Vector &);
     double e0(const Vector &);
+    double gamma(const Vector &);
+
+    struct TimingData
+    {
+      // Total times for all major computations:
+      // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
+      StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
+
+      // These accumulate the total processed dofs or quad points:
+      // #(CG iterations) for the H1 CG solve.
+      // #dofs  * #(CG iterations) for the L2 CG solve.
+      // #quads * #(RK sub steps) for the quadrature data computations.
+      int H1cg_iter, L2dof_iter, quad_tstep;
+
+      TimingData()
+        : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
+    };
 
     // Given a solutions state (x, v, e), this class performs all necessary
     // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
     class LagrangianHydroOperator : public TimeDependentOperator {
     protected:
-      const Problem problem;
+      const ProblemOption problem;
 
       occa::device device;
       OccaFiniteElementSpace &o_H1FESpace;
@@ -102,10 +73,10 @@ namespace mfem {
       ParFiniteElementSpace &H1FESpace;
       ParFiniteElementSpace &L2FESpace;
 
-      Array<int> &ess_tdofs;
+      Array<int> &essential_tdofs;
 
       int dim, elements, l2dofs_cnt, h1dofs_cnt;
-      double cfl, gamma;
+      double cfl;
       bool use_viscosity;
 
       // Velocity mass matrix and local inverses of the energy mass matrices. These
@@ -116,7 +87,7 @@ namespace mfem {
       // Integration rule for all assemblies.
       const IntegrationRule &integ_rule;
 
-      int cg_print_level, cg_max_iters;
+      int cg_print_level, cg_max_iter;
       double cg_rel_tol, cg_abs_tol;
 
       // Data associated with each quadrature point in the mesh. These values are
@@ -132,23 +103,23 @@ namespace mfem {
 
       occa::kernel updateKernel;
 
-      double MaterialPressure(double rho, double e) const {
-        return (gamma - 1.0) * rho * e;
-      }
+      // Linear solver for energy.
+      OccaCGSolver locCG;
+
+      mutable TimingData timer;
 
       void UpdateQuadratureData(const OccaVector &S) const;
 
     public:
-      mutable HydroTimers timers;
-
-      LagrangianHydroOperator(Problem problem_,
+      LagrangianHydroOperator(ProblemOption problem_,
                               OccaFiniteElementSpace &o_H1FESpace_,
                               OccaFiniteElementSpace &o_L1FESpace_,
-                              Array<int> &ess_tdofs_,
+                              Array<int> &essential_tdofs,
                               OccaGridFunction &rho0,
                               double cfl_,
-                              double gamma_,
-                              bool use_viscosity_);
+                              Coefficient *material_, bool use_viscosity_,
+                              double cg_tol_, int cg_max_iter_,
+                              occa::properties &props);
 
       // Solve for dx_dt, dv_dt and de_dt.
       virtual void Mult(const OccaVector &S, OccaVector &dS_dt) const;
@@ -163,6 +134,8 @@ namespace mfem {
       // The density values, which are stored only at some quadrature points, are
       // projected as a ParGridFunction.
       void ComputeDensity(ParGridFunction &rho);
+
+      void PrintTimingData(bool IamRoot, int steps);
 
       ~LagrangianHydroOperator();
     };
