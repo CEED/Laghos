@@ -14,6 +14,30 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
+# SETUP ************************************************************************
+CUB_DIR  ?= ./cub
+CUDA_DIR ?= /usr/local/cuda
+MFEM_DIR ?= $(HOME)/home/mfem/kernels
+RAJA_DIR ?= $(HOME)/usr/local/raja/last
+MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
+NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
+CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+
+# number of proc to use for compilation stage
+CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+
+# fetch current/working directory
+pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
+
+kernels = $(pwd)/kernels
+
+# OKRTC ************************************************************************
+#OKRTC_DIR ?= ~/usr/local/okrtc
+ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
+	OKRTC ?= dbg=1 $(OKRTC_DIR)/bin/okrtc
+endif
+
+# ******************************************************************************
 define LAGHOS_HELP_MSG
 
 Laghos makefile targets:
@@ -50,14 +74,7 @@ endef
 PREFIX = ./bin
 INSTALL = /usr/bin/install
 
-# Set okrtc path
-#OKRTC_DIR ?= ~/usr/local/okrtc
-ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
-	OKRTC ?= $(OKRTC_DIR)/bin/okrtc
-endif
-
 # Use the MFEM build directory
-MFEM_DIR ?= ~/home/mfem/kernels
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -100,8 +117,12 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS)
+# CXXFLAGS ADDONS **************************************************************
+CXXFLAGS += $(CXXEXTRA)
+
+# LAGHOS FLAGS *****************************************************************
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUB_INC) $(RAJA_INC) $(CUDA_INC) $(MPI_INC)
+LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -114,7 +135,7 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
-# Source files setup
+# SOURCE FILES SETUP ***********************************************************
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
 	$(KERNELS_DIR)/kForcePAOperator.cpp \
 	$(KERNELS_DIR)/kMassPAOperator.cpp
@@ -122,36 +143,42 @@ SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
 KERNELS_RTC_DIRS = $(KERNELS_DIR)/force
 KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))
 
+# OBJECT FILES *****************************************************************
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 OBJECT_KERNELS = $(KERNELS_RTC_SRC_FILES:.cpp=.o)
+
+# HEADER FILES *****************************************************************
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
-# Targets
-
+# Targets **********************************************************************
 .PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $< #$(<F)
+	cd $(<D); $(CCC) -c $(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
+
+# all & laghos *********************************************************************
+all:;@$(MAKE) -j $(CPU) laghos
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(CCC) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS) -ldl
 
-all: laghos
-
+# go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0
 pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
 
-ng:;@dbg=1 ./laghos -cfl 0.1 -rs 0 -ng
-vng:;@dbg=1 valgrind ./laghos -cfl 0.1 -rs 0 -ng
-png:;@dbg=1 mpirun -n 2 ./laghos -cfl 0.1 -rs 0 -ng
-#png:;@dbg=1 mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
-#png:;@dbg=1 mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
-vpng:;@dbg=1 valgrind mpirun -n 2 ./laghos -cfl 0.1 -rs 0 -ng
+ng:;@./laghos -cfl 0.1 -rs 0 -ng
+vng:;@valgrind ./laghos -cfl 0.1 -rs 0 -ms 1 -ng
+png:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 2 -ng
+#png:;@mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
+#png:;@mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
+pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
+#vpng:;@mpirun -n 2 valgrind ./laghos -cfl 0.1 -rs 2 -ms 1 -ng
+vpngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 1 -ms 1 -ng
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -165,7 +192,7 @@ $(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
 
 #rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
 $(OBJECT_KERNELS): %.o: %.cpp makefile
-	dbg=1 $(OKRTC) $(CCC) -I/home/camier1/home/okrtc/include -o $(@) -c -I$(realpath $(dir $(<))) $(<)
+	$(OKRTC) $(CCC) -o $(@) -c -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)

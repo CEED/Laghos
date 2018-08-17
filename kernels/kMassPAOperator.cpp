@@ -58,6 +58,7 @@ void kMassPAOperator::Setup()
 }
 
 // *************************************************************************
+// first pass: dofs.Size(): 8-6-4
 void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
    push(Wheat);
@@ -72,12 +73,16 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
       assert(global_ess_tdofs_count>0);
-      ess_tdofs.Resize(ess_tdofs_count);
+      ess_tdofs.Resize(global_ess_tdofs_count);
 #else
       assert(ess_tdofs_count>0);
       ess_tdofs.Resize(ess_tdofs_count);
 #endif
-   }//else assert(ess_tdofs_count<=ess_tdofs.Size());
+   } else{
+      dbg("ess_tdofs_count==%d",ess_tdofs_count);
+      dbg("ess_tdofs.Size()==%d",ess_tdofs.Size());      
+      assert(ess_tdofs_count<=ess_tdofs.Size());
+   }
 
    assert(ess_tdofs>0);
   
