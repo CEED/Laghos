@@ -54,137 +54,142 @@ void rUpdateQuadratureData2D(
   forall(el,numElements,
 #endif
   {
-    double s_gradv[4*NUM_QUAD_2D] ;
-    for (int i = 0; i < (4*NUM_QUAD_2D); ++i) {
-      s_gradv[i] = 0;
-    }
-    for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-      double vDx[2*NUM_QUAD_1D] ;
-      double vx[2*NUM_QUAD_1D]  ;
-      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-        for (int vi = 0; vi < 2; ++vi) {
-          vDx[ijN(vi,qx,2)] = 0;
-          vx[ijN(vi,qx,2)] = 0;
-        }
-      }
-      for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          for (int vi = 0; vi < 2; ++vi) {
-            vDx[ijN(vi,qx,2)] += v[_ijklNM(vi,dx,dy,el,NUM_DOFS_1D,numElements)]*dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
-            vx[ijN(vi,qx,2)]  += v[_ijklNM(vi,dx,dy,el,NUM_DOFS_1D,numElements)]*dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-          }
-        }
-      }
-      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        const double wy  = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-        const double wDy = dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          for (int vi = 0; vi < 2; ++vi) {
-            s_gradv[ijkN(vi,0,qx+qy*NUM_QUAD_1D,2)] += wy *vDx[ijN(vi,qx,2)];
-            s_gradv[ijkN(vi,1,qx+qy*NUM_QUAD_1D,2)] += wDy*vx[ijN(vi,qx,2)];
-          }
-        }
-      }
-    }
+     const int DIM = 2;
+     const int VDIMQ = DIM*DIM * NUM_QUAD_2D;
+     double s_gradv[VDIMQ];
     
-    for (int q = 0; q < NUM_QUAD; ++q) {
-      double q_gradv[NUM_DIM*NUM_DIM];
-      double q_stress[NUM_DIM*NUM_DIM];
+     for (int i = 0; i < VDIMQ; ++i) s_gradv[i] = 0.0;
+    
+     for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+        double vDx[DIM*NUM_QUAD_1D];
+        double  vx[DIM*NUM_QUAD_1D];
       
-      const double invJ_00 = invJ[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ_10 = invJ[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ_01 = invJ[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ_11 = invJ[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
-
-      q_gradv[ijN(0,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_00)+(s_gradv[ijkN(1,0,q,2)]*invJ_01));
-      q_gradv[ijN(1,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_10)+(s_gradv[ijkN(1,0,q,2)]*invJ_11));
-      q_gradv[ijN(0,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_00)+(s_gradv[ijkN(1,1,q,2)]*invJ_01));
-      q_gradv[ijN(1,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_10)+(s_gradv[ijkN(1,1,q,2)]*invJ_11));
-
-      const double q_Jw = detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
-
-      const double q_rho = rho0DetJ0w[ijN(q,el,NUM_QUAD)] / q_Jw;
-      const double q_e   = fmax(0.0,e[ijN(q,el,NUM_QUAD)]);
-
-      // TODO: Input OccaVector eos(q,e) -> (stress,soundSpeed)
-      const double s = -(GAMMA-1.0)*q_rho*q_e;
-      q_stress[ijN(0,0,2)] = s; q_stress[ijN(1,0,2)] = 0;
-      q_stress[ijN(0,1,2)] = 0; q_stress[ijN(1,1,2)] = s;
-
-      const double gradv00 = q_gradv[ijN(0,0,2)];
-      const double gradv11 = q_gradv[ijN(1,1,2)];
-      const double gradv10 = 0.5*(q_gradv[ijN(1,0,2)]+q_gradv[ijN(0,1,2)]);
-      q_gradv[ijN(1,0,2)] = gradv10;
-      q_gradv[ijN(0,1,2)] = gradv10;
-
-      double comprDirX = 1;
-      double comprDirY = 0;
-      double minEig = 0;
-      // linalg/densemat.cpp: Eigensystem2S()
-      if (gradv10 == 0) {
-        minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
-      } else {
-        const double zeta  = (gradv11-gradv00) / (2.0*gradv10);
-        const double azeta = fabs(zeta);
-        double t = 1.0 / (azeta+sqrt(1.0+zeta*zeta));
-        if ((t < 0) != (zeta < 0)) {
-          t = -t;
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+           for (int c = 0; c < DIM; ++c) {
+              vDx[ijN(c,qx,DIM)] = 0.0;
+              vx[ijN(c,qx,DIM)] = 0.0;
+           }
         }
-        const double c = sqrt(1.0 / (1.0+t*t));
-        const double s = c*t;
-        t *= gradv10;
-        if ((gradv00-t) <= (gradv11+t)) {
-          minEig = gradv00-t;
-          comprDirX = c;
-          comprDirY = -s;
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+           for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              const double wx  =  dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+              const double wDx = dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+              for (int c = 0; c < DIM; ++c) {
+                 vDx[ijN(c,qx,DIM)] += wDx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+                 vx[ijN(c,qx,DIM)] +=  wx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+              }
+           }
+        }
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+           const double  wy =  dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+           const double wDy = dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
+           for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+              for (int c = 0; c < DIM; ++c) {
+                 s_gradv[ijkN(c,0,qx+qy*NUM_QUAD_1D,DIM)] += wy *vDx[ijN(c,qx,DIM)];
+                 s_gradv[ijkN(c,1,qx+qy*NUM_QUAD_1D,DIM)] += wDy*vx[ijN(c,qx,DIM)];
+              }
+           }
+        }
+     }
+    
+     for (int q = 0; q < NUM_QUAD; ++q) {
+        double q_gradv[NUM_DIM*NUM_DIM];
+        double q_stress[NUM_DIM*NUM_DIM];
+      
+        const double invJ_00 = invJ[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ_10 = invJ[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ_01 = invJ[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ_11 = invJ[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
+
+        q_gradv[ijN(0,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_00)+(s_gradv[ijkN(1,0,q,2)]*invJ_01));
+        q_gradv[ijN(1,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_10)+(s_gradv[ijkN(1,0,q,2)]*invJ_11));
+        q_gradv[ijN(0,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_00)+(s_gradv[ijkN(1,1,q,2)]*invJ_01));
+        q_gradv[ijN(1,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_10)+(s_gradv[ijkN(1,1,q,2)]*invJ_11));
+
+        const double q_Jw = detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
+
+        const double q_rho = rho0DetJ0w[ijN(q,el,NUM_QUAD)] / q_Jw;
+        const double q_e   = fmax(0.0,e[ijN(q,el,NUM_QUAD)]);
+
+        // TODO: Input OccaVector eos(q,e) -> (stress,soundSpeed)
+        const double s = -(GAMMA-1.0)*q_rho*q_e;
+        q_stress[ijN(0,0,2)] = s; q_stress[ijN(1,0,2)] = 0;
+        q_stress[ijN(0,1,2)] = 0; q_stress[ijN(1,1,2)] = s;
+
+        const double gradv00 = q_gradv[ijN(0,0,2)];
+        const double gradv11 = q_gradv[ijN(1,1,2)];
+        const double gradv10 = 0.5*(q_gradv[ijN(1,0,2)]+q_gradv[ijN(0,1,2)]);
+        q_gradv[ijN(1,0,2)] = gradv10;
+        q_gradv[ijN(0,1,2)] = gradv10;
+
+        double comprDirX = 1;
+        double comprDirY = 0;
+        double minEig = 0;
+        // linalg/densemat.cpp: Eigensystem2S()
+        if (gradv10 == 0) {
+           minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
         } else {
-          minEig = gradv11+t;
-          comprDirX = s;
-          comprDirY = c;
+           const double zeta  = (gradv11-gradv00) / (2.0*gradv10);
+           const double azeta = fabs(zeta);
+           double t = 1.0 / (azeta+sqrt(1.0+zeta*zeta));
+           if ((t < 0) != (zeta < 0)) {
+              t = -t;
+           }
+           const double c = sqrt(1.0 / (1.0+t*t));
+           const double s = c*t;
+           t *= gradv10;
+           if ((gradv00-t) <= (gradv11+t)) {
+              minEig = gradv00-t;
+              comprDirX = c;
+              comprDirY = -s;
+           } else {
+              minEig = gradv11+t;
+              comprDirX = s;
+              comprDirY = c;
+           }
         }
-      }
 
-      // Computes the initial->physical transformation Jacobian.
-      const double J_00 = J[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double J_10 = J[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double J_01 = J[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
-      const double J_11 = J[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ0_00 = invJ0[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ0_10 = invJ0[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ0_01 = invJ0[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
-      const double invJ0_11 = invJ0[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
-      const double Jpi_00 = ((J_00*invJ0_00)+(J_10*invJ0_01));
-      const double Jpi_10 = ((J_00*invJ0_10)+(J_10*invJ0_11));
-      const double Jpi_01 = ((J_01*invJ0_00)+(J_11*invJ0_01));
-      const double Jpi_11 = ((J_01*invJ0_10)+(J_11*invJ0_11));
-      const double physDirX = (Jpi_00*comprDirX)+(Jpi_10*comprDirY);
-      const double physDirY = (Jpi_01*comprDirX)+(Jpi_11*comprDirY);
-      const double q_h = H0*sqrt((physDirX*physDirX)+(physDirY*physDirY));
-      // TODO: soundSpeed will be an input as well (function call or values per q)
-      const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
-      dtEst[ijN(q,el,NUM_QUAD)] = CFL*q_h / soundSpeed;
-      //printf("\ndt_est=%.15e",q_h);
-      //printf("\ndt_est=%.15e",dtEst[ijN(q,el)]);
-      if (USE_VISCOSITY) {
-        // TODO: Check how we can extract outside of kernel
-        const double mu = minEig;
-        double coeff = 2.0*q_rho*q_h*q_h*fabs(mu);
-        if (mu < 0) {
-          coeff += 0.5*q_rho*q_h*soundSpeed;
+        // Computes the initial->physical transformation Jacobian.
+        const double J_00 = J[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double J_10 = J[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double J_01 = J[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
+        const double J_11 = J[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ0_00 = invJ0[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ0_10 = invJ0[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ0_01 = invJ0[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)];
+        const double invJ0_11 = invJ0[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)];
+        const double Jpi_00 = ((J_00*invJ0_00)+(J_10*invJ0_01));
+        const double Jpi_10 = ((J_00*invJ0_10)+(J_10*invJ0_11));
+        const double Jpi_01 = ((J_01*invJ0_00)+(J_11*invJ0_01));
+        const double Jpi_11 = ((J_01*invJ0_10)+(J_11*invJ0_11));
+        const double physDirX = (Jpi_00*comprDirX)+(Jpi_10*comprDirY);
+        const double physDirY = (Jpi_01*comprDirX)+(Jpi_11*comprDirY);
+        const double q_h = H0*sqrt((physDirX*physDirX)+(physDirY*physDirY));
+        // TODO: soundSpeed will be an input as well (function call or values per q)
+        const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
+        dtEst[ijN(q,el,NUM_QUAD)] = CFL*q_h / soundSpeed;
+        //printf("\ndt_est=%.15e",q_h);
+        //printf("\ndt_est=%.15e",dtEst[ijN(q,el)]);
+        if (USE_VISCOSITY) {
+           // TODO: Check how we can extract outside of kernel
+           const double mu = minEig;
+           double coeff = 2.0*q_rho*q_h*q_h*fabs(mu);
+           if (mu < 0) {
+              coeff += 0.5*q_rho*q_h*soundSpeed;
+           }
+           for (int y = 0; y < NUM_DIM; ++y) {
+              for (int x = 0; x < NUM_DIM; ++x) {
+                 q_stress[ijN(x,y,2)] += coeff*q_gradv[ijN(x,y,2)];
+              }
+           }
         }
-        for (int y = 0; y < NUM_DIM; ++y) {
-          for (int x = 0; x < NUM_DIM; ++x) {
-            q_stress[ijN(x,y,2)] += coeff*q_gradv[ijN(x,y,2)];
-          }
-        }
-      }
-      const double S00 = q_stress[ijN(0,0,2)]; const double S10 = q_stress[ijN(1,0,2)];
-      const double S01 = q_stress[ijN(0,1,2)]; const double S11 = q_stress[ijN(1,1,2)];
-      stressJinvT[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_00)+(S10*invJ_01));
-      stressJinvT[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_10)+(S10*invJ_11));
-      stressJinvT[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_00)+(S11*invJ_01));
-      stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
-    }
+        const double S00 = q_stress[ijN(0,0,2)]; const double S10 = q_stress[ijN(1,0,2)];
+        const double S01 = q_stress[ijN(0,1,2)]; const double S11 = q_stress[ijN(1,1,2)];
+        stressJinvT[ijklNM(0,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_00)+(S10*invJ_01));
+        stressJinvT[ijklNM(1,0,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S00*invJ_10)+(S10*invJ_11));
+        stressJinvT[ijklNM(0,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_00)+(S11*invJ_01));
+        stressJinvT[ijklNM(1,1,q,el,NUM_DIM,NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
+     }
   }
 #ifdef __LAMBDA__
          );
