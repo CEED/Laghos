@@ -24,7 +24,7 @@
 
 // *****************************************************************************
 #ifdef __RAJA__ // *************************************************************
-#warning KERNELS, WITH NVCC
+#warning RAJA, WITH NVCC
 #define sync
 #define share
 #define kernel
@@ -51,9 +51,10 @@ const int CUDA_BLOCK_SIZE = 256;
 
 
 // *****************************************************************************
-#else // __RAJA__ on GPU, CUDA Kernel launches  *****************************
+#else // __KERNELS__ on GPU, CUDA Kernel launches  *****************************
 #ifdef __NVCC__
 #ifndef __LAMBDA__
+//#warning __KERNELS__ on GPU, CUDA Kernel launches
 #define kernel __global__
 #define share __shared__
 #define sync __syncthreads();
@@ -76,7 +77,7 @@ const int CUDA_BLOCK_SIZE = 256;
 
 
 // *****************************************************************************
-#else // __RAJA__ on GPU, LAMBDA launches  **********************************
+#else // __KERNELS__ on GPU, LAMBDA launches  **********************************
 #define kernel
 #define sync
 #define share
@@ -101,14 +102,14 @@ void cuda_forallT(const int end,
 #define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
-#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
+#define call0(name,grid,blck,...) name(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
 #define ReduceForall(i,max,body) 
 #endif // __LAMBDA__
 
 
 // *****************************************************************************
-#else // __RAJA__ on CPU ****************************************************
+#else // __KERNELS__ on CPU ****************************************************
 //#warning NO RAJA, NO NVCC
 #define sync
 #define share
@@ -133,11 +134,7 @@ public:
 #define forall(i,max,body) for(int i=0;i<max;i++){body}
 #define forallS(i,max,step,body) for(int i=0;i<max;i+=step){body}
 #define ReduceForall(i,max,body) forall(i,max,body)
-#ifdef __TEMPLATES__
 #define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
-#else
-#define call0(name,id,grid,blck,...) name(__VA_ARGS__)
-#endif
 #define cuKer(name,...) name ## 0(__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #endif //__NVCC__

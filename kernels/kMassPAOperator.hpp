@@ -42,6 +42,7 @@ private:
    mfem::Array<int> ess_tdofs;
    kernels::kBilinearForm *bilinearForm;
    Operator *massOperator;
+   mutable mfem::Vector distX;
 public:
    kMassPAOperator(QuadratureData*,
                    ParFiniteElementSpace&,

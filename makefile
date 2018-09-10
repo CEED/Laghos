@@ -17,11 +17,11 @@
 # SETUP ************************************************************************
 CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/kernels
+MFEM_DIR ?= $(HOME)/home/mfem/kernels-gpu-cpu
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
-NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+#NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
+#CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 # number of proc to use for compilation stage
 CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
@@ -107,7 +107,7 @@ CFLAGS = -O3
 LDFLAGS =
 
 OPTIM_OPTS = -O3
-DEBUG_OPTS = -g -Wall
+DEBUG_OPTS = -g #-Wall
 LAGHOS_DEBUG = $(MFEM_DEBUG)
 ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    ifeq ($(LAGHOS_DEBUG),YES)
@@ -120,9 +120,29 @@ endif
 # CXXFLAGS ADDONS **************************************************************
 CXXFLAGS += $(CXXEXTRA)
 
+# NVCC *************************************************************************
+ifneq (,$(nvcc))
+#	CXX = nvcc
+#	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
+#	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
+#	CXXFLAGS += $(if $(templates),-D__TEMPLATES__)
+#	CUDA_INC = -I$(CUDA_DIR)/samples/common/inc
+#	CXXFLAGS += --expt-extended-lambda
+	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
+endif
+
+# all, targets & laghos ********************************************************
+#nv nvcc cuda:;$(MAKE) nvcc=1 templates=1 all
+all:;@$(MAKE) -j $(CPU) laghos
+
+# MPI **************************************************************************
+MPI_INC = -I$(MPI_HOME)/include 
+MPI_LIB = -L$(MPI_HOME)/lib -lmpi
+
 # LAGHOS FLAGS *****************************************************************
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUB_INC) $(RAJA_INC) $(CUDA_INC) $(MPI_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) \
+					$(CUB_INC) $(MPI_INC) $(RAJA_INC)
+LAGHOS_LIBS = $(MFEM_LIBS) $(MPI_LIB) $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -137,6 +157,15 @@ KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
 # SOURCE FILES SETUP ***********************************************************
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
+	qupdate/d2q.cpp \
+	qupdate/dof2quad.cpp \
+	qupdate/geom.cpp \
+	qupdate/maps.cpp \
+	qupdate/qupdate.cpp \
+	qupdate/densemat.cpp \
+	qupdate/eigen.cpp \
+	qupdate/global2local.cpp \
+	qupdate/memcpy.cpp\
 	$(KERNELS_DIR)/kForcePAOperator.cpp \
 	$(KERNELS_DIR)/kMassPAOperator.cpp
 # Kernel files setup
@@ -156,24 +185,41 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $(<F)
+	cd $(<D); $(CCC) -c $(abspath $<)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
-# all & laghos *********************************************************************
-all:;@$(MAKE) -j $(CPU) laghos
-
+# ******************************************************************************
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS) -ldl
+	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0
-pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
+pgo:;@mpirun -n 2 ./laghos -cfl 0.1 -rs 0
+pgo2:;@DBG=1 mpirun -xterm -1! -n 2 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
 
 ng:;@./laghos -cfl 0.1 -rs 0 -ng
+png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
+png2:;mpirun -n 2 ./laghos -cfl 0.1 -ng
+png3:;mpirun -n 3 ./laghos -cfl 0.1 -ng
+
+dng:;@cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng #-cgt 0 -cgm 2
+mng:;cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1
+ddng:;@DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -cgt 0 -cgm 2
+
+ng1:;DBG=1 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+mng1:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+mng2:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 2
+dng1:;DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+
 vng:;@valgrind ./laghos -cfl 0.1 -rs 0 -ms 1 -ng
-png:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 2 -ng
+mpng2:;@DBG=1 mpirun -xterm -1! -n 2 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+vpng2:;@DBG=1 mpirun -xterm -1! -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+
+png2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -ng
+vpng2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 2 -ng -ms 1
 #png:;@mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
 #png:;@mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
 pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
@@ -191,8 +237,8 @@ $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 $(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
 
 #rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
-$(OBJECT_KERNELS): %.o: %.cpp makefile
-	$(OKRTC) $(CCC) -o $(@) -c -I$(realpath $(dir $(<))) $(<)
+$(OBJECT_KERNELS): %.o: %.cpp
+	$(OKRTC) $(CCC) -o $(@) -c $(CUB_INC) $(MPI_INC) $(RAJA_INC) -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)

@@ -29,7 +29,8 @@
 #define   ijklmNM(i,j,k,l,m,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*(m))))
 #define __ijklmNM(i,j,qx,qy,e,D,Q,E) (qx)+(Q)*((qy)+(Q)*((e)+(E)*((i)+(D)*j)))
 
-#define _ijklmNM(i,j,k,l,m,N,M) (j)+(N)*((k)+(N)*((l)+(N)*((m)+(M)*(i))))
-#define ijklmnNM(i,j,k,l,m,n,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*((m)+(M)*(n)))))
+#define   _ijklmNM(i,j,k,l,m,N,M) (j)+(N)*((k)+(N)*((l)+(N)*((m)+(M)*(i))))
+#define   ijklmnNM(i,j,k,l,m,n,N,M) (i)+(N)*((j)+(N)*((k)+(M)*((l)+(M)*((m)+(M)*(n)))))
+#define __ijxyzeDQE(i,j,qx,qy,qz,e,D,Q,E) (qx)+(Q)*((qy)+(Q)*((qz)+(Q)*((e)+(E)*((i)+(D)*j))))
 
 #endif // MFEM_KERNELS_KERNEL_OFFSETS

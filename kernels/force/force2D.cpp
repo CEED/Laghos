@@ -16,20 +16,36 @@
 #include "../kernels.hpp"
 
 // *****************************************************************************
-void rForceMult2D(const int NUM_DIM,
+#ifdef __TEMPLATES__
+template<const int NUM_DIM,
+         const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int L2_DOFS_1D,
+         const int H1_DOFS_1D> kernel
+#endif
+void rForceMult2D(
+#ifndef __TEMPLATES__
+                  const int NUM_DIM,
                   const int NUM_DOFS_1D,
                   const int NUM_QUAD_1D,
                   const int L2_DOFS_1D,
                   const int H1_DOFS_1D,
+#endif
                   const int numElements,
-                  const double* __restrict L2DofToQuad,
-                  const double* __restrict H1QuadToDof,
-                  const double* __restrict H1QuadToDofD,
-                  const double* __restrict stressJinvT,
-                  const double* __restrict e,
-                  double* __restrict v) {
+                  const double* L2DofToQuad,
+                  const double* H1QuadToDof,
+                  const double* H1QuadToDofD,
+                  const double* stressJinvT,
+                  const double* e,
+                  double* v) {
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  forall(el,numElements, {
+#ifndef __NVCC__
+  forall(el,numElements,
+#else
+  const int el = blockDim.x * blockIdx.x + threadIdx.x;
+  if (el < numElements)
+#endif
+  {
     double e_xy[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
       e_xy[i] = 0;
@@ -66,9 +82,9 @@ void rForceMult2D(const int NUM_DIM,
           xy[dx]  = 0.0;
         }
         for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
+           const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)]  *
              stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)];
-          const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
+           const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
              stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)];
           for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
             Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
@@ -85,90 +101,23 @@ void rForceMult2D(const int NUM_DIM,
       }
     }
   }
-        );
+#ifndef __NVCC__
+           );
+#endif
 }
-
-// *****************************************************************************
-void rForceMultTranspose2D(const int NUM_DIM,
-                           const int NUM_DOFS_1D,
-                           const int NUM_QUAD_1D,
-                           const int L2_DOFS_1D,
-                           const int H1_DOFS_1D,
-                           const int numElements,
-                           const double* __restrict L2QuadToDof,
-                           const double* __restrict H1DofToQuad,
-                           const double* __restrict H1DofToQuadD,
-                           const double* __restrict stressJinvT,
-                           const double* __restrict v,
-                           double* __restrict e) {
-  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-  forall(el,numElements, {
-    double vStress[NUM_QUAD_2D];
-    for (int i = 0; i < NUM_QUAD_2D; ++i) {
-      vStress[i] = 0;
-    }
-    for (int c = 0; c < NUM_DIM; ++c) {
-      double v_Dxy[NUM_QUAD_2D];
-      double v_xDy[NUM_QUAD_2D];
-      for (int i = 0; i < NUM_QUAD_2D; ++i) {
-        v_Dxy[i] = v_xDy[i] = 0;
-      }
-      for (int dy = 0; dy < H1_DOFS_1D; ++dy) {
-        double v_x[NUM_QUAD_1D];
-        double v_Dx[NUM_QUAD_1D];
-        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          v_x[qx] = v_Dx[qx] = 0;
-        }
-
-        for (int dx = 0; dx < H1_DOFS_1D; ++dx) {
-          const double r_v = v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
-          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-            v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-            v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
-          }
-        }
-        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-          const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-          const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-            v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] += v_Dx[qx] * wy;
-            v_xDy[ijN(qx,qy,NUM_QUAD_1D)] += v_x[qx]  * wDy;
-          }
-        }
-      }
-      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-          vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
-            ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] *
-              stressJinvT[__ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)]) +
-             (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] *
-              stressJinvT[__ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D,numElements)]));
-        }
-      }
-    }
-    for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
-        e[ijkN(dx,dy,el,L2_DOFS_1D)] = 0;
-      }
-    }
-    for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-      double e_x[L2_DOFS_1D];
-      for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
-        e_x[dx] = 0;
-      }
-      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
-        const double r_v = vStress[ijN(qx,qy,NUM_QUAD_1D)];
-        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
-          e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
-        }
-      }
-      for (int dy = 0; dy < L2_DOFS_1D; ++dy) {
-        const double w = L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
-        for (int dx = 0; dx < L2_DOFS_1D; ++dx) {
-          e[ijkN(dx,dy,el,L2_DOFS_1D)] += e_x[dx] * w;
-        }
-      }
-    }
-  }
-        );
-}
+template kernel void rForceMult2D<2,2,2,1,2>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,3,4,2,3>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,4,6,3,4>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,5,8,4,5>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,6,10,5,6>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,7,12,6,7>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,8,14,7,8>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,9,16,8,9>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,10,18,9,10>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,11,20,10,11>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,12,22,11,12>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,13,24,12,13>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,14,26,13,14>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,15,28,14,15>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,16,30,15,16>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template kernel void rForceMult2D<2,17,32,16,17>(int,double const*,double const*,double const*,double const*,double const*,double*);
