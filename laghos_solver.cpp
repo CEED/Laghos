@@ -149,8 +149,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       rhs_c.Resize(H1compFESpace.GetVLayout());
       dv_c.Resize(H1compFESpace.GetVLayout());
       kv.Resize(H1FESpace.GetVLayout());
-      B.Resize(H1compFESpace.GetVLayout());
-      X.Resize(H1compFESpace.GetVLayout());
+      B.Resize(H1compFESpace.GetTrueVLayout());
+      X.Resize(H1compFESpace.GetTrueVLayout());
    }
    
    GridFunctionCoefficient rho_coeff(&rho0);
@@ -408,16 +408,19 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
-            // Essential true dofs as if there's only one component.
+            dbg("Essential true dofs as if there's only one component.");
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
+            dbg("dv_c.Fill(0.0);");
             dv_c.Fill(0.0);
 
             // *****************************************************************
             dbg("MultTranspose(rhs_c, B)");
+            dbg("rhs_c.Size()=%d",rhs_c.Size());
+            dbg("B.Size()=%d",B.Size());
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->MultTranspose(rhs_c, B);
-            dbg("MultTranspose done");
+            dbg("MultTranspose done, B.Size()=%d",B.Size());
             //B.Pull();dbg("B:\n"); B.Print();assert(__FILE__ && __LINE__ && false);
             
             dbg("GetRestrictionOperator->Mult");
@@ -428,7 +431,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             dbg("EliminateRHS");
             kVMassPA->EliminateRHS(B);
-            
+            dbg("B.Size()=%d",B.Size());
+
             timer.sw_cgH1.Start();
             dbg("CG_VMass.Mult(B, X);");
             //B.Pull();dbg("B:\n"); B.Print();assert(__FILE__ && __LINE__ && false);

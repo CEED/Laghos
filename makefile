@@ -222,7 +222,7 @@ png2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 
 vpng2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 2 -ng -ms 1
 #png:;@mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
 #png:;@mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
-pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
+pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
 #vpng:;@mpirun -n 2 valgrind ./laghos -cfl 0.1 -rs 2 -ms 1 -ng
 vpngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 1 -ms 1 -ng
 

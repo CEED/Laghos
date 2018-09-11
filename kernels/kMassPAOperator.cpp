@@ -58,13 +58,13 @@ void kMassPAOperator::Setup()
    bilinearForm->AddDomainIntegrator(massInteg);
    bilinearForm->Assemble();
    bilinearForm->FormOperator(mfem::Array<int>(), massOperator);
-   //dbg("fes.GetVLayout()->Size()=%d",fes.GetVLayout()->Size());
-   //dbg("fes.GetTrueVLayout()->Size()=%d",fes.GetTrueVLayout()->Size());
-   //dbg("massOperator->Width()=%d",massOperator->Width());
-   //dbg("massOperator->Height()=%d",massOperator->Height());
-   //dbg("massOperator->InLayout()->Size()=%d",massOperator->InLayout()->Size());
-   //dbg("massOperator->OutLayout()->Size()=%d",massOperator->OutLayout()->Size());
-   //distX.Resize(engine.MakeLayout(fes.GetVLayout()->Size()));
+   dbg("fes.GetVLayout()->Size()=%d",fes.GetVLayout()->Size());
+   dbg("fes.GetTrueVLayout()->Size()=%d",fes.GetTrueVLayout()->Size());
+   dbg("massOperator->Width()=%d",massOperator->Width());
+   dbg("massOperator->Height()=%d",massOperator->Height());
+   dbg("massOperator->InLayout()->Size()=%d",massOperator->InLayout()->Size());
+   dbg("massOperator->OutLayout()->Size()=%d",massOperator->OutLayout()->Size());
+   //distX.Resize(engine.MakeLayout(massOperator->Width()));
    pop();
 }
 
@@ -121,17 +121,17 @@ void kMassPAOperator::Mult(const mfem::Vector &x,
                                  mfem::Vector &y) const
 {
    push(Wheat);
-      
+   
    if (distX.Size()!=x.Size()) {
-      dbg("\n\033[7;1mdistX.Size()=%d, x.Size()=%d", distX.Size(), x.Size());
+      dbg("\033[7;1mdistX.Size()=%d, x.Size()=%d", distX.Size(), x.Size());
+      dbg("\033[7;1m                y.Size()=%d", y.Size());
+      dbg("\033[7;1mmassOperator->Width()=%d", massOperator->Width());
       distX.Resize(fes.GetMesh()->GetEngine().MakeLayout(x.Size()));
    }
    
    assert(distX.Size()==x.Size());
-   
-   //distX = x;
    distX.Assign(x);
-   
+
    kernels::Vector &kx = distX.Get_PVector()->As<kernels::Vector>();
    kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
 
