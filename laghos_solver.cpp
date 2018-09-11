@@ -137,7 +137,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    qupdate(qu)
 {
    push();
-   one.Fill(1.0);
+   one = 1.0;
    if (has_engine){
       x.Resize(H1FESpace.GetVLayout());
       v.Resize(H1FESpace.GetVLayout());
@@ -359,8 +359,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       dbg("rhs.Size()=%d",rhs.Size());
       dbg("ForcePA->Mult(one, rhs)");
       ForcePA->Mult(one, rhs);
+      //rhs.Pull();dbg("rhs:\n"); rhs.Print();assert(__FILE__ && __LINE__ && false);
+
       timer.sw_force.Stop();
       rhs.Axpby(-1.0, rhs, 0.0, one);
+      //rhs.Pull();dbg("rhs:\n"); rhs.Print();assert(__FILE__ && __LINE__ && false);
 
       if (!has_engine)
       {
@@ -377,6 +380,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          timer.H1cg_iter += cg.GetNumIterations();
          VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
+         //dbg("\033[7mdv_c:");dv.Print();assert(__FILE__ && __LINE__ && false);
       }
       else
       {
@@ -390,9 +394,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dbg("\033[7mrhs_c:");
             rhs_c.MakeRefOffset(rhs, c*size);
             
+            //dbg("rhs_c:\n"); rhs_c.Print();//assert(__FILE__ && __LINE__ && false);
+
             //dbg("\033[7mdv_c:");
             //dv_c.MakeRefOffset(dv, c*size);
-            //dv_c.Pull();dbg("dv_c:\n"); dv_c.Print();//assert(__FILE__ && __LINE__ && false);
+            //dv_c.Pull();dbg("dv_c:\n"); dv_c.Print();assert(__FILE__ && __LINE__ && false);
             //dv_c.Push();
             
             Array<int> c_tdofs;
@@ -408,8 +414,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dv_c.Fill(0.0);
 
             // *****************************************************************
+            dbg("MultTranspose(rhs_c, B)");
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->MultTranspose(rhs_c, B);
+            dbg("MultTranspose done");
+            //B.Pull();dbg("B:\n"); B.Print();assert(__FILE__ && __LINE__ && false);
+            
             dbg("GetRestrictionOperator->Mult");
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetRestrictionOperator()->Mult(dv_c, X);
@@ -446,11 +456,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
                GetProlongationOperator()->Mult(X, dv_c);
             
             dv_c.Pull();
-#ifdef __NVCC__
+//#ifdef __NVCC__
 #warning dv_c 2 dv memcpy
             memcpy(dv.GetData()+c*size, dv_c.GetData(), size*sizeof(double));
-            //dbg("dv:\n"); dv.Print();//assert(__FILE__&&__LINE__&&false);
-#endif
+            //dbg("dv:\n"); dv.Print();assert(__FILE__&&__LINE__&&false);
+//#endif
          }
          dbg("\033[7mend of for loop");
       } // engine

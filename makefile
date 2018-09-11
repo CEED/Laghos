@@ -132,8 +132,8 @@ ifneq (,$(nvcc))
 endif
 
 # all, targets & laghos ********************************************************
-#nv nvcc cuda:;$(MAKE) nvcc=1 templates=1 all
 all:;@$(MAKE) -j $(CPU) laghos
+nv nvcc cuda:;$(MAKE) nvcc=1 templates=1 all
 
 # MPI **************************************************************************
 MPI_INC = -I$(MPI_HOME)/include 

@@ -246,7 +246,12 @@ int main(int argc, char *argv[])
    delete mesh;
 
    if (engine){
-      SharedPtr<Engine> kernels(new mfem::kernels::Engine(&mpi,"cpu"));
+#ifdef __NVCC__
+      const char *arch = "gpu";
+#else
+      const char *arch = "cpu";
+#endif
+      SharedPtr<Engine> kernels(new mfem::kernels::Engine(&mpi,arch));
       pmesh->SetEngine(*kernels);
    }
    
