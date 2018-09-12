@@ -75,10 +75,10 @@ namespace hydrodynamics
              const double* __restrict__ C,
              double* __restrict__ A){
       const size_t ah_x_aw = ah*aw;
-      for (int i = 0; i < ah_x_aw; i++) A[i] = 0.0;
-      for (int j = 0; j < aw; j++) {
-         for (int k = 0; k < bw; k++) {
-            for (int i = 0; i < ah; i++) {
+      for (size_t i = 0; i < ah_x_aw; i++) A[i] = 0.0;
+      for (size_t j = 0; j < aw; j++) {
+         for (size_t k = 0; k < bw; k++) {
+            for (size_t i = 0; i < ah; i++) {
                A[i+j*ah] += B[i+k*ah] * C[k+j*bw];
             }
          }
@@ -92,19 +92,19 @@ namespace hydrodynamics
               const double* __restrict__ x,
               double* __restrict__ y) {
       if (width == 0) {
-         for (int row = 0; row < height; row++) 
+         for (size_t row = 0; row < height; row++) 
             y[row] = 0.0;         
          return;
       }
       double *d_col = data;
       double x_col = x[0];
-      for (int row = 0; row < height; row++) {
+      for (size_t row = 0; row < height; row++) {
          y[row] = x_col*d_col[row];
       }
       d_col += height;
-      for (int col = 1; col < width; col++) {
+      for (size_t col = 1; col < width; col++) {
          x_col = x[col];
-         for (int row = 0; row < height; row++) {
+         for (size_t row = 0; row < height; row++) {
             y[row] += x_col*d_col[row];
          }
          d_col += height;
@@ -115,8 +115,8 @@ namespace hydrodynamics
    void add(const size_t height, const size_t width,
             const double c, const double *A,
             double *D){
-      for (int j = 0; j < width; j++){
-         for (int i = 0; i < height; i++) {
+      for (size_t j = 0; j < width; j++){
+         for (size_t i = 0; i < height; i++) {
             D[i*width+j] += c * A[i*width+j];
          }
       }

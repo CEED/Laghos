@@ -28,7 +28,6 @@ namespace hydrodynamics {
    // **************************************************************************
    int *global2LocalMap(ParFiniteElementSpace &fes){
       const int elements = fes.GetNE();
-      const int globalDofs = fes.GetNDofs();
       const int localDofs = fes.GetFE(0)->GetDof();
 
       const FiniteElement *fe = fes.GetFE(0);

@@ -145,17 +145,17 @@ namespace hydrodynamics {
                              const size_t size,
                              double *data){
       push();
-      const int vdim = fes.GetVDim();
-      const int ndofs = fes.GetNDofs();
+      const size_t vdim = fes.GetVDim();
+      const size_t ndofs = fes.GetNDofs();
       dbg("size=%d",size);    
       dbg("vdim=%d ndofs=%d",vdim, ndofs);
       double *temp = new double[size];
-      for (int k=0; k<size; k++) temp[k]=0.0;
-      int k=0;
-      for (int d = 0; d < ndofs; d++)
-         for (int v = 0; v < vdim; v++)      
+      for (size_t k=0; k<size; k++) temp[k]=0.0;
+      size_t k=0;
+      for (size_t d = 0; d < ndofs; d++)
+         for (size_t v = 0; v < vdim; v++)      
             temp[k++] = data[d+v*ndofs];
-      for (int i=0; i<size; i++){
+      for (size_t i=0; i<size; i++){
          data[i] = temp[i];
          dbg("data[%d]=%f",i,data[i]);
       }
@@ -168,17 +168,17 @@ namespace hydrodynamics {
                               const size_t size,
                               double *data){
       push();
-      const int vdim = fes.GetVDim();
-      const int ndofs = fes.GetNDofs();
+      const size_t vdim = fes.GetVDim();
+      const size_t ndofs = fes.GetNDofs();
       dbg("size=%d",size);      
       dbg("vdim=%d ndofs=%d",vdim, ndofs);      
       double *temp = new double[size];
-      for (int k=0; k<size; k++) temp[k]=0.0;
-      int k=0;
-      for (int j=0; j < ndofs; j++)
-         for (int i=0; i < vdim; i++)
+      for (size_t k=0; k<size; k++) temp[k]=0.0;
+      size_t k=0;
+      for (size_t j=0; j < ndofs; j++)
+         for (size_t i=0; i < vdim; i++)
             temp[j+i*ndofs] = data[k++];
-      for (int i = 0; i < size; i++){
+      for (size_t i = 0; i < size; i++){
          data[i] = temp[i];
          dbg("data[%d]=%f",i,data[i]);
       }

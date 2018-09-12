@@ -17,11 +17,11 @@
 # SETUP ************************************************************************
 CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/kernels-gpu-cpu
+MFEM_DIR ?= $(HOME)/home/mfem/kernels
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 #NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-#CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+CXXEXTRA = # -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 # number of proc to use for compilation stage
 CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
@@ -156,20 +156,9 @@ MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
 # SOURCE FILES SETUP ***********************************************************
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp \
-	qupdate/d2q.cpp \
-	qupdate/dof2quad.cpp \
-	qupdate/geom.cpp \
-	qupdate/maps.cpp \
-	qupdate/qupdate.cpp \
-	qupdate/densemat.cpp \
-	qupdate/eigen.cpp \
-	qupdate/global2local.cpp \
-	qupdate/memcpy.cpp\
-	$(KERNELS_DIR)/kForcePAOperator.cpp \
-	$(KERNELS_DIR)/kMassPAOperator.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
 # Kernel files setup
-KERNELS_RTC_DIRS = $(KERNELS_DIR)/force
+KERNELS_RTC_DIRS = $(KERNELS_DIR) $(KERNELS_DIR)/force qupdate
 KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))
 
 # OBJECT FILES *****************************************************************
@@ -192,7 +181,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 # ******************************************************************************
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
+	$(MFEM_CXX) $(CXXFLAGS) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0
@@ -238,7 +227,7 @@ $(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
 
 #rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
 $(OBJECT_KERNELS): %.o: %.cpp
-	$(OKRTC) $(CCC) -o $(@) -c $(CUB_INC) $(MPI_INC) $(RAJA_INC) -I$(realpath $(dir $(<))) $(<)
+	$(OKRTC) $(CCC) $(CXXFLAGS) -o $(@) -c $(CUB_INC) $(MPI_INC) $(RAJA_INC) -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)
