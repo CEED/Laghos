@@ -83,6 +83,29 @@ namespace hydrodynamics {
       }
    }
 
+   // **************************************************************************
+   static void global2LocalMap(ParFiniteElementSpace &fes, qarray<int> &map){
+      const int elements = fes.GetNE();
+      const int localDofs = fes.GetFE(0)->GetDof();
+
+      const FiniteElement *fe = fes.GetFE(0);
+      const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
+      const Array<int> &dof_map = el->GetDofMap();
+      const bool dof_map_is_identity = dof_map.Size()==0;
+      const Table& e2dTable = fes.GetElementToDofTable();
+      const int *elementMap = e2dTable.GetJ();
+      mfem::Array<int> h_map(localDofs*elements);
+      
+      for (int e = 0; e < elements; ++e) {
+         for (int d = 0; d < localDofs; ++d) {
+            const int did = dof_map_is_identity?d:dof_map[d];
+            const int gid = elementMap[localDofs*e + did];
+            const int lid = localDofs*e + d;
+            h_map[lid] = gid;
+         }
+      }
+      map = h_map;
+   }
    // ***************************************************************************
    void d2q(ParFiniteElementSpace &fes,
             const IntegrationRule& ir,
@@ -94,11 +117,9 @@ namespace hydrodynamics {
       const int elements = fes.GetNE();
       const qDofQuadMaps* maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
       const double* dofToQuad = maps->dofToQuad;
-      //volatile double dummy = dofToQuad[0];
       const int localDofs = fes.GetFE(0)->GetDof();
       qarray<int> l2gMap(localDofs, elements);
       global2LocalMap(fes,l2gMap);
-      //volatile int dummy = l2gMap[0];
       const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
       assert(vdim==1);

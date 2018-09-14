@@ -180,35 +180,37 @@ laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0
+go1:;@./laghos -cfl 0.1 -rs 0 -p 1
 pgo:;@mpirun -n 2 ./laghos -cfl 0.1 -rs 0
 pgo2:;@DBG=1 mpirun -xterm -1! -n 2 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
 #pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
 
 ng:;@./laghos -cfl 0.1 -rs 0 -ng
+ng1:;@./laghos -cfl 0.1 -rs 0 -ng -p 1
 png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
 png2:;mpirun -n 2 ./laghos -cfl 0.1 -ng
 png3:;mpirun -n 3 ./laghos -cfl 0.1 -ng
 
-dng:;@cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng #-cgt 0 -cgm 2
-mng:;cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1
-ddng:;@DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -cgt 0 -cgm 2
+#dng:;@cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng #-cgt 0 -cgm 2
+#mng:;cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1
+#ddng:;@DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -cgt 0 -cgm 2
 
-ng1:;DBG=1 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-mng1:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-mng2:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 2
-dng1:;DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#ng1:;DBG=1 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#mng1:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#mng2:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 2
+#dng1:;DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
 
-vng:;@valgrind ./laghos -cfl 0.1 -rs 0 -ms 1 -ng
-mpng2:;@DBG=1 mpirun -xterm -1! -n 2 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-vpng2:;@DBG=1 mpirun -xterm -1! -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#vng:;@valgrind ./laghos -cfl 0.1 -rs 0 -ms 1 -ng
+#mpng2:;@DBG=1 mpirun -xterm -1! -n 2 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
+#vpng2:;@DBG=1 mpirun -xterm -1! -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
 
-png2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -ng
-vpng2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 2 -ng -ms 1
+#png2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -ng
+#vpng2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 2 -ng -ms 1
 #png:;@mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
 #png:;@mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
-pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
+#pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
 #vpng:;@mpirun -n 2 valgrind ./laghos -cfl 0.1 -rs 2 -ms 1 -ng
-vpngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 1 -ms 1 -ng
+#vpngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 1 -ms 1 -ng
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
