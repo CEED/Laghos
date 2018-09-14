@@ -26,15 +26,30 @@ template<class T> struct qmalloc {
    // *************************************************************************
    inline void* operator new (size_t n, bool lock_page = false) {
       dbp("+]\033[m");
+#ifdef __NVCC__
+      void *ptr = NULL;
+      if (lock_page)
+         checkCudaErrors(cuMemHostAlloc(&ptr, n*sizeof(T),
+                                        CU_MEMHOSTALLOC_PORTABLE));
+      else
+      {
+         if (n==0) { n=1; }
+         checkCudaErrors(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+      }
+      return ptr;
+#else
       return ::new T[n];
+#endif
    }
 
    // ***************************************************************************
    inline void operator delete (void *ptr) {
       dbp("-]\033[m");
-      if (ptr) {
-         ::delete[] static_cast<T*>(ptr);
-      }
+#ifdef __NVCC__
+      cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
+#else
+      if (ptr) ::delete[] static_cast<T*>(ptr);
+#endif // __NVCC__
       ptr = nullptr;
    }
 };

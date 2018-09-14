@@ -28,8 +28,8 @@ namespace hydrodynamics
 {
    // **************************************************************************
    static void offsetNindices(ParFiniteElementSpace &fes,
-                              mfem::Array<int> &offsets,
-                              mfem::Array<int> &indices){
+                              qarray<int> &offsets,
+                              qarray<int> &indices){
       const int elements = fes.GetNE();
       const int globalDofs = fes.GetNDofs();
       const int localDofs = fes.GetFE(0)->GetDof();
@@ -37,9 +37,9 @@ namespace hydrodynamics
       const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
       const Array<int> &dof_map = el->GetDofMap();
       const bool dof_map_is_identity = dof_map.Size()==0;
-      const Table& e2dTable = fes.GetElementToDofTable();
+      const mfem::Table& e2dTable = fes.GetElementToDofTable();
       const int *elementMap = e2dTable.GetJ();      
-      Array<int> h_offsets(globalDofs+1);
+      mfem::Array<int> h_offsets(globalDofs+1);
       // We'll be keeping a count of how many local nodes point to its global dof
       for (int i = 0; i <= globalDofs; ++i) {
          h_offsets[i] = 0;
@@ -75,15 +75,22 @@ namespace hydrodynamics
    }
    
    // **************************************************************************
-   static void globalToLocal0(const int vdim,
-                              const bool ordering,
-                              const int globalEntries,                                           
-                              const int localEntries,
-                              const int* __restrict offsets,
-                              const int* __restrict indices,
-                              const double* __restrict globalX,
-                              double* __restrict localX) {
-      for(int i=1; i<globalEntries; i+=1) {
+   __kernel__
+   void globalToLocalK(const int vdim,
+                       const bool ordering,
+                       const int globalEntries,                                           
+                       const int localEntries,
+                       const int* __restrict offsets,
+                       const int* __restrict indices,
+                       const double* __restrict globalX,
+                       double* __restrict localX) {
+#ifdef __NVCC__
+      const int i = blockDim.x * blockIdx.x + threadIdx.x;
+      if (i < globalEntries)
+#else
+      for(int i=1; i<globalEntries; i+=1) 
+#endif
+      {
          const int offset = offsets[i];
          const int nextOffset = offsets[i+1];
          for (int v = 0; v < vdim; ++v) {
@@ -106,14 +113,15 @@ namespace hydrodynamics
       const int localDofs = fes.GetFE(0)->GetDof();
       const int globalDofs = fes.GetNDofs();
       const int localEntries = localDofs * fes.GetNE();
-      mfem::Array<int> offsets,indices;
+      qarray<int> offsets,indices;
       offsetNindices(fes,offsets,indices); // should be stored
       //dbg("offsets:");offsets.Print();
       //dbg("indices:");indices.Print();
-      globalToLocal0(vdim, ordering,
-                     globalDofs, localEntries,
-                     offsets, indices,
-                     globalVec, localVec);
+      globalToLocalK __config(globalDofs)
+         (vdim, ordering,
+          globalDofs, localEntries,
+          offsets, indices,
+          globalVec, localVec);
    }   
    
 } // namespace hydrodynamics

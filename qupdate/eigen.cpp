@@ -26,10 +26,6 @@ namespace mfem
 
 namespace hydrodynamics
 {
-   // **************************************************************************
-   static inline double det2D(const double *d){
-      return d[0] * d[3] - d[1] * d[2];
-   }
    
    // **************************************************************************
    /*static inline double det3D(const double *d){
@@ -39,17 +35,9 @@ namespace hydrodynamics
          d[6] * (d[1] * d[5] - d[2] * d[4]);
          }*/
 
-   // **************************************************************************
-   void calcInverse2D(const size_t n, const double *a, double *i){
-      const double d = det2D(a);
-      const double t = 1.0 / d;
-      i[0*n+0] =  a[1*n+1] * t ;
-      i[0*n+1] = -a[0*n+1] * t ;
-      i[1*n+0] = -a[1*n+0] * t ;
-      i[1*n+1] =  a[0*n+0] * t ;
-   }
 
    // **************************************************************************
+   __device__
    void symmetrize(const size_t n, double* __restrict__ d){
       for (size_t i = 0; i<n; i++){
          for (size_t j = 0; j<i; j++) {
@@ -60,6 +48,7 @@ namespace hydrodynamics
    }
    
    // **************************************************************************
+   __device__
    static inline double cpysign(const double x, const double y) {
       if ((x < 0 && y > 0) || (x > 0 && y < 0))
          return -x;
@@ -67,9 +56,11 @@ namespace hydrodynamics
    }
 
    // **************************************************************************
+   __device__
    static inline void eigensystem2S(const double &d12, double &d1, double &d2,
                                     double &c, double &s) {
-      static const double sqrt_1_eps = sqrt(1./numeric_limits<double>::epsilon());
+      const double epsilon = 1.e-16;
+      const double sqrt_1_eps = sqrt(1./epsilon);
       if (d12 == 0.) {
          c = 1.;
          s = 0.;
@@ -90,6 +81,7 @@ namespace hydrodynamics
    }
    
    // **************************************************************************
+   __device__
    void calcEigenvalues(const size_t n, const double *d,
                         double *lambda,
                         double *vec) {
@@ -117,6 +109,7 @@ namespace hydrodynamics
    }
 
    // **************************************************************************
+   __device__
    static inline void getScalingFactor(const double &d_max, double &mult){
       int d_exp;
       if (d_max > 0.)
@@ -137,6 +130,7 @@ namespace hydrodynamics
    }
 
       // **************************************************************************
+   __device__
    double calcSingularvalue(const int n, const int i, const double *d) {
       assert (n == 2);
       

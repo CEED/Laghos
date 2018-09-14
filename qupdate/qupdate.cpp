@@ -20,9 +20,25 @@
 namespace mfem {
 
 namespace hydrodynamics {
-   
+
    // **************************************************************************
-   //__attribute__((unused))
+   __device__ static inline double det2D(const double *d){
+      return d[0] * d[3] - d[1] * d[2];
+   }
+
+   // **************************************************************************
+   __device__
+   void calcInverse2D(const size_t n, const double *a, double *i){
+      const double d = det2D(a);
+      const double t = 1.0 / d;
+      i[0*n+0] =  a[1*n+1] * t ;
+      i[0*n+1] = -a[0*n+1] * t ;
+      i[1*n+0] = -a[1*n+0] * t ;
+      i[1*n+1] =  a[0*n+0] * t ;
+   }
+
+   // **************************************************************************
+   /*__attribute__((unused))
    static void getL2Values(const int dim,
                            const int nL2dof1D,
                            const int nqp1D,
@@ -36,9 +52,10 @@ namespace hydrodynamics {
       // QQ_k1_k2 = LQ_j2_k1 LQs_j2_k2 -- contract in y direction.
       multAtB(nL2dof1D, nqp1D, tensors1D->LQshape1D.Width(),
               LQ, tensors1D->LQshape1D.Data(), vecQ);
-   }
+              }*/
 
    // **************************************************************************
+   /*__attribute__((unused))
    static void getVectorGrad(const int dim,
                              const int nH1dof1D,
                              const int nqp1D,
@@ -86,48 +103,54 @@ namespace hydrodynamics {
             }
          }
       }
-   }
+      }*/
 
    // **************************************************************************
-   static void qGradVector2D( const int NUM_DOFS,
-                              const int NUM_QUAD,
-                              const int numElements,
-                              const double* __restrict dofToQuadD,
-                              const double* __restrict in,
-                              double* __restrict out){
-      push();
-      for(int e=0; e<numElements; e+=1){
-         dbg("elem #%d",e);
+   template <const int NUM_DOFS,
+             const int NUM_QUAD>
+   __kernel__
+   static void qGradVector2D(const int numElements,
+                             const double* __restrict dofToQuadD,
+                             const double* __restrict in,
+                             double* __restrict out){
+#ifdef __NVCC__
+      const int e = blockDim.x * blockIdx.x + threadIdx.x;
+      if (e < numElements)
+#else
+      for(int e=0; e<numElements; e+=1)
+#endif
+      {
+         //dbg("elem #%d",e);
          double s_in[2 * NUM_DOFS];
          for (int q = 0; q < NUM_QUAD; ++q) {
-            dbg("\tq #%d",q);
+            //dbg("\tq #%d",q);
             for (int d = q; d < NUM_DOFS; d+=NUM_QUAD) {
-               dbg("\t\td=%d",d);
-               const int x0 = ijN(0,d,2);
-               const int x1 = ijkNM(0,d,e,2,NUM_DOFS);
-               const int y0 = ijN(1,d,2);
-               const int y1 = ijkNM(1,d,e,2,NUM_DOFS);
-               const double x = in[ijkNM(0,d,e,2,NUM_DOFS)];
-               const double y = in[ijkNM(1,d,e,2,NUM_DOFS)];
-               dbg("\t\t%d <= %d: %f",x0,x1,x);
-               dbg("\t\t%d <= %d: %f",y0,y1,y);
+               //dbg("\t\td=%d",d);
+               //const int x0 = ijN(0,d,2);
+               //const int x1 = ijkNM(0,d,e,2,NUM_DOFS);
+               //const int y0 = ijN(1,d,2);
+               //const int y1 = ijkNM(1,d,e,2,NUM_DOFS);
+               //const double x = in[ijkNM(0,d,e,2,NUM_DOFS)];
+               //const double y = in[ijkNM(1,d,e,2,NUM_DOFS)];
+               //dbg("\t\t%d <= %d: %f",x0,x1,x);
+               //dbg("\t\t%d <= %d: %f",y0,y1,y);
                s_in[ijN(0,d,2)] = in[ijkNM(0,d,e,2,NUM_DOFS)];
                s_in[ijN(1,d,2)] = in[ijkNM(1,d,e,2,NUM_DOFS)];
             }
          }
-         dbg("eof share, returning to elem #%d",e);
+         //dbg("eof share, returning to elem #%d",e);
          for (int q = 0; q < NUM_QUAD; ++q) {
-            dbg("\tq #%d",q);
+            //dbg("\tq #%d",q);
             double J11 = 0.0; double J12 = 0.0;
             double J21 = 0.0; double J22 = 0.0;
             for (int d = 0; d < NUM_DOFS; ++d) {
-               dbg("\t\td=%d",d);
+               //dbg("\t\td=%d",d);
                const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
                const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
                const double x = s_in[ijN(0,d,2)];
                const double y = s_in[ijN(1,d,2)];
-               dbg("\t\twx=%f, wy=%f",wx,wy);
-               dbg("\t\t x=%f,  y=%f", x, y);
+               //dbg("\t\twx=%f, wy=%f",wx,wy);
+               //dbg("\t\t x=%f,  y=%f", x, y);
                J11 += (wx * x); J12 += (wx * y);
                J21 += (wy * x); J22 += (wy * y);
             }
@@ -137,7 +160,6 @@ namespace hydrodynamics {
             out[ijklNM(1,1,q,e,2,NUM_QUAD)] = J22;
          }
       }
-      pop();
    }
 
    // **************************************************************************
@@ -157,7 +179,7 @@ namespace hydrodynamics {
             temp[k++] = data[d+v*ndofs];
       for (size_t i=0; i<size; i++){
          data[i] = temp[i];
-         dbg("data[%d]=%f",i,data[i]);
+         //dbg("data[%d]=%f",i,data[i]);
       }
       delete [] temp;
       pop();
@@ -170,8 +192,8 @@ namespace hydrodynamics {
       push();
       const size_t vdim = fes.GetVDim();
       const size_t ndofs = fes.GetNDofs();
-      dbg("size=%d",size);      
-      dbg("vdim=%d ndofs=%d",vdim, ndofs);      
+      //dbg("size=%d",size);      
+      //dbg("vdim=%d ndofs=%d",vdim, ndofs);      
       double *temp = new double[size];
       for (size_t k=0; k<size; k++) temp[k]=0.0;
       size_t k=0;
@@ -180,7 +202,7 @@ namespace hydrodynamics {
             temp[j+i*ndofs] = data[k++];
       for (size_t i = 0; i < size; i++){
          data[i] = temp[i];
-         dbg("data[%d]=%f",i,data[i]);
+         //dbg("data[%d]=%f",i,data[i]);
       }
       delete [] temp;
       pop();
@@ -199,25 +221,171 @@ namespace hydrodynamics {
       const int ndf  = fe.GetDof();
       const int nqp  = ir.GetNPoints();
       const int nzones = fes.GetNE();
-      //const bool orderedByNODES = (fes.GetOrdering() == Ordering::byNODES);
-      
-      /*if (orderedByNODES) {
-         dbg("\033[7morderedByNODES, ReorderByVDim");
-         reorderByVDim(fes, size, in);
-         }*/
-      
-      qGradVector2D(ndf, nqp, nzones,
-                    maps->dofToQuadD,
-                    in, out);
-      
-      /*if (orderedByNODES) {
-         dbg("Reorder the original gf back");
-         reorderByNodes(fes, size, in);
-         }*/
+      assert(ndf==9);
+      assert(nqp==16);
+      qGradVector2D<9,16> __config(nzones) (nzones, maps->dofToQuadD, in, out);
       pop();
    }
 
+   // **************************************************************************
+   __device__ double Det(const size_t dim, const double *J){
+      assert(dim==2);
+      return J[0] * J[3] - J[1] * J[2];
+   }
    
+   // **************************************************************************
+   __device__ double norml2(const int size, const double *data) {
+      if (0 == size) return 0.0;
+      if (1 == size) return std::abs(data[0]);
+      double scale = 0.0;
+      double sum = 0.0;
+      for (int i = 0; i < size; i++) {
+         if (data[i] != 0.0)
+         {
+            const double absdata = fabs(data[i]);
+            if (scale <= absdata)
+            {
+               const double sqr_arg = scale / absdata;
+               sum = 1.0 + sum * (sqr_arg * sqr_arg);
+               scale = absdata;
+               continue;
+            } // end if scale <= absdata
+            const double sqr_arg = absdata / scale;
+            sum += (sqr_arg * sqr_arg); // else scale > absdata
+         } // end if data[i] != 0
+      }
+      return scale * sqrt(sum);
+   }
+   
+   // **************************************************************************
+   template<const int dim>
+   __kernel__ void qkernel(const int nzones,
+                           const int nqp,
+                           const int nqp1D,
+                           const double gamma,
+                           const bool use_viscosity,
+                           const double h0,
+                           const double h1order,
+                           const double cfl,
+                           const double infinity,
+                           
+                           const double *weights,
+                           const double *_J,
+                           const double *rho0DetJ0w,
+                           const double *e_quads,
+                           const double *grad_v_ext,
+                           const double *Jac0inv,
+                           double *dt_est,
+                           double *stressJinvT){
+      double min_detJ = infinity;
+#ifdef __NVCC__
+      //const int z = blockDim.x * blockIdx.x + threadIdx.x;
+      //if (z < nzones)
+      const int _z = blockDim.x * blockIdx.x + threadIdx.x;
+      if (_z >= 1) return;
+      for (int z = 0; z < nzones; z++)
+#else
+      for (int z = 0; z < nzones; z++)
+#endif
+      {
+         // ********************************************************************
+         for (int q = 0; q < nqp; q++) {
+            const int idx = z * nqp + q;
+            const double weight =  weights[q];
+            //printf("\nweight=%f",weight);
+            const double inv_weight = 1. / weight;
+            const double *J = &_J[(z*nqp+q)*nzones];
+            const double detJ = Det(dim,J);
+            //printf("\ndetJ=%f",detJ);
+            min_detJ = fmin(min_detJ, detJ);
+            //printf("\nmin_detJ=%f",min_detJ);
+            double Jinv[dim*dim];
+            calcInverse2D(dim, J, Jinv);    
+            //for(int k=0;k<dim*dim;k+=1) printf("%f ",Jinv[k]);    
+            // *****************************************************************
+            const double rho = inv_weight * rho0DetJ0w[idx] / detJ;
+            const double e   = fmax(0.0, e_quads[z*nqp1D*nqp1D+q]);
+            const double p  = (gamma - 1.0) * rho * e;
+            const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
+            //printf("\nrho=%f, e=%f, p=%f, sound_speed=%f",rho,e,p,sound_speed);
+            // *****************************************************************
+            double stress[dim*dim];
+            for (int k=0;k<dim*dim;k+=1) stress[k] = 0.0;
+            for (int d = 0; d < dim; d++)  stress[d*dim+d] = -p;
+            // *****************************************************************
+            double visc_coeff = 0.0;
+            if (use_viscosity) {
+               assert(false);
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity gradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.               
+               const double *dV = &grad_v_ext[(z*nqp+q)*nzones];
+               double sgrad_v[dim*dim];
+               mult(dim,dim,dim, dV, Jinv, sgrad_v);
+               symmetrize(dim,sgrad_v);
+               double eig_val_data[3], eig_vec_data[9];
+               if (dim==1) {
+                  eig_val_data[0] = sgrad_v[0*dim+0];
+                  eig_vec_data[0] = 1.;
+               }
+               else {
+                  calcEigenvalues(dim, &sgrad_v[0], eig_val_data, eig_vec_data);
+               }
+               double *compr_dir = eig_vec_data;
+               // Computes the initial->physical transformation Jacobian.
+               double Jpi[dim*dim];
+               mult(dim,dim,dim, J, &Jac0inv[idx], Jpi);
+               double ph_dir[dim];
+               //Jpi.Mult(compr_dir, ph_dir);
+               multV(dim, dim, Jpi, compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = h0 * norml2(dim,ph_dir) / norml2(9,compr_dir);
+               // Measure of maximal compression.
+               const double mu = eig_val_data[0];
+               visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               add(dim, dim, visc_coeff, sgrad_v, stress);
+            }
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const double h_min = calcSingularvalue(dim, dim-1, J) / h1order;
+            const double inv_h_min = 1. / h_min;
+            const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
+            const double inv_dt = sound_speed * inv_h_min + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+            //printf("\nh_min=%f, inv_h_min=%f, inv_rho_inv_h_min_sq=%f, inv_dt=%f",h_min,inv_h_min,inv_rho_inv_h_min_sq,inv_dt);
+            //printf("\nmin_detJ=%f, dt_est=%f, cfl=%f, inv_dt=%f",min_detJ,*dt_est,cfl,inv_dt);
+            if (min_detJ < 0.0) {
+               // This will force repetition of the step with smaller dt.
+               *dt_est = 0.0;
+            } else {
+               *dt_est = fmin(*dt_est, cfl * (1.0 / inv_dt) );
+            }
+            //printf("\ndt_est=%f",*dt_est);
+            // Quadrature data for partial assembly of the force operator.
+            double stressJiT[dim*dim];
+            multABt(dim, dim, dim, stress, Jinv, stressJiT);
+            for(int k=0;k<dim*dim;k+=1) stressJiT[k] *= weight * detJ;
+            for (int vd = 0 ; vd < dim; vd++) {
+               for (int gd = 0; gd < dim; gd++) {
+                  double *base = stressJinvT;
+                  double *offset = &stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)];
+                  assert(offset>=base);
+                  const size_t delta = offset-base;
+                  //tdata+k*Mk.Height()*Mk.Width()
+                  stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)] =
+                     stressJiT[vd+gd*dim];
+                  //printf("\nz=%d,q=%d,stressJiT=%f, delta=%ld",z,q,stressJiT[vd+gd*dim],delta);
+               }
+            }
+         }
+      }
+   }
+   
+   // **************************************************************************
+   // * Last kernel QUpdate
    // **************************************************************************
    void QUpdate(const int dim,
                 const int nzones,
@@ -235,276 +403,163 @@ namespace hydrodynamics {
                 bool &quad_data_is_current,
                 QuadratureData &quad_data) {
       push();
+      assert(dim==2);
       assert(p_assembly);
       assert(material_pcf);
-      
+
+      // ***********************************************************************
       ElementTransformation *T = H1FESpace.GetElementTransformation(0);
       const IntegrationPoint &ip = integ_rule.IntPoint(0);
       const double gamma = material_pcf->Eval(*T,ip);
 
       // ***********************************************************************
       if (quad_data_is_current) return;
+
+      // ***********************************************************************
       timer.sw_qdata.Start();
-
+      const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
+      const int dims     = H1FESpace.GetVDim();
+      const int elements = H1FESpace.GetNE();
+      const int numDofs  = fe.GetDof();
       const int nqp = integ_rule.GetNPoints();
-      dbg("nqp=%d, nzones=%d",nqp,nzones);
+      assert(elements==nzones);
+      dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
 
-      ParGridFunction x, velocity, energy;
       Vector* sptr = (Vector*) &S;
       
-      x.MakeRef(&H1FESpace, *sptr, 0);
-//#warning x for(int i=0;i<x.Size();i+=1) x[i] = 1.123456789*drand48();
-         //dbg("x (size=%d)",x.Size());//x.Print();
-      
-      velocity.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-//#warning v
-//      srand48(0xDEADBEEFul);
-//      for(int i=0;i<velocity.Size();i+=1) velocity[i] = 0.123456789*drand48();
-//      dbg("velocity (size=%d)",velocity.Size());velocity.Print();
-      
-      energy.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-      //dbg("energy (size=%d)",energy.Size());//energy.Print();
-      
-      Vector e_loc(l2dofs_cnt), vector_loc(h1dofs_cnt * dim);
-      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
-      DenseMatrix vector_loc_mtx(vector_loc.GetData(), h1dofs_cnt, dim);
-      DenseTensor grad_v_ref(dim, dim, nqp);
-      Array<int> L2dofs, H1dofs;
-
-      const H1_QuadrilateralElement *fe =
-         dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
-      const Array<int> &h1_dof_map = fe->GetDofMap();
-      
+      const Engine &engine = L2FESpace.GetMesh()->GetEngine();
+      const size_t H1_size = H1FESpace.GetVSize();
+      const size_t L2_size = L2FESpace.GetVSize();
+                 
       const int nqp1D    = tensors1D->LQshape1D.Width();
       const int nL2dof1D = tensors1D->LQshape1D.Height();
       const int nH1dof1D = tensors1D->HQshape1D.Height();
       
-      // Energy values at quadrature point *************************************
-      const bool use_external_e = false;
-      Vector e_vals(nqp);
-      Vector e_quads(nzones * nqp);
-      if (use_external_e)
-         d2q(L2FESpace, integ_rule, energy.GetData(), e_quads.GetData());
+      // Energy dof => quads ***************************************************
+      const size_t e_quads_size = nzones * nqp;
+      double *d_e_data = (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
+      double *e_data = sptr->GetData()+2*H1_size;
+      //for(int k=0;k<L2_size;k+=1) dbg("e[%d]=%f",k,e_data[k]); assert(false);
+      mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
+      double *d_e_quads_data = (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
+      d2q(L2FESpace, integ_rule, d_e_data, d_e_quads_data);
+      // double h_e_quads_data[e_quads_size];mfem::kernels::kmemcpy::rDtoH(h_e_quads_data, d_e_quads_data, e_quads_size*sizeof(double));
+      //for(int k=0;k<e_quads_size;k+=1) dbg("d_e_quads_data[%d]=%f",k,h_e_quads_data[k]); assert(false);
 
-      // Jacobian **************************************************************
-      DenseTensor Jpr(dim, dim, nqp);
+      // Refresh Geom J, invJ & detJ *******************************************
+      const qGeometry *geom = qGeometry::Get(H1FESpace,integ_rule);
 
-      // ***********************************************************************
-      const bool use_external_J = true;
-      qGeometry *geom;
-      if (use_external_J)
-         geom = qGeometry::Get(H1FESpace,integ_rule);
-
-      // IP Weights ************************************************************
-      Vector weights;
-      const bool use_external_w = true;
-      const qDofQuadMaps* maps;
-      if (use_external_w){
-         maps = qDofQuadMaps::Get(H1FESpace,integ_rule);
-         weights.SetDataAndSize((double*)maps->quadWeights.ptr(),nqp);
-      }
-
-      // Velocity **************************************************************
-      const bool use_external_grad_v = true;
-      Vector grad_v_ext;
-      if (use_external_grad_v){
-         
-         const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-         const int dims     = H1FESpace.GetVDim();
-         const int elements = H1FESpace.GetNE();
-         const int numDofs  = fe.GetDof();
-         
-         //dbg("velocity:\n");velocity.Print();
-         reorderByVDim(H1FESpace, velocity.Size(), velocity.GetData());
-         //dbg("reorderByVDim:");velocity.Print();
-        
-         const size_t v_local_size = dims * numDofs * elements;
-         mfem::Array<double> local_velocity(v_local_size);
-         const Table& e2dTable = H1FESpace.GetElementToDofTable();
-         const int* elementMap = e2dTable.GetJ();
-
-         for (int e = 0; e < elements; ++e) {
-            for (int d = 0; d < numDofs; ++d) {
-               const int lid = d+numDofs*e;
-               const int gid = elementMap[lid];
-               for (int v = 0; v < dims; ++v) {
-                  const int moffset = v+dims*lid;
-                  const int xoffset = v+dims*gid;
-                  local_velocity[moffset] = velocity[xoffset];
-               }
+      // Integration Points Weights (tensor) ***********************************
+      const qDofQuadMaps* maps = qDofQuadMaps::Get(H1FESpace,integ_rule);
+      /*{
+         const size_t quadWeights1D_size = nqp;
+         double h_maps_quadWeights[quadWeights1D_size];
+         mfem::kernels::kmemcpy::rDtoH(h_maps_quadWeights, maps->quadWeights.GetData(), quadWeights1D_size*sizeof(double));
+         for(int k=0;k<quadWeights1D_size;k+=1) dbg("h_maps_quadWeights[%d]=%f",k,h_maps_quadWeights[k]); assert(false);
+         }*/
+      
+      // Velocity **************************************************************     
+      ParGridFunction velocity;
+      velocity.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
+      reorderByVDim(H1FESpace, velocity.Size(), velocity.GetData());
+      const size_t v_local_size = dims * numDofs * elements;
+      mfem::Array<double> local_velocity(v_local_size);
+      const Table& e2dTable = H1FESpace.GetElementToDofTable();
+      const int* elementMap = e2dTable.GetJ();
+      for (int e = 0; e < elements; ++e) {
+         for (int d = 0; d < numDofs; ++d) {
+            const int lid = d+numDofs*e;
+            const int gid = elementMap[lid];
+            for (int v = 0; v < dims; ++v) {
+               const int moffset = v+dims*lid;
+               const int xoffset = v+dims*gid;
+               local_velocity[moffset] = velocity[xoffset];
             }
          }
-         //dbg("local_velocity:");local_velocity.Print();
-
-         //dbg("dims=%d, elements=%d, numDofs=%d, v_local_size=%d",dims, elements, numDofs, v_local_size);
-         Vector v_local(v_local_size);
-         v_local = local_velocity;
-         //dbg("v_local:");v_local.Print();
-        
-         reorderByNodes(H1FESpace, velocity.Size(), velocity.GetData());
-         
-         //globalToLocal(H1FESpace,velocity.GetData(),v_local.GetData(),false);
-         //dbg("v_local:");v_local.Print();
-
-         const size_t grad_v_size = dim * dim * nqp * nzones;
-         grad_v_ext.SetSize(grad_v_size);
-         //dbg("grad_v_size=%d",grad_v_size);
-         
-         maps = qDofQuadMaps::GetSimplexMaps(fe,integ_rule);
-         
-         qGradVector(H1FESpace,
-                     integ_rule,
-                     maps,
-                     v_local_size,
-                     v_local.GetData(),
-                     grad_v_ext.GetData());
-         
-         //dbg("grad_v_ext:\n");grad_v_ext.Print();
-                  
-         //assert(false);
-/*
-         for (int z = 0; z < nzones; z++) {
-            H1FESpace.GetElementVDofs(z, H1dofs);
-            velocity.GetSubVector(H1dofs, vector_loc);
-            //dbg("(z=%d) vector_loc:",z);vector_loc.Print();
-            getVectorGrad(dim, nH1dof1D, nqp1D, h1_dof_map, vector_loc_mtx, grad_v_ref);
-            for (int q = 0; q < nqp; q++) {
-               DenseMatrix qgrad_v_ext(&grad_v_ext.GetData()[(z*nqp+q)*nzones],dim,dim);
-               dbg("(%d,%d) grad_v_ref:",z,q);
-               grad_v_ref(q).Print();
-               dbg("\033[7mVERSUS:");               
-               qgrad_v_ext.Print();
-            }
-            }
-*/
-         
-         //assert(false);
       }
-   
-      // ***********************************************************************
+      double *d_v_data = (double*)mfem::kernels::kmalloc<double>::operator new(v_local_size);
+      mfem::kernels::kmemcpy::rHtoD(d_v_data,
+                                    local_velocity.GetData(),
+                                    v_local_size*sizeof(double));
+      /*{
+         double h_v_data[v_local_size];
+         mfem::kernels::kmemcpy::rDtoH(h_v_data, d_v_data, v_local_size*sizeof(double));
+         for(int k=0;k<v_local_size;k+=1) dbg("h_v_data[%d]=%f",k,h_v_data[k]); assert(false);
+         }*/
+
+      reorderByNodes(H1FESpace, velocity.Size(), velocity.GetData());
+      const size_t grad_v_size = dim * dim * nqp * nzones;
+      double *d_grad_v_data = (double*) mfem::kernels::kmalloc<double>::operator new(grad_v_size);
+      const qDofQuadMaps *simplex_maps = qDofQuadMaps::GetSimplexMaps(fe,integ_rule);
+      qGradVector(H1FESpace,
+                  integ_rule,
+                  simplex_maps,
+                  v_local_size,
+                  d_v_data,
+                  d_grad_v_data);
+      /*{
+         double h_grad_v_data[grad_v_size];
+         mfem::kernels::kmemcpy::rDtoH(h_grad_v_data, d_grad_v_data, grad_v_size*sizeof(double));
+         for(int k=0;k<grad_v_size;k+=1) dbg("h_grad_v_data[%d]=%f",k,h_grad_v_data[k]); assert(false);
+         }*/
+
+      // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
       const double infinity = std::numeric_limits<double>::infinity();
-      double min_detJ = infinity;
+      dbg("infinity=%f",infinity);
       
-      for (int z = 0; z < nzones; z++) {
-         ElementTransformation *T = H1FESpace.GetElementTransformation(z);
-         
-         // Energy values at quadrature point **********************************
-         if (!use_external_e){
-            L2FESpace.GetElementDofs(z, L2dofs);
-            energy.GetSubVector(L2dofs, e_loc);
-            getL2Values(dim, nL2dof1D, nqp1D, e_loc.GetData(), e_vals.GetData());
-         }
- 
-         // Jacobians at quadrature points *************************************
-         if (!use_external_J)
-         {
-            H1FESpace.GetElementVDofs(z, H1dofs);
-            x.GetSubVector(H1dofs, vector_loc);
-            getVectorGrad(dim, nH1dof1D, nqp1D, h1_dof_map, vector_loc_mtx, Jpr);
-         }
+      const size_t rho0DetJ0w_sz = nzones * nqp;
+      double *d_rho0DetJ0w =
+         (double*)mfem::kernels::kmalloc<double>::operator new(rho0DetJ0w_sz);
+      mfem::kernels::kmemcpy::rHtoD(d_rho0DetJ0w,
+                                    quad_data.rho0DetJ0w.GetData(),
+                                    rho0DetJ0w_sz*sizeof(double));
+      /*{
+         double h_rho0DetJ0w[rho0DetJ0w_sz];
+         mfem::kernels::kmemcpy::rDtoH(h_rho0DetJ0w, d_rho0DetJ0w, rho0DetJ0w_sz*sizeof(double));
+         for(int k=0;k<rho0DetJ0w_sz;k+=1) dbg("h_rho0DetJ0w[%d]=%f",k,h_rho0DetJ0w[k]); assert(false);
+         }*/
 
-         // Velocity gradient at quadrature points *****************************
-         if (use_viscosity) {
-            if (!use_external_grad_v){
-               H1FESpace.GetElementVDofs(z, H1dofs);
-               velocity.GetSubVector(H1dofs, vector_loc);
-               getVectorGrad(dim, nH1dof1D, nqp1D, h1_dof_map, vector_loc_mtx, grad_v_ref);
-            }
-         }
-         
-         // ********************************************************************
-         for (int q = 0; q < nqp; q++) {
-            const int idx = z * nqp + q;
-            double ip_w = 0.0;
-            if (!use_external_w){
-               const IntegrationPoint &ip = integ_rule.IntPoint(q);
-               T->SetIntPoint(&ip);
-               ip_w = ip.weight;
-            }
-            const double weight = (!use_external_w) ? ip_w : weights[q];
-            const double inv_weight = 1. / weight;
+      const size_t Jac0inv_sz = dim * dim * nzones * nqp;
+      double *d_Jac0inv =
+         (double*)mfem::kernels::kmalloc<double>::operator new(Jac0inv_sz);
+      mfem::kernels::kmemcpy::rHtoD(d_Jac0inv,
+                                    quad_data.Jac0inv.Data(),
+                                    Jac0inv_sz*sizeof(double));
+      //for(int k=0;k<Jac0inv_sz;k+=1) dbg("d_Jac0inv[%d]=%f",k,quad_data.Jac0inv.Data()[k]); assert(false);
+      
+      double *d_dt_est = (double*)mfem::kernels::kmalloc<double>::operator new(1);
+      mfem::kernels::kmemcpy::rHtoD(d_dt_est, &quad_data.dt_est, sizeof(double));
 
-            const DenseMatrix &J = !use_external_J? Jpr(q):
-               DenseMatrix(&geom->J[(z*nqp+q)*nzones],dim,dim);
-
-            const double detJ = J.Det();
-            min_detJ = fmin(min_detJ, detJ);   
-            calcInverse2D(J.Height(), J.Data(), Jinv.Data());        
-            
-            // *****************************************************************
-            const double rho = inv_weight * quad_data.rho0DetJ0w(idx) / detJ;
-            const double e   = !use_external_e?
-               fmax(0.0, e_vals(q)):
-               fmax(0.0, e_quads.GetData()[z*nqp1D*nqp1D+q]);
-            const double p  = (gamma - 1.0) * rho * e;
-            const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            // *****************************************************************
-            stress = 0.0;
-            for (int d = 0; d < dim; d++)  stress(d,d) = -p;
-            // *****************************************************************
-            double visc_coeff = 0.0;
-            if (use_viscosity) {
-               // Compression-based length scale at the point. The first
-               // eigenvector of the symmetric velocity gradient gives the
-               // direction of maximal compression. This is used to define the
-               // relative change of the initial length scale.               
-               const DenseMatrix &dV = !use_external_grad_v? grad_v_ref(q):
-                  DenseMatrix(&grad_v_ext.GetData()[(z*nqp+q)*nzones],dim,dim);                  
-               mult(sgrad_v.Height(),sgrad_v.Width(),grad_v_ref(q).Width(),
-                    dV.Data(), Jinv.Data(), sgrad_v.Data());
-               symmetrize(sgrad_v.Height(),sgrad_v.Data());
-               double eig_val_data[3], eig_vec_data[9];
-               if (dim==1) {
-                  eig_val_data[0] = sgrad_v(0, 0);
-                  eig_vec_data[0] = 1.;
-               }
-               else {
-                  calcEigenvalues(sgrad_v.Height(),sgrad_v.Data(),
-                                  eig_val_data, eig_vec_data);
-               }
-               Vector compr_dir(eig_vec_data, dim);
-               // Computes the initial->physical transformation Jacobian.
-               mult(Jpi.Height(),Jpi.Width(),J.Width(),
-                 J.Data(), quad_data.Jac0inv(idx).Data(), Jpi.Data());
-               Vector ph_dir(dim);
-               //Jpi.Mult(compr_dir, ph_dir);
-               multV(Jpi.Height(), Jpi.Width(), Jpi.Data(),
-                     compr_dir.GetData(), ph_dir.GetData());
-               // Change of the initial mesh size in the compression direction.
-               const double h = quad_data.h0 * ph_dir.Norml2() / compr_dir.Norml2();
-               // Measure of maximal compression.
-               const double mu = eig_val_data[0];
-               visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
-               add(stress.Height(), stress.Width(),visc_coeff, sgrad_v.Data(), stress.Data());
-            }
-            // Time step estimate at the point. Here the more relevant length
-            // scale is related to the actual mesh deformation; we use the min
-            // singular value of the ref->physical Jacobian. In addition, the
-            // time step estimate should be aware of the presence of shocks.
-            const double h_min = calcSingularvalue(J.Height(), dim-1, J.Data()) / h1order;
-            const double inv_h_min = 1. / h_min;
-            const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-            const double inv_dt = sound_speed * inv_h_min + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
-            if (min_detJ < 0.0) {
-               // This will force repetition of the step with smaller dt.
-               quad_data.dt_est = 0.0;
-            } else {
-               quad_data.dt_est = fmin(quad_data.dt_est, cfl * (1.0 / inv_dt) );
-            }
-            // Quadrature data for partial assembly of the force operator.
-            multABt(stress.Height(), stress.Width(), Jinv.Height(),
-                    stress.Data(), Jinv.Data(), stressJiT.Data());
-            stressJiT *= weight * detJ;
-            for (int vd = 0 ; vd < dim; vd++) {
-               for (int gd = 0; gd < dim; gd++) {
-                  quad_data.stressJinvT(vd)(z*nqp + q, gd) =
-                     stressJiT(vd, gd);
-               }
-            }
-         }
-      }
+      const size_t stressJinvT_sz = nzones * nqp * dim * dim;
+      double *d_stressJinvT =
+         (double*)mfem::kernels::kmalloc<double>::operator new(stressJinvT_sz);
+      
+      qkernel<2> __config(nzones) (nzones,
+                                   nqp,
+                                   nqp1D,
+                                   gamma,
+                                   use_viscosity,
+                                   quad_data.h0,
+                                   h1order,
+                                   cfl,
+                                   infinity,
+                                    
+                                   maps->quadWeights,                                   
+                                   geom->J,
+                                   d_rho0DetJ0w,
+                                   d_e_quads_data,
+                                   d_grad_v_data,
+                                   d_Jac0inv,
+                                   d_dt_est,
+                                   d_stressJinvT);
+      
+      mfem::kernels::kmemcpy::rDtoH(quad_data.stressJinvT.Data(),
+                                    d_stressJinvT, stressJinvT_sz*sizeof(double));
+      
+      mfem::kernels::kmemcpy::rDtoH(&quad_data.dt_est, d_dt_est, sizeof(double));
+      
+      dbg("dt_est=%.21e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;
       timer.sw_qdata.Stop();

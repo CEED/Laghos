@@ -26,15 +26,21 @@ namespace hydrodynamics
 {
 
    // **************************************************************************
-   static void qIniGeom2D( const int NUM_DOFS,
-                           const int NUM_QUAD,
-                           const int numElements,
-                           const double* __restrict dofToQuadD,
-                           const double* __restrict nodes,
-                           double* __restrict J,
-                           double* __restrict invJ,
-                           double* __restrict detJ){
-      for(int e=0;e<numElements;e+=1){
+   template<const int NUM_DOFS,
+            const int NUM_QUAD>
+   __kernel__ void qIniGeom2DK(const int numElements,
+                               const double* __restrict dofToQuadD,
+                               const double* __restrict nodes,
+                               double* __restrict J,
+                               double* __restrict invJ,
+                               double* __restrict detJ){
+#ifdef __NVCC__
+      const int e = blockDim.x * blockIdx.x + threadIdx.x;
+      if (e < numElements)
+#else
+      for(int e=0;e<numElements;e+=1)
+#endif
+      {
          double s_nodes[2 * NUM_DOFS];
          for (int q = 0; q < NUM_QUAD; ++q)
          {
@@ -83,9 +89,11 @@ namespace hydrodynamics
                         double* invJ,
                         double* detJ){
       push();
-      assert (DIM==2);
-      qIniGeom2D(NUM_DOFS, NUM_QUAD, numElements,
-                 dofToQuadD, nodes, J, invJ, detJ);
+      assert(DIM==2);
+      assert(NUM_DOFS==9);
+      assert(NUM_QUAD==16);
+      qIniGeom2DK<9,16> __config(numElements)
+         (numElements, dofToQuadD, nodes, J, invJ, detJ);
       pop();
    }
 

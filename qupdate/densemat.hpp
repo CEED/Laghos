@@ -14,43 +14,34 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "../laghos_solver.hpp"
-#include "qupdate.hpp"
-
-#ifdef MFEM_USE_MPI
-
-using namespace std;
+#ifndef MFEM_LAGHOS_QUPDATE_DENSEMAT
+#define MFEM_LAGHOS_QUPDATE_DENSEMAT
 
 namespace mfem {
-   
+
 namespace hydrodynamics {
+
+   // **************************************************************************
+   __device__ void multABt(const size_t, const size_t, const size_t,
+                           const double*, const double*, double*);
    
    // **************************************************************************
-   void global2LocalMap(ParFiniteElementSpace &fes, qarray<int> &map){
-      const int elements = fes.GetNE();
-      const int localDofs = fes.GetFE(0)->GetDof();
+   __device__ void multAtB(const size_t, const size_t, const size_t,
+                const double*, const double*, double*);
+   
+   // **************************************************************************
+   __device__ void mult(const size_t, const size_t, const size_t,
+                        const double*, const double*, double*);
 
-      const FiniteElement *fe = fes.GetFE(0);
-      const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
-      const Array<int> &dof_map = el->GetDofMap();
-      const bool dof_map_is_identity = dof_map.Size()==0;
-      const Table& e2dTable = fes.GetElementToDofTable();
-      const int *elementMap = e2dTable.GetJ();
-      mfem::Array<int> h_map(localDofs*elements);
-      
-      for (int e = 0; e < elements; ++e) {
-         for (int d = 0; d < localDofs; ++d) {
-            const int did = dof_map_is_identity?d:dof_map[d];
-            const int gid = elementMap[localDofs*e + did];
-            const int lid = localDofs*e + d;
-            h_map[lid] = gid;
-         }
-      }
-      map = h_map;
-   }
-
+   // **************************************************************************
+   __device__ void multV(const size_t, const size_t,
+                         double*, const double*, double*);
+   
+   // **************************************************************************
+   __device__ void add(const size_t, const size_t,
+                       const double, const double*, double*);
 } // namespace hydrodynamics
 
 } // namespace mfem
 
-#endif // MFEM_USE_MPI
+#endif // MFEM_LAGHOS_QUPDATE_DENSEMAT

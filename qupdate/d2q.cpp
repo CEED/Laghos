@@ -25,15 +25,21 @@ namespace mfem {
 namespace hydrodynamics {
    
    // **************************************************************************
-   static void vecToQuad2D(const int NUM_VDIM,
-                           const int NUM_DOFS_1D,
-                           const int NUM_QUAD_1D,
-                           const int numElements,
-                           const double* dofToQuad,
-                           const int* l2gMap,
-                           const double* gf,
-                           double* out) {
-      for(int e=0;e<numElements;e+=1){
+   template<const int NUM_VDIM,
+            const int NUM_DOFS_1D,
+            const int NUM_QUAD_1D>
+   __kernel__ void vecToQuad2D(const int numElements,
+                               const double* dofToQuad,
+                               const int* l2gMap,
+                               const double* gf,
+                               double* out) {
+#ifdef __NVCC__
+      const int e = blockDim.x * blockIdx.x + threadIdx.x;
+      if (e < numElements)
+#else
+      for(int e=0;e<numElements;e+=1)
+#endif
+      {
          double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
          for (int v = 0; v < NUM_VDIM; ++v) {
             for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
@@ -88,10 +94,18 @@ namespace hydrodynamics {
       const int elements = fes.GetNE();
       const qDofQuadMaps* maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
       const double* dofToQuad = maps->dofToQuad;
-      const int* l2gMap = global2LocalMap(fes);
+      //volatile double dummy = dofToQuad[0];
+      const int localDofs = fes.GetFE(0)->GetDof();
+      qarray<int> l2gMap(localDofs, elements);
+      global2LocalMap(fes,l2gMap);
+      //volatile int dummy = l2gMap[0];
       const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-      const int dofs1D = fes.GetFE(0)->GetOrder() + 1;     
-      vecToQuad2D(vdim, dofs1D, quad1D, elements, dofToQuad, l2gMap, vec, quad);
+      const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
+      assert(vdim==1);
+      assert(dofs1D==2);
+      assert(quad1D==4);
+      vecToQuad2D<1,2,4> __config(elements)
+         (elements, dofToQuad, l2gMap, vec, quad);
    }
 
 } // namespace hydrodynamics

@@ -38,7 +38,12 @@ void* qmemcpy::rHtoD(void *dest, const void *src, std::size_t bytes,
    dbg(">\033[m");
    if (bytes==0) return dest;
    assert(src); assert(dest);
+#ifdef __NVCC__
+   checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,bytes));
+   return dest;
+#else
    return std::memcpy(dest,src,bytes);
+#endif
 }
 
 // ***************************************************************************
@@ -48,7 +53,12 @@ void* qmemcpy::rDtoH(void *dest, const void *src, std::size_t bytes,
    dbg("<\033[m");
    if (bytes==0) return dest;
    assert(src); assert(dest);
+#ifdef __NVCC__
+   checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes));
+   return dest;
+#else
    return std::memcpy(dest,src,bytes);
+#endif
 }
 
 // ***************************************************************************
@@ -58,7 +68,12 @@ void* qmemcpy::rDtoD(void *dest, const void *src, std::size_t bytes,
    dbg("=\033[m");
    if (bytes==0) return dest; 
    assert(src); assert(dest);
+#ifdef __NVCC__
+   checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
+   return dest;
+#else
    return std::memcpy(dest,src,bytes);
+#endif
 }
 
 } // mfem

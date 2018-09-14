@@ -200,7 +200,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    
    if (has_engine){
 #ifdef __NVCC__
-      dbg("Jac0inv UseExternalData");
+      /*dbg("Jac0inv UseExternalData");
       const int ji_isz = quad_data.Jac0inv.SizeI();
       const int ji_jsz = quad_data.Jac0inv.SizeJ();
       const int ji_ksz = quad_data.Jac0inv.SizeK();
@@ -209,7 +209,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                     quad_data.Jac0inv.Data(),
                                     ji_isz*ji_jsz*ji_ksz*sizeof(double));
       quad_data.Jac0inv.UseExternalData(ji_ext_data, ji_isz,ji_jsz,ji_ksz);
-      
+      */
       dbg("stressJinvT UseExternalData");
       const int si_isz = quad_data.stressJinvT.SizeI();
       const int si_jsz = quad_data.stressJinvT.SizeJ();
@@ -845,6 +845,8 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
+   dbg("dt_est=%.21e",quad_data.dt_est); // dt_est=1.537012829212408386581e-02
+   //assert(false);
    delete [] gamma_b;
    delete [] rho_b;
    delete [] e_b;

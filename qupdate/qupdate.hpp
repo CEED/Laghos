@@ -23,6 +23,17 @@
 #include "array.hpp"
 #include "dof2quad.hpp"
 #include "geom.hpp"
+#include "eigen.hpp"
+#include "densemat.hpp"
+
+// *****************************************************************************
+#ifdef __NVCC__
+#define __kernel__ __global__
+#define __config(N) <<<((N+256-1)/256),256>>>
+#else
+#define __kernel__ static
+#define __config
+#endif
 
 // Offsets *********************************************************************
 #define   ijN(i,j,N) (i)+(N)*(j)
@@ -45,22 +56,6 @@ namespace mfem {
 namespace hydrodynamics {
    
    // **************************************************************************
-   void multABt(const size_t, const size_t, const size_t,
-                const double*, const double*, double*);
-   
-   // **************************************************************************
-   void multAtB(const size_t, const size_t, const size_t,
-                const double*, const double*, double*);
-   
-   // **************************************************************************
-   void mult(const size_t, const size_t, const size_t,
-             const double*, const double*, double*);
-
-   // **************************************************************************
-   void multV(const size_t, const size_t,
-              double*, const double*, double*);
-
-   // **************************************************************************
    void QUpdate(const int dim,
                 const int nzones,
                 const int l2dofs_cnt,
@@ -78,17 +73,7 @@ namespace hydrodynamics {
                 QuadratureData &quad_data);
 
    // **************************************************************************
-   void add(const size_t, const size_t,
-            const double, const double*, double*);
-
-   // **************************************************************************
-   void calcInverse2D(const size_t, const double*, double*);
-   void symmetrize(const size_t, double*);
-   void calcEigenvalues(const size_t, const double*, double*, double*);
-   double calcSingularvalue(const int, const int, const double*);
-   
-   // **************************************************************************
-   int *global2LocalMap(ParFiniteElementSpace&);
+   void global2LocalMap(ParFiniteElementSpace&,qarray<int>&);
    void globalToLocal(ParFiniteElementSpace&, const double*, double*,
                       const bool =false);
 
