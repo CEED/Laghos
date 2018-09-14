@@ -28,14 +28,31 @@ namespace hydrodynamics
 {
    
    // **************************************************************************
-   /*static inline double det3D(const double *d){
+   __device__
+   inline double det2D(const double *d){
+      return d[0] * d[3] - d[1] * d[2];
+   }
+
+   // **************************************************************************
+   __device__
+   inline double det3D(const double *d){
       return
          d[0] * (d[4] * d[8] - d[5] * d[7]) +
          d[3] * (d[2] * d[7] - d[1] * d[8]) +
          d[6] * (d[1] * d[5] - d[2] * d[4]);
-         }*/
+   }
 
-
+   // **************************************************************************
+   __device__
+   void calcInverse2D(const size_t n, const double *a, double *i){
+      const double d = det2D(a);
+      const double t = 1.0 / d;
+      i[0*n+0] =  a[1*n+1] * t ;
+      i[0*n+1] = -a[0*n+1] * t ;
+      i[1*n+0] = -a[1*n+0] * t ;
+      i[1*n+1] =  a[0*n+0] * t ;
+   }
+   
    // **************************************************************************
    __device__
    void symmetrize(const size_t n, double* __restrict__ d){

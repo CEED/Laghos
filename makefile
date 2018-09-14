@@ -21,8 +21,7 @@ MFEM_DIR ?= $(HOME)/home/mfem/kernels
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 #NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = --device-c
- # -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+# -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 # number of proc to use for compilation stage
 CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
@@ -123,12 +122,7 @@ CXXFLAGS += $(CXXEXTRA)
 
 # NVCC *************************************************************************
 ifneq (,$(nvcc))
-#	CXX = nvcc
-#	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
-#	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-#	CXXFLAGS += $(if $(templates),-D__TEMPLATES__)
-#	CUDA_INC = -I$(CUDA_DIR)/samples/common/inc
-#	CXXFLAGS += --expt-extended-lambda
+	CXXEXTRA = --device-c
 	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
 endif
 
@@ -182,7 +176,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 # ******************************************************************************
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) -arch=sm_60 -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
+	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0

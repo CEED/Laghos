@@ -18,6 +18,16 @@
 #define MFEM_LAGHOS_QUPDATE
 
 // *****************************************************************************
+#ifdef __NVCC__
+#define __kernel__ __global__
+#define __config(N) <<<((N+256-1)/256),256>>>
+#else
+#define __kernel__
+#define __device__
+#define __config(...)
+#endif
+
+// *****************************************************************************
 #include "memcpy.hpp"
 #include "alloc.hpp"
 #include "array.hpp"
@@ -25,15 +35,6 @@
 #include "geom.hpp"
 #include "eigen.hpp"
 #include "densemat.hpp"
-
-// *****************************************************************************
-#ifdef __NVCC__
-#define __kernel__ __global__
-#define __config(N) <<<((N+256-1)/256),256>>>
-#else
-#define __kernel__ static
-#define __config
-#endif
 
 // Offsets *********************************************************************
 #define   ijN(i,j,N) (i)+(N)*(j)

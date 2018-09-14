@@ -21,38 +21,6 @@ namespace mfem {
 
 namespace hydrodynamics {
 
-   // **************************************************************************
-   __device__ static inline double det2D(const double *d){
-      return d[0] * d[3] - d[1] * d[2];
-   }
-
-   // **************************************************************************
-   __device__
-   void calcInverse2D(const size_t n, const double *a, double *i){
-      const double d = det2D(a);
-      const double t = 1.0 / d;
-      i[0*n+0] =  a[1*n+1] * t ;
-      i[0*n+1] = -a[0*n+1] * t ;
-      i[1*n+0] = -a[1*n+0] * t ;
-      i[1*n+1] =  a[0*n+0] * t ;
-   }
-
-   // **************************************************************************
-   /*__attribute__((unused))
-   static void getL2Values(const int dim,
-                           const int nL2dof1D,
-                           const int nqp1D,
-                           const double* __restrict__ vecL2,
-                           double* __restrict__ vecQ){     
-      assert(dim == 2);      
-      double LQ[nL2dof1D*nqp1D];         
-      // LQ_j2_k1 = vecL2_j1_j2 LQs_j1_k1  -- contract in x direction.
-      multAtB(nL2dof1D, nL2dof1D, tensors1D->LQshape1D.Width(),
-              vecL2, tensors1D->LQshape1D.Data(), LQ);      
-      // QQ_k1_k2 = LQ_j2_k1 LQs_j2_k2 -- contract in y direction.
-      multAtB(nL2dof1D, nqp1D, tensors1D->LQshape1D.Width(),
-              LQ, tensors1D->LQshape1D.Data(), vecQ);
-              }*/
 
    // **************************************************************************
    /*__attribute__((unused))
