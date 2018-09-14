@@ -105,7 +105,7 @@ namespace hydrodynamics
    }
    
    // **************************************************************************
-   void globalToLocal(ParFiniteElementSpace &fes,
+   /*void globalToLocal(ParFiniteElementSpace &fes,
                       const double *globalVec,
                       double *localVec,
                       const bool ordering) {
@@ -122,7 +122,7 @@ namespace hydrodynamics
           globalDofs, localEntries,
           offsets, indices,
           globalVec, localVec);
-   }   
+          }   */
    
 } // namespace hydrodynamics
 

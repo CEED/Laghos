@@ -21,58 +21,6 @@ namespace mfem {
 
 namespace hydrodynamics {
 
-
-   // **************************************************************************
-   /*__attribute__((unused))
-   static void getVectorGrad(const int dim,
-                             const int nH1dof1D,
-                             const int nqp1D,
-                             const Array<int> &dof_map,
-                             const DenseMatrix &vec,
-                             DenseTensor &J) {
-      assert(dim == 2);
-      
-      const int nH1dof = nH1dof1D * nH1dof1D;
-      
-      double X[nH1dof];
-      double HQ[nH1dof1D * nqp1D];
-      double QQ[nqp1D * nqp1D];
-      
-      for (int c = 0; c < 2; c++) {
-         
-         // Transfer from the mfem's H1 local numbering to the tensor structure
-         for (int j = 0; j < nH1dof; j++) X[j] = vec(dof_map[j], c);         
-
-         // HQ_i2_k1  = X_i1_i2 HQg_i1_k1  -- gradients in x direction.
-         // QQ_k1_k2  = HQ_i2_k1 HQs_i2_k2 -- contract  in y direction.
-         multAtB(nH1dof1D, nH1dof1D, tensors1D->HQgrad1D.Width(),
-                 X, tensors1D->HQgrad1D.Data(), HQ);
-         multAtB(nH1dof1D, nqp1D, tensors1D->HQshape1D.Width(),
-                 HQ, tensors1D->HQshape1D.Data(), QQ);
-         // Set the (c,0) component of the Jacobians at all quadrature points.
-         for (int k1 = 0; k1 < nqp1D; k1++) {
-            for (int k2 = 0; k2 < nqp1D; k2++) {
-               const int idx = k2 * nqp1D + k1;
-               J(idx)(c, 0) = QQ[idx];
-            }
-         }
-
-         // HQ_i2_k1  = X_i1_i2 HQs_i1_k1  -- contract  in x direction.
-         // QQ_k1_k2  = HQ_i2_k1 HQg_i2_k2 -- gradients in y direction.
-         multAtB(nH1dof1D, nH1dof1D, tensors1D->HQshape1D.Width(),
-                 X, tensors1D->HQshape1D.Data(), HQ);
-         multAtB(nH1dof1D, nqp1D, tensors1D->HQgrad1D.Width(),
-                 HQ, tensors1D->HQgrad1D.Data(), QQ);
-         // Set the (c,1) component of the Jacobians at all quadrature points.
-         for (int k1 = 0; k1 < nqp1D; k1++) {
-            for (int k2 = 0; k2 < nqp1D; k2++) {
-               const int idx = k2 * nqp1D + k1;
-               J(idx)(c, 1) = QQ[idx];
-            }
-         }
-      }
-      }*/
-
    // **************************************************************************
    template <const int NUM_DOFS,
              const int NUM_QUAD>
@@ -88,37 +36,21 @@ namespace hydrodynamics {
       for(int e=0; e<numElements; e+=1)
 #endif
       {
-         //dbg("elem #%d",e);
          double s_in[2 * NUM_DOFS];
          for (int q = 0; q < NUM_QUAD; ++q) {
-            //dbg("\tq #%d",q);
             for (int d = q; d < NUM_DOFS; d+=NUM_QUAD) {
-               //dbg("\t\td=%d",d);
-               //const int x0 = ijN(0,d,2);
-               //const int x1 = ijkNM(0,d,e,2,NUM_DOFS);
-               //const int y0 = ijN(1,d,2);
-               //const int y1 = ijkNM(1,d,e,2,NUM_DOFS);
-               //const double x = in[ijkNM(0,d,e,2,NUM_DOFS)];
-               //const double y = in[ijkNM(1,d,e,2,NUM_DOFS)];
-               //dbg("\t\t%d <= %d: %f",x0,x1,x);
-               //dbg("\t\t%d <= %d: %f",y0,y1,y);
                s_in[ijN(0,d,2)] = in[ijkNM(0,d,e,2,NUM_DOFS)];
                s_in[ijN(1,d,2)] = in[ijkNM(1,d,e,2,NUM_DOFS)];
             }
          }
-         //dbg("eof share, returning to elem #%d",e);
          for (int q = 0; q < NUM_QUAD; ++q) {
-            //dbg("\tq #%d",q);
             double J11 = 0.0; double J12 = 0.0;
             double J21 = 0.0; double J22 = 0.0;
             for (int d = 0; d < NUM_DOFS; ++d) {
-               //dbg("\t\td=%d",d);
                const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
                const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
                const double x = s_in[ijN(0,d,2)];
                const double y = s_in[ijN(1,d,2)];
-               //dbg("\t\twx=%f, wy=%f",wx,wy);
-               //dbg("\t\t x=%f,  y=%f", x, y);
                J11 += (wx * x); J12 += (wx * y);
                J21 += (wy * x); J22 += (wy * y);
             }
@@ -137,8 +69,6 @@ namespace hydrodynamics {
       push();
       const size_t vdim = fes.GetVDim();
       const size_t ndofs = fes.GetNDofs();
-      dbg("size=%d",size);    
-      dbg("vdim=%d ndofs=%d",vdim, ndofs);
       double *temp = new double[size];
       for (size_t k=0; k<size; k++) temp[k]=0.0;
       size_t k=0;
@@ -147,7 +77,6 @@ namespace hydrodynamics {
             temp[k++] = data[d+v*ndofs];
       for (size_t i=0; i<size; i++){
          data[i] = temp[i];
-         //dbg("data[%d]=%f",i,data[i]);
       }
       delete [] temp;
       pop();
@@ -159,9 +88,7 @@ namespace hydrodynamics {
                               double *data){
       push();
       const size_t vdim = fes.GetVDim();
-      const size_t ndofs = fes.GetNDofs();
-      //dbg("size=%d",size);      
-      //dbg("vdim=%d ndofs=%d",vdim, ndofs);      
+      const size_t ndofs = fes.GetNDofs(); 
       double *temp = new double[size];
       for (size_t k=0; k<size; k++) temp[k]=0.0;
       size_t k=0;
@@ -170,7 +97,6 @@ namespace hydrodynamics {
             temp[j+i*ndofs] = data[k++];
       for (size_t i = 0; i < size; i++){
          data[i] = temp[i];
-         //dbg("data[%d]=%f",i,data[i]);
       }
       delete [] temp;
       pop();
@@ -247,11 +173,8 @@ namespace hydrodynamics {
                            double *stressJinvT){
       double min_detJ = infinity;
 #ifdef __NVCC__
-      //const int z = blockDim.x * blockIdx.x + threadIdx.x;
-      //if (z < nzones)
-      const int _z = blockDim.x * blockIdx.x + threadIdx.x;
-      if (_z >= 1) return;
-      for (int z = 0; z < nzones; z++)
+      const int z = blockDim.x * blockIdx.x + threadIdx.x;
+      if (z < nzones)
 #else
       for (int z = 0; z < nzones; z++)
 #endif
@@ -260,22 +183,17 @@ namespace hydrodynamics {
          for (int q = 0; q < nqp; q++) {
             const int idx = z * nqp + q;
             const double weight =  weights[q];
-            //printf("\nweight=%f",weight);
             const double inv_weight = 1. / weight;
             const double *J = &_J[(z*nqp+q)*nzones];
             const double detJ = Det(dim,J);
-            //printf("\ndetJ=%f",detJ);
             min_detJ = fmin(min_detJ, detJ);
-            //printf("\nmin_detJ=%f",min_detJ);
             double Jinv[dim*dim];
-            calcInverse2D(dim, J, Jinv);    
-            //for(int k=0;k<dim*dim;k+=1) printf("%f ",Jinv[k]);    
+            calcInverse2D(dim, J, Jinv);
             // *****************************************************************
             const double rho = inv_weight * rho0DetJ0w[idx] / detJ;
             const double e   = fmax(0.0, e_quads[z*nqp1D*nqp1D+q]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            //printf("\nrho=%f, e=%f, p=%f, sound_speed=%f",rho,e,p,sound_speed);
             // *****************************************************************
             double stress[dim*dim];
             for (int k=0;k<dim*dim;k+=1) stress[k] = 0.0;
@@ -283,35 +201,43 @@ namespace hydrodynamics {
             // *****************************************************************
             double visc_coeff = 0.0;
             if (use_viscosity) {
-               assert(false);
                // Compression-based length scale at the point. The first
                // eigenvector of the symmetric velocity gradient gives the
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.               
                const double *dV = &grad_v_ext[(z*nqp+q)*nzones];
+               //printf("\n\033[35m dV="); for(int k=0;k<dim*dim;k+=1) printf(" %f",dV[k]);
+               //printf("\n\033[35m Jinv="); for(int k=0;k<dim*dim;k+=1) printf(" %f",Jinv[k]);
                double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
+               //printf("\n\033[35m sgrad_v="); for(int k=0;k<dim*dim;k+=1) printf(" %f",sgrad_v[k]);
                symmetrize(dim,sgrad_v);
+               //dbg("\n\033[35mSymmetrize sgrad_v="); for(int k=0;k<dim*dim;k+=1) printf(" %f",sgrad_v[k]);
                double eig_val_data[3], eig_vec_data[9];
                if (dim==1) {
                   eig_val_data[0] = sgrad_v[0*dim+0];
                   eig_vec_data[0] = 1.;
                }
                else {
-                  calcEigenvalues(dim, &sgrad_v[0], eig_val_data, eig_vec_data);
+                  calcEigenvalues(dim, sgrad_v, eig_val_data, eig_vec_data);
                }
-               double *compr_dir = eig_vec_data;
+               //dbg("\neig_val_data:"); for(int k=0;k<3;k+=1) printf(" %f",eig_val_data[k]);
+               //dbg("\neig_vec_data:"); for(int k=0;k<3;k+=1) printf(" %f",eig_vec_data[k]);
+               double compr_dir[3] = {eig_vec_data[0],eig_vec_data[1],eig_vec_data[2]};
                // Computes the initial->physical transformation Jacobian.
                double Jpi[dim*dim];
-               mult(dim,dim,dim, J, &Jac0inv[idx], Jpi);
+               mult(dim,dim,dim, J, Jac0inv+idx*dim*dim, Jpi);
+               //dbg("\n\033[36mJac0inv="); for(int k=0;k<dim*dim;k+=1) printf(" %f",(Jac0inv+idx*dim*dim)[k]);
                double ph_dir[dim];
                //Jpi.Mult(compr_dir, ph_dir);
                multV(dim, dim, Jpi, compr_dir, ph_dir);
                // Change of the initial mesh size in the compression direction.
-               const double h = h0 * norml2(dim,ph_dir) / norml2(9,compr_dir);
+               const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
+               //dbg("\n\033[33m|ph_dir|=%f, |compr_dir|=%f\033[m",norml2(dim,ph_dir),norml2(dim,compr_dir));
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               //dbg("\n\033[32mh=%f, mu=%f, visc_coeff=%f\033[m",h,mu,visc_coeff);
                if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
                add(dim, dim, visc_coeff, sgrad_v, stress);
             }
@@ -319,11 +245,17 @@ namespace hydrodynamics {
             // scale is related to the actual mesh deformation; we use the min
             // singular value of the ref->physical Jacobian. In addition, the
             // time step estimate should be aware of the presence of shocks.
-            const double h_min = calcSingularvalue(dim, dim-1, J) / h1order;
-            const double inv_h_min = 1. / h_min;
-            const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-            const double inv_dt = sound_speed * inv_h_min + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+            const double sv = calcSingularvalue(dim, dim-1, J);
+            const double h_min = sv / h1order;
+            
+            const double inv_dt = sound_speed / h_min + 2.5 * visc_coeff / rho / h_min / h_min;
+            
+            //const double inv_h_min = 1. / h_min;
+            //const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
+            //const double inv_dt = sound_speed * inv_h_min + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
             //printf("\nh_min=%f, inv_h_min=%f, inv_rho_inv_h_min_sq=%f, inv_dt=%f",h_min,inv_h_min,inv_rho_inv_h_min_sq,inv_dt);
+            //printf("\nsound_speed=%f, h_min=%f, visc_coeff=%f, rho=%f, inv_dt=%f",sound_speed, h_min, visc_coeff, rho, inv_dt);
+            //printf("\nsv=%f, h1order=%f, h_min=%f, inv_dt=%f",sv, h1order, h_min,inv_dt);
             //printf("\nmin_detJ=%f, dt_est=%f, cfl=%f, inv_dt=%f",min_detJ,*dt_est,cfl,inv_dt);
             if (min_detJ < 0.0) {
                // This will force repetition of the step with smaller dt.
