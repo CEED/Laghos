@@ -14,112 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "../laghos_solver.hpp"
 #include "qupdate.hpp"
 
 namespace mfem {
 
 namespace hydrodynamics {
-
-   // **************************************************************************
-   template <const int NUM_DOFS,
-             const int NUM_QUAD>
-   __kernel__
-   static void qGradVector2D(const int numElements,
-                             const double* __restrict dofToQuadD,
-                             const double* __restrict in,
-                             double* __restrict out){
-#ifdef __NVCC__
-      const int e = blockDim.x * blockIdx.x + threadIdx.x;
-      if (e < numElements)
-#else
-      for(int e=0; e<numElements; e+=1)
-#endif
-      {
-         double s_in[2 * NUM_DOFS];
-         for (int q = 0; q < NUM_QUAD; ++q) {
-            for (int d = q; d < NUM_DOFS; d+=NUM_QUAD) {
-               s_in[ijN(0,d,2)] = in[ijkNM(0,d,e,2,NUM_DOFS)];
-               s_in[ijN(1,d,2)] = in[ijkNM(1,d,e,2,NUM_DOFS)];
-            }
-         }
-         for (int q = 0; q < NUM_QUAD; ++q) {
-            double J11 = 0.0; double J12 = 0.0;
-            double J21 = 0.0; double J22 = 0.0;
-            for (int d = 0; d < NUM_DOFS; ++d) {
-               const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
-               const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
-               const double x = s_in[ijN(0,d,2)];
-               const double y = s_in[ijN(1,d,2)];
-               J11 += (wx * x); J12 += (wx * y);
-               J21 += (wy * x); J22 += (wy * y);
-            }
-            out[ijklNM(0,0,q,e,2,NUM_QUAD)] = J11;
-            out[ijklNM(1,0,q,e,2,NUM_QUAD)] = J12;
-            out[ijklNM(0,1,q,e,2,NUM_QUAD)] = J21;
-            out[ijklNM(1,1,q,e,2,NUM_QUAD)] = J22;
-         }
-      }
-   }
-
-   // **************************************************************************
-   static void reorderByVDim(const FiniteElementSpace& fes,
-                             const size_t size,
-                             double *data){
-      push();
-      const size_t vdim = fes.GetVDim();
-      const size_t ndofs = fes.GetNDofs();
-      double *temp = new double[size];
-      for (size_t k=0; k<size; k++) temp[k]=0.0;
-      size_t k=0;
-      for (size_t d = 0; d < ndofs; d++)
-         for (size_t v = 0; v < vdim; v++)      
-            temp[k++] = data[d+v*ndofs];
-      for (size_t i=0; i<size; i++){
-         data[i] = temp[i];
-      }
-      delete [] temp;
-      pop();
-   }
-
-   // ***************************************************************************
-   static void reorderByNodes(const FiniteElementSpace& fes,
-                              const size_t size,
-                              double *data){
-      push();
-      const size_t vdim = fes.GetVDim();
-      const size_t ndofs = fes.GetNDofs(); 
-      double *temp = new double[size];
-      for (size_t k=0; k<size; k++) temp[k]=0.0;
-      size_t k=0;
-      for (size_t j=0; j < ndofs; j++)
-         for (size_t i=0; i < vdim; i++)
-            temp[j+i*ndofs] = data[k++];
-      for (size_t i = 0; i < size; i++){
-         data[i] = temp[i];
-      }
-      delete [] temp;
-      pop();
-   }
-
-   // **************************************************************************
-   void qGradVector(const FiniteElementSpace& fes,
-                    const IntegrationRule& ir,
-                    const qDofQuadMaps* maps,
-                    const size_t size,
-                    double *in,
-                    double *out){
-      push();
-      const mfem::FiniteElement &fe = *(fes.GetFE(0));
-      const int dim = fe.GetDim(); assert(dim==2);
-      const int ndf  = fe.GetDof();
-      const int nqp  = ir.GetNPoints();
-      const int nzones = fes.GetNE();
-      assert(ndf==9);
-      assert(nqp==16);
-      qGradVector2D<9,16> __config(nzones) (nzones, maps->dofToQuadD, in, out);
-      pop();
-   }
 
    // **************************************************************************
    __device__ double Det(const size_t dim, const double *J){
@@ -277,7 +176,7 @@ namespace hydrodynamics {
                 const double cfl,
                 TimingData &timer,
                 Coefficient *material_pcf,
-                const IntegrationRule &integ_rule,
+                const IntegrationRule &ir,
                 ParFiniteElementSpace &H1FESpace,
                 ParFiniteElementSpace &L2FESpace,
                 const Vector &S,
@@ -290,7 +189,7 @@ namespace hydrodynamics {
 
       // ***********************************************************************
       ElementTransformation *T = H1FESpace.GetElementTransformation(0);
-      const IntegrationPoint &ip = integ_rule.IntPoint(0);
+      const IntegrationPoint &ip = ir.IntPoint(0);
       const double gamma = material_pcf->Eval(*T,ip);
 
       // ***********************************************************************
@@ -302,7 +201,7 @@ namespace hydrodynamics {
       const int dims     = H1FESpace.GetVDim();
       const int elements = H1FESpace.GetNE();
       const int numDofs  = fe.GetDof();
-      const int nqp = integ_rule.GetNPoints();
+      const int nqp = ir.GetNPoints();
       assert(elements==nzones);
       dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
 
@@ -322,54 +221,25 @@ namespace hydrodynamics {
       double *e_data = sptr->GetData()+2*H1_size;
       mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
       double *d_e_quads_data = (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
-      Dof2Quad(L2FESpace, integ_rule, d_e_data, d_e_quads_data);
+      Dof2QuadScalar(L2FESpace, ir, d_e_data, d_e_quads_data);
 
       // Refresh Geom J, invJ & detJ *******************************************
-      const qGeometry *geom = qGeometry::Get(H1FESpace,integ_rule);
+      const qGeometry *geom = qGeometry::Get(H1FESpace,ir);
 
       // Integration Points Weights (tensor) ***********************************
-      const qDofQuadMaps* maps = qDofQuadMaps::Get(H1FESpace,integ_rule);
+      const qDofQuadMaps* maps = qDofQuadMaps::Get(H1FESpace,ir);
       
       // Velocity **************************************************************     
       ParGridFunction velocity;
       velocity.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-      reorderByVDim(H1FESpace, velocity.Size(), velocity.GetData());
-      const size_t v_local_size = dims * numDofs * elements;
-      mfem::Array<double> local_velocity(v_local_size);
-      const Table& e2dTable = H1FESpace.GetElementToDofTable();
-      const int* elementMap = e2dTable.GetJ();
-      for (int e = 0; e < elements; ++e) {
-         for (int d = 0; d < numDofs; ++d) {
-            const int lid = d+numDofs*e;
-            const int gid = elementMap[lid];
-            for (int v = 0; v < dims; ++v) {
-               const int moffset = v+dims*lid;
-               const int xoffset = v+dims*gid;
-               local_velocity[moffset] = velocity[xoffset];
-            }
-         }
-      }
-      double *d_v_data = (double*)mfem::kernels::kmalloc<double>::operator new(v_local_size);
-      mfem::kernels::kmemcpy::rHtoD(d_v_data,
-                                    local_velocity.GetData(),
-                                    v_local_size*sizeof(double));
-
-      reorderByNodes(H1FESpace, velocity.Size(), velocity.GetData());
-      const size_t grad_v_size = dim * dim * nqp * nzones;
-      double *d_grad_v_data = (double*) mfem::kernels::kmalloc<double>::operator new(grad_v_size);
-      const qDofQuadMaps *simplex_maps = qDofQuadMaps::GetSimplexMaps(fe,integ_rule);
-      qGradVector(H1FESpace,
-                  integ_rule,
-                  simplex_maps,
-                  v_local_size,
-                  d_v_data,
-                  d_grad_v_data);
-
+      double *d_grad_v_data;
+      Dof2QuadGrad(H1FESpace,ir,velocity.GetData(),&d_grad_v_data);
+      
       // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
       const double infinity = std::numeric_limits<double>::infinity();
-      dbg("infinity=%f",infinity);
-      
+
+      dbg("rho0DetJ0w");
       const size_t rho0DetJ0w_sz = nzones * nqp;
       double *d_rho0DetJ0w =
          (double*)mfem::kernels::kmalloc<double>::operator new(rho0DetJ0w_sz);
@@ -377,20 +247,24 @@ namespace hydrodynamics {
                                     quad_data.rho0DetJ0w.GetData(),
                                     rho0DetJ0w_sz*sizeof(double));
 
+      dbg("Jac0inv");
       const size_t Jac0inv_sz = dim * dim * nzones * nqp;
       double *d_Jac0inv =
          (double*)mfem::kernels::kmalloc<double>::operator new(Jac0inv_sz);
       mfem::kernels::kmemcpy::rHtoD(d_Jac0inv,
                                     quad_data.Jac0inv.Data(),
                                     Jac0inv_sz*sizeof(double));
-      
+
+      dbg("dt_est");
       double *d_dt_est = (double*)mfem::kernels::kmalloc<double>::operator new(1);
       mfem::kernels::kmemcpy::rHtoD(d_dt_est, &quad_data.dt_est, sizeof(double));
 
+      dbg("stressJinvT");
       const size_t stressJinvT_sz = nzones * nqp * dim * dim;
       double *d_stressJinvT =
          (double*)mfem::kernels::kmalloc<double>::operator new(stressJinvT_sz);
-      
+
+      dbg("qkernel");
       qkernel<2> __config(nzones) (nzones,
                                    nqp,
                                    nqp1D,

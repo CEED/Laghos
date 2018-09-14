@@ -28,9 +28,11 @@
 #endif
 
 // *****************************************************************************
+#include "../laghos_solver.hpp"
 #include "memcpy.hpp"
 #include "alloc.hpp"
 #include "array.hpp"
+#include "maps.hpp"
 #include "dof2quad.hpp"
 #include "geom.hpp"
 #include "eigen.hpp"

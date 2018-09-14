@@ -187,7 +187,9 @@ pgo2:;@DBG=1 mpirun -xterm -1! -n 2 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cg
 
 ng:;@./laghos -cfl 0.1 -rs 0 -ng
 ng1:;@./laghos -cfl 0.1 -rs 0 -ng -p 1
+ng1q:;@./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
 png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
+png1:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1
 png2:;mpirun -n 2 ./laghos -cfl 0.1 -ng
 png3:;mpirun -n 3 ./laghos -cfl 0.1 -ng
 

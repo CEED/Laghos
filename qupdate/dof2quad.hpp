@@ -16,57 +16,19 @@ namespace mfem
 {
 
 namespace hydrodynamics {
+
+   // *****************************************************************************
+   // * Dof2QuadScalar
+   // *****************************************************************************
+   void Dof2QuadScalar(ParFiniteElementSpace&, const IntegrationRule&,
+                       const double*, double*);
+
+   // *****************************************************************************
+   // * Dof2QuadGrad
+   // *****************************************************************************
+   void Dof2QuadGrad(ParFiniteElementSpace&, const IntegrationRule&,
+                     double*, double**);
    
-// ***************************************************************************
-// * qDofQuadMaps
-// ***************************************************************************
-class qDofQuadMaps
-{
-private:
-   std::string hash;
-public:
-   qarray<double, false> dofToQuad, dofToQuadD; // B
-   qarray<double, false> quadToDof, quadToDofD; // B^T
-   qarray<double> quadWeights;
-public:
-   ~qDofQuadMaps();
-   static void delqDofQuadMaps();
-   static qDofQuadMaps* Get(const mfem::FiniteElementSpace&,
-                            const mfem::IntegrationRule&,
-                            const bool = false);
-   static qDofQuadMaps* Get(const mfem::FiniteElementSpace&,
-                            const mfem::FiniteElementSpace&,
-                            const mfem::IntegrationRule&,
-                            const bool = false);
-   static qDofQuadMaps* Get(const mfem::FiniteElement&,
-                            const mfem::FiniteElement&,
-                            const mfem::IntegrationRule&,
-                            const bool = false);
-   static qDofQuadMaps* GetTensorMaps(const mfem::FiniteElement&,
-                                      const mfem::FiniteElement&,
-                                      const mfem::IntegrationRule&,
-                                      const bool = false);
-   static qDofQuadMaps* GetD2QTensorMaps(const mfem::FiniteElement&,
-                                         const mfem::IntegrationRule&,
-                                         const bool = false);
-   static qDofQuadMaps* GetSimplexMaps(const mfem::FiniteElement&,
-                                       const mfem::IntegrationRule&,
-                                       const bool = false);
-   static qDofQuadMaps* GetSimplexMaps(const mfem::FiniteElement&,
-                                       const mfem::FiniteElement&,
-                                       const mfem::IntegrationRule&,
-                                       const bool = false);
-   static qDofQuadMaps* GetD2QSimplexMaps(const mfem::FiniteElement&,
-                                          const mfem::IntegrationRule&,
-                                          const bool = false);
-};
-
-// *****************************************************************************
-// * Dof2Quad
-// *****************************************************************************
-void Dof2Quad(ParFiniteElementSpace&, const IntegrationRule&,
-              const double*, double*);
-
 } // namespace hydrodynamics
    
 } // namespace mfem
