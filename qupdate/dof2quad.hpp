@@ -61,6 +61,12 @@ public:
                                           const bool = false);
 };
 
+// *****************************************************************************
+// * Dof2Quad
+// *****************************************************************************
+void Dof2Quad(ParFiniteElementSpace&, const IntegrationRule&,
+              const double*, double*);
+
 } // namespace hydrodynamics
    
 } // namespace mfem

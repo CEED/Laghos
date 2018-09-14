@@ -66,10 +66,6 @@ namespace hydrodynamics {
                 bool &quad_data_is_current,
                 QuadratureData &quad_data);
 
-   // **************************************************************************
-   void d2q(ParFiniteElementSpace&, const IntegrationRule&,
-            const double*, double*);
-
 } // namespace hydrodynamics
 
 } // namespace mfem

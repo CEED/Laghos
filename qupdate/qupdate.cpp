@@ -322,7 +322,7 @@ namespace hydrodynamics {
       double *e_data = sptr->GetData()+2*H1_size;
       mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
       double *d_e_quads_data = (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
-      d2q(L2FESpace, integ_rule, d_e_data, d_e_quads_data);
+      Dof2Quad(L2FESpace, integ_rule, d_e_data, d_e_quads_data);
 
       // Refresh Geom J, invJ & detJ *******************************************
       const qGeometry *geom = qGeometry::Get(H1FESpace,integ_rule);
