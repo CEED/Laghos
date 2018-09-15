@@ -190,6 +190,7 @@ ng1:;@./laghos -cfl 0.1 -rs 0 -ng -p 1
 ng1q:;@./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
 png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
 png1:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1
+png1q:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
 png2:;mpirun -n 2 ./laghos -cfl 0.1 -ng
 png3:;mpirun -n 3 ./laghos -cfl 0.1 -ng
 

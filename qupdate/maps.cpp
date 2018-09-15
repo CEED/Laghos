@@ -164,6 +164,7 @@ qDofQuadMaps* qDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       }
       for (int d = 0; d < dofs; ++d)
       {
+         //printf("\n[tensor] shape=%f, grad=%f",d2q[d],d2qD[d]);
          dofToQuad[maps->dofToQuad.dim()[0]*q + maps->dofToQuad.dim()[1]*d] = d2q[d];
          dofToQuadD[maps->dofToQuad.dim()[0]*q + maps->dofToQuad.dim()[1]*d] = d2qD[d];
       }
@@ -286,14 +287,17 @@ qDofQuadMaps* qDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
       {
          const double w = d2q[d];
          dofToQuad[maps->dofToQuad.dim()[0]*q +
-                                              maps->dofToQuad.dim()[1]*d] = w;
+                   maps->dofToQuad.dim()[1]*d] = w;
+         //printf("\n\033[32m[simplex] shape=%f",w);
          for (int dim = 0; dim < dims; ++dim)
          {
             const double wD = d2qD(d, dim);
+            //printf(", grad=%f",wD);
             dofToQuadD[maps->dofToQuadD.dim()[0]*dim +
                        maps->dofToQuadD.dim()[1]*q +
                        maps->dofToQuadD.dim()[2]*d] = wD;
          }
+         //printf("\033[m");
       }
    }
    if (transpose)

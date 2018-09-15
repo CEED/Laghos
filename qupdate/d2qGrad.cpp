@@ -26,10 +26,12 @@ namespace hydrodynamics {
    template <const int NUM_DOFS,
              const int NUM_QUAD>
    __kernel__
-   static void qGradVector2D(const int numElements,
-                             const double* __restrict dofToQuadD,
-                             const double* __restrict in,
-                             double* __restrict out){
+   static void qGradVector2DSimplex(const int numElements,
+                                    const double* __restrict simplx_dofToQuadD,
+                                    const double* __restrict in,
+                                    double* __restrict out){
+      const int NUM_QUAD_1D = 4;
+      const int NUM_DOFS_1D = 3;
 #ifdef __NVCC__
       const int e = blockDim.x * blockIdx.x + threadIdx.x;
       if (e < numElements)
@@ -48,8 +50,9 @@ namespace hydrodynamics {
             double J11 = 0.0; double J12 = 0.0;
             double J21 = 0.0; double J22 = 0.0;
             for (int d = 0; d < NUM_DOFS; ++d) {
-               const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
-               const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
+               const double wx = simplx_dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
+               const double wy = simplx_dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
+               //printf("\nwx=%f, wy=%f",wx,wy);fflush(0);
                const double x = s_in[ijN(0,d,2)];
                const double y = s_in[ijN(1,d,2)];
                J11 += (wx * x); J12 += (wx * y);
@@ -59,6 +62,70 @@ namespace hydrodynamics {
             out[ijklNM(1,0,q,e,2,NUM_QUAD)] = J12;
             out[ijklNM(0,1,q,e,2,NUM_QUAD)] = J21;
             out[ijklNM(1,1,q,e,2,NUM_QUAD)] = J22;
+            //assert(false);
+         }
+      }
+   }
+   // **************************************************************************
+   template <const int NUM_DOFS,
+             const int NUM_QUAD>
+   __kernel__
+   static void qGradVector2DTensor(const int numElements,
+                                   const double* __restrict dofToQuad,
+                                   const double* __restrict dofToQuadD,
+                                   const double* __restrict in,
+                                   double* __restrict out){
+      const int NUM_DOFS_1D = 3;
+      const int NUM_QUAD_1D = 4;
+#ifdef __NVCC__
+      const int e = blockDim.x * blockIdx.x + threadIdx.x;
+      if (e < numElements)
+#else
+      for(int e=0; e<numElements; e+=1)
+#endif
+      {
+         double s_gradv[4*NUM_QUAD] ;
+         for (int i = 0; i < (4*NUM_QUAD); ++i) {
+            s_gradv[i] = 0.0;
+         }
+         
+         for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+            double vDx[2*NUM_QUAD_1D];
+            double vx[2*NUM_QUAD_1D];
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+               for (int vi = 0; vi < 2; ++vi) {
+                  vDx[ijN(vi,qx,2)] = 0;
+                  vx[ijN(vi,qx,2)] = 0;
+               }
+            }
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+               for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                  for (int vi = 0; vi < 2; ++vi) {
+                     vDx[ijN(vi,qx,2)] +=
+                        in[_ijklNM(vi,dx,dy,e,NUM_DOFS_1D,numElements)]
+                        *dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+                     vx[ijN(vi,qx,2)]  +=
+                        in[_ijklNM(vi,dx,dy,e,NUM_DOFS_1D,numElements)]
+                        *dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+                  }
+               }
+            }
+            for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+               const double wy  = dofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
+               const double wDy = dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
+               for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+                  for (int vi = 0; vi < 2; ++vi) {
+                     s_gradv[ijkN(vi,0,qx+qy*NUM_QUAD_1D,2)] += wy*vDx[ijN(vi,qx,2)];
+                     s_gradv[ijkN(vi,1,qx+qy*NUM_QUAD_1D,2)] += wDy*vx[ijN(vi,qx,2)];
+                  }
+               }
+            }
+         }
+         for (int q = 0; q < NUM_QUAD; ++q) {
+            out[ijklNM(0,0,q,e,2,NUM_QUAD)] = s_gradv[ijkN(0,0,q,2)];
+            out[ijklNM(1,0,q,e,2,NUM_QUAD)] = s_gradv[ijkN(1,0,q,2)];
+            out[ijklNM(0,1,q,e,2,NUM_QUAD)] = s_gradv[ijkN(0,1,q,2)];
+            out[ijklNM(1,1,q,e,2,NUM_QUAD)] = s_gradv[ijkN(1,1,q,2)];
          }
       }
    }
@@ -106,7 +173,8 @@ namespace hydrodynamics {
    // **************************************************************************
    static void qGradVector(const FiniteElementSpace& fes,
                            const IntegrationRule& ir,
-                           const qDofQuadMaps* maps,
+                           const qDofQuadMaps* simplex_maps,
+                           const qDofQuadMaps* tensor_maps,
                            const size_t size,
                            double *in,
                            double *out){
@@ -118,7 +186,17 @@ namespace hydrodynamics {
       const int nzones = fes.GetNE();
       assert(ndf==9);
       assert(nqp==16);
-      qGradVector2D<9,16> __config(nzones) (nzones, maps->dofToQuadD, in, out);
+      qGradVector2DSimplex<9,16> __config(nzones)
+         (nzones,
+          simplex_maps->dofToQuadD,
+          in, out);
+      /*
+      qGradVector2DTensor<9,16> __config(nzones)
+         (nzones,
+          tensor_maps->dofToQuad,
+          tensor_maps->dofToQuadD,
+          in, out);
+      */
       pop();
    }
 
@@ -165,11 +243,13 @@ namespace hydrodynamics {
                                     v_local_size*sizeof(double));
 
       reorderByNodes(fes, size, velocity);
+      
       const size_t grad_v_size = dim * dim * nqp * nzones;
       *d_grad_v_data = (double*) mfem::kernels::kmalloc<double>::operator new(grad_v_size);
       const qDofQuadMaps *simplex_maps = qDofQuadMaps::GetSimplexMaps(fe,ir);
+      const qDofQuadMaps *tensor_maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
       qGradVector(fes, ir,
-                  simplex_maps,
+                  simplex_maps,tensor_maps,
                   v_local_size,
                   d_v_data,
                   *d_grad_v_data);
