@@ -393,6 +393,9 @@ int main(int argc, char *argv[])
    ParGridFunction rho_gf;
    if (visualization || visit) { oper.ComputeDensity(rho_gf); }
 
+   const double energy_init = oper.InternalEnergy(e_gf) +
+                              oper.KineticEnergy(v_gf);
+
    if (visualization)
    {
       // Make sure all MPI ranks have sent their 'v' solution before initiating
@@ -563,6 +566,29 @@ int main(int argc, char *argv[])
       case 6: steps *= 6;
    }
    oper.PrintTimingData(mpi.Root(), steps);
+
+   const double energy_final = oper.InternalEnergy(e_gf) +
+                               oper.KineticEnergy(v_gf);
+   if (mpi.Root())
+   {
+      cout << endl;
+      cout << "Energy error: " << energy_init << " " << energy_final << " "
+                               << energy_init - energy_final << endl;
+   }
+
+   // Print the error.
+   if (problem == 0)
+   {
+      const double error_max = v_gf.ComputeMaxError(v_coeff),
+                   error_l1  = v_gf.ComputeL1Error(v_coeff),
+                   error_l2  = v_gf.ComputeL2Error(v_coeff);
+      if (mpi.Root())
+      {
+         cout << "L_inf  error: " << error_max << endl
+              << "L_1    error: " << error_l1 << endl
+              << "L_2    error: " << error_l2 << endl;
+      }
+   }
 
    if (visualization)
    {
