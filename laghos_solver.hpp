@@ -22,10 +22,6 @@
 
 #ifdef MFEM_USE_MPI
 
-#include <memory>
-#include <iostream>
-#include <fstream>
-
 namespace mfem
 {
 

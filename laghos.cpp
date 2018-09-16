@@ -50,10 +50,7 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 
-
 #include "laghos_solver.hpp"
-#include <memory>
-#include <iostream>
 #include <fstream>
 
 using namespace std;
