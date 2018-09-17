@@ -155,7 +155,6 @@ namespace hydrodynamics {
                   double *base = stressJinvT;
                   double *offset = &stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)];
                   assert(offset>=base);
-                  const size_t delta = offset-base;
                   stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)] =
                      stressJiT[vd+gd*dim];
                }
@@ -197,39 +196,38 @@ namespace hydrodynamics {
 
       // ***********************************************************************
       timer.sw_qdata.Start();
+      Vector* sptr = (Vector*) &S;
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-      const int dims     = H1FESpace.GetVDim();
       const int elements = H1FESpace.GetNE();
       const int numDofs  = fe.GetDof();
       const int nqp = ir.GetNPoints();
       assert(elements==nzones);
       dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
-
-      Vector* sptr = (Vector*) &S;
-      
-      const Engine &engine = L2FESpace.GetMesh()->GetEngine();
       const size_t H1_size = H1FESpace.GetVSize();
       const size_t L2_size = L2FESpace.GetVSize();
-                 
-      const int nqp1D    = tensors1D->LQshape1D.Width();
-      const int nL2dof1D = tensors1D->LQshape1D.Height();
-      const int nH1dof1D = tensors1D->HQshape1D.Height();
+      const int nqp1D = tensors1D->LQshape1D.Width();
       
       // Energy dof => quads ***************************************************
+      dbg("Energy dof => quads (L2FESpace)");
       const size_t e_quads_size = nzones * nqp;
-      double *d_e_data = (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
+      double *d_e_data =
+         (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
       double *e_data = sptr->GetData()+2*H1_size;
       mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
-      double *d_e_quads_data = (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
+      double *d_e_quads_data =
+         (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
       Dof2QuadScalar(L2FESpace, ir, d_e_data, d_e_quads_data);
 
       // Refresh Geom J, invJ & detJ *******************************************
+      dbg("Refresh Geom J, invJ & detJ");
       const qGeometry *geom = qGeometry::Get(H1FESpace,ir);
 
       // Integration Points Weights (tensor) ***********************************
+      dbg("Integration Points Weights (tensor,H1FESpace)");
       const qDofQuadMaps* maps = qDofQuadMaps::Get(H1FESpace,ir);
       
-      // Velocity **************************************************************     
+      // Velocity **************************************************************
+      dbg("Velocity");
       ParGridFunction velocity;
       velocity.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
       double *d_grad_v_data;
@@ -256,7 +254,8 @@ namespace hydrodynamics {
                                     Jac0inv_sz*sizeof(double));
 
       dbg("dt_est");
-      double *d_dt_est = (double*)mfem::kernels::kmalloc<double>::operator new(1);
+      double *d_dt_est =
+         (double*)mfem::kernels::kmalloc<double>::operator new(1);
       mfem::kernels::kmemcpy::rHtoD(d_dt_est, &quad_data.dt_est, sizeof(double));
 
       dbg("stressJinvT");
@@ -286,9 +285,7 @@ namespace hydrodynamics {
       
       mfem::kernels::kmemcpy::rDtoH(quad_data.stressJinvT.Data(),
                                     d_stressJinvT, stressJinvT_sz*sizeof(double));
-      
       mfem::kernels::kmemcpy::rDtoH(&quad_data.dt_est, d_dt_est, sizeof(double));
-      
       dbg("dt_est=%.21e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;

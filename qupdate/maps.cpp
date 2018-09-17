@@ -87,6 +87,7 @@ qDofQuadMaps* qDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
    // If we've already made the dof-quad maps, reuse them
    if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
    {
+      dbg("found existing map!");
       return AllDofQuadMaps[hash];
    }
    // Otherwise, build them
@@ -94,7 +95,9 @@ qDofQuadMaps* qDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
    AllDofQuadMaps[hash]=maps;
    maps->hash = hash;
    push();
+   dbg("trialMaps");
    const qDofQuadMaps* trialMaps = GetD2QTensorMaps(trialFE, ir);
+   dbg("testMaps");
    const qDofQuadMaps* testMaps  = GetD2QTensorMaps(testFE, ir, true);
    maps->dofToQuad   = trialMaps->dofToQuad;
    maps->dofToQuadD  = trialMaps->dofToQuadD;
@@ -110,14 +113,14 @@ qDofQuadMaps* qDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
                                              const IntegrationRule& ir,
                                              const bool transpose)
 {
-   const mfem::TensorBasisElement& tfe = dynamic_cast<const TensorBasisElement&>
-                                         (fe);
+   const mfem::TensorBasisElement& tfe =
+      dynamic_cast<const TensorBasisElement&> (fe);
    const Poly_1D::Basis& basis = tfe.GetBasis1D();
    const int order = fe.GetOrder();
    const int dofs = order + 1;
    const int dims = fe.GetDim();
-   const mfem::IntegrationRule& ir1D = IntRules.Get(Geometry::SEGMENT,
-                                                    ir.GetOrder());
+   const mfem::IntegrationRule& ir1D =
+      IntRules.Get(Geometry::SEGMENT, ir.GetOrder());
    const int quadPoints = ir1D.GetNPoints();
    const int quadPoints2D = quadPoints*quadPoints;
    const int quadPoints3D = quadPoints2D*quadPoints;
@@ -133,6 +136,7 @@ qDofQuadMaps* qDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
    std::string hash = ss.str();
    if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
    {
+      dbg("found existing map!");
       return AllDofQuadMaps[hash];
    }
 
@@ -143,6 +147,9 @@ qDofQuadMaps* qDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
 
    maps->dofToQuad.allocate(quadPoints, dofs,1,1,transpose);
    maps->dofToQuadD.allocate(quadPoints, dofs,1,1,transpose);
+   const int dim0 = maps->dofToQuad.dim()[0];
+   const int dim1 = maps->dofToQuad.dim()[1];
+   
    double* quadWeights1DData = NULL;
    if (transpose)
    {
@@ -164,9 +171,8 @@ qDofQuadMaps* qDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
       }
       for (int d = 0; d < dofs; ++d)
       {
-         //printf("\n[tensor] shape=%f, grad=%f",d2q[d],d2qD[d]);
-         dofToQuad[maps->dofToQuad.dim()[0]*q + maps->dofToQuad.dim()[1]*d] = d2q[d];
-         dofToQuadD[maps->dofToQuad.dim()[0]*q + maps->dofToQuad.dim()[1]*d] = d2qD[d];
+         dofToQuad[dim0*q + dim1*d] = d2q[d];
+         dofToQuadD[dim0*q + dim1*d] = d2qD[d];
       }
    }
    maps->dofToQuad = dofToQuad;
@@ -221,13 +227,16 @@ qDofQuadMaps* qDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
    // If we've already made the dof-quad maps, reuse them
    if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
    {
+      dbg("found existing map!");
       return AllDofQuadMaps[hash];
    }
    push();
    qDofQuadMaps *maps = new qDofQuadMaps();
    AllDofQuadMaps[hash]=maps;
    maps->hash = hash;
+   dbg("trialMaps");
    const qDofQuadMaps* trialMaps = GetD2QSimplexMaps(trialFE, ir);
+   dbg("testMaps");
    const qDofQuadMaps* testMaps  = GetD2QSimplexMaps(testFE, ir, true);
    maps->dofToQuad   = trialMaps->dofToQuad;
    maps->dofToQuadD  = trialMaps->dofToQuadD;
@@ -255,6 +264,7 @@ qDofQuadMaps* qDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
    std::string hash = ss.str();
    if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
    {
+      dbg("found existing map!");
       return AllDofQuadMaps[hash];
    }
    qDofQuadMaps* maps = new qDofQuadMaps();
@@ -288,16 +298,13 @@ qDofQuadMaps* qDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
          const double w = d2q[d];
          dofToQuad[maps->dofToQuad.dim()[0]*q +
                    maps->dofToQuad.dim()[1]*d] = w;
-         //printf("\n\033[32m[simplex] shape=%f",w);
          for (int dim = 0; dim < dims; ++dim)
          {
             const double wD = d2qD(d, dim);
-            //printf(", grad=%f",wD);
             dofToQuadD[maps->dofToQuadD.dim()[0]*dim +
                        maps->dofToQuadD.dim()[1]*q +
                        maps->dofToQuadD.dim()[2]*d] = wD;
          }
-         //printf("\033[m");
       }
    }
    if (transpose)

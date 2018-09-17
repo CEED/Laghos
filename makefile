@@ -124,6 +124,8 @@ CXXFLAGS += $(CXXEXTRA)
 ifneq (,$(nvcc))
 	CXXEXTRA = --device-c
 	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
+else
+#	CXXEXTRA += -Wall
 endif
 
 # all, targets & laghos ********************************************************
@@ -187,7 +189,7 @@ pgo2:;@DBG=1 mpirun -xterm -1! -n 2 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cg
 
 ng:;@./laghos -cfl 0.1 -rs 0 -ng
 ng1:;@./laghos -cfl 0.1 -rs 0 -ng -p 1
-ng1q:;@./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
+ng1q:;@./laghos -cfl 0.1 -rs 0 -ng -p 1 -q -ms 1
 png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
 png1:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1
 png1q:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1 -q

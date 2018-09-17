@@ -83,9 +83,9 @@ namespace hydrodynamics {
 
    // **************************************************************************
    static void global2LocalMap(ParFiniteElementSpace &fes, qarray<int> &map){
+      push();
       const int elements = fes.GetNE();
       const int localDofs = fes.GetFE(0)->GetDof();
-
       const FiniteElement *fe = fes.GetFE(0);
       const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
       const Array<int> &dof_map = el->GetDofMap();
@@ -93,7 +93,6 @@ namespace hydrodynamics {
       const Table& e2dTable = fes.GetElementToDofTable();
       const int *elementMap = e2dTable.GetJ();
       mfem::Array<int> h_map(localDofs*elements);
-      
       for (int e = 0; e < elements; ++e) {
          for (int d = 0; d < localDofs; ++d) {
             const int did = dof_map_is_identity?d:dof_map[d];
@@ -103,6 +102,7 @@ namespace hydrodynamics {
          }
       }
       map = h_map;
+      pop();
    }
    
    // ***************************************************************************
@@ -110,10 +110,12 @@ namespace hydrodynamics {
                        const IntegrationRule& ir,
                        const double *vec,
                        double *quad) {
+      push();
       const FiniteElement& fe = *fes.GetFE(0);
       const int dim  = fe.GetDim(); assert(dim==2);
       const int vdim = fes.GetVDim();
       const int elements = fes.GetNE();
+      dbg("maps");
       const qDofQuadMaps* maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
       const double* dofToQuad = maps->dofToQuad;
       const int localDofs = fes.GetFE(0)->GetDof();
@@ -126,6 +128,7 @@ namespace hydrodynamics {
       assert(quad1D==4);
       vecToQuad2D<1,2,4> __config(elements)
          (elements, dofToQuad, l2gMap, vec, quad);
+      pop();
    }
 
 } // namespace hydrodynamics
