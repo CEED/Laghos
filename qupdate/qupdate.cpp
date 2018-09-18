@@ -90,7 +90,6 @@ namespace hydrodynamics {
             calcInverse2D(dim,J,Jinv);
             // *****************************************************************
             const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
-            dbg("weight=%f, detJ=%f, rho=%f",weight,detJ,rho);
             const double e   = fmax(0.0, e_quads[zdx]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
@@ -105,11 +104,12 @@ namespace hydrodynamics {
                // eigenvector of the symmetric velocity gradient gives the
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.
-               const double *dV = &grad_v_ext[zdx*dim*dim];
+               const double *dV = grad_v_ext + zdx*dim*dim;
                double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
                symmetrize(dim,sgrad_v);
-               double eig_val_data[3], eig_vec_data[9];
+               double eig_val_data[3] = {0.0};
+               double eig_vec_data[9] = {0.0};
                if (dim==1) {
                   eig_val_data[0] = sgrad_v[0];
                   eig_vec_data[0] = 1.;
@@ -206,30 +206,35 @@ namespace hydrodynamics {
       
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
+      const double *h_e_data = sptr->GetData()+2*H1_size;
+      for(size_t k=0;k<L2_size;k+=1) dbg("\te[%d]=%f",k,h_e_data[k]);
       double *d_e_data =
          (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
-      const double *e_data = sptr->GetData()+2*H1_size;
-      mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
+      mfem::kernels::kmemcpy::rHtoD(d_e_data, h_e_data, L2_size*sizeof(double));
       double *d_e_quads_data;
       Dof2QuadScalar(L2FESpace, ir, d_e_data, &d_e_quads_data);
 
       // Refresh Geom J, invJ & detJ *******************************************
       dbg("Refresh Geom J, invJ & detJ");
-      ParGridFunction coords;
-      coords.MakeRef(&H1FESpace, *sptr, 0);
+      const double *h_x_data = sptr->GetData() + 0;
+      double *d_x_data =
+         (double*)mfem::kernels::kmalloc<double>::operator new(H1_size);
+      mfem::kernels::kmemcpy::rHtoD(d_x_data, h_x_data, H1_size*sizeof(double));
       double *d_grad_x_data;
-      Dof2QuadGrad(H1FESpace,ir,coords.GetData(),&d_grad_x_data);
+      Dof2QuadGrad(H1FESpace,ir,d_x_data,&d_grad_x_data);
       
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
       const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(H1FESpace,ir);
       
       // Velocity **************************************************************
-      dbg("Velocity");
-      ParGridFunction velocity;
-      velocity.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
+      dbg("Velocity H1_size=%d",H1_size);
+      const double *h_v_data = sptr->GetData() + H1_size;
+      double *d_v_data =
+         (double*)mfem::kernels::kmalloc<double>::operator new(H1_size);
+      mfem::kernels::kmemcpy::rHtoD(d_v_data, h_v_data, H1_size*sizeof(double));
       double *d_grad_v_data;
-      Dof2QuadGrad(H1FESpace,ir,velocity.GetData(),&d_grad_v_data);
+      Dof2QuadGrad(H1FESpace,ir,d_v_data,&d_grad_v_data);
       
       // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
@@ -271,6 +276,7 @@ namespace hydrodynamics {
                                    h1order,
                                    cfl,
                                    infinity,
+                                   
                                    maps->quadWeights,
                                    d_grad_x_data,
                                    d_rho0DetJ0w,
@@ -283,7 +289,7 @@ namespace hydrodynamics {
       mfem::kernels::kmemcpy::rDtoH(quad_data.stressJinvT.Data(),
                                     d_stressJinvT, stressJinvT_sz*sizeof(double));
       mfem::kernels::kmemcpy::rDtoH(&quad_data.dt_est, d_dt_est, sizeof(double));
-      dbg("dt_est=%.21e",quad_data.dt_est);
+      dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;
       timer.sw_qdata.Stop();

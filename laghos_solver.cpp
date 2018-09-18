@@ -657,6 +657,10 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+//#warning UpdateQuadratureData drand48
+   //const size_t mx = S.Size();
+   //Vector *S_p = (Vector*) &S;
+   //for(size_t k=0;k<mx;k+=1) S_p->GetData()[k] *= 0.123456789*drand48();
    if (qupdate) {
       QUpdate(dim,nzones,l2dofs_cnt,h1dofs_cnt,use_viscosity,p_assembly,cfl,
               timer,material_pcf,integ_rule,H1FESpace,L2FESpace,S,
@@ -678,6 +682,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
    x.MakeRef(&H1FESpace, *sptr, 0);
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
+   //for(size_t k=0;k<L2FESpace.GetVSize();k+=1) dbg("\te[%d]=%f",k,e.GetData()[k]);
    Vector e_vals, e_loc(l2dofs_cnt), vector_vals(h1dofs_cnt * dim);
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim),
                vecvalMat(vector_vals.GetData(), h1dofs_cnt, dim);
@@ -844,7 +849,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
-   dbg("dt_est=%.21e",quad_data.dt_est); // dt_est=1.537012829212408386581e-02
+   dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
    //assert(false);
    delete [] gamma_b;
    delete [] rho_b;

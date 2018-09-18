@@ -90,8 +90,8 @@ namespace hydrodynamics {
    // **************************************************************************
    void Dof2QuadGrad(ParFiniteElementSpace &fes,
                      const IntegrationRule& ir,
-                     const double *in,
-                     double **out){
+                     const double *d_in,
+                     double **d_out){
       push();
       const kernels::kFiniteElementSpace &kfes =
          fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
@@ -108,25 +108,22 @@ namespace hydrodynamics {
       const size_t nqp = ir.GetNPoints();
 
       const size_t local_size = vdim * numDofs * nzones;
-      mfem::Array<double> local_in(local_size);
-      kfes.GlobalToLocal(in,local_in.GetData());
-             
-      double *d_in_data =
+      double *d_local_in =
          (double*)mfem::kernels::kmalloc<double>::operator new(local_size);
-      mfem::kernels::kmemcpy::rHtoD(d_in_data,
-                                    local_in.GetData(),
-                                    local_size*sizeof(double));
       
+      kfes.GlobalToLocal(d_in,d_local_in);
+      dbg("GlobalToLocal done");
+            
       const size_t out_size = vdim * vdim * nqp * nzones;
-      *out = (double*) mfem::kernels::kmalloc<double>::operator new(out_size);
+      *d_out = (double*) mfem::kernels::kmalloc<double>::operator new(out_size);
     
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
       const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
 
       assert(dofs1D==3);
-      assert(quad1D==4);
+      assert(quad1D==4);      
       qGradVector2D<3,4> __config(nzones)
-         (nzones, maps->dofToQuad, maps->dofToQuadD, d_in_data, *out);      
+         (nzones, maps->dofToQuad, maps->dofToQuadD, d_local_in, *d_out);      
       pop();
    }
    

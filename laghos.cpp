@@ -350,7 +350,7 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   // Initialize density and specific internal energy values. We interpolate in
+   dbg("Initialize density and specific internal energy values.");// We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
    // L2 projection to the positive basis in which we actually compute. The goal
    // is to get a high-order representation of the initial condition. Note that
@@ -361,21 +361,27 @@ int main(int argc, char *argv[])
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+   dbg("ProjectCoefficient: rho_coeff");
    l2_rho.ProjectCoefficient(rho_coeff);
+   dbg("ProjectGridFunction: l2_rho");
    rho.ProjectGridFunction(l2_rho);
+   dbg("problem?");
    if (problem == 1)
    {
-      // For the Sedov test, we use a delta function at the origin.
+      dbg("For the Sedov test, we use a delta function at the origin.");
       DeltaCoefficient e_coeff(0, 0, 0.25);
+      dbg("ProjectCoefficient");
       l2_e.ProjectCoefficient(e_coeff);
+      dbg("done");
    }
    else
    {
       FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
+   dbg("ProjectGridFunction");
    e_gf.ProjectGridFunction(l2_e);
-
+   
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
    // mesh.
