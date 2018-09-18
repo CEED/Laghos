@@ -80,18 +80,21 @@ namespace hydrodynamics {
       {
          // ********************************************************************
          for (int q = 0; q < nqp; q++) {
-            const int idx = z * nqp + q;
+            const int zdx = z * nqp + q;
             const double weight =  weights[q];
             const double inv_weight = 1. / weight;
-            const double *J = &_J[(z*nqp+q)*nzones];
+            //const double *J = &_J[(zdx)*nzones];
+            //size_t offset = zdx + nqp*nzones*(gd+vd*dim);
+            const double *J = _J + zdx*dim*dim;
             const double detJ = Det(dim,J);
             min_detJ = fmin(min_detJ, detJ);
             double Jinv[dim*dim];
             calcInverse2D(dim, J, Jinv);
             // *****************************************************************
-            const double rho = inv_weight * rho0DetJ0w[idx] / detJ;
-            //dbg("weight=%f, detJ=%f, rho=%f",weight,detJ,rho);
-            const double e   = fmax(0.0, e_quads[z*nqp1D*nqp1D+q]);
+            //const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
+            const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
+            dbg("weight=%f, detJ=%f, rho=%f",weight,detJ,rho);
+            const double e   = fmax(0.0, e_quads[zdx]);
             //const double e   = fmax(0.0, e_quads[z*nqp+q]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
@@ -108,7 +111,8 @@ namespace hydrodynamics {
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.               
                //const double *dV = &grad_v_ext[z*nqp+q*dim*dim];
-               const double *dV = &grad_v_ext[(z*nqp+q)*nzones];
+               //const double *dV = &grad_v_ext[zdx*nzones];
+               const double *dV = &grad_v_ext[zdx*dim*dim];
                double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
                symmetrize(dim,sgrad_v);
@@ -124,7 +128,7 @@ namespace hydrodynamics {
                for(int k=0;k<dim;k+=1) compr_dir[k]=eig_vec_data[k];
                // Computes the initial->physical transformation Jacobian.
                double Jpi[dim*dim];
-               mult(dim,dim,dim, J, Jac0inv+idx*dim*dim, Jpi);
+               mult(dim,dim,dim, J, Jac0inv+zdx*dim*dim, Jpi);
                double ph_dir[dim];
                multV(dim, dim, Jpi, compr_dir, ph_dir);
                // Change of the initial mesh size in the compression direction.
@@ -157,10 +161,9 @@ namespace hydrodynamics {
             for (int vd = 0 ; vd < dim; vd++) {
                for (int gd = 0; gd < dim; gd++) {
                   double *base = stressJinvT;
-                  double *offset = &stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)];
-                  assert(offset>=base);
-                  stressJinvT[q + z*nqp + nqp*nzones*(gd+vd*dim)] =
-                     stressJiT[vd+gd*dim];
+#warning gd+vd*dim
+                  size_t offset = zdx + nqp*nzones*(gd+vd*dim);
+                  stressJinvT[offset] = stressJiT[vd+gd*dim];
                }
             }
          }

@@ -657,6 +657,9 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+   Vector* S_p = (Vector*) &S;
+   const size_t mx = S.Size();
+//#warning drand48   for(size_t k=0;k<mx;k+=1) S_p->GetData()[k]=drand48();
    if (qupdate) {
       QUpdate(dim,nzones,l2dofs_cnt,h1dofs_cnt,use_viscosity,p_assembly,cfl,
               timer,material_pcf,integ_rule,H1FESpace,L2FESpace,S,
@@ -674,7 +677,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
    const int nqp = integ_rule.GetNPoints();
 
    ParGridFunction x, v, e;
-   Vector* sptr = (Vector*) &S;
+   Vector* sptr = (Vector*) &S;   
    x.MakeRef(&H1FESpace, *sptr, 0);
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
@@ -772,7 +775,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
                          p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
 
             //printf("\n\t weight=%f, detJ=%f",integ_rule.IntPoint(q).weight,detJ);
-            //printf("\n\tweight=%f, detJ=%f, rho=%f",integ_rule.IntPoint(q).weight,detJ,rho);
+            printf("\n\tweight=%f, detJ=%f, rho=%f",integ_rule.IntPoint(q).weight,detJ,rho);
             //printf("\n\t rho=%f",rho);
             //printf("\n\trho=%f, p=%f, sound_speed=%f", rho, p, sound_speed);
             stress = 0.0;
@@ -850,7 +853,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
       }
    }
    dbg("dt_est=%.21e",quad_data.dt_est); // dt_est=1.537012829212408386581e-02
-   //assert(false);
+   assert(false);
    delete [] gamma_b;
    delete [] rho_b;
    delete [] e_b;
