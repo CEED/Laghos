@@ -31,8 +31,6 @@
 #include "../laghos_solver.hpp"
 #include "memcpy.hpp"
 #include "alloc.hpp"
-#include "array.hpp"
-#include "maps.hpp"
 #include "d2q.hpp"
 #include "eigen.hpp"
 #include "densemat.hpp"

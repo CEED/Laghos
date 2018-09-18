@@ -27,9 +27,9 @@ namespace hydrodynamics {
             const int NUM_DOFS_1D,
             const int NUM_QUAD_1D>
    __kernel__ void vecToQuad2D(const int numElements,
-                               const double* dofToQuad,
-                               const double* in,
-                               double* out) {
+                               const double* __restrict dofToQuad,
+                               const double* __restrict in,
+                               double* __restrict out) {
 #ifdef __NVCC__
       const int e = blockDim.x * blockIdx.x + threadIdx.x;
       if (e < numElements)
@@ -85,25 +85,33 @@ namespace hydrodynamics {
                        const double *in,
                        double **out) {
       push();
-      const size_t nzones = fes.GetNE();
-      const size_t nqp = ir.GetNPoints();
-      const kernels::kFiniteElementSpace &h1k =
+      const kernels::kFiniteElementSpace &kfes =
          fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
       const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(fes,ir);
 
-      const size_t data_size = nqp * nzones;
-      *out = (double*) kernels::kmalloc<double>::operator new(data_size);
-      mfem::Array<double> local_in(data_size);
-      h1k.GlobalToLocal(in,local_in.GetData());
+      const int dim = fes.GetMesh()->Dimension();
+      const int vdim = fes.GetVDim();
+      const int vsize = fes.GetVSize();
+      assert(dim==2);
+      assert(vdim==1);
+      const mfem::FiniteElement& fe = *fes.GetFE(0);
+      const size_t numDofs  = fe.GetDof();
+      const size_t nzones = fes.GetNE();
+      const size_t nqp = ir.GetNPoints();
+
+      const size_t local_size = numDofs * nzones;
+      mfem::Array<double> local_in(local_size);
+      kfes.GlobalToLocal(in,local_in.GetData());
       
       double *d_in_data =
-         (double*)kernels::kmalloc<double>::operator new(data_size);
+         (double*)kernels::kmalloc<double>::operator new(local_size);
       mfem::kernels::kmemcpy::rHtoD(d_in_data,
                                     local_in.GetData(),
-                                    data_size*sizeof(double));
-
+                                    local_size*sizeof(double));
       
-      const int vdim = fes.GetVDim();
+      const size_t qdata_size =  nqp * nzones;
+      *out = (double*) kernels::kmalloc<double>::operator new(qdata_size);
+      
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
       const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
       

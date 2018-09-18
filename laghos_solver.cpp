@@ -771,6 +771,10 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
                          p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
 
+            //printf("\n\t weight=%f, detJ=%f",integ_rule.IntPoint(q).weight,detJ);
+            //printf("\n\tweight=%f, detJ=%f, rho=%f",integ_rule.IntPoint(q).weight,detJ,rho);
+            //printf("\n\t rho=%f",rho);
+            //printf("\n\trho=%f, p=%f, sound_speed=%f", rho, p, sound_speed);
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
