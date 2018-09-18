@@ -32,7 +32,6 @@
 #include "memcpy.hpp"
 #include "alloc.hpp"
 #include "array.hpp"
-#include "geom.hpp"
 #include "maps.hpp"
 #include "d2q.hpp"
 #include "eigen.hpp"

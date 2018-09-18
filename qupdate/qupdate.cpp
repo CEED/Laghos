@@ -207,27 +207,22 @@ namespace hydrodynamics {
       
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
-      const size_t e_quads_size = nzones * nqp;
+      //const size_t e_quads_size = nzones * nqp;
       double *d_e_data =
          (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
       double *e_data = sptr->GetData()+2*H1_size;
       mfem::kernels::kmemcpy::rHtoD(d_e_data, e_data, L2_size*sizeof(double));
-      double *d_e_quads_data =
-         (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
-      Dof2QuadScalar(L2FESpace, ir, d_e_data, d_e_quads_data);
+      double *d_e_quads_data;
+      // = (double*)mfem::kernels::kmalloc<double>::operator new(e_quads_size);
+      Dof2QuadScalar(L2FESpace, ir, d_e_data, &d_e_quads_data);
 
       // Refresh Geom J, invJ & detJ *******************************************
       dbg("Refresh Geom J, invJ & detJ");
-      const qGeometry *geom = qGeometry::Get(H1FESpace,ir);
-      dbg("Coords & Jacobians");
       ParGridFunction coords;
       coords.MakeRef(&H1FESpace, *sptr, 0);
       double *d_grad_x_data;
       Dof2QuadGrad(H1FESpace,ir,coords.GetData(),&d_grad_x_data);
       const size_t d_grad_x_size = dim * dim * nzones * nqp;
-      /*for(size_t k=0;k<d_grad_x_size;k+=1){
-         printf("\n\t%f %f",d_grad_x_data[k],geom->J[k]);
-         }*/
       
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");

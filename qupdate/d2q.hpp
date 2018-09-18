@@ -21,7 +21,7 @@ namespace hydrodynamics {
    // * Dof2QuadScalar
    // *****************************************************************************
    void Dof2QuadScalar(ParFiniteElementSpace&, const IntegrationRule&,
-                       const double*, double*);
+                       const double*, double**);
 
    // *****************************************************************************
    // * Dof2QuadGrad

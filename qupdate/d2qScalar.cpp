@@ -28,8 +28,7 @@ namespace hydrodynamics {
             const int NUM_QUAD_1D>
    __kernel__ void vecToQuad2D(const int numElements,
                                const double* dofToQuad,
-                               const int* l2gMap,
-                               const double* gf,
+                               const double* in,
                                double* out) {
 #ifdef __NVCC__
       const int e = blockDim.x * blockIdx.x + threadIdx.x;
@@ -54,9 +53,8 @@ namespace hydrodynamics {
                }
             }
             for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
-               const int gid = l2gMap[ijkN(dx, dy, e,NUM_DOFS_1D)];
                for (int v = 0; v < NUM_VDIM; ++v) {
-                  const double r_gf = gf[v + gid*NUM_VDIM];
+                  const double r_gf = in[_ijklNM(v,dx,dy,e,NUM_DOFS_1D,numElements)];
                   for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
                      out_x[v][qy] += r_gf * dofToQuad[ijN(qy, dx,NUM_QUAD_1D)];
                   }
@@ -80,54 +78,40 @@ namespace hydrodynamics {
          }
       }
    }
-
-   // **************************************************************************
-   static void global2LocalMap(ParFiniteElementSpace &fes, qarray<int> &map){
-      push();
-      const int elements = fes.GetNE();
-      const int localDofs = fes.GetFE(0)->GetDof();
-      const FiniteElement *fe = fes.GetFE(0);
-      const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
-      const Array<int> &dof_map = el->GetDofMap();
-      const bool dof_map_is_identity = dof_map.Size()==0;
-      const Table& e2dTable = fes.GetElementToDofTable();
-      const int *elementMap = e2dTable.GetJ();
-      mfem::Array<int> h_map(localDofs*elements);
-      for (int e = 0; e < elements; ++e) {
-         for (int d = 0; d < localDofs; ++d) {
-            const int did = dof_map_is_identity?d:dof_map[d];
-            const int gid = elementMap[localDofs*e + did];
-            const int lid = localDofs*e + d;
-            h_map[lid] = gid;
-         }
-      }
-      map = h_map;
-      pop();
-   }
    
    // ***************************************************************************
    void Dof2QuadScalar(ParFiniteElementSpace &fes,
                        const IntegrationRule& ir,
-                       const double *vec,
-                       double *quad) {
+                       const double *in,
+                       double **out) {
       push();
-      const FiniteElement& fe = *fes.GetFE(0);
-      const int dim  = fe.GetDim(); assert(dim==2);
+      const size_t nzones = fes.GetNE();
+      const size_t nqp = ir.GetNPoints();
+      const kernels::kFiniteElementSpace &h1k =
+         fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
+      const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(fes,ir);
+
+      const size_t data_size = nqp * nzones;
+      *out = (double*) kernels::kmalloc<double>::operator new(data_size);
+      mfem::Array<double> local_in(data_size);
+      h1k.GlobalToLocal(in,local_in.GetData());
+      
+      double *d_in_data =
+         (double*)kernels::kmalloc<double>::operator new(data_size);
+      mfem::kernels::kmemcpy::rHtoD(d_in_data,
+                                    local_in.GetData(),
+                                    data_size*sizeof(double));
+
+      
       const int vdim = fes.GetVDim();
-      const int elements = fes.GetNE();
-      dbg("maps");
-      const qDofQuadMaps* maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
-      const double* dofToQuad = maps->dofToQuad;
-      const int localDofs = fes.GetFE(0)->GetDof();
-      qarray<int> l2gMap(localDofs, elements);
-      global2LocalMap(fes,l2gMap);
-      const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
+      const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+      
       assert(vdim==1);
       assert(dofs1D==2);
       assert(quad1D==4);
-      vecToQuad2D<1,2,4> __config(elements)
-         (elements, dofToQuad, l2gMap, vec, quad);
+      vecToQuad2D<1,2,4> __config(nzones)
+         (nzones, maps->dofToQuad, d_in_data, *out);
       pop();
    }
 
