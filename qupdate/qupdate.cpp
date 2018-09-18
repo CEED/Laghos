@@ -198,10 +198,8 @@ namespace hydrodynamics {
       timer.sw_qdata.Start();
       Vector* sptr = (Vector*) &S;
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-      const int elements = H1FESpace.GetNE();
       const int numDofs  = fe.GetDof();
       const int nqp = ir.GetNPoints();
-      assert(elements==nzones);
       dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
       const size_t H1_size = H1FESpace.GetVSize();
       const size_t L2_size = L2FESpace.GetVSize();
@@ -221,7 +219,16 @@ namespace hydrodynamics {
       // Refresh Geom J, invJ & detJ *******************************************
       dbg("Refresh Geom J, invJ & detJ");
       const qGeometry *geom = qGeometry::Get(H1FESpace,ir);
-
+      dbg("Coords & Jacobians");
+      ParGridFunction coords;
+      coords.MakeRef(&H1FESpace, *sptr, 0);
+      double *d_grad_x_data;
+      Dof2QuadGrad(H1FESpace,ir,coords.GetData(),&d_grad_x_data);
+      const size_t d_grad_x_size = dim * dim * nzones * nqp;
+      /*for(size_t k=0;k<d_grad_x_size;k+=1){
+         printf("\n\t%f %f",d_grad_x_data[k],geom->J[k]);
+         }*/
+      
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
       const qDofQuadMaps* maps = qDofQuadMaps::Get(H1FESpace,ir);
@@ -273,9 +280,8 @@ namespace hydrodynamics {
                                    h1order,
                                    cfl,
                                    infinity,
-                                    
                                    maps->quadWeights,                                   
-                                   geom->J,
+                                   d_grad_x_data,//geom->J,
                                    d_rho0DetJ0w,
                                    d_e_quads_data,
                                    d_grad_v_data,

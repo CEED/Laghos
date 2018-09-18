@@ -134,8 +134,7 @@ namespace hydrodynamics {
                            const qDofQuadMaps* tensor_maps,
                            const size_t size,
                            const double *in,
-                           double *out,
-                           double *bis){
+                           double *out){
       push();
       const mfem::FiniteElement &fe = *(fes.GetFE(0));
       const int dim = fe.GetDim(); assert(dim==2);
@@ -251,8 +250,6 @@ namespace hydrodynamics {
       const size_t grad_v_size = dim * dim * nqp * nzones;
       *d_grad_v_data =
          (double*) mfem::kernels::kmalloc<double>::operator new(grad_v_size);
-      double *d_grad_v_data_bis =
-         (double*) mfem::kernels::kmalloc<double>::operator new(grad_v_size);
       const qDofQuadMaps *simplex_maps = qDofQuadMaps::GetSimplexMaps(fe,ir);
       const qDofQuadMaps *tensor_maps = qDofQuadMaps::GetTensorMaps(fe,fe,ir);
       qGradVector(fes, ir,use_tensor,
@@ -260,8 +257,7 @@ namespace hydrodynamics {
                   tensor_maps,
                   v_local_size,
                   d_v_data,
-                  *d_grad_v_data,
-                  d_grad_v_data_bis);
+                  *d_grad_v_data);
       pop();
    }
    
