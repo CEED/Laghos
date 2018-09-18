@@ -63,7 +63,7 @@ namespace hydrodynamics {
                            const double infinity,
                            
                            const double *weights,
-                           const double *_J,
+                           const double *Jacobians,
                            const double *rho0DetJ0w,
                            const double *e_quads,
                            const double *grad_v_ext,
@@ -83,22 +83,17 @@ namespace hydrodynamics {
             const int zdx = z * nqp + q;
             const double weight =  weights[q];
             const double inv_weight = 1. / weight;
-            //const double *J = &_J[(zdx)*nzones];
-            //size_t offset = zdx + nqp*nzones*(gd+vd*dim);
-            const double *J = _J + zdx*dim*dim;
+            const double *J = Jacobians + zdx*dim*dim;
             const double detJ = Det(dim,J);
-            min_detJ = fmin(min_detJ, detJ);
+            min_detJ = fmin(min_detJ,detJ);
             double Jinv[dim*dim];
-            calcInverse2D(dim, J, Jinv);
+            calcInverse2D(dim,J,Jinv);
             // *****************************************************************
-            //const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
             const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
             dbg("weight=%f, detJ=%f, rho=%f",weight,detJ,rho);
             const double e   = fmax(0.0, e_quads[zdx]);
-            //const double e   = fmax(0.0, e_quads[z*nqp+q]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            //dbg("rho=%f, e=%f, p=%f, sound_speed=%f", rho, e, p, sound_speed);
             // *****************************************************************
             double stress[dim*dim];
             for (int k=0;k<dim*dim;k+=1) stress[k] = 0.0;
@@ -109,9 +104,7 @@ namespace hydrodynamics {
                // Compression-based length scale at the point. The first
                // eigenvector of the symmetric velocity gradient gives the
                // direction of maximal compression. This is used to define the
-               // relative change of the initial length scale.               
-               //const double *dV = &grad_v_ext[z*nqp+q*dim*dim];
-               //const double *dV = &grad_v_ext[zdx*nzones];
+               // relative change of the initial length scale.
                const double *dV = &grad_v_ext[zdx*dim*dim];
                double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
@@ -147,7 +140,8 @@ namespace hydrodynamics {
             const double h_min = sv / h1order;
             const double inv_h_min = 1. / h_min;
             const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-            const double inv_dt = sound_speed * inv_h_min + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+            const double inv_dt = sound_speed * inv_h_min
+               + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
             if (min_detJ < 0.0) {
                // This will force repetition of the step with smaller dt.
                *dt_est = 0.0;
@@ -160,9 +154,7 @@ namespace hydrodynamics {
             for(int k=0;k<dim*dim;k+=1) stressJiT[k] *= weight * detJ;
             for (int vd = 0 ; vd < dim; vd++) {
                for (int gd = 0; gd < dim; gd++) {
-                  double *base = stressJinvT;
-#warning gd+vd*dim
-                  size_t offset = zdx + nqp*nzones*(gd+vd*dim);
+                  const size_t offset = zdx + nqp*nzones*(gd+vd*dim);
                   stressJinvT[offset] = stressJiT[vd+gd*dim];
                }
             }
