@@ -368,7 +368,6 @@ int main(int argc, char *argv[])
       dbg("For the Sedov test, we use a delta function at the origin.");
       DeltaCoefficient e_coeff(0, 0, 0.25);
       l2_e.ProjectCoefficient(e_coeff);
-      l2_e.Print();
    }
    else
    {
@@ -376,7 +375,6 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   e_gf.Print();
    
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
