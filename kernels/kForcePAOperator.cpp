@@ -73,7 +73,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
    kernels::Vector &rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    l2k.GlobalToLocal(rVecL2, rgVecL2);
 #ifdef __NVCC__
-   const int si_isz = quad_data->stressJinvT.SizeI();
+/*   const int si_isz = quad_data->stressJinvT.SizeI();
    const int si_jsz = quad_data->stressJinvT.SizeJ();
    const int si_ksz = quad_data->stressJinvT.SizeK();
    const int ijk = si_isz*si_jsz*si_ksz;
@@ -81,7 +81,9 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
    mfem::kernels::kmemcpy::rHtoD(quad_data->d_stressJinvT.Data(),
                                  quad_data->stressJinvT.Data(),
                                  ijk*sizeof(double));
+*/
 #endif
+   dbg("rForceMult");
    rForceMult(dim,
               NUM_DOFS_1D,
               NUM_QUAD_1D,
@@ -92,12 +94,13 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               h1D2Q->quadToDof,
               h1D2Q->quadToDofD,
 #ifdef __NVCC__
-              quad_data->d_stressJinvT.Data(),
+              quad_data->/*d_*/stressJinvT.Data(),
 #else
               quad_data->stressJinvT.Data(),
 #endif
               (const double*)rgVecL2.KernelsMem().ptr(),
               (double*)rgVecH1.KernelsMem().ptr());
+   dbg("done");
    h1k.LocalToGlobal(rgVecH1, rVecH1);
    pop();
 }
@@ -111,6 +114,7 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
    const kernels::Vector &rgVecL2 = gVecL2.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector &rVecL2 = vecL2.Get_PVector()->As<kernels::Vector>();
    h1k.GlobalToLocal(rVecH1, rgVecH1);
+   dbg("rForceMultTranspose");
    rForceMultTranspose(dim,
                        NUM_DOFS_1D,
                        NUM_QUAD_1D,
@@ -121,7 +125,7 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        h1D2Q->dofToQuad,
                        h1D2Q->dofToQuadD,
 #ifdef __NVCC__
-                       (const double*)quad_data->d_stressJinvT.Data(),
+                       (const double*)quad_data->/*d_*/stressJinvT.Data(),
 #else
                        (const double*)quad_data->stressJinvT.Data(),
 #endif

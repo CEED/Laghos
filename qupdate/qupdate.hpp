@@ -29,7 +29,6 @@
 
 // *****************************************************************************
 #include "../laghos_solver.hpp"
-#include "alloc.hpp"
 #include "d2q.hpp"
 #include "eigen.hpp"
 #include "densemat.hpp"

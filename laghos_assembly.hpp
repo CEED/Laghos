@@ -46,7 +46,7 @@ struct QuadratureData
    // recomputed in every time step.
    DenseTensor stressJinvT;
 #ifdef __NVCC__
-   DenseTensor d_stressJinvT;
+   //DenseTensor d_stressJinvT;
 #endif
 
    // Quadrature data used for full/partial assembly of the mass matrices. At

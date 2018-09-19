@@ -332,6 +332,11 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
+   dbg("S.Resize");
+   if (engine){
+      S.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
+      S.Pull(false);
+   }
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -401,7 +406,8 @@ int main(int argc, char *argv[])
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter, qupdate);
-
+   assert(oper.InLayout()->Size()==S.Size());
+   assert(oper.OutLayout()->Size()==S.Size());
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -445,15 +451,26 @@ int main(int argc, char *argv[])
       visit_dc.Save();
    }
 
-   // Perform time-integration (looping over the time iterations, ti, with a
+   dbg("Perform time-integration");// (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
+   dbg("ResetTimeStepEstimate");
    oper.ResetTimeStepEstimate();
+   dbg("GetTimeStepEstimate");
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   BlockVector S_old(S);
+   dbg("S_old(S);");
+   //BlockVector S_old(S);
+   BlockVector S_old(true_offset);
+   if (engine) {
+      dbg("S_old.Resize");
+      S_old.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
+   }
+   dbg("S_old.Assign(S)");
+   S_old.Assign(S);
+   dbg("Time-step for-loop");
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -462,13 +479,17 @@ int main(int argc, char *argv[])
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
-
-      S_old = S;
+      dbg("S_old = S;");
+      //S_old = S;
+      S_old.Assign(S);
+      dbg("t_old = t;");
       t_old = t;
+      dbg("ResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
+      dbg("ode_solver->Step(S, t, dt);");
       ode_solver->Step(S, t, dt);
       steps++;
 
