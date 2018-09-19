@@ -660,7 +660,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 //#warning UpdateQuadratureData drand48
    //const size_t mx = S.Size();
    //Vector *S_p = (Vector*) &S;
-   //for(size_t k=0;k<mx;k+=1) S_p->GetData()[k] *= 0.123456789*drand48();
+   //for(size_t k=0;k<mx;k+=1) S_p->GetData()[k] = drand48();
    if (qupdate) {
       QUpdate(dim,nzones,l2dofs_cnt,h1dofs_cnt,use_viscosity,p_assembly,cfl,
               timer,material_pcf,integ_rule,H1FESpace,L2FESpace,S,
@@ -775,6 +775,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
             CalcInverse(Jpr, Jinv);
             const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
                          p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
+            //printf("\n\t[%d,%d] %f %f %f %f",b/*z*/,q,detJ,rho,p,sound_speed);
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 

@@ -361,26 +361,22 @@ int main(int argc, char *argv[])
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
-   dbg("ProjectCoefficient: rho_coeff");
    l2_rho.ProjectCoefficient(rho_coeff);
-   dbg("ProjectGridFunction: l2_rho");
    rho.ProjectGridFunction(l2_rho);
-   dbg("problem?");
    if (problem == 1)
    {
       dbg("For the Sedov test, we use a delta function at the origin.");
       DeltaCoefficient e_coeff(0, 0, 0.25);
-      dbg("ProjectCoefficient");
       l2_e.ProjectCoefficient(e_coeff);
-      dbg("done");
+      l2_e.Print();
    }
    else
    {
       FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
-   dbg("ProjectGridFunction");
    e_gf.ProjectGridFunction(l2_e);
+   e_gf.Print();
    
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving

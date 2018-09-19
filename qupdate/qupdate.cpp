@@ -72,8 +72,10 @@ namespace hydrodynamics {
                            double *stressJinvT){
       double min_detJ = infinity;
 #ifdef __NVCC__
-      const int z = blockDim.x * blockIdx.x + threadIdx.x;
-      if (z < nzones)
+      const int _z = blockDim.x * blockIdx.x + threadIdx.x;
+      //if (z < nzones)
+      if (_z != 0) return;
+      for (int z = 0; z < nzones; z++)
 #else
       for (int z = 0; z < nzones; z++)
 #endif
@@ -93,10 +95,11 @@ namespace hydrodynamics {
             const double e   = fmax(0.0, e_quads[zdx]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
+            //printf("\n\t[%d,%d] %f %f %f %f",z,q,detJ,rho,p,sound_speed);
             // *****************************************************************
             double stress[dim*dim];
-            for (int k=0;k<dim*dim;k+=1) stress[k] = 0.0;
-            for (int d = 0; d < dim; d++)  stress[d*dim+d] = -p;
+            for (int k = 0; k < dim*dim;k+=1) stress[k] = 0.0;
+            for (int d = 0; d < dim; d++) stress[d*dim+d] = -p;
             // *****************************************************************
             double visc_coeff = 0.0;
             if (use_viscosity) {
@@ -108,8 +111,8 @@ namespace hydrodynamics {
                double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
                symmetrize(dim,sgrad_v);
-               double eig_val_data[3] = {0.0};
-               double eig_vec_data[9] = {0.0};
+               double eig_val_data[3];
+               double eig_vec_data[9];
                if (dim==1) {
                   eig_val_data[0] = sgrad_v[0];
                   eig_vec_data[0] = 1.;
@@ -214,7 +217,7 @@ namespace hydrodynamics {
       double *d_e_quads_data;
       Dof2QuadScalar(L2FESpace, ir, d_e_data, &d_e_quads_data);
 
-      // Refresh Geom J, invJ & detJ *******************************************
+      // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
       const double *h_x_data = sptr->GetData() + 0;
       double *d_x_data =
