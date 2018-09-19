@@ -150,6 +150,8 @@ public:
 
    void PrintTimingData(bool IamRoot, int steps) const;
 
+   int GetH1VSize() const { return H1FESpace.GetVSize(); }
+
    ~LagrangianHydroOperator();
 };
 

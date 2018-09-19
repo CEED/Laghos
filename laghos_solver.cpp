@@ -289,6 +289,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
+   Vector* sptr = (Vector*) &S;
+   ParGridFunction x;
+   x.MakeRef(&H1FESpace, *sptr, 0);
+   H1FESpace.GetParMesh()->NewNodes(x, false);
+
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
