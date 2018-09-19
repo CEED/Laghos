@@ -70,16 +70,14 @@ namespace hydrodynamics {
                            const double *Jac0inv,
                            double *dt_est,
                            double *stressJinvT){
-      double min_detJ = infinity;
 #ifdef __NVCC__
-      const int _z = blockDim.x * blockIdx.x + threadIdx.x;
-      //if (z < nzones)
-      if (_z != 0) return;
-      for (int z = 0; z < nzones; z++)
+      const int z = blockDim.x * blockIdx.x + threadIdx.x;
+      if (z < nzones)
 #else
       for (int z = 0; z < nzones; z++)
 #endif
       {
+         double min_detJ = infinity;
          // ********************************************************************
          for (int q = 0; q < nqp; q++) {
             const int zdx = z * nqp + q;
@@ -88,6 +86,7 @@ namespace hydrodynamics {
             const double *J = Jacobians + zdx*dim*dim;
             const double detJ = Det(dim,J);
             min_detJ = fmin(min_detJ,detJ);
+            //printf("\n\tmin_detJ[z:%d,q:%d]=%f",z,q,min_detJ);
             double Jinv[dim*dim];
             calcInverse2D(dim,J,Jinv);
             // *****************************************************************
@@ -147,9 +146,13 @@ namespace hydrodynamics {
                + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
             if (min_detJ < 0.0) {
                // This will force repetition of the step with smaller dt.
-               *dt_est = 0.0;
+               //printf("\n\tdt_est[z:%d,q:%d] = ZERO!",z,q);
+               dt_est[z] = 0.0;
             } else {
-               *dt_est = fmin(*dt_est, cfl * (1.0 / inv_dt) );
+               //const double bkp = dt_est[z];
+               const double cfl_inv_dt = cfl / inv_dt;
+               dt_est[z] = fmin(dt_est[z], cfl_inv_dt);
+               //printf("\n\tdt_est[z:%d,q:%d]: bkp=%f, cui=%f",z,q,bkp,cfl_inv_dt);
             }
             // Quadrature data for partial assembly of the force operator.
             double stressJiT[dim*dim];
@@ -259,10 +262,13 @@ namespace hydrodynamics {
                                     quad_data.Jac0inv.Data(),
                                     Jac0inv_sz*sizeof(double));
 
-      dbg("dt_est");
+      dbg("dt_est=%f",quad_data.dt_est);
+      const size_t dt_est_sz = nzones;
+      double h_dt_est[dt_est_sz];
+      for(size_t k=0; k<dt_est_sz;k+=1) h_dt_est[k] = quad_data.dt_est;
       double *d_dt_est =
-         (double*)mfem::kernels::kmalloc<double>::operator new(1);
-      mfem::kernels::kmemcpy::rHtoD(d_dt_est, &quad_data.dt_est, sizeof(double));
+         (double*)mfem::kernels::kmalloc<double>::operator new(dt_est_sz);
+      mfem::kernels::kmemcpy::rHtoD(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
 
       dbg("stressJinvT");
       const size_t stressJinvT_sz = nzones * nqp * dim * dim;
@@ -291,7 +297,14 @@ namespace hydrodynamics {
       
       mfem::kernels::kmemcpy::rDtoH(quad_data.stressJinvT.Data(),
                                     d_stressJinvT, stressJinvT_sz*sizeof(double));
-      mfem::kernels::kmemcpy::rDtoH(&quad_data.dt_est, d_dt_est, sizeof(double));
+      
+      quad_data.dt_est = vector_min(dt_est_sz,d_dt_est);
+      
+      mfem::kernels::kmemcpy::rDtoH(h_dt_est,
+                                    d_dt_est, dt_est_sz*sizeof(double));
+      /*for(int k=0;k<dt_est_sz;k+=1){
+         dbg("\033[7mh_dt_est[%d]=%.15e",k,h_dt_est[k]);
+         }*/
       dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;
