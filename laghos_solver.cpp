@@ -207,7 +207,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    
    if (has_engine){
 #ifdef __NVCC__
-      /*dbg("Jac0inv UseExternalData");
+      dbg("Jac0inv UseExternalData");
       const int ji_isz = quad_data.Jac0inv.SizeI();
       const int ji_jsz = quad_data.Jac0inv.SizeJ();
       const int ji_ksz = quad_data.Jac0inv.SizeK();
@@ -216,7 +216,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                     quad_data.Jac0inv.Data(),
                                     ji_isz*ji_jsz*ji_ksz*sizeof(double));
       quad_data.Jac0inv.UseExternalData(ji_ext_data, ji_isz,ji_jsz,ji_ksz);
-      */
+      
       
       dbg("stressJinvT UseExternalData");
       const int si_isz = quad_data.stressJinvT.SizeI();
@@ -226,7 +226,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       mfem::kernels::kmemcpy::rHtoD(si_ext_data,
                                     quad_data.stressJinvT.Data(),
                                     si_isz*si_jsz*si_ksz*sizeof(double));
-      quad_data./*d_*/stressJinvT.UseExternalData(si_ext_data, si_isz,si_jsz,si_ksz);
+      quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz,si_jsz,si_ksz);
 #endif
    }
 
@@ -305,14 +305,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    push();
    dbg("\033[7mLagrangianHydroOperator::Mult");
    
-   if (has_engine){
-      //dbg("has_engine");
-      //dbg("dS_dt.Resize");
-      //const int dS_dt_sz = dS_dt.Size();
-      ///const Engine &engine = H1FESpace.GetParMesh()->GetEngine();
-      //dS_dt.SetEngine(engine);
-      //dS_dt.Resize(engine.MakeLayout(dS_dt_sz));
-   }
    dbg("dS_dt.Fill(0.0)");
    dS_dt.Fill(0.0);
       
@@ -322,8 +314,14 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    Vector* sptr = (Vector*) &S;
    
    ParGridFunction x;
+   if (has_engine){
+      x.Resize(H1FESpace.GetVLayout());
+   }
    x.MakeRef(&H1FESpace, *sptr, 0);
+   //x.MakeRefOffset(*sptr,0);
+   //x.Pull();
    H1FESpace.GetParMesh()->NewNodes(x, false);
+   //x.Push();
 
    dbg("UpdateQuadratureData");
    UpdateQuadratureData(S);

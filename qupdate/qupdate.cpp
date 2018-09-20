@@ -185,7 +185,7 @@ namespace hydrodynamics {
                 ParFiniteElementSpace &L2FESpace,
                 const Vector &S,
                 bool &quad_data_is_current,
-                QuadratureData &quad_data) {
+                QuadratureData &quad_data) {      
       // ***********************************************************************
       push();
       
@@ -194,14 +194,24 @@ namespace hydrodynamics {
          dbg("quad_data_is_current, return");
          return;
       }
-      
+
+      // ***********************************************************************
+      static int been_there = 0;
+      const int stop_there = 2;
+      been_there += 1;
+      dbg("been_there=%d",been_there);
+      //if (been_there==stop_there) assert(false);
+
+      // ***********************************************************************
       assert(dim==2);
       assert(p_assembly);
       assert(material_pcf);
 
       // ***********************************************************************
       dbg("T");
+      //if (been_there==stop_there) assert(false);
       ElementTransformation *T = H1FESpace.GetElementTransformation(0);
+      if (been_there==stop_there) assert(false);
       dbg("ip");
       const IntegrationPoint &ip = ir.IntPoint(0);
       dbg("gamma");
@@ -218,75 +228,92 @@ namespace hydrodynamics {
       const size_t H1_size = H1FESpace.GetVSize();
       const size_t L2_size = L2FESpace.GetVSize();
       const int nqp1D = tensors1D->LQshape1D.Width();
-      
+      if (been_there==2) assert(false);
+          
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
-      //const double *h_e_data = S_p->GetData()+2*H1_size;
-      //for(size_t k=0;k<L2_size;k+=1) dbg("\te[%d]=%f",k,h_e_data[k]);
-      //double *d_e_data = (double*)mfem::kernels::kmalloc<double>::operator new(L2_size);
-      //mfem::kernels::kmemcpy::rHtoD(d_e_data, h_e_data, L2_size*sizeof(double));
+      {
+         S_p->Pull();
+         const double *h_e_data = S_p->GetData()+2*H1_size;
+         for(size_t k=0;k<L2_size;k+=1) dbg("\te[%d]=%f",k,h_e_data[k]);
+         S_p->Push();
+      }      
       double *d_e_quads_data;
       ParGridFunction d_e;
       d_e.Resize(L2FESpace.GetVLayout());
+      assert(L2FESpace.GetVLayout()->Size()==L2_size);
       d_e.MakeRefOffset(*S_p, 2*H1_size);
       Dof2QuadScalar(L2FESpace, ir, (const double*)d_e.GetDeviceData(), &d_e_quads_data);
-      assert(false);
 
       // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
-      const double *h_x_data = S_p->GetData() + 0;
-      double *d_x_data =
-         (double*)mfem::kernels::kmalloc<double>::operator new(H1_size);
-      mfem::kernels::kmemcpy::rHtoD(d_x_data, h_x_data, H1_size*sizeof(double));
+      {
+         S_p->Pull();
+         const double *h_x_data = S_p->GetData();
+         for(size_t k=0;k<H1_size;k+=1) dbg("\tx[%d]=%f",k,h_x_data[k]);
+         S_p->Push();
+      }
       double *d_grad_x_data;
-      Dof2QuadGrad(H1FESpace,ir,d_x_data,&d_grad_x_data);
-      
+      ParGridFunction d_x;
+      d_x.Resize(H1FESpace.GetVLayout());
+      d_x.MakeRefOffset(*S_p, 0);
+      Dof2QuadGrad(H1FESpace, ir, (const double*)d_x.GetDeviceData(), &d_grad_x_data);
+
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
       const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(H1FESpace,ir);
       
       // Velocity **************************************************************
       dbg("Velocity H1_size=%d",H1_size);
-      const double *h_v_data = S_p->GetData() + H1_size;
-      double *d_v_data =
-         (double*)mfem::kernels::kmalloc<double>::operator new(H1_size);
-      mfem::kernels::kmemcpy::rHtoD(d_v_data, h_v_data, H1_size*sizeof(double));
+      ParGridFunction d_v;
+      d_v.Resize(H1FESpace.GetVLayout());
+      d_v.MakeRefOffset(*S_p, H1_size);
       double *d_grad_v_data;
-      Dof2QuadGrad(H1FESpace,ir,d_v_data,&d_grad_v_data);
-      
+      Dof2QuadGrad(H1FESpace,ir,(const double*)d_v.GetDeviceData(),&d_grad_v_data);
+
       // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
       const double infinity = std::numeric_limits<double>::infinity();
 
+      // ***********************************************************************
       dbg("rho0DetJ0w");
       const size_t rho0DetJ0w_sz = nzones * nqp;
-      double *d_rho0DetJ0w =
-         (double*)mfem::kernels::kmalloc<double>::operator new(rho0DetJ0w_sz);
-      mfem::kernels::kmemcpy::rHtoD(d_rho0DetJ0w,
-                                    quad_data.rho0DetJ0w.GetData(),
-                                    rho0DetJ0w_sz*sizeof(double));
+      static double *d_rho0DetJ0w = NULL;
+      if (!d_rho0DetJ0w){
+         d_rho0DetJ0w = (double*)kernels::kmalloc<double>::operator new(rho0DetJ0w_sz);
+         assert(d_rho0DetJ0w);
+         mfem::kernels::kmemcpy::rHtoD(d_rho0DetJ0w,
+                                       quad_data.rho0DetJ0w.GetData(),
+                                       rho0DetJ0w_sz*sizeof(double));
+      }
 
+      // ***********************************************************************
       dbg("Jac0inv");
       const size_t Jac0inv_sz = dim * dim * nzones * nqp;
-      double *d_Jac0inv =
-         (double*)mfem::kernels::kmalloc<double>::operator new(Jac0inv_sz);
-      mfem::kernels::kmemcpy::rHtoD(d_Jac0inv,
-                                    quad_data.Jac0inv.Data(),
-                                    Jac0inv_sz*sizeof(double));
+      static double *d_Jac0inv = NULL;
+      if (!d_Jac0inv){
+         d_Jac0inv = (double*)kernels::kmalloc<double>::operator new(Jac0inv_sz);
+         assert(d_Jac0inv);
+         kernels::kmemcpy::rHtoD(d_Jac0inv,
+                                 quad_data.Jac0inv.Data(),
+                                 Jac0inv_sz*sizeof(double));
+      }
 
+      // ***********************************************************************
       dbg("dt_est=%f",quad_data.dt_est);
       const size_t dt_est_sz = nzones;
-      double h_dt_est[dt_est_sz];
-      for(size_t k=0; k<dt_est_sz;k+=1) h_dt_est[k] = quad_data.dt_est;
-      double *d_dt_est =
-         (double*)mfem::kernels::kmalloc<double>::operator new(dt_est_sz);
-      mfem::kernels::kmemcpy::rHtoD(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
+      static double *h_dt_est = NULL;
+      if (!h_dt_est){
+         h_dt_est = (double*) ::malloc(dt_est_sz*sizeof(double));
+         for(size_t k=0; k<dt_est_sz; k+=1) h_dt_est[k] = quad_data.dt_est;
+      }
+      static double *d_dt_est = NULL;
+      if (!d_dt_est){
+         d_dt_est = (double*)kernels::kmalloc<double>::operator new(dt_est_sz);
+         kernels::kmemcpy::rHtoD(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
+      }
 
-      /*dbg("stressJinvT");
-      const size_t stressJinvT_sz = nzones * nqp * dim * dim;
-      double *d_stressJinvT =
-         (double*)mfem::kernels::kmalloc<double>::operator new(stressJinvT_sz);
-      */
+      // ***********************************************************************
       dbg("qkernel");
       qkernel<2> __config(nzones) (nzones,
                                    nqp,
@@ -305,17 +332,15 @@ namespace hydrodynamics {
                                    d_grad_v_data,
                                    d_Jac0inv,
                                    d_dt_est,
-                                   quad_data./*d_*/stressJinvT.Data());
-      
-      /*mfem::kernels::kmemcpy::rDtoH(quad_data.stressJinvT.Data(),
-                                    d_stressJinvT, stressJinvT_sz*sizeof(double));
-      */
+                                   quad_data.stressJinvT.Data());
+
+      // ***********************************************************************
       quad_data.dt_est = vector_min(dt_est_sz,d_dt_est);
       mfem::kernels::kmemcpy::rDtoH(h_dt_est,
                                     d_dt_est, dt_est_sz*sizeof(double));
-      /*for(int k=0;k<dt_est_sz;k+=1){
+      for(int k=0;k<dt_est_sz;k+=1){
          dbg("\033[7mh_dt_est[%d]=%.15e",k,h_dt_est[k]);
-         }*/
+      }
       dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;

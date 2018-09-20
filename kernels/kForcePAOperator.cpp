@@ -72,17 +72,6 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
    const kernels::Vector &rgVecH1 = gVecH1.Get_PVector()->As<const kernels::Vector>();
    kernels::Vector &rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
    l2k.GlobalToLocal(rVecL2, rgVecL2);
-#ifdef __NVCC__
-/*   const int si_isz = quad_data->stressJinvT.SizeI();
-   const int si_jsz = quad_data->stressJinvT.SizeJ();
-   const int si_ksz = quad_data->stressJinvT.SizeK();
-   const int ijk = si_isz*si_jsz*si_ksz;
-#warning kmemcpy d_stressJinvT
-   mfem::kernels::kmemcpy::rHtoD(quad_data->d_stressJinvT.Data(),
-                                 quad_data->stressJinvT.Data(),
-                                 ijk*sizeof(double));
-*/
-#endif
    dbg("rForceMult");
    rForceMult(dim,
               NUM_DOFS_1D,
@@ -93,11 +82,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               l2D2Q->dofToQuad,
               h1D2Q->quadToDof,
               h1D2Q->quadToDofD,
-#ifdef __NVCC__
-              quad_data->/*d_*/stressJinvT.Data(),
-#else
               quad_data->stressJinvT.Data(),
-#endif
               (const double*)rgVecL2.KernelsMem().ptr(),
               (double*)rgVecH1.KernelsMem().ptr());
    dbg("done");
@@ -124,11 +109,7 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        l2D2Q->quadToDof,
                        h1D2Q->dofToQuad,
                        h1D2Q->dofToQuadD,
-#ifdef __NVCC__
-                       (const double*)quad_data->/*d_*/stressJinvT.Data(),
-#else
                        (const double*)quad_data->stressJinvT.Data(),
-#endif
                        (const double*)rgVecH1.KernelsMem().ptr(),
                        (double*)rgVecL2.KernelsMem().ptr());
    l2k.LocalToGlobal(rgVecL2, rVecL2);

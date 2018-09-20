@@ -100,7 +100,9 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
    }
 
    assert(dofs.GetData());
-   ::memcpy(ess_tdofs,dofs,ess_tdofs_count*sizeof(int));
+#warning ess_tdofs.Assign();
+   ess_tdofs.Assign(dofs);
+   //::memcpy(ess_tdofs,dofs,ess_tdofs_count*sizeof(int));
    ess_tdofs.Push();
    pop();
 }

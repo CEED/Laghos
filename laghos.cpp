@@ -349,11 +349,14 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
+   dbg("SetNodalGridFunction");
    pmesh->SetNodalGridFunction(&x_gf);
+   //x_gf.Pull();dbg("x_gf:\n"); x_gf.Print(); assert(__FILE__ && __LINE__ && false);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   //v_gf.Pull();dbg("v_gf:\n"); v_gf.Print(); assert(__FILE__ && __LINE__ && false);
 
    dbg("Initialize density and specific internal energy values.");// We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -380,6 +383,9 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   
+   // Finished initializing, now push to the device
+   S.Push();
    
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
