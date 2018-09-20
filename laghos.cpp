@@ -325,8 +325,7 @@ int main(int argc, char *argv[])
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
 
-   // Initialize x_gf using the starting mesh coordinates. This also links the
-   // mesh positions to the values in x_gf.
+   // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
 
    // Initialize the velocity.
@@ -370,11 +369,11 @@ int main(int argc, char *argv[])
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc;
+   int source = 0; bool visc = true;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
-         visc = false; break;
+              visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
@@ -475,7 +474,9 @@ int main(int argc, char *argv[])
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
-      // Make sure that the mesh corresponds to the new solution state.
+      // Make sure that the mesh corresponds to the new solution state. This is
+      // needed, because some time integrators use different S-type vectors
+      // and the oper might have redirected the mesh positions to those.
       pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)

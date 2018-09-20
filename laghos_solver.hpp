@@ -66,6 +66,9 @@ protected:
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
 
+   // Reference to the current mesh configuration.
+   mutable ParGridFunction x_gf;
+
    Array<int> &ess_tdofs;
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
@@ -135,6 +138,7 @@ public:
 
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
+   void UpdateMesh(const Vector &S) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;

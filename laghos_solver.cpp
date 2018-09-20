@@ -202,13 +202,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
+   UpdateMesh(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
+   Vector* sptr = (Vector*) &S;
    ParGridFunction v;
    const int VsizeH1 = H1FESpace.GetVSize();
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
@@ -237,6 +235,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
+   dv = 0.0;
 
    Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (p_assembly)
@@ -289,11 +288,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
-   Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
-
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -304,6 +298,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction de;
    de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   de = 0.0;
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
@@ -356,12 +351,16 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    delete e_source;
 }
 
-double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
+void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 {
    Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
+   x_gf.MakeRef(&H1FESpace, *sptr, 0);
+   H1FESpace.GetParMesh()->NewNodes(x_gf, false);
+}
+
+double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
+{
+   UpdateMesh(S);
    UpdateQuadratureData(S);
 
    double glob_dt_est;
