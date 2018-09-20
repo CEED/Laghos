@@ -572,8 +572,8 @@ int main(int argc, char *argv[])
    if (mpi.Root())
    {
       cout << endl;
-      cout << "Energy error: " << energy_init << " " << energy_final << " "
-                               << energy_init - energy_final << endl;
+      cout << "Energy  diff: " << scientific << setprecision(2)
+           << fabs(energy_init - energy_final) << endl;
    }
 
    // Print the error.

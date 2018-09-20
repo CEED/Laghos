@@ -37,39 +37,42 @@ void RK2AvgSolver::Init(TimeDependentOperator &_f)
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
    const int Vsize = hydro_oper->GetH1VSize();
-   Vector V(Vsize), Y(S.Size()), dS_dt(S.Size());
+   Vector V(Vsize), dS_dt(S.Size()), S0(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   Vector v_dS, v_S, x_dS;
-   v_S.SetDataAndSize(S.GetData() + Vsize, Vsize);
-   v_dS.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
-   x_dS.SetDataAndSize(dS_dt.GetData(), Vsize);
+   Vector dv_dt, v0, dx_dt;
+   v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+   dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
+   dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+   // Each step updates S (explicit) and then V (using S).
+   // The last step doesn't need to update V.
 
    // 1.
-   Y = S;
-   hydro_oper->SolveVelocity(Y, dS_dt);
-   add(0.5 * dt, v_dS, v_S, V);
-
-   std::cout << "Solved velocity" << std::endl;
+   // S is S0.
+   hydro_oper->UpdateMesh(S);
+   hydro_oper->SolveVelocity(S, dS_dt);
+   // V = v0 + 0.5 * dt * dv_dt;
+   add(v0, 0.5 * dt, dv_dt, V);
 
    // 2.
-   hydro_oper->SolveEnergy(Y, V, dS_dt);
-   x_dS = V;
-   // Y = S + 0.5 * dt * dS_dt;
-   add(0.5 * dt, dS_dt, S, Y);
-   S = Y; // TODO better way.
+   hydro_oper->SolveEnergy(S, V, dS_dt);
+   dx_dt = V;
+   // S = S0 + 0.5 * dt * dS_dt;
+   add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
-   hydro_oper->SolveVelocity(Y, dS_dt);
-   // V = v_S + 0.5 * dt * v_dS;
-   add(0.5 * dt, v_dS, v_S, V);
+   hydro_oper->UpdateMesh(S);
+   hydro_oper->SolveVelocity(S, dS_dt);
+   // V = v0 + 0.5 * dt * dv_dt;
+   add(v0, 0.5 * dt, dv_dt, V);
 
    // 3.
-   hydro_oper->SolveEnergy(Y, V, dS_dt);
-   x_dS = V;
-   // Y = S + dt * dS_dt.
-   add(dt, dS_dt, S, Y);
-   S = Y; // TODO better way.
+   hydro_oper->SolveEnergy(S, V, dS_dt);
+   dx_dt = V;
+   // S = S0 + dt * dS_dt.
+   add(S0, dt, dS_dt, S);
+   t += dt;
    hydro_oper->ResetQuadratureData();
 }
 
