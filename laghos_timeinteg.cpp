@@ -46,19 +46,22 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
 
-   // Each step updates S (explicit) and then V (using S).
-   // The last step doesn't need to update V.
+   // In each sub-step:
+   // - Update S.
+   // - Compute dv_dt using S.
+   // - Update V using dv_dt.
+   // - Compute de_dt and dx_dt using S and V.
 
-   // 1.
+   // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
    hydro_oper->SolveVelocity(S, dS_dt);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
-
-   // 2.
    hydro_oper->SolveEnergy(S, V, dS_dt);
    dx_dt = V;
+
+   // -- 2.
    // S = S0 + 0.5 * dt * dS_dt;
    add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
@@ -66,14 +69,15 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    hydro_oper->SolveVelocity(S, dS_dt);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
-
-   // 3.
    hydro_oper->SolveEnergy(S, V, dS_dt);
    dx_dt = V;
+
+   // -- 3.
    // S = S0 + dt * dS_dt.
    add(S0, dt, dS_dt, S);
-   t += dt;
    hydro_oper->ResetQuadratureData();
+
+   t += dt;
 }
 
 } // namespace hydrodynamics
