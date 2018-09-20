@@ -509,7 +509,8 @@ int main(int argc, char *argv[])
          if (dt < numeric_limits<double>::epsilon())
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
-         S = S_old;
+         S.Assign(S_old);
+         //S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;
@@ -517,6 +518,7 @@ int main(int argc, char *argv[])
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       // Make sure that the mesh corresponds to the new solution state.
+#warning pmesh->NewNodes(x_gf, false);
       pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)

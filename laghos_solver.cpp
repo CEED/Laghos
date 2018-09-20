@@ -320,7 +320,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    x.MakeRef(&H1FESpace, *sptr, 0);
    //x.MakeRefOffset(*sptr,0);
    //x.Pull();
-   H1FESpace.GetParMesh()->NewNodes(x, false);
+#warning H1FESpace NewNodes
+   //H1FESpace.GetParMesh()->NewNodes(x, false);
    //x.Push();
 
    dbg("UpdateQuadratureData");

@@ -210,12 +210,18 @@ namespace hydrodynamics {
       // ***********************************************************************
       dbg("T");
       //if (been_there==stop_there) assert(false);
+      /*
       ElementTransformation *T = H1FESpace.GetElementTransformation(0);
       if (been_there==stop_there) assert(false);
       dbg("ip");
       const IntegrationPoint &ip = ir.IntPoint(0);
       dbg("gamma");
       const double gamma = material_pcf->Eval(*T,ip);
+      */
+#warning gamma = 1.4
+      const double gamma = 1.4;
+      dbg("gamma=%f",gamma);
+      assert(gamma == 1.4); // Sedov problem
 
       // ***********************************************************************
       timer.sw_qdata.Start();
@@ -228,7 +234,7 @@ namespace hydrodynamics {
       const size_t H1_size = H1FESpace.GetVSize();
       const size_t L2_size = L2FESpace.GetVSize();
       const int nqp1D = tensors1D->LQshape1D.Width();
-      if (been_there==2) assert(false);
+      //if (been_there==2) assert(false);
           
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
