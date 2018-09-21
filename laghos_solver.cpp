@@ -135,6 +135,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    x(VsizeH1),
    v(VsizeH1),
    e(VsizeL2),
+   dx(), dv(), dvc(), de(),
    rhs(VsizeH1),
    B(H1compFESpace.GetTrueVSize()),
    X(H1compFESpace.GetTrueVSize()),
@@ -149,12 +150,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    push();
    one = 1.0;
    if (has_engine){
-      dbg("has_engine");
       assert(this->InLayout());
       assert(InLayout()->Size()==size);
       x.Resize(H1FESpace.GetVLayout());
       v.Resize(H1FESpace.GetVLayout());
       e.Resize(L2FESpace.GetVLayout());
+      dx.Resize(H1FESpace.GetVLayout());
+      dv.Resize(H1FESpace.GetVLayout());
+      dvc.Resize(H1compFESpace.GetVLayout());
+      de.Resize(L2FESpace.GetVLayout());
+      de.Pull(false);
       rhs.Resize(H1FESpace.GetVLayout());
       one.Resize(L2FESpace.GetVLayout());
       one.Fill(1.0);
@@ -190,7 +195,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       Mv.Assemble();
    }
 
-   dbg("Values of rho0DetJ0 and Jac0inv at all quadrature points.");
+   // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
    Vector rho_vals(nqp);
    for (int i = 0; i < nzones; i++)
@@ -214,25 +219,29 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (has_engine){
 #ifdef __NVCC__
       dbg("Jac0inv UseExternalData");
-      const int ji_isz = quad_data.Jac0inv.SizeI();
-      const int ji_jsz = quad_data.Jac0inv.SizeJ();
-      const int ji_ksz = quad_data.Jac0inv.SizeK();
-      double *ji_ext_data = (double*)mfem::kernels::kmalloc<double>::operator new(ji_isz*ji_jsz*ji_ksz);
-      mfem::kernels::kmemcpy::rHtoD(ji_ext_data,
-                                    quad_data.Jac0inv.Data(),
-                                    ji_isz*ji_jsz*ji_ksz*sizeof(double));
-      quad_data.Jac0inv.UseExternalData(ji_ext_data, ji_isz,ji_jsz,ji_ksz);
+      const size_t Jinv_isz = quad_data.Jac0inv.SizeI();
+      const size_t Jinv_jsz = quad_data.Jac0inv.SizeJ();
+      const size_t Jinv_ksz = quad_data.Jac0inv.SizeK();
+      const size_t Jinv_sz = Jinv_isz * Jinv_jsz * Jinv_ksz;
+      double *ji_ext_data =
+         (double*)kernels::kmalloc<double>::operator new(Jinv_sz);
+      kernels::kmemcpy::rHtoD(ji_ext_data,
+                              quad_data.Jac0inv.Data(),
+                              Jinv_sz*sizeof(double));
+      quad_data.Jac0inv.UseExternalData(ji_ext_data, Jinv_isz, Jinv_jsz, Jinv_ksz);
       
       
       dbg("stressJinvT UseExternalData");
-      const int si_isz = quad_data.stressJinvT.SizeI();
-      const int si_jsz = quad_data.stressJinvT.SizeJ();
-      const int si_ksz = quad_data.stressJinvT.SizeK();
-      double *si_ext_data = (double*)mfem::kernels::kmalloc<double>::operator new(si_isz*si_jsz*si_ksz);
-      mfem::kernels::kmemcpy::rHtoD(si_ext_data,
-                                    quad_data.stressJinvT.Data(),
-                                    si_isz*si_jsz*si_ksz*sizeof(double));
-      quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz,si_jsz,si_ksz);
+      const size_t si_isz = quad_data.stressJinvT.SizeI();
+      const size_t si_jsz = quad_data.stressJinvT.SizeJ();
+      const size_t si_ksz = quad_data.stressJinvT.SizeK();
+      const size_t si_sz = si_isz * si_jsz * si_ksz;
+      double *si_ext_data =
+         (double*)kernels::kmalloc<double>::operator new(si_sz);
+      kernels::kmemcpy::rHtoD(si_ext_data,
+                              quad_data.stressJinvT.Data(),
+                              si_sz*sizeof(double));
+      quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz, si_jsz, si_ksz);
 #endif
    }
 
@@ -311,43 +320,17 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    push();
    dbg("\033[7mLagrangianHydroOperator::Mult");
    
-   dbg("dS_dt.Fill(0.0)");
    dS_dt.Fill(0.0);
-      
+   UpdateQuadratureData(S);     
    Vector* sptr = (Vector*) &S;
-   
-   ParGridFunction x_gf;
-   //x_gf.Resize(H1FESpace.GetVLayout());
-   //x_gf.Pull(false);
-   x_gf.MakeRef(&H1FESpace, *sptr, 0);
-   //x_gf.MakeRefOffset(*sptr, 0);
-   //x_gf.Pull();
-   H1FESpace.GetParMesh()->NewNodes(x_gf, false);
-   
-   dbg("UpdateQuadratureData");
-   UpdateQuadratureData(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // - Position
    // - Velocity
    // - Specific Internal Energy
-   dbg("v.MakeRefOffset");
    v.MakeRefOffset(*sptr,VsizeH1);
-   dbg("v.Size()=%d, VsizeH1=%d",v.Size(),VsizeH1);
-   dbg("e.MakeRefOffset");
    e.MakeRefOffset(*sptr,VsizeH1*2);
-   dbg("eSize()=%d, VsizeL2=%d",e.Size(),VsizeL2);
 
-   dbg("dx, dv, de");
-   ParGridFunction dx, dv, de;
-   if (has_engine){
-      dbg("Resizing");
-      dx.Resize(H1FESpace.GetVLayout());
-      dv.Resize(H1FESpace.GetVLayout());
-      de.Resize(L2FESpace.GetVLayout());
-      de.Pull(false);
-   }
-   
    dx.MakeRefOffset(dS_dt, 0);
    dv.MakeRefOffset(dS_dt, VsizeH1);
    de.MakeRefOffset(dS_dt, VsizeH1*2);
@@ -397,10 +380,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
          for (int c = 0; c < dim; c++)
          {
-            dbg("\033[7mdim #%d",c);
-            dbg("\033[7mrhs_c:");
+            dv_c.Fill(0.0);
             rhs_c.MakeRefOffset(rhs, c*size);
-                        
+
             mfem::Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
             mfem::Array<int> ess_bdr(bdr_attr_max);
@@ -410,47 +392,28 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             ess_bdr = 0; ess_bdr[c] = 1;
             dbg("Essential true dofs as if there's only one component.");
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-            dbg("done");
 
-            dbg("dv_c.Fill(0.0);");
-            dv_c.Fill(0.0);
-
-            // *****************************************************************
-            dbg("MultTranspose(rhs_c, B)");
-            dbg("rhs_c.Size()=%d",rhs_c.Size());
-            dbg("B.Size()=%d",B.Size());
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->MultTranspose(rhs_c, B);
-            dbg("MultTranspose done, B.Size()=%d",B.Size());
-
-            dbg("GetRestrictionOperator->Mult");
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetRestrictionOperator()->Mult(dv_c, X);
 
-            dbg("SetEssentialTrueDofs");
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
-            dbg("EliminateRHS");
             kVMassPA->EliminateRHS(B);
-            dbg("B.Size()=%d",B.Size());
 
             timer.sw_cgH1.Start();
-            dbg("CG_VMass.Mult(B, X);");
 
             CG_VMass.Mult(B, X);
 
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += CG_VMass.GetNumIterations();
-            dbg("GetProlongationOperator->Mult");
+            
             H1compFESpace.Get_PFESpace()->As<kernels::kFiniteElementSpace>().
                GetProlongationOperator()->Mult(X, dv_c);
 
-            dbg("dv.Assign(dv_c)");
-            ParGridFunction dvc;
-            dvc.Resize(H1compFESpace.GetVLayout());
             dvc.MakeRefOffset(dS_dt, VsizeH1 + c*size);
             dvc.Assign(dv_c);
          }
-         dbg("\033[7mend of for loop");
       } // engine
    }
    else // p_assembly
