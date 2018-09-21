@@ -528,14 +528,14 @@ int main(int argc, char *argv[])
                assert(t_final==0.5);
                assert(cfl==0.1);
                static int k = 0;
-               const double p0_05 = 6.647849286951836e+00; 
-               const double p0_85 = 7.053780376106562e+00;
-               if (problem==0 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p0_05)<1.e-16);}
-               if (problem==0 and ti==85) {k++;assert(fabs(sqrt_tot_norm-p0_85)<1.e-16);}
-               const double p1_05 = 3.9369101158965925e+00; 
-               const double p1_62 = 2.8935883659834465e+00;
-               if (problem==1 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p1_05)<1.e-16);}
-               if (problem==1 and ti==62) {k++;assert(fabs(sqrt_tot_norm-p1_62)<1.e-16);}
+               const double p0_05 = 6.64784928695183e+00; 
+               const double p0_85 = 7.05378037610656e+00;
+               if (problem==0 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p0_05)<1.e-14);}
+               if (problem==0 and ti==85) {k++;assert(fabs(sqrt_tot_norm-p0_85)<1.e-14);}
+               const double p1_05 = 3.93691011589659e+00; 
+               const double p1_62 = 2.89358836598344e+00;
+               if (problem==1 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p1_05)<1.e-14);}
+               if (problem==1 and ti==62) {k++;assert(fabs(sqrt_tot_norm-p1_62)<1.e-14);}
                if (last_step){
                   if (k==2) printf("\033[32;7m[Laghos] OK\033[m");
                   else return printf("\033[31;7m[Laghos] ERROR\033[m");

@@ -58,13 +58,6 @@ void kMassPAOperator::Setup()
    bilinearForm->AddDomainIntegrator(massInteg);
    bilinearForm->Assemble();
    bilinearForm->FormOperator(mfem::Array<int>(), massOperator);
-   dbg("fes.GetVLayout()->Size()=%d",fes.GetVLayout()->Size());
-   dbg("fes.GetTrueVLayout()->Size()=%d",fes.GetTrueVLayout()->Size());
-   dbg("massOperator->Width()=%d",massOperator->Width());
-   dbg("massOperator->Height()=%d",massOperator->Height());
-   dbg("massOperator->InLayout()->Size()=%d",massOperator->InLayout()->Size());
-   dbg("massOperator->OutLayout()->Size()=%d",massOperator->OutLayout()->Size());
-   //distX.Resize(engine.MakeLayout(massOperator->Width()));
    pop();
 }
 
@@ -89,8 +82,6 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       ess_tdofs.Resize(ess_tdofs_count);
 #endif
    } else{
-      dbg("ess_tdofs_count==%d",ess_tdofs_count);
-      dbg("ess_tdofs.Size()==%d",ess_tdofs.Size());      
       assert(ess_tdofs_count<=ess_tdofs.Size());
    } 
   
@@ -98,11 +89,8 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       pop();
       return;
    }
-
    assert(dofs.GetData());
-#warning ess_tdofs.Assign();
    ess_tdofs.Assign(dofs);
-   //::memcpy(ess_tdofs,dofs,ess_tdofs_count*sizeof(int));
    ess_tdofs.Push();
    pop();
 }
@@ -125,9 +113,6 @@ void kMassPAOperator::Mult(const mfem::Vector &x,
    push(Wheat);
    
    if (distX.Size()!=x.Size()) {
-      dbg("\033[7;1mdistX.Size()=%d, x.Size()=%d", distX.Size(), x.Size());
-      dbg("\033[7;1m                y.Size()=%d", y.Size());
-      dbg("\033[7;1mmassOperator->Width()=%d", massOperator->Width());
       distX.Resize(fes.GetMesh()->GetEngine().MakeLayout(x.Size()));
    }
    
