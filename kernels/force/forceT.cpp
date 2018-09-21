@@ -114,6 +114,6 @@ void rForceMultTranspose(const int NUM_DIM,
     fflush(stdout);
   }
   assert(call[id]);
-  call0(rForceMultTranspose,id,grid,blck,
-        nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
+  exeKernel(id,grid,blck,
+            nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
 }

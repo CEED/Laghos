@@ -28,9 +28,6 @@
 
 // *****************************************************************************
 #define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
-#define ISQRT(N) static_cast<unsigned>(sqrt(static_cast<float>(N)))
-#define ICBRT(N) static_cast<unsigned>(cbrt(static_cast<float>(N)))
-#define IROOT(D,N) ((D==1)?N:(D==2)?ISQRT(N):(D==3)?ICBRT(N):0)
 
 // *****************************************************************************
 #include <math.h>
@@ -46,13 +43,6 @@
 #include <helper_cuda.h>
 #include <helper_functions.h>
 #endif // __NVCC__
-
-// *****************************************************************************
-#ifdef __RAJA__
-#include <cuda.h>
-#include "RAJA/RAJA.hpp"
-#include "RAJA/policy/cuda.hpp"
-#endif // __RAJA__
 
 // *****************************************************************************
 #include "force/force.hpp"
