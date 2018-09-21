@@ -19,36 +19,6 @@
 namespace mfem {
 
 namespace hydrodynamics {
-
-   // **************************************************************************
-   __device__ double Det(const size_t dim, const double *J){
-      assert(dim==2);
-      return J[0] * J[3] - J[1] * J[2];
-   }
-   
-   // **************************************************************************
-   __device__ double norml2(const int size, const double *data) {
-      if (0 == size) return 0.0;
-      if (1 == size) return std::abs(data[0]);
-      double scale = 0.0;
-      double sum = 0.0;
-      for (int i = 0; i < size; i++) {
-         if (data[i] != 0.0)
-         {
-            const double absdata = fabs(data[i]);
-            if (scale <= absdata)
-            {
-               const double sqr_arg = scale / absdata;
-               sum = 1.0 + sum * (sqr_arg * sqr_arg);
-               scale = absdata;
-               continue;
-            } // end if scale <= absdata
-            const double sqr_arg = absdata / scale;
-            sum += (sqr_arg * sqr_arg); // else scale > absdata
-         } // end if data[i] != 0
-      }
-      return scale * sqrt(sum);
-   }
    
    // **************************************************************************
    template<const int dim>
@@ -60,8 +30,7 @@ namespace hydrodynamics {
                            const double h0,
                            const double h1order,
                            const double cfl,
-                           const double infinity,
-                           
+                           const double infinity,                           
                            const double *weights,
                            const double *Jacobians,
                            const double *rho0DetJ0w,
@@ -78,25 +47,30 @@ namespace hydrodynamics {
 #endif
       {
          double min_detJ = infinity;
+         double Jinv[dim*dim];
+         double stress[dim*dim];
+         double sgrad_v[dim*dim];
+         double eig_val_data[3];
+         double eig_vec_data[9];
+         double compr_dir[dim];
+         double Jpi[dim*dim];
+         double ph_dir[dim];
+         double stressJiT[dim*dim];
          // ********************************************************************
-         for (int q = 0; q < nqp; q++) {
+         for (int q = 0; q < nqp; q++) { // this for-loop should be kernel'd too
             const int zdx = z * nqp + q;
             const double weight =  weights[q];
             const double inv_weight = 1. / weight;
             const double *J = Jacobians + zdx*dim*dim;
-            const double detJ = Det(dim,J);
+            const double detJ = det(dim,J);
             min_detJ = fmin(min_detJ,detJ);
-            //printf("\n\tmin_detJ[z:%d,q:%d]=%f",z,q,min_detJ);
-            double Jinv[dim*dim];
             calcInverse2D(dim,J,Jinv);
             // *****************************************************************
             const double rho = inv_weight * rho0DetJ0w[zdx] / detJ;
             const double e   = fmax(0.0, e_quads[zdx]);
             const double p  = (gamma - 1.0) * rho * e;
             const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            //printf("\n\t[%d,%d] %f %f %f %f",z,q,detJ,rho,p,sound_speed);
             // *****************************************************************
-            double stress[dim*dim];
             for (int k = 0; k < dim*dim;k+=1) stress[k] = 0.0;
             for (int d = 0; d < dim; d++) stress[d*dim+d] = -p;
             // *****************************************************************
@@ -107,11 +81,8 @@ namespace hydrodynamics {
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.
                const double *dV = grad_v_ext + zdx*dim*dim;
-               double sgrad_v[dim*dim];
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
                symmetrize(dim,sgrad_v);
-               double eig_val_data[3];
-               double eig_vec_data[9];
                if (dim==1) {
                   eig_val_data[0] = sgrad_v[0];
                   eig_vec_data[0] = 1.;
@@ -119,12 +90,9 @@ namespace hydrodynamics {
                else {
                   calcEigenvalues(dim, sgrad_v, eig_val_data, eig_vec_data);
                }
-               double compr_dir[dim];
                for(int k=0;k<dim;k+=1) compr_dir[k]=eig_vec_data[k];
                // Computes the initial->physical transformation Jacobian.
-               double Jpi[dim*dim];
                mult(dim,dim,dim, J, Jac0inv+zdx*dim*dim, Jpi);
-               double ph_dir[dim];
                multV(dim, dim, Jpi, compr_dir, ph_dir);
                // Change of the initial mesh size in the compression direction.
                const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
@@ -146,16 +114,12 @@ namespace hydrodynamics {
                + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
             if (min_detJ < 0.0) {
                // This will force repetition of the step with smaller dt.
-               //printf("\n\tdt_est[z:%d,q:%d] = ZERO!",z,q);
                dt_est[z] = 0.0;
             } else {
-               //const double bkp = dt_est[z];
                const double cfl_inv_dt = cfl / inv_dt;
                dt_est[z] = fmin(dt_est[z], cfl_inv_dt);
-               //printf("\n\tdt_est[z:%d,q:%d]: bkp=%f, cui=%f",z,q,bkp,cfl_inv_dt);
             }
             // Quadrature data for partial assembly of the force operator.
-            double stressJiT[dim*dim];
             multABt(dim, dim, dim, stress, Jinv, stressJiT);
             for(int k=0;k<dim*dim;k+=1) stressJiT[k] *= weight * detJ;
             for (int vd = 0 ; vd < dim; vd++) {
@@ -186,15 +150,12 @@ namespace hydrodynamics {
                 ParFiniteElementSpace &L2FESpace,
                 const Vector &S,
                 bool &quad_data_is_current,
-                QuadratureData &quad_data) {      
-      // ***********************************************************************
+                QuadratureData &quad_data,
+                ParGridFunction &d_x,
+                ParGridFunction &d_v,
+                ParGridFunction &d_e) {
       push();
-      
-      // ***********************************************************************
-      if (quad_data_is_current){
-         dbg("quad_data_is_current, return");
-         return;
-      }
+      if (quad_data_is_current) { return; }
 
       // ***********************************************************************
       assert(dim==2);
@@ -202,14 +163,10 @@ namespace hydrodynamics {
       assert(material_pcf);
 
       // ***********************************************************************
-      Vector* S_p = (Vector*) &S;
-      
-      dbg("gamma=%f",gamma);
-
-      // ***********************************************************************
       timer.sw_qdata.Start();
-      dbg("S_p");
-      //Vector* S_p = (Vector*) &S;
+      Vector* S_p = (Vector*) &S;
+      S_p->Pull();
+      //S_p->Push(); // No need to push them back, an .Assign will come after
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
       const int numDofs  = fe.GetDof();
       const int nqp = ir.GetNPoints();
@@ -220,30 +177,13 @@ namespace hydrodynamics {
           
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
-      {
-         S_p->Pull();
-         const double *h_e_data = S_p->GetData()+2*H1_size;
-         for(size_t k=0;k<L2_size;k+=1) dbg("\te[%d]=%f",k,h_e_data[k]);
-         S_p->Push();
-      }      
-      double *d_e_quads_data;
-      ParGridFunction d_e;
-      d_e.Resize(L2FESpace.GetVLayout());
-      assert(L2FESpace.GetVLayout()->Size()==L2_size);
+      static double *d_e_quads_data = NULL;
       d_e.MakeRefOffset(*S_p, 2*H1_size);
       Dof2QuadScalar(L2FESpace, ir, (const double*)d_e.GetDeviceData(), &d_e_quads_data);
 
       // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
-      {
-         S_p->Pull();
-         const double *h_x_data = S_p->GetData();
-         for(size_t k=0;k<H1_size;k+=1) dbg("\tx[%d]=%f",k,h_x_data[k]);
-         S_p->Push();
-      }
-      double *d_grad_x_data;
-      ParGridFunction d_x;
-      d_x.Resize(H1FESpace.GetVLayout());
+      static double *d_grad_x_data = NULL;
       d_x.MakeRefOffset(*S_p, 0);
       Dof2QuadGrad(H1FESpace, ir, (const double*)d_x.GetDeviceData(), &d_grad_x_data);
 
@@ -253,10 +193,8 @@ namespace hydrodynamics {
       
       // Velocity **************************************************************
       dbg("Velocity H1_size=%d",H1_size);
-      ParGridFunction d_v;
-      d_v.Resize(H1FESpace.GetVLayout());
       d_v.MakeRefOffset(*S_p, H1_size);
-      double *d_grad_v_data;
+      static double *d_grad_v_data = NULL;
       Dof2QuadGrad(H1FESpace,ir,(const double*)d_v.GetDeviceData(),&d_grad_v_data);
 
       // ***********************************************************************      
@@ -311,8 +249,7 @@ namespace hydrodynamics {
                                    quad_data.h0,
                                    h1order,
                                    cfl,
-                                   infinity,
-                                   
+                                   infinity,                                   
                                    maps->quadWeights,
                                    d_grad_x_data,
                                    d_rho0DetJ0w,
@@ -324,11 +261,6 @@ namespace hydrodynamics {
 
       // ***********************************************************************
       quad_data.dt_est = vector_min(dt_est_sz,d_dt_est);
-      mfem::kernels::kmemcpy::rDtoH(h_dt_est,
-                                    d_dt_est, dt_est_sz*sizeof(double));
-      for(int k=0;k<dt_est_sz;k+=1){
-         dbg("\033[7mh_dt_est[%d]=%.15e",k,h_dt_est[k]);
-      }
       dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;

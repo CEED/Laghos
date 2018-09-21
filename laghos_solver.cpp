@@ -597,7 +597,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
               use_viscosity, p_assembly, cfl, gamma,
               timer, material_pcf, integ_rule,
               H1FESpace, L2FESpace, S,
-              quad_data_is_current, quad_data);
+              quad_data_is_current, quad_data, dx, dv, de);
       return;
    }
    StdUpdateQuadratureData(S);

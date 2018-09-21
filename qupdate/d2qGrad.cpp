@@ -108,14 +108,19 @@ namespace hydrodynamics {
       const size_t nqp = ir.GetNPoints();
 
       const size_t local_size = vdim * numDofs * nzones;
-      double *d_local_in =
-         (double*)mfem::kernels::kmalloc<double>::operator new(local_size);
+      static double *d_local_in = NULL;
+      if (!d_local_in){
+         d_local_in=
+            (double*) kernels::kmalloc<double>::operator new(local_size);
+      }
       
       kfes.GlobalToLocal(d_in,d_local_in);
-      dbg("GlobalToLocal done");
             
       const size_t out_size = vdim * vdim * nqp * nzones;
-      *d_out = (double*) mfem::kernels::kmalloc<double>::operator new(out_size);
+      if (!(*d_out)){
+         *d_out =
+            (double*) kernels::kmalloc<double>::operator new(out_size);
+      }
     
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
       const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();

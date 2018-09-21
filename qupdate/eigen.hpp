@@ -22,6 +22,8 @@ namespace mfem {
 namespace hydrodynamics {
 
    // **************************************************************************
+   __device__ double norml2(const size_t, const double*);
+   __device__ double det(const size_t, const double*);
    __device__ void calcInverse2D(const size_t, const double*, double*);
    __device__ void symmetrize(const size_t, double*);
    __device__ void calcEigenvalues(const size_t, const double*, double*, double*);

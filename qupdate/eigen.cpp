@@ -25,26 +25,58 @@ namespace mfem
 
 namespace hydrodynamics
 {
+   // **************************************************************************
+   __device__ double norml2(const size_t size, const double *data) {
+      if (0 == size) return 0.0;
+      if (1 == size) return std::abs(data[0]);
+      double scale = 0.0;
+      double sum = 0.0;
+      for (int i = 0; i < size; i++) {
+         if (data[i] != 0.0)
+         {
+            const double absdata = fabs(data[i]);
+            if (scale <= absdata)
+            {
+               const double sqr_arg = scale / absdata;
+               sum = 1.0 + sum * (sqr_arg * sqr_arg);
+               scale = absdata;
+               continue;
+            } // end if scale <= absdata
+            const double sqr_arg = absdata / scale;
+            sum += (sqr_arg * sqr_arg); // else scale > absdata
+         } // end if data[i] != 0
+      }
+      return scale * sqrt(sum);
+   }
    
    // **************************************************************************
    __device__
-   inline double det2D(const double *d){
+   static inline double det2D(const double *d){
       return d[0] * d[3] - d[1] * d[2];
-   }
-
+   }  
+   
    // **************************************************************************
    __device__
-   inline double det3D(const double *d){
+   static inline double det3D(const double *d){
       return
          d[0] * (d[4] * d[8] - d[5] * d[7]) +
          d[3] * (d[2] * d[7] - d[1] * d[8]) +
          d[6] * (d[1] * d[5] - d[2] * d[4]);
    }
+   
+   // **************************************************************************
+   __device__
+   double det(const size_t dim, const double *J){
+      if (dim==2) return det2D(J);
+      if (dim==3) return det3D(J);
+      assert(false);
+      return 0.0;
+   }
 
    // **************************************************************************
    __device__
    void calcInverse2D(const size_t n, const double *a, double *i){
-      const double d = det2D(a);
+      const double d = det(n,a);
       const double t = 1.0 / d;
       i[0*n+0] =  a[1*n+1] * t ;
       i[0*n+1] = -a[0*n+1] * t ;
