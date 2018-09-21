@@ -73,7 +73,7 @@ protected:
    ParFiniteElementSpace &L2FESpace;
    mutable ParFiniteElementSpace H1compFESpace;
 
-   Array<int> &ess_tdofs;
+   const Array<int> &ess_tdofs;
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
@@ -124,6 +124,7 @@ protected:
    //mutable mfem::Vector loc_rhs, loc_de;
    // bool switch to launch QUpdate or StdUpdateQuadratureData
    const bool qupdate;
+   const double gamma;
    
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -140,12 +141,20 @@ protected:
    void StdUpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
+   LagrangianHydroOperator(const int size,
+                           ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, ParGridFunction &rho0,
-                           int source_type_, double cfl_,
-                           Coefficient *material_, bool visc, bool pa,
-                           double cgt, int cgiter,bool qupdate);
+                           const Array<int> &essential_tdofs,
+                           ParGridFunction &rho0,
+                           const int source_type_,
+                           const double cfl_,
+                           Coefficient *material_,
+                           const bool visc,
+                           const bool pa,
+                           const double cgt,
+                           const int cgiter,
+                           const bool qupdate,
+                           const double gamma);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;

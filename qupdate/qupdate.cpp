@@ -178,6 +178,7 @@ namespace hydrodynamics {
                 const bool use_viscosity,
                 const bool p_assembly,
                 const double cfl,
+                const double gamma,
                 TimingData &timer,
                 Coefficient *material_pcf,
                 const IntegrationRule &ir,
@@ -196,37 +197,19 @@ namespace hydrodynamics {
       }
 
       // ***********************************************************************
-      static int been_there = 0;
-      const int stop_there = 2;
-      been_there += 1;
-      dbg("been_there=%d",been_there);
-      //if (been_there==stop_there) assert(false);
-
-      // ***********************************************************************
       assert(dim==2);
       assert(p_assembly);
       assert(material_pcf);
 
       // ***********************************************************************
-      dbg("T");
-      //if (been_there==stop_there) assert(false);
-      /*
-      ElementTransformation *T = H1FESpace.GetElementTransformation(0);
-      if (been_there==stop_there) assert(false);
-      dbg("ip");
-      const IntegrationPoint &ip = ir.IntPoint(0);
-      dbg("gamma");
-      const double gamma = material_pcf->Eval(*T,ip);
-      */
-#warning gamma = 1.4
-      const double gamma = 1.4;
+      Vector* S_p = (Vector*) &S;
+      
       dbg("gamma=%f",gamma);
-      assert(gamma == 1.4); // Sedov problem
 
       // ***********************************************************************
       timer.sw_qdata.Start();
       dbg("S_p");
-      Vector* S_p = (Vector*) &S;
+      //Vector* S_p = (Vector*) &S;
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
       const int numDofs  = fe.GetDof();
       const int nqp = ir.GetNPoints();
@@ -234,7 +217,6 @@ namespace hydrodynamics {
       const size_t H1_size = H1FESpace.GetVSize();
       const size_t L2_size = L2FESpace.GetVSize();
       const int nqp1D = tensors1D->LQshape1D.Width();
-      //if (been_there==2) assert(false);
           
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");

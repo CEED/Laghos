@@ -54,6 +54,7 @@ namespace hydrodynamics {
                 const bool use_viscosity,
                 const bool p_assembly,
                 const double cfl,
+                const double gamma,
                 TimingData &timer,
                 Coefficient *material_pcf,
                 const IntegrationRule &integ_rule,

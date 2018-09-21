@@ -332,7 +332,6 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
-   dbg("S.Resize");
    if (engine){
       S.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
       S.Pull(false);
@@ -351,12 +350,10 @@ int main(int argc, char *argv[])
    // mesh positions to the values in x_gf.
    dbg("SetNodalGridFunction");
    pmesh->SetNodalGridFunction(&x_gf);
-   //x_gf.Pull();dbg("x_gf:\n"); x_gf.Print(); assert(__FILE__ && __LINE__ && false);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   //v_gf.Pull();dbg("v_gf:\n"); v_gf.Print(); assert(__FILE__ && __LINE__ && false);
 
    dbg("Initialize density and specific internal energy values.");// We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -373,7 +370,7 @@ int main(int argc, char *argv[])
    rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
    {
-      dbg("For the Sedov test, we use a delta function at the origin.");
+      // For the Sedov test, we use a delta function at the origin.
       DeltaCoefficient e_coeff(0, 0, 0.25);
       l2_e.ProjectCoefficient(e_coeff);
    }
@@ -411,7 +408,8 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                visc, p_assembly, cg_tol, cg_max_iter, qupdate);
+                                visc, p_assembly, cg_tol, cg_max_iter,
+                                qupdate, gamma(S));
    assert(oper.InLayout()->Size()==S.Size());
    assert(oper.OutLayout()->Size()==S.Size());
    socketstream vis_rho, vis_v, vis_e;
@@ -457,7 +455,7 @@ int main(int argc, char *argv[])
       visit_dc.Save();
    }
 
-   dbg("Perform time-integration");// (looping over the time iterations, ti, with a
+   // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(oper);
@@ -467,16 +465,11 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   dbg("S_old(S);");
-   //BlockVector S_old(S);
    BlockVector S_old(true_offset);
    if (engine) {
-      dbg("S_old.Resize");
       S_old.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
    }
-   dbg("S_old.Assign(S)");
    S_old.Assign(S);
-   dbg("Time-step for-loop");
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -485,17 +478,12 @@ int main(int argc, char *argv[])
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
-      dbg("S_old = S;");
-      //S_old = S;
       S_old.Assign(S);
-      dbg("t_old = t;");
       t_old = t;
-      dbg("ResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
-      dbg("ode_solver->Step(S, t, dt);");
       ode_solver->Step(S, t, dt);
       steps++;
 
@@ -510,16 +498,11 @@ int main(int argc, char *argv[])
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S.Assign(S_old);
-         //S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
-
-      // Make sure that the mesh corresponds to the new solution state.
-#warning pmesh->NewNodes(x_gf, false);
-      pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
@@ -528,12 +511,36 @@ int main(int argc, char *argv[])
                        pmesh->GetComm());
          if (mpi.Root())
          {
+            const double sqrt_tot_norm = sqrt(tot_norm);
             cout << fixed;
             cout << "step " << setw(5) << ti
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt(tot_norm) << endl;
+                 << sqrt_tot_norm << endl;
+            // 2D Taylor-Green & Sedov problems
+            if (getenv("CHK")){
+               // Default options only checks
+               assert(rs_levels==0 and rp_levels==0);
+               assert(order_v==2);
+               assert(order_e==1);
+               assert(ode_solver_type==4);
+               assert(t_final==0.5);
+               assert(cfl==0.1);
+               static int k = 0;
+               const double p0_05 = 6.647849286951836e+00; 
+               const double p0_85 = 7.053780376106562e+00;
+               if (problem==0 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p0_05)<1.e-16);}
+               if (problem==0 and ti==85) {k++;assert(fabs(sqrt_tot_norm-p0_85)<1.e-16);}
+               const double p1_05 = 3.9369101158965925e+00; 
+               const double p1_62 = 2.8935883659834465e+00;
+               if (problem==1 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p1_05)<1.e-16);}
+               if (problem==1 and ti==62) {k++;assert(fabs(sqrt_tot_norm-p1_62)<1.e-16);}
+               if (last_step){
+                  if (k==2) printf("\033[32;7m[Laghos] OK\033[m");
+                  else return printf("\033[31;7m[Laghos] ERROR\033[m");
+               }
+            }
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
