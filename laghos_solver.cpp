@@ -152,6 +152,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (has_engine){
       assert(this->InLayout());
       assert(InLayout()->Size()==size);
+      x_gf.Resize(H1FESpace.GetVLayout());
       x.Resize(H1FESpace.GetVLayout());
       v.Resize(H1FESpace.GetVLayout());
       e.Resize(L2FESpace.GetVLayout());
@@ -440,12 +441,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 
-   dbg("Solve for energy, assemble the energy source if such exists.");
+   // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
       // Refresh coords to pmesh from sptr just for e_source Assemble
-      ParGridFunction x_gf;
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       H1FESpace.GetParMesh()->NewNodes(x_gf, false);
       e_source = new LinearForm(&L2FESpace);
@@ -462,16 +462,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       timer.sw_force.Start();
       ForcePA->MultTranspose(v, e_rhs);
-      dbg("e_rhs.Pull()");
       e_rhs.Pull();
-      dbg("done");
       timer.sw_force.Stop();
-
-      if (e_source) {
-         dbg("e_source");
-         e_rhs += *e_source;
-      }
-      dbg("for zones");
+      if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
@@ -481,11 +474,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          locCG.Mult(loc_rhs, loc_de);
          timer.sw_cgL2.Stop();
          timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
-         dbg("de.SetSubVector");
          de.SetSubVector(l2dofs, loc_de);
       }
       de.Push();
-      dbg("done");
    }
    else
    {
@@ -504,19 +495,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          de.SetSubVector(l2dofs, loc_de);
       }
    }
-   delete e_source;
-   dbg("finished");
+   if (source_type == 1) delete e_source;
    quad_data_is_current = false;
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
-   Vector* sptr = (Vector*) &S;
-   ParGridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetParMesh()->NewNodes(x, false);
-   UpdateQuadratureData(S);
-   
+   UpdateQuadratureData(S);   
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
@@ -608,9 +593,11 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (qupdate) {
-      QUpdate(dim,nzones,l2dofs_cnt,h1dofs_cnt,use_viscosity,p_assembly,cfl,gamma,
-              timer,material_pcf,integ_rule,H1FESpace,L2FESpace,S,
-              quad_data_is_current,quad_data);
+      QUpdate(dim, nzones, l2dofs_cnt, h1dofs_cnt,
+              use_viscosity, p_assembly, cfl, gamma,
+              timer, material_pcf, integ_rule,
+              H1FESpace, L2FESpace, S,
+              quad_data_is_current, quad_data);
       return;
    }
    StdUpdateQuadratureData(S);
@@ -626,13 +613,9 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
 
    ParGridFunction x, v, e;
    Vector* sptr = (Vector*) &S;
-   dbg("x");
    x.MakeRef(&H1FESpace, *sptr, 0);
-   dbg("v");
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
-   dbg("e");
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-   //for(size_t k=0;k<L2FESpace.GetVSize();k+=1) dbg("\te[%d]=%f",k,e.GetData()[k]);
    Vector e_vals, e_loc(l2dofs_cnt), vector_vals(h1dofs_cnt * dim);
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim),
                vecvalMat(vector_vals.GetData(), h1dofs_cnt, dim);
@@ -725,7 +708,6 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
             CalcInverse(Jpr, Jinv);
             const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
                          p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
-            //printf("\n\t[%d,%d] %f %f %f %f",b/*z*/,q,detJ,rho,p,sound_speed);
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
@@ -801,7 +783,6 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
       }
    }
    dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
-   //assert(false);
    delete [] gamma_b;
    delete [] rho_b;
    delete [] e_b;
