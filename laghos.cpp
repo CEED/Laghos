@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
-              visc = false; break;
+         visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
@@ -476,7 +476,7 @@ int main(int argc, char *argv[])
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
-      // and the oper might have redirected the mesh positions to those.
+      // and the oper object might have redirected the mesh positions to those.
       pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
