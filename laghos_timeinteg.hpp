@@ -27,15 +27,24 @@ namespace hydrodynamics
 
 class LagrangianHydroOperator;
 
-class RK2AvgSolver : public ODESolver
+class HydroODESolver : public ODESolver
 {
-private:
+protected:
    LagrangianHydroOperator *hydro_oper;
 
 public:
-   RK2AvgSolver() : hydro_oper(NULL) { }
+   HydroODESolver() : hydro_oper(NULL) { }
 
    virtual void Init(TimeDependentOperator &_f);
+
+   virtual void Step(Vector &S, double &t, double &dt)
+   { MFEM_ABORT("Time stepping is undefined."); }
+};
+
+class RK2AvgSolver : public HydroODESolver
+{
+public:
+   RK2AvgSolver() { }
 
    virtual void Step(Vector &S, double &t, double &dt);
 };

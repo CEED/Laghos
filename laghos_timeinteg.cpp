@@ -25,14 +25,13 @@ namespace mfem
 namespace hydrodynamics
 {
 
-void RK2AvgSolver::Init(TimeDependentOperator &_f)
+void HydroODESolver::Init(TimeDependentOperator &_f)
 {
    ODESolver::Init(_f);
 
    hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
-   MFEM_VERIFY(hydro_oper, "RK2AvgSolver expects LagrangianHydroOperator.");
+   MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
 }
-
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
@@ -47,7 +46,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
 
    // In each sub-step:
-   // - Update S.
+   // - Update the global state Vector S.
    // - Compute dv_dt using S.
    // - Update V using dv_dt.
    // - Compute de_dt and dx_dt using S and V.
