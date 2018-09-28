@@ -33,22 +33,15 @@
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
-// Sample runs:
-//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -tf 2.0
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
-//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
-//    mpirun -np 8 laghos -p 2 -m data/segment01.mesh     -rs 5 -tf 0.2
-//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0
-//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 3.0
-//
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
+//    p = 4  --> Gresho vortex (smooth problem).
+//
+// Sample runs: see README.md, section 'Verification of Results'.
+//
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -377,6 +370,7 @@ int main(int argc, char *argv[])
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
+      case 4: visc = false; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
@@ -408,8 +402,12 @@ int main(int argc, char *argv[])
       const int Ww = 350, Wh = 350; // window size
       int offx = Ww+10; // window offsets
 
-      VisualizeField(vis_rho, vishost, visport, rho_gf,
-                     "Density", Wx, Wy, Ww, Wh);
+      if (problem != 0 && problem != 4)
+      {
+         VisualizeField(vis_rho, vishost, visport, rho_gf,
+                        "Density", Wx, Wy, Ww, Wh);
+      }
+
       Wx += offx;
       VisualizeField(vis_v, vishost, visport, v_gf,
                      "Velocity", Wx, Wy, Ww, Wh);
@@ -505,8 +503,12 @@ int main(int argc, char *argv[])
             int Ww = 350, Wh = 350; // window size
             int offx = Ww+10; // window offsets
 
-            VisualizeField(vis_rho, vishost, visport, rho_gf,
-                           "Density", Wx, Wy, Ww, Wh);
+            if (problem != 0 && problem != 4)
+            {
+               VisualizeField(vis_rho, vishost, visport, rho_gf,
+                              "Density", Wx, Wy, Ww, Wh);
+            }
+
             Wx += offx;
             VisualizeField(vis_v, vishost, visport,
                            v_gf, "Velocity", Wx, Wy, Ww, Wh);
@@ -577,7 +579,8 @@ int main(int argc, char *argv[])
    }
 
    // Print the error.
-   if (problem == 0)
+   // For problems 0 and 4 the exact velocity is constant in time.
+   if (problem == 0 || problem == 4)
    {
       const double error_max = v_gf.ComputeMaxError(v_coeff),
                    error_l1  = v_gf.ComputeL1Error(v_coeff),
@@ -620,6 +623,7 @@ double rho0(const Vector &x)
          else { return 0.1; }
       case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
          else { return 0.125; }
+      case 4: return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -631,10 +635,15 @@ double gamma(const Vector &x)
       case 0: return 5./3.;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-         else { return 1.5; }
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 4: return 5.0 / 3.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
+}
+
+double rad(double x, double y)
+{
+   return sqrt(x*x + y*y);
 }
 
 void v0(const Vector &x, Vector &v)
@@ -654,6 +663,22 @@ void v0(const Vector &x, Vector &v)
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
+      case 4:
+      {
+         const double r = rad(x(0), x(1));
+         if (r < 0.2)
+         {
+            v(0) =  5.0 * x(1);
+            v(1) = -5.0 * x(0);
+         }
+         else if (r < 0.4)
+         {
+            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
+            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+         }
+         else { v = 0.0; }
+         break;
+      }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -682,6 +707,22 @@ double e0(const Vector &x)
          else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
       case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
          else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+      case 4:
+      {
+         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
+         const double gamma = 5.0 / 3.0;
+         if (r < 0.2)
+         {
+            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
+         }
+         else if (r < 0.4)
+         {
+            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
+            const double t2 = 20.0 * r - 4.0 * log(r);
+            return (t1 - t2) / (gamma - 1.0);
+         }
+         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+      }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
