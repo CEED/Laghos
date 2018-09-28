@@ -165,7 +165,7 @@ Clone and build the parallel version of MFEM:
 ```
 The above uses the `laghos-v1.0` tag of MFEM, which is guaranteed to work with
 Laghos v1.0. Alternatively, one can use the latest versions of the MFEM and
-Laghos `master` branches (provided there are no conflicts. See the [MFEM
+Laghos `master` branches (provided there are no conflicts). See the [MFEM
 building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
@@ -297,7 +297,7 @@ The latter produces the following specific internal energy plot (notice the `-vi
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
-(`step`), time steps (`dt`) and energies (`|e|`) for the nine runs listed above:
+(`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
 1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
 2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75  -pa`
@@ -347,10 +347,8 @@ A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
 machine at LLNL is:
 
 ```
-srun -n 393216 laghos -pa -p 1 -tf 0.6
-                      -pt 322 -m data/cube_12_hex.mesh
-                      --cg-tol 0 --cg-max-iter 50 --max-steps 2
-                      -ok 3 -ot 2 -rs 5 -rp 3
+srun -n 393216 laghos -pa -p 1 -tf 0.6 -pt 322 -m data/cube_12_hex.mesh \
+                      --cg-tol 0 --cg-max-iter 50 --max-steps 2 -ok 3 -ot 2 -rs 5 -rp 3
 ```
 This is Q3-Q2 3D computation on 393,216 MPI ranks (24,576 nodes) that produces
 rates of approximately 168497, 74221, and 16696 megadofs, and a total FOM of
@@ -372,6 +370,10 @@ the following versions of Laghos have been developed
   [OCCA](http://libocca.org/).
 - A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
   [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
+- An MFEM/engines-based version in the
+  [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branches.
+- Version with adaptive mesh refinement in the
+  [amr-dev](https://github.com/CEED/Laghos/tree/amr-dev) branch.
 
 ## Contact
 
