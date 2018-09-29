@@ -165,7 +165,7 @@ Clone and build the parallel version of MFEM:
 ```
 The above uses the `laghos-v1.0` tag of MFEM, which is guaranteed to work with
 Laghos v1.0. Alternatively, one can use the latest versions of the MFEM and
-Laghos `master` branches (provided there are no conflicts. See the [MFEM
+Laghos `master` branches (provided there are no conflicts). See the [MFEM
 building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
@@ -255,31 +255,33 @@ partial assembly option (`-pa`).
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa
-mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa
+mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
+mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -vis -pa
 ```
 
-The latter produces the following density plot (when run with the `-vis` instead
-of the `-no-vis` option)
+The latter produces the following density plot (notice the `-vis` option)
 
 ![Sedov blast image](data/sedov.png)
 
-#### Taylor-Green vortex
+#### Taylor-Green and Gresho vortices
 
-Laghos includes also a smooth test problem, that exposes all the principal
+Laghos includes also smooth test problems that expose all the principal
 computational kernels of the problem except for the artificial viscosity
 evaluation.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -no-vis -pa
-mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -no-vis -pa
+mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -pa
+mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -vis -pa
+mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
 ```
 
-The latter produces the following velocity magnitude plot (when run with the
-`-vis` instead of the `-no-vis` option)
+The latter produce the following velocity magnitude plots (notice the `-vis` option)
 
-![Taylor-Green image](data/tg.png)
+<table border="0">
+<td> <img src="data/tg.png">
+<td> <img src="data/gresho.png">
+</table>
 
 #### Triple-point problem
 
@@ -288,27 +290,26 @@ thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -no-vis -pa
-mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -no-vis -pa
+mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -pa
+mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -vis -pa
 ```
 
-The latter produces the following specific internal energy plot (when run with
-the `-vis` instead of the `-no-vis` option)
+The latter produces the following specific internal energy plot (notice the `-vis` option)
 
 ![Triple-point image](data/tp.png)
 
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
-(`step`), time steps (`dt`) and energies (`|e|`) for the nine runs listed above:
+(`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -no-vis -pa`
-2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -no-vis -pa`
-3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -no-vis -pa`
-4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -no-vis -pa`
-5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -no-vis -fa`
-6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -no-vis -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -no-vis -pa`
+1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
+2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
+3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa`
+4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa`
+5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
+6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
+7. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
@@ -318,7 +319,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  4. |  561 | 0.000360 | 134.0937837919  |
 |  5. |  414 | 0.000339 | 32.0120759615   |
 |  6. | 5310 | 0.000264 | 141.8348694390  |
-|  7. |  937 | 0.002285 | 144.0012514765  |
+|  7. |  776 | 0.000045 | 409.8243172608  |
 
 
 An implementation is considered valid if the final energy values are all within
@@ -348,10 +349,8 @@ A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
 machine at LLNL is:
 
 ```
-srun -n 393216 laghos -pa -p 1 -tf 0.6 -no-vis
-                      -pt 322 -m data/cube_12_hex.mesh
-                      --cg-tol 0 --cg-max-iter 50 --max-steps 2
-                      -ok 3 -ot 2 -rs 5 -rp 3
+srun -n 393216 laghos -pa -p 1 -tf 0.6 -pt 322 -m data/cube_12_hex.mesh \
+                      --cg-tol 0 --cg-max-iter 50 --max-steps 2 -ok 3 -ot 2 -rs 5 -rp 3
 ```
 This is Q3-Q2 3D computation on 393,216 MPI ranks (24,576 nodes) that produces
 rates of approximately 168497, 74221, and 16696 megadofs, and a total FOM of
@@ -373,6 +372,10 @@ the following versions of Laghos have been developed
   [OCCA](http://libocca.org/).
 - A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
   [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
+- An MFEM/engines-based version in the
+  [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branches.
+- Version with adaptive mesh refinement in the
+  [amr-dev](https://github.com/CEED/Laghos/tree/amr-dev) branch.
 
 ## Contact
 

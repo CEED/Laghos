@@ -19,11 +19,7 @@
 
 #include "mfem.hpp"
 
-
 #ifdef MFEM_USE_MPI
-
-#include <memory>
-#include <iostream>
 
 namespace mfem
 {

@@ -22,10 +22,6 @@
 
 #ifdef MFEM_USE_MPI
 
-#include <memory>
-#include <iostream>
-#include <fstream>
-
 namespace mfem
 {
 
@@ -70,6 +66,9 @@ protected:
    ParFiniteElementSpace &H1FESpace;
    ParFiniteElementSpace &L2FESpace;
 
+   // Reference to the current mesh configuration.
+   mutable ParGridFunction x_gf;
+
    Array<int> &ess_tdofs;
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
@@ -82,7 +81,8 @@ protected:
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
-   DenseTensor Me_inv;
+   SparseMatrix Mv_spmat_copy;
+   DenseTensor Me, Me_inv;
 
    // Integration rule for all assemblies.
    const IntegrationRule &integ_rule;
@@ -90,7 +90,7 @@ protected:
    // Data associated with each quadrature point in the mesh. These values are
    // recomputed at each time step.
    mutable QuadratureData quad_data;
-   mutable bool quad_data_is_current;
+   mutable bool quad_data_is_current, forcemat_is_assembled;
 
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
@@ -123,6 +123,7 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
+   void AssembleForceMatrix() const;
 
 public:
    LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
@@ -135,6 +136,10 @@ public:
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
+   void SolveVelocity(const Vector &S, Vector &dS_dt) const;
+   void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
+   void UpdateMesh(const Vector &S) const;
+
    // Calls UpdateQuadratureData to compute the new quad_data.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
@@ -142,9 +147,14 @@ public:
 
    // The density values, which are stored only at some quadrature points, are
    // projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho);
+   void ComputeDensity(ParGridFunction &rho) const;
 
-   void PrintTimingData(bool IamRoot, int steps);
+   double InternalEnergy(const ParGridFunction &e) const;
+   double KineticEnergy(const ParGridFunction &v) const;
+
+   void PrintTimingData(bool IamRoot, int steps) const;
+
+   int GetH1VSize() const { return H1FESpace.GetVSize(); }
 
    ~LagrangianHydroOperator();
 };
