@@ -278,8 +278,10 @@ mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -
 
 The latter produce the following velocity magnitude plots (notice the `-vis` option)
 
-![Taylor-Green image](data/tg.png)
-![Gresho image](data/gresho.png)
+<table border="0">
+<td> <img src="data/tg.png">
+<td> <img src="data/gresho.png">
+</table>
 
 #### Triple-point problem
 
