@@ -623,6 +623,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
                if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
                stress.Add(visc_coeff, sgrad_v);
+
+               // Note that the (mu < 0.0) check introduces discontinuous
+               // behavior. This can lead to bigger differences in results when
+               // there are round-offs around the zero for the min eigenvalue.
+               // We've observed differences between Linux and Mac for some 3D
+               // calculations.
             }
 
             // Time step estimate at the point. Here the more relevant length
