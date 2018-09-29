@@ -263,9 +263,9 @@ The latter produces the following density plot (notice the `-vis` option)
 
 ![Sedov blast image](data/sedov.png)
 
-#### Taylor-Green vortex
+#### Taylor-Green and Gresho vortices
 
-Laghos includes also a smooth test problem, that exposes all the principal
+Laghos includes also smooth test problems that expose all the principal
 computational kernels of the problem except for the artificial viscosity
 evaluation.
 
@@ -273,11 +273,14 @@ Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -pa
 mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -cfl 0.1 -tf 0.25 -vis -pa
+mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
 ```
 
-The latter produces the following velocity magnitude plot (notice the `-vis` option)
+The latter produce the following velocity magnitude plots (notice the `-vis` option)
 
 ![Taylor-Green image](data/tg.png)
+
+![Gresho image](data/gresho.png)
 
 #### Triple-point problem
 
