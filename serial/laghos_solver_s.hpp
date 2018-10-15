@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "laghos_assembly_s.hpp"
+#include "../laghos_assembly.hpp"
 
 #include <memory>
 #include <iostream>
@@ -50,7 +50,6 @@ class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
    FiniteElementSpace &H1FESpace, &L2FESpace;
-   mutable FiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 

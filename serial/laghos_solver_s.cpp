@@ -70,7 +70,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  bool visc, bool pa)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
-     H1compFESpace(h1_fes.GetMesh(), h1_fes.FEColl(), 1),
      ess_tdofs(essential_tdofs),
      dim(h1_fes.GetMesh()->Dimension()),
      nzones(h1_fes.GetMesh()->GetNE()),
@@ -80,12 +79,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      use_viscosity(visc), p_assembly(pa),
      material_pcf(material_),
      Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
-     integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
+     integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(0),
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
      Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1compFESpace), locEMassPA(&quad_data, l2_fes),
+     VMassPA(&quad_data, H1FESpace), locEMassPA(&quad_data, l2_fes),
      locCG()
 {
    GridFunctionCoefficient rho_coeff(&rho0);
@@ -212,38 +211,22 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    }
 
    // Solve for velocity.
-   Vector one(Vsize_l2), rhs(Vsize_h1); one = 1.0;
+   Vector one(Vsize_l2), rhs(Vsize_h1), B, X; one = 1.0;
    if (p_assembly)
    {
       ForcePA.Mult(one, rhs); rhs.Neg();
 
-      // Partial assembly solve for each velocity component.
-      const int size = H1compFESpace.GetVSize();
-      for (int c = 0; c < dim; c++)
-      {
-         Vector rhs_c(rhs.GetData() + c*size, size),
-                dv_c(dv.GetData() + c*size, size);
-
-         Array<int> vdofs_marker, ess_vdofs;
-         Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-         // we must enforce v_x/y/z = 0 for the velocity components.
-         ess_bdr = 0; ess_bdr[c] = 1;
-         // Essential vdofs as if there's only one component.
-         H1compFESpace.GetEssentialVDofs(ess_bdr, vdofs_marker);
-         FiniteElementSpace::MarkerToList(vdofs_marker, ess_vdofs);
-
-         dv_c = 0.0;
-         VMassPA.EliminateRHS(ess_vdofs, rhs_c);
-
-         CGSolver cg;
-         cg.SetOperator(VMassPA);
-         cg.SetRelTol(1e-8);
-         cg.SetAbsTol(0.0);
-         cg.SetMaxIter(300);
-         cg.SetPrintLevel(0);
-         cg.Mult(rhs_c, dv_c);
-      }
+      Operator *cVMassPA;
+      VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
+      CGSolver cg;
+      //cg.SetPreconditioner(VMassPA_prec);
+      cg.SetOperator(*cVMassPA);
+      cg.SetRelTol(1e-8); cg.SetAbsTol(0.0);
+      cg.SetMaxIter(300);
+      cg.SetPrintLevel(0);
+      cg.Mult(B, X);
+      VMassPA.RecoverFEMSolution(X, rhs, dv);
+      delete cVMassPA;
    }
    else
    {

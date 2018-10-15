@@ -77,10 +77,10 @@ extern const Tensors1D *tensors1D;
 class FastEvaluator
 {
    const int dim;
-   ParFiniteElementSpace &H1FESpace;
+   FiniteElementSpace &H1FESpace;
 
 public:
-   FastEvaluator(ParFiniteElementSpace &h1fes)
+   FastEvaluator(FiniteElementSpace &h1fes)
       : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
 
    void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
@@ -130,7 +130,7 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &H1FESpace, &L2FESpace;
+   FiniteElementSpace &H1FESpace, &L2FESpace;
 
    // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
@@ -144,7 +144,7 @@ private:
 
 public:
    ForcePAOperator(QuadratureData *quad_data_,
-                   ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes)
+                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes)
       : dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
         quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
 
@@ -161,7 +161,7 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &FESpace;
+   FiniteElementSpace &FESpace;
 
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
@@ -169,7 +169,7 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
       : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
         quad_data(quad_data_), FESpace(fes)
@@ -192,7 +192,7 @@ class DiagonalSolver : public Solver
 {
 private:
    Vector diag;
-   ParFiniteElementSpace &FESpace;
+   FiniteElementSpace &FESpace;
 
 public:
    DiagonalSolver(ParFiniteElementSpace &fes)
@@ -228,7 +228,7 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
       : Operator(fes.GetFE(0)->GetDof()),
         dim(fes.GetMesh()->Dimension()), zone_id(0),
         quad_data(quad_data_)
