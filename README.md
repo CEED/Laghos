@@ -368,14 +368,11 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - A serial version in the [serial](./serial) directory.
-- [GPU version](https://github.com/CEED/Laghos/tree/occa-dev) based on
-  [OCCA](http://libocca.org/).
-- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
-  [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
+- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the [raja](./raja) directory.
+- A GPU/CPU version based on [OCCA](http://libocca.org/) in the [occa](./occa) directory.
+- Version with adaptive mesh refinement in the [amr](./amr) directory.
 - An MFEM/engines-based version in the
   [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branches.
-- Version with adaptive mesh refinement in the
-  [amr-dev](https://github.com/CEED/Laghos/tree/amr-dev) branch.
 
 ## Contact
 

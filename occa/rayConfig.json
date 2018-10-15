@@ -1,0 +1,9 @@
+{
+  devices: [
+    { mode: 'OpenMP' },
+    { mode: 'CUDA', deviceID: 0 },
+    { mode: 'CUDA', deviceID: 1 },
+    { mode: 'CUDA', deviceID: 2 },
+    { mode: 'CUDA', deviceID: 3 },
+  ],
+}
