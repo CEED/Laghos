@@ -67,7 +67,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  GridFunction &rho0,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
-                                                 bool visc, bool pa)
+                                                 bool visc, bool pa,
+                                                 double cgt, int cgiter)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      ess_tdofs(essential_tdofs),
@@ -76,27 +77,28 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
      source_type(source_type_), cfl(cfl_),
-     use_viscosity(visc), p_assembly(pa),
+     use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
      material_pcf(material_),
-     Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
+     Mv(&h1_fes), Mv_spmat_copy(),
+     Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
      integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(0),
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
-     quad_data_is_current(false),
+     quad_data_is_current(false), forcemat_is_assembled(false),
      Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1FESpace), locEMassPA(&quad_data, l2_fes),
-     locCG()
+     VMassPA(&quad_data, H1FESpace), VMassPA_prec(H1FESpace),
+     locEMassPA(&quad_data, l2_fes),
+     locCG(), timer()
 {
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
-   DenseMatrix Me(l2dofs_cnt);
-   DenseMatrixInverse inv(&Me);
    MassIntegrator mi(rho_coeff, &integ_rule);
    for (int i = 0; i < nzones; i++)
    {
+      DenseMatrixInverse inv(&Me(i));
       mi.AssembleElementMatrix(*l2_fes.GetFE(i),
-                               *l2_fes.GetElementTransformation(i), Me);
+                               *l2_fes.GetElementTransformation(i), Me(i));
       inv.Factor();
       inv.GetInverseMatrix(Me_inv(i));
    }
@@ -105,6 +107,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff, &integ_rule);
    Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    const int nqp = integ_rule.GetNPoints();
@@ -160,6 +163,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                 L2FESpace.GetFE(0)->GetOrder(),
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))));
       evaluator = new FastEvaluator(H1FESpace);
+
+      // Setup the preconditioner of the velocity mass operator.
+      Vector d;
+      (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
+      VMassPA_prec.SetDiagonal(d);
    }
 
    locCG.SetOperator(locEMassPA);
@@ -172,78 +180,105 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   dS_dt = 0.0;
-
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   Vector* sptr = (Vector*) &S;
-   GridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetMesh()->NewNodes(x, false);
-
-   UpdateQuadratureData(S);
+   UpdateMesh(S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
-   // - Position
-   // - Velocity
-   // - Specific Internal Energy
-
-   const int Vsize_l2 = L2FESpace.GetVSize();
-   const int Vsize_h1 = H1FESpace.GetVSize();
-
-   GridFunction v, e;
-   v.MakeRef(&H1FESpace, *sptr, Vsize_h1);
-   e.MakeRef(&L2FESpace, *sptr, Vsize_h1*2);
-
-   GridFunction dx, dv, de;
-   dx.MakeRef(&H1FESpace, dS_dt, 0);
-   dv.MakeRef(&H1FESpace, dS_dt, Vsize_h1);
-   de.MakeRef(&L2FESpace, dS_dt, Vsize_h1*2);
+   // (Position, Velocity, Specific Internal Energy).
+   Vector* sptr = (Vector*) &S;
+   GridFunction v;
+   const int VsizeH1 = H1FESpace.GetVSize();
+   v.MakeRef(&H1FESpace, *sptr, VsizeH1);
 
    // Set dx_dt = v (explicit).
+   GridFunction dx;
+   dx.MakeRef(&H1FESpace, dS_dt, 0);
    dx = v;
 
-   if (!p_assembly)
-   {
-      Force = 0.0;
-      Force.Assemble();
-   }
+   SolveVelocity(S, dS_dt);
+   SolveEnergy(S, v, dS_dt);
 
-   // Solve for velocity.
-   Vector one(Vsize_l2), rhs(Vsize_h1), B, X; one = 1.0;
+   quad_data_is_current = false;
+}
+
+void LagrangianHydroOperator::SolveVelocity(const Vector &S,
+                                            Vector &dS_dt) const
+{
+   UpdateQuadratureData(S);
+   AssembleForceMatrix();
+
+   const int VsizeL2 = L2FESpace.GetVSize();
+   const int VsizeH1 = H1FESpace.GetVSize();
+
+   // The monolithic BlockVector stores the unknown fields as follows:
+   // (Position, Velocity, Specific Internal Energy).
+   GridFunction dv;
+   dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
+   dv = 0.0;
+
+   Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (p_assembly)
    {
-      ForcePA.Mult(one, rhs); rhs.Neg();
+      timer.sw_force.Start();
+      ForcePA.Mult(one, rhs);
+      timer.sw_force.Stop();
+      rhs.Neg();
 
       Operator *cVMassPA;
       VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
       CGSolver cg;
-      //cg.SetPreconditioner(VMassPA_prec);
+      cg.SetPreconditioner(VMassPA_prec);
       cg.SetOperator(*cVMassPA);
-      cg.SetRelTol(1e-8); cg.SetAbsTol(0.0);
-      cg.SetMaxIter(300);
+      cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+      cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(0);
+      timer.sw_cgH1.Start();
       cg.Mult(B, X);
+      timer.sw_cgH1.Stop();
+      timer.H1cg_iter += cg.GetNumIterations();
       VMassPA.RecoverFEMSolution(X, rhs, dv);
       delete cVMassPA;
    }
    else
    {
-      Force.Mult(one, rhs); rhs.Neg();
+      timer.sw_force.Start();
+      Force.Mult(one, rhs);
+      timer.sw_force.Stop();
+      rhs.Neg();
+
       SparseMatrix A;
-      Vector B, X;
-      dv = 0.0;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg;
+      DSmoother prec(0);
+      cg.SetPreconditioner(prec);
       cg.SetOperator(A);
-      cg.SetRelTol(1e-8);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(200);
+      cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+      cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(0);
+      timer.sw_cgH1.Start();
       cg.Mult(B, X);
+      timer.sw_cgH1.Stop();
+      timer.H1cg_iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
+}
+
+void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
+                                          Vector &dS_dt) const
+{
+   UpdateQuadratureData(S);
+   AssembleForceMatrix();
+
+   const int VsizeL2 = L2FESpace.GetVSize();
+   const int VsizeH1 = H1FESpace.GetVSize();
+
+   // The monolithic BlockVector stores the unknown fields as follows:
+   // (Position, Velocity, Specific Internal Energy).
+   GridFunction de;
+   de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   de = 0.0;
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
@@ -256,43 +291,56 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->Assemble();
    }
    Array<int> l2dofs;
-   Vector e_rhs(Vsize_l2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+   Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    if (p_assembly)
    {
+      timer.sw_force.Start();
       ForcePA.MultTranspose(v, e_rhs);
+      timer.sw_force.Stop();
+
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
          e_rhs.GetSubVector(l2dofs, loc_rhs);
          locEMassPA.SetZoneId(z);
+         timer.sw_cgL2.Start();
          locCG.Mult(loc_rhs, loc_de);
+         timer.sw_cgL2.Stop();
+         timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
          de.SetSubVector(l2dofs, loc_de);
       }
    }
    else
    {
+      timer.sw_force.Start();
       Force.MultTranspose(v, e_rhs);
+      timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
          e_rhs.GetSubVector(l2dofs, loc_rhs);
+         timer.sw_cgL2.Start();
          Me_inv(z).Mult(loc_rhs, loc_de);
+         timer.sw_cgL2.Stop();
+         timer.L2dof_iter += l2dofs_cnt;
          de.SetSubVector(l2dofs, loc_de);
       }
    }
    delete e_source;
+}
 
-   quad_data_is_current = false;
+void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
+{
+   Vector* sptr = (Vector*) &S;
+   x_gf.MakeRef(&H1FESpace, *sptr, 0);
+   H1FESpace.GetMesh()->NewNodes(x_gf, false);
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
-   Vector* sptr = (Vector*) &S;
-   GridFunction x;
-   x.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetMesh()->NewNodes(x, false);
+   UpdateMesh(S);
    UpdateQuadratureData(S);
 
    return quad_data.dt_est;
@@ -327,6 +375,68 @@ void LagrangianHydroOperator::ComputeDensity(GridFunction &rho)
    }
 }
 
+double LagrangianHydroOperator::InternalEnergy(const GridFunction &e) const
+{
+   Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
+   one = 1.0;
+   Array<int> l2dofs;
+
+   double ie = 0.0;
+   for (int z = 0; z < nzones; z++)
+   {
+      L2FESpace.GetElementDofs(z, l2dofs);
+      e.GetSubVector(l2dofs, loc_e);
+      ie += Me(z).InnerProduct(loc_e, one);
+   }
+
+   return ie;
+}
+
+double LagrangianHydroOperator::KineticEnergy(const GridFunction &v) const
+{
+   return 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+}
+
+void LagrangianHydroOperator::PrintTimingData(int steps) const
+{
+   double runtime[5];
+   runtime[0] = timer.sw_cgH1.RealTime();
+   runtime[1] = timer.sw_cgL2.RealTime();
+   runtime[2] = timer.sw_force.RealTime();
+   runtime[3] = timer.sw_qdata.RealTime();
+   runtime[4] = runtime[0] + runtime[2] + runtime[3];
+
+   int data[2];
+   data[0] = timer.L2dof_iter;
+   data[1] = timer.quad_tstep;
+
+   const int H1size = H1FESpace.GetVSize(),
+             L2size = L2FESpace.GetVSize();
+   using namespace std;
+   cout << endl;
+   cout << "CG (H1) total time: " << runtime[0] << endl;
+   cout << "CG (H1) rate (megadofs x cg_iterations / second): "
+        << 1e-6 * H1size * timer.H1cg_iter / runtime[0] << endl;
+   cout << endl;
+   cout << "CG (L2) total time: " << runtime[1] << endl;
+   cout << "CG (L2) rate (megadofs x cg_iterations / second): "
+        << 1e-6 * data[0] / runtime[1] << endl;
+   cout << endl;
+   // The Force operator is applied twice per time step, on the H1 and the L2
+   // vectors, respectively.
+   cout << "Forces total time: " << runtime[2] << endl;
+   cout << "Forces rate (megadofs x timesteps / second): "
+        << 1e-6 * steps * (H1size + L2size) / runtime[2] << endl;
+   cout << endl;
+   cout << "UpdateQuadData total time: " << runtime[3] << endl;
+   cout << "UpdateQuadData rate (megaquads x timesteps / second): "
+        << 1e-6 * data[1] * integ_rule.GetNPoints() / runtime[3] << endl;
+   cout << endl;
+   cout << "Major kernels total time (seconds): " << runtime[4] << endl;
+   cout << "Major kernels total rate (megadofs x time steps / second): "
+        << 1e-6 * H1size * steps / runtime[4] << endl;
+}
+
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
    delete tensors1D;
@@ -335,6 +445,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
+   timer.sw_qdata.Start();
 
    const int nqp = integ_rule.GetNPoints();
 
@@ -475,6 +586,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
                if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
                stress.Add(visc_coeff, sgrad_v);
+
+               // Note that the (mu < 0.0) check introduces discontinuous
+               // behavior. This can lead to bigger differences in results when
+               // there are round-offs around the zero for the min eigenvalue.
+               // We've observed differences between Linux and Mac for some 3D
+               // calculations.
             }
 
             // Time step estimate at the point. Here the more relevant length
@@ -517,6 +634,22 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] cs_b;
    delete [] Jpr_b;
    quad_data_is_current = true;
+   forcemat_is_assembled = false;
+
+   timer.sw_qdata.Stop();
+   timer.quad_tstep += nzones;
+}
+
+void LagrangianHydroOperator::AssembleForceMatrix() const
+{
+   if (forcemat_is_assembled || p_assembly) { return; }
+
+   Force = 0.0;
+   timer.sw_force.Start();
+   Force.Assemble();
+   timer.sw_force.Stop();
+
+   forcemat_is_assembled = true;
 }
 
 } // namespace hydrodynamics

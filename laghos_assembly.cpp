@@ -16,8 +16,6 @@
 
 #include "laghos_assembly.hpp"
 
-#ifdef MFEM_USE_MPI
-
 using namespace std;
 
 namespace mfem
@@ -1186,5 +1184,3 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI

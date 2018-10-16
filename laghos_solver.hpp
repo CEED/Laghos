@@ -54,8 +54,7 @@ struct TimingData
    // #quads * #(RK sub steps) for the quadrature data computations.
    int H1cg_iter, L2dof_iter, quad_tstep;
 
-   TimingData()
-      : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
+   TimingData() : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -63,8 +62,7 @@ struct TimingData
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
-   ParFiniteElementSpace &H1FESpace;
-   ParFiniteElementSpace &L2FESpace;
+   ParFiniteElementSpace &H1FESpace, &L2FESpace;
 
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;

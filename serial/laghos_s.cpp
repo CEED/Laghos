@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
       case 3: ode_solver = new RK3SSPSolver; break;
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
-   case 7: ode_solver = new RK2AvgSolver; break;
+      case 7: ode_solver = new RK2AvgSolver; break;
       default:
          cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
          delete mesh;
@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
       // and the oper object might have redirected the mesh positions to those.
-      pmesh->NewNodes(x_gf, false);
+      mesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
@@ -438,7 +438,7 @@ int main(int argc, char *argv[])
       case 4: steps *= 4; break;
       case 6: steps *= 6;
    }
-   oper.PrintTimingData(mpi.Root(), steps);
+   oper.PrintTimingData(steps);
 
    const double energy_final = oper.InternalEnergy(e_gf) +
                                oper.KineticEnergy(v_gf);

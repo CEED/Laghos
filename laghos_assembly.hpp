@@ -19,8 +19,6 @@
 
 #include "mfem.hpp"
 
-#ifdef MFEM_USE_MPI
-
 namespace mfem
 {
 
@@ -195,12 +193,16 @@ private:
    FiniteElementSpace &FESpace;
 
 public:
-   DiagonalSolver(ParFiniteElementSpace &fes)
+   DiagonalSolver(FiniteElementSpace &fes)
       : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
 
    void SetDiagonal(Vector &d)
    {
       const Operator *P = FESpace.GetProlongationMatrix();
+
+      // Happens when this is called by the serial version of Laghos.
+      if (P == NULL) { diag = d; return; }
+
       diag.SetSize(P->Width());
       P->MultTranspose(d, diag);
    }
@@ -241,7 +243,5 @@ public:
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS_ASSEMBLY
