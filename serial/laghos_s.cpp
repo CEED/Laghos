@@ -46,7 +46,7 @@
 
 
 #include "laghos_solver_s.hpp"
-#include "../laghos_timeinteg.hpp"
+#include "laghos_timeinteg_s.hpp"
 #include <fstream>
 
 using namespace std;
