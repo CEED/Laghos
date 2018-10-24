@@ -309,17 +309,19 @@ To make sure the results are correct, we tabulate reference final iterations
 4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa`
 5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
 6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
+8. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
 |  1. |  339 | 0.000702 | 49.6955373491   |
 |  2. | 1041 | 0.000121 | 3390.9635545458 |
-|  3. | 1150 | 0.002271 | 46.3055694501   |
-|  4. |  561 | 0.000360 | 134.0937837919  |
-|  5. |  414 | 0.000339 | 32.0120759615   |
-|  6. | 5310 | 0.000264 | 141.8348694390  |
-|  7. |  776 | 0.000045 | 409.8243172608  |
+|  3. | 1154 | 0.002245 | 46.3052853801   |
+|  4. |  558 | 0.002558 | 134.0980581082  |
+|  5. |  413 | 0.000401 | 32.0120778271   |
+|  6. | 5301 | 0.000159 | 141.8332066932  |
+|  7. |  967 | 0.001231 | 144.0014164758  |
+|  8. |  776 | 0.000045 | 409.8243172608  |
 
 
 An implementation is considered valid if the final energy values are all within

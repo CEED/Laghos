@@ -479,6 +479,15 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    delete tensors1D;
 }
 
+// Smooth transition between 0 and 1 for x in [-eps, eps].
+inline double smooth_step_01(double x, double eps)
+{
+   const double y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return 0.0; }
+   if (y > 1.0) { return 1.0; }
+   return (3.0 - 2.0 * y) * y * y;
+}
+
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
@@ -621,14 +630,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               // The following represents a "smooth" version of the
+               // statement if (mu < 0) visc_coeff += 0.5 rho h sound_speed.
+               // Note that eps must be scaled appropriately if Laghos is
+               // run in different unit systems.
+               const double eps = 1e-10;
+               visc_coeff += 0.5 * rho * h * sound_speed *
+                             (1.0 - smooth_step_01(mu, eps));
                stress.Add(visc_coeff, sgrad_v);
-
-               // Note that the (mu < 0.0) check introduces discontinuous
-               // behavior. This can lead to bigger differences in results when
-               // there are round-offs around the zero for the min eigenvalue.
-               // We've observed differences between Linux and Mac for some 3D
-               // calculations.
             }
 
             // Time step estimate at the point. Here the more relevant length
@@ -664,6 +673,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
+
    delete [] gamma_b;
    delete [] rho_b;
    delete [] e_b;
