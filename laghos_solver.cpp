@@ -634,9 +634,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // statement if (mu < 0) visc_coeff += 0.5 rho h sound_speed.
                // Note that eps must be scaled appropriately if Laghos is
                // run in different unit systems.
-               const double eps = 1e-10;
+               const double eps = 1e-12;
                visc_coeff += 0.5 * rho * h * sound_speed *
-                             (1.0 - smooth_step_01(mu, eps));
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+
                stress.Add(visc_coeff, sgrad_v);
             }
 
