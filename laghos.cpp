@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
          for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         if (dim == 2) { nxyz[2] = 0; }
+         if (dim == 3) { nxyz[2] = 0; }
          break;
       case 21: // 2D
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete [] partitioning;
    }
    else
    {
