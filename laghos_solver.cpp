@@ -470,7 +470,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
-           << 1e-6 * H1gsize * steps / rt_max[4] << endl;
+           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[4] << endl;
    }
 }
 
