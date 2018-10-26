@@ -73,13 +73,14 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
-   const char *mesh_file = "data/square01_quad.mesh";
-   int rs_levels = 0;
+   problem = 1;
+   const char *mesh_file = "data/cube01_hex.mesh";
+   int rs_levels = 2;
    int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
