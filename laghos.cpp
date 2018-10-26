@@ -711,9 +711,9 @@ double e0(const Vector &x)
       }
       case 1: return 0.0; // This case in initialized in main().
       case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-                                  : 0.1 / rho0(x) / (gamma(x) - 1.0);
+                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
       case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                                  : 1.0 / rho0(x) / (gamma(x) - 1.0);
+                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
