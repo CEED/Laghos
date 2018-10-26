@@ -434,12 +434,21 @@ void LagrangianHydroOperator::PrintTimingData(int steps) const
    cout << endl;
    cout << "Major kernels total time (seconds): " << runtime[4] << endl;
    cout << "Major kernels total rate (megadofs x time steps / second): "
-        << 1e-6 * H1size * steps / runtime[4] << endl;
+        << 1e-6 * steps * (H1size + L2size) / runtime[4] << endl;
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
    delete tensors1D;
+}
+
+// Smooth transition between 0 and 1 for x in [-eps, eps].
+inline double smooth_step_01(double x, double eps)
+{
+   const double y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return 0.0; }
+   if (y > 1.0) { return 1.0; }
+   return (3.0 - 2.0 * y) * y * y;
 }
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
@@ -584,7 +593,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               // The following represents a "smooth" version of the
+               // statement if (mu < 0) visc_coeff += 0.5 rho h sound_speed.
+               // Note that eps must be scaled appropriately if Laghos is
+               // run in different unit systems.
+               const double eps = 1e-12;
+               visc_coeff += 0.5 * rho * h * sound_speed *
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+
                stress.Add(visc_coeff, sgrad_v);
 
                // Note that the (mu < 0.0) check introduces discontinuous
