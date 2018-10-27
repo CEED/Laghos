@@ -630,10 +630,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               // The following represents a "smooth" version of the
-               // statement if (mu < 0) visc_coeff += 0.5 rho h sound_speed.
-               // Note that eps must be scaled appropriately if Laghos is
-               // run in different unit systems.
+               // The following represents a "smooth" version of the statement
+               // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+               // eps must be scaled appropriately if a different unit system is
+               // being used.
                const double eps = 1e-12;
                visc_coeff += 0.5 * rho * h * sound_speed *
                              (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
