@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "raja/raja.hpp"
+#include "cuda/cuda.hpp"
 
 #include "laghos_assembly.hpp"
 
@@ -67,12 +67,12 @@ struct TimingData
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
-class LagrangianHydroOperator : public RajaTimeDependentOperator
+class LagrangianHydroOperator : public CudaTimeDependentOperator
 {
 protected:
-   RajaFiniteElementSpace &H1FESpace;
-   RajaFiniteElementSpace &L2FESpace;
-   mutable RajaFiniteElementSpace H1compFESpace;
+   CudaFiniteElementSpace &H1FESpace;
+   CudaFiniteElementSpace &L2FESpace;
+   mutable CudaFiniteElementSpace H1compFESpace;
 
    Array<int> &ess_tdofs;
 
@@ -94,22 +94,22 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it's used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable RajaMassOperator VMassPA, EMassPA;
+   mutable CudaMassOperator VMassPA, EMassPA;
    mutable DiagonalSolver VMassPA_prec;
-   mutable RajaForceOperator ForcePA;
+   mutable CudaForceOperator ForcePA;
 
    // Linear solver for energy.
-   //RajaCGSolver locCG;
-   RajaCGSolver CG_VMass,CG_EMass;
+   //CudaCGSolver locCG;
+   CudaCGSolver CG_VMass,CG_EMass;
 
    mutable TimingData timer;
 
    // Device vectors we want to keep
-   mutable RajaVector v,e,rhs,B,X;
-   const RajaVector one;
-   mutable RajaVector e_rhs;
-   mutable RajaVector rhs_c;
-   mutable RajaVector v_local,e_quad;
+   mutable CudaVector v,e,rhs,B,X;
+   const CudaVector one;
+   mutable CudaVector e_rhs;
+   mutable CudaVector rhs_c;
+   mutable CudaVector v_local,e_quad;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -122,21 +122,21 @@ protected:
       }
    }
 
-   void UpdateQuadratureData(const RajaVector &S) const;
+   void UpdateQuadratureData(const CudaVector &S) const;
 
 public:
-   LagrangianHydroOperator(int size, RajaFiniteElementSpace &h1_fes,
-                           RajaFiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, RajaGridFunction &rho0,
+   LagrangianHydroOperator(int size, CudaFiniteElementSpace &h1_fes,
+                           CudaFiniteElementSpace &l2_fes,
+                           Array<int> &essential_tdofs, CudaGridFunction &rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
                            double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
-   virtual void Mult(const RajaVector &S, RajaVector &dS_dt) const;
+   virtual void Mult(const CudaVector &S, CudaVector &dS_dt) const;
 
    // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
-   double GetTimeStepEstimate(const RajaVector &S) const;
+   double GetTimeStepEstimate(const CudaVector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { quad_data_is_current = false; }
 

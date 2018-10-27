@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
    bool sync = false;
 
    // **************************************************************************
-#if defined(__NVCC__) and not defined(__RAJA__)
+#if defined(__NVCC__) and not defined(__CUDA__)
    cuda=true;
 #endif
 
@@ -155,9 +155,9 @@ int main(int argc, char *argv[])
                   "Enable or disable MULT test kernels.");
    args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",
                   "Enable or disable LAMBDA test kernels.");
-   // RAJA Options *************************************************************
+   // CUDA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
-                  "Enable or disable CUDA kernels if you are using RAJA.");
+                  "Enable or disable CUDA kernels if you are using CUDA.");
    // OCCA Options *************************************************************
    args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
                   "Enable or disable OCCA behavior: geometry update and\n"
@@ -272,8 +272,8 @@ int main(int argc, char *argv[])
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   RajaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   RajaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   CudaFiniteElementSpace L2FESpace(pmesh, &L2FEC);
+   CudaFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary,
    // and we assume that the boundaries are straight.
@@ -291,14 +291,14 @@ int main(int argc, char *argv[])
    }
 
    // Define the explicit ODE solver used for time integration.
-   RajaODESolver *ode_solver = NULL;
+   CudaODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
-      case 1: ode_solver = new RajaForwardEulerSolver; break;
-      case 2: ode_solver = new RajaRK2Solver(0.5); break;
-      case 3: ode_solver = new RajaRK3SSPSolver; break;
-      case 4: ode_solver = new RajaRK4Solver; break;
-      case 6: ode_solver = new RajaRK6Solver; break;
+      case 1: ode_solver = new CudaForwardEulerSolver; break;
+      case 2: ode_solver = new CudaRK2Solver(0.5); break;
+      case 3: ode_solver = new CudaRK3SSPSolver; break;
+      case 4: ode_solver = new CudaRK4Solver; break;
+      case 6: ode_solver = new CudaRK6Solver; break;
       default:
          if (myid == 0)
          {
@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   RajaVector S(true_offset[3]);
+   CudaVector S(true_offset[3]);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -343,9 +343,9 @@ int main(int argc, char *argv[])
    ParGridFunction v_gf(&H1FESpace);
    ParGridFunction e_gf(&L2FESpace);
 
-   RajaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
-   RajaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
-   RajaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
+   CudaGridFunction d_x_gf(H1FESpace, S.GetRange(true_offset[0], true_offset[1]));
+   CudaGridFunction d_v_gf(H1FESpace, S.GetRange(true_offset[1], true_offset[2]));
+   CudaGridFunction d_e_gf(L2FESpace, S.GetRange(true_offset[2], true_offset[3]));
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
@@ -371,11 +371,11 @@ int main(int argc, char *argv[])
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   RajaFiniteElementSpace l2_fes(pmesh, &l2_fec);
+   CudaFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
-   RajaGridFunction d_rho(L2FESpace);
+   CudaGridFunction d_rho(L2FESpace);
    d_rho = rho;
    if (problem == 1)
    {
@@ -396,12 +396,12 @@ int main(int argc, char *argv[])
    // gamma values are projected on a function that stays constant on the moving
    // mesh.
    /*L2_FECollection mat_fec(0, pmesh->Dimension());
-   RajaFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   CudaFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
    FunctionCoefficient mat_coeff(hydrodynamics::gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
-   RajaGridFunction d_mat_gf_coeff(mat_fes);
+   CudaGridFunction d_mat_gf_coeff(mat_fes);
    d_mat_gf_coeff=mat_gf_coeff;*/
 
    // Additional details, depending on the problem.
@@ -471,7 +471,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   RajaVector S_old(S);
+   CudaVector S_old(S);
 
    for (int ti = 1; !last_step; ti++)
    {

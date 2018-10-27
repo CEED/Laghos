@@ -17,15 +17,12 @@
 #########
 # SETUP #
 #########
-CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
 MFEM_DIR ?= $(HOME)/home/mfem/master
-RAJA_DIR ?= $(HOME)/usr/local/raja/last
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
-NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
-
+NV_ARCH ?= -arch=sm_61
+CXXEXTRA = -std=c++11 -m64 -Xcompiler -Wall
 
 ###################
 # LAGHOS_HELP_MSG #
@@ -63,8 +60,8 @@ CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 # fetch current/working directory
 pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
 home = $(HOME)
-raja = $(pwd)/raja
-kernels = $(raja)/kernels
+cuda = $(pwd)/cuda
+kernels = $(cuda)/kernels
 
 # Default installation location
 PREFIX = ./bin
@@ -73,10 +70,6 @@ INSTALL = /usr/bin/install
 # Use the MFEM build directory
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
-# Use the MFEM install directory
-# MFEM_DIR = ../mfem/mfem
-# CONFIG_MK = $(MFEM_DIR)/config.mk
-# TEST_MK = $(MFEM_DIR)/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
@@ -120,51 +113,16 @@ endif
 ###################
 CXXFLAGS += $(CXXEXTRA)
 
-#############
-# SANITIZER #
-#############
-#CXXFLAGS += -g -O1 -fno-inline -fsanitize=address -fsanitize=undefined
-#ASAN_LIB = -lasan -lubsan
-
-###############################
-# RAJA compilation: make rj=1 #
-###############################
-ifneq (,$(rj))
-	CXX = nvcc
-	CXXFLAGS += -D__RAJA__ -DUSE_CUDA
-	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
-	CXXFLAGS += --restrict -Xcompiler -fopenmp 
-	CXXFLAGS += -x=cu $(NV_ARCH)
-endif
-
 ############################
 # CUDA compiler: make nv=1 #
 ############################
 ifneq (,$(nv))
 	CXX = nvcc
-	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
-#	CXXFLAGS += -Xptxas=-v # -maxrregcount=32
+	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH)
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-#	CXXFLAGS += -lineinfo
-#	CXXFLAGS += -default-stream per-thread
-ifneq (,$(l))	
-	CXXFLAGS += --expt-extended-lambda
-endif
-endif
-
-############################
-# LAMBDAS launch: make l=1 #
-############################
-ifneq (,$(l))
-	CXXFLAGS += -D__LAMBDA__
-endif
-
-#############################
-# TEMPLATE launch: make t=1 #
-#############################
-ifneq (,$(t))
 	CXXFLAGS += -D__TEMPLATES__
 endif
+
 
 #################################################
 # CPU,LAMBDA: make v=1 l=1
@@ -173,22 +131,10 @@ endif
 # GPU,LAMBDA,TEMPLATES: make v=1 nv=1 l=1 t=1
 # GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
 #
-# RAJA: make v=1 rj=1 t=1
+# CUDA: make v=1 rj=1 t=1
 ##################################################
-.PHONY: cpuL cpuLT rj raja cpuRJ cuda nvl gpuLT nvk gpuKT
-cpuL:;$(MAKE) l=1 all
-cpuLT:;$(MAKE) l=1 t=1 all
-
-################
-# RAJA targets #
-################
-rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
-
-################
-# CUDA targets #
-################
-nv nvl cuda gpuLT:;$(MAKE) nv=1 l=1 t=1 all
-nvk gpuKT:;$(MAKE) nv=1 t=1 all
+.PHONY: cuda
+cuda :;$(MAKE) nv=1 all
 
 ####################
 # make all targets #
@@ -196,9 +142,6 @@ nvk gpuKT:;$(MAKE) nv=1 t=1 all
 tgts:
 	make cln && make gpuLT && mv laghos laghos.gpuLT
 	make cln && make gpuKT && mv laghos laghos.gpuKT
-#	make cln && make cpuL && mv laghos laghos.cpuL
-#	make cln && make cpuLT && mv laghos laghos.cpuLT
-#	make cln && make raja && mv laghos laghos.raja
 
 ######
 # GO #
@@ -209,7 +152,6 @@ gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/
 
 gos:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50 -share
 gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1 -share
-#--track-origins=yes
 
 #######################
 # TPL INCLUDES & LIBS #
@@ -219,28 +161,14 @@ MPI_INC = -I$(MPI_HOME)/include
 ############
 # CUDA ENV #
 ############
-CUDA_INC = -I$(CUDA_DIR)/samples/common/inc
 CUDA_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
-
-############
-# RAJA ENV #
-############
-ifneq (,$(rj))
-RAJA_INC = -I$(RAJA_DIR)/include
-RAJA_LIBS = $(RAJA_DIR)/lib/libRAJA.a
-endif
-
-###########
-# CUB INC #
-###########
-CUB_INC = -I$(CUB_DIR)
 
 ################
 # LAGHOS FLAGS #
 ################
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUB_INC) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
-LAGHOS_LIBS = $(ASAN_LIB) $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
+LAGHOS_LIBS = $(ASAN_LIB) $(MFEM_LIBS) -fopenmp $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
 endif
@@ -267,30 +195,18 @@ KERNEL_FILES += $(wildcard $(kernels)/mass/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/quad/*.cpp)
 KERNEL_FILES += $(wildcard $(kernels)/share/*.cpp)
 
-RAJA_FILES = $(wildcard $(raja)/config/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/fem/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/general/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/linalg/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/tests/*.cpp)
+CUDA_FILES = $(wildcard $(cuda)/config/*.cpp)
+CUDA_FILES += $(wildcard $(cuda)/fem/*.cpp)
+CUDA_FILES += $(wildcard $(cuda)/general/*.cpp)
+CUDA_FILES += $(wildcard $(cuda)/linalg/*.cpp)
+CUDA_FILES += $(wildcard $(cuda)/tests/*.cpp)
 
 ################
 # OBJECT FILES #
 ################
 OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
-OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
-
-##############
-# CUDA FILES #
-##############
-CUDA_FILES    = $(wildcard $(kernels)/blas/*.cu)
-CUDA_FILES   += $(wildcard $(raja)/linalg/*.cu)
-OBJECT_CUDAS  = $(CUDA_FILES:.cu=.o)
-DLINK_CUDA    = $(OBJECT_CUDAS:.o=.lo)
-#ifeq ($(CXX),nvcc)
-#OBJECT_FILES += $(OBJECT_CUDAS)
-#OBJECT_FILES += $(DLINK_CUDA)
-#endif
+OBJECT_FILES += $(CUDA_FILES:.cpp=.o)
 
 ################
 # HEADER FILES #
@@ -325,24 +241,11 @@ quiet = $(if $(v),$($(1)),$(call output,$1,$@);$($(1)))
 $(pwd)/%.o:$(pwd)/%.cpp
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
 
-$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp
+$(cuda)/%.o: $(cuda)/%.cpp $(cuda)/%.hpp $(cuda)/cuda.hpp $(cuda)/rmanaged.hpp
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
 
 $(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
 	$(call quiet,CCC) -c -o $@ $(abspath $<)
-
-####################
-# CUDA compilation #
-####################
-$(raja)/%.o: $(raja)/%.cu
-	$(call quiet,CCU) -c -o $@ $(abspath $<)
-$(raja)/%.lo: $(raja)/%.o
-	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
-
-$(kernels)/%.o: $(kernels)/%.cu
-	$(call quiet,CCU) -c -o $@ $(abspath $<)
-$(kernels)/%.lo: $(kernels)/%.o
-	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
 
 ################
 # all & LAGHOS #
@@ -375,8 +278,8 @@ clean cln: clean-build clean-exec
 
 clean-build:
 	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM \
-	raja/*/*.o raja/*/*.lo \
-	raja/kernels/*.o raja/kernels/*/*.o raja/kernels/*/*.lo 
+	cuda/*/*.o cuda/*/*.lo \
+	cuda/kernels/*.o cuda/kernels/*/*.o cuda/kernels/*/*.lo 
 clean-exec:
 	rm -rf ./results
 

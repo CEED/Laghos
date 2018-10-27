@@ -79,15 +79,15 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 // * LagrangianHydroOperator
 // ***************************************************************************
 LagrangianHydroOperator::LagrangianHydroOperator(int size,
-                                                 RajaFiniteElementSpace &h1_fes,
-                                                 RajaFiniteElementSpace &l2_fes,
+                                                 CudaFiniteElementSpace &h1_fes,
+                                                 CudaFiniteElementSpace &l2_fes,
                                                  Array<int> &essential_tdofs,
-                                                 RajaGridFunction &rho0,
+                                                 CudaGridFunction &rho0,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
                                                  double cgt, int cgiter)
-   : RajaTimeDependentOperator(size),
+   : CudaTimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
      ess_tdofs(essential_tdofs),
@@ -98,7 +98,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      source_type(source_type_), cfl(cfl_),
      use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
      material_pcf(material_),
-     integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(),
+     integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(0),
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false),
@@ -145,11 +145,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
-   quad_data.dqMaps = RajaDofQuadMaps::Get(H1FESpace,integ_rule);
-   quad_data.geom = RajaGeometry::Get(H1FESpace,integ_rule);
+   quad_data.dqMaps = CudaDofQuadMaps::Get(H1FESpace,integ_rule);
+   quad_data.geom = CudaGeometry::Get(H1FESpace,integ_rule);
    quad_data.Jac0inv = quad_data.geom->invJ;
 
-   RajaVector rhoValues; // used in rInitQuadratureData
+   CudaVector rhoValues; // used in rInitQuadratureData
    rho0.ToQuad(integ_rule, rhoValues);
 
    if (dim==1) { assert(false); }
@@ -194,7 +194,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 LagrangianHydroOperator::~LagrangianHydroOperator() {}
 
 // *****************************************************************************
-void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
+void LagrangianHydroOperator::Mult(const CudaVector &S, CudaVector &dS_dt) const
 {
    push(Wheat);
 
@@ -204,7 +204,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
    push(Mult:h_x,Red);//D2H
-   Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
+   Vector h_x = CudaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
    pop();
@@ -221,9 +221,9 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    v = S.GetRange(VsizeH1, VsizeH1);
    e = S.GetRange(2*VsizeH1, VsizeL2);
 
-   RajaVector dx = dS_dt.GetRange(0, VsizeH1);
-   RajaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
-   RajaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);
+   CudaVector dx = dS_dt.GetRange(0, VsizeH1);
+   CudaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
+   CudaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);
 
    // Set dx_dt = v (explicit)
    dx = v;
@@ -240,7 +240,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    for (int c = 0; c < dim; c++)
    {
       rhs_c = rhs.GetRange(c*size, size);
-      RajaVector dv_c = dv.GetRange(c*size, size);
+      CudaVector dv_c = dv.GetRange(c*size, size);
       Array<int> c_tdofs;
       Array<int> ess_bdr(H1FESpace.GetMesh()->bdr_attributes.Max());
       // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
@@ -298,7 +298,7 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    pop();
 }
 
-double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
+double LagrangianHydroOperator::GetTimeStepEstimate(const CudaVector &S) const
 {
    push(Wheat);
    UpdateQuadratureData(S);
@@ -385,7 +385,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 }
 
 // *****************************************************************************
-void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
+void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
 {
    if (quad_data_is_current) { return; }
    push(Wheat);
@@ -395,13 +395,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
 
-   const RajaVector x = S.GetRange(0, vSize);
-   RajaVector v = S.GetRange(vSize, vSize);
-   RajaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
+   const CudaVector x = S.GetRange(0, vSize);
+   CudaVector v = S.GetRange(vSize, vSize);
+   CudaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
 
    quad_data.geom = rconfig::Get().Occa() ?
-                    RajaGeometry::Get(H1FESpace,integ_rule):
-                    RajaGeometry::Get(H1FESpace,integ_rule,x);
+                    CudaGeometry::Get(H1FESpace,integ_rule):
+                    CudaGeometry::Get(H1FESpace,integ_rule,x);
    H1FESpace.GlobalToLocal(v, v_local);
    e.ToQuad(integ_rule, e_quad);
 

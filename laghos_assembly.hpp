@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "raja/raja.hpp"
+#include "cuda/cuda.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -38,22 +38,22 @@ struct QuadratureData
 
    // Reference to physical Jacobian for the initial mesh. These are computed
    // only at time zero and stored here.
-   RajaVector Jac0inv;
+   CudaVector Jac0inv;
 
    // Quadrature data used for full/partial assembly of the force operator. At
    // each quadrature point, it combines the stress, inverse Jacobian,
    // determinant of the Jacobian and the integration weight. It must be
    // recomputed in every time step.
-   RajaVector stressJinvT;
-   RajaDofQuadMaps *dqMaps;
-   RajaGeometry *geom;
+   CudaVector stressJinvT;
+   CudaDofQuadMaps *dqMaps;
+   CudaGeometry *geom;
 
    // Quadrature data used for full/partial assembly of the mass matrices. At
    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
-   RajaVector rho0DetJ0w;
+   CudaVector rho0DetJ0w;
 
 
    // Initial length scale. This represents a notion of local mesh size. We
@@ -63,7 +63,7 @@ struct QuadratureData
    // Estimate of the minimum time step over all quadrature points. This is
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
-   RajaVector dtEst;
+   CudaVector dtEst;
 
    QuadratureData(int dim, int nzones, int quads_per_zone);
 
@@ -94,59 +94,59 @@ public:
 };
 
 // *****************************************************************************
-// * RajaMassOperator
+// * CudaMassOperator
 // *****************************************************************************
-class RajaMassOperator : public RajaOperator
+class CudaMassOperator : public CudaOperator
 {
 private:
    int dim;
    int nzones;
-   RajaFiniteElementSpace &fes;
+   CudaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
    unsigned int ess_tdofs_count;
-   RajaArray<int> ess_tdofs;
-   RajaBilinearForm bilinearForm;
-   RajaOperator *massOperator;
+   CudaArray<int> ess_tdofs;
+   CudaBilinearForm bilinearForm;
+   CudaOperator *massOperator;
    QuadratureData *quad_data;
    // For distributing X
-   mutable RajaVector distX;
-   mutable RajaGridFunction x_gf, y_gf;
+   mutable CudaVector distX;
+   mutable CudaGridFunction x_gf, y_gf;
 public:
-   RajaMassOperator(RajaFiniteElementSpace &fes_,
+   CudaMassOperator(CudaFiniteElementSpace &fes_,
                     const IntegrationRule &integ_rule_,
                     QuadratureData *quad_data_);
-   ~RajaMassOperator();
+   ~CudaMassOperator();
    void Setup();
    void SetEssentialTrueDofs(Array<int> &dofs);
    // Can be used for both velocity and specific internal energy. For the case
    // of velocity, we only work with one component at a time.
-   void Mult(const RajaVector &x, RajaVector &y) const;
-   void EliminateRHS(RajaVector &b);
+   void Mult(const CudaVector &x, CudaVector &y) const;
+   void EliminateRHS(CudaVector &b);
    void ComputeDiagonal2D(Vector &diag) const;
    void ComputeDiagonal3D(Vector &diag) const;
 };
 
 // Performs partial assembly, which corresponds to (and replaces) the use of the
 // LagrangianHydroOperator::Force global matrix.
-class RajaForceOperator : public RajaOperator
+class CudaForceOperator : public CudaOperator
 {
 private:
    const int dim;
    const int nzones;
-   const RajaFiniteElementSpace &h1fes, &l2fes;
+   const CudaFiniteElementSpace &h1fes, &l2fes;
    const IntegrationRule &integ_rule;
    const QuadratureData *quad_data;
-   const RajaDofQuadMaps *l2D2Q, *h1D2Q;
-   mutable RajaVector gVecL2, gVecH1;
+   const CudaDofQuadMaps *l2D2Q, *h1D2Q;
+   mutable CudaVector gVecL2, gVecH1;
 public:
-   RajaForceOperator(RajaFiniteElementSpace &h1fes_,
-                     RajaFiniteElementSpace &l2fes_,
+   CudaForceOperator(CudaFiniteElementSpace &h1fes_,
+                     CudaFiniteElementSpace &l2fes_,
                      const IntegrationRule &integ_rule,
                      const QuadratureData *quad_data_);
    void Setup();
-   void Mult(const RajaVector &vecL2, RajaVector &vecH1) const;
-   void MultTranspose(const RajaVector &vecH1, RajaVector &vecL2) const;
-   ~RajaForceOperator();
+   void Mult(const CudaVector &vecL2, CudaVector &vecH1) const;
+   void MultTranspose(const CudaVector &vecH1, CudaVector &vecL2) const;
+   ~CudaForceOperator();
 };
 
 // Scales by the inverse diagonal of the MassPAOperator.

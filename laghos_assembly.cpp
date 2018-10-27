@@ -66,10 +66,10 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
 }
 
 // *****************************************************************************
-RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
+CudaMassOperator::CudaMassOperator(CudaFiniteElementSpace &fes_,
                                    const IntegrationRule &integ_rule_,
                                    QuadratureData *quad_data_)
-   : RajaOperator(fes_.GetTrueVSize()),
+   : CudaOperator(fes_.GetTrueVSize()),
      fes(fes_),
      integ_rule(integ_rule_),
      ess_tdofs_count(0),
@@ -79,17 +79,17 @@ RajaMassOperator::RajaMassOperator(RajaFiniteElementSpace &fes_,
      y_gf(fes) {}
 
 // *****************************************************************************
-RajaMassOperator::~RajaMassOperator()
+CudaMassOperator::~CudaMassOperator()
 {
 }
 
 // *****************************************************************************
-void RajaMassOperator::Setup()
+void CudaMassOperator::Setup()
 {
    push(Wheat);
    dim=fes.GetMesh()->Dimension();
    nzones=fes.GetMesh()->GetNE();
-   RajaMassIntegrator &massInteg = *(new RajaMassIntegrator());
+   CudaMassIntegrator &massInteg = *(new CudaMassIntegrator());
    massInteg.SetIntegrationRule(integ_rule);
    massInteg.SetOperator(quad_data->rho0DetJ0w);
    bilinearForm.AddDomainIntegrator(&massInteg);
@@ -99,7 +99,7 @@ void RajaMassOperator::Setup()
 }
 
 // *************************************************************************
-void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
+void CudaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    push(Wheat);
    dbg("\n\033[33;1m[SetEssentialTrueDofs] dofs.Size()=%d\033[m",dofs.Size());
@@ -136,7 +136,7 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 }
 
 // *****************************************************************************
-void RajaMassOperator::EliminateRHS(RajaVector &b)
+void CudaMassOperator::EliminateRHS(CudaVector &b)
 {
    push(Wheat);
    if (ess_tdofs_count > 0)
@@ -147,7 +147,7 @@ void RajaMassOperator::EliminateRHS(RajaVector &b)
 }
 
 // *************************************************************************
-void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
+void CudaMassOperator::Mult(const CudaVector &x, CudaVector &y) const
 {
    push(Wheat);
 
@@ -169,13 +169,13 @@ void RajaMassOperator::Mult(const RajaVector &x, RajaVector &y) const
 
 
 // *****************************************************************************
-// * RajaForceOperator
+// * CudaForceOperator
 // *****************************************************************************
-RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
-                                     RajaFiniteElementSpace &l2fes_,
+CudaForceOperator::CudaForceOperator(CudaFiniteElementSpace &h1fes_,
+                                     CudaFiniteElementSpace &l2fes_,
                                      const IntegrationRule &integ_rule_,
                                      const QuadratureData *quad_data_)
-   : RajaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
+   : CudaOperator(l2fes_.GetTrueVSize(), h1fes_.GetTrueVSize()),
      dim(h1fes_.GetMesh()->Dimension()),
      nzones(h1fes_.GetMesh()->GetNE()),
      h1fes(h1fes_),
@@ -186,18 +186,18 @@ RajaForceOperator::RajaForceOperator(RajaFiniteElementSpace &h1fes_,
      gVecH1(h1fes.GetVDim() * h1fes.GetLocalDofs() * nzones) { }
 
 // *****************************************************************************
-RajaForceOperator::~RajaForceOperator() {}
+CudaForceOperator::~CudaForceOperator() {}
 
 // *************************************************************************
-void RajaForceOperator::Setup()
+void CudaForceOperator::Setup()
 {
-   h1D2Q = RajaDofQuadMaps::Get(h1fes, integ_rule);
-   l2D2Q = RajaDofQuadMaps::Get(l2fes, integ_rule);
+   h1D2Q = CudaDofQuadMaps::Get(h1fes, integ_rule);
+   l2D2Q = CudaDofQuadMaps::Get(l2fes, integ_rule);
 }
 
 // *************************************************************************
-void RajaForceOperator::Mult(const RajaVector &vecL2,
-                             RajaVector &vecH1) const
+void CudaForceOperator::Mult(const CudaVector &vecL2,
+                             CudaVector &vecH1) const
 {
    push(Wheat);
    l2fes.GlobalToLocal(vecL2, gVecL2);
@@ -238,8 +238,8 @@ void RajaForceOperator::Mult(const RajaVector &vecL2,
 }
 
 // *************************************************************************
-void RajaForceOperator::MultTranspose(const RajaVector &vecH1,
-                                      RajaVector &vecL2) const
+void CudaForceOperator::MultTranspose(const CudaVector &vecH1,
+                                      CudaVector &vecL2) const
 {
    push(Wheat);
    h1fes.GlobalToLocal(vecH1, gVecH1);
