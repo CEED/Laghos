@@ -173,11 +173,10 @@ int main(int argc, char *argv[])
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
          for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         if (dim == 3) { nxyz[2] = 0; }
          break;
       case 21: // 2D
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
-         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = 0;
+         nxyz[0] = 2 * unit; nxyz[1] = unit;
          break;
       case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
