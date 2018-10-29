@@ -22,7 +22,6 @@ namespace mfem
 // ***************************************************************************
 bool dotTest(const int rs_levels)
 {
-   cuProfilerStart();
    struct timeval st, et;
    int size = 0x400;
    for (int lev = 0; lev < rs_levels; lev++) { size<<=1; }

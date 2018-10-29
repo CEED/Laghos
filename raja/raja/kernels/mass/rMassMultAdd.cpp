@@ -16,15 +16,9 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-#endif
 void rMassMultAdd2D(
-#ifndef __TEMPLATES__
-   const int NUM_DOFS_1D,
-   const int NUM_QUAD_1D,
-#endif
    const int numElements,
    const double* restrict dofToQuad,
    const double* restrict dofToQuadD,
@@ -34,12 +28,8 @@ void rMassMultAdd2D(
    const double* restrict solIn,
    double* restrict solOut)
 {
-#ifndef __LAMBDA__
-   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-   if (e < numElements)
-#else
+
    forall(e,numElements,
-#endif
    {
       double sol_xy[NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
@@ -105,21 +95,13 @@ void rMassMultAdd2D(
          }
       }
    }
-#ifdef __LAMBDA__
            );
-#endif
 }
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
-#endif
 void rMassMultAdd3D(
-#ifndef __TEMPLATES__
-   const int NUM_DOFS_1D,
-   const int NUM_QUAD_1D,
-#endif
    const int numElements,
    const double* dofToQuad,
    const double* dofToQuadD,
@@ -129,12 +111,7 @@ void rMassMultAdd3D(
    const double* solIn,
    double* __restrict solOut)
 {
-#ifndef __LAMBDA__
-   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-   if (e < numElements)
-#else
    forall(e,numElements,
-#endif
    {
       double sol_xyz[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
       for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
@@ -250,9 +227,7 @@ void rMassMultAdd3D(
          }
       }
    }
-#ifdef __LAMBDA__
            );
-#endif
 }
 
 // *****************************************************************************
@@ -278,12 +253,6 @@ void rMassMultAdd(const int DIM,
                   const double* x,
                   double* __restrict y)
 {
-   push(Lime);
-#ifndef __LAMBDA__
-   const int blck = 256;
-   const int grid = (numElements+blck-1)/blck;
-#endif
-#ifdef __TEMPLATES__
    assert(LOG2(DIM)<=4);
    assert((NUM_QUAD_1D&1)==0);
    assert(LOG2(NUM_DOFS_1D-1)<=8);
@@ -334,16 +303,4 @@ void rMassMultAdd(const int DIM,
    assert(call[id]);
    call0(rMassMultAdd,id,grid,blck,
          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
-#else
-   if (DIM==1) { assert(false); }
-   if (DIM==2)
-      call0(rMassMultAdd2D,id,grid,blck,
-            NUM_DOFS_1D,NUM_QUAD_1D,
-            numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
-   if (DIM==3)
-      call0(rMassMultAdd3D,id,grid,blck,
-            NUM_DOFS_1D,NUM_QUAD_1D,
-            numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
-#endif
-   pop();
 }

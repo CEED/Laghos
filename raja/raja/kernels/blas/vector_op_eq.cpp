@@ -15,27 +15,10 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
-#ifndef __LAMBDA__
-// *****************************************************************************
-extern "C" kernel void vector_op_eq0(const int N,
-                                     const double c0,
-                                     double* __restrict v0)
-{
-   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-   if (i < N) { v0[i] = c0; }
-}
-#endif
-
 // *****************************************************************************
 void vector_op_eq(const int N,
                   const double c0,
                   double* __restrict v0)
 {
-   push(eq,Cyan);
-#ifndef __LAMBDA__
-   cuKer(vector_op_eq,N,c0,v0);
-#else
    forall(i,N,v0[i] = c0;);
-#endif
-   pop();
 }

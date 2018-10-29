@@ -22,7 +22,6 @@ namespace mfem
 void* rmemcpy::rHtoH(void *dest, const void *src, std::size_t bytes,
                      const bool async)
 {
-   dbg(">\033[m");
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
    std::memcpy(dest,src,bytes);
@@ -33,17 +32,14 @@ void* rmemcpy::rHtoH(void *dest, const void *src, std::size_t bytes,
 void* rmemcpy::rHtoD(void *dest, const void *src, std::size_t bytes,
                      const bool async)
 {
-   dbg(">\033[m");
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
    if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
-#ifdef __NVCC__
    if (!rconfig::Get().Uvm())
    {
-      checkCudaErrors(cuMemcpyHtoD((CUdeviceptr)dest,src,bytes));
+      cuMemcpyHtoD((CUdeviceptr)dest,src,bytes);
    }
-   else { checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes)); }
-#endif
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
    return dest;
 }
 
@@ -51,17 +47,14 @@ void* rmemcpy::rHtoD(void *dest, const void *src, std::size_t bytes,
 void* rmemcpy::rDtoH(void *dest, const void *src, std::size_t bytes,
                      const bool async)
 {
-   dbg("<\033[m");
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
    if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
-#ifdef __NVCC__
    if (!rconfig::Get().Uvm())
    {
-      checkCudaErrors(cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes));
+      cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes);
    }
-   else { checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes)); }
-#endif
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
    return dest;
 }
 
@@ -69,25 +62,22 @@ void* rmemcpy::rDtoH(void *dest, const void *src, std::size_t bytes,
 void* rmemcpy::rDtoD(void *dest, const void *src, std::size_t bytes,
                      const bool async)
 {
-   dbg("<\033[m");
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
    if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
-#ifdef __NVCC__
    if (!rconfig::Get().Uvm())
    {
       if (!async)
       {
-         checkCudaErrors(cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes));
+         cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
       }
       else
       {
          const CUstream s = *rconfig::Get().Stream();
-         checkCudaErrors(cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s));
+         cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s);
       }
    }
-   else { checkCudaErrors(cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes)); }
-#endif
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
    return dest;
 }
 

@@ -28,7 +28,6 @@ bool isNvidiaCudaMpsDaemonRunning(void)
    return system(command)==0;
 }
 
-#ifdef __NVCC__
 // ***************************************************************************
 void computeCapabilityOfTheDevice(const int mpi_rank,
                                   const CUdevice cuDevice,
@@ -41,7 +40,6 @@ void computeCapabilityOfTheDevice(const int mpi_rank,
    printf("\033[32m[laghos] Rank_%d => Device_%d (%s:sm_%d.%d)\033[m\n",
           mpi_rank, device, name, major, minor);
 }
-#endif
 
 // ***************************************************************************
 static bool isTux(void)
@@ -52,39 +50,6 @@ static bool isTux(void)
    if (strncmp("tux", hostname, 3)==0) { return true; }
    return false;
 }
-
-// ***************************************************************************
-#ifdef __NVCC__
-__attribute__((unused))
-static void printDevProp(cudaDeviceProp devProp)
-{
-   printf("Major revision number:         %d\n",  devProp.major);
-   printf("Minor revision number:         %d\n",  devProp.minor);
-   printf("Name:                          %s\n",  devProp.name);
-   printf("Total global memory:           %u\n",  devProp.totalGlobalMem);
-   printf("Total shared memory per block: %u\n",  devProp.sharedMemPerBlock);
-   printf("Total registers per block:     %d\n",  devProp.regsPerBlock);
-   printf("Warp size:                     %d\n",  devProp.warpSize);
-   printf("Maximum memory pitch:          %u\n",  devProp.memPitch);
-   printf("Maximum threads per block:     %d\n",  devProp.maxThreadsPerBlock);
-   for (int i = 0; i < 3; ++i)
-   {
-      printf("Maximum dimension %d of block:  %d\n", i, devProp.maxThreadsDim[i]);
-   }
-   for (int i = 0; i < 3; ++i)
-   {
-      printf("Maximum dimension %d of grid:   %d\n", i, devProp.maxGridSize[i]);
-   }
-   printf("Clock rate:                    %d\n",  devProp.clockRate);
-   printf("Total constant memory:         %u\n",  devProp.totalConstMem);
-   printf("Texture alignment:             %u\n",  devProp.textureAlignment);
-   printf("Concurrent copy and execution: %s\n",
-          (devProp.deviceOverlap ? "Yes" : "No"));
-   printf("Number of multiprocessors:     %d\n",  devProp.multiProcessorCount);
-   printf("Kernel execution timeout:      %s\n",
-          (devProp.kernelExecTimeoutEnabled ? "Yes" : "No"));
-}
-#endif
 
 // ***************************************************************************
 // *   Setup
@@ -127,11 +92,9 @@ void rconfig::Setup(const int _mpi_rank,
       printf("\033[32m[laghos] \033[31;1mNo MPS daemon\033[m\n");
    }
 
-#ifdef __NVCC__
    // Get the number of devices with compute capability greater or equal to 2.0
    // Can be changed wuth CUDA_VISIBLE_DEVICES
-   cuCheck(cudaGetDeviceCount(&gpu_count));
-#endif
+   cudaGetDeviceCount(&gpu_count);
    cuda=_cuda;
    dcg=_dcg; // CG on device
    uvm=_uvm;
@@ -142,23 +105,6 @@ void rconfig::Setup(const int _mpi_rank,
    hcpo=_hcpo;
    sync=_sync;
 
-#if defined(__NVCC__)
-
-   // __NVVP__ warning output
-#if defined(__NVVP__)
-   if (Root())
-   {
-      printf("\033[32m[laghos] \033[31;1m__NVVP__\033[m\n");
-   }
-#endif // __NVVP__
-
-   // LAGHOS_DEBUG warning output
-#if defined(LAGHOS_DEBUG)
-   if (Root())
-   {
-      printf("\033[32m[laghos] \033[31;1mLAGHOS_DEBUG\033[m\n");
-   }
-#endif
 
    // Check for Enforced Kernel Synchronization
    if (Sync() && Root())
@@ -194,28 +140,13 @@ void rconfig::Setup(const int _mpi_rank,
    // Get the properties of the device
    struct cudaDeviceProp properties;
    cudaGetDeviceProperties(&properties, device);
-#if defined(LAGHOS_DEBUG)
-   if (Root())
-   {
-      printDevProp(properties);
-   }
-#endif // LAGHOS_DEBUG
    maxXGridSize=properties.maxGridSize[0];
    maxXThreadsDim=properties.maxThreadsDim[0];
-   //printf("\033[32m[laghos] maxXGridSize: %d\033[m\n", maxXGridSize);
-   //printf("\033[32m[laghos] maxXThreadsDim: %d\033[m\n", maxXThreadsDim);
 
    // Create our context
    cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
    hStream=new CUstream;
    cuStreamCreate(hStream, CU_STREAM_DEFAULT);
-#endif // __NVCC__
-   if (_dot)
-   {
-      dotTest(rs_levels);
-      MPI_Finalize();
-      exit(0);
-   }
 }
 
 // ***************************************************************************

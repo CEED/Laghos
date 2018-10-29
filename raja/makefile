@@ -15,13 +15,16 @@
 # testbed platforms, in support of the nation's exascale computing imperative.
 
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
+RAJA_CXXFLAGS = -D__LAMBDA__ -D__TEMPLATES__ --expt-extended-lambda -Xcompiler -fopenmp 
+RAJA_INCFLAGS = -I$(RAJA_DIR)/include
+RAJA_LIBS = -fopenmp $(RAJA_DIR)/lib/libRAJA.a
 
 NV_ARCH ?= -arch=sm_61
-
 CUDA_DIR ?= /usr/local/cuda
+
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
-NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
+NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) $(RAJA_CXXFLAGS)
 NVCC_INCFLAGS = -I$(MPI_HOME)/include 
 NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
@@ -106,8 +109,8 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(NVCC_CXXFLAGS) $(NVCC_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS) $(NVCC_LIBS)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(RAJA_INCFLAGS) $(NVCC_CXXFLAGS) $(NVCC_INCFLAGS)
+LAGHOS_LIBS = $(MFEM_LIBS) $(RAJA_LIBS) $(NVCC_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -117,86 +120,83 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = ./laghos.cpp \
-./laghos_assembly.cpp \
-./raja/linalg/rsolvers.cpp \
-./raja/linalg/rvector.cpp \
-./raja/kernels/share/rGridFuncToQuadS.cpp \
-./raja/kernels/share/rMassMultAddS.cpp \
-./raja/kernels/share/rMassAssembleS.cpp \
-./raja/kernels/share/rForceS.cpp \
-./raja/kernels/share/rQDataUpdateS.cpp \
-./raja/kernels/force/rForce.cpp \
-./raja/kernels/geom/rInitGeom.cpp \
-./raja/kernels/quad/rQDataInit.cpp \
-./raja/kernels/quad/rQDataUpdate.cpp \
-./raja/kernels/quad/rGridFuncToQuad.cpp \
-./raja/kernels/maps/rLocalToGlobal.cpp \
-./raja/kernels/maps/rMapping.cpp \
-./raja/kernels/maps/rGlobalToLocal.cpp \
-./raja/kernels/mass/rMassAssemble.cpp \
-./raja/kernels/mass/rMassMultAdd.cpp \
-./raja/kernels/blas/vector_map_dofs.cpp \
-./raja/kernels/blas/vector_vec_sub.cpp \
-./raja/kernels/blas/vector_dot.cpp \
-./raja/kernels/blas/vector_clear_dofs.cpp \
-./raja/kernels/blas/vector_xsy.cpp \
-./raja/kernels/blas/vector_xpay.cpp \
-./raja/kernels/blas/vector_axpy.cpp \
-./raja/kernels/blas/vector_op_eq.cpp \
-./raja/kernels/blas/vector_get_subvector.cpp \
-./raja/kernels/blas/vector_vec_add.cpp \
-./raja/kernels/blas/vector_min.cpp \
-./raja/kernels/blas/vector_set_subvector.cpp \
-./raja/kernels/blas/vector_set_subvector_const.cpp \
-./raja/kernels/blas/vector_vec_mul.cpp \
-./raja/kernels/blas/vector_neg.cpp \
-./raja/fem/rconform.cpp \
-./raja/fem/rrestrict.cpp \
-./raja/fem/rbilinearform.cpp \
-./raja/fem/rbilininteg.cpp \
-./raja/fem/rprolong.cpp \
-./raja/fem/rgridfunc.cpp \
-./raja/fem/rfespace.cpp \
-./raja/tests/lambda.cpp \
-./raja/tests/dot.cpp \
-./raja/tests/mult.cpp \
-./raja/general/rmemcpy.cpp \
-./raja/general/rtable.cpp \
-./raja/general/rcommd.cpp \
-./raja/config/rconfig.cpp \
-./raja/config/rnvvp.cpp \
-./laghos_solver.cpp
+SOURCE_FILES = /home/camier1/home/laghos/raja/raja/laghos.cpp \
+/home/camier1/home/laghos/raja/raja/laghos_assembly.cpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/rsolvers.cpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/rvector.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/share/rGridFuncToQuadS.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/share/rMassMultAddS.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/share/rMassAssembleS.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/share/rForceS.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/share/rQDataUpdateS.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/force/rForce.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/geom/rInitGeom.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/quad/rQDataInit.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/quad/rQDataUpdate.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/quad/rGridFuncToQuad.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/maps/rLocalToGlobal.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/maps/rMapping.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/maps/rGlobalToLocal.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/mass/rMassAssemble.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/mass/rMassMultAdd.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_map_dofs.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_vec_sub.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_dot.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_clear_dofs.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_xsy.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_xpay.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_axpy.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_op_eq.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_get_subvector.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_vec_add.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_min.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_set_subvector.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_set_subvector_const.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_vec_mul.cpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/blas/vector_neg.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rconform.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rrestrict.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rbilinearform.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rbilininteg.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rprolong.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rgridfunc.cpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rfespace.cpp \
+/home/camier1/home/laghos/raja/raja/raja/tests/lambda.cpp \
+/home/camier1/home/laghos/raja/raja/raja/tests/dot.cpp \
+/home/camier1/home/laghos/raja/raja/raja/tests/mult.cpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rmemcpy.cpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rtable.cpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rcommd.cpp \
+/home/camier1/home/laghos/raja/raja/raja/config/rconfig.cpp \
+/home/camier1/home/laghos/raja/raja/laghos_solver.cpp
 
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = ./raja/raja.hpp \
-./raja/linalg/rode.hpp \
-./raja/linalg/rsolvers.hpp \
-./raja/linalg/rvector.hpp \
-./raja/linalg/roperator.hpp \
-./raja/kernels/raja.hpp \
-./raja/kernels/include/forall.hpp \
-./raja/kernels/include/kernels.hpp \
-./raja/kernels/include/offsets.hpp \
-./raja/fem/rbilinearform.hpp \
-./raja/fem/rrestrict.hpp \
-./raja/fem/rfespace.hpp \
-./raja/fem/rbilininteg.hpp \
-./raja/fem/rgridfunc.hpp \
-./raja/fem/rprolong.hpp \
-./raja/fem/rconform.hpp \
-./raja/tests/tests.hpp \
-./raja/general/rarray.hpp \
-./raja/general/rtable.hpp \
-./raja/general/rmalloc.hpp \
-./raja/general/rmemcpy.hpp \
-./raja/general/rcommd.hpp \
-./raja/config/rnvvp.hpp \
-./raja/config/rdbg.hpp \
-./raja/config/rconfig.hpp \
-./laghos_solver.hpp \
-./laghos_assembly.hpp
+HEADER_FILES = /home/camier1/home/laghos/raja/raja/raja/raja.hpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/rode.hpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/rsolvers.hpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/rvector.hpp \
+/home/camier1/home/laghos/raja/raja/raja/linalg/roperator.hpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/raja.hpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/include/forall.hpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/include/kernels.hpp \
+/home/camier1/home/laghos/raja/raja/raja/kernels/include/offsets.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rbilinearform.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rrestrict.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rfespace.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rbilininteg.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rgridfunc.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rprolong.hpp \
+/home/camier1/home/laghos/raja/raja/raja/fem/rconform.hpp \
+/home/camier1/home/laghos/raja/raja/raja/tests/tests.hpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rarray.hpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rtable.hpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rmalloc.hpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rmemcpy.hpp \
+/home/camier1/home/laghos/raja/raja/raja/general/rcommd.hpp \
+/home/camier1/home/laghos/raja/raja/raja/config/rconfig.hpp \
+/home/camier1/home/laghos/raja/raja/laghos_solver.hpp \
+/home/camier1/home/laghos/raja/raja/laghos_assembly.hpp
 
 # Targets
 

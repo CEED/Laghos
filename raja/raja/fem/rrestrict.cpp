@@ -19,9 +19,7 @@ namespace mfem
 void RajaRestrictionOperator::Mult(const RajaVector& x,
                                    RajaVector& y) const
 {
-   push(DeepSkyBlue);
    rExtractSubVector(entries, indices->ptr(), x, y);
-   pop();
 }
 
 } // namespace mfem

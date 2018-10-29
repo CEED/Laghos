@@ -32,24 +32,10 @@
 #define IROOT(D,N) ((D==1)?N:(D==2)?ISQRT(N):(D==3)?ICBRT(N):0)
 
 // *****************************************************************************
-#ifdef __NVCC__
-#include <cuda.h>
-#include <helper_cuda.h>
-#include <helper_functions.h>
-#endif // __NVCC__
-
-// *****************************************************************************
-#ifdef __RAJA__
 #include <cuda.h>
 #include "RAJA/RAJA.hpp"
-//#include "RAJA/util/defines.hpp"
-#include "RAJA/policy/cuda.hpp"
-//#include "RAJA/policy/cuda/MemUtils_CUDA.hpp"
-#endif
 
 // *****************************************************************************
-#include "../config/rdbg.hpp"
-#include "../config/rnvvp.hpp"
 #include "../config/rconfig.hpp"
 #include "../general/rmemcpy.hpp"
 #include "../general/rmalloc.hpp"

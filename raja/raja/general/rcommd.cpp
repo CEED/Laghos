@@ -29,7 +29,6 @@ RajaCommD::RajaCommD(ParFiniteElementSpace &pfes):
 RajaCommD::~RajaCommD() { }
 
 
-#ifdef __NVCC__
 // ***************************************************************************
 // * kCopyFromTable
 // ***************************************************************************
@@ -48,11 +47,9 @@ T *d_CopyGroupToBuffer_k(const T *d_ldata,T *d_buf,
                          const RajaTable &d_dofs,
                          const int group)
 {
-   push(PapayaWhip);
    const int ndofs = d_dofs.RowSize(group);
    const int *dofs = d_dofs.GetRow(group);
    k_CopyGroupToBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
-   pop();
    return d_buf + ndofs;
 }
 
@@ -93,12 +90,10 @@ template <class T>
 const T *RajaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
                                           int group, int layout) const
 {
-   push(Gold);
    assert(layout==0);
    const int ndofs = d_group_ldof.RowSize(group);
    const int *dofs = d_group_ldof.GetRow(group);
    k_CopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
-   pop();
    return d_buf + ndofs;
 }
 
@@ -123,21 +118,16 @@ const T *RajaCommD::d_ReduceGroupFromBuffer(const T *d_buf, T *d_ldata,
                                             int group, int layout,
                                             void (*Op)(OpData<T>)) const
 {
-   push(PaleGoldenrod);
-   dbg("\t\033[33m[d_ReduceGroupFromBuffer]");
    OpData<T> opd;
    opd.ldata = d_ldata;
    opd.nldofs = group_ldof.RowSize(group);
    opd.nb = 1;
    opd.buf = const_cast<T*>(d_buf);
-   dbg("\t\t\033[33m[d_ReduceGroupFromBuffer] layout 2");
    opd.ldofs = const_cast<int*>(d_group_ltdof.GetRow(group));
    assert(opd.nb == 1);
    // this is the operation to perform: opd.ldata[opd.ldofs[i]] += opd.buf[i];
    // mfem/general/communication.cpp, line 1008
    kAtomicAdd<<<opd.nldofs,1>>>(opd.ldata,opd.ldofs,opd.buf);
-   dbg("\t\t\033[33m[d_ReduceGroupFromBuffer] done");
-   pop();
    return d_buf + opd.nldofs;
 }
 
@@ -151,23 +141,16 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
    MFEM_VERIFY(comm_lock == 0, "object is already in use");
    if (group_buf_size == 0) { return; }
 
-   push(Moccasin);
    assert(layout==2);
    const int rnk = rconfig::Get().Rank();
-   dbg("\033[33;1m[%d-d_BcastBegin]",rnk);
    int request_counter = 0;
-   push(alloc,Moccasin);
    group_buf.SetSize(group_buf_size*sizeof(T));
    T *buf = (T *)group_buf.GetData();
    if (!d_group_buf)
    {
-      push(alloc,Purple);
       d_group_buf = rmalloc<T>::operator new (group_buf_size);
-      dbg("\n\033[31;1m[%d-d_ReduceBegin] d_buf cuMemAlloc\033[m",rnk);
-      pop();
    }
    T *d_buf = (T*)d_group_buf;
-   pop();
    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
    {
       const int num_send_groups = nbr_send_groups.RowSize(nbr);
@@ -185,20 +168,15 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
          }
          if (!rconfig::Get().Aware())
          {
-            push(BcastBegin:DtoH,Red);
             rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
-            pop();
          }
 
          // make sure the device has finished
          if (rconfig::Get().Aware())
          {
-            push(sync,Lime);
             cudaStreamSynchronize(0);//*rconfig::Get().Stream());
-            pop();
          }
 
-         push(MPI_Isend,Orange);
          if (rconfig::Get().Aware())
             MPI_Isend(d_buf_start,
                       buf - buf_start,
@@ -215,7 +193,6 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
                       40822,
                       gtopo.GetComm(),
                       &requests[request_counter]);
-         pop();
          request_marker[request_counter] = -1; // mark as send request
          request_counter++;
       }
@@ -229,7 +206,6 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
          {
             recv_size += group_ldof.RowSize(grp_list[i]);
          }
-         push(MPI_Irecv,Orange);
          if (rconfig::Get().Aware())
             MPI_Irecv(d_buf,
                       recv_size,
@@ -246,7 +222,6 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
                       40822,
                       gtopo.GetComm(),
                       &requests[request_counter]);
-         pop();
          request_marker[request_counter] = nbr;
          request_counter++;
          buf_offsets[nbr] = buf - (T*)group_buf.GetData();
@@ -257,8 +232,6 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
    assert(buf - (T*)group_buf.GetData() == group_buf_size);
    comm_lock = 1; // 1 - locked for Bcast
    num_requests = request_counter;
-   dbg("\033[33;1m[%d-d_BcastBegin] done",rnk);
-   pop();
 }
 
 // ***************************************************************************
@@ -268,18 +241,14 @@ template <class T>
 void RajaCommD::d_BcastEnd(T *d_ldata, int layout)
 {
    if (comm_lock == 0) { return; }
-   push(PeachPuff);
    const int rnk = rconfig::Get().Rank();
-   dbg("\033[33;1m[%d-d_BcastEnd]",rnk);
    // The above also handles the case (group_buf_size == 0).
    assert(comm_lock == 1);
    // copy the received data from the buffer to d_ldata, as it arrives
    int idx;
-   push(MPI_Waitany,Orange);
    while (MPI_Waitany(num_requests, requests, &idx, MPI_STATUS_IGNORE),
           idx != MPI_UNDEFINED)
    {
-      pop();
       int nbr = request_marker[idx];
       if (nbr == -1) { continue; } // skip send requests
 
@@ -296,9 +265,7 @@ void RajaCommD::d_BcastEnd(T *d_ldata, int layout)
          const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
          if (!rconfig::Get().Aware())
          {
-            push(BcastEnd:HtoD,Red);
             rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
-            pop();
          }
          for (int i = 0; i < num_recv_groups; i++)
          {
@@ -308,8 +275,6 @@ void RajaCommD::d_BcastEnd(T *d_ldata, int layout)
    }
    comm_lock = 0; // 0 - no lock
    num_requests = 0;
-   dbg("\033[33;1m[%d-d_BcastEnd] done",rnk);
-   pop();
 }
 
 // ***************************************************************************
@@ -320,9 +285,7 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
 {
    MFEM_VERIFY(comm_lock == 0, "object is already in use");
    if (group_buf_size == 0) { return; }
-   push(PapayaWhip);
    const int rnk = rconfig::Get().Rank();
-   dbg("\033[33;1m[%d-d_ReduceBegin]",rnk);
 
    int request_counter = 0;
    group_buf.SetSize(group_buf_size*sizeof(T));
@@ -346,21 +309,15 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
             d_buf = d_CopyGroupToBuffer(d_ldata, d_buf, grp_list[i], 0);
             buf += d_buf - d_buf_ini;
          }
-         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Isend",rnk);
          if (!rconfig::Get().Aware())
          {
-            push(ReduceBegin:DtoH,Red);
             rmemcpy::rDtoH(buf_start,d_buf_start,(buf-buf_start)*sizeof(T));
-            pop();
          }
          // make sure the device has finished
          if (rconfig::Get().Aware())
          {
-            push(sync,Lime);
             cudaStreamSynchronize(0);//*rconfig::Get().Stream());
-            pop();
          }
-         push(MPI_Isend,Orange);
          if (rconfig::Get().Aware())
             MPI_Isend(d_buf_start,
                       buf - buf_start,
@@ -377,7 +334,6 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
                       43822,
                       gtopo.GetComm(),
                       &requests[request_counter]);
-         pop();
          request_marker[request_counter] = -1; // mark as send request
          request_counter++;
       }
@@ -392,8 +348,6 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
          {
             recv_size += group_ldof.RowSize(grp_list[i]);
          }
-         dbg("\033[33;1m[%d-d_ReduceBegin] MPI_Irecv",rnk);
-         push(MPI_Irecv,Orange);
          if (rconfig::Get().Aware())
             MPI_Irecv(d_buf,
                       recv_size,
@@ -410,7 +364,6 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
                       43822,
                       gtopo.GetComm(),
                       &requests[request_counter]);
-         pop();
          request_marker[request_counter] = nbr;
          request_counter++;
          buf_offsets[nbr] = buf - (T*)group_buf.GetData();
@@ -421,8 +374,6 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
    assert(buf - (T*)group_buf.GetData() == group_buf_size);
    comm_lock = 2;
    num_requests = request_counter;
-   dbg("\033[33;1m[%d-d_ReduceBegin] done",rnk);
-   pop();
 }
 
 // ***************************************************************************
@@ -433,15 +384,11 @@ void RajaCommD::d_ReduceEnd(T *d_ldata, int layout,
                             void (*Op)(OpData<T>))
 {
    if (comm_lock == 0) { return; }
-   push(LavenderBlush);
    const int rnk = rconfig::Get().Rank();
-   dbg("\033[33;1m[%d-d_ReduceEnd]",rnk);
    // The above also handles the case (group_buf_size == 0).
    assert(comm_lock == 2);
 
-   push(MPI_Waitall,Orange);
    MPI_Waitall(num_requests, requests, MPI_STATUSES_IGNORE);
-   pop();
    for (int nbr = 1; nbr < nbr_send_groups.Size(); nbr++)
    {
       // In Reduce operation: send_groups <--> recv_groups
@@ -459,9 +406,7 @@ void RajaCommD::d_ReduceEnd(T *d_ldata, int layout,
          const T *d_buf = (T*)d_group_buf + buf_offsets[nbr];
          if (!rconfig::Get().Aware())
          {
-            push(ReduceEnd:HtoD,Red);
             rmemcpy::rHtoD((void*)d_buf,buf,recv_size*sizeof(T));
-            pop();
          }
          for (int i = 0; i < num_recv_groups; i++)
          {
@@ -471,8 +416,6 @@ void RajaCommD::d_ReduceEnd(T *d_ldata, int layout,
    }
    comm_lock = 0; // 0 - no lock
    num_requests = 0;
-   dbg("\033[33;1m[%d-d_ReduceEnd] end",rnk);
-   pop();
 }
 
 // ***************************************************************************
@@ -483,16 +426,5 @@ template void RajaCommD::d_BcastEnd<double>(double*, int);
 template void RajaCommD::d_ReduceBegin<double>(const double *);
 template void RajaCommD::d_ReduceEnd<double>(double*,int,
                                              void (*)(OpData<double>));
-#else // __NVCC__
-template <class T> void RajaCommD::d_ReduceBegin(const T*) {}
-template <class T> void RajaCommD::d_ReduceEnd(T*,int,void (*Op)(OpData<T>)) {}
-template <class T> void RajaCommD::d_BcastBegin(T*, int) {}
-template <class T> void RajaCommD::d_BcastEnd(T*, int) {}
-template void RajaCommD::d_BcastBegin<double>(double*, int);
-template void RajaCommD::d_BcastEnd<double>(double*, int);
-template void RajaCommD::d_ReduceBegin<double>(const double *);
-template void RajaCommD::d_ReduceEnd<double>(double*,int,
-                                             void (*)(OpData<double>));
-#endif // __NVCC__
 
 } // namespace mfem

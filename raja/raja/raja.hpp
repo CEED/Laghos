@@ -24,9 +24,6 @@
 // __NVCC__ ********************************************************************
 #ifdef __NVCC__
 #include <cuda.h>
-#include <helper_cuda.h>
-#include <helper_functions.h>
-#define cuCheck checkCudaErrors
 #endif
 
 // MFEM/fem  *******************************************************************
@@ -35,8 +32,6 @@
 #include "fem/pfespace.hpp"
 
 // LAGHOS/raja/config **********************************************************
-#include "config/rdbg.hpp"
-#include "config/rnvvp.hpp"
 #include "config/rconfig.hpp"
 
 // LAGHOS/raja/general *********************************************************

@@ -15,34 +15,11 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
-#ifndef __LAMBDA__
-extern "C" kernel
-void vector_set_subvector0(const int N,
-                           double* __restrict v0,
-                           const double* __restrict v1,
-                           const int* __restrict v2)
-{
-   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-   if (i < N)
-   {
-      const int dof_i = v2[i];
-      const bool tst = dof_i >= 0;
-      const int idx = tst?dof_i:-dof_i-1;
-      const double value = tst?v1[i]:-v1[i];
-      v0[idx]=value;
-   }
-}
-#endif
-
 void vector_set_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2)
 {
-   push(set,Cyan);
-#ifndef __LAMBDA__
-   cuKer(vector_set_subvector,N,v0,v1,v2);
-#else
    forall(i,N,
    {
       const int dof_i = v2[i];
@@ -51,6 +28,4 @@ void vector_set_subvector(const int N,
       const double value = tst?v1[i]:-v1[i];
       v0[idx]=value;
    });
-#endif
-   pop();
 }

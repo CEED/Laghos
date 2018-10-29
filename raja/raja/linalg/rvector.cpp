@@ -16,14 +16,12 @@ namespace mfem
 RajaVector::~RajaVector()
 {
    if (!own) { return; }
-   dbg("\033[33m[~v");
    rmalloc::operator delete (data);
 }
 
 // ***************************************************************************
 double* RajaVector::alloc(const size_t sz)
 {
-   dbg("\033[33m[v");
    return (double*) rmalloc::operator new (sz);
 }
 
@@ -41,9 +39,7 @@ RajaVector::RajaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
 RajaVector::RajaVector(const size_t sz,double value):
    size(sz),data(alloc(sz)),own(true)
 {
-   push(SkyBlue);
    *this=value;
-   pop();
 }
 
 RajaVector::RajaVector(const RajaVector& v):

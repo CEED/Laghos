@@ -41,20 +41,16 @@ public:
    /// Operator application.
    void Mult(const RajaVector & x, RajaVector & y) const
    {
-      push(Pm1AP,SkyBlue);
       P.Mult(x, Px);
       A.Mult(Px, APx);
       Rt.MultTranspose(APx, y);
-      pop();
    }
    /// Application of the transpose.
    void MultTranspose(const RajaVector & x, RajaVector & y) const
    {
-      push(Pm1APT,SkyBlue);
       Rt.Mult(x, APx);
       A.MultTranspose(APx, Px);
       P.MultTranspose(Px, y);
-      pop();
    }
 };
 
@@ -67,24 +63,16 @@ public:
    RajaIdOperator(int s = 0) { height = width = s; }
    void Mult(const RajaVector &x, RajaVector &y) const
    {
-      push(Id=,DarkCyan);
-      //usleep(1);
       y=x;
-      pop();
    }
    void MultTranspose(const RajaVector &x, RajaVector &y) const
    {
-      push(Id=T,DarkCyan);
-      //usleep(1);
       y=x;
-      pop();
    }
 };
 
 // ***************************************************************************
-#ifdef __NVCC__
 __global__ void iniK(void) {}
-#endif
 
 // ***************************************************************************
 bool multTest(ParMesh *pmesh, const int order, const int max_step)
@@ -120,57 +108,31 @@ bool multTest(ParMesh *pmesh, const int order, const int max_step)
    RajaVector y(lsize);
 
    MPI_Barrier(pmesh->GetComm());
-#ifdef __NVCC__
    cudaDeviceSynchronize();
-#endif
 
    // Do one RAP Mult/MultTranspose to set MPI's buffers
    Pm1AP.Mult(x,y);
    Pm1AP.MultTranspose(x,y);
 
-#ifdef __NVCC__
    MPI_Barrier(pmesh->GetComm());
    cudaDeviceSynchronize();
-   // Now let go the markers
-   rconfig::Get().Nvvp(true);
-   cuProfilerStart();
-#endif
 
    // Launch first dummy kernel for profiling overhead to start
-#ifdef __NVCC__
-   push(iniK,Green);
    iniK<<<128,1>>>();
-   pop();
-#endif
 
    MPI_Barrier(pmesh->GetComm());
-#ifdef __NVCC__
    cudaDeviceSynchronize();
-#endif
 
    gettimeofday(&st, NULL);
    for (int i=0; i<nb_step; i++)
    {
-#ifdef __NVCC__
       cudaDeviceSynchronize(); // used with nvvp
-#endif
-      push(SkyBlue);
       Pm1AP.Mult(x, y);
-      pop();
-
-      push(Wrk,LawnGreen);
-      //usleep(1);
-      pop();
-
-      push(SkyBlue);
       Pm1AP.MultTranspose(x, y);
-      pop();
    }
    // We MUST sync after to make sure every kernel has completed
    // or play with the -sync flag to enforce it with the push/pop
-#ifdef __NVCC__
    cudaDeviceSynchronize();
-#endif
    gettimeofday(&et, NULL);
    const float alltime = ((et.tv_sec-st.tv_sec)*1.0e3+(et.tv_usec -
                                                        st.tv_usec)/1.0e3);

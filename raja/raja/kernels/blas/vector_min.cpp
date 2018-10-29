@@ -16,47 +16,62 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-#ifdef __NVCC__
-#include <cub/cub.cuh>
+#define CUDA_BLOCKSIZE 256
 
 // *****************************************************************************
-static double cub_vector_min(const int N,
-                             const double* __restrict vec)
+__global__ void cuKernelMin(const size_t N, double *gdsr, const double *x)
 {
-   static double *h_min = NULL;
-   if (!h_min) { h_min = (double*)mfem::rmalloc<double>::operator new (1,true); }
-   static double *d_min = NULL;
-   if (!d_min) { d_min=(double*)mfem::rmalloc<double>::operator new (1); }
-   static void *d_storage = NULL;
-   static size_t storage_bytes = 0;
-   if (!d_storage)
+   __shared__ double s_min[CUDA_BLOCKSIZE];
+   const size_t n = blockDim.x*blockIdx.x + threadIdx.x;
+   if (n>=N) { return; }
+   const size_t bid = blockIdx.x;
+   const size_t tid = threadIdx.x;
+   const size_t bbd = bid*blockDim.x;
+   const size_t rid = bbd+tid;
+   s_min[tid] = x[n];
+   for (size_t workers=blockDim.x>>1; workers>0; workers>>=1)
    {
-      cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
-      d_storage = mfem::rmalloc<char>::operator new (storage_bytes);
+      __syncthreads();
+      if (tid >= workers) { continue; }
+      if (rid >= N) { continue; }
+      const size_t dualTid = tid + workers;
+      if (dualTid >= N) { continue; }
+      const size_t rdd = bbd+dualTid;
+      if (rdd >= N) { continue; }
+      if (dualTid >= blockDim.x) { continue; }
+      s_min[tid] = fmin(s_min[tid],s_min[dualTid]);
    }
-   cub::DeviceReduce::Min(d_storage, storage_bytes, vec, d_min, N);
-   mfem::rmemcpy::rDtoH(h_min,d_min,sizeof(double));
-   return *h_min;
+   if (tid==0) { gdsr[bid] = s_min[0]; }
 }
-#endif // __NVCC__
 
+// *****************************************************************************
+double cuVectorMin(const size_t N, const double *x)
+{
+   const size_t tpb = CUDA_BLOCKSIZE;
+   const size_t blockSize = CUDA_BLOCKSIZE;
+   const size_t gridSize = (N+blockSize-1)/blockSize;
+   const size_t min_sz = (N%tpb)==0? (N/tpb) : (1+N/tpb);
+   const size_t bytes = min_sz*sizeof(double);
+   static double *h_min = NULL;
+   if (!h_min) { h_min = (double*)calloc(min_sz,sizeof(double)); }
+   static CUdeviceptr gdsr = (CUdeviceptr) NULL;
+   if (!gdsr) { cuMemAlloc(&gdsr,bytes); }
+   cuKernelMin<<<gridSize,blockSize>>>(N, (double*)gdsr, x);
+   cuMemcpy((CUdeviceptr)h_min,(CUdeviceptr)gdsr,bytes);
+   double min = HUGE_VAL;
+   for (size_t i=0; i<min_sz; i+=1) { min = fmin(min,h_min[i]); }
+   return min;
+}
 
 // *****************************************************************************
 double vector_min(const int N,
                   const double* __restrict vec)
 {
-   push(min,Cyan);
-#ifdef __NVCC__
-   if (mfem::rconfig::Get().Cuda())
-   {
-      const double result = cub_vector_min(N,vec);
-      pop();
-      return result;
+   if (mfem::rconfig::Get().Cuda()){
+      return cuVectorMin(N,vec);
    }
-#endif
    ReduceDecl(Min,red,vec[0]);
    ReduceForall(i,N,red.min(vec[i]););
-   pop();
    return red;
 }
 

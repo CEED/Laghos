@@ -17,7 +17,6 @@ namespace mfem
 void RajaGridFunction::ToQuad(const IntegrationRule& ir,
                               RajaVector& quadValues)
 {
-   push(PowderBlue);
    const FiniteElement& fe = *(fes.GetFE(0));
    const int dim  = fe.GetDim();
    const int vdim = fes.GetVDim();
@@ -41,7 +40,6 @@ void RajaGridFunction::ToQuad(const IntegrationRule& ir,
                       fes.GetLocalToGlobalMap(),
                       ptr(),
                       quadValues);
-   pop();
 }
 
 } // mfem

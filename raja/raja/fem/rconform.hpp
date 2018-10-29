@@ -26,7 +26,6 @@ class RajaConformingProlongationOperator : public RajaOperator
 {
 protected:
    Array<int> external_ldofs;
-   //RajaArray<int> d_non_empty_m;
    RajaArray<int> d_external_ldofs;
    RajaCommD *gc;
    int kMaxTh;

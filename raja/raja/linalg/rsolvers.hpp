@@ -24,18 +24,6 @@ namespace mfem
 {
 
 // ***************************************************************************
-/*extern "C" void d_Mult(const RajaVector &b, RajaVector &x,
-                       const int N,
-                       const RajaOperator *oper,
-                       RajaSolverOperator *prec,
-                       const bool iterative_mode,
-                       RajaVector &r,
-                       RajaVector &d,
-                       RajaVector &z,
-                       double &final_norm);*/
-
-
-// ***************************************************************************
 class RajaIterativeSolver : public RajaSolverOperator
 {
 #ifdef MFEM_USE_MPI
@@ -166,13 +154,7 @@ public:
    void h_Mult(const RajaVector &b, RajaVector &x) const ;
    virtual void Mult(const RajaVector &b, RajaVector &x) const
    {
-      if (rconfig::Get().Dcg())
-      {
-#ifdef __NVCC__
-         //d_Mult(b,x,b.Size(),oper,prec,iterative_mode,r,d,z,final_norm);
-#endif
-      }
-      else { h_Mult(b,x); }
+      h_Mult(b,x);
    }
 };
 

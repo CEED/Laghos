@@ -27,7 +27,6 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
     indices(localDofs, GetNE()),
     map(localDofs, GetNE())
 {
-   push(PowderBlue);
    const FiniteElement *fe = GetFE(0);
    const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
    const Array<int> &dof_map = el->GetDofMap();
@@ -114,7 +113,6 @@ RajaFiniteElementSpace::RajaFiniteElementSpace(Mesh* mesh,
                                                R->Width(),
                                                reorderIndices);
    prolongationOp = new RajaProlongationOperator(P);
-   pop();
 }
 
 // ***************************************************************************
@@ -134,7 +132,6 @@ bool RajaFiniteElementSpace::hasTensorBasis() const
 void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                                            RajaVector& localVec) const
 {
-   push(PowderBlue);
    const int vdim = GetVDim();
    const int localEntries = localDofs * GetNE();
    const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -146,7 +143,6 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
                   indices,
                   globalVec,
                   localVec);
-   pop();
 }
 
 // ***************************************************************************
@@ -154,7 +150,6 @@ void RajaFiniteElementSpace::GlobalToLocal(const RajaVector& globalVec,
 void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                                            RajaVector& globalVec) const
 {
-   push(PowderBlue);
    const int vdim = GetVDim();
    const int localEntries = localDofs * GetNE();
    const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -166,7 +161,6 @@ void RajaFiniteElementSpace::LocalToGlobal(const RajaVector& localVec,
                   indices,
                   localVec,
                   globalVec);
-   pop();
 }
 
 } // namespace mfem

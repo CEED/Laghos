@@ -16,27 +16,19 @@ namespace mfem
 // *************************************************************************
 void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
 {
-   push(SkyBlue);
-   //assert(false);
-
    int i;
    double r0, den, nom, nom0, betanom, alpha, beta;
    if (iterative_mode)
    {
-      push(iMsub,SkyBlue);
       oper->Mult(x, r);
       subtract(b, r, r); // r = b - A x
-      pop();
    }
    else
    {
-      push(rbx0,SkyBlue);
       r = b;
       x = 0.0;
-      pop();
    }
 
-   push(d,SkyBlue);
    if (prec)
    {
       prec->Mult(r, z); // z = B r
@@ -46,12 +38,8 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
    {
       d = r;
    }
-   pop();
-
-   push(nom,SkyBlue);
    nom0 = nom = Dot(d, r);
    MFEM_ASSERT(IsFinite(nom), "nom = " << nom);
-   pop();
 
    if (print_level == 1
        || print_level == 3)
@@ -59,65 +47,44 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
       mfem::out << "   Iteration : " << std::setw(3) << 0 << "  (B r, r) = "
                 << nom << (print_level == 3 ? " ...\n" : "\n");
    }
-   pop();
 
-   push(r0,SkyBlue);
    r0 = std::max(nom*rel_tol*rel_tol,abs_tol*abs_tol);
-   pop();
 
-   push(nCvg?,SkyBlue);
    if (nom <= r0)
    {
       converged = 1;
       final_iter = 0;
       final_norm = sqrt(nom);
-      pop();
-      pop();
       return;
    }
-   pop();
 
-   push(z=Ad,SkyBlue);
    oper->Mult(d, z);  // z = A d
-   pop();
 
-   push(z.d,SkyBlue);
    den = Dot(z, d);
    MFEM_ASSERT(IsFinite(den), "den = " << den);
-   pop();
 
    if (print_level >= 0 && den < 0.0)
    {
       mfem::out << "Negative denominator in step 0 of PCG: " << den << '\n';
    }
 
-   push(dCvg?,SkyBlue);
    if (den == 0.0)
    {
       converged = 0;
       final_iter = 0;
       final_norm = sqrt(nom);
-      pop();
-      pop();
       return;
    }
-   pop();
 
    // start iteration
    converged = 0;
    final_iter = max_iter;
-   push(for,SkyBlue);
    for (i = 1; true; )
    {
       alpha = nom/den;
-      push(x+ad,SkyBlue);
       add(x,  alpha, d, x);     //  x = x + alpha d
-      pop();
-      push(r-aAd,SkyBlue);
       add(r, -alpha, z, r);     //  r = r - alpha A d
-      pop();
 
-      push(z=Br,SkyBlue);
       if (prec)
       {
          prec->Mult(r, z);      //  z = B r
@@ -128,8 +95,6 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
          betanom = Dot(r, r);
       }
       MFEM_ASSERT(IsFinite(betanom), "betanom = " << betanom);
-      pop();
-
 
       if (print_level == 1)
       {
@@ -158,7 +123,6 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
          break;
       }
 
-      push(z+bd,SkyBlue);
       beta = betanom/nom;
       if (prec)
       {
@@ -168,15 +132,10 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
       {
          add(r, beta, d, d);
       }
-      pop();
 
-      push(Ad,SkyBlue);
       oper->Mult(d, z);       //  z = A d
-      pop();
 
-      push(d.z,SkyBlue);
       den = Dot(d, z);
-      pop();
 
       MFEM_ASSERT(IsFinite(den), "den = " << den);
       if (den <= 0.0)
@@ -187,7 +146,6 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
       }
       nom = betanom;
    }
-   pop();
 
    if (print_level >= 0 && !converged)
    {
@@ -209,9 +167,7 @@ void RajaCGSolver::h_Mult(const RajaVector &b, RajaVector &x) const
       mfem::out << "Average reduction factor = "
                 << pow (betanom/nom0, 0.5/final_iter) << '\n';
    }
-   push(final_norm,SkyBlue);
    final_norm = sqrt(betanom);
-   pop();
 }
 
 } // mfem

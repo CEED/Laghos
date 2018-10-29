@@ -87,9 +87,7 @@ bool lambdaTest(ParMesh *pmesh, const int order_v, const int max_step)
    bilinearForm.FormOperator(Array<int>(), massOperator);
    // **************************************************************************
    MPI_Barrier(pmesh->GetComm());
-#ifdef __NVCC__
    cudaDeviceSynchronize();
-#endif
    // *************************************************************************
    // Now let go the markers
    rconfig::Get().Nvvp(true);
@@ -104,9 +102,7 @@ bool lambdaTest(ParMesh *pmesh, const int order_v, const int max_step)
    }
    // We MUST sync after to make sure every kernel has completed
    // or play with the -sync flag to enforce it with the push/pop
-#ifdef __NVCC__
    cudaDeviceSynchronize();
-#endif
    gettimeofday(&et, NULL);
    const float Kalltime = (et.tv_sec-st.tv_sec)*1.0e6+(et.tv_usec - st.tv_usec);
    if (rconfig::Get().Root())

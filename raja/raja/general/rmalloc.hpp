@@ -26,11 +26,8 @@ template<class T> struct rmalloc: public rmemcpy
    // *************************************************************************
    inline void* operator new (size_t n, bool lock_page = false)
    {
-      dbg("+]\033[m");
       if (!rconfig::Get().Cuda()) { return ::new T[n]; }
-#ifdef __NVCC__
       void *ptr;
-      push(new,Purple);
       if (!rconfig::Get().Uvm())
       {
          if (lock_page) { cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE); }
@@ -40,20 +37,12 @@ template<class T> struct rmalloc: public rmemcpy
       {
          cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
       }
-      pop();
       return ptr;
-#else
-      // We come here when the user requests a manager,
-      // but has compiled the code without NVCC
-      assert(false);
-      return ::new T[n];
-#endif // __NVCC__
    }
 
    // ***************************************************************************
    inline void operator delete (void *ptr)
    {
-      dbg("-]\033[m");
       if (!rconfig::Get().Cuda())
       {
          if (ptr)
@@ -61,14 +50,10 @@ template<class T> struct rmalloc: public rmemcpy
             ::delete[] static_cast<T*>(ptr);
          }
       }
-#ifdef __NVCC__
       else
       {
-         push(delete,Fuchsia);
          cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
-         pop();
       }
-#endif // __NVCC__
       ptr = nullptr;
    }
 };

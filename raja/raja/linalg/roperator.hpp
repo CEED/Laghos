@@ -81,20 +81,16 @@ public:
    /// Operator application.
    void Mult(const RajaVector & x, RajaVector & y) const
    {
-      push(SkyBlue);
       P.Mult(x, Px);
       A.Mult(Px, APx);
       Rt.MultTranspose(APx, y);
-      pop();
    }
    /// Application of the transpose.
    void MultTranspose(const RajaVector & x, RajaVector & y) const
    {
-      push(SkyBlue);
       Rt.Mult(x, APx);
       A.MultTranspose(APx, Px);
       P.MultTranspose(Px, y);
-      pop();
    }
 };
 

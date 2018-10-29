@@ -589,7 +589,6 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict e,
                 double* restrict v)
 {
-   push(Lime);
 #ifndef __LAMBDA__
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (nzones+blck-1)/blck;
@@ -659,7 +658,6 @@ void rForceMult(const int NUM_DIM,
       exit(printf("\n[rForceMult] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
    }
 #endif // __TEMPLATES__
-   pop();
 }
 
 // *****************************************************************************
@@ -685,7 +683,6 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict v,
                          double* restrict e)
 {
-   push(Lime);
 #ifndef __LAMBDA__
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (nzones+blck-1)/blck;
@@ -755,6 +752,5 @@ void rForceMultTranspose(const int NUM_DIM,
       exit(printf("\n[rForceMultTranspose] NUM_DIM!=2 && NUM_DIM!=3 ERROR"));
    }
 #endif
-   pop();
 }
 

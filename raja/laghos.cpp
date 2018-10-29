@@ -104,11 +104,6 @@ int main(int argc, char *argv[])
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
 
-   // **************************************************************************
-#if defined(__NVCC__) and not defined(__RAJA__)
-   cuda=true;
-#endif
-
    const char *basename = "results/Laghos";
    OptionsParser args(argc, argv);
    // Standard Options *********************************************************
@@ -263,10 +258,6 @@ int main(int argc, char *argv[])
    // Mult RAP MPI test
    if (mult) { return multTest(pmesh,order_v,max_tsteps)?0:1; }
 
-   // **************************************************************************
-   //cuProfilerStart();
-   push(Tan);
-
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -306,7 +297,6 @@ int main(int argc, char *argv[])
          }
          delete pmesh;
          MPI_Finalize();
-         pop();
          return 3;
    }
 
@@ -488,10 +478,8 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time,
       // and dt is the time step to advance.
-      cuProfilerStart();
       ode_solver->Step(S, t, dt);
       steps++;
-      //cuProfilerStop();
 
       // Make sure that the mesh corresponds to the new solution state.
       x_gf = d_x_gf;
@@ -613,7 +601,6 @@ int main(int argc, char *argv[])
    delete ode_solver;
    delete pmesh;
    delete material_pcf;
-   pop();
    return 0;
 }
 

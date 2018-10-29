@@ -115,37 +115,18 @@ void k_Mult2(double *y,const double *x,const int *external_ldofs,
 void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
                                                 RajaVector &y) const
 {
-   push(Coral);
    const double *d_xdata = x.GetData();
    const int in_layout = 2; // 2 - input is ltdofs array
-
-   push(d_BcastBegin,Coral);
    gc->d_BcastBegin(const_cast<double*>(d_xdata), in_layout);
-   pop();
-
-   push(d_Mult_Work,Coral);
    double *d_ydata = y.GetData();
-#ifdef __NVCC__
    int j = 0;
    const int m = external_ldofs.Size();
-   /* // Test with async rDtoD
-      push(k_DtoDAsync,Coral);
-      for (int i = 0; i < m; i++){
-      const int end = external_ldofs[i];
-      //printf("\n[k_Mult] rDtoD async size %d",end-j);
-      rmemcpy::rDtoD(d_ydata+j,d_xdata+j-i,(end-j)*sizeof(double),true); // async
-      j = end+1;
-      }
-      cudaDeviceSynchronize();
-      pop();*/
-
    if (m>0)
    {
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim)
       {
          const int kTpB=64;
-         //printf("\n[k_Mult] m=%d kMaxTh=%d",m,kMaxTh);
          k_Mult<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
          cuLastCheck();
       }
@@ -165,14 +146,8 @@ void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
       j = external_ldofs[m-1]+1;
    }
    rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
-#endif
-   pop();
-
-   push(d_BcastEnd,Coral);
    const int out_layout = 0; // 0 - output is ldofs array
    gc->d_BcastEnd(d_ydata, out_layout);
-   pop();
-   pop();
 }
 
 
@@ -213,25 +188,11 @@ void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,
 void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
                                                          RajaVector &y) const
 {
-   push(Coral);
    const double *d_xdata = x.GetData();
-
-   push(d_ReduceBegin,Coral);
    gc->d_ReduceBegin(d_xdata);
-   pop();
-
-   push(d_MultTranspose_Work,Coral);
    double *d_ydata = y.GetData();
-#ifdef __NVCC__
    int j = 0;
    const int m = external_ldofs.Size();
-   /*push(k_DtoDT,Coral);
-   for (int i = 0; i < m; i++)   {
-     const int end = external_ldofs[i];
-     rmemcpy::rDtoD(d_ydata+j-i,d_xdata+j,(end-j)*sizeof(double));
-     j = end+1;
-   }
-   pop();*/
    if (m>0)
    {
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
@@ -257,13 +218,8 @@ void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
       j = external_ldofs[m-1]+1;
    }
    rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));
-#endif
-   pop();
-   push(d_ReduceEnd,Coral);
    const int out_layout = 2; // 2 - output is an array on all ltdofs
    gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
-   pop();
-   pop();
 }
 
 // ***************************************************************************
@@ -272,14 +228,11 @@ void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
 void RajaConformingProlongationOperator::h_Mult(const Vector &x,
                                                 Vector &y) const
 {
-   push(Coral);
    const double *xdata = x.GetData();
    double *ydata = y.GetData();
    const int m = external_ldofs.Size();
    const int in_layout = 2; // 2 - input is ltdofs array
-   push(BcastBegin,Moccasin);
    gc->BcastBegin(const_cast<double*>(xdata), in_layout);
-   pop();
    int j = 0;
    for (int i = 0; i < m; i++)
    {
@@ -289,10 +242,7 @@ void RajaConformingProlongationOperator::h_Mult(const Vector &x,
    }
    std::copy(xdata+j-m, xdata+Width(), ydata+j);
    const int out_layout = 0; // 0 - output is ldofs array
-   push(BcastEnd,PeachPuff);
    gc->BcastEnd(ydata, out_layout);
-   pop();
-   pop();
 }
 
 // ***************************************************************************
@@ -301,13 +251,10 @@ void RajaConformingProlongationOperator::h_Mult(const Vector &x,
 void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                          Vector &y) const
 {
-   push(Coral);
    const double *xdata = x.GetData();
    double *ydata = y.GetData();
    const int m = external_ldofs.Size();
-   push(ReduceBegin,PapayaWhip);
    gc->ReduceBegin(xdata);
-   pop();
    int j = 0;
    for (int i = 0; i < m; i++)
    {
@@ -317,10 +264,7 @@ void RajaConformingProlongationOperator::h_MultTranspose(const Vector &x,
    }
    std::copy(xdata+j, xdata+Height(), ydata+j-m);
    const int out_layout = 2; // 2 - output is an array on all ltdofs
-   push(ReduceEnd,LavenderBlush);
    gc->ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
-   pop();
-   pop();
 }
 
 } // namespace mfem

@@ -31,7 +31,6 @@ void rNodeCopyByVDim0(const int elements,
    const int e = blockDim.x * blockIdx.x + threadIdx.x;
    if (e < elements)
 #else
-   push(Lime);
    forall(e,elements,
 #endif
    {
@@ -49,7 +48,6 @@ void rNodeCopyByVDim0(const int elements,
    }
 #ifdef __LAMBDA__
    );
-   pop();
 #endif
 }
 
@@ -288,7 +286,6 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ)
 {
-   push(Lime);
 #ifndef __LAMBDA__
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (numElements+blck-1)/blck;
@@ -360,5 +357,4 @@ void rIniGeom(const int DIM,
             numElements,dofToQuadD,nodes,J,invJ,detJ);
    assert(DIM==2 || DIM==3);
 #endif
-   pop();
 }

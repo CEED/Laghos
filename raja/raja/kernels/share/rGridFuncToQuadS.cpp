@@ -300,7 +300,6 @@ void rGridFuncToQuadS(const int DIM,
                       const double* gf,
                       double* __restrict out)
 {
-   push(Green);
 #ifndef __LAMBDA__
    if (DIM==1) { assert(false); }
    const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:1;
@@ -375,5 +374,4 @@ void rGridFuncToQuadS(const int DIM,
             NUM_VDIM,NUM_DOFS_1D,NUM_QUAD_1D,
             numElements,dofToQuad,l2gMap,gf,out);
 #endif
-   pop();
 }

@@ -119,9 +119,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      v_local(H1FESpace.GetVDim() * H1FESpace.GetLocalDofs()*nzones),
      e_quad()
 {
-   push(Wheat);
-   //printf("\n\033[31m[orders] %d %d\033[m\n",h1_fes.GetOrder(0),l2_fes.GetOrder(0));
-
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;
@@ -187,7 +184,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    CG_EMass.SetMaxIter(200);
    CG_EMass.SetPrintLevel(-1);
-   pop();
 }
 
 // *****************************************************************************
@@ -196,18 +192,14 @@ LagrangianHydroOperator::~LagrangianHydroOperator() {}
 // *****************************************************************************
 void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
 {
-   push(Wheat);
-
    dS_dt = 0.0;
 
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
-   push(Mult:h_x,Red);//D2H
    Vector h_x = RajaVector(S.GetRange(0, H1FESpace.GetVSize()));
    ParGridFunction x(&H1FESpace, h_x.GetData());
    H1FESpace.GetParMesh()->NewNodes(x, false);
-   pop();
 
    UpdateQuadratureData(S);
 
@@ -295,17 +287,14 @@ void LagrangianHydroOperator::Mult(const RajaVector &S, RajaVector &dS_dt) const
    delete e_source;
 
    quad_data_is_current = false;
-   pop();
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const RajaVector &S) const
 {
-   push(Wheat);
    UpdateQuadratureData(S);
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1FESpace.GetParMesh()->GetComm());
-   pop();
    return glob_dt_est;
 }
 
@@ -316,9 +305,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
-   push(RosyBrown);
    rho.SetSpace(&L2FESpace);
-
    DenseMatrix Mrho(l2dofs_cnt);
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
@@ -336,7 +323,6 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
       L2FESpace.GetElementDofs(i, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
-   pop();
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
@@ -388,7 +374,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 {
    if (quad_data_is_current) { return; }
-   push(Wheat);
 
    timer.sw_qdata.Start();
 
@@ -464,7 +449,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const RajaVector &S) const
 
    timer.sw_qdata.Stop();
    timer.quad_tstep += nzones;
-   pop();
 }
 
 } // namespace hydrodynamics

@@ -444,7 +444,6 @@ void rMassMultAddS(const int DIM,
                    const double* x,
                    double* __restrict y)
 {
-   push(Green);
 #ifndef __LAMBDA__
    if (DIM==1) { assert(false); }
    const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
@@ -514,5 +513,4 @@ void rMassMultAddS(const int DIM,
             NUM_DOFS_1D,NUM_QUAD_1D,
             numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 #endif
-   pop();
 }
