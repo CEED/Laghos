@@ -15,7 +15,6 @@ namespace mfem {
 // ***************************************************************************
 void CudaGridFunction::ToQuad(const IntegrationRule& ir,
                               CudaVector& quadValues) {
-  push(PowderBlue);
   const FiniteElement& fe = *(fes.GetFE(0));
   const int dim  = fe.GetDim();
   const int vdim = fes.GetVDim();
@@ -38,7 +37,6 @@ void CudaGridFunction::ToQuad(const IntegrationRule& ir,
                     fes.GetLocalToGlobalMap(),
                     ptr(),
                     quadValues);
-  pop();
 }
 
 } // mfem

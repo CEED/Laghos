@@ -34,7 +34,7 @@ template <class T, bool xyz = true> class CudaArray;
     rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
   }
-  ~CudaArray(){dbg("\033[32m[~i"); rmalloc<T>::operator delete(data);}
+  ~CudaArray(){rmalloc<T>::operator delete(data);}
   inline size_t* dim() { return &d[0]; }
   inline T* ptr() { return data; }
   inline const T* GetData() const { return data; }
@@ -50,7 +50,6 @@ template <class T, bool xyz = true> class CudaArray;
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    dbg("\033[32m[i");
     data=(T*) rmalloc<T>::operator new(sz);
   }
   inline T& operator[](const size_t x) { return data[x]; }
@@ -80,7 +79,7 @@ template <class T> class CudaArray<T,false> : public rmalloc<T>{
   CudaArray():data(NULL),sz(0),d{0,0,0,0} {}
   CudaArray(const size_t d0) {allocate(d0);}
   CudaArray(const CudaArray<T,false> &r) {assert(false);}
-  ~CudaArray(){dbg("\033[32m[~I"); rmalloc<T>::operator delete(data);}
+  ~CudaArray(){rmalloc<T>::operator delete(data);}
   CudaArray& operator=(Array<T> &a){
     rmemcpy::rHtoD(data,a.GetData(),a.Size()*sizeof(T));
     return *this;
@@ -100,7 +99,6 @@ template <class T> class CudaArray<T,false> : public rmalloc<T>{
                 const bool transposed = false) {
     d[0]=X; d[1]=Y; d[2]=Z; d[3]=D;
     sz=d[0]*d[1]*d[2]*d[3];
-    dbg("\033[32m[I");
     assert(sz>0);
     data=(T*) rmalloc<T>::operator new(sz);
 #define xsw(a,b) a^=b^=a^=b

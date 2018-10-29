@@ -25,7 +25,6 @@ namespace mfem {
      offsets(globalDofs+1),
      indices(localDofs, GetNE()),  
      map(localDofs, GetNE()) {
-    push(PowderBlue);
     const FiniteElement *fe = GetFE(0);
     const TensorBasisElement* el = dynamic_cast<const TensorBasisElement*>(fe);
     const Array<int> &dof_map = el->GetDofMap();
@@ -75,8 +74,8 @@ namespace mfem {
     map = h_map;
   
     const SparseMatrix* R = GetRestrictionMatrix(); assert(R);
-    //const Operator* P = GetProlongationMatrix(); assert(P);
-    const CudaConformingProlongationOperator *P = new CudaConformingProlongationOperator(*this);
+    const CudaConformingProlongationOperator *P =
+       new CudaConformingProlongationOperator(*this);
   
     const int mHeight = R->Height();
     const int* I = R->GetI();
@@ -101,7 +100,6 @@ namespace mfem {
                                                 R->Width(),
                                                 reorderIndices);
     prolongationOp = new CudaProlongationOperator(P);
-    pop();
   }
 
   // ***************************************************************************
@@ -118,7 +116,6 @@ namespace mfem {
   // ***************************************************************************
   void CudaFiniteElementSpace::GlobalToLocal(const CudaVector& globalVec,
                                              CudaVector& localVec) const {
-    push(PowderBlue);
     const int vdim = GetVDim();
     const int localEntries = localDofs * GetNE();
     const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -130,14 +127,11 @@ namespace mfem {
                    indices,
                    globalVec,
                    localVec);
-    pop();
   }
 
   // ***************************************************************************
-  // Aggregate local node values to their respective global dofs
   void CudaFiniteElementSpace::LocalToGlobal(const CudaVector& localVec,
                                              CudaVector& globalVec) const {
-    push(PowderBlue);
     const int vdim = GetVDim();
     const int localEntries = localDofs * GetNE();
     const bool vdim_ordering = ordering == Ordering::byVDIM;
@@ -149,7 +143,6 @@ namespace mfem {
                    indices,
                    localVec,
                    globalVec);
-    pop();
   }
   
 } // namespace mfem

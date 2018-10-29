@@ -73,19 +73,15 @@ namespace mfem {
         Px(P.Height()), APx(A.Height()) { }
     /// Operator application.
     void Mult(const CudaVector & x, CudaVector & y) const {
-      push(SkyBlue);
       P.Mult(x, Px);
       A.Mult(Px, APx);
       Rt.MultTranspose(APx, y);
-      pop();
     }
     /// Application of the transpose.
     void MultTranspose(const CudaVector & x, CudaVector & y) const {
-      push(SkyBlue);
       Rt.Mult(x, APx);
       A.MultTranspose(APx, Px);
       P.MultTranspose(Px, y);
-      pop();
     }
   };
   

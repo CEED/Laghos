@@ -39,12 +39,10 @@ namespace mfem {
       dxdt.SetSize(f->Width());
     }
     void Step(CudaVector &x, double &t, double &dt){
-      push(SkyBlue);
       f->SetTime(t);
       f->Mult(x, dxdt);
       x.Add(dt, dxdt);
       t += dt;
-      pop();
     }
   };
 
@@ -62,7 +60,6 @@ namespace mfem {
       x1.SetSize(n);
     }
     void Step(CudaVector &x, double &t, double &dt){
-      push(SkyBlue);
       const double b = 0.5/a;
       f->SetTime(t);
       f->Mult(x, dxdt);
@@ -72,7 +69,6 @@ namespace mfem {
       f->Mult(x, dxdt);
       add(x1, b*dt, dxdt, x);
       t += dt;
-      pop();
     }
   };
 
@@ -88,7 +84,6 @@ namespace mfem {
      k.SetSize(n);
    }
    void Step(CudaVector &x, double &t, double &dt){
-      push(SkyBlue);
      // x0 = x, t0 = t, k0 = dt*f(t0, x0)
      f->SetTime(t);
      f->Mult(x, k);
@@ -105,7 +100,6 @@ namespace mfem {
      y.Add(dt, k);
      add(1./3, x, 2./3, y, x);
      t += dt;
-     pop();
    }
  };
 
@@ -123,44 +117,21 @@ namespace mfem {
     }
     
     void Step(CudaVector &x, double &t, double &dt){
-      push(SkyBlue);
       f->SetTime(t);
-      push(k1,SkyBlue);
       f->Mult(x, k); // k1
-      pop();
-      
-      push(addxx,SkyBlue);
       add(x, dt/2, k, y);
-      add(x, dt/6, k, z);pop();
-      
+      add(x, dt/6, k, z);
       f->SetTime(t + dt/2);
-      
-      push(k2,SkyBlue);
       f->Mult(y, k); // k2
-      pop();
-      
-      push(addxz1,SkyBlue);
       add(x, dt/2, k, y);
-      z.Add(dt/3, k);pop();
-      
-      push(k3,SkyBlue);
+      z.Add(dt/3, k);
       f->Mult(y, k); // k3
-      pop();
-
-      push(addxz2,SkyBlue);
       add(x, dt, k, y);
       z.Add(dt/3, k);
-      f->SetTime(t + dt);pop();
-      
-      push(k4,SkyBlue);
+      f->SetTime(t + dt);
       f->Mult(y, k); // k4
-      pop();
-      
-      push(addz,SkyBlue);
-      add(z, dt/6, k, x);pop();
-      
+      add(z, dt/6, k, x);
       t += dt;
-      pop();
     }
   };
 
@@ -188,7 +159,6 @@ namespace mfem {
       }
     }
     void Step(CudaVector &x, double &t, double &dt){
-      push(SkyBlue);
       f->SetTime(t);
       f->Mult(x, k[0]);
       for (int l = 0, i = 1; i < s; i++)
@@ -206,7 +176,6 @@ namespace mfem {
         x.Add(b[i]*dt, k[i]);
       }
       t += dt;
-      pop();
     }
     ~CudaExplicitRKSolver(){
       delete [] k;

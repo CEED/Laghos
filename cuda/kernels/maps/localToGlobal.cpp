@@ -26,12 +26,8 @@ void rLocalToGlobal0(const int globalEntries,
                      const double* localX,
                      double* __restrict globalX)
 {
-#ifndef __LAMBDA__
    const int i = blockDim.x * blockIdx.x + threadIdx.x;
    if (i < globalEntries)
-#else
-   forall(i,globalEntries,
-#endif
    {
       const int offset = offsets[i];
       const int nextOffset = offsets[i + 1];
@@ -47,9 +43,6 @@ void rLocalToGlobal0(const int globalEntries,
          globalX[g_offset] = dofValue;
       }
    }
-#ifdef __LAMBDA__
-   );
-#endif
 }
 
 // *****************************************************************************
@@ -62,8 +55,6 @@ void rLocalToGlobal(const int NUM_VDIM,
                     const double* localX,
                     double* __restrict globalX)
 {
-   push(Lime);
    cuKer(rLocalToGlobal,globalEntries,NUM_VDIM,VDIM_ORDERING,
          localEntries,offsets,indices,localX,globalX);
-   pop();
 }

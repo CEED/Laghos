@@ -521,7 +521,6 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict e,
                 double* restrict v)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (nzones+blck-1)/blck;
    assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
@@ -574,7 +573,6 @@ void rForceMult(const int NUM_DIM,
    assert(call[id]);
    call0(id,grid,blck,
          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
-   pop();
 }
 
 // *****************************************************************************
@@ -600,7 +598,6 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict v,
                          double* restrict e)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (nzones+blck-1)/blck;
    assert(NUM_DOFS_1D==H1_DOFS_1D);
@@ -653,6 +650,5 @@ void rForceMultTranspose(const int NUM_DIM,
    assert(call[id]);
    call0(id,grid,blck,
          nzones,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,v,e);
-   pop();
 }
 

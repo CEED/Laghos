@@ -15,7 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
 
-#ifndef __LAMBDA__
+// *****************************************************************************
 extern "C" kernel
 void vector_set_subvector_const0(const int N,
                                  const double value,
@@ -35,30 +35,12 @@ void vector_set_subvector_const0(const int N,
       data[-dof_i-1] = -value;
    }
 }
-#endif
 
+// *****************************************************************************
 void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs)
 {
-   push(set,Cyan);
-#ifndef __LAMBDA__
    cuKer(vector_set_subvector_const,N,value,data,tdofs);
-#else
-   forall(i,N,
-   {
-      const int dof_i = tdofs[i];
-      data[dof_i] = value;
-      if (dof_i >= 0)
-      {
-         data[dof_i] = value;
-      }
-      else
-      {
-         data[-dof_i-1] = -value;
-      }
-   });
-#endif
-   pop();
 }

@@ -92,12 +92,9 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
-   bool dot = false;
-   bool mult = false;
-   bool lambda = false; // lambda test on one kernel only
    const bool cuda = true;
    bool uvm = false;
-   bool aware = false;
+   bool aware = true;
    bool share = true;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
@@ -141,13 +138,6 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   // Tests Options ************************************************************
-   args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
-                  "Enable or disable DOT test kernels.");
-   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
-                  "Enable or disable MULT test kernels.");
-   args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",
-                  "Enable or disable LAMBDA test kernels.");
    // CUDA Options *************************************************************
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "[32mEnable or disable Unified Memory.[m");
@@ -172,7 +162,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,uvm,aware,share,hcpo,sync,dot,rs_levels);
+                        cuda,uvm,aware,share,hcpo,sync,rs_levels);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -243,14 +233,6 @@ int main(int argc, char *argv[])
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
-   // **************************************************************************
-   // Mult RAP MPI test
-   if (mult) { return multTest(pmesh,order_v,max_tsteps)?0:1; }
-
-   // **************************************************************************
-   //cuProfilerStart();
-   push(Tan);
-
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -290,7 +272,6 @@ int main(int argc, char *argv[])
          }
          delete pmesh;
          MPI_Finalize();
-         pop();
          return 3;
    }
 
@@ -336,12 +317,7 @@ int main(int argc, char *argv[])
    pmesh->SetNodalGridFunction(&x_gf);
    d_x_gf = x_gf;
 
-   // **************************************************************************
-   // Lambda launch test
-   if (lambda) { return hydrodynamics::lambdaTest(pmesh,order_v,max_tsteps)?0:1; }
-
    // Initialize the velocity.
-   //dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    d_v_gf = v_gf;
@@ -376,17 +352,6 @@ int main(int argc, char *argv[])
    d_e_gf = e_gf;
 
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
-   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
-   // gamma values are projected on a function that stays constant on the moving
-   // mesh.
-   /*L2_FECollection mat_fec(0, pmesh->Dimension());
-   CudaFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
-   mat_gf.ProjectCoefficient(mat_coeff);
-   GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
-   CudaGridFunction d_mat_gf_coeff(mat_fes);
-   d_mat_gf_coeff=mat_gf_coeff;*/
 
    // Additional details, depending on the problem.
    int source = 0; bool visc=false;
@@ -472,10 +437,8 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time,
       // and dt is the time step to advance.
-      cuProfilerStart();
       ode_solver->Step(S, t, dt);
       steps++;
-      //cuProfilerStop();
 
       // Make sure that the mesh corresponds to the new solution state.
       x_gf = d_x_gf;
@@ -597,7 +560,6 @@ int main(int argc, char *argv[])
    delete ode_solver;
    delete pmesh;
    delete material_pcf;
-   pop();
    return 0;
 }
 

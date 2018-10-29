@@ -30,15 +30,18 @@ namespace mfem {
     CudaTable d_group_ldof;
     CudaTable d_group_ltdof;
     void *d_group_buf;
-    int comm_lock; // 0 - no lock, 1 - locked for Bcast, 2 - locked for Reduce
+    int comm_lock;
     int num_requests;
   public:
     CudaCommD(ParFiniteElementSpace&);
     ~CudaCommD();
     
     template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
-    template <class T> const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
-    template <class T> const T *d_ReduceGroupFromBuffer(const T*,T*,int,int,void (*)(OpData<T>)) const;
+    template <class T>
+    const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
+    template <class T>
+    const T *d_ReduceGroupFromBuffer(const T*,T*,int,int,
+                                     void (*)(OpData<T>)) const;
     
     template <class T> void d_BcastBegin(T*,int);
     template <class T> void d_BcastEnd(T*, int);

@@ -231,7 +231,6 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (numElements+blck-1)/blck;
    const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
@@ -291,5 +290,4 @@ void rIniGeom(const int DIM,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,dofToQuadD,nodes,J,invJ,detJ);
-   pop();
 }

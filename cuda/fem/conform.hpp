@@ -24,7 +24,6 @@ namespace mfem {
   class CudaConformingProlongationOperator : public CudaOperator{
   protected:
     Array<int> external_ldofs;
-    //CudaArray<int> d_non_empty_m;
     CudaArray<int> d_external_ldofs;
     CudaCommD *gc;
     int kMaxTh;

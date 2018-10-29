@@ -254,7 +254,6 @@ void rGridFuncToQuad(const int DIM,
                      const double* gf,
                      double* __restrict out)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (numElements+blck-1)/blck;
    const unsigned int id = (DIM<<8)|(NUM_VDIM<<4)|(NUM_DOFS_1D-1);
@@ -313,5 +312,4 @@ void rGridFuncToQuad(const int DIM,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,dofToQuad,l2gMap,gf,out);
-   pop();
 }

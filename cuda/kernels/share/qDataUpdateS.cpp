@@ -666,7 +666,6 @@ void rUpdateQuadratureDataS(const double GAMMA,
                             double* restrict stressJinvT,
                             double* restrict dtEst)
 {
-   push(Green);
    const int grid = nzones;
    const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
    const dim3 blck(b1d,b1d,1);
@@ -723,5 +722,4 @@ void rUpdateQuadratureDataS(const double GAMMA,
          nzones,dofToQuad,dofToQuadD,quadWeights,
          v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
          stressJinvT,dtEst);
-   pop();
 }

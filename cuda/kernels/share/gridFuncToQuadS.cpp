@@ -213,7 +213,6 @@ void rGridFuncToQuadS(const int DIM,
                       const double* gf,
                       double* __restrict out)
 {
-   push(Green);
    if (DIM==1) { assert(false); }
    const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:1;
    const int grid = ((numElements+MX_ELEMENT_BATCH-1)/MX_ELEMENT_BATCH);
@@ -273,5 +272,4 @@ void rGridFuncToQuadS(const int DIM,
    }
    assert(call[id]);
    call0(id,grid,blck, numElements,dofToQuad,l2gMap,gf,out);
-   pop();
 }

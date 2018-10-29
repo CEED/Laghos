@@ -320,7 +320,6 @@ void rMassMultAddS(const int DIM,
                    const double* x,
                    double* __restrict y)
 {
-   push(Green);
    if (DIM==1) { assert(false); }
    const int b1d = (NUM_QUAD_1D<NUM_DOFS_1D)?NUM_DOFS_1D:NUM_QUAD_1D;
    const int MX_ELEMENT_BATCH = DIM==2?M2_ELEMENT_BATCH:1;
@@ -376,5 +375,4 @@ void rMassMultAddS(const int DIM,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
-   pop();
 }

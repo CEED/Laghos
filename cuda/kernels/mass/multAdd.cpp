@@ -250,7 +250,6 @@ void rMassMultAdd(const int DIM,
                   const double* x,
                   double* __restrict y)
 {
-   push(Lime);
    const int blck = 256;
    const int grid = (numElements+blck-1)/blck;
    assert(LOG2(DIM)<=4);
@@ -303,5 +302,4 @@ void rMassMultAdd(const int DIM,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
-   pop();
 }

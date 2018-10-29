@@ -45,7 +45,6 @@ void rInitQuadratureData(const int NUM_QUAD,
                          const double* restrict quadWeights,
                          double* restrict rho0DetJ0w)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (numElements+blck-1)/blck;
    const unsigned int id = NUM_QUAD;
@@ -96,5 +95,4 @@ void rInitQuadratureData(const int NUM_QUAD,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,rho0,detJ,quadWeights,rho0DetJ0w);
-   pop();
 }

@@ -35,8 +35,6 @@
 #include <cuda.h>
 
 // *****************************************************************************
-#include "../config/dbg.hpp"
-#include "../config/nvvp.hpp"
 #include "../config/config.hpp"
 #include "../general/memcpy.hpp"
 #include "../general/malloc.hpp"

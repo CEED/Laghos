@@ -16,11 +16,13 @@ namespace mfem {
   // * CudaConformingProlongationOperator
   // ***************************************************************************
   CudaConformingProlongationOperator::CudaConformingProlongationOperator
-  (ParFiniteElementSpace &pfes): CudaOperator(pfes.GetVSize(), pfes.GetTrueVSize()),
+  (ParFiniteElementSpace &pfes): CudaOperator(pfes.GetVSize(),
+                                              pfes.GetTrueVSize()),
                                  external_ldofs(),
                                  d_external_ldofs(Height()-Width()), // size can be 0 here
                                  gc(new CudaCommD(pfes)),
-                                 kMaxTh(0){
+                                 kMaxTh(0)
+  {
     Array<int> ldofs;
     Table &group_ldof = gc->GroupLDofTable();
     external_ldofs.Reserve(Height()-Width());
@@ -37,7 +39,6 @@ namespace mfem {
     if (HmW>0)
       d_external_ldofs=external_ldofs;
     assert(external_ldofs.Size() == Height()-Width());
-    // *************************************************************************
     const int m = external_ldofs.Size();
     int j = 0;
     for (int i = 0; i < m; i++) {
@@ -69,7 +70,8 @@ namespace mfem {
   // * k_Mult
   // ***************************************************************************
   static __global__
-  void k_Mult(double *y,const double *x,const int *external_ldofs,const int m){
+  void k_Mult(double *y, const double *x,
+              const int *external_ldofs, const int m){
     const int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i>=m) return;
     const int j = (i>0)?external_ldofs[i-1]+1:0;
@@ -78,7 +80,7 @@ namespace mfem {
       y[j+k]=x[j-i+k];
   }
   static __global__
-  void k_Mult2(double *y,const double *x,const int *external_ldofs,
+  void k_Mult2(double *y, const double *x, const int *external_ldofs,
                const int m, const int base){
     const int i = base+threadIdx.x;
     const int j = (i>0)?external_ldofs[i-1]+1:0;
@@ -93,13 +95,9 @@ namespace mfem {
   // ***************************************************************************
   void CudaConformingProlongationOperator::d_Mult(const CudaVector &x,
                                                   CudaVector &y) const{
-    push(Coral);
     const double *d_xdata = x.GetData();
     const int in_layout = 2; // 2 - input is ltdofs array
-    push(d_BcastBegin,Coral);
     gc->d_BcastBegin(const_cast<double*>(d_xdata), in_layout);
-    pop();
-    push(d_Mult_Work,Coral);
     double *d_ydata = y.GetData(); 
     int j = 0;
     const int m = external_ldofs.Size();    
@@ -123,12 +121,8 @@ namespace mfem {
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j,d_xdata+j-m,(Width()+m-j)*sizeof(double));
-    pop();
-    push(d_BcastEnd,Coral);
     const int out_layout = 0; // 0 - output is ldofs array
     gc->d_BcastEnd(d_ydata, out_layout);
-    pop();
-    pop();
   }
 
   
@@ -163,12 +157,8 @@ namespace mfem {
   // ***************************************************************************
   void CudaConformingProlongationOperator::d_MultTranspose(const CudaVector &x,
                                                            CudaVector &y) const{
-    push(Coral);
     const double *d_xdata = x.GetData();
-    push(d_ReduceBegin,Coral);
     gc->d_ReduceBegin(d_xdata);
-    pop();
-    push(d_MultTranspose_Work,Coral);
     double *d_ydata = y.GetData();
     int j = 0;
     const int m = external_ldofs.Size();
@@ -192,12 +182,8 @@ namespace mfem {
       j = external_ldofs[m-1]+1;
     }
     rmemcpy::rDtoD(d_ydata+j-m,d_xdata+j,(Height()-j)*sizeof(double));
-    pop();
-    push(d_ReduceEnd,Coral);
     const int out_layout = 2; // 2 - output is an array on all ltdofs
     gc->d_ReduceEnd<double>(d_ydata, out_layout, GroupCommunicator::Sum);
-    pop();
-    pop();
   }
 
   // ***************************************************************************
@@ -205,14 +191,11 @@ namespace mfem {
   // ***************************************************************************
   void CudaConformingProlongationOperator::h_Mult(const Vector &x,
                                                   Vector &y) const{
-    push(Coral);
     const double *xdata = x.GetData();
     double *ydata = y.GetData(); 
     const int m = external_ldofs.Size();
     const int in_layout = 2; // 2 - input is ltdofs array
-    push(BcastBegin,Moccasin);
     gc->BcastBegin(const_cast<double*>(xdata), in_layout);
-    pop();
     int j = 0;
     for (int i = 0; i < m; i++){
       const int end = external_ldofs[i];
@@ -221,10 +204,7 @@ namespace mfem {
     }
     std::copy(xdata+j-m, xdata+Width(), ydata+j);
     const int out_layout = 0; // 0 - output is ldofs array
-    push(BcastEnd,PeachPuff);
     gc->BcastEnd(ydata, out_layout);
-    pop();
-    pop();
   }
 
   // ***************************************************************************
@@ -232,13 +212,10 @@ namespace mfem {
   // ***************************************************************************
   void CudaConformingProlongationOperator::h_MultTranspose(const Vector &x,
                                                            Vector &y) const{
-    push(Coral);
     const double *xdata = x.GetData();
     double *ydata = y.GetData();
     const int m = external_ldofs.Size();
-    push(ReduceBegin,PapayaWhip);
     gc->ReduceBegin(xdata);
-    pop();
     int j = 0;
     for (int i = 0; i < m; i++)   {
       const int end = external_ldofs[i];
@@ -247,10 +224,7 @@ namespace mfem {
     }
     std::copy(xdata+j, xdata+Height(), ydata+j-m);
     const int out_layout = 2; // 2 - output is an array on all ltdofs
-    push(ReduceEnd,LavenderBlush);
     gc->ReduceEnd<double>(ydata, out_layout, GroupCommunicator::Sum);
-    pop();
-    pop();
   }
 
 } // namespace mfem

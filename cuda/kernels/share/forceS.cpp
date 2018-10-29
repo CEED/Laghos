@@ -699,7 +699,6 @@ void rForceMultS(const int NUM_DIM,
                  const double* restrict e,
                  double* restrict v)
 {
-   push(Green);
    if (NUM_DIM==1) { assert(false); }
    const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD_1D;
    const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
@@ -756,7 +755,6 @@ void rForceMultS(const int NUM_DIM,
    assert(call[id]);
    call0(id,grid,blck,
          numElements,L2QuadToDof,H1DofToQuad,H1DofToQuadD,stressJinvT,e,v);
-   pop();
 }
 
 
@@ -783,7 +781,6 @@ void rForceMultTransposeS(const int NUM_DIM,
                           const double* restrict v,
                           double* restrict e)
 {
-   push(Green);
    const int H1_MAX_1D = (H1_DOFS_1D > NUM_QUAD_1D)?H1_DOFS_1D:NUM_QUAD_1D;
    const int L2_MAX_1D = (L2_DOFS_1D > NUM_QUAD_1D)?L2_DOFS_1D:NUM_QUAD_1D;
    const int INNER_SIZE = (H1_MAX_1D > L2_MAX_1D)?H1_MAX_1D:L2_MAX_1D;

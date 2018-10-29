@@ -125,10 +125,8 @@ void rMassAssembleS(const int dim,
                     const double COEFF,
                     double* __restrict oper)
 {
-   push(Green);
    assert(false);
    if (dim==1) {assert(false);}
    if (dim==2) { rMassAssemble2S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper); }
    if (dim==3) { rMassAssemble3S(NUM_QUAD,numElements,COEFF,quadWeights,J,oper); }
-   pop();
 }

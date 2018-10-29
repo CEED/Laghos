@@ -600,7 +600,6 @@ void rUpdateQuadratureData(const double GAMMA,
                            double* restrict stressJinvT,
                            double* restrict dtEst)
 {
-   push(Lime);
    const int blck = CUDA_BLOCK_SIZE;
    const int grid = (nzones+blck-1)/blck;
    assert(LOG2(NUM_DIM)<=4);
@@ -656,5 +655,4 @@ void rUpdateQuadratureData(const double GAMMA,
          nzones,dofToQuad,dofToQuadD,quadWeights,
          v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
          stressJinvT,dtEst);
-   pop();
 }

@@ -23,31 +23,25 @@ namespace mfem {
 
     // *************************************************************************
     inline void* operator new(size_t n, bool lock_page = false) {
-      dbg("+]\033[m");
       if (!rconfig::Get().Cuda()) return ::new T[n];
       void *ptr;
-      push(new,Purple);
       if (!rconfig::Get().Uvm()){
         if (lock_page) cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE);
         else cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T));
       }else{
         cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
       }
-      pop();
       return ptr;
     }
   
     // ***************************************************************************
     inline void operator delete(void *ptr) {
-      dbg("-]\033[m");
       if (!rconfig::Get().Cuda()) {
         if (ptr)
           ::delete[] static_cast<T*>(ptr);
       }
       else {
-        push(delete,Fuchsia);
         cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
-        pop();
       }
       ptr = nullptr;
     }

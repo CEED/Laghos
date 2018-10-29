@@ -19,13 +19,11 @@ static CudaGeometry *geom=NULL;
 // * ~ CudaGeometry
 // ***************************************************************************
 CudaGeometry::~CudaGeometry(){
-  push(SteelBlue);
   free(geom->meshNodes);
   free(geom->J);
   free(geom->invJ);
   free(geom->detJ);
   delete[] geom;
-  pop();
 }
 
 // *****************************************************************************
@@ -34,7 +32,6 @@ CudaGeometry::~CudaGeometry(){
 CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
                                 const IntegrationRule& ir,
                                 const CudaVector& Sx) {
-  push(SteelBlue);
   const Mesh *mesh = fes.GetMesh();
   const mfem::GridFunction *nodes = mesh->GetNodes();
   const FiniteElementSpace *fespace = nodes->FESpace();
@@ -45,18 +42,13 @@ CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
   const int elements = fespace->GetNE();
   const int ndofs    = fespace->GetNDofs();
   const CudaDofQuadMaps* maps = CudaDofQuadMaps::GetSimplexMaps(*fe, ir);
-  push(rNodeCopyByVDim,SteelBlue);
   rNodeCopyByVDim(elements,numDofs,ndofs,dims,geom->eMap,Sx,geom->meshNodes);
-  pop(rNodeCopyByVDim);
-  push(rIniGeom,SteelBlue);
   rIniGeom(dims,numDofs,numQuad,elements,
            maps->dofToQuadD,
            geom->meshNodes,
            geom->J,
            geom->invJ,
            geom->detJ);
-  pop(rIniGeom);
-  pop();
   return geom;
 }
   
@@ -64,7 +56,6 @@ CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
 // *****************************************************************************
 CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
                                 const IntegrationRule& ir) {
-  push(SteelBlue);
   Mesh& mesh = *(fes.GetMesh());
   const bool geom_to_allocate =
     (!geom) || rconfig::Get().GeomNeedsUpdate(mesh.GetSequence());
@@ -86,7 +77,6 @@ CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
   const int* elementMap = e2dTable.GetJ();
   Array<int> eMap(numDofs*elements);
   {
-    push(cpynodes,SteelBlue);
     for (int e = 0; e < elements; ++e) {
       for (int d = 0; d < numDofs; ++d) {
         const int lid = d+numDofs*e;
@@ -99,19 +89,15 @@ CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
         }
       }
     }
-    pop();
   }
   if (geom_to_allocate){
     geom->meshNodes.allocate(dims, numDofs, elements);
     geom->eMap.allocate(numDofs, elements);
   }
   {
-    push(H2D:cpyMeshNodes,SteelBlue);
     geom->meshNodes = meshNodes;
     geom->eMap = eMap;
-    pop();
   }
-  // Reorder the original gf back
   if (orderedByNODES) ReorderByNodes(nodes);
   if (geom_to_allocate){
     geom->J.allocate(dims, dims, numQuad, elements);
@@ -120,23 +106,17 @@ CudaGeometry* CudaGeometry::Get(CudaFiniteElementSpace& fes,
   }
     
   const CudaDofQuadMaps* maps = CudaDofQuadMaps::GetSimplexMaps(fe, ir);
-  {
-    push(rIniGeom,SteelBlue);
-    rIniGeom(dims,numDofs,numQuad,elements,
-             maps->dofToQuadD,
-             geom->meshNodes,
-             geom->J,
-             geom->invJ,
-             geom->detJ);
-    pop();
-  }
-  pop();
+  rIniGeom(dims,numDofs,numQuad,elements,
+           maps->dofToQuadD,
+           geom->meshNodes,
+           geom->J,
+           geom->invJ,
+           geom->detJ);
   return geom;
 }
 
 // ***************************************************************************
 void CudaGeometry::ReorderByVDim(GridFunction& nodes){
-  push(SteelBlue);
   const FiniteElementSpace *fes=nodes.FESpace();
   const int size = nodes.Size();
   const int vdim = fes->GetVDim();
@@ -150,12 +130,10 @@ void CudaGeometry::ReorderByVDim(GridFunction& nodes){
   for (int i = 0; i < size; i++)
     data[i] = temp[i];
   delete [] temp;
-  pop();
 }
 
 // ***************************************************************************
 void CudaGeometry::ReorderByNodes(GridFunction& nodes){
-  push(SteelBlue);
   const FiniteElementSpace *fes=nodes.FESpace();
   const int size = nodes.Size();
   const int vdim = fes->GetVDim();
@@ -169,12 +147,11 @@ void CudaGeometry::ReorderByNodes(GridFunction& nodes){
   for (int i = 0; i < size; i++)
     data[i] = temp[i];
   delete [] temp;
-  pop();
 }
 
-// ***************************************************************************
+// *****************************************************************************
 // * CudaDofQuadMaps
-// ***************************************************************************
+// *****************************************************************************
   static std::map<std::string, CudaDofQuadMaps* > AllDofQuadMaps;
 
   // ***************************************************************************
@@ -212,7 +189,7 @@ CudaDofQuadMaps* CudaDofQuadMaps::Get(const FiniteElement& trialFE,
   return GetTensorMaps(trialFE, testFE, ir, transpose);
 }
 
-// ***************************************************************************
+// *****************************************************************************
 CudaDofQuadMaps* CudaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
                                                 const FiniteElement& testFE,
                                                 const IntegrationRule& ir,
@@ -236,7 +213,6 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
   CudaDofQuadMaps *maps = new CudaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
-  push();
   const CudaDofQuadMaps* trialMaps = GetD2QTensorMaps(trialFE, ir);
   const CudaDofQuadMaps* testMaps  = GetD2QTensorMaps(testFE, ir, true);
   maps->dofToQuad   = trialMaps->dofToQuad;
@@ -244,11 +220,10 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetTensorMaps(const FiniteElement& trialFE,
   maps->quadToDof   = testMaps->dofToQuad;
   maps->quadToDofD  = testMaps->dofToQuadD;
   maps->quadWeights = testMaps->quadWeights;
-  pop();
   return maps;
 }
   
-// ***************************************************************************
+// *****************************************************************************
 CudaDofQuadMaps* CudaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
                                                    const IntegrationRule& ir,
                                                    const bool transpose) {
@@ -274,7 +249,6 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
 
-  push(SteelBlue);
   CudaDofQuadMaps *maps = new CudaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
@@ -323,11 +297,10 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetD2QTensorMaps(const FiniteElement& fe,
     ::delete [] quadWeights1DData;
   }
   assert(maps);
-  pop();
   return maps;
 }
 
-// ***************************************************************************
+// *****************************************************************************
 CudaDofQuadMaps* CudaDofQuadMaps::GetSimplexMaps(const FiniteElement& fe,
                                                  const IntegrationRule& ir,
                                                  const bool transpose) {
@@ -348,7 +321,6 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
   // If we've already made the dof-quad maps, reuse them
   if (AllDofQuadMaps.find(hash)!=AllDofQuadMaps.end())
     return AllDofQuadMaps[hash];
-  push(SteelBlue);
   CudaDofQuadMaps *maps = new CudaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
   maps->hash = hash;
@@ -359,11 +331,10 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetSimplexMaps(const FiniteElement& trialFE,
   maps->quadToDof   = testMaps->dofToQuad;
   maps->quadToDofD  = testMaps->dofToQuadD;
   maps->quadWeights = testMaps->quadWeights;
-  pop();
   return maps;
 }
 
-// ***************************************************************************
+// *****************************************************************************
 CudaDofQuadMaps* CudaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
                                                     const IntegrationRule& ir,
                                                     const bool transpose) {
@@ -381,8 +352,7 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
     return AllDofQuadMaps[hash];
   CudaDofQuadMaps* maps = new CudaDofQuadMaps();
   AllDofQuadMaps[hash]=maps;
-  maps->hash = hash;  
-  push(SteelBlue);
+  maps->hash = hash;
   // Initialize the dof -> quad mapping
   maps->dofToQuad.allocate(numQuad, numDofs,1,1,transpose);
   maps->dofToQuadD.allocate(dims, numQuad, numDofs,1,transpose);
@@ -416,14 +386,13 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
     maps->quadWeights = quadWeights;
   maps->dofToQuad = dofToQuad;
   maps->dofToQuadD = dofToQuadD;
-  pop();
   return maps;
 }
 
 
-// ***************************************************************************
+// *****************************************************************************
 // * Base Integrator
-// ***************************************************************************
+// *****************************************************************************
 void CudaIntegrator::SetIntegrationRule(const IntegrationRule& ir_) {
   ir = &ir_;
 }
@@ -435,7 +404,6 @@ const IntegrationRule& CudaIntegrator::GetIntegrationRule() const {
 
 void CudaIntegrator::SetupIntegrator(CudaBilinearForm& bform_,
                                      const CudaIntegratorType itype_) {
-  push(SteelBlue);
   mesh = &(bform_.GetMesh());
   trialFESpace = &(bform_.GetTrialFESpace());
   testFESpace  = &(bform_.GetTestFESpace());
@@ -444,7 +412,6 @@ void CudaIntegrator::SetupIntegrator(CudaBilinearForm& bform_,
   maps = CudaDofQuadMaps::Get(*trialFESpace,*testFESpace,*ir);
   mapsTranspose = CudaDofQuadMaps::Get(*testFESpace,*trialFESpace,*ir);
   Setup();
-  pop();
 }
 
 CudaGeometry* CudaIntegrator::GetGeometry() {
@@ -452,25 +419,24 @@ CudaGeometry* CudaIntegrator::GetGeometry() {
 }
 
 
-// ***************************************************************************
+// *****************************************************************************
 // * Mass Integrator
-// ***************************************************************************
+// *****************************************************************************
 void CudaMassIntegrator::SetupIntegrationRule() {
   assert(false);
 }
 
-// ***************************************************************************
+// *****************************************************************************
 void CudaMassIntegrator::Assemble() {
   if (op.Size()) return;
   assert(false);
 }
 
-// ***************************************************************************
+// *****************************************************************************
 void CudaMassIntegrator::SetOperator(CudaVector& v) { op = v; }
 
 // ***************************************************************************
 void CudaMassIntegrator::MultAdd(CudaVector& x, CudaVector& y) {
-  push(SteelBlue);
   const int dim = mesh->Dimension();
   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
   const int dofs1D = trialFESpace->GetFE(0)->GetOrder() + 1;
@@ -494,7 +460,7 @@ void CudaMassIntegrator::MultAdd(CudaVector& x, CudaVector& y) {
                   maps->quadToDof,
                   maps->quadToDofD,
                   op,x,y);
-  pop();
 }
-}
+
+} // namespace mfem
 

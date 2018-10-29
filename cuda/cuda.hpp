@@ -30,8 +30,6 @@
 #include "fem/pfespace.hpp"
 
 // LAGHOS/cuda/config **********************************************************
-#include "./config/dbg.hpp"
-#include "./config/nvvp.hpp"
 #include "./config/config.hpp"
 
 // LAGHOS/cuda/general *********************************************************
@@ -58,9 +56,6 @@
 #include "./fem/bilinearform.hpp"
 #include "./fem/cuGridfunc.hpp"
 #include "./fem/bilininteg.hpp"
-
-// LAGHOS/cuda/tests ***********************************************************
-#include "./tests/tests.hpp"
 
 #endif // LAGHOS_CUDA
 

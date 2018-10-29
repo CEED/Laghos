@@ -82,7 +82,6 @@ namespace mfem {
                       const bool _share,
                       const bool _hcpo,
                       const bool _sync,
-                      const bool _dot,
                       const int rs_levels){
     mpi_rank=_mpi_rank;
     mpi_size=_mpi_size;
@@ -92,10 +91,6 @@ namespace mfem {
     if (tux && Root())
       printf("\033[32m[laghos] \033[1mTux\033[m\n");
     
-    // On Tux machines, use the MPIX_Query_cuda_support
-    // Otherwise, assume there is a support
-    //aware = tux?(MPIX_Query_cuda_support()==1)?true:false:true;
-
     // On Tux machines, look for MPS
     mps = tux?isNvidiaCudaMpsDaemonRunning():false;
     if (tux && Mps() && Root())
@@ -110,7 +105,6 @@ namespace mfem {
     uvm=_uvm;
     aware=_aware;
     share=_share;
-    share_env=getenv("SHR");
     hcpo=_hcpo;
     sync=_sync;
     
@@ -167,11 +161,6 @@ namespace mfem {
     cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
     hStream=new CUstream;
     cuStreamCreate(hStream, CU_STREAM_DEFAULT);
-    if (_dot){
-      dotTest(rs_levels);
-      MPI_Finalize();
-      exit(0);
-    }
   }
 
   // ***************************************************************************

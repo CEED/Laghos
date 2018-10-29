@@ -17,9 +17,7 @@ namespace mfem {
   // ***************************************************************************
   void CudaRestrictionOperator::Mult(const CudaVector& x,
                                      CudaVector& y) const {
-    push(DeepSkyBlue);
     rExtractSubVector(entries, indices->ptr(), x, y);
-    pop();
   }
 
 } // namespace mfem

@@ -32,6 +32,7 @@ namespace mfem {
     int gpu_count=0;
     int maxXGridSize=0;
     int maxXThreadsDim=0;
+    // *************************************************************************
     CUdevice cuDevice;
     CUcontext cuContext;
     CUstream *hStream;
@@ -39,7 +40,6 @@ namespace mfem {
     bool cuda=false;
     bool uvm=false;
     bool share=false;
-    bool share_env=false;
     // *************************************************************************
     bool hcpo=false;
     bool sync=false;
@@ -59,7 +59,7 @@ namespace mfem {
     void Setup(const int,const int, const bool cuda,
                const bool uvm, const bool aware,
                const bool share, const bool hcpo,
-               const bool sync, const bool dot, const int rs_levels);
+               const bool sync, const int rs_levels);
     // *************************************************************************
     bool IAmAlone();
     bool GeomNeedsUpdate(const int);
@@ -74,8 +74,7 @@ namespace mfem {
     // *************************************************************************
     inline bool Uvm() { return uvm; }
     inline bool Cuda() { return cuda; }
-    inline bool Share() { return share && !share_env; }
-    inline bool ShareEnv() { return share_env; }
+    inline bool Share() { return share; }
     inline bool Hcpo() { return hcpo; }
     inline bool Sync() { return sync; }
     inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }

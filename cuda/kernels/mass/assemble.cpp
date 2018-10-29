@@ -24,12 +24,8 @@ void rMassAssemble2D0(const int numElements,
                       const double* J,
                       double* __restrict oper)
 {
-#ifndef __LAMBDA__
    const int e = blockDim.x * blockIdx.x + threadIdx.x;
    if (e < numElements)
-#else
-   forall(e,numElements,
-#endif
    {
       for (int q = 0; q < NUM_QUAD_2D; ++q)
       {
@@ -41,10 +37,8 @@ void rMassAssemble2D0(const int numElements,
          oper[ijN(q,e,NUM_QUAD_2D)] = quadWeights[q] * COEFF * detJ;
       }
    }
-#ifdef __LAMBDA__
-   );
-#endif
 }
+
 // *****************************************************************************
 static void rMassAssemble2D(const int numElements,
                             const int NUM_QUAD_2D,
@@ -53,9 +47,7 @@ static void rMassAssemble2D(const int numElements,
                             const double* J,
                             double* __restrict oper)
 {
-   push(Lime);
    cuKer(rMassAssemble2D,numElements,NUM_QUAD_2D,COEFF,quadWeights,J,oper);
-   pop();
 }
 
 // *****************************************************************************
@@ -67,12 +59,8 @@ void rMassAssemble3D0(const int numElements,
                       const double* J,
                       double* __restrict oper)
 {
-#ifndef __LAMBDA__
    const int e = blockDim.x * blockIdx.x + threadIdx.x;
    if (e < numElements)
-#else
-   forall(e,numElements,
-#endif
    {
       for (int q = 0; q < NUM_QUAD_3D; ++q)
       {
@@ -91,9 +79,6 @@ void rMassAssemble3D0(const int numElements,
          oper[ijN(q,e,NUM_QUAD_3D)] = quadWeights[q]*COEFF*detJ;
       }
    }
-#ifdef __LAMBDA__
-   );
-#endif
 }
 static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const int numElements,
@@ -102,9 +87,7 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
                             const double* J,
                             double* __restrict oper)
 {
-   push(Lime);
    cuKer(rMassAssemble3D,numElements,NUM_QUAD_3D,COEFF,quadWeights,J,oper);
-   pop();
 }
 
 // *****************************************************************************
@@ -116,10 +99,8 @@ void rMassAssemble(const int dim,
                    const double COEFF,
                    double* __restrict oper)
 {
-   push(Lime);
    assert(false);
    if (dim==1) { assert(false); }
    if (dim==2) { rMassAssemble2D(numElements,NUM_QUAD,COEFF,quadWeights,J,oper); }
    if (dim==3) { rMassAssemble3D(numElements,NUM_QUAD,COEFF,quadWeights,J,oper); }
-   pop();
 }

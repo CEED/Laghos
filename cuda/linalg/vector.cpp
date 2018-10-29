@@ -14,13 +14,11 @@ namespace mfem {
   
 CudaVector::~CudaVector(){
   if (!own) return;
-  dbg("\033[33m[~v");
   rmalloc::operator delete(data);
 }
 
 // ***************************************************************************
 double* CudaVector::alloc(const size_t sz) {
-  dbg("\033[33m[v");
   return (double*) rmalloc::operator new(sz);
 }
 
@@ -36,9 +34,7 @@ double* CudaVector::alloc(const size_t sz) {
 CudaVector::CudaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
 CudaVector::CudaVector(const size_t sz,double value):
   size(sz),data(alloc(sz)),own(true) {
-  push(SkyBlue);
   *this=value;
-  pop();
 }
 
 CudaVector::CudaVector(const CudaVector& v):
