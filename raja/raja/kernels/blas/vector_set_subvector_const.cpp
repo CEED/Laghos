@@ -15,13 +15,13 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
-
+// *****************************************************************************
 void vector_set_subvector_const(const int N,
                                 const double value,
                                 double* __restrict data,
                                 const int* __restrict tdofs)
 {
-   forall(i,N,
+   forall(i, N,
    {
       const int dof_i = tdofs[i];
       data[dof_i] = value;

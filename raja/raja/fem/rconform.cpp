@@ -36,29 +36,22 @@ RajaConformingProlongationOperator::RajaConformingProlongationOperator
       }
    }
    external_ldofs.Sort();
-#ifdef __NVCC__
    const int HmW=Height()-Width();
    if (HmW>0)
    {
       d_external_ldofs=external_ldofs;
    }
-#endif
    assert(external_ldofs.Size() == Height()-Width());
    // *************************************************************************
    const int m = external_ldofs.Size();
-   // printf("\n[RajaConformingProlongationOperator] m=%d\n",m);fflush(stdout);
    int j = 0;
    for (int i = 0; i < m; i++)
    {
       const int end = external_ldofs[i];
       const int size = end-j;
       if (size>kMaxTh) { kMaxTh=size; }
-      //printf(" %d",size);
       j = end+1;
    }
-   //printf("\n[RajaConformingProlongationOperator] kMaxTh=%d",kMaxTh);fflush(stdout);
-   //gc->PrintInfo();
-   //pfes.Dof_TrueDof_Matrix()->PrintCommPkg();
 }
 
 // ***************************************************************************
@@ -69,7 +62,6 @@ RajaConformingProlongationOperator::~RajaConformingProlongationOperator()
    delete  gc;
 }
 
-#ifdef __NVCC__
 // ***************************************************************************
 // * CUDA Error Status Check
 // ***************************************************************************
@@ -107,7 +99,6 @@ void k_Mult2(double *y,const double *x,const int *external_ldofs,
    if (k>=(end-j)) { return; }
    y[j+k]=x[j-i+k];
 }
-#endif
 
 // ***************************************************************************
 // * Device Mult
@@ -154,7 +145,6 @@ void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
 // ***************************************************************************
 // * k_Mult
 // ***************************************************************************
-#ifdef __NVCC__
 static __global__
 void k_MultTranspose(double *y,const double *x,const int *external_ldofs,
                      const int m)
@@ -180,7 +170,6 @@ void k_MultTranspose2(double *y,const double *x,const int *external_ldofs,
    if (k>=(end-j)) { return; }
    y[j-i+k]=x[j+k];
 }
-#endif
 
 // ***************************************************************************
 // * Device MultTranspose

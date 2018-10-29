@@ -17,7 +17,7 @@
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D>
 void rMassMultAdd2D(
    const int numElements,
    const double* restrict dofToQuad,
@@ -95,12 +95,12 @@ void rMassMultAdd2D(
          }
       }
    }
-           );
+         );
 }
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D> kernel
+         const int NUM_QUAD_1D>
 void rMassMultAdd3D(
    const int numElements,
    const double* dofToQuad,
@@ -227,7 +227,7 @@ void rMassMultAdd3D(
          }
       }
    }
-           );
+         );
 }
 
 // *****************************************************************************
@@ -301,6 +301,5 @@ void rMassMultAdd(const int DIM,
       fflush(stdout);
    }
    assert(call[id]);
-   call0(rMassMultAdd,id,grid,blck,
-         numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
+   call[id](numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y);
 }

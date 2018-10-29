@@ -15,12 +15,13 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
+// *****************************************************************************
 void vector_set_subvector(const int N,
                           double* __restrict v0,
                           const double* __restrict v1,
                           const int* __restrict v2)
 {
-   forall(i,N,
+   forall(i, N,
    {
       const int dof_i = v2[i];
       const bool tst = dof_i >= 0;

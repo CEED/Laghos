@@ -67,7 +67,8 @@ double cuVectorMin(const size_t N, const double *x)
 double vector_min(const int N,
                   const double* __restrict vec)
 {
-   if (mfem::rconfig::Get().Cuda()){
+   if (mfem::rconfig::Get().Cuda())
+   {
       return cuVectorMin(N,vec);
    }
    ReduceDecl(Min,red,vec[0]);

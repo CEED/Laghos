@@ -15,7 +15,7 @@
 # testbed platforms, in support of the nation's exascale computing imperative.
 
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
-RAJA_CXXFLAGS = -D__LAMBDA__ -D__TEMPLATES__ --expt-extended-lambda -Xcompiler -fopenmp 
+RAJA_CXXFLAGS = --expt-extended-lambda -Xcompiler -fopenmp 
 RAJA_INCFLAGS = -I$(RAJA_DIR)/include
 RAJA_LIBS = -fopenmp $(RAJA_DIR)/lib/libRAJA.a
 
@@ -124,11 +124,6 @@ SOURCE_FILES = ./laghos.cpp \
 ./laghos_assembly.cpp \
 ./raja/linalg/rsolvers.cpp \
 ./raja/linalg/rvector.cpp \
-./raja/kernels/share/rGridFuncToQuadS.cpp \
-./raja/kernels/share/rMassMultAddS.cpp \
-./raja/kernels/share/rMassAssembleS.cpp \
-./raja/kernels/share/rForceS.cpp \
-./raja/kernels/share/rQDataUpdateS.cpp \
 ./raja/kernels/force/rForce.cpp \
 ./raja/kernels/geom/rInitGeom.cpp \
 ./raja/kernels/quad/rQDataInit.cpp \

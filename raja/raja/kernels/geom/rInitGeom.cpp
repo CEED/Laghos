@@ -16,42 +16,6 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
-kernel
-#endif
-void rNodeCopyByVDim0(const int elements,
-                      const int numDofs,
-                      const int ndofs,
-                      const int dims,
-                      const int* eMap,
-                      const double* Sx,
-                      double* nodes)
-{
-#ifndef __LAMBDA__
-   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-   if (e < elements)
-#else
-   forall(e,elements,
-#endif
-   {
-      for (int dof = 0; dof < numDofs; ++dof)
-      {
-         const int lid = dof+numDofs*e;
-         const int gid = eMap[lid];
-         for (int v = 0; v < dims; ++v)
-         {
-            const int moffset = v+dims*lid;
-            const int voffset = gid+v*ndofs;
-            nodes[moffset] = Sx[voffset];
-         }
-      }
-   }
-#ifdef __LAMBDA__
-   );
-#endif
-}
-
-// *****************************************************************************
 void rNodeCopyByVDim(const int elements,
                      const int numDofs,
                      const int ndofs,
@@ -60,24 +24,27 @@ void rNodeCopyByVDim(const int elements,
                      const double* Sx,
                      double* nodes)
 {
-#ifndef __LAMBDA__
-   cuKer(rNodeCopyByVDim,elements,numDofs,ndofs,dims,eMap,Sx,nodes);
-#else
-   rNodeCopyByVDim0(elements,numDofs,ndofs,dims,eMap,Sx,nodes);
-#endif
+   forall(e, elements,   {
+         for (int dof = 0; dof < numDofs; ++dof)
+         {
+            const int lid = dof+numDofs*e;
+            const int gid = eMap[lid];
+            for (int v = 0; v < dims; ++v)
+            {
+               const int moffset = v+dims*lid;
+               const int voffset = gid+v*ndofs;
+               nodes[moffset] = Sx[voffset];
+            }
+         }
+      }
+      );
 }
 
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
-#endif
+         const int NUM_QUAD>
 void rIniGeom1D(
-#ifndef __TEMPLATES__
-   const int NUM_DOFS,
-   const int NUM_QUAD,
-#endif
    const int numElements,
    const double* restrict dofToQuadD,
    const double* restrict nodes,
@@ -85,12 +52,7 @@ void rIniGeom1D(
    double* restrict invJ,
    double* restrict detJ)
 {
-#ifndef __LAMBDA__
-   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-   if (e < numElements)
-#else
    forall(e,numElements,
-#endif
    {
       double s_nodes[NUM_DOFS];
       for (int q = 0; q < NUM_QUAD; ++q)
@@ -113,21 +75,13 @@ void rIniGeom1D(
          detJ[ijN(q, e,NUM_QUAD)] = J11;
       }
    }
-#ifdef __LAMBDA__
-           );
-#endif
+         );
 }
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
-#endif
+         const int NUM_QUAD>
 void rIniGeom2D(
-#ifndef __TEMPLATES__
-   const int NUM_DOFS,
-   const int NUM_QUAD,
-#endif
    const int numElements,
    const double* restrict dofToQuadD,
    const double* restrict nodes,
@@ -135,12 +89,7 @@ void rIniGeom2D(
    double* restrict invJ,
    double* restrict detJ)
 {
-#ifndef __LAMBDA__
-   const int el = blockDim.x * blockIdx.x + threadIdx.x;
-   if (el < numElements)
-#else
    forall(el,numElements,
-#endif
    {
       double s_nodes[2 * NUM_DOFS];
       for (int q = 0; q < NUM_QUAD; ++q)
@@ -177,21 +126,13 @@ void rIniGeom2D(
          detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
       }
    }
-#ifdef __LAMBDA__
-           );
-#endif
+         );
 }
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DOFS,
-         const int NUM_QUAD> kernel
-#endif
+         const int NUM_QUAD>
 void rIniGeom3D(
-#ifndef __TEMPLATES__
-   const int NUM_DOFS,
-   const int NUM_QUAD,
-#endif
    const int numElements,
    const double* restrict dofToQuadD,
    const double* restrict nodes,
@@ -199,12 +140,7 @@ void rIniGeom3D(
    double* restrict invJ,
    double* restrict detJ)
 {
-#ifndef __LAMBDA__
-   const int e = blockDim.x * blockIdx.x + threadIdx.x;
-   if (e < numElements)
-#else
    forall(e,numElements,
-#endif
    {
       double s_nodes[3*NUM_DOFS];
       for (int q = 0; q < NUM_QUAD; ++q)
@@ -261,9 +197,7 @@ void rIniGeom3D(
          detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
       }
    }
-#ifdef __LAMBDA__
-           );
-#endif
+         );
 }
 
 // *****************************************************************************
@@ -286,11 +220,6 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ)
 {
-#ifndef __LAMBDA__
-   const int blck = CUDA_BLOCK_SIZE;
-   const int grid = (numElements+blck-1)/blck;
-#endif
-#ifdef __TEMPLATES__
    const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
    const unsigned int quad1D = IROOT(DIM,NUM_QUAD);
    const unsigned int id = (DIM<<4)|(dofs1D-2);
@@ -346,15 +275,5 @@ void rIniGeom(const int DIM,
       fflush(stdout);
    }
    assert(call[id]);
-   call0(rIniGeom2D,id,grid,blck,
-         numElements,dofToQuadD,nodes,J,invJ,detJ);
-#else
-   if (DIM==2)
-      call0(rIniGeom2D,id,grid,blck,NUM_DOFS,NUM_QUAD,
-            numElements,dofToQuadD,nodes,J,invJ,detJ);
-   if (DIM==3)
-      call0(rIniGeom3D,id,grid,blck,NUM_DOFS,NUM_QUAD,
-            numElements,dofToQuadD,nodes,J,invJ,detJ);
-   assert(DIM==2 || DIM==3);
-#endif
+   call[id](numElements,dofToQuadD,nodes,J,invJ,detJ);
 }

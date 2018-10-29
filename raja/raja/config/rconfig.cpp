@@ -49,7 +49,6 @@ void rconfig::Setup(const int _mpi_rank,
                     const bool _cuda,
                     const bool _uvm,
                     const bool _aware,
-                    const bool _share,
                     const bool _hcpo,
                     const bool _sync)
 {
@@ -62,7 +61,6 @@ void rconfig::Setup(const int _mpi_rank,
    cuda=_cuda;
    uvm=_uvm;
    aware=_aware;
-   share=_share;
    hcpo=_hcpo;
    sync=_sync;
 

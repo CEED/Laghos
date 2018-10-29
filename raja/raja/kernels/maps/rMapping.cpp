@@ -30,7 +30,8 @@ void rMapSubVector(const int N,
                    const double* in,
                    double* __restrict out)
 {
-   forall(i,N, {
+   forall(i,N,
+   {
       const int fromIdx = indices[2*i + 0];
       const int toIdx   = indices[2*i + 1];
       out[toIdx] = in[fromIdx];

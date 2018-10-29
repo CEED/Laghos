@@ -15,10 +15,15 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
+// *****************************************************************************
 void vector_map_dofs(const int N,
                      double* __restrict v0,
                      const double* __restrict v1,
                      const int* v2)
 {
-   forall(i,N, { const int idx = v2[i]; v0[idx] = v1[idx]; });
+   forall(i, N,
+   {
+      const int idx = v2[i];
+      v0[idx] = v1[idx];
+   });
 }

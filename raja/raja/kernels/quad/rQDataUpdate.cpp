@@ -19,7 +19,7 @@
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> kernel
+         const int NUM_DOFS_1D>
 void rUpdateQuadratureData2D(const double GAMMA,
                              const double H0,
                              const double CFL,
@@ -41,33 +41,33 @@ void rUpdateQuadratureData2D(const double GAMMA,
    const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
    const int VDIMQ = NUM_DIM*NUM_DIM * NUM_QUAD_2D;
    forall(el,numElements,
-          {
-             double s_gradv[VDIMQ];
-             for (int i = 0; i < VDIMQ; ++i) s_gradv[i] = 0.0;
+   {
+      double s_gradv[VDIMQ];
+      for (int i = 0; i < VDIMQ; ++i) s_gradv[i] = 0.0;
 
-             for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
-             {
-                double vDx[NUM_DIM*NUM_QUAD_1D];
-                double  vx[NUM_DIM*NUM_QUAD_1D];
+      for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
+      {
+         double vDx[NUM_DIM*NUM_QUAD_1D];
+         double  vx[NUM_DIM*NUM_QUAD_1D];
 
-                for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-                {
-                   for (int c = 0; c < NUM_DIM; ++c)
-                   {
-                      vDx[ijN(c,qx,NUM_DIM)] = 0.0;
-                      vx[ijN(c,qx,NUM_DIM)] = 0.0;
-                   }
-                }
-                for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
-                {
-                   for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
-                   {
-                      const double wx  =  dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-                      const double wDx = dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
-                      for (int c = 0; c < NUM_DIM; ++c)
-                      {
-                         vDx[ijN(c,qx,NUM_DIM)] += wDx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
-                         vx[ijN(c,qx,NUM_DIM)] +=  wx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+         for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+         {
+            for (int c = 0; c < NUM_DIM; ++c)
+            {
+               vDx[ijN(c,qx,NUM_DIM)] = 0.0;
+               vx[ijN(c,qx,NUM_DIM)] = 0.0;
+            }
+         }
+         for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
+         {
+            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            {
+               const double wx  =  dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+               const double wDx = dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+               for (int c = 0; c < NUM_DIM; ++c)
+               {
+                  vDx[ijN(c,qx,NUM_DIM)] += wDx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+                  vx[ijN(c,qx,NUM_DIM)] +=  wx * v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
                }
             }
          }
@@ -207,14 +207,14 @@ void rUpdateQuadratureData2D(const double GAMMA,
                             NUM_QUAD)] = q_Jw*((S01*invJ_10)+(S11*invJ_11));
       }
    }
-          );
+         );
 }
 
 // *****************************************************************************
 template<const int NUM_DIM,
          const int NUM_QUAD,
          const int NUM_QUAD_1D,
-         const int NUM_DOFS_1D> kernel
+         const int NUM_DOFS_1D>
 void rUpdateQuadratureData3D(const double GAMMA,
                              const double H0,
                              const double CFL,
@@ -540,7 +540,7 @@ void rUpdateQuadratureData3D(const double GAMMA,
                             NUM_QUAD)] = q_Jw*((S02*invJ_20)+(S12*invJ_21)+(S22*invJ_22));
       }
    }
-           );
+         );
 }
 
 // *****************************************************************************
@@ -633,9 +633,8 @@ void rUpdateQuadratureData(const double GAMMA,
       fflush(stdout);
    }
    assert(call[id]);
-   call0(rUpdateQuadratureData,id,grid,blck,
-         GAMMA,H0,CFL,USE_VISCOSITY,
-         nzones,dofToQuad,dofToQuadD,quadWeights,
-         v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
-         stressJinvT,dtEst);
+   call[id](GAMMA,H0,CFL,USE_VISCOSITY,
+            nzones,dofToQuad,dofToQuadD,quadWeights,
+            v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
+            stressJinvT,dtEst);
 }

@@ -21,5 +21,5 @@ void vector_xsy(const int N,
                 const double* __restrict v1,
                 const double* __restrict v2)
 {
-   forall(i,N, {v0[i] = v1[i]-v2[i];});
+   forall(i,N, v0[i] = v1[i]-v2[i];);
 }

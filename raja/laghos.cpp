@@ -95,7 +95,6 @@ int main(int argc, char *argv[])
    bool cuda = false;
    bool uvm = false;
    bool aware = false;
-   bool share = false;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
 
@@ -151,9 +150,6 @@ int main(int argc, char *argv[])
                   "\twhich transfers ALL the data to the host before communications.[m");
    args.AddOption(&sync, "-sync", "--sync", "-no-sync", "--no-sync",
                   "[32mEnable or disable Enforced Kernel Synchronization.[m");
-   // Not usable Options *******************************************************
-   args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
-                  "Enable or disable SHARE kernels (WIP, not usable).");
    args.Parse();
    if (!args.Good())
    {
@@ -165,7 +161,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,uvm,aware,share,hcpo,sync);
+                        cuda,uvm,aware,hcpo,sync);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.

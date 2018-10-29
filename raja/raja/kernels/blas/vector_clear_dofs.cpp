@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
+// *****************************************************************************
 void vector_clear_dofs(const int N,
                        double* __restrict v0,
                        const int* __restrict v1)

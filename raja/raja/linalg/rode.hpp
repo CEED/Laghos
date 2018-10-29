@@ -135,20 +135,20 @@ public:
       f->Mult(x, k); // k1
 
       add(x, dt/2, k, y);
-      add(x, dt/6, k, z); 
+      add(x, dt/6, k, z);
 
       f->SetTime(t + dt/2);
 
       f->Mult(y, k); // k2
 
       add(x, dt/2, k, y);
-      z.Add(dt/3, k); 
+      z.Add(dt/3, k);
 
       f->Mult(y, k); // k3
 
       add(x, dt, k, y);
       z.Add(dt/3, k);
-      f->SetTime(t + dt); 
+      f->SetTime(t + dt);
 
       f->Mult(y, k); // k4
 

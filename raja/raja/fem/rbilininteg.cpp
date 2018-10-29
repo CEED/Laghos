@@ -501,26 +501,15 @@ void RajaMassIntegrator::MultAdd(RajaVector& x, RajaVector& y)
    const int dim = mesh->Dimension();
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir->GetOrder()).GetNPoints();
    const int dofs1D = trialFESpace->GetFE(0)->GetOrder() + 1;
-   if (rconfig::Get().Share())
-      rMassMultAddS(dim,
-                    dofs1D,
-                    quad1D,
-                    mesh->GetNE(),
-                    maps->dofToQuad,
-                    maps->dofToQuadD,
-                    maps->quadToDof,
-                    maps->quadToDofD,
-                    op,x,y);
-   else
-      rMassMultAdd(dim,
-                   dofs1D,
-                   quad1D,
-                   mesh->GetNE(),
-                   maps->dofToQuad,
-                   maps->dofToQuadD,
-                   maps->quadToDof,
-                   maps->quadToDofD,
-                   op,x,y);
+   rMassMultAdd(dim,
+                dofs1D,
+                quad1D,
+                mesh->GetNE(),
+                maps->dofToQuad,
+                maps->dofToQuadD,
+                maps->quadToDof,
+                maps->quadToDofD,
+                op,x,y);
 }
 }
 

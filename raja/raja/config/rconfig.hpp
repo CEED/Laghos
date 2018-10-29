@@ -19,10 +19,6 @@
 namespace mfem
 {
 
-#ifndef __NVCC__
-typedef int CUstream;
-#endif
-
 // ***************************************************************************
 // * Configuration class for RAJA
 // ***************************************************************************
@@ -38,17 +34,14 @@ private:
    int gpu_count=0;
    int maxXGridSize=0;
    int maxXThreadsDim=0;
-#ifdef __NVCC__
+   // **************************************************************************
    CUdevice cuDevice;
    CUcontext cuContext;
    CUstream *hStream;
-#endif
    // *************************************************************************
    bool cuda=false;
    bool dcg=false;
    bool uvm=false;
-   bool share=false;
-   bool share_env=false;
    // *************************************************************************
    bool occa=false;
    bool hcpo=false;
@@ -69,7 +62,7 @@ public:
    // *************************************************************************
    void Setup(const int, const int,
               const bool cuda, const bool uvm, const bool aware,
-              const bool share, const bool hcpo, const bool sync);
+              const bool hcpo, const bool sync);
    // *************************************************************************
    bool IAmAlone();
    bool GeomNeedsUpdate(const int);
@@ -84,19 +77,13 @@ public:
    // *************************************************************************
    inline bool Uvm() { return uvm; }
    inline bool Cuda() { return cuda; }
-   inline bool Dcg() { return dcg; }
-   inline bool Share() { return share && !share_env; }
-   inline bool ShareEnv() { return share_env; }
-   inline bool Occa() { return occa; }
    inline bool Hcpo() { return hcpo; }
    inline bool Sync() { return sync; }
    inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
    inline int MaxXGridSize() { return maxXGridSize; }
    inline int MaxXThreadsDim() { return maxXThreadsDim; }
    // *************************************************************************
-#ifdef __NVCC__
    inline CUstream *Stream() { return hStream; }
-#endif
 };
 
 } // namespace mfem

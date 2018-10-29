@@ -16,15 +16,14 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-extern "C" kernel
-void rLocalToGlobal0(const int globalEntries,
-                     const int NUM_VDIM,
-                     const bool VDIM_ORDERING,
-                     const int localEntries,
-                     const int* offsets,
-                     const int* indices,
-                     const double* localX,
-                     double* __restrict globalX)
+void rLocalToGlobal(const int NUM_VDIM,
+                    const bool VDIM_ORDERING,
+                    const int globalEntries,
+                    const int localEntries,
+                    const int* offsets,
+                    const int* indices,
+                    const double* localX,
+                    double* __restrict globalX)
 {
    forall(i,globalEntries,
    {
@@ -42,18 +41,4 @@ void rLocalToGlobal0(const int globalEntries,
          globalX[g_offset] = dofValue;
       }
    });
-}
-
-// *****************************************************************************
-void rLocalToGlobal(const int NUM_VDIM,
-                    const bool VDIM_ORDERING,
-                    const int globalEntries,
-                    const int localEntries,
-                    const int* offsets,
-                    const int* indices,
-                    const double* localX,
-                    double* __restrict globalX)
-{
-   cuKer(rLocalToGlobal,globalEntries,NUM_VDIM,VDIM_ORDERING,
-         localEntries,offsets,indices,localX,globalX);
 }

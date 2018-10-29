@@ -17,7 +17,7 @@
 
 
 // *****************************************************************************
-template<const int NUM_QUAD> kernel
+template<const int NUM_QUAD>
 void rInitQuadData(
    const int nzones,
    const double* restrict rho0,
@@ -25,7 +25,8 @@ void rInitQuadData(
    const double* restrict quadWeights,
    double* restrict rho0DetJ0w)
 {
-   forall(el,nzones, {
+   forall(el,nzones,
+   {
       for (int q = 0; q < NUM_QUAD; ++q)
       {
          rho0DetJ0w[ijN(q,el,NUM_QUAD)] =
@@ -44,7 +45,8 @@ void rInitQuadratureData(const int NUM_QUAD,
 {
    const unsigned int id = NUM_QUAD;
    static std::unordered_map<unsigned int,
-                             fInitQuadratureData> call = {
+          fInitQuadratureData> call =
+   {
       {2,&rInitQuadData<2>},
       {4,&rInitQuadData<4>},
       {8,&rInitQuadData<8>},
@@ -88,6 +90,5 @@ void rInitQuadratureData(const int NUM_QUAD,
       fflush(stdout);
    }
    assert(call[id]);
-   call0(rInitQuadData,id,grid,blck,
-         numElements,rho0,detJ,quadWeights,rho0DetJ0w);
+   call[id](numElements,rho0,detJ,quadWeights,rho0DetJ0w);
 }

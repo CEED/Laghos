@@ -16,31 +16,6 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-extern "C" kernel
-void rGlobalToLocal0(const int globalEntries,
-                     const int NUM_VDIM,
-                     const bool VDIM_ORDERING,
-                     const int localEntries,
-                     const int* __restrict offsets,
-                     const int* __restrict indices,
-                     const double* __restrict globalX,
-                     double* __restrict localX)
-{
-   forall(i,globalEntries, {
-         const int offset = offsets[i];
-         const int nextOffset = offsets[i+1];
-         for (int v = 0; v < NUM_VDIM; ++v)
-         {
-            const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
-            const double dofValue = globalX[g_offset];
-            for (int j = offset; j < nextOffset; ++j)
-            {
-               const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
-               localX[l_offset] = dofValue;
-            }
-         }
-      });
-}
 void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
                     const int globalEntries,
@@ -50,6 +25,19 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const double* __restrict globalX,
                     double* __restrict localX)
 {
-   cuKer(rGlobalToLocal,globalEntries,NUM_VDIM,VDIM_ORDERING,
-         localEntries,offsets,indices,globalX,localX);
+   forall(i,globalEntries,
+   {
+      const int offset = offsets[i];
+      const int nextOffset = offsets[i+1];
+      for (int v = 0; v < NUM_VDIM; ++v)
+      {
+         const int g_offset = ijNMt(v,i,NUM_VDIM,globalEntries,VDIM_ORDERING);
+         const double dofValue = globalX[g_offset];
+         for (int j = offset; j < nextOffset; ++j)
+         {
+            const int l_offset = ijNMt(v,indices[j],NUM_VDIM,localEntries,VDIM_ORDERING);
+            localX[l_offset] = dofValue;
+         }
+      }
+   });
 }

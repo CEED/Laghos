@@ -69,7 +69,8 @@ double vector_dot(const int N,
                   const double* __restrict x,
                   const double* __restrict y)
 {
-   if (mfem::rconfig::Get().Cuda()){
+   if (mfem::rconfig::Get().Cuda())
+   {
       return cuVectorDot(N,x,y);
    }
    ReduceDecl(Sum,dot,0.0);

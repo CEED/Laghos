@@ -17,27 +17,7 @@
 #define LAGHOS_RAJA_KERNELS_FORALL
 
 // *****************************************************************************
-#define ELEMENT_BATCH 10
-#define M2_ELEMENT_BATCH 32
-
-#define A2_ELEMENT_BATCH 1
-#define A2_QUAD_BATCH 1
-
-#define A3_ELEMENT_BATCH 1
-#define A3_QUAD_BATCH 1
-
-// *****************************************************************************
-#define sync
-#define share
-#define kernel
-
-#define exclusive_inc
-#define exclusive_decl
-#define exclusive_reset
-#define exclusive_set(name,idx) name[idx]
-#define exclusive(type,name,size) type name[size]
-
-const int CUDA_BLOCK_SIZE = 256;
+#define CUDA_BLOCK_SIZE 256
 
 #define cu_device __device__
 #define cu_exec RAJA::cuda_exec<CUDA_BLOCK_SIZE>
@@ -53,14 +33,9 @@ const int CUDA_BLOCK_SIZE = 256;
   RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 
 #define forall(i,max,body)                                              \
-  if (mfem::rconfig::Get().Cuda())                                      \
-    RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
-  else                                                                  \
-    RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
-
-#define forallS(i,max,step,body) {assert(false);forall(i,max,body)}
-#define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
-#define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
-#define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
+   if (mfem::rconfig::Get().Cuda())                                     \
+      RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
+   else                                                                 \
+      RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
 
 #endif // LAGHOS_RAJA_KERNELS_FORALL

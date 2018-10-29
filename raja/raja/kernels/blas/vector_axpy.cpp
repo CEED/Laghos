@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../raja.hpp"
 
+// *****************************************************************************
 void vector_axpy(const int N,
                  const double alpha,
                  double* __restrict v0,
