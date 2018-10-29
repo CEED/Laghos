@@ -86,7 +86,7 @@ const int CUDA_BLOCK_SIZE = 256;
   call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define call0(name,id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
-#define ReduceForall(i,max,body) 
+#define ReduceForall(i,max,body)
 
 
 // *****************************************************************************
@@ -102,27 +102,29 @@ const int CUDA_BLOCK_SIZE = 256;
 template <typename FORALL_BODY>
 __global__ void gpu(const int length,
                     const int step,
-                    FORALL_BODY body) {
-  const int idx = blockDim.x*blockIdx.x + threadIdx.x;
-  const int ids = idx * step;
-  if (ids < length) {body(idx);}
+                    FORALL_BODY body)
+{
+   const int idx = blockDim.x*blockIdx.x + threadIdx.x;
+   const int ids = idx * step;
+   if (ids < length) {body(idx);}
 }
 template <typename FORALL_BODY>
 void cuda_forallT(const int end,
                   const int step,
-                  FORALL_BODY &&body) {
-  const size_t blockSize = 256;
-  const size_t gridSize = (end+blockSize-1)/blockSize;
-  //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
-  gpu<<<gridSize, blockSize>>>(end,step,body);
+                  FORALL_BODY &&body)
+{
+   const size_t blockSize = 256;
+   const size_t gridSize = (end+blockSize-1)/blockSize;
+   //printf("\033[32;1m[cuda_forallT] grid:%d, block:%d\033[m\n",gridSize,blockSize);
+   gpu<<<gridSize, blockSize>>>(end,step,body);
 }
-#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body}); 
-#define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body}); 
+#define forall(i,max,body) cuda_forallT(max,1, [=] __device__ (int i) {body});
+#define forallS(i,max,step,body) cuda_forallT(max,step, [=] __device__ (int i) {body});
 #define cuKer(name,end,...) name ## 0(end,__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0(end,__VA_ARGS__)
 #define call0(name,id,grid,blck,...) call[id](__VA_ARGS__)
 #define ReduceDecl(type,var,ini) double var=ini;
-#define ReduceForall(i,max,body) 
+#define ReduceForall(i,max,body)
 #endif // __LAMBDA__
 
 
@@ -137,21 +139,23 @@ void cuda_forallT(const int end,
 #define exclusive_reset xdx = 0
 #define exclusive_set(name,idx) name[xdx][idx]
 #define exclusive_inc ++xdx
-class ReduceSum{
+class ReduceSum
+{
 public:
-  double s;
+   double s;
 public:
-  inline ReduceSum(double d):s(d){}
-  inline operator double() { return s; }
-  inline ReduceSum& operator +=(const double d) { return *this=(s+d); }
+   inline ReduceSum(double d):s(d) {}
+   inline operator double() { return s; }
+   inline ReduceSum& operator +=(const double d) { return *this=(s+d); }
 };
-class ReduceMin{
+class ReduceMin
+{
 public:
-  double m;
+   double m;
 public:
-  inline ReduceMin(double d):m(d){}
-  inline operator double() { return m; }
-  inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
+   inline ReduceMin(double d):m(d) {}
+   inline operator double() { return m; }
+   inline ReduceMin& min(const double d) { return *this=(m<d)?m:d; }
 };
 #define ReduceDecl(type,var,ini) Reduce##type var(ini);
 #define forall(i,max,body) for(int i=0;i<max;i++){body}

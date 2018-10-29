@@ -16,32 +16,37 @@
 #include "../raja.hpp"
 #include <sys/time.h>
 
-namespace mfem {
+namespace mfem
+{
 
-  // ***************************************************************************
-  bool dotTest(const int rs_levels){
-    cuProfilerStart();
-    struct timeval st, et;
-    int size = 0x400;
-    for (int lev = 0; lev < rs_levels; lev++) size<<=1;
-    Vector h_a(size); h_a=1.0/M_PI;
-    Vector h_b(size); h_b=M_PI;
-    gettimeofday(&st, NULL);
-    RajaVector a(size);a=1.0/M_PI;//h_a;//a.Print();
-    RajaVector b(size);b=M_PI;//(h_b); //b.Print();
-    //RajaVector c(size); c=0.0;
-    gettimeofday(&et, NULL);
-    const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-    printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\033[m\n",setTime/1000.0);
-    gettimeofday(&st, NULL);
-    //double dt = a*b;
-    //c+=1.0;
-    a+=b;
-    gettimeofday(&et, NULL);
-    //assert(dt == (double)size);
-    const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec-st.tv_usec)/1000.0);
-    printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\033[m\n",size,alltime/1000.0);
-    return true;
-  }
+// ***************************************************************************
+bool dotTest(const int rs_levels)
+{
+   cuProfilerStart();
+   struct timeval st, et;
+   int size = 0x400;
+   for (int lev = 0; lev < rs_levels; lev++) { size<<=1; }
+   Vector h_a(size); h_a=1.0/M_PI;
+   Vector h_b(size); h_b=M_PI;
+   gettimeofday(&st, NULL);
+   RajaVector a(size); a=1.0/M_PI; //h_a;//a.Print();
+   RajaVector b(size); b=M_PI; //(h_b); //b.Print();
+   //RajaVector c(size); c=0.0;
+   gettimeofday(&et, NULL);
+   const double setTime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec
+                                                         -st.tv_usec)/1000.0);
+   printf("\033[32m[laghos] Set in \033[1m%12.6e(s)\033[m\n",setTime/1000.0);
+   gettimeofday(&st, NULL);
+   //double dt = a*b;
+   //c+=1.0;
+   a+=b;
+   gettimeofday(&et, NULL);
+   //assert(dt == (double)size);
+   const double alltime = ((et.tv_sec-st.tv_sec)*1000.0+(et.tv_usec
+                                                         -st.tv_usec)/1000.0);
+   printf("\033[32m[laghos] Ker (%d) in \033[1m%12.6e(s)\033[m\n",size,
+          alltime/1000.0);
+   return true;
+}
 
 } // namespace mfem

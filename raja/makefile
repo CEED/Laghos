@@ -14,31 +14,31 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-#########
-# SETUP #
-#########
-CUB_DIR  ?= ./cub
-CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/master
 RAJA_DIR ?= $(HOME)/usr/local/raja/last
+
+NV_ARCH ?= -arch=sm_61
+
+CUDA_DIR ?= /usr/local/cuda
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 
-NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-CXXEXTRA = -std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
+NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
+NVCC_INCFLAGS = -I$(MPI_HOME)/include 
+NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
+				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
-
-###################
-# LAGHOS_HELP_MSG #
-###################
 define LAGHOS_HELP_MSG
+
 Laghos makefile targets:
+
    make
    make status/info
    make install
    make clean
    make distclean
    make style
+
 Examples:
+
 make -j 4
    Build Laghos using the current configuration options from MFEM.
    (Laghos requires the MFEM finite element library, and uses its compiler and
@@ -55,22 +55,15 @@ make distclean
 make style
    Format the Laghos C++ source files using the Artistic Style (astyle) settings
    from MFEM.
+
 endef
-
-# number of proc to use for compilation stage
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
-
-# fetch current/working directory
-pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
-home = $(HOME)
-raja = $(pwd)/raja
-kernels = $(raja)/kernels
 
 # Default installation location
 PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
+MFEM_DIR = ../../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -82,8 +75,6 @@ TEST_MK = $(MFEM_DIR)/config/test.mk
 # one for compilation in 'lib'.
 MFEM_DIR1 := $(MFEM_DIR)
 MFEM_DIR2 := $(realpath $(MFEM_DIR))
-#MFEM_DIR1 := $(MFEM_DIR)/build/mfem/lib
-#MFEM_DIR2 := $(MFEM_DIR)/build/mfem/include/mfem
 
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
@@ -93,20 +84,20 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
 endif
 
-#################
-# MFEM compiler #
-#################
-CXX = $(MFEM_CXX)
+CXX = nvcc
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
+
 # MFEM config does not define C compiler
 CC     = gcc
-CFLAGS = -O3 -Wall
+CFLAGS = -O3
+
 # Optional link flags
 LDFLAGS =
+
 OPTIM_OPTS = -O3
 DEBUG_OPTS = -g -Wall
-LAGHOS_DEBUG ?= $(MFEM_DEBUG)
+LAGHOS_DEBUG = $(MFEM_DEBUG)
 ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    ifeq ($(LAGHOS_DEBUG),YES)
       CXXFLAGS = $(DEBUG_OPTS)
@@ -115,244 +106,119 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-###################
-# CXXFLAGS ADDONS #
-###################
-CXXFLAGS += $(CXXEXTRA)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(NVCC_CXXFLAGS) $(NVCC_INCFLAGS)
+LAGHOS_LIBS = $(MFEM_LIBS) $(NVCC_LIBS)
 
-#############
-# SANITIZER #
-#############
-#CXXFLAGS += -g -O1 -fno-inline -fsanitize=address -fsanitize=undefined
-#ASAN_LIB = -lasan -lubsan
-
-###############################
-# RAJA compilation: make rj=1 #
-###############################
-ifneq (,$(rj))
-	CXX = nvcc
-	CXXFLAGS += -D__RAJA__ -DUSE_CUDA
-	CXXFLAGS += -D__LAMBDA__ --expt-extended-lambda
-	CXXFLAGS += --restrict -Xcompiler -fopenmp 
-	CXXFLAGS += -x=cu $(NV_ARCH)
-endif
-
-############################
-# CUDA compiler: make nv=1 #
-############################
-ifneq (,$(nv))
-	CXX = nvcc
-	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH) #-rdc=true
-#	CXXFLAGS += -Xptxas=-v # -maxrregcount=32
-	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-#	CXXFLAGS += -lineinfo
-#	CXXFLAGS += -default-stream per-thread
-ifneq (,$(l))	
-	CXXFLAGS += --expt-extended-lambda
-endif
-endif
-
-############################
-# LAMBDAS launch: make l=1 #
-############################
-ifneq (,$(l))
-	CXXFLAGS += -D__LAMBDA__
-endif
-
-#############################
-# TEMPLATE launch: make t=1 #
-#############################
-ifneq (,$(t))
-	CXXFLAGS += -D__TEMPLATES__
-endif
-
-#################################################
-# CPU,LAMBDA: make v=1 l=1
-# CPU,LAMBDA,TEMPLATE: make v=1 l=1 t=1
-#
-# GPU,LAMBDA,TEMPLATES: make v=1 nv=1 l=1 t=1
-# GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
-#
-# RAJA: make v=1 rj=1 t=1
-##################################################
-.PHONY: cpuL cpuLT rj raja cpuRJ cuda nvl gpuLT nvk gpuKT
-cpuL:;$(MAKE) l=1 all
-cpuLT:;$(MAKE) l=1 t=1 all
-
-################
-# RAJA targets #
-################
-rj raja cpuRJ:;$(MAKE) rj=1 t=1 all
-
-################
-# CUDA targets #
-################
-nv nvl cuda gpuLT:;$(MAKE) nv=1 l=1 t=1 all
-nvk gpuKT:;$(MAKE) nv=1 t=1 all
-
-####################
-# make all targets #
-####################
-tgts:
-	make cln && make gpuLT && mv laghos laghos.gpuLT
-	make cln && make gpuKT && mv laghos laghos.gpuKT
-#	make cln && make cpuL && mv laghos laghos.cpuL
-#	make cln && make cpuLT && mv laghos laghos.cpuLT
-#	make cln && make raja && mv laghos laghos.raja
-
-######
-# GO #
-######
-ORDERS = -ok 3 -ot 2
-go:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50
-gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1
-
-gos:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50 -share
-gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1 -share
-#--track-origins=yes
-
-#######################
-# TPL INCLUDES & LIBS #
-#######################
-MPI_INC = -I$(MPI_HOME)/include 
-
-############
-# CUDA ENV #
-############
-CUDA_INC = -I$(CUDA_DIR)/samples/common/inc
-CUDA_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
-				-lcuda -lcudart -lcudadevrt -lnvToolsExt
-
-############
-# RAJA ENV #
-############
-ifneq (,$(rj))
-RAJA_INC = -I$(RAJA_DIR)/include
-RAJA_LIBS = $(RAJA_DIR)/lib/libRAJA.a
-endif
-
-###########
-# CUB INC #
-###########
-CUB_INC = -I$(CUB_DIR)
-
-################
-# LAGHOS FLAGS #
-################
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(CUB_INC) $(RAJA_INC) $(CUDA_INC) $(MPI_INC) $(DBG_INC)
-LAGHOS_LIBS = $(ASAN_LIB) $(MFEM_LIBS) -fopenmp $(RAJA_LIBS) $(CUDA_LIBS) -ldl $(DBG_LIB) $(BKT_LIB)
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
 endif
 
-#########################
-# FINAL LIBS, CCC & Ccc #
-#########################
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
-CCU  = $(strip $(CXX) $(CUFLAGS) $(MFEM_INCFLAGS) $(CUDA_INC) $(MPI_INC))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-################
-# SOURCE FILES #
-################
-SOURCE_FILES = $(wildcard $(pwd)/*.cpp)
+SOURCE_FILES = ./laghos.cpp \
+./laghos_assembly.cpp \
+./raja/linalg/rsolvers.cpp \
+./raja/linalg/rvector.cpp \
+./raja/kernels/share/rGridFuncToQuadS.cpp \
+./raja/kernels/share/rMassMultAddS.cpp \
+./raja/kernels/share/rMassAssembleS.cpp \
+./raja/kernels/share/rForceS.cpp \
+./raja/kernels/share/rQDataUpdateS.cpp \
+./raja/kernels/force/rForce.cpp \
+./raja/kernels/geom/rInitGeom.cpp \
+./raja/kernels/quad/rQDataInit.cpp \
+./raja/kernels/quad/rQDataUpdate.cpp \
+./raja/kernels/quad/rGridFuncToQuad.cpp \
+./raja/kernels/maps/rLocalToGlobal.cpp \
+./raja/kernels/maps/rMapping.cpp \
+./raja/kernels/maps/rGlobalToLocal.cpp \
+./raja/kernels/mass/rMassAssemble.cpp \
+./raja/kernels/mass/rMassMultAdd.cpp \
+./raja/kernels/blas/vector_map_dofs.cpp \
+./raja/kernels/blas/vector_vec_sub.cpp \
+./raja/kernels/blas/vector_dot.cpp \
+./raja/kernels/blas/vector_clear_dofs.cpp \
+./raja/kernels/blas/vector_xsy.cpp \
+./raja/kernels/blas/vector_xpay.cpp \
+./raja/kernels/blas/vector_axpy.cpp \
+./raja/kernels/blas/vector_op_eq.cpp \
+./raja/kernels/blas/vector_get_subvector.cpp \
+./raja/kernels/blas/vector_vec_add.cpp \
+./raja/kernels/blas/vector_min.cpp \
+./raja/kernels/blas/vector_set_subvector.cpp \
+./raja/kernels/blas/vector_set_subvector_const.cpp \
+./raja/kernels/blas/vector_vec_mul.cpp \
+./raja/kernels/blas/vector_neg.cpp \
+./raja/fem/rconform.cpp \
+./raja/fem/rrestrict.cpp \
+./raja/fem/rbilinearform.cpp \
+./raja/fem/rbilininteg.cpp \
+./raja/fem/rprolong.cpp \
+./raja/fem/rgridfunc.cpp \
+./raja/fem/rfespace.cpp \
+./raja/tests/lambda.cpp \
+./raja/tests/dot.cpp \
+./raja/tests/mult.cpp \
+./raja/general/rmemcpy.cpp \
+./raja/general/rtable.cpp \
+./raja/general/rcommd.cpp \
+./raja/config/rconfig.cpp \
+./raja/config/rnvvp.cpp \
+./laghos_solver.cpp
 
-KERNEL_FILES = $(wildcard $(kernels)/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/blas/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/force/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/geom/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/maps/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/mass/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/quad/*.cpp)
-KERNEL_FILES += $(wildcard $(kernels)/share/*.cpp)
+OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
+OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
+HEADER_FILES = ./raja/raja.hpp \
+./raja/linalg/rode.hpp \
+./raja/linalg/rsolvers.hpp \
+./raja/linalg/rvector.hpp \
+./raja/linalg/roperator.hpp \
+./raja/kernels/raja.hpp \
+./raja/kernels/include/forall.hpp \
+./raja/kernels/include/kernels.hpp \
+./raja/kernels/include/offsets.hpp \
+./raja/fem/rbilinearform.hpp \
+./raja/fem/rrestrict.hpp \
+./raja/fem/rfespace.hpp \
+./raja/fem/rbilininteg.hpp \
+./raja/fem/rgridfunc.hpp \
+./raja/fem/rprolong.hpp \
+./raja/fem/rconform.hpp \
+./raja/tests/tests.hpp \
+./raja/general/rarray.hpp \
+./raja/general/rtable.hpp \
+./raja/general/rmalloc.hpp \
+./raja/general/rmemcpy.hpp \
+./raja/general/rcommd.hpp \
+./raja/config/rnvvp.hpp \
+./raja/config/rdbg.hpp \
+./raja/config/rconfig.hpp \
+./laghos_solver.hpp \
+./laghos_assembly.hpp
 
-RAJA_FILES = $(wildcard $(raja)/config/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/fem/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/general/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/linalg/*.cpp)
-RAJA_FILES += $(wildcard $(raja)/tests/*.cpp)
+# Targets
 
-################
-# OBJECT FILES #
-################
-OBJECT_FILES  = $(SOURCE_FILES:.cpp=.o)
-OBJECT_FILES += $(KERNEL_FILES:.cpp=.o)
-OBJECT_FILES += $(RAJA_FILES:.cpp=.o)
-
-##############
-# CUDA FILES #
-##############
-CUDA_FILES    = $(wildcard $(kernels)/blas/*.cu)
-CUDA_FILES   += $(wildcard $(raja)/linalg/*.cu)
-OBJECT_CUDAS  = $(CUDA_FILES:.cu=.o)
-DLINK_CUDA    = $(OBJECT_CUDAS:.o=.lo)
-#ifeq ($(CXX),nvcc)
-#OBJECT_FILES += $(OBJECT_CUDAS)
-#OBJECT_FILES += $(DLINK_CUDA)
-#endif
-
-################
-# HEADER FILES #
-################
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
-
-################
-# OUTPUT rules #
-################
-rule_file = $(notdir $(1))
-rule_path = $(patsubst %/,%,$(dir $(1)))
-last_path = $(notdir $(patsubst %/,%,$(dir $(1))))
-ansicolor = $(shell echo $(call last_path,$(1)) | cksum | cut -b1-2 | xargs -IS expr 2 \* S + 17)
-emacs_out = @echo -e $(call last_path,$(2))/$(call rule_file,$(2))
-color_out = @if [ -t 1 ]; then \
-				printf "%s \033[38;5;%d;1m%s\033[m/%s\n" \
-					$(shell echo $(firstword $($(1)))) $(call ansicolor,$(2)) \
-					$(call last_path,$(2)) $(call rule_file,$(2)); else \
-				printf "%s %s\n" $(1) $(2); fi
-# if TERM=dumb, use it, otherwise switch to the term one
-output = $(if $(TERM:dumb=),$(call color_out,$1,$2),$(call emacs_out,$1,$2))
-# if V is set to non-nil, turn the verbose mode
-quiet = $(if $(v),$($(1)),$(call output,$1,$@);$($(1)))
-
-###########
-# Targets #
-###########
 .PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
 
 .SUFFIXES: .c .cpp .o
-
-$(pwd)/%.o:$(pwd)/%.cpp
-	$(call quiet,CCC) -c -o $@ $(abspath $<)
-
-$(raja)/%.o: $(raja)/%.cpp $(raja)/%.hpp $(raja)/raja.hpp $(raja)/rmanaged.hpp
-	$(call quiet,CCC) -c -o $@ $(abspath $<)
-
-$(kernels)/%.o: $(kernels)/%.cpp $(kernels)/kernels.hpp $(kernels)/defines.hpp
-	$(call quiet,CCC) -c -o $@ $(abspath $<)
-
-####################
-# CUDA compilation #
-####################
-$(raja)/%.o: $(raja)/%.cu
-	$(call quiet,CCU) -c -o $@ $(abspath $<)
-$(raja)/%.lo: $(raja)/%.o
-	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
-
-$(kernels)/%.o: $(kernels)/%.cu
-	$(call quiet,CCU) -c -o $@ $(abspath $<)
-$(kernels)/%.lo: $(kernels)/%.o
-	$(call quiet,CCU) -dlink -o $@ $< -lcudadevrt -lcudart
-
-################
-# all & LAGHOS #
-################
-all: 
-	@$(MAKE) -j $(CPU) laghos
+.cpp.o:
+	cd $(<D); $(CCC) -c $(<F)
+.c.o:
+	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) -o laghos $(OBJECT_FILES) $(LIBS)
+
+all: laghos
+
+opt:
+	$(MAKE) "LAGHOS_DEBUG=NO"
+
+debug:
+	$(MAKE) "LAGHOS_DEBUG=YES"
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
@@ -371,12 +237,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-clean cln: clean-build clean-exec
+clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos laghos-nvcc laghos-mpicxx *.o *~ *.dSYM \
-	raja/*/*.o raja/*/*.lo \
-	raja/kernels/*.o raja/kernels/*/*.o raja/kernels/*/*.lo 
+	rm -rf laghos $(OBJECT_FILES) *~ *.dSYM
 clean-exec:
 	rm -rf ./results
 
@@ -405,14 +269,3 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
-
-print :
-	@echo $(VAR)=$($(VAR))
-
-print-%:
-	$(info [ variable name]: $*)
-	$(info [        origin]: $(origin $*))
-	$(info [         value]: $(value $*))
-	$(info [expanded value]: $($*))
-	$(info )
-	@true

@@ -22,13 +22,18 @@
 void vector_neg(const int, double* restrict);
 //extern "C" kernel void d_vector_op_eq(const int, const double, double* restrict);
 void vector_op_eq(const int, const double, double* restrict);
-void vector_xpay(const int, const double, double* restrict, const double* restrict,
+void vector_xpay(const int, const double, double* restrict,
+                 const double* restrict,
                  const double* restrict);
-void vector_xsy(const int, double* restrict, const double* restrict, const double* restrict);
-void vector_axpy(const int, const double, double* restrict, const double* restrict);
-void vector_map_dofs(const int, double* restrict, const double* restrict, const int* restrict);
+void vector_xsy(const int, double* restrict, const double* restrict,
+                const double* restrict);
+void vector_axpy(const int, const double, double* restrict,
+                 const double* restrict);
+void vector_map_dofs(const int, double* restrict, const double* restrict,
+                     const int* restrict);
 template <class T>
-void vector_map_add_dofs(const int, T* restrict, const T* restrict, const int* restrict);
+void vector_map_add_dofs(const int, T* restrict, const T* restrict,
+                         const int* restrict);
 void vector_clear_dofs(const int, double* restrict, const int* restrict);
 void vector_vec_sub(const int, double* restrict, const double* restrict);
 void vector_vec_add(const int, double* restrict, const double* restrict);
@@ -237,15 +242,15 @@ void rMassMultAdd(const int dim,
                   const double* restrict x,
                   double* restrict y);
 void rMassMultAddS(const int dim,
-                  const int NUM_DOFS_1D,
-                  const int NUM_QUAD_1D,
-                  const int numElements,
-                  const double* restrict dofToQuad,
-                  const double* restrict dofToQuadD,
-                  const double* restrict quadToDof,
-                  const double* restrict quadToDofD,
-                  const double* restrict op,
-                  const double* restrict x,
-                  double* restrict y);
+                   const int NUM_DOFS_1D,
+                   const int NUM_QUAD_1D,
+                   const int numElements,
+                   const double* restrict dofToQuad,
+                   const double* restrict dofToQuadD,
+                   const double* restrict quadToDof,
+                   const double* restrict quadToDofD,
+                   const double* restrict op,
+                   const double* restrict x,
+                   double* restrict y);
 
 #endif // LAGHOS_RAJA_KERNELS
