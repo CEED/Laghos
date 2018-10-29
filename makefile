@@ -51,7 +51,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../../mfem
+MFEM_DIR = ../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -105,12 +105,10 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos_s.cpp laghos_solver_s.cpp laghos_timeinteg_s.cpp \
-               ../laghos_assembly.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver_s.hpp laghos_timeinteg_s.hpp \
-               ../laghos_assembly.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 # Targets
 
@@ -154,8 +152,9 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM Laghos_*
+	rm -rf laghos *.o *~ *.dSYM
 clean-exec:
+	rm -rf ./results
 
 distclean: clean
 	rm -rf bin/

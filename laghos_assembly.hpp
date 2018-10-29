@@ -18,8 +18,6 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include <memory>
-#include <iostream>
 
 namespace mfem
 {
@@ -80,7 +78,6 @@ class FastEvaluator
    FiniteElementSpace &H1FESpace;
 
 public:
-
    FastEvaluator(FiniteElementSpace &h1fes)
       : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
 
@@ -133,14 +130,14 @@ private:
    QuadratureData *quad_data;
    FiniteElementSpace &H1FESpace, &L2FESpace;
 
-   // Force matrix action on quadrilateral elements in 2D
+   // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
-   // Force matrix action on hexahedral elements in 3D
+   // Force matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &vecL2, Vector &vecH1) const;
 
-   // Transpose force matrix action on quadrilateral elements in 2D
+   // Transpose force matrix action on quadrilateral elements in 2D.
    void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
-   // Transpose force matrix action on hexahedral elements in 3D
+   // Transpose force matrix action on hexahedral elements in 3D.
    void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
 public:
@@ -164,34 +161,57 @@ private:
    QuadratureData *quad_data;
    FiniteElementSpace &FESpace;
 
-   Array<int> *ess_tdofs;
-
-   mutable GridFunction x_gf, y_gf;
-
-   // Mass matrix action on quadrilateral elements in 2D
+   // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on hexahedral elements in 3D
+   // Mass matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
    MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
       : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes), ess_tdofs(NULL),
-        x_gf(&fes), y_gf(&fes)
+        quad_data(quad_data_), FESpace(fes)
    { }
 
-   // Mass matrix action. We work with one velocity component at a time.
+   // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
 
-   void EliminateRHS(Array<int> &dofs, Vector &b)
+   void ComputeDiagonal2D(Vector &diag) const;
+   void ComputeDiagonal3D(Vector &diag) const;
+
+   virtual const Operator *GetProlongation() const
+   { return FESpace.GetProlongationMatrix(); }
+   virtual const Operator *GetRestriction() const
+   { return FESpace.GetRestrictionMatrix(); }
+};
+
+// Scales by the inverse diagonal of the MassPAOperator.
+class DiagonalSolver : public Solver
+{
+private:
+   Vector diag;
+   FiniteElementSpace &FESpace;
+
+public:
+   DiagonalSolver(FiniteElementSpace &fes)
+      : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
+
+   void SetDiagonal(Vector &d)
    {
-      ess_tdofs = &dofs;
-      for (int i = 0; i < dofs.Size(); i++)
-      {
-         b(dofs[i]) = 0.0;
-      }
+      const Operator *P = FESpace.GetProlongationMatrix();
+
+      // Happens when this is called by the serial version of Laghos.
+      if (P == NULL) { diag = d; return; }
+
+      diag.SetSize(P->Width());
+      P->MultTranspose(d, diag);
    }
+
+   virtual void Mult(const Vector &x, Vector &y) const
+   {
+      for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
+   }
+   virtual void SetOperator(const Operator &op) { }
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.

@@ -18,11 +18,7 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "laghos_assembly_s.hpp"
-
-#include <memory>
-#include <iostream>
-#include <fstream>
+#include "../laghos_assembly.hpp"
 
 namespace mfem
 {
@@ -44,25 +40,45 @@ void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma(const Vector &);
 
+struct TimingData
+{
+   // Total times for all major computations:
+   // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
+   StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
+
+   // These accumulate the total processed dofs or quad points:
+   // #(CG iterations) for the H1 CG solve.
+   // #dofs  * #(CG iterations) for the L2 CG solve.
+   // #quads * #(RK sub steps) for the quadrature data computations.
+   int H1cg_iter, L2dof_iter, quad_tstep;
+
+   TimingData() : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
+};
+
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
    FiniteElementSpace &H1FESpace, &L2FESpace;
-   mutable FiniteElementSpace H1compFESpace;
+
+   // Reference to the current mesh configuration.
+   mutable GridFunction x_gf;
 
    Array<int> &ess_tdofs;
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, p_assembly;
+   const double cg_rel_tol;
+   const int cg_max_iter;
    Coefficient *material_pcf;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable BilinearForm Mv;
-   DenseTensor Me_inv;
+   SparseMatrix Mv_spmat_copy;
+   DenseTensor Me, Me_inv;
 
    // Integration rule for all assemblies.
    const IntegrationRule &integ_rule;
@@ -70,10 +86,10 @@ protected:
    // Data associated with each quadrature point in the mesh. These values are
    // recomputed at each time step.
    mutable QuadratureData quad_data;
-   mutable bool quad_data_is_current;
+   mutable bool quad_data_is_current, forcemat_is_assembled;
 
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
-   // assembled in each time step and then it's used to compute the final
+   // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
 
@@ -83,10 +99,13 @@ protected:
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    mutable MassPAOperator VMassPA;
+   mutable DiagonalSolver VMassPA_prec;
    mutable LocalMassPAOperator locEMassPA;
 
    // Linear solver for energy.
    CGSolver locCG;
+
+   mutable TimingData timer;
 
    void ComputeMaterialProperties(int nvalues, const double gamma[],
                                   const double rho[], const double e[],
@@ -100,18 +119,24 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
+   void AssembleForceMatrix() const;
 
 public:
    LagrangianHydroOperator(int size, FiniteElementSpace &h1_fes,
                            FiniteElementSpace &l2_fes,
                            Array<int> &essential_tdofs, GridFunction &rho0,
                            int source_type_, double cfl_,
-                           Coefficient *material_, bool visc, bool pa);
+                           Coefficient *material_, bool visc, bool pa,
+                           double cgt, int cgiter);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
-   // Calls UpdateQuadratureData to compute the new quad_data.dt_est.
+   void SolveVelocity(const Vector &S, Vector &dS_dt) const;
+   void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
+   void UpdateMesh(const Vector &S) const;
+
+   // Calls UpdateQuadratureData to compute the new quad_data.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { quad_data_is_current = false; }
@@ -119,6 +144,13 @@ public:
    // The density values, which are stored only at some quadrature points, are
    // projected as a ParGridFunction.
    void ComputeDensity(GridFunction &rho);
+
+   double InternalEnergy(const GridFunction &e) const;
+   double KineticEnergy(const GridFunction &v) const;
+
+   void PrintTimingData(int steps) const;
+
+   int GetH1VSize() const { return H1FESpace.GetVSize(); }
 
    ~LagrangianHydroOperator();
 };

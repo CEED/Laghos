@@ -24,10 +24,6 @@
 
 #ifdef MFEM_USE_MPI
 
-#include <memory>
-#include <iostream>
-#include <fstream>
-
 namespace mfem
 {
 
@@ -41,7 +37,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
-
 
 // These are defined in laghos.cpp
 double rho0(const Vector &);
@@ -89,10 +84,10 @@ protected:
    // Data associated with each quadrature point in the mesh. These values are
    // recomputed at each time step.
    mutable QuadratureData quad_data;
-   mutable bool quad_data_is_current;
+   mutable bool quad_data_is_current, forcemat_is_assembled;
 
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
-   // assembled in each time step and then it's used to compute the final
+   // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable RajaMassOperator VMassPA, EMassPA;
    mutable DiagonalSolver VMassPA_prec;
@@ -142,9 +137,14 @@ public:
 
    // The density values, which are stored only at some quadrature points, are
    // projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho);
+   void ComputeDensity(ParGridFunction &rho) const;
 
-   void PrintTimingData(bool IamRoot, int steps);
+   double InternalEnergy(const ParGridFunction &e) const;
+   double KineticEnergy(const ParGridFunction &v) const;
+
+   void PrintTimingData(bool IamRoot, int steps) const;
+
+   int GetH1VSize() const { return H1FESpace.GetVSize(); }
 
    ~LagrangianHydroOperator();
 };

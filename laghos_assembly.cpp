@@ -14,7 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_assembly_s.hpp"
+#include "laghos_assembly.hpp"
 
 using namespace std;
 
@@ -358,7 +358,7 @@ void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
    else { MFEM_ABORT("Unsupported dimension"); }
 }
 
-// Force matrix action on quadrilateral elements in 2D
+// Force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -398,7 +398,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // HQ_i2_k1   = HQs_i2_k2 QQ_k1_k2 -- contract in y direction.
          // HHx_i1_i2  = HQg_i1_k1 HQ_i2_k1 -- gradients in x direction.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQshape1D, QQd, HQ);
          MultABt(tensors1D->HQgrad1D, HQ, HHx);
 
@@ -406,7 +406,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // HQ_i2_k1  = HQg_i2_k2 QQ_k1_k2 -- gradients in y direction.
          // HHy_i1_i2 = HQ_i1_k1 HQ_i2_k1  -- contract in x direction.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQgrad1D, QQd, HQ);
          MultABt(tensors1D->HQshape1D, HQ, HHy);
 
@@ -427,7 +427,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Force matrix action on hexahedral elements in 3D
+// Force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -490,7 +490,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
       {
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQs_i2_k2 -- contract  in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -516,7 +516,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- gradients in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -542,7 +542,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
          d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- contract  in y direction.
          // The first step does some reordering (it's not product of matrices).
@@ -588,7 +588,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
    }
 }
 
-// Transpose force matrix action on quadrilateral elements in 2D
+// Transpose force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                                         Vector &vecL2) const
 {
@@ -656,7 +656,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
    }
 }
 
-// Transpose force matrix action on hexahedral elements in 3D
+// Transpose force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 {
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -722,7 +722,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
          double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
 
@@ -749,7 +749,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
          d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
 
@@ -776,7 +776,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
          d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
-         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; };
+         for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,2) * d[v_c]_dz) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
       }
@@ -808,35 +808,138 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
    }
 }
 
-void MassPAOperator::Mult(const Vector &x, Vector &y) const
+void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   if (ess_tdofs)
+   const H1_QuadrilateralElement *fe_H1 =
+      dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
+   const Array<int> &dof_map = fe_H1->GetDofMap();
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
+
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width(), nqp = nqp1D * nqp1D;
+   Vector dz(ndof1D * ndof1D);
+   DenseMatrix HQ(ndof1D, nqp1D), D(dz.GetData(), ndof1D, ndof1D);
+   Array<int> dofs;
+
+   diag.SetSize(height);
+   diag = 0.0;
+
+   // Squares of the shape functions at all quadrature points.
+   DenseMatrix HQs_sq(ndof1D, nqp1D);
+   for (int i = 0; i < ndof1D; i++)
    {
-      x_gf = x;
-      for (int i = 0; i < ess_tdofs->Size(); i++)
+      for (int k = 0; k < nqp1D; k++)
       {
-         const int idx = (*ess_tdofs)[i];
-         x_gf(idx) = 0.0;
+         HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
       }
    }
-   else { x_gf = x; }
 
-   if      (dim == 2) { MultQuad(x_gf, y_gf); }
-   else if (dim == 3) { MultHex(x_gf, y_gf); }
-   else { MFEM_ABORT("Unsupported dimension"); }
-   y = y_gf;
-
-   if (ess_tdofs)
+   for (int z = 0; z < nzones; z++)
    {
-      for (int i = 0; i < ess_tdofs->Size(); i++)
+      DenseMatrix QQ(quad_data->rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
+
+      // HQ_i1_k2 = HQs_i1_k1^2 QQ_k1_k2    -- contract in x direction.
+      // Y_i1_i2  = HQ_i1_k2    HQs_i2_k2^2 -- contract in y direction.
+      mfem::Mult(HQs_sq, QQ, HQ);
+      MultABt(HQ, HQs_sq, D);
+
+      // Transfer from the tensor structure numbering to mfem's H1 numbering.
+      FESpace.GetElementDofs(z, dofs);
+      for (int j = 0; j < dz.Size(); j++)
       {
-         const int idx = (*ess_tdofs)[i];
-         y(idx) = 0.0;
+         diag[dofs[dof_map[j]]] += dz[j];
       }
+   }
+
+   for (int i = 0; i < height / 2; i++)
+   {
+      diag(i + height / 2) = diag(i);
    }
 }
 
-// Mass matrix action on quadrilateral elements in 2D
+void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
+{
+   const H1_HexahedronElement *fe_H1 =
+      dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
+   const Array<int> &dof_map = fe_H1->GetDofMap();
+   const DenseMatrix &HQs = tensors1D->HQshape1D;
+
+   const int ndof1D = HQs.Height(), nqp1D = HQs.Width(),
+             nqp = nqp1D * nqp1D * nqp1D;
+   DenseMatrix HH_Q(ndof1D * ndof1D, nqp1D), Q_HQ(nqp1D, ndof1D*nqp1D);
+   DenseMatrix H_HQ(HH_Q.GetData(), ndof1D, ndof1D*nqp1D);
+   Vector dz(ndof1D * ndof1D * ndof1D);
+   DenseMatrix D(dz.GetData(), ndof1D*ndof1D, ndof1D);
+   Array<int> dofs;
+
+   diag.SetSize(height);
+   diag = 0.0;
+
+   // Squares of the shape functions at all quadrature points.
+   DenseMatrix HQs_sq(ndof1D, nqp1D);
+   for (int i = 0; i < ndof1D; i++)
+   {
+      for (int k = 0; k < nqp1D; k++)
+      {
+         HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
+      }
+   }
+
+   for (int z = 0; z < nzones; z++)
+   {
+      DenseMatrix QQ_Q(quad_data->rho0DetJ0w.GetData() + z*nqp,
+                       nqp1D * nqp1D, nqp1D);
+
+      // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2^2  -- contract in y direction.
+      // The first step does some reordering (it's not product of matrices).
+      // HHQ_i1_i2_k3 = HQs_i1_k1^2  QHQ_k1_i2_k3 -- contract in x direction.
+      // D_i1_i2_i3   = HHQ_i1_i2_k3 HQs_i3_k3^2  -- contract in z direction.
+      for (int k1 = 0; k1 < nqp1D; k1++)
+      {
+         for (int i2 = 0; i2 < ndof1D; i2++)
+         {
+            for (int k3 = 0; k3 < nqp1D; k3++)
+            {
+               Q_HQ(k1, i2 + ndof1D*k3) = 0.0;
+               for (int k2 = 0; k2 < nqp1D; k2++)
+               {
+                  Q_HQ(k1, i2 + ndof1D*k3) +=
+                     QQ_Q(k1 + nqp1D*k2, k3) * HQs_sq(i2, k2);
+               }
+            }
+         }
+      }
+      mfem::Mult(HQs_sq, Q_HQ, H_HQ);
+      MultABt(HH_Q, HQs_sq, D);
+
+      // Transfer from the tensor structure numbering to mfem's H1 numbering.
+      FESpace.GetElementDofs(z, dofs);
+      for (int j = 0; j < dz.Size(); j++)
+      {
+         diag[dofs[dof_map[j]]] += dz[j];
+      }
+   }
+
+   for (int i = 0; i < height / 3; i++)
+   {
+      diag(i + height / 3) = diag(i);
+      diag(i + 2 * height / 3) = diag(i);
+   }
+}
+
+void MassPAOperator::Mult(const Vector &x, Vector &y) const
+{
+   const int comp_size = FESpace.GetNDofs();
+   for (int c = 0; c < dim; c++)
+   {
+      Vector x_comp(x.GetData() + c * comp_size, comp_size),
+             y_comp(y.GetData() + c * comp_size, comp_size);
+      if      (dim == 2) { MultQuad(x_comp, y_comp); }
+      else if (dim == 3) { MultHex(x_comp, y_comp); }
+      else { MFEM_ABORT("Unsupported dimension"); }
+   }
+}
+
+// Mass matrix action on quadrilateral elements in 2D.
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
    const H1_QuadrilateralElement *fe_H1 =

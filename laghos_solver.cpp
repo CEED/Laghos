@@ -14,7 +14,9 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_solver_s.hpp"
+#include "laghos_solver.hpp"
+
+#ifdef MFEM_USE_MPI
 
 using namespace std;
 
@@ -25,46 +27,59 @@ namespace hydrodynamics
 {
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    GridFunction &gf, const char *title,
+                    ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
-   Mesh &mesh = *gf.FESpace()->GetMesh();
+   ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
+   MPI_Comm comm = pmesh.GetComm();
+
+   int num_procs, myid;
+   MPI_Comm_size(comm, &num_procs);
+   MPI_Comm_rank(comm, &myid);
+
    bool newly_opened = false;
    int connection_failed;
 
    do
    {
-      if (!sock.is_open() || !sock)
+      if (myid == 0)
       {
-         sock.open(vishost, visport);
-         sock.precision(8);
-         newly_opened = true;
+         if (!sock.is_open() || !sock)
+         {
+            sock.open(vishost, visport);
+            sock.precision(8);
+            newly_opened = true;
+         }
+         sock << "solution\n";
       }
-      sock << "solution\n";
 
-      mesh.Print(sock);
-      gf.Save(sock);
+      pmesh.PrintAsOne(sock);
+      gf.SaveAsOne(sock);
 
-      if (newly_opened)
+      if (myid == 0 && newly_opened)
       {
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
               << x << " " << y << " " << w << " " << h << "\n"
-              << "keys maaAc";
+              << "keys maaAcl";
          if ( vec ) { sock << "vvv"; }
          sock << endl;
       }
 
-      connection_failed = !sock && !newly_opened;
+      if (myid == 0)
+      {
+         connection_failed = !sock && !newly_opened;
+      }
+      MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
    }
    while (connection_failed);
 }
 
 LagrangianHydroOperator::LagrangianHydroOperator(int size,
-                                                 FiniteElementSpace &h1_fes,
-                                                 FiniteElementSpace &l2_fes,
+                                                 ParFiniteElementSpace &h1_fes,
+                                                 ParFiniteElementSpace &l2_fes,
                                                  Array<int> &essential_tdofs,
-                                                 GridFunction &rho0,
+                                                 ParGridFunction &rho0,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
@@ -131,21 +146,24 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
 
    // Initial local mesh size (assumes all mesh elements are of the same type).
-   double area = 0.0;
-   Mesh *m = H1FESpace.GetMesh();
-   for (int i = 0; i < nzones; i++) { area += m->GetElementVolume(i); }
-   switch (m->GetElementBaseGeometry(0))
+   double loc_area = 0.0, glob_area;
+   int loc_z_cnt = nzones, glob_z_cnt;
+   ParMesh *pm = H1FESpace.GetParMesh();
+   for (int i = 0; i < nzones; i++) { loc_area += pm->GetElementVolume(i); }
+   MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
+   MPI_Allreduce(&loc_z_cnt, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
+   switch (pm->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT:
-         quad_data.h0 = area / nzones; break;
+         quad_data.h0 = glob_area / glob_z_cnt; break;
       case Geometry::SQUARE:
-         quad_data.h0 = sqrt(area / nzones); break;
+         quad_data.h0 = sqrt(glob_area / glob_z_cnt); break;
       case Geometry::TRIANGLE:
-         quad_data.h0 = sqrt(2.0 * area / nzones); break;
+         quad_data.h0 = sqrt(2.0 * glob_area / glob_z_cnt); break;
       case Geometry::CUBE:
-         quad_data.h0 = pow(area / nzones, 1.0/3.0); break;
+         quad_data.h0 = pow(glob_area / glob_z_cnt, 1.0/3.0); break;
       case Geometry::TETRAHEDRON:
-         quad_data.h0 = pow(6.0 * area / nzones, 1.0/3.0); break;
+         quad_data.h0 = pow(6.0 * glob_area / glob_z_cnt, 1.0/3.0); break;
       default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
@@ -159,6 +177,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    if (p_assembly)
    {
+      // Compute the global 1D reference tensors.
       tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                                 L2FESpace.GetFE(0)->GetOrder(),
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))));
@@ -188,12 +207,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    Vector* sptr = (Vector*) &S;
-   GridFunction v;
+   ParGridFunction v;
    const int VsizeH1 = H1FESpace.GetVSize();
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
 
    // Set dx_dt = v (explicit).
-   GridFunction dx;
+   ParGridFunction dx;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
    dx = v;
 
@@ -214,7 +233,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   GridFunction dv;
+   ParGridFunction dv;
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
    dv = 0.0;
 
@@ -228,7 +247,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
       Operator *cVMassPA;
       VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
-      CGSolver cg;
+      CGSolver cg(H1FESpace.GetParMesh()->GetComm());
       cg.SetPreconditioner(VMassPA_prec);
       cg.SetOperator(*cVMassPA);
       cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
@@ -248,10 +267,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_force.Stop();
       rhs.Neg();
 
-      SparseMatrix A;
+      HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
-      CGSolver cg;
-      DSmoother prec(0);
+      CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+      HypreSmoother prec;
+      prec.SetType(HypreSmoother::Jacobi, 1);
       cg.SetPreconditioner(prec);
       cg.SetOperator(A);
       cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
@@ -276,7 +296,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   GridFunction de;
+   ParGridFunction de;
    de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
    de = 0.0;
 
@@ -335,7 +355,7 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 {
    Vector* sptr = (Vector*) &S;
    x_gf.MakeRef(&H1FESpace, *sptr, 0);
-   H1FESpace.GetMesh()->NewNodes(x_gf, false);
+   H1FESpace.GetParMesh()->NewNodes(x_gf, false);
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
@@ -343,7 +363,10 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    UpdateMesh(S);
    UpdateQuadratureData(S);
 
-   return quad_data.dt_est;
+   double glob_dt_est;
+   MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
+                 H1FESpace.GetParMesh()->GetComm());
+   return glob_dt_est;
 }
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
@@ -351,7 +374,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(GridFunction &rho)
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2FESpace);
 
@@ -375,66 +398,80 @@ void LagrangianHydroOperator::ComputeDensity(GridFunction &rho)
    }
 }
 
-double LagrangianHydroOperator::InternalEnergy(const GridFunction &e) const
+double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e) const
 {
    Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
    one = 1.0;
    Array<int> l2dofs;
 
-   double ie = 0.0;
+   double loc_ie = 0.0;
    for (int z = 0; z < nzones; z++)
    {
       L2FESpace.GetElementDofs(z, l2dofs);
       e.GetSubVector(l2dofs, loc_e);
-      ie += Me(z).InnerProduct(loc_e, one);
+      loc_ie += Me(z).InnerProduct(loc_e, one);
    }
 
-   return ie;
+   double glob_ie;
+   MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
+                 H1FESpace.GetParMesh()->GetComm());
+   return glob_ie;
 }
 
-double LagrangianHydroOperator::KineticEnergy(const GridFunction &v) const
+double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-   return 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+   double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+
+   double glob_ke;
+   MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
+                 H1FESpace.GetParMesh()->GetComm());
+   return glob_ke;
 }
 
-void LagrangianHydroOperator::PrintTimingData(int steps) const
+void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
 {
-   double runtime[5];
-   runtime[0] = timer.sw_cgH1.RealTime();
-   runtime[1] = timer.sw_cgL2.RealTime();
-   runtime[2] = timer.sw_force.RealTime();
-   runtime[3] = timer.sw_qdata.RealTime();
-   runtime[4] = runtime[0] + runtime[2] + runtime[3];
+   double my_rt[5], rt_max[5];
+   my_rt[0] = timer.sw_cgH1.RealTime();
+   my_rt[1] = timer.sw_cgL2.RealTime();
+   my_rt[2] = timer.sw_force.RealTime();
+   my_rt[3] = timer.sw_qdata.RealTime();
+   my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
+   MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
-   int data[2];
-   data[0] = timer.L2dof_iter;
-   data[1] = timer.quad_tstep;
+   HYPRE_Int mydata[2], alldata[2];
+   mydata[0] = timer.L2dof_iter;
+   mydata[1] = timer.quad_tstep;
+   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0,
+              H1FESpace.GetComm());
 
-   const int H1size = H1FESpace.GetVSize(),
-             L2size = L2FESpace.GetVSize();
-   using namespace std;
-   cout << endl;
-   cout << "CG (H1) total time: " << runtime[0] << endl;
-   cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-        << 1e-6 * H1size * timer.H1cg_iter / runtime[0] << endl;
-   cout << endl;
-   cout << "CG (L2) total time: " << runtime[1] << endl;
-   cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-        << 1e-6 * data[0] / runtime[1] << endl;
-   cout << endl;
-   // The Force operator is applied twice per time step, on the H1 and the L2
-   // vectors, respectively.
-   cout << "Forces total time: " << runtime[2] << endl;
-   cout << "Forces rate (megadofs x timesteps / second): "
-        << 1e-6 * steps * (H1size + L2size) / runtime[2] << endl;
-   cout << endl;
-   cout << "UpdateQuadData total time: " << runtime[3] << endl;
-   cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-        << 1e-6 * data[1] * integ_rule.GetNPoints() / runtime[3] << endl;
-   cout << endl;
-   cout << "Major kernels total time (seconds): " << runtime[4] << endl;
-   cout << "Major kernels total rate (megadofs x time steps / second): "
-        << 1e-6 * H1size * steps / runtime[4] << endl;
+   if (IamRoot)
+   {
+      const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
+                      L2gsize = L2FESpace.GlobalTrueVSize();
+      using namespace std;
+      cout << endl;
+      cout << "CG (H1) total time: " << rt_max[0] << endl;
+      cout << "CG (H1) rate (megadofs x cg_iterations / second): "
+           << 1e-6 * H1gsize * timer.H1cg_iter / rt_max[0] << endl;
+      cout << endl;
+      cout << "CG (L2) total time: " << rt_max[1] << endl;
+      cout << "CG (L2) rate (megadofs x cg_iterations / second): "
+           << 1e-6 * alldata[0] / rt_max[1] << endl;
+      cout << endl;
+      // The Force operator is applied twice per time step, on the H1 and the L2
+      // vectors, respectively.
+      cout << "Forces total time: " << rt_max[2] << endl;
+      cout << "Forces rate (megadofs x timesteps / second): "
+           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[2] << endl;
+      cout << endl;
+      cout << "UpdateQuadData total time: " << rt_max[3] << endl;
+      cout << "UpdateQuadData rate (megaquads x timesteps / second): "
+           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
+      cout << endl;
+      cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
+      cout << "Major kernels total rate (megadofs x time steps / second): "
+           << 1e-6 * H1gsize * steps / rt_max[4] << endl;
+   }
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
@@ -449,7 +486,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    const int nqp = integ_rule.GetNPoints();
 
-   GridFunction x, v, e;
+   ParGridFunction x, v, e;
    Vector* sptr = (Vector*) &S;
    x.MakeRef(&H1FESpace, *sptr, 0);
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
@@ -474,7 +511,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    *cs_b  = new double[nqp_batch];
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
-   DenseTensor *Jpr_b = new DenseTensor[nqp_batch];
+   DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
@@ -655,3 +692,5 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 } // namespace hydrodynamics
 
 } // namespace mfem
+
+#endif // MFEM_USE_MPI
