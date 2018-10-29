@@ -42,69 +42,29 @@ void computeCapabilityOfTheDevice(const int mpi_rank,
 }
 
 // ***************************************************************************
-static bool isTux(void)
-{
-   char hostname[1024];
-   hostname[1023] = '\0';
-   gethostname(hostname, 1023);
-   if (strncmp("tux", hostname, 3)==0) { return true; }
-   return false;
-}
-
-// ***************************************************************************
 // *   Setup
 // ***************************************************************************
 void rconfig::Setup(const int _mpi_rank,
                     const int _mpi_size,
                     const bool _cuda,
-                    const bool _dcg,
                     const bool _uvm,
                     const bool _aware,
                     const bool _share,
-                    const bool _occa,
                     const bool _hcpo,
-                    const bool _sync,
-                    const bool _dot,
-                    const int rs_levels)
+                    const bool _sync)
 {
    mpi_rank=_mpi_rank;
    mpi_size=_mpi_size;
-
-   // Look if we are on a Tux machine
-   const bool tux = isTux();
-   if (tux && Root())
-   {
-      printf("\033[32m[laghos] \033[1mTux\033[m\n");
-   }
-
-   // On Tux machines, use the MPIX_Query_cuda_support
-   // Otherwise, assume there is a support
-   //aware = tux?(MPIX_Query_cuda_support()==1)?true:false:true;
-
-   // On Tux machines, look for MPS
-   mps = tux?isNvidiaCudaMpsDaemonRunning():false;
-   if (tux && Mps() && Root())
-   {
-      printf("\033[32m[laghos] \033[32;1mMPS daemon\033[m\033[m\n");
-   }
-   if (tux && !Mps() && Root())
-   {
-      printf("\033[32m[laghos] \033[31;1mNo MPS daemon\033[m\n");
-   }
 
    // Get the number of devices with compute capability greater or equal to 2.0
    // Can be changed wuth CUDA_VISIBLE_DEVICES
    cudaGetDeviceCount(&gpu_count);
    cuda=_cuda;
-   dcg=_dcg; // CG on device
    uvm=_uvm;
    aware=_aware;
    share=_share;
-   share_env=getenv("SHR");
-   occa=_occa;
    hcpo=_hcpo;
    sync=_sync;
-
 
    // Check for Enforced Kernel Synchronization
    if (Sync() && Root())
@@ -152,14 +112,12 @@ void rconfig::Setup(const int _mpi_rank,
 // ***************************************************************************
 bool rconfig::IAmAlone()
 {
-   if (Occa()) { return false; }
    return mpi_size==1;
 }
 
 // ***************************************************************************
 bool rconfig::GeomNeedsUpdate(const int sequence)
 {
-   if (Occa()) { return true; }
    assert(sequence==0);
    return (sequence!=0);
 }
@@ -167,7 +125,6 @@ bool rconfig::GeomNeedsUpdate(const int sequence)
 // ***************************************************************************
 bool rconfig::DoHostConformingProlongationOperator()
 {
-   if (Occa()) { return true; }
    return (Cuda())?hcpo:true;
 }
 

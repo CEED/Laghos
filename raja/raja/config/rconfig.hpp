@@ -67,11 +67,9 @@ public:
       return rconfig_singleton;
    }
    // *************************************************************************
-   void Setup(const int,const int,
-              const bool cuda, const bool dcg,
-              const bool uvm, const bool aware,
-              const bool share, const bool occa, const bool hcpo,
-              const bool sync, const bool dot, const int rs_levels);
+   void Setup(const int, const int,
+              const bool cuda, const bool uvm, const bool aware,
+              const bool share, const bool hcpo, const bool sync);
    // *************************************************************************
    bool IAmAlone();
    bool GeomNeedsUpdate(const int);

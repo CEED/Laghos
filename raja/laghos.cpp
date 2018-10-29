@@ -92,15 +92,10 @@ int main(int argc, char *argv[])
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
-   bool dot = false;
-   bool mult = false;
-   bool lambda = false; // lambda test on one kernel only
    bool cuda = false;
-   bool dcg = false;
    bool uvm = false;
    bool aware = false;
    bool share = false;
-   bool occa = false;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
 
@@ -143,20 +138,9 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   // Tests Options ************************************************************
-   args.AddOption(&dot, "-dot", "--dot", "-no-dot", "--no-dot",
-                  "Enable or disable DOT test kernels.");
-   args.AddOption(&mult, "-mult", "--mult", "-no-mult", "--no-mult",
-                  "Enable or disable MULT test kernels.");
-   args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",
-                  "Enable or disable LAMBDA test kernels.");
    // RAJA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels if you are using RAJA.");
-   // OCCA Options *************************************************************
-   args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
-                  "Enable or disable OCCA behavior: geometry update and\n"
-                  "\tHost Conforming Prolongation Operations.");
    // CUDA Options *************************************************************
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "[32mEnable or disable Unified Memory.[m");
@@ -170,8 +154,6 @@ int main(int argc, char *argv[])
    // Not usable Options *******************************************************
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels (WIP, not usable).");
-   args.AddOption(&dcg, "-dcg", "--dcg", "-no-dcg", "--no-dcg",
-                  "Enable or disable CUDA CG (WIP, not usable).");
    args.Parse();
    if (!args.Good())
    {
@@ -183,7 +165,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,dcg,uvm,aware,share,occa,hcpo,sync,dot,rs_levels);
+                        cuda,uvm,aware,share,hcpo,sync);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -253,10 +235,6 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
-
-   // **************************************************************************
-   // Mult RAP MPI test
-   if (mult) { return multTest(pmesh,order_v,max_tsteps)?0:1; }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -342,12 +320,7 @@ int main(int argc, char *argv[])
    pmesh->SetNodalGridFunction(&x_gf);
    d_x_gf = x_gf;
 
-   // **************************************************************************
-   // Lambda launch test
-   if (lambda) { return hydrodynamics::lambdaTest(pmesh,order_v,max_tsteps)?0:1; }
-
    // Initialize the velocity.
-   //dbg()<<"[7mInitialize the velocity";
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    d_v_gf = v_gf;
