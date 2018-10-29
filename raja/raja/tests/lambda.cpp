@@ -42,7 +42,7 @@ namespace hydrodynamics {
       mfem::out << "Number of global dofs: " << gsize << std::endl;
     if (rconfig::Get().Root())
       mfem::out << "Number of local dofs: " << lsize << std::endl;
-    const IntegrationRule &integ_rule=IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(),
+    const IntegrationRule &integ_rule=IntRules.Get(H1FESpace.GetMesh()->GetElementBaseGeometry(0),
                                                   3*H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
     QuadratureData quad_data(dim, nzones, integ_rule.GetNPoints());
     // RajaBilinearForm::Mult
