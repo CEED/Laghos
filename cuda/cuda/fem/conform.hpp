@@ -16,26 +16,28 @@
 #ifndef LAGHOS_CUDA_CONFORM_PROLONGATION_OP
 #define LAGHOS_CUDA_CONFORM_PROLONGATION_OP
 
-namespace mfem {
-  
-  // ***************************************************************************
-  // * CudaConformingProlongationOperator
-  //  **************************************************************************
-  class CudaConformingProlongationOperator : public CudaOperator{
-  protected:
-    Array<int> external_ldofs;
-    CudaArray<int> d_external_ldofs;
-    CudaCommD *gc;
-    int kMaxTh;
-  public:
-    CudaConformingProlongationOperator(ParFiniteElementSpace &);
-    ~CudaConformingProlongationOperator();
-    void d_Mult(const CudaVector &x, CudaVector &y) const;
-    void d_MultTranspose(const CudaVector &x, CudaVector &y) const;  
-    void h_Mult(const Vector &x, Vector &y) const;
-    void h_MultTranspose(const Vector &x, Vector &y) const;
-  };
-  
+namespace mfem
+{
+
+// ***************************************************************************
+// * CudaConformingProlongationOperator
+//  **************************************************************************
+class CudaConformingProlongationOperator : public CudaOperator
+{
+protected:
+   Array<int> external_ldofs;
+   CudaArray<int> d_external_ldofs;
+   CudaCommD *gc;
+   int kMaxTh;
+public:
+   CudaConformingProlongationOperator(ParFiniteElementSpace &);
+   ~CudaConformingProlongationOperator();
+   void d_Mult(const CudaVector &x, CudaVector &y) const;
+   void d_MultTranspose(const CudaVector &x, CudaVector &y) const;
+   void h_Mult(const Vector &x, Vector &y) const;
+   void h_MultTranspose(const Vector &x, Vector &y) const;
+};
+
 } // mfem
 
 #endif // LAGHOS_CUDA_CONFORM_PROLONGATION_OP

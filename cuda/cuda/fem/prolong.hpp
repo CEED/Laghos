@@ -16,19 +16,21 @@
 #ifndef LAGHOS_CUDA_PROLONG_OP
 #define LAGHOS_CUDA_PROLONG_OP
 
-namespace mfem {
-  
-  // ***************************************************************************
-  // * CudaProlongationOperator
-  // ***************************************************************************
-  class CudaProlongationOperator : public CudaOperator {
-  protected:
-    const CudaConformingProlongationOperator* pmat = NULL;
-  public:
-    CudaProlongationOperator(const CudaConformingProlongationOperator*);
-    void Mult(const CudaVector& x, CudaVector& y) const;
-    void MultTranspose(const CudaVector& x, CudaVector& y) const ;
-  };
+namespace mfem
+{
+
+// ***************************************************************************
+// * CudaProlongationOperator
+// ***************************************************************************
+class CudaProlongationOperator : public CudaOperator
+{
+protected:
+   const CudaConformingProlongationOperator* pmat = NULL;
+public:
+   CudaProlongationOperator(const CudaConformingProlongationOperator*);
+   void Mult(const CudaVector& x, CudaVector& y) const;
+   void MultTranspose(const CudaVector& x, CudaVector& y) const ;
+};
 
 } // mfem
 

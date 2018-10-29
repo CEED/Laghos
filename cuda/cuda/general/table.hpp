@@ -16,20 +16,22 @@
 #ifndef LAGHOS_CUDA_TABLE
 #define LAGHOS_CUDA_TABLE
 
-namespace mfem {
-  
-  class CudaTable : public rmalloc<int>{
-  private:
-    int size = 0;
-    int *I = NULL;
-    int *J = NULL;
-  public:
-    CudaTable(const Table&);
-    inline int Size(){return size;}
-    int RowSize(int i) const { return I[i+1]-I[i]; }
-    const int *GetRow(int i) const { return J+I[i]; }
-    int *GetRow(int i) { return J+I[i]; }
-  };
+namespace mfem
+{
+
+class CudaTable : public rmalloc<int>
+{
+private:
+   int size = 0;
+   int *I = NULL;
+   int *J = NULL;
+public:
+   CudaTable(const Table&);
+   inline int Size() {return size;}
+   int RowSize(int i) const { return I[i+1]-I[i]; }
+   const int *GetRow(int i) const { return J+I[i]; }
+   int *GetRow(int i) { return J+I[i]; }
+};
 
 } // mfem
 

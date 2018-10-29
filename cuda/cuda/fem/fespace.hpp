@@ -16,34 +16,36 @@
 #ifndef LAGHOS_CUDA_FESPACE
 #define LAGHOS_CUDA_FESPACE
 
-namespace mfem {
-  
-  // ***************************************************************************
-  // * CudaFiniteElementSpace
-  //  **************************************************************************
-  class CudaFiniteElementSpace : public ParFiniteElementSpace {
-  private:
-    int globalDofs, localDofs;
-    CudaArray<int> offsets;
-    CudaArray<int> indices, *reorderIndices;
-    CudaArray<int> map;
-    CudaOperator *restrictionOp, *prolongationOp;
-  public:
-    CudaFiniteElementSpace(Mesh* mesh,
-                           const FiniteElementCollection* fec,
-                           const int vdim_ = 1,
-                           Ordering::Type ordering_ = Ordering::byNODES);
-    ~CudaFiniteElementSpace();
-    // *************************************************************************
-    bool hasTensorBasis() const;
-    int GetLocalDofs() const { return localDofs; }
-    const CudaOperator* GetRestrictionOperator() { return restrictionOp; }
-    const CudaOperator* GetProlongationOperator() { return prolongationOp; }
-    const CudaArray<int>& GetLocalToGlobalMap() const { return map; }
-    // *************************************************************************
-    void GlobalToLocal(const CudaVector&, CudaVector&) const;
-    void LocalToGlobal(const CudaVector&, CudaVector&) const;
-  };
+namespace mfem
+{
+
+// ***************************************************************************
+// * CudaFiniteElementSpace
+//  **************************************************************************
+class CudaFiniteElementSpace : public ParFiniteElementSpace
+{
+private:
+   int globalDofs, localDofs;
+   CudaArray<int> offsets;
+   CudaArray<int> indices, *reorderIndices;
+   CudaArray<int> map;
+   CudaOperator *restrictionOp, *prolongationOp;
+public:
+   CudaFiniteElementSpace(Mesh* mesh,
+                          const FiniteElementCollection* fec,
+                          const int vdim_ = 1,
+                          Ordering::Type ordering_ = Ordering::byNODES);
+   ~CudaFiniteElementSpace();
+   // *************************************************************************
+   bool hasTensorBasis() const;
+   int GetLocalDofs() const { return localDofs; }
+   const CudaOperator* GetRestrictionOperator() { return restrictionOp; }
+   const CudaOperator* GetProlongationOperator() { return prolongationOp; }
+   const CudaArray<int>& GetLocalToGlobalMap() const { return map; }
+   // *************************************************************************
+   void GlobalToLocal(const CudaVector&, CudaVector&) const;
+   void LocalToGlobal(const CudaVector&, CudaVector&) const;
+};
 
 } // mfem
 

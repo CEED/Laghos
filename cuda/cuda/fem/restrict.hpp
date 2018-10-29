@@ -16,23 +16,25 @@
 #ifndef LAGHOS_CUDA_RESTRICT_OP
 #define LAGHOS_CUDA_RESTRICT_OP
 
-namespace mfem {
-  
-  // ***************************************************************************
-  // * CudaRestrictionOperator
-  // ***************************************************************************
-  class CudaRestrictionOperator : public CudaOperator {
-  protected:
-    int entries;
-    const CudaArray<int> *indices;
-  public:
-    CudaRestrictionOperator(const int h, const int w,
-                            const CudaArray<int> *idx):
+namespace mfem
+{
+
+// ***************************************************************************
+// * CudaRestrictionOperator
+// ***************************************************************************
+class CudaRestrictionOperator : public CudaOperator
+{
+protected:
+   int entries;
+   const CudaArray<int> *indices;
+public:
+   CudaRestrictionOperator(const int h, const int w,
+                           const CudaArray<int> *idx):
       CudaOperator(h,w),
       entries(idx->size()>>1),
-      indices(idx){} 
-    void Mult(const CudaVector& x, CudaVector& y) const ;
-  };
+      indices(idx) {}
+   void Mult(const CudaVector& x, CudaVector& y) const ;
+};
 
 } // mfem
 

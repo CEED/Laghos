@@ -16,29 +16,33 @@
 #ifndef LAGHOS_CUDA_GRIDFUNC
 #define LAGHOS_CUDA_GRIDFUNC
 
-namespace mfem {
+namespace mfem
+{
 
-class CudaGridFunction : public CudaVector {
- public:
-  const CudaFiniteElementSpace& fes;
- public:
-  
-  CudaGridFunction(const CudaFiniteElementSpace& f):
-    CudaVector(f.GetVSize()),fes(f) {}
-  
-  CudaGridFunction(const CudaFiniteElementSpace& f,const CudaVector* v):
-    CudaVector(v), fes(f) {}
-  
-  void ToQuad(const IntegrationRule&,CudaVector&);
-  
-  CudaGridFunction& operator=(const CudaVector& v) {
-    CudaVector::operator=(v);
-    return *this;
-  }
-  CudaGridFunction& operator=(const Vector& v) {
-    CudaVector::operator=(v);
-    return *this;
-  }
+class CudaGridFunction : public CudaVector
+{
+public:
+   const CudaFiniteElementSpace& fes;
+public:
+
+   CudaGridFunction(const CudaFiniteElementSpace& f):
+      CudaVector(f.GetVSize()),fes(f) {}
+
+   CudaGridFunction(const CudaFiniteElementSpace& f,const CudaVector* v):
+      CudaVector(v), fes(f) {}
+
+   void ToQuad(const IntegrationRule&,CudaVector&);
+
+   CudaGridFunction& operator=(const CudaVector& v)
+   {
+      CudaVector::operator=(v);
+      return *this;
+   }
+   CudaGridFunction& operator=(const Vector& v)
+   {
+      CudaVector::operator=(v);
+      return *this;
+   }
 };
 
 } // mfem

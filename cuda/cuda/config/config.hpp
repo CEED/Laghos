@@ -16,74 +16,77 @@
 #ifndef LAGHOS_CUDA_CONFIG
 #define LAGHOS_CUDA_CONFIG
 
-namespace mfem {
+namespace mfem
+{
 
-  // ***************************************************************************
-  // * Configuration class for CUDA
-  // ***************************************************************************
-  class rconfig{
-  private:
-    // *************************************************************************
-    int mpi_rank=0;
-    int mpi_size=0;
-    bool aware=false;
-    //  ************************************************************************
-    bool mps=false;
-    int gpu_count=0;
-    int maxXGridSize=0;
-    int maxXThreadsDim=0;
-    // *************************************************************************
-    CUdevice cuDevice;
-    CUcontext cuContext;
-    CUstream *hStream;
-    // *************************************************************************
-    bool cuda=false;
-    bool uvm=false;
-    bool share=false;
-    // *************************************************************************
-    bool hcpo=false;
-    bool sync=false;
-    bool nvvp=false;
-    // *************************************************************************
-  private:
-    rconfig(){}
-    rconfig(rconfig const&);
-    void operator=(rconfig const&);
-    // *************************************************************************
-  public:
-    static rconfig& Get(){
+// ***************************************************************************
+// * Configuration class for CUDA
+// ***************************************************************************
+class rconfig
+{
+private:
+   // *************************************************************************
+   int mpi_rank=0;
+   int mpi_size=0;
+   bool aware=false;
+   //  ************************************************************************
+   bool mps=false;
+   int gpu_count=0;
+   int maxXGridSize=0;
+   int maxXThreadsDim=0;
+   // *************************************************************************
+   CUdevice cuDevice;
+   CUcontext cuContext;
+   CUstream *hStream;
+   // *************************************************************************
+   bool cuda=false;
+   bool uvm=false;
+   bool share=false;
+   // *************************************************************************
+   bool hcpo=false;
+   bool sync=false;
+   bool nvvp=false;
+   // *************************************************************************
+private:
+   rconfig() {}
+   rconfig(rconfig const&);
+   void operator=(rconfig const&);
+   // *************************************************************************
+public:
+   static rconfig& Get()
+   {
       static rconfig rconfig_singleton;
       return rconfig_singleton;
-    }
-    // *************************************************************************
-    void Setup(const int,const int, const bool cuda,
-               const bool uvm, const bool aware,
-               const bool share, const bool hcpo,
-               const bool sync, const int rs_levels);
-    // *************************************************************************
-    bool IAmAlone();
-    bool GeomNeedsUpdate(const int);
-    bool DoHostConformingProlongationOperator();
-    // *************************************************************************
-    inline int Rank() { return mpi_rank; }
-    inline int Size() { return mpi_size; }
-    inline bool Root() { return mpi_rank==0; }
-    inline bool Aware() { return aware; }
-    // *************************************************************************
-    inline bool Mps() { return mps; }
-    // *************************************************************************
-    inline bool Uvm() { return uvm; }
-    inline bool Cuda() { return cuda; }
-    inline bool Share() { return share; }
-    inline bool Hcpo() { return hcpo; }
-    inline bool Sync() { return sync; }
-    inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
-    inline int MaxXGridSize() { return maxXGridSize; }
-    inline int MaxXThreadsDim() { return maxXThreadsDim; }
+   }
    // *************************************************************************
-    inline CUstream *Stream() { return hStream; }
-  };
-  
+   void Setup(const int,const int, const bool cuda,
+              const bool uvm, const bool aware,
+              const bool share, const bool hcpo,
+              const bool sync, const int rs_levels);
+   // *************************************************************************
+   bool IAmAlone();
+   bool GeomNeedsUpdate(const int);
+   bool DoHostConformingProlongationOperator();
+   // *************************************************************************
+   inline int Rank() { return mpi_rank; }
+   inline int Size() { return mpi_size; }
+   inline bool Root() { return mpi_rank==0; }
+   inline bool Aware() { return aware; }
+   // *************************************************************************
+   inline bool Mps() { return mps; }
+   // *************************************************************************
+   inline bool Uvm() { return uvm; }
+   inline bool Cuda() { return cuda; }
+   inline bool Share() { return share; }
+   inline bool Hcpo() { return hcpo; }
+   inline bool Sync() { return sync; }
+   inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
+   inline int MaxXGridSize() { return maxXGridSize; }
+   inline int MaxXThreadsDim() { return maxXThreadsDim; }
+   // *************************************************************************
+   inline CUstream *Stream() { return hStream; }
+};
+
 } // namespace mfem
 
 #endif // LAGHOS_CUDA_CONFIG
