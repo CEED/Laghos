@@ -120,7 +120,6 @@ ifneq (,$(nv))
 	CXX = nvcc
 	CUFLAGS = -std=c++11 -m64 --restrict $(NV_ARCH)
 	CXXFLAGS += --restrict $(NV_ARCH) -x=cu
-	CXXFLAGS += -D__TEMPLATES__
 endif
 
 
@@ -302,7 +301,7 @@ status info:
 	@true
 
 ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
-FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)
+FORMAT_FILES := $(SOURCE_FILES) $(KERNEL_FILES) $(HEADER_FILES)
 
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\

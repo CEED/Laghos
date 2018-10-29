@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
-   const char *mesh_file = "data/square01_quad.mesh";
+   const char *mesh_file = "../master/data/square01_quad.mesh";
    int rs_levels = 0;
    int rp_levels = 0;
    int order_v = 2;

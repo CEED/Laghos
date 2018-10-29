@@ -65,7 +65,8 @@ double cuVectorMin(const size_t N, const double *x)
 
 
 // *****************************************************************************
-double vector_min(const int N, const double* __restrict x) {
+double vector_min(const int N, const double* __restrict x)
+{
    return cuVectorMin(N, x);
 }
 

@@ -68,6 +68,7 @@ double cuVectorDot(const size_t N, const double *x, const double *y)
 // *****************************************************************************
 double vector_dot(const int N,
                   const double* __restrict x,
-                  const double* __restrict y) {
+                  const double* __restrict y)
+{
    return cuVectorDot(N, x, y);
 }

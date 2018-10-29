@@ -17,39 +17,20 @@
 #define LAGHOS_CUDA_KERNELS_FORALL
 
 // *****************************************************************************
+#define CUDA_BLOCK_SIZE 256
+
 #define ELEMENT_BATCH 10
 #define M2_ELEMENT_BATCH 32
-
-#define A2_ELEMENT_BATCH 1
-#define A2_QUAD_BATCH 1
-
-#define A3_ELEMENT_BATCH 1
-#define A3_QUAD_BATCH 1
 
 // *****************************************************************************
 #define kernel __global__
 #define share __shared__
 #define sync __syncthreads();
-#define exclusive_inc
-#define exclusive_decl
-#define exclusive_reset
-#define exclusive_set(name,idx) name[idx]
-#define exclusive(type,name,size) type name[size]
-const int CUDA_BLOCK_SIZE = 256;
-#define cuKer(name,end,...) name ## 0<<<((end+256-1)/256),256>>>(end,__VA_ARGS__)
-#define cuLaunchKer(name,args) {                                      \
-    cuLaunchKernel(name ## 0,                                         \
-                   ((end+256-1)/256),1,1,                             \
-                   256,1,1,                                           \
-                   0,0,                                               \
-                   args);                                             \
-      }
+// *****************************************************************************
+#define cuKer(name,end,...)                                             \
+   name ## 0<<<((end+CUDA_BLOCK_SIZE-1)/CUDA_BLOCK_SIZE),               \
+               CUDA_BLOCK_SIZE>>>(end,__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
-#define call0p(name,id,grid,blck,...)                               \
-  printf("\033[32;1m[call0] name=%s grid:%d, block:%d\033[m\n",#name,grid,blck); \
-  call[id]<<<grid,blck>>>(__VA_ARGS__)
-#define call0(name,id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
-#define ReduceDecl(type,var,ini) double var=ini;
-#define ReduceForall(i,max,body) 
+#define call0(id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
 
 #endif // LAGHOS_CUDA_KERNELS_FORALL
