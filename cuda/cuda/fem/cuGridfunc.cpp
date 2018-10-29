@@ -10,33 +10,36 @@
 // Software Foundation) version 2.1 dated February 1999.
 #include "../cuda.hpp"
 
-namespace mfem {
+namespace mfem
+{
 
 // ***************************************************************************
 void CudaGridFunction::ToQuad(const IntegrationRule& ir,
-                              CudaVector& quadValues) {
-  const FiniteElement& fe = *(fes.GetFE(0));
-  const int dim  = fe.GetDim();
-  const int vdim = fes.GetVDim();
-  const int elements = fes.GetNE();
-  const int numQuad  = ir.GetNPoints();
-  const CudaDofQuadMaps* maps = CudaDofQuadMaps::Get(fes, ir);
-  const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-  const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
-  quadValues.SetSize(numQuad * elements);
-  if (rconfig::Get().Share()){
-     rGridFuncToQuadS(dim,vdim,dofs1D,quad1D,elements,
+                              CudaVector& quadValues)
+{
+   const FiniteElement& fe = *(fes.GetFE(0));
+   const int dim  = fe.GetDim();
+   const int vdim = fes.GetVDim();
+   const int elements = fes.GetNE();
+   const int numQuad  = ir.GetNPoints();
+   const CudaDofQuadMaps* maps = CudaDofQuadMaps::Get(fes, ir);
+   const int quad1D  = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   const int dofs1D =fes.GetFE(0)->GetOrder() + 1;
+   quadValues.SetSize(numQuad * elements);
+   if (rconfig::Get().Share())
+   {
+      rGridFuncToQuadS(dim,vdim,dofs1D,quad1D,elements,
+                       maps->dofToQuad,
+                       fes.GetLocalToGlobalMap(),
+                       ptr(),
+                       quadValues);
+   }
+   else
+      rGridFuncToQuad(dim,vdim,dofs1D,quad1D,elements,
                       maps->dofToQuad,
                       fes.GetLocalToGlobalMap(),
                       ptr(),
                       quadValues);
-  }
-  else
-    rGridFuncToQuad(dim,vdim,dofs1D,quad1D,elements,
-                    maps->dofToQuad,
-                    fes.GetLocalToGlobalMap(),
-                    ptr(),
-                    quadValues);
 }
 
 } // mfem

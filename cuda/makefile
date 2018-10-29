@@ -123,34 +123,9 @@ ifneq (,$(nv))
 endif
 
 
-#################################################
-# CPU,LAMBDA: make v=1 l=1
-# CPU,LAMBDA,TEMPLATE: make v=1 l=1 t=1
-#
-# GPU,LAMBDA,TEMPLATES: make v=1 nv=1 l=1 t=1
-# GPU,CUDA Kernel, TEMPLATES: make v=1 nv=1 t=1
-#
-# CUDA: make v=1 rj=1 t=1
-##################################################
 .PHONY: cuda
 cuda :;$(MAKE) nv=1 all
 
-####################
-# make all targets #
-####################
-tgts:
-	make cln && make gpuLT && mv laghos laghos.gpuLT
-	make cln && make gpuKT && mv laghos laghos.gpuKT
-
-######
-# GO #
-######
-ORDERS = -ok 3 -ot 2
-go:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50
-gov:;@valgrind --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1
-
-gos:;@./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 50 -share
-gosv:;@valgrind --track-origins=yes --log-file=laghos.vlgrnd ./laghos -cfl 0.1 $(ORDERS) --mesh data/cube01_hex.mesh -ms 1 -share
 
 #######################
 # TPL INCLUDES & LIBS #
@@ -301,7 +276,7 @@ status info:
 	@true
 
 ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
-FORMAT_FILES := $(SOURCE_FILES) $(KERNEL_FILES) $(HEADER_FILES)
+FORMAT_FILES := $(SOURCE_FILES) $(CUDA_FILES) $(KERNEL_FILES) $(HEADER_FILES)
 
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\

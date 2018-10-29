@@ -15,56 +15,70 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
 
-namespace mfem {
+namespace mfem
+{
 
-  // *************************************************************************
-  void* rmemcpy::rHtoH(void *dest, const void *src,
-                       std::size_t bytes, const bool async){
-    if (bytes==0) return dest;
-    assert(src); assert(dest);
-    std::memcpy(dest,src,bytes);
-    return dest;
-  }
+// *************************************************************************
+void* rmemcpy::rHtoH(void *dest, const void *src,
+                     std::size_t bytes, const bool async)
+{
+   if (bytes==0) { return dest; }
+   assert(src); assert(dest);
+   std::memcpy(dest,src,bytes);
+   return dest;
+}
 
-  // *************************************************************************
-  void* rmemcpy::rHtoD(void *dest, const void *src,
-                       std::size_t bytes, const bool async){
-    if (bytes==0) return dest;
-    assert(src); assert(dest);
-    if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-    if (!rconfig::Get().Uvm())
+// *************************************************************************
+void* rmemcpy::rHtoD(void *dest, const void *src,
+                     std::size_t bytes, const bool async)
+{
+   if (bytes==0) { return dest; }
+   assert(src); assert(dest);
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Uvm())
+   {
       cuMemcpyHtoD((CUdeviceptr)dest,src,bytes);
-    else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-    return dest;
-  }
+   }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   return dest;
+}
 
-  // ***************************************************************************
-  void* rmemcpy::rDtoH(void *dest, const void *src,
-                       std::size_t bytes, const bool async){
-    if (bytes==0) return dest;
-    assert(src); assert(dest);
-    if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-    if (!rconfig::Get().Uvm())
+// ***************************************************************************
+void* rmemcpy::rDtoH(void *dest, const void *src,
+                     std::size_t bytes, const bool async)
+{
+   if (bytes==0) { return dest; }
+   assert(src); assert(dest);
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Uvm())
+   {
       cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes);
-    else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-    return dest;
-  }
-  
-  // ***************************************************************************
-  void* rmemcpy::rDtoD(void *dest, const void *src,
-                       std::size_t bytes, const bool async){
-    if (bytes==0) return dest;
-    assert(src); assert(dest);
-    if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-    if (!rconfig::Get().Uvm()){
+   }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   return dest;
+}
+
+// ***************************************************************************
+void* rmemcpy::rDtoD(void *dest, const void *src,
+                     std::size_t bytes, const bool async)
+{
+   if (bytes==0) { return dest; }
+   assert(src); assert(dest);
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Uvm())
+   {
       if (!async)
-        cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-      else{
-        const CUstream s = *rconfig::Get().Stream();
-        cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s);
+      {
+         cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
       }
-    } else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-    return dest;
-  }
+      else
+      {
+         const CUstream s = *rconfig::Get().Stream();
+         cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s);
+      }
+   }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   return dest;
+}
 
 } // mfem

@@ -10,14 +10,16 @@
 // Software Foundation) version 2.1 dated February 1999.
 #include "../cuda.hpp"
 
-namespace mfem {
-  
-  // ***************************************************************************
-  // * CudaRestrictionOperator
-  // ***************************************************************************
-  void CudaRestrictionOperator::Mult(const CudaVector& x,
-                                     CudaVector& y) const {
-    rExtractSubVector(entries, indices->ptr(), x, y);
-  }
+namespace mfem
+{
+
+// ***************************************************************************
+// * CudaRestrictionOperator
+// ***************************************************************************
+void CudaRestrictionOperator::Mult(const CudaVector& x,
+                                   CudaVector& y) const
+{
+   rExtractSubVector(entries, indices->ptr(), x, y);
+}
 
 } // namespace mfem
