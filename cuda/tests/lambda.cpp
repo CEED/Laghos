@@ -49,10 +49,6 @@ namespace hydrodynamics {
     const int vlsize = nzones * H1compFESpace.GetLocalDofs() * H1compFESpace.GetVDim();
     CudaVector B(vlsize);
     CudaVector X(vlsize);
-    /*printf("\n\033[31m[lambda] localX size = %d, GetNE=%d, GetLocalDofs=%d, GetVDim=%d\033[m",
-         X.Size(),nzones,
-         H1compFESpace.GetLocalDofs(),
-         H1compFESpace.GetVDim());*/
     quad_data.dqMaps = CudaDofQuadMaps::Get(H1FESpace,integ_rule);
     quad_data.geom = CudaGeometry::Get(H1FESpace,integ_rule);
     CudaGridFunction d_rho(L2FESpace);
@@ -77,9 +73,7 @@ namespace hydrodynamics {
     bilinearForm.FormOperator(Array<int>(), massOperator);
     // **************************************************************************
     MPI_Barrier(pmesh->GetComm());
-#ifdef __NVCC__
     cudaDeviceSynchronize();
-#endif
     // *************************************************************************
     // Now let go the markers
     rconfig::Get().Nvvp(true);
@@ -93,9 +87,7 @@ namespace hydrodynamics {
     }
     // We MUST sync after to make sure every kernel has completed
     // or play with the -sync flag to enforce it with the push/pop
-#ifdef __NVCC__
     cudaDeviceSynchronize();
-#endif
     gettimeofday(&et, NULL);
     const float Kalltime = (et.tv_sec-st.tv_sec)*1.0e6+(et.tv_usec - st.tv_usec);
     if (rconfig::Get().Root())

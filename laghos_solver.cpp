@@ -106,7 +106,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      EMassPA(L2FESpace, integ_rule, &quad_data),
      VMassPA_prec(H1FESpace),
      ForcePA(H1FESpace, L2FESpace, integ_rule, &quad_data),
-     //locCG(),
      CG_VMass(H1FESpace.GetParMesh()->GetComm()),
      CG_EMass(L2FESpace.GetParMesh()->GetComm()),
      timer(),
@@ -120,7 +119,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      e_quad()
 {
    push(Wheat);
-   //printf("\n\033[31m[orders] %d %d\033[m\n",h1_fes.GetOrder(0),l2_fes.GetOrder(0));
 
    // Initial local mesh size (assumes similar cells).
    double loc_area = 0.0, glob_area;
@@ -399,9 +397,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
    CudaVector v = S.GetRange(vSize, vSize);
    CudaGridFunction e(L2FESpace, S.GetRange(2*vSize, eSize));
 
-   quad_data.geom = rconfig::Get().Occa() ?
-                    CudaGeometry::Get(H1FESpace,integ_rule):
-                    CudaGeometry::Get(H1FESpace,integ_rule,x);
+   quad_data.geom = CudaGeometry::Get(H1FESpace,integ_rule,x);
    H1FESpace.GlobalToLocal(v, v_local);
    e.ToQuad(integ_rule, e_quad);
 

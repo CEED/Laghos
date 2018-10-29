@@ -23,18 +23,6 @@
 namespace mfem {
 
   // ***************************************************************************
-  /*extern "C" void d_Mult(const CudaVector &b, CudaVector &x,
-                         const int N,
-                         const CudaOperator *oper,
-                         CudaSolverOperator *prec,
-                         const bool iterative_mode,
-                         CudaVector &r,
-                         CudaVector &d,
-                         CudaVector &z,
-                         double &final_norm);*/
-
-
-  // ***************************************************************************
   class CudaIterativeSolver : public CudaSolverOperator{
 #ifdef MFEM_USE_MPI
   private:
@@ -154,12 +142,7 @@ namespace mfem {
     }
     void h_Mult(const CudaVector &b, CudaVector &x) const ;
     virtual void Mult(const CudaVector &b, CudaVector &x) const {
-      if (rconfig::Get().Dcg()){
-#ifdef __NVCC__
-        //d_Mult(b,x,b.Size(),oper,prec,iterative_mode,r,d,z,final_norm);
-#endif
-      }
-      else h_Mult(b,x);
+      h_Mult(b,x);
     }
   };
 

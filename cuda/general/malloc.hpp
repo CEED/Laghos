@@ -25,7 +25,6 @@ namespace mfem {
     inline void* operator new(size_t n, bool lock_page = false) {
       dbg("+]\033[m");
       if (!rconfig::Get().Cuda()) return ::new T[n];
-#ifdef __NVCC__
       void *ptr;
       push(new,Purple);
       if (!rconfig::Get().Uvm()){
@@ -36,12 +35,6 @@ namespace mfem {
       }
       pop();
       return ptr;
-#else
-      // We come here when the user requests a manager,
-      // but has compiled the code without NVCC
-      assert(false);
-      return ::new T[n];
-#endif // __NVCC__
     }
   
     // ***************************************************************************
@@ -51,13 +44,11 @@ namespace mfem {
         if (ptr)
           ::delete[] static_cast<T*>(ptr);
       }
-#ifdef __NVCC__
       else {
         push(delete,Fuchsia);
         cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
         pop();
       }
-#endif // __NVCC__
       ptr = nullptr;
     }
   };

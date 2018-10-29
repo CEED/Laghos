@@ -32,11 +32,9 @@ namespace mfem {
     if (bytes==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-#ifdef __NVCC__
     if (!rconfig::Get().Uvm())
       cuMemcpyHtoD((CUdeviceptr)dest,src,bytes);
     else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-#endif
     return dest;
   }
 
@@ -46,11 +44,9 @@ namespace mfem {
     if (bytes==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-#ifdef __NVCC__
     if (!rconfig::Get().Uvm())
       cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes);
     else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-#endif
     return dest;
   }
   
@@ -60,7 +56,6 @@ namespace mfem {
     if (bytes==0) return dest;
     assert(src); assert(dest);
     if (!rconfig::Get().Cuda()) return std::memcpy(dest,src,bytes);
-#ifdef __NVCC__
     if (!rconfig::Get().Uvm()){
       if (!async)
         cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
@@ -69,7 +64,6 @@ namespace mfem {
         cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s);
       }
     } else cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
-#endif
     return dest;
   }
 

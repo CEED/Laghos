@@ -77,11 +77,9 @@ namespace mfem {
   void rconfig::Setup(const int _mpi_rank,
                       const int _mpi_size,
                       const bool _cuda,
-                      const bool _dcg,
                       const bool _uvm,
                       const bool _aware,
                       const bool _share,
-                      const bool _occa,
                       const bool _hcpo,
                       const bool _sync,
                       const bool _dot,
@@ -109,12 +107,10 @@ namespace mfem {
     // Can be changed wuth CUDA_VISIBLE_DEVICES
     cudaGetDeviceCount(&gpu_count);
     cuda=_cuda;
-    dcg=_dcg; // CG on device
     uvm=_uvm;
     aware=_aware;
     share=_share;
     share_env=getenv("SHR");
-    occa=_occa;
     hcpo=_hcpo;
     sync=_sync;
     
@@ -180,20 +176,17 @@ namespace mfem {
 
   // ***************************************************************************
   bool rconfig::IAmAlone() {
-    if (Occa()) return false;
     return mpi_size==1;
   }
 
   // ***************************************************************************
   bool rconfig::GeomNeedsUpdate(const int sequence) {
-    if (Occa()) return true;
     assert(sequence==0);
     return (sequence!=0);
   }
 
   // ***************************************************************************
   bool rconfig::DoHostConformingProlongationOperator() {
-    if (Occa()) return true;
     return (Cuda())?hcpo:true;
   }
   

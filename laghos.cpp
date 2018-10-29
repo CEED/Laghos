@@ -95,19 +95,12 @@ int main(int argc, char *argv[])
    bool dot = false;
    bool mult = false;
    bool lambda = false; // lambda test on one kernel only
-   bool cuda = false;
-   bool dcg = false;
+   const bool cuda = true;
    bool uvm = false;
    bool aware = false;
-   bool share = false;
-   bool occa = false;
+   bool share = true;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
-
-   // **************************************************************************
-#if defined(__NVCC__) and not defined(__CUDA__)
-   cuda=true;
-#endif
 
    const char *basename = "results/Laghos";
    OptionsParser args(argc, argv);
@@ -156,13 +149,6 @@ int main(int argc, char *argv[])
    args.AddOption(&lambda, "-l", "--lambda", "-no-lambda", "--no-lambda",
                   "Enable or disable LAMBDA test kernels.");
    // CUDA Options *************************************************************
-   args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
-                  "Enable or disable CUDA kernels if you are using CUDA.");
-   // OCCA Options *************************************************************
-   args.AddOption(&occa, "-occa", "--occa", "-not-occa", "--no-occa",
-                  "Enable or disable OCCA behavior: geometry update and\n"
-                  "\tHost Conforming Prolongation Operations.");
-   // CUDA Options *************************************************************
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "[32mEnable or disable Unified Memory.[m");
    args.AddOption(&aware, "-aware", "--aware", "-no-aware", "--no-aware",
@@ -175,8 +161,6 @@ int main(int argc, char *argv[])
    // Not usable Options *******************************************************
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels (WIP, not usable).");
-   args.AddOption(&dcg, "-dcg", "--dcg", "-no-dcg", "--no-dcg",
-                  "Enable or disable CUDA CG (WIP, not usable).");
    args.Parse();
    if (!args.Good())
    {
@@ -188,7 +172,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,dcg,uvm,aware,share,occa,hcpo,sync,dot,rs_levels);
+                        cuda,uvm,aware,share,hcpo,sync,dot,rs_levels);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.

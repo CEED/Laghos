@@ -28,7 +28,6 @@ namespace mfem {
   CudaCommD::~CudaCommD(){ }
 
 
-#ifdef __NVCC__
   // ***************************************************************************
   // * kCopyFromTable
   // ***************************************************************************
@@ -453,15 +452,5 @@ namespace mfem {
   template void CudaCommD::d_BcastEnd<double>(double*, int);
   template void CudaCommD::d_ReduceBegin<double>(const double *);
   template void CudaCommD::d_ReduceEnd<double>(double*,int,void (*)(OpData<double>));
-#else // __NVCC__
-  template <class T> void CudaCommD::d_ReduceBegin(const T*) {}
-  template <class T> void CudaCommD::d_ReduceEnd(T*,int,void (*Op)(OpData<T>)){}
-  template <class T> void CudaCommD::d_BcastBegin(T*, int) {}
-  template <class T> void CudaCommD::d_BcastEnd(T*, int) {}
-  template void CudaCommD::d_BcastBegin<double>(double*, int);
-  template void CudaCommD::d_BcastEnd<double>(double*, int);
-  template void CudaCommD::d_ReduceBegin<double>(const double *);
-  template void CudaCommD::d_ReduceEnd<double>(double*,int,void (*)(OpData<double>));
-#endif // __NVCC__
 
 } // namespace mfem

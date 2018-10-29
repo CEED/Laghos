@@ -45,7 +45,7 @@ typedef enum {
   White} colors;
 
 // *****************************************************************************
-#if defined(__NVVP__)
+#ifdef __NVVP__
 
 #include <nvToolsExt.h>
 #include <cudaProfiler.h>
@@ -77,11 +77,11 @@ NVTX_DECLSPEC int NVTX_API rNvtxSyncPop(void);
 #else // __NVVP__ **************************************************************
 
 #define pop(...)
-#define push(...) dbg("\n%s",__PRETTY_FUNCTION__)
+#define push(...) //dbg("\n%s",__PRETTY_FUNCTION__)
 #define cuProfilerStart(...)
 #define cuProfilerStop(...)
 
-#endif // defined(__NVCC__) and defined(__NVVP__)
+#endif // __NVVP__
 
 #endif // LAGHOS_CUDA_NVVP
 
