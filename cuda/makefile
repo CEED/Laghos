@@ -15,12 +15,12 @@
 # testbed platforms, in support of the nation's exascale computing imperative.
 
 NV_ARCH ?= -arch=sm_61
-
 CUDA_DIR ?= /usr/local/cuda
-MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
+
+MPI_HOME ?= /usr/local/mpi
+MPI_INCFLAGS = -I$(MPI_HOME)/include 
 
 NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
-NVCC_INCFLAGS = -I$(MPI_HOME)/include 
 NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
 				-lcuda -lcudart -lcudadevrt -lnvToolsExt
 
@@ -104,7 +104,8 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) $(NVCC_CXXFLAGS) $(NVCC_INCFLAGS)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) \
+      $(MPI_INCFLAGS) $(NVCC_CXXFLAGS) $(NVCC_INCFLAGS)
 LAGHOS_LIBS = $(MFEM_LIBS) $(NVCC_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
