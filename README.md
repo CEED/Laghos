@@ -187,8 +187,7 @@ Build Laghos
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
 
-
-## Building on GPU with cuda, or RAJA
+## Building on GPU with the CUDA or RAJA versions of the miniapp
 
 ### Environment setup
 ```sh
@@ -221,8 +220,7 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 
 ### Laghos
 -   `git clone git@github.com:CEED/Laghos.git`
--   `cd Laghos`
--   `git checkout raja-dev`
+-   `cd Laghos/cuda`
 -   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
 -   `make` to build for the CPU version
 -   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
@@ -368,6 +366,7 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - A serial version in the [serial](./serial) directory.
+- A CUDA version in the [cuda](./cuda) directory.
 - [GPU version](https://github.com/CEED/Laghos/tree/occa-dev) based on
   [OCCA](http://libocca.org/).
 - A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
