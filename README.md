@@ -187,7 +187,7 @@ Build Laghos
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
 
-## Building on GPU with the CUDA or the RAJA versions of the miniapp
+## Building on GPU with CUDA and RAJA
 
 ### Environment setup
 ```sh
