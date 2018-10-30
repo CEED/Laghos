@@ -24,20 +24,21 @@ void rNodeCopyByVDim(const int elements,
                      const double* Sx,
                      double* nodes)
 {
-   forall(e, elements,   {
-         for (int dof = 0; dof < numDofs; ++dof)
+   forall(e, elements,
+   {
+      for (int dof = 0; dof < numDofs; ++dof)
+      {
+         const int lid = dof+numDofs*e;
+         const int gid = eMap[lid];
+         for (int v = 0; v < dims; ++v)
          {
-            const int lid = dof+numDofs*e;
-            const int gid = eMap[lid];
-            for (int v = 0; v < dims; ++v)
-            {
-               const int moffset = v+dims*lid;
-               const int voffset = gid+v*ndofs;
-               nodes[moffset] = Sx[voffset];
-            }
+            const int moffset = v+dims*lid;
+            const int voffset = gid+v*ndofs;
+            nodes[moffset] = Sx[voffset];
          }
       }
-      );
+   }
+         );
 }
 
 

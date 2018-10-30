@@ -59,8 +59,8 @@ static void rMassAssemble3D(const int NUM_QUAD_3D,
          const double J32 = J[ijklNM(1,2,q,e,3,NUM_QUAD_3D)];
          const double J33 = J[ijklNM(2,2,q,e,3,NUM_QUAD_3D)];
          const double detJ = ((J11*J22*J33)+(J12*J23*J31)+
-                              (J13*J21*J32)-(J13*J22*J31)-
-                              (J12*J21*J33)-(J11*J23*J32));
+         (J13*J21*J32)-(J13*J22*J31)-
+         (J12*J21*J33)-(J11*J23*J32));
          oper[ijN(q,e,NUM_QUAD_3D)] = quadWeights[q]*COEFF*detJ;
       }
    } );
