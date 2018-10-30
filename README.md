@@ -191,14 +191,14 @@ build respectively. See `make help` for additional options.
 
 ### Environment setup
 ```sh
-export MPI_PATH=~/usr/local/openmpi/3.0.0
+export MPI_HOME=~/usr/local/openmpi/3.0.0
 ```
 
 ### Hypre
 - <https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods/download/hypre-2.11.2.tar.gz>
 - `tar xzvf hypre-2.11.2.tar.gz`
 - ` cd hypre-2.11.2/src`
-- `./configure --disable-fortran --with-MPI --with-MPI-include=$MPI_PATH/include --with-MPI-lib-dirs=$MPI_PATH/lib`
+- `./configure --disable-fortran --with-MPI --with-MPI-include=$MPI_HOME/include --with-MPI-lib-dirs=$MPI_HOME/lib`
 - `make -j`
 - `cd ../..`
 
@@ -222,13 +222,8 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 -   `git clone git@github.com:CEED/Laghos.git`
 -   `cd Laghos/cuda`
 -   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
--   `make` to build for the CPU version
+-   `make` to build the CUDA version
 -   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `cp ./laghos ./laghos.cpu`
--   `make clean && make cuda`
--   `./laghos -cfl 0.1` should give you again again `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `cp ./laghos ./laghos.gpu`
--   if you set up the RAJA_DIR path in the `makefile`, you can `make clean && make raja`, `cp ./laghos ./laghos.raja`
 
 ### Options
 -   -m <string>: Mesh file to use
@@ -237,12 +232,9 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 -   -p <int>: Problem setup to use, Sedov problem is '1'
 -   -cfl <double>: CFL-condition number
 -   -ms <int>: Maximum number of steps (negative means no restriction)
--   -mult: Enable or disable MULT test kernels
 -   -cuda: Enable or disable CUDA kernels if you are using RAJA
 -   -uvm: Enable or disable Unified Memory
 -   -aware: Enable or disable MPI CUDA Aware
--   -hcpo: Enable or disable Host Conforming Prolongation Operations,
-    which transfers ALL the data to the host before communications
 
 ## Running
 
