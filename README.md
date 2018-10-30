@@ -187,7 +187,7 @@ Build Laghos
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
 
-## Building on GPU with the CUDA or RAJA versions of the miniapp
+## Building on GPU with the CUDA or the RAJA versions of the miniapp
 
 ### Environment setup
 ```sh
@@ -218,12 +218,21 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   `make -j`
 -   `cd ..`
 
-### Laghos
+### CUDA Laghos
 -   `git clone git@github.com:CEED/Laghos.git`
 -   `cd Laghos/cuda`
 -   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
 -   `make` to build the CUDA version
 -   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
+-   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
+
+### RAJA Laghos
+-   `git clone git@github.com:CEED/Laghos.git`
+-   `cd Laghos/raja`
+-   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to RAJA\_DIR, CUDA\_DIR, MFEM\_DIR, MPI\_HOME
+-   `make` to build the RAJA version
+-   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
+-   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
 
 ### Options
 -   -m <string>: Mesh file to use
@@ -360,8 +369,8 @@ the following versions of Laghos have been developed
 - A CUDA version in the [cuda](./cuda) directory.
 - [GPU version](https://github.com/CEED/Laghos/tree/occa-dev) based on
   [OCCA](http://libocca.org/).
-- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
-  [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
+- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the [raja](./raja) directory.
+  [raja](https://github.com/CEED/Laghos/tree/raja) branch.
 - An MFEM/engines-based version in the
   [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branches.
 - Version with adaptive mesh refinement in the
