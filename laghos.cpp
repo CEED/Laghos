@@ -73,13 +73,14 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
-   const char *mesh_file = "data/square01_quad.mesh";
-   int rs_levels = 0;
+   problem = 1;
+   const char *mesh_file = "data/cube01_hex.mesh";
+   int rs_levels = 2;
    int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
@@ -172,11 +173,10 @@ int main(int argc, char *argv[])
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
          for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         if (dim == 2) { nxyz[2] = 0; }
          break;
       case 21: // 2D
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
-         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = 0;
+         nxyz[0] = 2 * unit; nxyz[1] = unit;
          break;
       case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete [] partitioning;
    }
    else
    {
@@ -710,9 +710,9 @@ double e0(const Vector &x)
       }
       case 1: return 0.0; // This case in initialized in main().
       case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-                                  : 0.1 / rho0(x) / (gamma(x) - 1.0);
+                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
       case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                                  : 1.0 / rho0(x) / (gamma(x) - 1.0);
+                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);

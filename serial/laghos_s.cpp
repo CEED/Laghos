@@ -64,12 +64,13 @@ int main(int argc, char *argv[])
    display_banner(cout);
 
    // Parse command-line options.
-   const char *mesh_file = "../data/square01_quad.mesh";
-   int rs_levels = 0;
+   problem = 1;
+   const char *mesh_file = "../data/cube01_hex.mesh";
+   int rs_levels = 2;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
@@ -568,9 +569,9 @@ double e0(const Vector &x)
       }
       case 1: return 0.0; // This case in initialized in main().
       case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-                                  : 0.1 / rho0(x) / (gamma(x) - 1.0);
+                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
       case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                                  : 1.0 / rho0(x) / (gamma(x) - 1.0);
+                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
