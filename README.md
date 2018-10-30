@@ -232,7 +232,6 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   -p <int>: Problem setup to use, Sedov problem is '1'
 -   -cfl <double>: CFL-condition number
 -   -ms <int>: Maximum number of steps (negative means no restriction)
--   -cuda: Enable or disable CUDA kernels if you are using RAJA
 -   -uvm: Enable or disable Unified Memory
 -   -aware: Enable or disable MPI CUDA Aware
 
