@@ -187,19 +187,18 @@ Build Laghos
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
 
-
-## Building on GPU with cuda, or RAJA
+## Building on GPU with CUDA and RAJA
 
 ### Environment setup
 ```sh
-export MPI_PATH=~/usr/local/openmpi/3.0.0
+export MPI_HOME=~/usr/local/openmpi/3.0.0
 ```
 
 ### Hypre
 - <https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods/download/hypre-2.11.2.tar.gz>
 - `tar xzvf hypre-2.11.2.tar.gz`
 - ` cd hypre-2.11.2/src`
-- `./configure --disable-fortran --with-MPI --with-MPI-include=$MPI_PATH/include --with-MPI-lib-dirs=$MPI_PATH/lib`
+- `./configure --disable-fortran --with-MPI --with-MPI-include=$MPI_HOME/include --with-MPI-lib-dirs=$MPI_HOME/lib`
 - `make -j`
 - `cd ../..`
 
@@ -219,18 +218,21 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 -   `make -j`
 -   `cd ..`
 
-### Laghos
+### CUDA Laghos
 -   `git clone git@github.com:CEED/Laghos.git`
--   `cd Laghos`
--   `git checkout raja-dev`
+-   `cd Laghos/cuda`
 -   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
--   `make` to build for the CPU version
+-   `make` to build the CUDA version
 -   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `cp ./laghos ./laghos.cpu`
--   `make clean && make cuda`
--   `./laghos -cfl 0.1` should give you again again `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `cp ./laghos ./laghos.gpu`
--   if you set up the RAJA_DIR path in the `makefile`, you can `make clean && make raja`, `cp ./laghos ./laghos.raja`
+-   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
+
+### RAJA Laghos
+-   `git clone git@github.com:CEED/Laghos.git`
+-   `cd Laghos/raja`
+-   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to RAJA\_DIR, CUDA\_DIR, MFEM\_DIR, MPI\_HOME
+-   `make` to build the RAJA version
+-   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
+-   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
 
 ### Options
 -   -m <string>: Mesh file to use
@@ -239,12 +241,8 @@ export MPI_PATH=~/usr/local/openmpi/3.0.0
 -   -p <int>: Problem setup to use, Sedov problem is '1'
 -   -cfl <double>: CFL-condition number
 -   -ms <int>: Maximum number of steps (negative means no restriction)
--   -mult: Enable or disable MULT test kernels
--   -cuda: Enable or disable CUDA kernels if you are using RAJA
 -   -uvm: Enable or disable Unified Memory
 -   -aware: Enable or disable MPI CUDA Aware
--   -hcpo: Enable or disable Host Conforming Prolongation Operations,
-    which transfers ALL the data to the host before communications
 
 ## Running
 
@@ -370,10 +368,11 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - A serial version in the [serial](./serial) directory.
+- A CUDA version in the [cuda](./cuda) directory.
 - [GPU version](https://github.com/CEED/Laghos/tree/occa-dev) based on
   [OCCA](http://libocca.org/).
-- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the
-  [raja-dev](https://github.com/CEED/Laghos/tree/raja-dev) branch.
+- A [RAJA](https://software.llnl.gov/RAJA/)-based version in the [raja](./raja) directory.
+  [raja](https://github.com/CEED/Laghos/tree/raja) branch.
 - An MFEM/engines-based version in the
   [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branches.
 - Version with adaptive mesh refinement in the
