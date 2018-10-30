@@ -27,8 +27,8 @@
 
 // *****************************************************************************
 #define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
-#define ISQRT(N) static_cast<unsigned>(sqrt(static_cast<float>(N)))
-#define ICBRT(N) static_cast<unsigned>(cbrt(static_cast<float>(N)))
+#define ISQRT(N) sqrt(static_cast<float>(N))
+#define ICBRT(N) cbrt(static_cast<float>(N))
 #define IROOT(D,N) ((D==1)?N:(D==2)?ISQRT(N):(D==3)?ICBRT(N):0)
 
 // *****************************************************************************
