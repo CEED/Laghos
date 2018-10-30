@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    const bool cuda = true;
    bool uvm = false;
-   bool aware = true;
+   bool aware = false;
    bool share = true;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
