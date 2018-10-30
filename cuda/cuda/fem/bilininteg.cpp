@@ -423,13 +423,13 @@ CudaDofQuadMaps* CudaDofQuadMaps::GetD2QSimplexMaps(const FiniteElement& fe,
       {
          const double w = d2q[d];
          dofToQuad[maps->dofToQuad.dim()[0]*q +
-                                              maps->dofToQuad.dim()[1]*d] = w;
+                   maps->dofToQuad.dim()[1]*d] = w;
          for (int dim = 0; dim < dims; ++dim)
          {
             const double wD = d2qD(d, dim);
             dofToQuadD[maps->dofToQuadD.dim()[0]*dim +
-                                                     maps->dofToQuadD.dim()[1]*q +
-                                                     maps->dofToQuadD.dim()[2]*d] = wD;
+                       maps->dofToQuadD.dim()[1]*q +
+                       maps->dofToQuadD.dim()[2]*d] = wD;
          }
       }
    }

@@ -49,12 +49,12 @@ void rUpdateQuadratureData2S(const double GAMMA,
       share double s_dofToQuadD[NUM_QUAD_DOFS_1D];//@dim(NUM_QUAD_1D, NUM_DOFS_1D);
 
       share double s_xy[NUM_DIM *
-                                NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+                        NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
       share double s_xDy[NUM_DIM *
-                                 NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
+                         NUM_QUAD_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D, NUM_QUAD_1D);
 
       share double s_gradv[NUM_DIM * NUM_DIM *
-                                   NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
+                           NUM_QUAD_2D];//@dim(NUM_DIM, NUM_DIM, NUM_QUAD_2D);
 
       double r_v[NUM_DIM * NUM_DOFS_1D];//@dim(NUM_DIM, NUM_DOFS_1D);
 
@@ -599,25 +599,25 @@ void rUpdateQuadratureData3S(const double GAMMA,
                const double S22 = q_stress[ijN(2, 2,3)];
 
                stressJinvT[ijklNM(0, 0, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01) + (S20 * invJ_02));
+                                  NUM_QUAD)] = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01) + (S20 * invJ_02));
                stressJinvT[ijklNM(1, 0, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11) + (S20 * invJ_12));
+                                  NUM_QUAD)] = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11) + (S20 * invJ_12));
                stressJinvT[ijklNM(2, 0, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S00 * invJ_20) + (S10 * invJ_21) + (S20 * invJ_22));
+                                  NUM_QUAD)] = q_Jw * ((S00 * invJ_20) + (S10 * invJ_21) + (S20 * invJ_22));
 
                stressJinvT[ijklNM(0, 1, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01) + (S21 * invJ_02));
+                                  NUM_QUAD)] = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01) + (S21 * invJ_02));
                stressJinvT[ijklNM(1, 1, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11) + (S21 * invJ_12));
+                                  NUM_QUAD)] = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11) + (S21 * invJ_12));
                stressJinvT[ijklNM(2, 1, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S01 * invJ_20) + (S11 * invJ_21) + (S21 * invJ_22));
+                                  NUM_QUAD)] = q_Jw * ((S01 * invJ_20) + (S11 * invJ_21) + (S21 * invJ_22));
 
                stressJinvT[ijklNM(0, 2, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S02 * invJ_00) + (S12 * invJ_01) + (S22 * invJ_02));
+                                  NUM_QUAD)] = q_Jw * ((S02 * invJ_00) + (S12 * invJ_01) + (S22 * invJ_02));
                stressJinvT[ijklNM(1, 2, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S02 * invJ_10) + (S12 * invJ_11) + (S22 * invJ_12));
+                                  NUM_QUAD)] = q_Jw * ((S02 * invJ_10) + (S12 * invJ_11) + (S22 * invJ_12));
                stressJinvT[ijklNM(2, 2, q, el,NUM_DIM,
-                                            NUM_QUAD)] = q_Jw * ((S02 * invJ_20) + (S12 * invJ_21) + (S22 * invJ_22));
+                                  NUM_QUAD)] = q_Jw * ((S02 * invJ_20) + (S12 * invJ_21) + (S22 * invJ_22));
             }
          }
       }

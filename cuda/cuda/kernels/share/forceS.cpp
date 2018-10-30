@@ -630,7 +630,7 @@ void rForceMultTranspose3S(const int numElements,
                               xyDz += wy  * xDz;
                            }
                            r_qv += ((Dxyz * stressJinvT[ijklmnNM(0, c, qx, qy, qz, el,NUM_DIM,
-                                                                             NUM_QUAD_1D)]) +
+                                                                 NUM_QUAD_1D)]) +
                                     (xDyz * stressJinvT[ijklmnNM(1, c, qx, qy, qz, el,NUM_DIM,NUM_QUAD_1D)]) +
                                     (xyDz * stressJinvT[ijklmnNM(2, c, qx, qy, qz, el,NUM_DIM,NUM_QUAD_1D)]));
                         }

@@ -18,11 +18,11 @@ NV_ARCH ?= -arch=sm_61
 CUDA_DIR ?= /usr/local/cuda
 
 MPI_HOME ?= /usr/local/mpi
-MPI_INCFLAGS = -I$(MPI_HOME)/include 
+MPI_INCFLAGS = -I$(MPI_HOME)/include
 
 NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
 NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
-				-lcuda -lcudart -lcudadevrt -lnvToolsExt
+            -lcuda -lcudart -lcudadevrt -lnvToolsExt
 
 define LAGHOS_HELP_MSG
 
