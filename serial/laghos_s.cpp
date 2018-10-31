@@ -56,6 +56,10 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
+double rho0(const Vector &);
+void v0(const Vector &, Vector &);
+double e0(const Vector &);
+double gamma(const Vector &);
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
@@ -221,7 +225,7 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    GridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
+   FunctionCoefficient rho_coeff(rho0);
    L2_FECollection l2_fec(order_e, mesh->Dimension());
    FiniteElementSpace l2_fes(mesh, &l2_fec);
    GridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -246,7 +250,7 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, mesh->Dimension());
    FiniteElementSpace mat_fes(mesh, &mat_fec);
    GridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   FunctionCoefficient mat_coeff(gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
@@ -474,12 +478,6 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-namespace mfem
-{
-
-namespace hydrodynamics
-{
-
 double rho0(const Vector &x)
 {
    switch (problem)
@@ -591,10 +589,6 @@ double e0(const Vector &x)
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-
-} // namespace hydrodynamics
-
-} // namespace mfem
 
 void display_banner(ostream & os)
 {
