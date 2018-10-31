@@ -494,7 +494,7 @@ int main(int argc, char *argv[])
          S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
-         last_step = false;
+         if (steps != max_tsteps) { last_step = false; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
