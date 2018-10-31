@@ -607,7 +607,8 @@ int main(int argc, char *argv[])
       case 2: steps *= 2; break;
       case 3: steps *= 3; break;
       case 4: steps *= 4; break;
-      case 6: steps *= 6;
+      case 6: steps *= 6; break;
+      case 7: steps *= 2;
    }
    oper.PrintTimingData(mpi.Root(), steps);
 
