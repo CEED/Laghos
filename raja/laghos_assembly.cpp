@@ -108,7 +108,7 @@ void RajaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
 #endif
    }
    else { assert(ess_tdofs_count<=ess_tdofs.Size()); }
-   assert(ess_tdofs>0);
+   assert(ess_tdofs.ptr());
    if (ess_tdofs_count == 0) { return; }
    assert(ess_tdofs_count>0);
    assert(dofs.GetData());
