@@ -37,8 +37,8 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 The CUDA version differs from the official benchmark version of Laghos (in the
 top-level directory) in the following ways:
 
-1. item 1
-2. item 2
+1. Only problems 0 and 1 are defined
+2. Final iterations (`step`), time steps (`dt`) and energies (`|e|`) still differ from the original version
 
 ## Building
 
@@ -104,25 +104,17 @@ of Laghos...
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa`
-4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa`
-5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
-6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
-8. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
+1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
+2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
+3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -pa -cfl 0.05`
+4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -cfl 0.08`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
-|  1. |  339 | 0.000702 | 49.6955373491   |
-|  2. | 1041 | 0.000121 | 3390.9635545458 |
-|  3. | 1154 | 0.001655 | 46.3033960530   |
-|  4. |  560 | 0.002449 | 134.0861672235  |
-|  5. |  413 | 0.000470 | 32.0120774101   |
-|  6. | 5301 | 0.000360 | 141.8352298401  |
-|  7. |  975 | 0.001601 | 144.2461751623  |
-|  8. |  776 | 0.000045 | 409.8243172608  |
+|  1. |  333 | 0.000008 | 49.6955373330   |
+|  2. | 1036 | 0.000093 | 3390.9635544029 |
+|  3. | 1570 | 0.000768 | 46.2901037375   |
+|  4. |  486 | 0.000864 | 135.1267396160  |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
