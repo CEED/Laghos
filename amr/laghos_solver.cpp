@@ -59,7 +59,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
       if (myid == 0 && newly_opened)
       {
          const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
-               ? "mAcRjlPPPPPPPP" : "maaAcl";
+                            ? "mAcRjlPPPPPPPP" : "maaAcl";
 
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
@@ -78,7 +78,8 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-void VisualizeElementValues(socketstream &sock, const char *vishost, int visport,
+void VisualizeElementValues(socketstream &sock, const char *vishost,
+                            int visport,
                             ParMesh* pmesh, Vector &values, const char *title,
                             int x, int y, int w, int h)
 {
@@ -643,7 +644,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             zone_max_visc(z_id) = std::max(visc_coeff, zone_max_visc(z_id));
             zone_vgrad(z_id) = std::max(std::abs(det_v_grad), zone_vgrad(z_id));
             //zone_vgrad(z_id) += std::abs(det_v_grad);
-         }         
+         }
          ++z_id;
       }
    }

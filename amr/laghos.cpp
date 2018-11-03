@@ -445,7 +445,8 @@ int main(int argc, char *argv[])
       // tweak h0, set it as if the mesh was fully refined to amr_max_level
       double elem_size = 0.5; // FIXME: coarse element size
       //double h0 = elem_size / (1 << amr_max_level) / order_v;
-      double h0 = elem_size / order_v; // the division is now done inside UpdateQuadratureData
+      double h0 = elem_size /
+                  order_v; // the division is now done inside UpdateQuadratureData
       oper.SetH0(h0);
    }
 
@@ -635,7 +636,7 @@ int main(int argc, char *argv[])
             if (error_est(i) > ref_threshold
                 && pmesh->pncmesh->GetElementDepth(i) < amr_max_level
                 && (v_min(i) < 1e-3 || ti < 50) // only refine the still area
-                )
+               )
             {
                refs.Append(i);
             }

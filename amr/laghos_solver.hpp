@@ -41,7 +41,8 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     bool vec = false);
 
 /// Visualize per element scalar values.
-void VisualizeElementValues(socketstream &sock, const char *vishost, int visport,
+void VisualizeElementValues(socketstream &sock, const char *vishost,
+                            int visport,
                             ParMesh* pmesh, Vector &values, const char *title,
                             int x, int y, int w, int h);
 
