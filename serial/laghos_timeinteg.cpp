@@ -14,8 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_timeinteg_s.hpp"
-#include "laghos_solver_s.hpp"
+#include "laghos_timeinteg.hpp"
+#include "laghos_solver.hpp"
 
 using namespace std;
 
