@@ -43,12 +43,18 @@
 // Sample runs: see README.md, section 'Verification of Results'.
 //
 // Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
-// -m data/cube01_hex.mesh  -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
-// -m data/cube_12_hex.mesh -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
-// -m data/cube01_hex.mesh  -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
-// -m data/cube01_hex.mesh  -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
-// -m data/cube_12_hex.mesh -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
-// -m data/cube_12_hex.mesh -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
+// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
+// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
+// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
+// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
+// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
+// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
+// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
+// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
+// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -61,6 +67,10 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
+double rho0(const Vector &);
+void v0(const Vector &, Vector &);
+double e0(const Vector &);
+double gamma(const Vector &);
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
@@ -202,6 +212,30 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
          break;
+      case 511: // 3D.
+         unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 521: // 3D.
+         unit = floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 522: // 3D.
+         unit = floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
+         break;
+      case 911: // 3D.
+         unit = floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 921: // 3D.
+         unit = floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 922: // 3D.
+         unit = floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
+         break;
       default:
          if (myid == 0)
          {
@@ -339,7 +373,7 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
+   FunctionCoefficient rho_coeff(rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -364,7 +398,7 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   FunctionCoefficient mat_coeff(gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
@@ -475,7 +509,7 @@ int main(int argc, char *argv[])
          S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
-         last_step = false;
+         if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
@@ -573,7 +607,8 @@ int main(int argc, char *argv[])
       case 2: steps *= 2; break;
       case 3: steps *= 3; break;
       case 4: steps *= 4; break;
-      case 6: steps *= 6;
+      case 6: steps *= 6; break;
+      case 7: steps *= 2;
    }
    oper.PrintTimingData(mpi.Root(), steps);
 
@@ -614,12 +649,6 @@ int main(int argc, char *argv[])
 
    return 0;
 }
-
-namespace mfem
-{
-
-namespace hydrodynamics
-{
 
 double rho0(const Vector &x)
 {
@@ -732,10 +761,6 @@ double e0(const Vector &x)
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-
-} // namespace hydrodynamics
-
-} // namespace mfem
 
 void display_banner(ostream & os)
 {
