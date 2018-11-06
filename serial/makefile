@@ -140,10 +140,10 @@ $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 MFEM_TESTS = laghos
 include $(TEST_MK)
 # Testing: Specific execution options
-RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
+RUN_MPI =
 test: laghos
 	@$(call mfem-test,$<, $(RUN_MPI), Laghos miniapp,\
-	-p 0 -m data/square01_quad.mesh -rs 3 -tf 0.1)
+	-p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.1)
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
 
