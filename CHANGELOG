@@ -11,11 +11,15 @@
 Version 1.2, released on Nov X, 2018
 ====================================
 
-- Added a CUDA version in the cuda/ directory.
+- Added CUDA version in the cuda/ directory.
 
-- Added a RAJA version in the raja/ directory.
+- Added RAJA version in the raja/ directory.
 
-- Replace a viscosity if statement with a smooth step function.
+- Added OCCA version in the occa/ directory.
+
+- Added Adaptive Mesh Refinement version in the amr/ directory.
+
+- Replaced a viscosity "if statement" with a smooth step function.
 
 
 Version 1.1, released on Sep 28, 2018

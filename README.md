@@ -90,9 +90,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 431.
+  starting around line 481.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 375 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 418 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -264,7 +264,6 @@ To make sure the results are correct, we tabulate reference final iterations
 |  7. |  975 | 0.001601 | 144.2461751623  |
 |  8. |  776 | 0.000045 | 409.8243172608  |
 
-
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
@@ -312,8 +311,8 @@ the following versions of Laghos have been developed
 
 - SERIAL version in the [serial](./serial/README.md) directory.
 - CUDA version in the [cuda](./cuda/README.md) directory. This version supports GPU acceleration.
-- [RAJA](https://software.llnl.gov/RAJA/) version in the [raja](./raja/README.md) directory. This version supports GPU acceleration.
-- [OCCA](http://libocca.org/) version in the [occa](./occa/README.md) directory. This version supports GPU and OpenMP acceleration.
+- RAJA version in the [raja](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
+- OCCA version in the [occa](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
 - Adaptive mesh refinement (AMR) version in the [amr](./amr/README.md) directory.
 - An MFEM/engines-based version in the
   [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branch.

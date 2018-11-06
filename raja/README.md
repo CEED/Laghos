@@ -99,8 +99,6 @@ of Laghos...
 -   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
 -   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
 
-**UPDATE**
-
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
