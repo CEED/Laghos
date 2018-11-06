@@ -44,7 +44,6 @@
 // All tests should be run in serial with the correct path to the mesh files.
 //
 
-
 #include "laghos_solver_s.hpp"
 #include "laghos_timeinteg_s.hpp"
 #include <fstream>
@@ -357,7 +356,7 @@ int main(int argc, char *argv[])
          S = S_old;
          oper.ResetQuadratureData();
          cout << "Repeating step " << ti << endl;
-         last_step = false;
+         if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
@@ -442,7 +441,8 @@ int main(int argc, char *argv[])
       case 2: steps *= 2; break;
       case 3: steps *= 3; break;
       case 4: steps *= 4; break;
-      case 6: steps *= 6;
+      case 6: steps *= 6; break;
+      case 7: steps *= 2;
    }
    oper.PrintTimingData(steps);
 
