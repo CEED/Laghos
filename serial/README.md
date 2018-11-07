@@ -43,8 +43,7 @@ top-level directory) in the following ways:
 
 The serial version of Laghos has the following external dependencies:
 
-- MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
-  https://github.com/mfem/mfem
+- MFEM, used for (high-order) finite element discretization.
 
 To build the miniapp, first clone and build MFEM:
 ```sh

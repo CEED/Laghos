@@ -23,6 +23,8 @@
 //
 //             High-order Lagrangian Hydrodynamics Miniapp
 //
+//                            SERIAL version
+//
 // Laghos(LAGrangian High-Order Solver) is a miniapp that solves the
 // time-dependent Euler equation of compressible gas dynamics in a moving
 // Lagrangian frame using unstructured high-order finite element spatial
