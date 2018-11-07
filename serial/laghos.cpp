@@ -23,6 +23,8 @@
 //
 //             High-order Lagrangian Hydrodynamics Miniapp
 //
+//                            SERIAL version
+//
 // Laghos(LAGrangian High-Order Solver) is a miniapp that solves the
 // time-dependent Euler equation of compressible gas dynamics in a moving
 // Lagrangian frame using unstructured high-order finite element spatial
@@ -44,8 +46,8 @@
 // All tests should be run in serial with the correct path to the mesh files.
 //
 
-#include "laghos_solver_s.hpp"
-#include "laghos_timeinteg_s.hpp"
+#include "laghos_solver.hpp"
+#include "laghos_timeinteg.hpp"
 #include <fstream>
 
 using namespace std;
@@ -97,7 +99,8 @@ int main(int argc, char *argv[])
                   "Order (degree) of the thermodynamic finite element space.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
-                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6.");
+                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
+                  "            7 - RK2Avg.");
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");

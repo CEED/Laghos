@@ -168,13 +168,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
 
-   ForceIntegrator *fi = new ForceIntegrator(quad_data);
-   fi->SetIntRule(&integ_rule);
-   Force.AddDomainIntegrator(fi);
-   // Make a dummy assembly to figure out the sparsity.
-   Force.Assemble(0);
-   Force.Finalize(0);
-
    if (p_assembly)
    {
       // Compute the global 1D reference tensors.
@@ -187,6 +180,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       Vector d;
       (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
       VMassPA_prec.SetDiagonal(d);
+   }
+   else
+   {
+      ForceIntegrator *fi = new ForceIntegrator(quad_data);
+      fi->SetIntRule(&integ_rule);
+      Force.AddDomainIntegrator(fi);
+      // Make a dummy assembly to figure out the sparsity.
+      Force.Assemble(0);
+      Force.Finalize(0);
    }
 
    locCG.SetOperator(locEMassPA);

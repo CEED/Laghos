@@ -69,7 +69,9 @@ Other computational motives in Laghos include the following:
   with the less efficient full assembly option). Serial and parallel mesh
   refinement options can be set via a command-line flag.
 - Explicit time-stepping loop with a variety of time integrator options. Laghos
-  supports Runge-Kutta ODE solvers of orders 1, 2, 3, 4 and 6.
+  supports Runge-Kutta ODE solvers of orders 1, 2, 3, 4 and 6, as well as a
+  specialized Runge-Kutta method of order 2 that ensures exact energy
+  conservation on fully discrete level (RK2Avg).
 - Continuous and discontinuous high-order finite element discretization spaces
   of runtime-specified order.
 - Moving (high-order) meshes.
@@ -90,9 +92,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 481.
+  starting around line 482.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 418 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 419 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -159,12 +161,12 @@ Clone and build the parallel version of MFEM:
 ```sh
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
-~/mfem> git checkout laghos-v1.0
+~/mfem> git checkout laghos-v1.2
 ~/mfem> make parallel -j
 ~/mfem> cd ..
 ```
-The above uses the `laghos-v1.0` tag of MFEM, which is guaranteed to work with
-Laghos v1.0. Alternatively, one can use the latest versions of the MFEM and
+The above uses the `laghos-v1.2` tag of MFEM, which is guaranteed to work with
+Laghos v1.2. Alternatively, one can use the latest versions of the MFEM and
 Laghos `master` branches (provided there are no conflicts). See the [MFEM
 building page](http://mfem.org/building/) for additional details.
 
@@ -226,8 +228,8 @@ The latter produce the following velocity magnitude plots (notice the `-vis` opt
 
 #### Triple-point problem
 
-Well known three-material problem combines shock waves and vorticity,
-thus examining the complex computational abilities of Laghos.
+This is a well known three-material problem that combines shock waves and
+vorticity, thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
@@ -309,12 +311,12 @@ local problem on each of them by doing more parallel refinements: `srun -n
 In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
 the following versions of Laghos have been developed
 
-- SERIAL version in the [serial](./serial/README.md) directory.
-- CUDA version in the [cuda](./cuda/README.md) directory. This version supports GPU acceleration.
-- RAJA version in the [raja](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
-- OCCA version in the [occa](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
-- Adaptive mesh refinement (AMR) version in the [amr](./amr/README.md) directory.
-- An MFEM/engines-based version in the
+- **SERIAL** version in the [serial/](./serial/README.md) directory.
+- **CUDA** version in the [cuda/](./cuda/README.md) directory. This version supports GPU acceleration.
+- **RAJA** version in the [raja/](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
+- **OCCA** version in the [occa/](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
+- **AMR** version in the [amr/](./amr/README.md) directory. This version supports dynamic adaptive mesh refinement.
+- **MFEM/engines**-based version in the
   [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branch.
 
 ## Contact
