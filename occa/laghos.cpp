@@ -143,15 +143,15 @@ int main(int argc, char *argv[])
                   "of zones in each direction, e.g., the number of zones in direction x\n\t"
                   "must be divisible by the number of MPI tasks in direction x.\n\t"
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
-  args.AddOption(&device_info, "-d", "--device-info",
-                 "Device information to run example on (default: \"mode: 'Serial'\").");
-  args.AddOption(&occa_config,
-                 "-oc", "--occa-config",
-                 "Load OCCA information from the .json config file. --device-info overrides the config");
-  args.AddOption(&occa_verbose,
-                 "-ov", "--occa-verbose",
-                 "--no-ov", "--no-occa-verbose",
-                 "Print verbose information about OCCA kernel compilation.");
+   args.AddOption(&device_info, "-d", "--device-info",
+                  "Device information to run example on (default: \"mode: 'Serial'\").");
+   args.AddOption(&occa_config,
+                  "-oc", "--occa-config",
+                  "Load OCCA information from the .json config file. --device-info overrides the config");
+   args.AddOption(&occa_verbose,
+                  "-ov", "--occa-verbose",
+                  "--no-ov", "--no-occa-verbose",
+                  "Print verbose information about OCCA kernel compilation.");
    args.Parse();
    if (!args.Good())
    {
@@ -160,29 +160,36 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   if (strlen(occa_config)) {
-     occa::json config = occa::json::parse(occa_config);
-     if (!config.has("devices")) {
-       std::cout << "Config file \"" << occa_config << "\" does not have 'devices'.\n";
-       return 1;
-     }
+   if (strlen(occa_config))
+   {
+      occa::json config = occa::json::parse(occa_config);
+      if (!config.has("devices"))
+      {
+         std::cout << "Config file \"" << occa_config << "\" does not have 'devices'.\n";
+         return 1;
+      }
 
-     occa::json devices = config["devices"];
-     occa::json specificDevices = config["specificDevices"];
+      occa::json devices = config["devices"];
+      occa::json specificDevices = config["specificDevices"];
 
-     const std::string mpiRankStr = occa::toString(myid);
+      const std::string mpiRankStr = occa::toString(myid);
 
-     if (specificDevices.has(mpiRankStr)) {
-       device_info_str = specificDevices[mpiRankStr].toString();
-     } else {
-       const int procsPerNode = devices.size();
-       const int deviceID = (myid % procsPerNode);
-       device_info_str = devices[deviceID].toString();
-     }
+      if (specificDevices.has(mpiRankStr))
+      {
+         device_info_str = specificDevices[mpiRankStr].toString();
+      }
+      else
+      {
+         const int procsPerNode = devices.size();
+         const int deviceID = (myid % procsPerNode);
+         device_info_str = devices[deviceID].toString();
+      }
 
-     device_info = device_info_str.c_str();
-   } else if (!strlen(device_info)) {
-     device_info = device_info_str.c_str();
+      device_info = device_info_str.c_str();
+   }
+   else if (!strlen(device_info))
+   {
+      device_info = device_info_str.c_str();
    }
 
    // Set the OCCA device to run example in
@@ -296,7 +303,8 @@ int main(int argc, char *argv[])
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
    OccaFiniteElementSpace o_L2FESpace(pmesh, &L2FEC, Ordering::byNODES);
-   OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension(), Ordering::byNODES);
+   OccaFiniteElementSpace o_H1FESpace(pmesh, &H1FEC, pmesh->Dimension(),
+                                      Ordering::byNODES);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -389,14 +397,16 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho(l2_fes), l2_e(l2_fes);
    l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
-   if (problem == sedov) {
-     // For the Sedov test, we use a delta function at the origin.
-     DeltaCoefficient e_coeff(0, 0, 0.25);
-     l2_e.ProjectCoefficient(e_coeff);
+   if (problem == sedov)
+   {
+      // For the Sedov test, we use a delta function at the origin.
+      DeltaCoefficient e_coeff(0, 0, 0.25);
+      l2_e.ProjectCoefficient(e_coeff);
    }
-   else {
-     FunctionCoefficient e_coeff(e0);
-     l2_e.ProjectCoefficient(e_coeff);
+   else
+   {
+      FunctionCoefficient e_coeff(e0);
+      l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
 
@@ -416,15 +426,16 @@ int main(int argc, char *argv[])
 
    // Additional details, depending on the problem.
    bool use_viscosity; double gamma;
-   switch (problem) {
-   case vortex:
-     use_viscosity = false; break;
-   case sedov:
-   case shockTube:
-   case triplePoint:
-     use_viscosity = true; break;
-   default:
-     MFEM_ABORT("Wrong problem specification!");
+   switch (problem)
+   {
+      case vortex:
+         use_viscosity = false; break;
+      case sedov:
+      case shockTube:
+      case triplePoint:
+         use_viscosity = true; break;
+      default:
+         MFEM_ABORT("Wrong problem specification!");
    }
 
    LagrangianHydroOperator oper(problem, o_H1FESpace, o_L2FESpace,
@@ -603,12 +614,13 @@ int main(int argc, char *argv[])
       }
    }
 
-   switch (odeSolverType) {
-   case RK2: steps *= 2; break;
-   case RK3: steps *= 3; break;
-   case RK4: steps *= 4; break;
-   case RK6: steps *= 6; break;
-   default:;
+   switch (odeSolverType)
+   {
+      case RK2: steps *= 2; break;
+      case RK3: steps *= 3; break;
+      case RK4: steps *= 4; break;
+      case RK6: steps *= 6; break;
+      default:;
    }
    oper.PrintTimingData(mpi.Root(), steps);
 
@@ -634,92 +646,98 @@ namespace hydrodynamics
 
 double rho0(const Vector &x)
 {
-  switch (problem) {
-  case vortex:
-    return 1.0;
-  case sedov:
-    return 1.0;
-  case shockTube:
-    if (x(0) < 0.5) { return 1.0; }
-    return 0.1;
-  case triplePoint:
-    if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-    return 0.125;
-  default:
-    MFEM_ABORT("Bad number given for problem id!");
-    return 0.0;
-  }
+   switch (problem)
+   {
+      case vortex:
+         return 1.0;
+      case sedov:
+         return 1.0;
+      case shockTube:
+         if (x(0) < 0.5) { return 1.0; }
+         return 0.1;
+      case triplePoint:
+         if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
+         return 0.125;
+      default:
+         MFEM_ABORT("Bad number given for problem id!");
+         return 0.0;
+   }
 }
 
 double gamma(const Vector &x)
 {
-  switch (problem) {
-  case vortex:
-    return 5./3.;
-  case sedov:
-    return 1.4;
-  case shockTube:
-    return 1.4;
-  case triplePoint:
-    if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-    return 1.5;
-  default:
-    MFEM_ABORT("Bad number given for problem id!");
-    return 0.0;
-  }
+   switch (problem)
+   {
+      case vortex:
+         return 5./3.;
+      case sedov:
+         return 1.4;
+      case shockTube:
+         return 1.4;
+      case triplePoint:
+         if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
+         return 1.5;
+      default:
+         MFEM_ABORT("Bad number given for problem id!");
+         return 0.0;
+   }
 }
 
 void v0(const Vector &x, Vector &v)
 {
-  switch (problem) {
-  case vortex:
-    v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
-    v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
-    if (x.Size() == 3) {
-      v(0) *= cos(M_PI*x(2));
-      v(1) *= cos(M_PI*x(2));
-      v(2) = 0.0;
-    }
-    break;
-  case sedov:
-  case shockTube:
-  case triplePoint:
-    v = 0.0; break;
-  default:
-    MFEM_ABORT("Bad number given for problem id!");
-  }
+   switch (problem)
+   {
+      case vortex:
+         v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
+         v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+         if (x.Size() == 3)
+         {
+            v(0) *= cos(M_PI*x(2));
+            v(1) *= cos(M_PI*x(2));
+            v(2) = 0.0;
+         }
+         break;
+      case sedov:
+      case shockTube:
+      case triplePoint:
+         v = 0.0; break;
+      default:
+         MFEM_ABORT("Bad number given for problem id!");
+   }
 }
 
 double e0(const Vector &x)
 {
-  switch (problem) {
-  case vortex: {
-    const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-    double val;
-    if (x.Size() == 2)
+   switch (problem)
+   {
+      case vortex:
       {
-        val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+         const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+         double val;
+         if (x.Size() == 2)
+         {
+            val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+         }
+         else
+         {
+            val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                           (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+         }
+         return val/denom;
       }
-    else
-      {
-        val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                       (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
-      }
-    return val/denom;
-  }
-  case sedov:
-    // This case in initialized in main().
-    return 0.0;
-  case shockTube:
-    if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-    return 0.1 / rho0(x) / (gamma(x) - 1.0);
-  case triplePoint:
-    if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-    return 1.0 / rho0(x) / (gamma(x) - 1.0);
-  default:
-    MFEM_ABORT("Bad number given for problem id!");
-    return 0.0;
-  }
+      case sedov:
+         // This case in initialized in main().
+         return 0.0;
+      case shockTube:
+         if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+         return 0.1 / rho0(x) / (gamma(x) - 1.0);
+      case triplePoint:
+         if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
+         return 1.0 / rho0(x) / (gamma(x) - 1.0);
+      default:
+         MFEM_ABORT("Bad number given for problem id!");
+         return 0.0;
+   }
 }
 
 } // namespace hydrodynamics
