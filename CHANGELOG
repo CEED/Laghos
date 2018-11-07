@@ -11,6 +11,9 @@
 Version 1.2, released on Nov X, 2018
 ====================================
 
+- Support Bernstein (positive) basis for the velocity when using partial
+  assembly (-pa option).
+
 - Added CUDA version in the cuda/ directory.
 
 - Added RAJA version in the raja/ directory.

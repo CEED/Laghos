@@ -172,7 +172,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
    {
       // Compute the global 1D reference tensors.
       const H1_FECollection *h1_fec =
-            dynamic_cast<const H1_FECollection *>(H1FESpace.FEColl());
+         dynamic_cast<const H1_FECollection *>(H1FESpace.FEColl());
       tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
                                 L2FESpace.GetFE(0)->GetOrder(),
                                 int(floor(0.7 + pow(nqp, 1.0 / dim))),
