@@ -69,12 +69,13 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   `git clone git@github.com:libocca/occa.git`
 -   `cd occa`
 -   `make -j`
+-   `cd ..`
 
 ### MFEM with OCCA
 -   `git clone git@github.com:mfem/mfem.git`
 -   `cd mfem`
 -   `git checkout occa-dev`
--   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0``
+-   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0 MFEM_USE_OCCA=YES OCCA_DIR=`pwd`/../occa``
 -   `make status` to verify that all the include paths are correct
 -   `make -j`
 -   `cd ..`
