@@ -68,7 +68,7 @@ struct Tensors1D
    // H1 shape functions and gradients, L2 shape functions.
    DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
 
-   Tensors1D(int H1order, int L2order, int nqp1D);
+   Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
 };
 extern const Tensors1D *tensors1D;
 
