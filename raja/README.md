@@ -38,7 +38,7 @@ The RAJA version differs from the official benchmark version of Laghos (in the
 top-level directory) in the following ways:
 
 1. Only problems 0 and 1 are defined
-2. Final iterations (`step`), time steps (`dt`) and energies (`|e|`) still differ from the original version
+2. Final iterations (`step`), time steps (`dt`) and energies (`|e|`) differ from the original version
 
 ## Building
 
@@ -68,6 +68,7 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 ### MFEM
 -   `git clone git@github.com:mfem/mfem.git`
 -   `cd mfem`
+-   `git checkout laghos-v1.2`
 -   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0``
 -   `make status` to verify that all the include paths are correct
 -   `make -j`
@@ -81,8 +82,8 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 
 ## Running
 
-The RAJA version can run the same examples as the official benchmark version
-of Laghos...
+The RAJA version can run the same sample test runs as the official benchmark
+version of Laghos.
 
 ### Options
 -   -m <string>: Mesh file to use
