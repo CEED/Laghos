@@ -92,7 +92,7 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 482.
+  starting around line 483.
 - In each time step, the ODE system of interest is constructed and solved by
   the class `LagrangianHydroOperator`, defined around line 419 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
