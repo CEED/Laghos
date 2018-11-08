@@ -38,7 +38,7 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 The AMR version differs from the official benchmark version of Laghos (in the
 top-level directory) in the following ways:
 
-1. The -amr parameter turns on dynamic AMR.
+1. The `-amr` parameter turns on dynamic AMR.
 2. The code includes functionality to change the mesh and the hydro operator on
    the fly.
 3. Parallel partitioning and load balancing is based on MFEM's non-conforming
@@ -94,7 +94,7 @@ To make sure the results are correct, we tabulate reference final iterations
 3. `mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 3 -tf 0.6 -amr`
 4. `mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr`
 
-| run | `step` | `dt` | `|e|` |
+| run | `step` | `dt` | `e` |
 | --- | ------ | ---- | ----- |
 |  1. | 2374 | 0.000308 | 90.9397751791 |
 |  2. | 2727 | 0.000458 | 168.0063715464 |

@@ -441,11 +441,9 @@ int main(int argc, char *argv[])
 
    if (amr)
    {
-      // tweak h0, set it as if the mesh was fully refined to amr_max_level
-      double elem_size = 0.5; // FIXME: coarse element size
-      //double h0 = elem_size / (1 << amr_max_level) / order_v;
-      double h0 = elem_size /
-                  order_v; // the division is now done inside UpdateQuadratureData
+      // set a base for h0, this will be further divided in UpdateQuadratureData
+      double elem_size = 0.5; // coarse element size (TODO calculate)
+      double h0 = elem_size / order_v;
       oper.SetH0(h0);
    }
 
