@@ -699,6 +699,8 @@ int main(int argc, char *argv[])
 
             GetZeroBCDofs(pmesh, &H1FESpace, bdr_attr_max, ess_tdofs);
 
+            ode_solver->Init(oper);
+
             //H1FESpace.PrintPartitionStats();
          }
       }
