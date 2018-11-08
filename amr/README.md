@@ -9,11 +9,12 @@
 
                        AMR version
 
+
 ## Overview
 
-This directory contains the AMR version of the **Laghos** (LAGrangian
-High-Order Solver), which is provided as a reference implementation and is NOT
-the official benchmark version of the miniapp.
+This directory contains the automatic mesh refinement (AMR) version of **Laghos**
+(LAGrangian High-Order Solver), which is currently considered experimental and
+is NOT the official benchmark version of the miniapp.
 
 For more details about Laghos see the [README file](../README.md) in the
 top-level directory.
@@ -32,60 +33,84 @@ Administration) responsible for the planning and preparation of a
 including software, applications, hardware, advanced system engineering and early
 testbed platforms, in support of the nation’s exascale computing imperative.
 
-## Differences with the official benchmark version
+## Differences from the official benchmark version
 
-The amr version differs from the official benchmark version of Laghos (in the
+The AMR version differs from the official benchmark version of Laghos (in the
 top-level directory) in the following ways:
 
-1. item 1
-2. item 2
+1. The -amr parameter turns on dynamic AMR.
+2. The code includes functionality to change the mesh and the hydro operator on
+   the fly.
+3. Parallel partitioning and load balancing is based on MFEM's non-conforming
+   mesh algorithm that partitions a space-filling curve. METIS is not required.
+
+
+## Limitations
+
+- The current AMR implementation is just a demonstration.
+- Only the Sedov problem is supported, as the refinement/derefinement decisions
+  are very simple and tailored specifically to Sedov.
+- Partial assembly is currently not supported in AMR mode. Also, the hydro
+  operator update is currently not efficient (e.g., the whole mass matrix is
+  reassembled on each mesh change).
+- MFEM currently does not support derefinement interpolation for non-nodal bases.
+  The AMR version therefore does not use BasisType::Positive for the L2 space.
+
 
 ## Building
 
-The amr version can be build following the [instructions](../README.md) in
-the top-level directory.
+The AMR version can be built following the same [instructions](../README.md) as
+for the top-level directory.
 
-...
 
 ## Running
 
-The amr version can run the same examples as the official benchmark version
-of Laghos, without MPI parallelization.
+The AMR version only runs with problem 1 (Sedov blast). New parameters are:
+
+- `-amr`: turn on AMR mode
+- `-rt` or `--ref-threshold`: tweak the refinement threshold
+- `-dt` or `--deref-threshold`: tweak the derefinement threshold
+
+One of the sample runs is:
+```sh
+mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr
+```
+
+This produces the following plots at steps 900 and 2422:
+
+<table border="0">
+<td><img src="data/sedov-amr-900.png">
+<td><img src="data/sedov-amr-2422.png">
+</table>
+
 
 ## Verification of Results
-
-**UPDATE**
 
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa`
-4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa`
-5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
-6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
-8. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
+1. `mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 4 -tf 0.8 -amr`
+2. `mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 4 -tf 0.8 -ok 3 -ot 2 -amr`
+3. `mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 3 -tf 0.6 -amr`
+4. `mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr`
 
-| `run` | `step` | `dt` | `e` |
-| ----- | ------ | ---- | --- |
-|  1. |  339 | 0.000702 | 49.6955373491   |
-|  2. | 1041 | 0.000121 | 3390.9635545458 |
-|  3. | 1154 | 0.001655 | 46.3033960530   |
-|  4. |  560 | 0.002449 | 134.0861672235  |
-|  5. |  413 | 0.000470 | 32.0120774101   |
-|  6. | 5301 | 0.000360 | 141.8352298401  |
-|  7. |  975 | 0.001601 | 144.2461751623  |
-|  8. |  776 | 0.000045 | 409.8243172608  |
+| run | `step` | `dt` | `|e|` |
+| --- | ------ | ---- | ----- |
+|  1. | 2374 | 0.000308 | 90.9397751791 |
+|  2. | 2727 | 0.000458 | 168.0063715464 |
+|  3. |  998 | 0.001262 | 388.6322346715 |
+|  4. | TODO | TODO | TODO |
+
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
+
 
 ## Contact
 
 You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
 comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
+
 
 ## Copyright
 

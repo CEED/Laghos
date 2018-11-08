@@ -33,18 +33,16 @@
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
-//             *** THIS IS A DYNAMIC MESH REFINEMENT DEMO ***
+//             *** THIS IS AN AUTOMATIC MESH REFINEMENT DEMO ***
 //
 // Sample runs:
 //    mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 4 -tf 0.8 -amr
 //    mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 4 -tf 0.8 -ok 3 -ot 2 -amr
-//    mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh    -rs 3 -tf 0.6 -amr
+//    mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 3 -tf 0.6 -amr
+//    mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr
 //
 // Test problems:
-//    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
-//    p = 2  --> 1D Sod shock tube.
-//    p = 3  --> Triple point.
 
 
 #include "laghos_solver.hpp"
@@ -217,7 +215,8 @@ int main(int argc, char *argv[])
       p_assembly = false;
       if (mpi.Root())
       {
-         cout << "Laghos does not support PA for AMR. Switching to FA." << endl;
+         cout << "Laghos currently does not support PA for AMR. "
+                 "Switching to FA." << endl;
       }
    }
 
