@@ -92,9 +92,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 483.
+  starting around line 488.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 419 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 424 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -210,7 +210,8 @@ The latter produces the following density plot (notice the `-vis` option)
 
 Laghos includes also smooth test problems that expose all the principal
 computational kernels of the problem except for the artificial viscosity
-evaluation.
+evaluation. (Viscosity can still be activated for these problems with the
+`--impose-viscosity` option.)
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
