@@ -132,8 +132,8 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
-   args.AddOption(&impose_visc, "-iv", "--impose-visc", "-niv",
-                  "--no-impose-visc",
+   args.AddOption(&impose_visc, "-iv", "--impose-viscosity", "-niv",
+                  "--no-impose-viscosity",
                   "Use active viscosity terms even for smooth problems.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
