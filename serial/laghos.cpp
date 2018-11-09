@@ -271,7 +271,8 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_vdofs, rho, source, cfl, mat_gf_coeff,
-                                visc, p_assembly, cg_tol, cg_max_iter);
+                                visc, p_assembly, cg_tol, cg_max_iter,
+                                H1FEC.GetBasisType());
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

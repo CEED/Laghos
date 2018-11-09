@@ -70,23 +70,22 @@ struct Tensors1D
 
    Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
 };
-extern const Tensors1D *tensors1D;
 
 class FastEvaluator
 {
    const int dim;
    FiniteElementSpace &H1FESpace;
+   Tensors1D *tensors1D;
 
 public:
-   FastEvaluator(FiniteElementSpace &h1fes)
-      : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
+   FastEvaluator(FiniteElementSpace &h1fes, Tensors1D *t1D)
+      : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes), tensors1D(t1D) { }
 
    void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
    // The input vec is an H1 function with dim components, over a zone.
    // The output is J_ij = d(vec_i) / d(x_j) with ij = 1 .. dim.
    void GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const;
 };
-extern const FastEvaluator *evaluator;
 
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
@@ -129,6 +128,7 @@ private:
 
    QuadratureData *quad_data;
    FiniteElementSpace &H1FESpace, &L2FESpace;
+   Tensors1D *tensors1D;
 
    // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
@@ -142,9 +142,11 @@ private:
 
 public:
    ForcePAOperator(QuadratureData *quad_data_,
-                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes)
+                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes,
+                   Tensors1D *t1D)
       : dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
+        quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes),
+        tensors1D(t1D) { }
 
    virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
    virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
@@ -160,6 +162,7 @@ private:
 
    QuadratureData *quad_data;
    FiniteElementSpace &FESpace;
+   Tensors1D *tensors1D;
 
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
@@ -167,11 +170,11 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
+   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
+                  Tensors1D *t1D)
       : Operator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes)
-   { }
+        quad_data(quad_data_), FESpace(fes), tensors1D(t1D) { }
 
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
@@ -223,6 +226,7 @@ private:
    int zone_id;
 
    QuadratureData *quad_data;
+   Tensors1D *tensors1D;
 
    // Mass matrix action on a quadrilateral element in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
@@ -230,11 +234,12 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes)
+   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
+                       Tensors1D *t1D)
       : Operator(fes.GetFE(0)->GetDof()),
         dim(fes.GetMesh()->Dimension()), zone_id(0),
-        quad_data(quad_data_)
-   { }
+        quad_data(quad_data_), tensors1D(t1D) { }
+
    void SetZoneId(int zid) { zone_id = zid; }
 
    virtual void Mult(const Vector &x, Vector &y) const;

@@ -82,6 +82,10 @@ protected:
    mutable QuadratureData quad_data;
    mutable bool quad_data_is_current, forcemat_is_assembled;
 
+   // Structures used to perform partial assembly.
+   Tensors1D tensors1D;
+   FastEvaluator evaluator;
+
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
@@ -121,7 +125,7 @@ public:
                            Array<int> &essential_tdofs, GridFunction &rho0,
                            int source_type_, double cfl_,
                            Coefficient *material_, bool visc, bool pa,
-                           double cgt, int cgiter);
+                           double cgt, int cgiter, int h1_basis_type);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
@@ -145,8 +149,6 @@ public:
    void PrintTimingData(int steps) const;
 
    int GetH1VSize() const { return H1FESpace.GetVSize(); }
-
-   ~LagrangianHydroOperator();
 };
 
 class TaylorCoefficient : public Coefficient

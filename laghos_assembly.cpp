@@ -24,9 +24,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-const Tensors1D *tensors1D = NULL;
-const FastEvaluator *evaluator = NULL;
-
 Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v)
    : HQshape1D(H1order + 1, nqp1D),
      HQgrad1D(H1order + 1, nqp1D),

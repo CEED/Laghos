@@ -83,7 +83,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  int source_type_, double cfl_,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
-                                                 double cgt, int cgiter)
+                                                 double cgt, int cgiter,
+                                                 int h1_basis_type)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
      ess_tdofs(essential_tdofs),
@@ -100,11 +101,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                              3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
      quad_data(dim, nzones, integ_rule.GetNPoints()),
      quad_data_is_current(false), forcemat_is_assembled(false),
-     Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes),
-     VMassPA(&quad_data, H1FESpace), VMassPA_prec(H1FESpace),
-     locEMassPA(&quad_data, l2_fes),
+     tensors1D(H1FESpace.GetFE(0)->GetOrder(), L2FESpace.GetFE(0)->GetOrder(),
+               int(floor(0.7 + pow(integ_rule.GetNPoints(), 1.0 / dim))),
+               h1_basis_type == BasisType::Positive),
+     evaluator(H1FESpace, &tensors1D),
+     Force(&l2_fes, &h1_fes), ForcePA(&quad_data, h1_fes, l2_fes, &tensors1D),
+     VMassPA(&quad_data, H1FESpace, &tensors1D), VMassPA_prec(H1FESpace),
+     locEMassPA(&quad_data, l2_fes, &tensors1D),
      locCG(), timer()
 {
+
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
@@ -170,15 +176,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
 
    if (p_assembly)
    {
-      // Compute the global 1D reference tensors.
-      const H1_FECollection *h1_fec =
-         dynamic_cast<const H1_FECollection *>(H1FESpace.FEColl());
-      tensors1D = new Tensors1D(H1FESpace.GetFE(0)->GetOrder(),
-                                L2FESpace.GetFE(0)->GetOrder(),
-                                int(floor(0.7 + pow(nqp, 1.0 / dim))),
-                                h1_fec->GetBasisType() == BasisType::Positive);
-      evaluator = new FastEvaluator(H1FESpace);
-
       // Setup the preconditioner of the velocity mass operator.
       Vector d;
       (dim == 2) ? VMassPA.ComputeDiagonal2D(d) : VMassPA.ComputeDiagonal3D(d);
@@ -479,11 +476,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
    }
 }
 
-LagrangianHydroOperator::~LagrangianHydroOperator()
-{
-   delete tensors1D;
-}
-
 // Smooth transition between 0 and 1 for x in [-eps, eps].
 inline double smooth_step_01(double x, double eps)
 {
@@ -548,12 +540,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             // Energy values at quadrature point.
             L2FESpace.GetElementDofs(z_id, L2dofs);
             e.GetSubVector(L2dofs, e_loc);
-            evaluator->GetL2Values(e_loc, e_vals);
+            evaluator.GetL2Values(e_loc, e_vals);
 
             // All reference->physical Jacobians at the quadrature points.
             H1FESpace.GetElementVDofs(z_id, H1dofs);
             x.GetSubVector(H1dofs, vector_vals);
-            evaluator->GetVectorGrad(vecvalMat, Jpr_b[z]);
+            evaluator.GetVectorGrad(vecvalMat, Jpr_b[z]);
          }
          else { e.GetValues(z_id, integ_rule, e_vals); }
          for (int q = 0; q < nqp; q++)
@@ -585,7 +577,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             // All reference->physical Jacobians at the quadrature points.
             H1FESpace.GetElementVDofs(z_id, H1dofs);
             v.GetSubVector(H1dofs, vector_vals);
-            evaluator->GetVectorGrad(vecvalMat, grad_v_ref);
+            evaluator.GetVectorGrad(vecvalMat, grad_v_ref);
          }
          for (int q = 0; q < nqp; q++)
          {
