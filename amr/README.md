@@ -33,6 +33,7 @@ Administration) responsible for the planning and preparation of a
 including software, applications, hardware, advanced system engineering and early
 testbed platforms, in support of the nation’s exascale computing imperative.
 
+
 ## Differences from the official benchmark version
 
 The AMR version differs from the official benchmark version of Laghos (in the
@@ -54,7 +55,7 @@ top-level directory) in the following ways:
   operator update is currently not efficient (e.g., the whole mass matrix is
   reassembled on each mesh change).
 - MFEM currently does not support derefinement interpolation for non-nodal bases.
-  The AMR version therefore does not use BasisType::Positive for the L2 space.
+  The AMR version therefore does not use `BasisType::Positive` for the L2 space.
 
 
 ## Building

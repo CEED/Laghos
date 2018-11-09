@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
       if (mpi.Root())
       {
          cout << "Laghos currently does not support PA for AMR. "
-                 "Switching to FA." << endl;
+              "Switching to FA." << endl;
       }
    }
 
