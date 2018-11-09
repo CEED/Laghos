@@ -81,6 +81,7 @@ int main(int argc, char *argv[])
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
+   bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
@@ -113,6 +114,9 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
+   args.AddOption(&impose_visc, "-iv", "--impose-visc", "-niv",
+                  "--no-impose-visc",
+                  "Use active viscosity terms even for smooth problems.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -268,6 +272,7 @@ int main(int argc, char *argv[])
       case 4: visc = false; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
+   if (impose_visc) { visc = true; }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_vdofs, rho, source, cfl, mat_gf_coeff,
