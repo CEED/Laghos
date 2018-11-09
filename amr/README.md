@@ -77,11 +77,11 @@ One of the sample runs is:
 mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr
 ```
 
-This produces the following plots at steps 900 and 2422:
+This produces the following plots at steps 900 and 2463:
 
 <table border="0">
 <td><img src="data/sedov-amr-900.png">
-<td><img src="data/sedov-amr-2422.png">
+<td><img src="data/sedov-amr-2463.png">
 </table>
 
 
@@ -100,8 +100,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  1. | 2374 | 0.000308 | 90.9397751791 |
 |  2. | 2727 | 0.000458 | 168.0063715464 |
 |  3. |  998 | 0.001262 | 388.6322346715 |
-|  4. | TODO | TODO | TODO |
-
+|  4. | 2463 | 0.000113 | 1703.2772575684 |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.

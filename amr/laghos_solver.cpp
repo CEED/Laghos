@@ -599,6 +599,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                ParNCMesh* pncmesh = H1FESpace.GetParMesh()->pncmesh;
                if (pncmesh)
                {
+                  // TODO: h0 should be a smooth function
                   h0 /= (1 << pncmesh->GetElementDepth(z_id));
                }
                const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();

@@ -442,6 +442,7 @@ int main(int argc, char *argv[])
    if (amr)
    {
       // set a base for h0, this will be further divided in UpdateQuadratureData
+      // TODO: for AMR, the treatment of h0 needs more work
       double elem_size = 0.5; // coarse element size (TODO calculate)
       double h0 = elem_size / order_v;
       oper.SetH0(h0);
