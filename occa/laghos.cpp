@@ -194,6 +194,12 @@ int main(int argc, char *argv[])
       device_info = device_info_str.c_str();
    }
 
+   mfem::Init();
+   occa::io::addLibraryPath(
+     "laghos",
+     occa::io::dirname(__FILE__) + "/kernels"
+   );
+
    // Set the OCCA device to run example in
    occa::setDevice(device_info);
 
