@@ -69,8 +69,6 @@ install:
 
    - cd $CURR_DIR
 
-awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11);
-
 script:
    - make
 
