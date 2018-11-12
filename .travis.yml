@@ -65,12 +65,12 @@ script:
    - make
    - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa
    - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa
-mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
-mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa
-mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa
-mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
-mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa
-mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa
+   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
+   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa
+   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa
+   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
+   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa
+   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa
 
 cache:
    directories:
