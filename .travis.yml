@@ -1,7 +1,6 @@
 language: cpp
 
 matrix:
-  fast_finish: true
   include:
     - os: linux
       compiler: gcc
@@ -20,8 +19,6 @@ matrix:
 
 install:
    - export CURR_DIR=$PWD
-   - export MPICH_CC="$CC"
-   - export MPICH_CXX="$CXX"
 
    # Back out of the mfem directory to install the libraries
    - cd ..
