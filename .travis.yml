@@ -1,5 +1,3 @@
-sudo: false
-
 language: cpp
 
 matrix:
@@ -12,9 +10,6 @@ matrix:
           packages:
 	    - libopenmpi-dev
             - openmpi-bin
-            # MPICH
-            # - mpich
-            # - libmpich-dev
       before_cache:
         - cd $TRAVIS_BUILD_DIR/../metis-4.0;
           mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
