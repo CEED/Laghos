@@ -60,7 +60,7 @@ install:
      fi;
 
    # Results
-   - if [ ! -d RESULTS/BASELINE ]; then
+   - if [ ! -e RESULTS/BASELINE ]; then
         rm -rf RESULTS;
         mkdir RESULTS;
         cat <<EOF  > BASELINE
@@ -99,4 +99,4 @@ cache:
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
      - $TRAVIS_BUILD_DIR/../mfem
-     - $TRAVIS_BUILD_DIR/../RESULTS
+     - $TRAVIS_BUILD_DIR/../RESULTS/BASELINE
