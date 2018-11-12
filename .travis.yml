@@ -1,0 +1,80 @@
+language: cpp
+
+matrix:
+  fast_finish: true
+  include:
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          packages:
+            # MPICH
+            - mpich
+            - libmpich-dev
+      before_cache:
+        - cd $TRAVIS_BUILD_DIR/../metis-4.0;
+          mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
+
+install:
+   - export CURR_DIR=$PWD
+   - export MPICH_CC="$CC"
+   - export MPICH_CXX="$CXX"
+
+   # Back out of the mfem directory to install the libraries
+   - cd ..
+
+   # hypre
+   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
+        wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
+        rm -rf hypre-2.10.0b;
+        tar xvzf hypre-2.10.0b.tar.gz;
+        cd hypre-2.10.0b/src;
+        ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
+        make -j3;
+        cd ../..;
+     else
+         echo "Reusing cached hypre-2.10.0b/";
+     fi;
+
+   # METIS
+   - if [ ! -e metis-4.0/libmetis.a ]; then
+        wget http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz;
+        tar xvzf metis-4.0.3.tar.gz;
+        make -j3 -C metis-4.0.3/Lib CC="$CC" OPTFLAGS="-O2";
+        rm -rf metis-4.0;
+        mv metis-4.0.3 metis-4.0;
+     else
+        echo "Reusing cached metis-4.0/";
+     fi;
+
+   # mfem
+   - if [ ! -d mfem/libmfem.a ]; then
+        rm -rf mfem;
+        git clone --depth 1 https://github.com/mfem/mfem.git;
+        cd mfem;
+        git checkout laghos-1.0;
+        make -j3 parallel;
+        mv ..;
+     else
+        echo "Reusing cached mfem@laghos-1.0";
+     fi;
+
+   - cd $CURR_DIR
+
+script:
+   - make
+   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa
+   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa
+mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
+mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa
+mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa
+mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
+mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa
+mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa
+
+cache:
+   directories:
+     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
+     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
+     - $TRAVIS_BUILD_DIR/../metis-4.0
+     - $TRAVIS_BUILD_DIR/../mfem
