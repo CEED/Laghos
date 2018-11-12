@@ -95,8 +95,8 @@ script:
 
 cache:
    directories:
-     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
-     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
-     - $TRAVIS_BUILD_DIR/../metis-4.0
-     - $TRAVIS_BUILD_DIR/../mfem
+     # - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
+     # - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
+     # - $TRAVIS_BUILD_DIR/../metis-4.0
+     # - $TRAVIS_BUILD_DIR/../mfem
 
