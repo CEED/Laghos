@@ -93,7 +93,7 @@ script:
      step = 0776, dt = 0.000045 409.8243172608
      EOF
 
-   - diff ../RESULTS/CURRENT ../RESULTS/BASELINE 2>&1
+   - diff ../RESULTS/CURRENT ../RESULTS/BASELINE
 
 cache:
    directories:
@@ -101,4 +101,4 @@ cache:
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
      - $TRAVIS_BUILD_DIR/../mfem
-     - $TRAVIS_BUILD_DIR/../RESULTS/BASELINE
+     - $TRAVIS_BUILD_DIR/../RESULTS
