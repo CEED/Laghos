@@ -7,8 +7,12 @@ matrix:
       compiler: gcc
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
-	    - libopenmpi-dev
+            - gcc-6
+            - g++-6
+            - libopenmpi-dev
             - openmpi-bin
       before_cache:
         - cd $TRAVIS_BUILD_DIR/../metis-4.0;
