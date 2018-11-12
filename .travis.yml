@@ -18,6 +18,7 @@ matrix:
           mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
 
 install:
+   # Save Laghos top directory
    - export CURR_DIR=$PWD
 
    # Back out of the mfem directory to install the libraries
@@ -47,7 +48,7 @@ install:
         echo "Reusing cached metis-4.0/";
      fi;
 
-   # mfem
+   # MFEM
    - if [ ! -e mfem/libmfem.a ]; then
         rm -rf mfem;
         git clone --depth 1 https://github.com/mfem/mfem.git;
@@ -59,6 +60,7 @@ install:
         echo "Reusing cached mfem@laghos-1.0";
      fi;
 
+   # Back to Laghos
    - cd $CURR_DIR
 
 script:
