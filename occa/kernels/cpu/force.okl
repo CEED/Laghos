@@ -54,8 +54,8 @@ typedef double* H1QuadToDof_t @dim(H1_DOFS_1D , NUM_QUAD_1D);
 typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
 #else
-typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(3,0,1,2);
-typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(4,0,1,2,3);
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(1,2,3,0);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(1,2,3,4,0);
 #endif
 
 typedef double* E2D_t      @dim(L2_DOFS_1D, L2_DOFS_1D, numElements);
