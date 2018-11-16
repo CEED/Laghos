@@ -49,12 +49,12 @@ To build the miniapp, first clone and build MFEM:
 ```sh
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
-~/mfem> git checkout laghos-v1.2
+~/mfem> git checkout laghos-v2.0
 ~/mfem> make serial -j
 ~/mfem> cd ..
 ```
-The above uses the `laghos-v1.2` tag of MFEM, which is guaranteed to work with
-Laghos v1.2. Alternatively, one can use the latest versions of the MFEM and
+The above uses the `laghos-v2.0` tag of MFEM, which is guaranteed to work with
+Laghos v2.0. Alternatively, one can use the latest versions of the MFEM and
 Laghos `master` branches (provided there are no conflicts). See the [MFEM
 building page](http://mfem.org/building/) for additional details.
 
