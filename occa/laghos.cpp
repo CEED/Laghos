@@ -196,8 +196,8 @@ int main(int argc, char *argv[])
 
    mfem::Init();
    occa::io::addLibraryPath(
-     "laghos",
-     occa::io::dirname(__FILE__) + "/kernels"
+      "laghos",
+      occa::io::dirname(__FILE__) + "/kernels"
    );
 
    // Set the OCCA device to run example in
