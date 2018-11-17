@@ -101,7 +101,36 @@ version of Laghos.
 
 ## Verification of Results
 
-TBD
+To make sure the results are correct, we tabulate reference final iterations
+(`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
+
+### Serial Mode
+
+1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75`
+2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75`
+3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -cfl 0.05`
+4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -cfl 0.08`
+
+### CUDA Mode
+
+1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75 -d "mode: 'CUDA', device_id: 0"`
+2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75 -d "mode: 'CUDA', device_id: 0"`
+3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -cfl 0.05 -d "mode: 'CUDA', device_id: 0"`
+4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -cfl 0.08 -d "mode: 'CUDA', device_id: 0"`
+
+### Results
+
+| `run` | `step` | `dt` | `e` |
+| ----- | ------ | ---- | --- |
+|  1. |  333 | 0.000008 | 49.6955373330   |
+|  2. | 1036 | 0.000093 | 3390.9635544028 |
+|  3. | 1625 | 0.000309 | 19.6812117043   |
+|  4. |  558 | 0.000359 | 50.4237325177   |
+
+An implementation is considered valid if the final energy values are all within
+round-off distance from the above reference values.
+
+> Sedov blast example has differences from original version
 
 ## Contact
 

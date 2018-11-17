@@ -42,15 +42,10 @@
 //    mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8
 //    mpirun -np 8 laghos -p 1 -m ../data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
 //    mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh    -rs 2 -tf 0.6
-//    mpirun -np 8 laghos -p 2 -m ../data/segment01.mesh     -rs 5 -tf 0.2
-//    mpirun -np 8 laghos -p 3 -m ../data/rectangle01_quad.mesh -rs 2 -tf 3.0
-//    mpirun -np 8 laghos -p 3 -m ../data/box01_hex.mesh        -rs 1 -tf 3.0
 //
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
-//    p = 2  --> 1D Sod shock tube.
-//    p = 3  --> Triple point.
 
 
 #include "laghos_solver.hpp"
