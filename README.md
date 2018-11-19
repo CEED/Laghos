@@ -294,18 +294,19 @@ A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
 machine at LLNL is:
 
 ```
-srun -n 393216 laghos -pa -p 1 -tf 0.6 -pt 322 -m data/cube_12_hex.mesh \
-                      --cg-tol 0 --cg-max-iter 50 --max-steps 2 -ok 3 -ot 2 -rs 5 -rp 3
+srun -n 294912 laghos -pa -p 1 -tf 0.6 -pt 911 -m data/cube_922_hex.mesh \
+                      --ode-solver 7 --max-steps 4
+                      --cg-tol 0 --cg-max-iter 50 -ok 3 -ot 2 -rs 5 -rp 2
 ```
-This is Q3-Q2 3D computation on 393,216 MPI ranks (24,576 nodes) that produces
-rates of approximately 168497, 74221, and 16696 megadofs, and a total FOM of
-about 2073 megadofs.
+This is Q3-Q2 3D computation on 294,912 MPI ranks (18,432 nodes) that produces
+rates of approximately 125419, 55588, and 12674 megadofs, and a total FOM of
+about 2064 megadofs.
 
 To make the above run 8 times bigger, one can either weak scale by using 8 times
 as many MPI tasks and increasing the number of serial refinements: `srun -n
-3145728 ... -rs 6 -rp 3`, or use the same number of MPI tasks but increase the
+2359296 ... -rs 6 -rp 2`, or use the same number of MPI tasks but increase the
 local problem on each of them by doing more parallel refinements: `srun -n
-393216 ... -rs 5 -rp 4`.
+294912 ... -rs 5 -rp 3`.
 
 ## Versions
 
