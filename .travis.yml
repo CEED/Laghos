@@ -53,7 +53,7 @@ install:
         rm -rf mfem;
         git clone --depth 1 https://github.com/mfem/mfem.git;
         cd mfem;
-        git checkout laghos-1.0;
+        # git checkout laghos-1.0;
         make -j3 parallel;
         cd ..;
      else
@@ -111,5 +111,5 @@ cache:
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
-     - $TRAVIS_BUILD_DIR/../mfem
+     # - $TRAVIS_BUILD_DIR/../mfem
 
