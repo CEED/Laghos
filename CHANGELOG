@@ -11,18 +11,20 @@
 Version 2.0, released on Nov 19, 2018
 =====================================
 
-- Support Bernstein (positive) basis for the velocity when using partial
-  assembly (-pa option).
+- Added a CUDA version of Laghos in the cuda/ directory.
 
-- Added CUDA version in the cuda/ directory.
+- Added a RAJA version of Laghos in the raja/ directory.
 
-- Added RAJA version in the raja/ directory.
+- Added an OCCA version of Laghos in the occa/ directory.
 
-- Added OCCA version in the occa/ directory.
-
-- Added Adaptive Mesh Refinement version in the amr/ directory.
+- Added an AMR (adaptive mesh refinement) version in the amr/ directory.
 
 - Replaced a viscosity "if statement" with a smooth step function.
+
+- When using partial assembly (-pa option), support the Bernstein positive basis
+  for the velocity .
+
+- Added Travis CI regression testing on GitHub.
 
 
 Version 1.1, released on Sep 28, 2018
