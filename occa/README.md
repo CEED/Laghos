@@ -7,11 +7,11 @@
 
         High-order Lagrangian Hydrodynamics Miniapp
 
-                      CUDA version
+                      OCCA version
 
 ## Overview
 
-This directory contains the CUDA version of the **Laghos** (LAGrangian
+This directory contains the OCCA version of the **Laghos** (LAGrangian
 High-Order Solver), which is provided as a reference implementation and is NOT
 the official benchmark version of the miniapp.
 
@@ -34,7 +34,7 @@ testbed platforms, in support of the nation’s exascale computing imperative.
 
 ## Differences with the official benchmark version
 
-The CUDA version differs from the official benchmark version of Laghos (in the
+The OCCA version differs from the official benchmark version of Laghos (in the
 top-level directory) in the following ways:
 
 1. Only problems 0 and 1 are defined
@@ -42,7 +42,7 @@ top-level directory) in the following ways:
 
 ## Building
 
-Follow the steps below to build the CUDA version with GPU acceleration.
+Follow the steps below to build the OCCA version
 
 ### Environment setup
 ```sh
@@ -65,24 +65,29 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   `make && make install`
 -   `cd ..`
 
-### MFEM
+### OCCA
+-   `git clone git@github.com:libocca/occa.git`
+-   `cd occa`
+-   `make -j`
+-   `cd ..`
+
+### MFEM with OCCA
 -   `git clone git@github.com:mfem/mfem.git`
 -   `cd mfem`
--   `git checkout laghos-v2.0`
--   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0``
+-   `git checkout occa-dev`
+-   ``make config MFEM_USE_MPI=YES HYPRE_DIR=`pwd`/../hypre-2.11.2/src/hypre MFEM_USE_METIS_5=YES METIS_DIR=`pwd`/../metis-5.1.0 MFEM_USE_OCCA=YES OCCA_DIR=`pwd`/../occa``
 -   `make status` to verify that all the include paths are correct
 -   `make -j`
 -   `cd ..`
 
-### CUDA Laghos
+### OCCA Laghos
 -   `git clone git@github.com:CEED/Laghos.git`
--   `cd Laghos/cuda`
--   edit the `makefile`, set NV\_ARCH to the desired architecture and the absolute paths to CUDA\_DIR, MFEM\_DIR, MPI\_HOME
--   `make` to build the CUDA version
+-   `cd Laghos/occa`
+-   `make -j`
 
 ## Running
 
-The CUDA version can run the same sample test runs as the official benchmark
+The OCCA version can run the same sample test runs as the official benchmark
 version of Laghos.
 
 ### Options
@@ -92,31 +97,40 @@ version of Laghos.
 -   -p <int>: Problem setup to use, Sedov problem is '1'
 -   -cfl <double>: CFL-condition number
 -   -ms <int>: Maximum number of steps (negative means no restriction)
--   -uvm: Enable or disable Unified Memory
--   -aware: Enable or disable MPI CUDA Aware
+-   -d <string>: OCCA device string (e.g. "mode: 'CUDA', device_id: 0")
 
 ## Verification of Results
-
--   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
 
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -pa -cfl 0.05`
-4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -cfl 0.08`
+### Serial Mode
+
+1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75`
+2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75`
+3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -cfl 0.05`
+4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -cfl 0.08`
+
+### CUDA Mode
+
+1. `mpirun -np 4 laghos -p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.75 -d "mode: 'CUDA', device_id: 0"`
+2. `mpirun -np 4 laghos -p 0 -m ../data/cube01_hex.mesh -rs 1 -tf 0.75 -d "mode: 'CUDA', device_id: 0"`
+3. `mpirun -np 4 laghos -p 1 -m ../data/square01_quad.mesh -rs 3 -tf 0.8 -cfl 0.05 -d "mode: 'CUDA', device_id: 0"`
+4. `mpirun -np 4 laghos -p 1 -m ../data/cube01_hex.mesh -rs 2 -tf 0.6 -cfl 0.08 -d "mode: 'CUDA', device_id: 0"`
+
+### Results
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
 |  1. |  333 | 0.000008 | 49.6955373330   |
-|  2. | 1036 | 0.000093 | 3390.9635544029 |
-|  3. | 1570 | 0.000768 | 46.2901037375   |
-|  4. |  486 | 0.000864 | 135.1267396160  |
+|  2. | 1036 | 0.000093 | 3390.9635544028 |
+|  3. | 1625 | 0.000309 | 19.6812117043   |
+|  4. |  558 | 0.000359 | 50.4237325177   |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
+
+> Sedov blast example has differences from original version
 
 ## Contact
 

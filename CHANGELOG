@@ -8,8 +8,8 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
-Version 1.2, released on Nov X, 2018
-====================================
+Version 2.0, released on Nov 19, 2018
+=====================================
 
 - Support Bernstein (positive) basis for the velocity when using partial
   assembly (-pa option).

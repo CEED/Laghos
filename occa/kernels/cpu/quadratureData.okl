@@ -1,0 +1,459 @@
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
+//
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
+//
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
+
+#include "occa://mfem/fem/defines.okl"
+
+#ifndef M_PI
+#  define M_PI 3.14159265358979323846264338327950288
+#endif
+
+#ifndef GAMMA
+#  if defined(VORTEX_PROBLEM)
+#    define GAMMA(q, el) (5.0 / 3.0)
+#  elif defined(SEDOV_PROBLEM) || defined(SHOCK_TUBE_PROBLEM)
+#    define GAMMA(q, el) 1.4
+#  else
+#    error "Cannot handle this problem ... yet!"
+#  endif
+#endif
+
+#if VDIM_ORDERING == ORDERING_BY_VDIM
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements);
+#else
+typedef double* V2D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(1,2,3,0);
+typedef double* V3D_t @dim(NUM_DIM, NUM_DOFS_1D, NUM_DOFS_1D, NUM_DOFS_1D, numElements) @dimOrder(1,2,3,4,0);
+#endif
+
+typedef double* QJacobian_t @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+typedef double* Stress_t    @dim(NUM_DIM, NUM_DIM, NUM_QUAD, numElements);
+
+@kernel void InitQuadratureData(const int numElements,
+                                @restrict const QLocal_t rho0,
+                                @restrict const QLocal_t detJ,
+                                @restrict const double * quadWeights,
+                                @restrict QLocal_t rho0DetJ0w) {
+  for (int el = 0; el < numElements; ++el; @outer) {
+    for (int q = 0; q < NUM_QUAD; ++q; @inner) {
+      rho0DetJ0w(q, el) = rho0(q, el) * detJ(q, el) * quadWeights[q];
+    }
+  }
+}
+
+@kernel void UpdateQuadratureData2D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V2D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @tile(1, @outer, @inner, check=false)) {
+    double s_gradv[4 * NUM_QUAD_2D] @dim(2, 2, NUM_QUAD_2D);
+
+    for (int i = 0; i < (4 * NUM_QUAD_2D); ++i) {
+      s_gradv[i] = 0;
+    }
+
+    for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+      double vDx[2 * NUM_QUAD_1D] @dim(2, NUM_QUAD_1D);
+      double vx[2 * NUM_QUAD_1D]  @dim(2, NUM_QUAD_1D);
+      for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+        for (int vi = 0; vi < 2; ++vi) {
+          vDx(vi, qx) = 0;
+          vx(vi, qx)  = 0;
+        }
+      }
+
+      for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          for (int vi = 0; vi < 2; ++vi) {
+            vDx(vi, qx) += v(vi, dx, dy, el) * dofToQuadD(qx, dx);
+            vx(vi, qx)  += v(vi, dx, dy, el) * dofToQuad(qx, dx);
+          }
+        }
+      }
+
+      for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+        const double wy  = dofToQuad(qy, dy);
+        const double wDy = dofToQuadD(qy, dy);
+
+        for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+          for (int vi = 0; vi < 2; ++vi) {
+            s_gradv(vi, 0, qx + qy*NUM_QUAD_1D) += wy  * vDx(vi, qx);
+            s_gradv(vi, 1, qx + qy*NUM_QUAD_1D) += wDy * vx(vi, qx);
+          }
+        }
+      }
+    }
+
+    for (int q = 0; q < NUM_QUAD; ++q) {
+      double q_gradv[NUM_DIM * NUM_DIM]  @dim(NUM_DIM, NUM_DIM);
+      double q_stress[NUM_DIM * NUM_DIM] @dim(NUM_DIM, NUM_DIM);
+
+      const double invJ_00 = invJ(0, 0, q, el), invJ_10 = invJ(1, 0, q, el);
+      const double invJ_01 = invJ(0, 1, q, el), invJ_11 = invJ(1, 1, q, el);
+
+      q_gradv(0, 0) = ((s_gradv(0, 0, q) * invJ_00) + (s_gradv(1, 0, q) * invJ_01));
+      q_gradv(1, 0) = ((s_gradv(0, 0, q) * invJ_10) + (s_gradv(1, 0, q) * invJ_11));
+      q_gradv(0, 1) = ((s_gradv(0, 1, q) * invJ_00) + (s_gradv(1, 1, q) * invJ_01));
+      q_gradv(1, 1) = ((s_gradv(0, 1, q) * invJ_10) + (s_gradv(1, 1, q) * invJ_11));
+
+      const double q_gamma = GAMMA(q, el);
+      const double q_Jw = detJ(q, el) * quadWeights[q];
+
+      const double q_rho = rho0DetJ0w(q, el) / q_Jw;
+      const double q_e   = max(0.0, e(q, el));
+
+      // TODO: Input OccaVector eos(q,e) -> (stress, soundSpeed)
+      const double s = -(q_gamma - 1.0) * q_rho * q_e;
+      q_stress(0, 0) = s; q_stress(1, 0) = 0;
+      q_stress(0, 1) = 0; q_stress(1, 1) = s;
+
+      const double gradv00 = q_gradv(0, 0);
+      const double gradv11 = q_gradv(1, 1);
+      const double gradv10 = 0.5 * (q_gradv(1, 0) + q_gradv(0, 1));
+      q_gradv(1, 0) = gradv10;
+      q_gradv(0, 1) = gradv10;
+
+      double comprDirX = 1;
+      double comprDirY = 0;
+      double minEig = 0;
+      // linalg/densemat.cpp: Eigensystem2S()
+      if (gradv10 == 0) {
+        minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
+      } else {
+        const double zeta  = (gradv11 - gradv00) / (2.0 * gradv10);
+        const double azeta = fabs(zeta);
+        double t = 1.0 / (azeta + sqrt(1.0 + zeta*zeta));
+        if ((t < 0) != (zeta < 0)) {
+          t = -t;
+        }
+
+        const double c = sqrt(1.0 / (1.0 + t*t));
+        const double s = c * t;
+        t *= gradv10;
+
+        if ((gradv00 - t) <= (gradv11 + t)) {
+          minEig = gradv00 - t;
+          comprDirX = c;
+          comprDirY = -s;
+        } else {
+          minEig = gradv11 + t;
+          comprDirX = s;
+          comprDirY = c;
+        }
+      }
+
+      // Computes the initial->physical transformation Jacobian.
+      const double J_00 = J(0, 0, q, el), J_10 = J(1, 0, q, el);
+      const double J_01 = J(0, 1, q, el), J_11 = J(1, 1, q, el);
+
+      const double invJ0_00 = invJ0(0, 0, q, el), invJ0_10 = invJ0(1, 0, q, el);
+      const double invJ0_01 = invJ0(0, 1, q, el), invJ0_11 = invJ0(1, 1, q, el);
+
+      const double Jpi_00 = ((J_00 * invJ0_00) + (J_10 * invJ0_01));
+      const double Jpi_10 = ((J_00 * invJ0_10) + (J_10 * invJ0_11));
+      const double Jpi_01 = ((J_01 * invJ0_00) + (J_11 * invJ0_01));
+      const double Jpi_11 = ((J_01 * invJ0_10) + (J_11 * invJ0_11));
+
+      const double physDirX = (Jpi_00 * comprDirX) + (Jpi_10 * comprDirY);
+      const double physDirY = (Jpi_01 * comprDirX) + (Jpi_11 * comprDirY);
+
+      const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY));
+
+      // TODO: soundSpeed will be an input as well (function call or values per q)
+      const double soundSpeed = sqrt(q_gamma * (q_gamma - 1.0) * q_e);
+      dtEst(q, el) = CFL * q_h / soundSpeed;
+
+      if (USE_VISCOSITY) {
+        // TODO: Check how we can extract outside of kernel
+        const double mu = minEig;
+        double coeff = 2.0 * q_rho * q_h * q_h * fabs(mu);
+        if (mu < 0) {
+          coeff += 0.5 * q_rho * q_h * soundSpeed;
+        }
+        for (int y = 0; y < NUM_DIM; ++y) {
+          for (int x = 0; x < NUM_DIM; ++x) {
+            q_stress(x, y) += coeff * q_gradv(x, y);
+          }
+        }
+      }
+      const double S00 = q_stress(0, 0), S10 = q_stress(1, 0);
+      const double S01 = q_stress(0, 1), S11 = q_stress(1, 1);
+
+      stressJinvT(0, 0, q, el) = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01));
+      stressJinvT(1, 0, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11));
+
+      stressJinvT(0, 1, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01));
+      stressJinvT(1, 1, q, el) = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11));
+    }
+  }
+}
+
+@kernel void UpdateQuadratureData3D(const int numElements,
+                                    @restrict const DofToQuad_t dofToQuad,
+                                    @restrict const DofToQuad_t dofToQuadD,
+                                    @restrict const double * quadWeights,
+                                    @restrict const V3D_t v,
+                                    @restrict const QLocal_t e,
+                                    @restrict const QLocal_t rho0DetJ0w,
+                                    @restrict const QJacobian_t invJ0,
+                                    @restrict const QJacobian_t J,
+                                    @restrict const QJacobian_t invJ,
+                                    @restrict const QLocal_t detJ,
+                                    @restrict Stress_t stressJinvT,
+                                    @restrict QLocal_t dtEst) {
+  for (int el = 0; el < numElements; ++el; @tile(1, @outer, @inner, check=false)) {
+    double s_gradv[9 * NUM_QUAD_3D] @dim(3, 3, NUM_QUAD_3D);
+
+    for (int i = 0; i < (9 * NUM_QUAD_3D); ++i) {
+      s_gradv[i] = 0;
+    }
+
+    for (int dz = 0; dz < NUM_DOFS_1D; ++dz) {
+      double vDxy[3 * NUM_QUAD_2D] @dim(3, NUM_QUAD_1D, NUM_QUAD_1D);
+      double vxDy[3 * NUM_QUAD_2D] @dim(3, NUM_QUAD_1D, NUM_QUAD_1D);
+      double vxy[3 * NUM_QUAD_2D]  @dim(3, NUM_QUAD_1D, NUM_QUAD_1D);
+      for (int i = 0; i < (3 * NUM_QUAD_2D); ++i) {
+        vDxy[i] = 0;
+        vxDy[i] = 0;
+        vxy[i]  = 0;
+      }
+
+      for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
+        double vDx[3 * NUM_QUAD_1D] @dim(3, NUM_QUAD_1D);
+        double vx[3 * NUM_QUAD_1D]  @dim(3, NUM_QUAD_1D);
+        for (int i = 0; i < (3 * NUM_QUAD_1D); ++i) {
+          vDx[i] = 0;
+          vx[i]  = 0;
+        }
+
+        for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            for (int vi = 0; vi < 3; ++vi) {
+              vDx(vi, qx) += v(vi, dx, dy, dz, el) * dofToQuadD(qx, dx);
+              vx(vi, qx)  += v(vi, dx, dy, dz, el) * dofToQuad(qx, dx);
+            }
+          }
+        }
+
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          const double wy  = dofToQuad(qy, dy);
+          const double wDy = dofToQuadD(qy, dy);
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            for (int vi = 0; vi < 3; ++vi) {
+              vDxy(vi, qx, qy) += wy  * vDx(vi, qx);
+              vxDy(vi, qx, qy) += wDy * vx(vi, qx);
+              vxy(vi, qx, qy)  += wy  * vx(vi, qx);
+            }
+          }
+        }
+      }
+      for (int qz = 0; qz < NUM_DOFS_1D; ++qz) {
+        const double wz  = dofToQuad(qz, dz);
+        const double wDz = dofToQuadD(qz, dz);
+        for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
+          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
+            const int q = qx + qy*NUM_QUAD_1D + qz*NUM_QUAD_2D;
+            for (int vi = 0; vi < 3; ++vi) {
+              s_gradv(vi, 0, q) += wz  * vDxy(vi, qx, qy);
+              s_gradv(vi, 1, q) += wz  * vxDy(vi, qx, qy);
+              s_gradv(vi, 2, q) += wDz * vxy(vi, qx, qy);
+            }
+          }
+        }
+      }
+    }
+
+    for (int q = 0; q < NUM_QUAD; ++q) {
+      double q_gradv[9]  @dim(3, 3);
+      double q_stress[9] @dim(3, 3);
+
+      const double invJ_00 = invJ(0, 0, q, el), invJ_10 = invJ(1, 0, q, el), invJ_20 = invJ(2, 0, q, el);
+      const double invJ_01 = invJ(0, 1, q, el), invJ_11 = invJ(1, 1, q, el), invJ_21 = invJ(2, 1, q, el);
+      const double invJ_02 = invJ(0, 2, q, el), invJ_12 = invJ(1, 2, q, el), invJ_22 = invJ(2, 2, q, el);
+
+      q_gradv(0, 0) = ((s_gradv(0, 0, q) * invJ_00) + (s_gradv(1, 0, q) * invJ_01) + (s_gradv(2, 0, q) * invJ_02));
+      q_gradv(1, 0) = ((s_gradv(0, 0, q) * invJ_10) + (s_gradv(1, 0, q) * invJ_11) + (s_gradv(2, 0, q) * invJ_12));
+      q_gradv(2, 0) = ((s_gradv(0, 0, q) * invJ_20) + (s_gradv(1, 0, q) * invJ_21) + (s_gradv(2, 0, q) * invJ_22));
+
+      q_gradv(0, 1) = ((s_gradv(0, 1, q) * invJ_00) + (s_gradv(1, 1, q) * invJ_01) + (s_gradv(2, 1, q) * invJ_02));
+      q_gradv(1, 1) = ((s_gradv(0, 1, q) * invJ_10) + (s_gradv(1, 1, q) * invJ_11) + (s_gradv(2, 1, q) * invJ_12));
+      q_gradv(2, 1) = ((s_gradv(0, 1, q) * invJ_20) + (s_gradv(1, 1, q) * invJ_21) + (s_gradv(2, 1, q) * invJ_22));
+
+      q_gradv(0, 2) = ((s_gradv(0, 2, q) * invJ_00) + (s_gradv(1, 2, q) * invJ_01) + (s_gradv(2, 2, q) * invJ_02));
+      q_gradv(1, 2) = ((s_gradv(0, 2, q) * invJ_10) + (s_gradv(1, 2, q) * invJ_11) + (s_gradv(2, 2, q) * invJ_12));
+      q_gradv(2, 2) = ((s_gradv(0, 2, q) * invJ_20) + (s_gradv(1, 2, q) * invJ_21) + (s_gradv(2, 2, q) * invJ_22));
+
+      const double q_gamma = GAMMA(q, el);
+      const double q_Jw = detJ(q, el) * quadWeights[q];
+
+      const double q_rho = rho0DetJ0w(q, el) / q_Jw;
+      const double q_e   = max(0.0, e(q, el));
+
+      const double s = -(q_gamma - 1.0) * q_rho * q_e;
+      q_stress(0, 0) = s; q_stress(1, 0) = 0; q_stress(2, 0) = 0;
+      q_stress(0, 1) = 0; q_stress(1, 1) = s; q_stress(2, 1) = 0;
+      q_stress(0, 2) = 0; q_stress(1, 2) = 0; q_stress(2, 2) = s;
+
+      const double gradv00 = q_gradv(0, 0);
+      const double gradv11 = q_gradv(1, 1);
+      const double gradv22 = q_gradv(2, 2);
+      const double gradv10 = 0.5 * (q_gradv(1, 0) + q_gradv(0, 1));
+      const double gradv20 = 0.5 * (q_gradv(2, 0) + q_gradv(0, 2));
+      const double gradv21 = 0.5 * (q_gradv(2, 1) + q_gradv(1, 2));
+      q_gradv(1, 0) = gradv10; q_gradv(2, 0) = gradv20;
+      q_gradv(0, 1) = gradv10; q_gradv(2, 1) = gradv21;
+      q_gradv(0, 2) = gradv20; q_gradv(1, 2) = gradv21;
+
+      double minEig = 0;
+      double comprDirX = 1;
+      double comprDirY = 0;
+      double comprDirZ = 0;
+
+      {
+        // Compute eigenvalues using quadrature formula
+        const double q_ = (gradv00 + gradv11 + gradv22) / 3.0;
+        const double gradv_q00 = (gradv00 - q_);
+        const double gradv_q11 = (gradv11 - q_);
+        const double gradv_q22 = (gradv22 - q_);
+
+        const double p1 = ((gradv10 * gradv10) +
+                           (gradv20 * gradv20) +
+                           (gradv21 * gradv21));
+        const double p2 = ((gradv_q00 * gradv_q00) +
+                           (gradv_q11 * gradv_q11) +
+                           (gradv_q22 * gradv_q22) +
+                           (2.0 * p1));
+        const double p    = sqrt(p2 / 6.0);
+        const double pinv = 1.0 / p;
+        // det(pinv * (gradv - q*I))
+        const double r = (0.5 * pinv * pinv * pinv *
+                          ((gradv_q00 * gradv_q11 * gradv_q22) +
+                           (2.0 * gradv10 * gradv21 * gradv20) -
+                           (gradv_q11 * gradv20 * gradv20) -
+                           (gradv_q22 * gradv10 * gradv10) -
+                           (gradv_q00 * gradv21 * gradv21)));
+
+        double phi = 0;
+        if (r <= -1.0) {
+          phi = M_PI / 3.0;
+        } else if (r < 1.0) {
+          phi = acos(r) / 3.0;
+        }
+
+        minEig = q_ + (2.0 * p * cos(phi + (2.0 * M_PI / 3.0)));
+        const double eig3 = q_ + (2.0 * p * cos(phi));
+        const double eig2 = 3.0 * q_ - minEig - eig3;
+        double maxNorm = 0;
+
+        for (int i = 0; i < 3; ++i) {
+          const double x = q_gradv[i + 3*0] - (i == 0)*eig3;
+          const double y = q_gradv[i + 3*1] - (i == 1)*eig3;
+          const double z = q_gradv[i + 3*2] - (i == 2)*eig3;
+          const double cx = ((x * (gradv00 - eig2)) +
+                             (y * gradv10) +
+                             (z * gradv20));
+          const double cy = ((x * gradv10) +
+                             (y * (gradv11 - eig2)) +
+                             (z * gradv21));
+          const double cz = ((x * gradv20) +
+                             (y * gradv21) +
+                             (z * (gradv22 - eig2)));
+          const double cNorm = (cx*cx + cy*cy + cz*cz);
+          if ((cNorm > 1e-16) && (maxNorm < cNorm)) {
+            comprDirX = cx;
+            comprDirY = cy;
+            comprDirZ = cz;
+            maxNorm = cNorm;
+          }
+        }
+        if (maxNorm > 1e-16) {
+          const double maxNormInv = 1.0 / sqrt(maxNorm);
+          comprDirX *= maxNormInv;
+          comprDirY *= maxNormInv;
+          comprDirZ *= maxNormInv;
+        }
+      }
+
+      // Computes the initial->physical transformation Jacobian.
+      const double J_00 = J(0, 0, q, el), J_10 = J(1, 0, q, el), J_20 = J(2, 0, q, el);
+      const double J_01 = J(0, 1, q, el), J_11 = J(1, 1, q, el), J_21 = J(2, 1, q, el);
+      const double J_02 = J(0, 2, q, el), J_12 = J(1, 2, q, el), J_22 = J(2, 2, q, el);
+
+      const double invJ0_00 = invJ0(0, 0, q, el), invJ0_10 = invJ0(1, 0, q, el), invJ0_20 = invJ0(2, 0, q, el);
+      const double invJ0_01 = invJ0(0, 1, q, el), invJ0_11 = invJ0(1, 1, q, el), invJ0_21 = invJ0(2, 1, q, el);
+      const double invJ0_02 = invJ0(0, 2, q, el), invJ0_12 = invJ0(1, 2, q, el), invJ0_22 = invJ0(2, 2, q, el);
+
+      const double Jpi_00 = ((J_00 * invJ0_00) + (J_10 * invJ0_01) + (J_20 * invJ0_02));
+      const double Jpi_10 = ((J_00 * invJ0_10) + (J_10 * invJ0_11) + (J_20 * invJ0_12));
+      const double Jpi_20 = ((J_00 * invJ0_20) + (J_10 * invJ0_21) + (J_20 * invJ0_22));
+
+      const double Jpi_01 = ((J_01 * invJ0_00) + (J_11 * invJ0_01) + (J_21 * invJ0_02));
+      const double Jpi_11 = ((J_01 * invJ0_10) + (J_11 * invJ0_11) + (J_21 * invJ0_12));
+      const double Jpi_21 = ((J_01 * invJ0_20) + (J_11 * invJ0_21) + (J_21 * invJ0_22));
+
+      const double Jpi_02 = ((J_02 * invJ0_00) + (J_12 * invJ0_01) + (J_22 * invJ0_02));
+      const double Jpi_12 = ((J_02 * invJ0_10) + (J_12 * invJ0_11) + (J_22 * invJ0_12));
+      const double Jpi_22 = ((J_02 * invJ0_20) + (J_12 * invJ0_21) + (J_22 * invJ0_22));
+
+      const double physDirX = ((Jpi_00 * comprDirX) + (Jpi_10 * comprDirY) + (Jpi_20 * comprDirZ));
+      const double physDirY = ((Jpi_01 * comprDirX) + (Jpi_11 * comprDirY) + (Jpi_21 * comprDirZ));
+      const double physDirZ = ((Jpi_02 * comprDirX) + (Jpi_12 * comprDirY) + (Jpi_22 * comprDirZ));
+
+      const double q_h = H0 * sqrt((physDirX * physDirX) + (physDirY * physDirY) + (physDirZ * physDirZ));
+
+      const double soundSpeed = sqrt(q_gamma * (q_gamma - 1.0) * q_e);
+      dtEst(q, el) = CFL * q_h / soundSpeed;
+
+      if (USE_VISCOSITY) {
+        // TODO: Check how we can extract outside of kernel
+        const double mu = minEig;
+        double coeff = 2.0 * q_rho * q_h * q_h * fabs(mu);
+        if (mu < 0) {
+          coeff += 0.5 * q_rho * q_h * soundSpeed;
+        }
+        for (int y = 0; y < 3; ++y) {
+          for (int x = 0; x < 3; ++x) {
+            q_stress(x, y) += coeff * q_gradv(x, y);
+          }
+        }
+      }
+
+      const double S00 = q_stress(0, 0), S10 = q_stress(1, 0), S20 = q_stress(2, 0);
+      const double S01 = q_stress(0, 1), S11 = q_stress(1, 1), S21 = q_stress(2, 1);
+      const double S02 = q_stress(0, 2), S12 = q_stress(1, 2), S22 = q_stress(2, 2);
+
+      stressJinvT(0, 0, q, el) = q_Jw * ((S00 * invJ_00) + (S10 * invJ_01) + (S20 * invJ_02));
+      stressJinvT(1, 0, q, el) = q_Jw * ((S00 * invJ_10) + (S10 * invJ_11) + (S20 * invJ_12));
+      stressJinvT(2, 0, q, el) = q_Jw * ((S00 * invJ_20) + (S10 * invJ_21) + (S20 * invJ_22));
+
+      stressJinvT(0, 1, q, el) = q_Jw * ((S01 * invJ_00) + (S11 * invJ_01) + (S21 * invJ_02));
+      stressJinvT(1, 1, q, el) = q_Jw * ((S01 * invJ_10) + (S11 * invJ_11) + (S21 * invJ_12));
+      stressJinvT(2, 1, q, el) = q_Jw * ((S01 * invJ_20) + (S11 * invJ_21) + (S21 * invJ_22));
+
+      stressJinvT(0, 2, q, el) = q_Jw * ((S02 * invJ_00) + (S12 * invJ_01) + (S22 * invJ_02));
+      stressJinvT(1, 2, q, el) = q_Jw * ((S02 * invJ_10) + (S12 * invJ_11) + (S22 * invJ_12));
+      stressJinvT(2, 2, q, el) = q_Jw * ((S02 * invJ_20) + (S12 * invJ_21) + (S22 * invJ_22));
+    }
+  }
+}
