@@ -61,7 +61,7 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   <http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/metis-5.1.0.tar.gz>
 -   `tar xzvf metis-5.1.0.tar.gz`
 -   `cd metis-5.1.0`
--   ``make config shared=1 prefix=`pwd` ``
+-   ``make config prefix=`pwd` ``
 -   `make && make install`
 -   `cd ..`
 
@@ -69,6 +69,8 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   `git clone git@github.com:libocca/occa.git`
 -   `cd occa`
 -   `make -j`
+-   `export PATH+=":${PWD}/bin"`
+-   `export LD_LIBRARY_PATH+=":${PWD}/lib"`
 -   `cd ..`
 
 ### MFEM with OCCA

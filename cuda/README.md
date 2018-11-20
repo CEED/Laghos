@@ -61,7 +61,7 @@ export MPI_HOME=~/usr/local/openmpi/3.0.0
 -   <http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/metis-5.1.0.tar.gz>
 -   `tar xzvf metis-5.1.0.tar.gz`
 -   `cd metis-5.1.0`
--   ``make config shared=1 prefix=`pwd` ``
+-   ``make config prefix=`pwd` ``
 -   `make && make install`
 -   `cd ..`
 
@@ -96,9 +96,6 @@ version of Laghos.
 -   -aware: Enable or disable MPI CUDA Aware
 
 ## Verification of Results
-
--   `./laghos -cfl 0.1` should give `step 78, t = 0.5000, dt = 0.001835, |e| = 7.0537801760`
--   `./laghos -m ../data/cube01_hex.mesh` should give `step   135,     t = 0.5000,     dt = 0.001164,  |e| = 1199.2994314997`
 
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
