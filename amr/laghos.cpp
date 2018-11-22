@@ -109,9 +109,8 @@ int main(int argc, char *argv[])
    double deref_threshold = 0.75;
    const int nc_limit = 1;
    const double blast_energy = 0.25;
-   //const double blast_position[] = {0.0, 0.0, 0.0};
-   const double blast_position[] = {1.0, 0.5, 0.5};
-   const double blast_amr_size = 0.2; //1e-10;
+   const double blast_position[] = {0.0, 0.0, 0.0};
+   const double blast_amr_size = 1e-10;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",

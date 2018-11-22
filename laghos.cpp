@@ -104,8 +104,7 @@ int main(int argc, char *argv[])
    const char *basename = "results/Laghos";
    int partition_type = 111;
    double blast_energy = 0.25;
-   //double blast_position[] = {0.0, 0.0, 0.0};
-   double blast_position[] = {1.0, 0.5, 0.5};
+   double blast_position[] = {0.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
