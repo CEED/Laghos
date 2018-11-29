@@ -36,7 +36,7 @@ private:
    const int dim, nzones;
    QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
-   const kernels::kFiniteElementSpace &h1k, &l2k;
+   const kFiniteElementSpace &h1k, &l2k;
    const IntegrationRule &integ_rule;
    const IntegrationRule &ir1D;
    const int NUM_DOFS_1D;
@@ -45,7 +45,7 @@ private:
    const int H1_DOFS_1D;
    const int h1sz;
    const int l2sz;
-   const kernels::kDofQuadMaps *l2D2Q, *h1D2Q;
+   const kDofQuadMaps *l2D2Q, *h1D2Q;
    mutable mfem::Vector gVecL2, gVecH1;
 public:
    kForcePAOperator(QuadratureData*,

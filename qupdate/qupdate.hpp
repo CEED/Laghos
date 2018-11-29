@@ -44,6 +44,8 @@
 
 namespace mfem {
 
+double kVectorMin(const size_t, const double*);
+
 namespace hydrodynamics {
    
    // **************************************************************************

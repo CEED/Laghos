@@ -16,6 +16,8 @@
 
 #include "qupdate.hpp"
 
+double kVectorMin(const size_t, const double*);
+
 namespace mfem {
 
 namespace hydrodynamics {
@@ -154,7 +156,7 @@ namespace hydrodynamics {
                 ParGridFunction &d_x,
                 ParGridFunction &d_v,
                 ParGridFunction &d_e) {
-      push();
+      //push();
       if (quad_data_is_current) { return; }
 
       // ***********************************************************************
@@ -165,7 +167,7 @@ namespace hydrodynamics {
       // ***********************************************************************
       timer.sw_qdata.Start();
       Vector* S_p = (Vector*) &S;
-      S_p->Pull();
+      //S_p->Pull();
       //S_p->Push(); // No need to push them back, an .Assign will come after
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
       const int numDofs  = fe.GetDof();
@@ -178,55 +180,55 @@ namespace hydrodynamics {
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
       static double *d_e_quads_data = NULL;
-      d_e.MakeRefOffset(*S_p, 2*H1_size);
-      Dof2QuadScalar(L2FESpace, ir, (const double*)d_e.GetDeviceData(), &d_e_quads_data);
+      d_e.MakeRef/*Offset*/(&L2FESpace, *S_p, 2*H1_size);
+      Dof2QuadScalar(L2FESpace, ir, d_e, &d_e_quads_data);
 
       // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
       static double *d_grad_x_data = NULL;
-      d_x.MakeRefOffset(*S_p, 0);
-      Dof2QuadGrad(H1FESpace, ir, (const double*)d_x.GetDeviceData(), &d_grad_x_data);
+      d_x.MakeRef/*Offset*/(&H1FESpace,*S_p, 0);
+      Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
 
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
-      const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(H1FESpace,ir);
+      const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(H1FESpace,ir);
       
       // Velocity **************************************************************
-      dbg("Velocity H1_size=%d",H1_size);
-      d_v.MakeRefOffset(*S_p, H1_size);
+      //dbg("Velocity H1_size=%d",H1_size);
+      d_v.MakeRef/*Offset*/(&H1FESpace,*S_p, H1_size);
       static double *d_grad_v_data = NULL;
-      Dof2QuadGrad(H1FESpace,ir,(const double*)d_v.GetDeviceData(),&d_grad_v_data);
+      Dof2QuadGrad(H1FESpace,ir, d_v, &d_grad_v_data);
 
       // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
       const double infinity = std::numeric_limits<double>::infinity();
 
       // ***********************************************************************
-      dbg("rho0DetJ0w");
+      //dbg("rho0DetJ0w");
       const size_t rho0DetJ0w_sz = nzones * nqp;
       static double *d_rho0DetJ0w = NULL;
       if (!d_rho0DetJ0w){
-         d_rho0DetJ0w = (double*)kernels::kmalloc<double>::operator new(rho0DetJ0w_sz);
+         d_rho0DetJ0w = (double*)mm::malloc<double>(rho0DetJ0w_sz);
          assert(d_rho0DetJ0w);
-         mfem::kernels::kmemcpy::rHtoD(d_rho0DetJ0w,
-                                       quad_data.rho0DetJ0w.GetData(),
-                                       rho0DetJ0w_sz*sizeof(double));
+         mm::H2D(d_rho0DetJ0w,
+                 quad_data.rho0DetJ0w.GetData(),
+                 rho0DetJ0w_sz*sizeof(double));
       }
 
       // ***********************************************************************
-      dbg("Jac0inv");
+      //dbg("Jac0inv");
       const size_t Jac0inv_sz = dim * dim * nzones * nqp;
       static double *d_Jac0inv = NULL;
       if (!d_Jac0inv){
-         d_Jac0inv = (double*)kernels::kmalloc<double>::operator new(Jac0inv_sz);
+         d_Jac0inv = (double*)mm::malloc<double>(Jac0inv_sz);
          assert(d_Jac0inv);
-         kernels::kmemcpy::rHtoD(d_Jac0inv,
-                                 quad_data.Jac0inv.Data(),
-                                 Jac0inv_sz*sizeof(double));
+         mm::H2D(d_Jac0inv,
+                 quad_data.Jac0inv.Data(),
+                 Jac0inv_sz*sizeof(double));
       }
 
       // ***********************************************************************
-      dbg("dt_est=%f",quad_data.dt_est);
+      //dbg("dt_est=%f",quad_data.dt_est);
       const size_t dt_est_sz = nzones;
       static double *h_dt_est = NULL;
       if (!h_dt_est){
@@ -235,8 +237,8 @@ namespace hydrodynamics {
       }
       static double *d_dt_est = NULL;
       if (!d_dt_est){
-         d_dt_est = (double*)kernels::kmalloc<double>::operator new(dt_est_sz);
-         kernels::kmemcpy::rHtoD(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
+         d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
+         mm::H2D(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
       }
 
       // ***********************************************************************
@@ -260,7 +262,7 @@ namespace hydrodynamics {
                                    quad_data.stressJinvT.Data());
 
       // ***********************************************************************
-      quad_data.dt_est = vector_min(dt_est_sz,d_dt_est);
+      quad_data.dt_est = kVectorMin(dt_est_sz,d_dt_est);
       dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
       //assert(false);
       quad_data_is_current = true;

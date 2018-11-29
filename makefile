@@ -15,16 +15,14 @@
 # testbed platforms, in support of the nation's exascale computing imperative.
 
 # SETUP ************************************************************************
-CUB_DIR  ?= ./cub
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/kernels
-RAJA_DIR ?= $(HOME)/usr/local/raja/last
+MFEM_DIR ?= $(HOME)/home/mfem/okina
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
 # -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 # number of proc to use for compilation stage
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+CPU = 1 #$(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # fetch current/working directory
 pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
@@ -230,7 +228,7 @@ $(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
 
 #rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
 $(OBJECT_KERNELS): %.o: %.cpp
-	$(OKRTC) $(CCC) -o $(@) -c $(CUB_INC) $(MPI_INC) $(RAJA_INC) -I$(realpath $(dir $(<))) $(<)
+	$(OKRTC) $(CCC) -o $(@) -c $(MPI_INC) -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)

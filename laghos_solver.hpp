@@ -117,11 +117,13 @@ protected:
    // Vectors & data we want to keep
    const size_t VsizeL2;
    const size_t VsizeH1;
-   mutable mfem::Vector x, v, e, rhs, B, X;
+   mutable mfem::Vector x, /*v, e,*/ rhs, B, X;
+   mutable mfem::ParGridFunction v, e;
    mutable mfem::ParGridFunction x_gf,dx,dv,dvc,de;
    mutable mfem::Vector one; // const
    mutable mfem::Vector e_rhs;
-   mutable mfem::Vector rhs_c, dv_c, kv;
+   mutable mfem::ParGridFunction rhs_c, dv_c, kv;
+   //mutable mfem::Vector rhs_c, dv_c, kv;
    //mutable mfem::Vector loc_rhs, loc_de;
    // bool switch to launch QUpdate or StdUpdateQuadratureData
    const bool qupdate;

@@ -87,7 +87,6 @@ int main(int argc, char *argv[])
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
-   bool engine = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
@@ -123,8 +122,6 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
-   args.AddOption(&engine, "-ng", "--engine", "-no-ng", "--no-engine",
-                  "Activate 1D tensor-based partial assembly through the engine.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -245,17 +242,6 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
-   if (engine)
-   {
-#ifdef __NVCC__
-      const char *arch = "gpu";
-#else
-      const char *arch = "cpu";
-#endif
-      SharedPtr<Engine> kernels(new mfem::kernels::Engine(&mpi,arch));
-      pmesh->SetEngine(*kernels);
-   }
-
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
@@ -333,11 +319,6 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
-   if (engine)
-   {
-      S.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
-      S.Pull(false);
-   }
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -384,7 +365,7 @@ int main(int argc, char *argv[])
    e_gf.ProjectGridFunction(l2_e);
 
    // Finished initializing, now push to the device
-   S.Push();
+   //S.Push();
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
@@ -412,11 +393,6 @@ int main(int argc, char *argv[])
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
                                 qupdate, gamma(S));
-   if (engine)
-   {
-      assert((int)oper.InLayout()->Size()==S.Size());
-      assert((int)oper.OutLayout()->Size()==S.Size());
-   }
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -471,11 +447,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(true_offset);
-   if (engine)
-   {
-      S_old.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
-   }
-   S_old.Assign(S);
+   S_old = S;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -484,7 +456,7 @@ int main(int argc, char *argv[])
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
-      S_old.Assign(S);
+      S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
 
@@ -503,7 +475,7 @@ int main(int argc, char *argv[])
          if (dt < numeric_limits<double>::epsilon())
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
-         S.Assign(S_old);
+         S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          ti--; continue;

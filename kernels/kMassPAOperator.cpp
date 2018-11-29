@@ -32,7 +32,7 @@ namespace hydrodynamics
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
                                  ParFiniteElementSpace &fes_,
                                  const IntegrationRule &ir_) :
-   AbcMassPAOperator(*fes_.GetTrueVLayout()),
+   AbcMassPAOperator(fes_.GetVSize()/**fes_.GetTrueVLayout()*/),
    dim(fes_.GetMesh()->Dimension()),
    nzones(fes_.GetMesh()->GetNE()),
    quad_data(qd_),
@@ -40,31 +40,34 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
    ir(ir_),
    ess_tdofs_count(0),
    ess_tdofs(0),
-   bilinearForm(new kernels::kBilinearForm(&fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>())),
-   massOperator(NULL)
+   bilinearForm(new mfem::PABilinearForm(&fes_)),//*(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&fes_))))),
+   //bilinearForm(new kernels::kBilinearForm(&fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>())),
+   massOperator(/*NULL*/)
 {
-   push(Wheat);
-   pop();
+   //push(Wheat);
+   //pop();
 }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-   push(Wheat);
-   const mfem::Engine &engine = fes.GetMesh()->GetEngine();
-   kernels::KernelsMassIntegrator *massInteg = new kernels::KernelsMassIntegrator(engine);
+//#warning Setup
+   assert(false);
+   //push(Wheat);
+   //const mfem::Engine &engine = fes.GetMesh()->GetEngine();
+   mfem::PAMassIntegrator *massInteg = new mfem::PAMassIntegrator(/*engine*/);
    massInteg->SetIntegrationRule(ir);
-   massInteg->SetOperator(quad_data->rho0DetJ0w);
+   //massInteg->SetOperator(quad_data->rho0DetJ0w);
    bilinearForm->AddDomainIntegrator(massInteg);
    bilinearForm->Assemble();
-   bilinearForm->FormOperator(mfem::Array<int>(), massOperator);
-   pop();
+   //bilinearForm->FormOperator(mfem::Array<int>(), massOperator);
+   //pop();
 }
 
 // *************************************************************************
 void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
-   push(Wheat);
+   //push(Wheat);
    ess_tdofs_count = dofs.Size();
    
    if (ess_tdofs.Size()==0){
@@ -74,9 +77,9 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
       assert(global_ess_tdofs_count>0);
-      const mfem::Engine &engine = fes.GetMesh()->GetEngine();
-      ess_tdofs.Resize(engine.MakeLayout(global_ess_tdofs_count));
-      ess_tdofs.Pull(false);
+      //const mfem::Engine &engine = fes.GetMesh()->GetEngine();
+      ess_tdofs.SetSize(global_ess_tdofs_count);//engine.MakeLayout(global_ess_tdofs_count));
+      //ess_tdofs.Pull(false);
 #else
       assert(ess_tdofs_count>0);
       ess_tdofs.Resize(ess_tdofs_count);
@@ -86,54 +89,54 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
    } 
   
    if (ess_tdofs_count == 0) {
-      pop();
+      //pop();
       return;
    }
    assert(dofs.GetData());
    ess_tdofs.Assign(dofs);
-   ess_tdofs.Push();
-   pop();
+   //ess_tdofs.Push();
+   //pop();
 }
 
 // *****************************************************************************
 void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
-   push(Wheat);
+   //push(Wheat);
    if (ess_tdofs_count > 0){
-      kernels::Vector &kb = b.Get_PVector()->As<kernels::Vector>();
-      kb.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      //mfem::Vector &kb = b.Get_PVector()->As<kernels::Vector>();
+      /*k*/b.SetSubVector(ess_tdofs, 0.0);//, ess_tdofs_count);
    }
-   pop();
+   //pop();
 }
 
 // *************************************************************************
 void kMassPAOperator::Mult(const mfem::Vector &x,
                                  mfem::Vector &y) const
 {
-   push(Wheat);
+   //push(Wheat);
    
    if (distX.Size()!=x.Size()) {
-      distX.Resize(fes.GetMesh()->GetEngine().MakeLayout(x.Size()));
+      distX.SetSize(x.Size());//fes.GetMesh()->GetEngine().MakeLayout(x.Size()));
    }
    
    assert(distX.Size()==x.Size());
-   distX.Assign(x);
+   distX = x;
 
-   kernels::Vector &kx = distX.Get_PVector()->As<kernels::Vector>();
-   kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
+   //mfem::Vector &kx = distX.Get_PVector()->As<kernels::Vector>();
+   //kernels::Vector &ky = y.Get_PVector()->As<kernels::Vector>();
 
    if (ess_tdofs_count)
    {
-      kx.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      distX.SetSubVector(ess_tdofs, 0.0);//, ess_tdofs_count);
    }
    
    massOperator->Mult(distX, y);
 
    if (ess_tdofs_count)
    {
-      ky.SetSubVector(ess_tdofs, 0.0, ess_tdofs_count);
+      /*k*/y.SetSubVector(ess_tdofs, 0.0);//, ess_tdofs_count);
    }
-   pop();
+   //pop();
 }
 
 } // namespace hydrodynamics

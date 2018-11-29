@@ -88,18 +88,20 @@ namespace hydrodynamics {
    // **************************************************************************
    // * Dof2DQuad
    // **************************************************************************
-   void Dof2QuadGrad(ParFiniteElementSpace &fes,
+   void Dof2QuadGrad(ParFiniteElementSpace &pfes,
                      const IntegrationRule& ir,
                      const double *d_in,
                      double **d_out){
-      push();
-      const kernels::kFiniteElementSpace &kfes =
-         fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
-      const kernels::kDofQuadMaps* maps = kernels::kDofQuadMaps::Get(fes,ir);
+      //push();
+      const mfem::kFiniteElementSpace &kfes = *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
+      //const kernels::kFiniteElementSpace &kfes =
+      //fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
+      const FiniteElementSpace &fes = pfes;
+      const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(fes,ir);
       
       const int dim = fes.GetMesh()->Dimension();
       const int vdim = fes.GetVDim();
-      //const int vsize = fes.GetVSize();
+      const int vsize = fes.GetVSize();
       assert(dim==2);
       assert(vdim==2);
       const mfem::FiniteElement& fe = *fes.GetFE(0);
@@ -110,16 +112,16 @@ namespace hydrodynamics {
       const size_t local_size = vdim * numDofs * nzones;
       static double *d_local_in = NULL;
       if (!d_local_in){
-         d_local_in=
-            (double*) kernels::kmalloc<double>::operator new(local_size);
+         d_local_in = (double*) mm::malloc<double>(local_size);
       }
       
-      kfes.GlobalToLocal(d_in,d_local_in);
+      Vector v_in = Vector((double*)d_in, vsize);
+      Vector v_local_in = Vector(local_size);
+      kfes.GlobalToLocal(v_in, v_local_in);
             
       const size_t out_size = vdim * vdim * nqp * nzones;
       if (!(*d_out)){
-         *d_out =
-            (double*) kernels::kmalloc<double>::operator new(out_size);
+         *d_out = (double*) mm::malloc<double>(out_size);
       }
     
       const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
@@ -129,7 +131,7 @@ namespace hydrodynamics {
       assert(quad1D==4);      
       qGradVector2D<3,4> __config(nzones)
          (nzones, maps->dofToQuad, maps->dofToQuadD, d_local_in, *d_out);      
-      pop();
+      //pop();
    }
    
 } // namespace hydrodynamics
