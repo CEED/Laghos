@@ -31,7 +31,7 @@ namespace hydrodynamics
       if (1 == size) return std::abs(data[0]);
       double scale = 0.0;
       double sum = 0.0;
-      for (int i = 0; i < size; i++) {
+      for (size_t i = 0; i < size; i++) {
          if (data[i] != 0.0)
          {
             const double absdata = fabs(data[i]);

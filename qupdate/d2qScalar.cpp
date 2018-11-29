@@ -91,7 +91,7 @@ namespace hydrodynamics {
 
       const int dim = fes.GetMesh()->Dimension();
       const int vdim = fes.GetVDim();
-      const int vsize = fes.GetVSize();
+      //const int vsize = fes.GetVSize();
       assert(dim==2);
       assert(vdim==1);
       const mfem::FiniteElement& fe = *fes.GetFE(0);

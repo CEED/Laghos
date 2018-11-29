@@ -245,7 +245,8 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
-   if (engine){
+   if (engine)
+   {
 #ifdef __NVCC__
       const char *arch = "gpu";
 #else
@@ -254,7 +255,7 @@ int main(int argc, char *argv[])
       SharedPtr<Engine> kernels(new mfem::kernels::Engine(&mpi,arch));
       pmesh->SetEngine(*kernels);
    }
-   
+
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
@@ -332,7 +333,8 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
-   if (engine){
+   if (engine)
+   {
       S.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
       S.Pull(false);
    }
@@ -380,10 +382,10 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   
+
    // Finished initializing, now push to the device
    S.Push();
-   
+
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
    // mesh.
@@ -410,8 +412,11 @@ int main(int argc, char *argv[])
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
                                 qupdate, gamma(S));
-   assert(oper.InLayout()->Size()==S.Size());
-   assert(oper.OutLayout()->Size()==S.Size());
+   if (engine)
+   {
+      assert((int)oper.InLayout()->Size()==S.Size());
+      assert((int)oper.OutLayout()->Size()==S.Size());
+   }
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -466,7 +471,8 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(true_offset);
-   if (engine) {
+   if (engine)
+   {
       S_old.Resize(pmesh->GetEngine().MakeLayout(true_offset[3]));
    }
    S_old.Assign(S);
@@ -519,7 +525,8 @@ int main(int argc, char *argv[])
                  << ",\t|e| = " << setprecision(10)
                  << sqrt_tot_norm << endl;
             // 2D Taylor-Green & Sedov problems
-            if (getenv("CHK")){
+            if (getenv("CHK"))
+            {
                // Default options only checks
                assert(rs_levels==0 and rp_levels==0);
                assert(order_v==2);
@@ -528,17 +535,18 @@ int main(int argc, char *argv[])
                assert(t_final==0.5);
                assert(cfl==0.1);
                static int k = 0;
-               const double p0_05 = 6.64784928695183e+00; 
+               const double p0_05 = 6.64784928695183e+00;
                const double p0_85 = 7.05378037610656e+00;
-               if (problem==0 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p0_05)<1.e-14);}
-               if (problem==0 and ti==85) {k++;assert(fabs(sqrt_tot_norm-p0_85)<1.e-14);}
-               const double p1_05 = 3.93691011589659e+00; 
+               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<1.e-14);}
+               if (problem==0 and ti==85) {k++; assert(fabs(sqrt_tot_norm-p0_85)<1.e-14);}
+               const double p1_05 = 3.93691011589659e+00;
                const double p1_62 = 2.89358836598344e+00;
-               if (problem==1 and ti==05) {k++;assert(fabs(sqrt_tot_norm-p1_05)<1.e-14);}
-               if (problem==1 and ti==62) {k++;assert(fabs(sqrt_tot_norm-p1_62)<1.e-14);}
-               if (last_step){
-                  if (k==2) printf("\033[32;7m[Laghos] OK\033[m");
-                  else return printf("\033[31;7m[Laghos] ERROR\033[m");
+               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<1.e-14);}
+               if (problem==1 and ti==62) {k++; assert(fabs(sqrt_tot_norm-p1_62)<1.e-14);}
+               if (last_step)
+               {
+                  if (k==2) { printf("\033[32;7m[Laghos] OK\033[m"); }
+                  else { return printf("\033[31;7m[Laghos] ERROR\033[m"); }
                }
             }
          }

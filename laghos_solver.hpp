@@ -113,7 +113,7 @@ protected:
    CGSolver CG_VMass,locCG;
 
    mutable TimingData timer;
-   
+
    // Vectors & data we want to keep
    const size_t VsizeL2;
    const size_t VsizeH1;
@@ -126,7 +126,7 @@ protected:
    // bool switch to launch QUpdate or StdUpdateQuadratureData
    const bool qupdate;
    const double gamma;
-   
+
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -142,7 +142,7 @@ protected:
    void StdUpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(const int size,
+   LagrangianHydroOperator(const size_t size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &essential_tdofs,
