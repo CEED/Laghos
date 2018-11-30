@@ -44,8 +44,8 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
    //bilinearForm(new kernels::kBilinearForm(&fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>())),
    massOperator(/*NULL*/)
 {
-   //push(Wheat);
-   //pop();
+   push(Wheat);
+   pop();
 }
 
 // *****************************************************************************
@@ -53,7 +53,7 @@ void kMassPAOperator::Setup()
 {
 //#warning Setup
    assert(false);
-   //push(Wheat);
+   push(Wheat);
    //const mfem::Engine &engine = fes.GetMesh()->GetEngine();
    mfem::PAMassIntegrator *massInteg = new mfem::PAMassIntegrator(/*engine*/);
    massInteg->SetIntegrationRule(ir);
@@ -67,7 +67,7 @@ void kMassPAOperator::Setup()
 // *************************************************************************
 void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
-   //push(Wheat);
+   push(Wheat);
    ess_tdofs_count = dofs.Size();
    
    if (ess_tdofs.Size()==0){
@@ -101,7 +101,7 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 // *****************************************************************************
 void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
-   //push(Wheat);
+   push(Wheat);
    if (ess_tdofs_count > 0){
       //mfem::Vector &kb = b.Get_PVector()->As<kernels::Vector>();
       /*k*/b.SetSubVector(ess_tdofs, 0.0);//, ess_tdofs_count);
@@ -113,7 +113,7 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 void kMassPAOperator::Mult(const mfem::Vector &x,
                                  mfem::Vector &y) const
 {
-   //push(Wheat);
+   push(Wheat);
    
    if (distX.Size()!=x.Size()) {
       distX.SetSize(x.Size());//fes.GetMesh()->GetEngine().MakeLayout(x.Size()));

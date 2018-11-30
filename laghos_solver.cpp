@@ -151,32 +151,32 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    qupdate(qupt),
    gamma(gm)
 {
-   //push();
+   push();
    one = 1.0;
-   /*
-   if (has_engine)
+   
+   if (true)//has_engine)
    {
       //assert(this->InLayout());
       //assert(InLayout()->Size()==size);
-      x_gf.Resize(H1FESpace.GetVLayout());
-      x.Resize(H1FESpace.GetVLayout());
-      v.Resize(H1FESpace.GetVLayout());
-      e.Resize(L2FESpace.GetVLayout());
-      dx.Resize(H1FESpace.GetVLayout());
-      dv.Resize(H1FESpace.GetVLayout());
-      dvc.Resize(H1compFESpace.GetVLayout());
-      de.Resize(L2FESpace.GetVLayout());
-      de.Pull(false);
-      rhs.Resize(H1FESpace.GetVLayout());
-      one.Resize(L2FESpace.GetVLayout());
-      one.Fill(1.0);
-      e_rhs.Resize(L2FESpace.GetVLayout());
-      rhs_c.Resize(H1compFESpace.GetVLayout());
-      dv_c.Resize(H1compFESpace.GetVLayout());
-      kv.Resize(H1FESpace.GetVLayout());
-      B.Resize(H1compFESpace.GetTrueVLayout());
-      X.Resize(H1compFESpace.GetTrueVLayout());
-      }*/
+      x_gf.SetSize(H1FESpace.GetVSize());
+      x.SetSize(H1FESpace.GetVSize());
+      v.SetSize(H1FESpace.GetVSize());
+      e.SetSize(L2FESpace.GetVSize());
+      dx.SetSize(H1FESpace.GetVSize());
+      dv.SetSize(H1FESpace.GetVSize());
+      dvc.SetSize(H1compFESpace.GetVSize());
+      de.SetSize(L2FESpace.GetVSize());
+      //de.Pull(false);
+      rhs.SetSize(H1FESpace.GetVSize());
+      one.SetSize(L2FESpace.GetVSize());
+      one = 1.0;
+      e_rhs.SetSize(L2FESpace.GetVSize());
+      rhs_c.SetSize(H1compFESpace.GetVSize());
+      dv_c.SetSize(H1compFESpace.GetVSize());
+      kv.SetSize(H1FESpace.GetVSize());
+      B.SetSize(H1compFESpace.GetTrueVSize());
+      X.SetSize(H1compFESpace.GetTrueVSize());
+   }
 
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -327,7 +327,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   //push();
+   push();
    dbg("\033[7mLagrangianHydroOperator::Mult");
 
    dS_dt = 0.0;
@@ -613,7 +613,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
-   //push();
+   push();
    timer.sw_qdata.Start();
 
    const int nqp = integ_rule.GetNPoints();
@@ -636,14 +636,14 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
    int nzones_batch = 3;
    const int nbatches =  nzones / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
-   double *gamma_b = new double[nqp_batch],
-   *rho_b = new double[nqp_batch],
-   *e_b   = new double[nqp_batch],
-   *p_b   = new double[nqp_batch],
-   *cs_b  = new double[nqp_batch];
+   double *gamma_b = mm::malloc<double>(nqp_batch),
+      *rho_b = mm::malloc<double>(nqp_batch),
+      *e_b   = mm::malloc<double>(nqp_batch),
+      *p_b   = mm::malloc<double>(nqp_batch),
+      *cs_b  = mm::malloc<double>(nqp_batch);
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
-   DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
+   DenseTensor *Jpr_b = mm::malloc<DenseTensor>(nzones_batch);
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
@@ -790,12 +790,12 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
       }
    }
    dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
-   delete [] gamma_b;
-   delete [] rho_b;
-   delete [] e_b;
-   delete [] p_b;
-   delete [] cs_b;
-   delete [] Jpr_b;
+   mm::free<double>(gamma_b);
+   mm::free<double>(rho_b);
+   mm::free<double>(e_b);
+   mm::free<double>(p_b);
+   mm::free<double>(cs_b);
+   mm::free<DenseTensor>(Jpr_b);
    quad_data_is_current = true;
 
    timer.sw_qdata.Stop();

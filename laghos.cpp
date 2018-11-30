@@ -156,10 +156,8 @@ int main(int argc, char *argv[])
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    //assert(false);
-   dbg("Read the serial mesh");
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
-   dbg("done");
-   assert(false);
+
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
@@ -256,7 +254,6 @@ int main(int argc, char *argv[])
    if (myid == 0)
    { cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl; }
 
-
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -264,7 +261,7 @@ int main(int argc, char *argv[])
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
-
+   
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
@@ -336,7 +333,6 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates. This also links the
    // mesh positions to the values in x_gf.
-   dbg("SetNodalGridFunction");
    pmesh->SetNodalGridFunction(&x_gf);
 
    // Initialize the velocity.
@@ -396,10 +392,13 @@ int main(int argc, char *argv[])
    
    pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
    config::Get().PA(p_assembly);
+
+   dbg("LagrangianHydroOperator");
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
                                 qupdate, gamma(S));
+ 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -446,6 +445,7 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
+   dbg("ode_solver->Init");
    ode_solver->Init(oper);
    dbg("ResetTimeStepEstimate");
    oper.ResetTimeStepEstimate();

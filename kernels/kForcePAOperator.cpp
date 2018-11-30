@@ -55,18 +55,18 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    gVecL2(h1sz),
    gVecH1(l2sz)
 {
-   //push();
+   push();
    if (!engine) return;
    //const Engine &ng = l2f.GetMesh()->GetEngine();
    gVecL2.SetSize(l2sz);//ng.MakeLayout(l2sz));
    gVecH1.SetSize(h1sz);//ng.MakeLayout(h1sz));
-   //pop();
+   pop();
 }
 
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
-   //push();   
+   push();   
    //const kernels::Vector &rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
    //mfem::Vector &rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
    //const kernels::Vector &rgVecH1 = gVecH1.Get_PVector()->As<const kernels::Vector>();
@@ -93,7 +93,7 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
 // *************************************************************************
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
-   //push();
+   push();
    //const kernels::Vector &rVecH1 = vecH1.Get_PVector()->As<const kernels::Vector>();
    //kernels::Vector &rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
    //const kernels::Vector &rgVecL2 = gVecL2.Get_PVector()->As<const kernels::Vector>();
