@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    const char *mesh_file = "data/square01_quad.mesh";
+   //const char *mesh_file = "/home/camier1/home/mfem/okina-laghos/data/star.mesh";
    int rs_levels = 0;
    int rp_levels = 0;
    int order_v = 2;
@@ -154,7 +155,11 @@ int main(int argc, char *argv[])
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
+   //assert(false);
+   dbg("Read the serial mesh");
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
+   dbg("done");
+   assert(false);
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
@@ -388,7 +393,9 @@ int main(int argc, char *argv[])
       case 3: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
-
+   
+   pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
+   config::Get().PA(p_assembly);
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,

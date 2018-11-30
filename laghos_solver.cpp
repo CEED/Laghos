@@ -225,15 +225,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    }
 
    if (has_engine)
-   {
+   {/*
 #ifdef __NVCC__
       dbg("Jac0inv UseExternalData");
       const size_t Jinv_isz = quad_data.Jac0inv.SizeI();
       const size_t Jinv_jsz = quad_data.Jac0inv.SizeJ();
       const size_t Jinv_ksz = quad_data.Jac0inv.SizeK();
       const size_t Jinv_sz = Jinv_isz * Jinv_jsz * Jinv_ksz;
-      double *ji_ext_data =
-         (double*)kernels::kmalloc<double>::operator new (Jinv_sz);
+      double *ji_ext_data = (double*)mm::malloc<double>(Jinv_sz);
       kernels::kmemcpy::rHtoD(ji_ext_data,
                               quad_data.Jac0inv.Data(),
                               Jinv_sz*sizeof(double));
@@ -245,13 +244,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       const size_t si_jsz = quad_data.stressJinvT.SizeJ();
       const size_t si_ksz = quad_data.stressJinvT.SizeK();
       const size_t si_sz = si_isz * si_jsz * si_ksz;
-      double *si_ext_data =
-         (double*)kernels::kmalloc<double>::operator new (si_sz);
+      double *si_ext_data = (double*)mm::malloc<double>(si_sz);
       kernels::kmemcpy::rHtoD(si_ext_data,
                               quad_data.stressJinvT.Data(),
                               si_sz*sizeof(double));
       quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz, si_jsz, si_ksz);
 #endif
+    */
    }
 
    // Initial local mesh size (assumes all mesh elements are of the same type).

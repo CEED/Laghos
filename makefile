@@ -16,13 +16,13 @@
 
 # SETUP ************************************************************************
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/okina
+MFEM_DIR ?= $(HOME)/home/mfem/okina-laghos
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 NV_ARCH ?= -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
 # -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
 
 # number of proc to use for compilation stage
-CPU = 1 #$(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 # fetch current/working directory
 pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
