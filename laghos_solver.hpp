@@ -77,7 +77,7 @@ protected:
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
-   const bool use_viscosity, p_assembly, has_engine;
+   const bool use_viscosity, p_assembly, okina;
    const double cg_rel_tol;
    const int cg_max_iter;
    Coefficient *material_pcf;
@@ -157,7 +157,8 @@ public:
                            const double cgt,
                            const int cgiter,
                            const bool qupdate,
-                           const double gamma);
+                           const double gamma,
+                           const bool okina);
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;

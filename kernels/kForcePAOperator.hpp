@@ -51,8 +51,7 @@ public:
    kForcePAOperator(QuadratureData*,
                     ParFiniteElementSpace&,
                     ParFiniteElementSpace&,
-                    const IntegrationRule&,
-                    const bool);
+                    const IntegrationRule&);
    void Mult(const Vector&, Vector&) const;
    void MultTranspose(const Vector&, Vector&) const;
 };

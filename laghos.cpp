@@ -88,13 +88,14 @@ int main(int argc, char *argv[])
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
+   bool okina = true;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
    int partition_type = 111;
-   bool qupdate = false;
+   bool qupdate = true;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -123,6 +124,8 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
+   args.AddOption(&okina, "-o", "--okina", "-no-o", "--no-okina",
+                  "Activate OKINA kernels.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -389,15 +392,16 @@ int main(int argc, char *argv[])
       case 3: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
-   
-   pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
-   config::Get().PA(p_assembly);
 
+   if (okina){
+      pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
+      config::Get().PA(p_assembly);
+   }
    dbg("LagrangianHydroOperator");
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
-                                qupdate, gamma(S));
+                                qupdate, gamma(S), okina);
  
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

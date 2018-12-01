@@ -30,19 +30,21 @@ namespace hydrodynamics
 
 // *****************************************************************************
 kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
-                                 ParFiniteElementSpace &fes_,
+                                 ParFiniteElementSpace &pfes_,
                                  const IntegrationRule &ir_) :
-   AbcMassPAOperator(fes_.GetVSize()/**fes_.GetTrueVLayout()*/),
-   dim(fes_.GetMesh()->Dimension()),
-   nzones(fes_.GetMesh()->GetNE()),
+   AbcMassPAOperator(pfes_.GetVSize()/**fes_.GetTrueVLayout()*/),
+   dim(pfes_.GetMesh()->Dimension()),
+   nzones(pfes_.GetMesh()->GetNE()),
    quad_data(qd_),
-   fes(fes_),
+   pfes(pfes_),
+   fes(static_cast<FiniteElementSpace*>(&pfes_)),
    ir(ir_),
    ess_tdofs_count(0),
    ess_tdofs(0),
-   bilinearForm(new mfem::PABilinearForm(&fes_)),//*(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&fes_))))),
+   paBilinearForm(new mfem::PABilinearForm(&pfes_)),
+   //*(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&fes_))))),
    //bilinearForm(new kernels::kBilinearForm(&fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>())),
-   massOperator(/*NULL*/)
+   massOperator(NULL)
 {
    push(Wheat);
    pop();
@@ -51,16 +53,16 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-//#warning Setup
-   assert(false);
    push(Wheat);
-   //const mfem::Engine &engine = fes.GetMesh()->GetEngine();
-   mfem::PAMassIntegrator *massInteg = new mfem::PAMassIntegrator(/*engine*/);
-   massInteg->SetIntegrationRule(ir);
-   //massInteg->SetOperator(quad_data->rho0DetJ0w);
-   bilinearForm->AddDomainIntegrator(massInteg);
-   bilinearForm->Assemble();
-   //bilinearForm->FormOperator(mfem::Array<int>(), massOperator);
+   mfem::PAMassIntegrator *paMassInteg = new mfem::PAMassIntegrator();
+   paBilinearForm->AddDomainIntegrator(paMassInteg);
+   paBilinearForm->Assemble();
+
+//paMassInteg->Setup(fes,&ir);
+   paMassInteg->SetIntegrationRule(ir);
+   paMassInteg->SetOperator(quad_data->rho0DetJ0w);
+
+   paBilinearForm->FormOperator(mfem::Array<int>(), massOperator);
    //pop();
 }
 
@@ -73,7 +75,7 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
    if (ess_tdofs.Size()==0){
 #ifdef MFEM_USE_MPI
       int global_ess_tdofs_count;
-      const MPI_Comm comm = fes.GetParMesh()->GetComm();
+      const MPI_Comm comm = pfes.GetParMesh()->GetComm();
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
       assert(global_ess_tdofs_count>0);

@@ -36,11 +36,12 @@ class kMassPAOperator : public AbcMassPAOperator
 private:
    const int dim, nzones;
    QuadratureData *quad_data;
-   ParFiniteElementSpace &fes;
+   ParFiniteElementSpace &pfes;
+   FiniteElementSpace *fes;
    const IntegrationRule &ir;
    int ess_tdofs_count;
    mfem::Array<int> ess_tdofs;
-   PABilinearForm *bilinearForm;
+   PABilinearForm *paBilinearForm;
    Operator *massOperator;
    mutable mfem::Vector distX;
 public:
@@ -54,9 +55,9 @@ public:
    virtual void ComputeDiagonal2D(Vector&) const {};
    virtual void ComputeDiagonal3D(Vector&) const {};
    virtual const Operator *GetProlongation() const
-   { return fes.GetProlongationMatrix(); }
+   { return pfes.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
-   { return fes.GetRestrictionMatrix(); }
+   { return pfes.GetRestrictionMatrix(); }
 };
   
 

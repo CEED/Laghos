@@ -32,8 +32,7 @@ namespace hydrodynamics
 kForcePAOperator::kForcePAOperator(QuadratureData *qd,
                                    ParFiniteElementSpace &h1f,
                                    ParFiniteElementSpace &l2f,
-                                   const IntegrationRule &ir,
-                                   const bool engine) :
+                                   const IntegrationRule &ir) :
    AbcForcePAOperator(/**h1f.GetTrueVLayout()*/),
    dim(h1f.GetMesh()->Dimension()),
    nzones(h1f.GetMesh()->GetNE()),
@@ -56,8 +55,6 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    gVecH1(l2sz)
 {
    push();
-   if (!engine) return;
-   //const Engine &ng = l2f.GetMesh()->GetEngine();
    gVecL2.SetSize(l2sz);//ng.MakeLayout(l2sz));
    gVecH1.SetSize(h1sz);//ng.MakeLayout(h1sz));
    pop();

@@ -89,12 +89,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  const bool qupt,
-                                                 const double gm) :
-#ifdef MFEM_USE_BACKENDS
-   TimeDependentOperator(*h1_fes.GetMesh()->GetEngine().MakeLayout(size)),
-#else
+                                                 const double gm,
+                                                 const bool ok) :
    TimeDependentOperator(size),
-#endif
    H1FESpace(h1_fes), L2FESpace(l2_fes),
    H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(),1),
    ess_tdofs(essential_tdofs),
@@ -104,11 +101,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
    source_type(source_type_), cfl(cfl_),
    use_viscosity(visc), p_assembly(pa),
-#ifdef MFEM_USE_BACKENDS
-   has_engine(h1_fes.GetMesh()->HasEngine()),
-#else
-   has_engine(false),
-#endif
+   okina(ok),
    cg_rel_tol(cgt), cg_max_iter(cgiter),
    material_pcf(material_),
    Mv(&h1_fes), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -117,13 +110,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    quad_data(dim, nzones, integ_rule.GetNPoints()),
    quad_data_is_current(false),
    Force(&l2_fes, &h1_fes),
-   ForcePA((!has_engine)?
+   ForcePA((!okina)?
            static_cast<AbcForcePAOperator*>(new  ForcePAOperator(&quad_data, h1_fes,
                                                                  l2_fes)):
            static_cast<AbcForcePAOperator*>(new kForcePAOperator(&quad_data, h1_fes,
-                                                                 l2_fes,
-                                                                 integ_rule,has_engine))),
-   VMassPA((!has_engine)?
+                                                                 l2_fes, integ_rule))),
+   VMassPA((!okina)?
            static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, H1FESpace)):
            static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, H1compFESpace,
                                                                integ_rule))),
@@ -224,8 +216,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       }
    }
 
-   if (has_engine)
-   {/*
+   if (okina)
+   {
 #ifdef __NVCC__
       dbg("Jac0inv UseExternalData");
       const size_t Jinv_isz = quad_data.Jac0inv.SizeI();
@@ -250,7 +242,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
                               si_sz*sizeof(double));
       quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz, si_jsz, si_ksz);
 #endif
-    */
    }
 
    // Initial local mesh size (assumes all mesh elements are of the same type).
@@ -297,7 +288,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       evaluator = new FastEvaluator(H1FESpace);
 
       // Setup the preconditioner of the velocity mass operator.
-      if (!has_engine)
+      if (not okina)
       {
          Vector d;
          (dim == 2) ? VMassPA->ComputeDiagonal2D(d) : VMassPA->ComputeDiagonal3D(d);
@@ -305,8 +296,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       }
    }
 
-   if (has_engine)
+   if (okina)
    {
+      push();
       VMassPA->Setup(); // quad_data has been filled, used for SetOperator
       //CG_VMass.SetPreconditioner(VMassPA_prec);
       CG_VMass.SetOperator(*VMassPA);
@@ -366,7 +358,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       timer.sw_force.Stop();
       rhs *= -1.0; //.Axpby(-1.0, rhs, 0.0, one);
 
-      if (!has_engine)
+      if (not okina)
       {
          Operator *cVMassPA;
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
@@ -507,6 +499,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
+   push();
    UpdateQuadratureData(S);
    double glob_dt_est;
    MPI_Allreduce(&quad_data.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
@@ -516,11 +509,13 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
+   push();
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
+   push();
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);
@@ -545,6 +540,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps)
 {
+   push();
    double my_rt[5], rt_max[5];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
@@ -598,6 +594,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+   push();
    if (qupdate)
    {
       QUpdate(dim, nzones, l2dofs_cnt, h1dofs_cnt,
