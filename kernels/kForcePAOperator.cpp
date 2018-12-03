@@ -49,8 +49,8 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    H1_DOFS_1D(h1fes.GetFE(0)->GetOrder()+1),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
-   l2D2Q(mfem::kDofQuadMaps::Get(l2fes, integ_rule)),
-   h1D2Q(mfem::kDofQuadMaps::Get(h1fes, integ_rule)),
+   l2D2Q(kDofQuadMaps::Get(l2fes, integ_rule)),
+   h1D2Q(kDofQuadMaps::Get(h1fes, integ_rule)),
    gVecL2(h1sz),
    gVecH1(l2sz)
 {

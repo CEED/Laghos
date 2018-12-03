@@ -92,12 +92,11 @@ namespace hydrodynamics {
                      const IntegrationRule& ir,
                      const double *d_in,
                      double **d_out){
-      //push();
-      const mfem::kFiniteElementSpace &kfes = *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
-      //const kernels::kFiniteElementSpace &kfes =
-      //fes.Get_PFESpace()->As<kernels::kFiniteElementSpace>();
+      push();
+      const mfem::kFiniteElementSpace &kfes =
+         *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
       const FiniteElementSpace &fes = pfes;
-      const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(fes,ir);
+      const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
       
       const int dim = fes.GetMesh()->Dimension();
       const int vdim = fes.GetVDim();
@@ -116,7 +115,7 @@ namespace hydrodynamics {
       }
       
       Vector v_in = Vector((double*)d_in, vsize);
-      Vector v_local_in = Vector(local_size);
+      Vector v_local_in = Vector(d_local_in, local_size);
       kfes.GlobalToLocal(v_in, v_local_in);
             
       const size_t out_size = vdim * vdim * nqp * nzones;
@@ -130,8 +129,8 @@ namespace hydrodynamics {
       assert(dofs1D==3);
       assert(quad1D==4);      
       qGradVector2D<3,4> __config(nzones)
-         (nzones, maps->dofToQuad, maps->dofToQuadD, d_local_in, *d_out);      
-      //pop();
+         (nzones, maps->dofToQuad, maps->dofToQuadD, d_local_in, *d_out);
+      pop();
    }
    
 } // namespace hydrodynamics

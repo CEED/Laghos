@@ -475,6 +475,7 @@ int main(int argc, char *argv[])
       // to advance.
       ode_solver->Step(S, t, dt);
       steps++;
+      //S.Print();assert(false);
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);

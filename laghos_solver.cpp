@@ -392,7 +392,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
-            dbg("Essential true dofs as if there's only one component.");
+            //dbg("Essential true dofs as if there's only one component.");
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c, B);
@@ -461,6 +461,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       timer.sw_force.Start();
       ForcePA->MultTranspose(v, e_rhs);
       //e_rhs.Pull();
+      mm::Get().Pull(e_rhs);
       timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
       for (int z = 0; z < nzones; z++)
@@ -474,6 +475,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
          de.SetSubVector(l2dofs, loc_de);
       }
+      mm::Get().Push(de);
       //de.Push();
    }
    else

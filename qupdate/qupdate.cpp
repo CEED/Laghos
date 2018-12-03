@@ -167,44 +167,66 @@ namespace hydrodynamics {
       // ***********************************************************************
       timer.sw_qdata.Start();
       Vector* S_p = (Vector*) &S;
+      //S_p->Print();assert(false);
       //S_p->Pull();
+      mm::Get().Pull(S_p->GetData());
       //S_p->Push(); // No need to push them back, an .Assign will come after
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
       const int numDofs  = fe.GetDof();
       const int nqp = ir.GetNPoints();
       dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
       const size_t H1_size = H1FESpace.GetVSize();
-      //const size_t L2_size = L2FESpace.GetVSize();
+      const size_t L2_size = L2FESpace.GetVSize();
       const int nqp1D = tensors1D->LQshape1D.Width();
           
       // Energy dof => quads ***************************************************
       dbg("Energy dof => quads (L2FESpace)");
       static double *d_e_quads_data = NULL;
-      d_e.MakeRef/*Offset*/(&L2FESpace, *S_p, 2*H1_size);
-      Dof2QuadScalar(L2FESpace, ir, d_e, &d_e_quads_data);
+      d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
+      /*dbg("d_e:");
+      for (size_t k=0;k<L2_size;k+=1){
+         printf("%f ",d_e[k]);
+         }*/
+      //assert(false);
+      Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
+      /*dbg("d_e_quads_data:");
+      for (size_t k=0;k<2*H1_size;k+=1){
+         printf("%f ",d_e_quads_data[k]);
+      }
+      assert(false);*/
 
       // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
       static double *d_grad_x_data = NULL;
       d_x.MakeRef/*Offset*/(&H1FESpace,*S_p, 0);
       Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
+      /*dbg("d_grad_x_data:");
+      for (size_t k=0;k<2*H1_size;k+=1){
+         printf("%f ",d_grad_x_data[k]);
+      }
+      assert(false);*/
 
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
       const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(H1FESpace,ir);
       
       // Velocity **************************************************************
-      //dbg("Velocity H1_size=%d",H1_size);
+      dbg("Velocity H1_size=%d",H1_size);
       d_v.MakeRef/*Offset*/(&H1FESpace,*S_p, H1_size);
       static double *d_grad_v_data = NULL;
       Dof2QuadGrad(H1FESpace,ir, d_v, &d_grad_v_data);
+      /*dbg("d_grad_v_data:");
+      for (size_t k=0;k<2*H1_size;k+=1){
+         printf("%f ",d_grad_v_data[k]);
+      }
+      assert(false);*/
 
       // ***********************************************************************      
       const double h1order = (double) H1FESpace.GetOrder(0);
       const double infinity = std::numeric_limits<double>::infinity();
 
       // ***********************************************************************
-      //dbg("rho0DetJ0w");
+      dbg("rho0DetJ0w");
       const size_t rho0DetJ0w_sz = nzones * nqp;
       static double *d_rho0DetJ0w = NULL;
       if (!d_rho0DetJ0w){
@@ -216,7 +238,7 @@ namespace hydrodynamics {
       }
 
       // ***********************************************************************
-      //dbg("Jac0inv");
+      dbg("Jac0inv");
       const size_t Jac0inv_sz = dim * dim * nzones * nqp;
       static double *d_Jac0inv = NULL;
       if (!d_Jac0inv){
@@ -228,7 +250,7 @@ namespace hydrodynamics {
       }
 
       // ***********************************************************************
-      //dbg("dt_est=%f",quad_data.dt_est);
+      dbg("dt_est=%f",quad_data.dt_est);
       const size_t dt_est_sz = nzones;
       static double *h_dt_est = NULL;
       if (!h_dt_est){
