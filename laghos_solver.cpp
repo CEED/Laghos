@@ -330,16 +330,16 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // - Position
    // - Velocity
    // - Specific Internal Energy
-   v.MakeRef/*Offset*/(&H1FESpace, *sptr, VsizeH1);
-   e.MakeRef/*Offset*/(&L2FESpace, *sptr, VsizeH1*2);
+   v.MakeRef(&H1FESpace, *sptr, VsizeH1);
+   e.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
 
-   dx.MakeRef/*Offset*/(&H1FESpace, dS_dt, 0);
-   dv.MakeRef/*Offset*/(&H1FESpace, dS_dt, VsizeH1);
-   de.MakeRef/*Offset*/(&L2FESpace, dS_dt, VsizeH1*2);
+   dx.MakeRef(&H1FESpace, dS_dt, 0); //dx.Print();
+   dv.MakeRef(&H1FESpace, dS_dt, VsizeH1); //dv.Print();
+   de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2); //de.Print();
 
    // Set dx_dt = v (explicit).
-   dx = v;
-
+   dx = v; //dx.Print();
+   
    if (!p_assembly)
    {
       Force = 0.0;
@@ -357,7 +357,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
       timer.sw_force.Stop();
       rhs *= -1.0; //.Axpby(-1.0, rhs, 0.0, one);
-
+      
       if (not okina)
       {
          Operator *cVMassPA;
@@ -379,12 +379,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          // Partial assembly solve for each velocity component
          const int size = H1compFESpace.GetVSize();
          kMassPAOperator *kVMassPA = static_cast<kMassPAOperator*>(VMassPA);
-
+         //dbg("\033[31;1mFOR");
          for (int c = 0; c < dim; c++)
          {
             dv_c = 0.0;
-            rhs_c.MakeRef/*Offset*/(&H1compFESpace, rhs, c*size);
-
+            rhs_c.MakeRef(&H1compFESpace, rhs, c*size);
+            //dbg("rhs_c:"); rhs_c.Print(); assert(false);
+            
             mfem::Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
             mfem::Array<int> ess_bdr(bdr_attr_max);
@@ -396,23 +397,35 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
 
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c, B);
+            //dbg("B:"); B.Print(); assert(false);
+
             H1compFESpace.GetProlongationMatrix()->Mult(dv_c, X);
+            //dbg("X:"); X.Print(); assert(false);
 
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(B);
+            //dbg("B:"); B.Print(); assert(false);
 
             timer.sw_cgH1.Start();
 
+            //dbg("CG_VMass.Mult(B, X):");
             CG_VMass.Mult(B, X);
+            //dbg("X:"); X.Print(); 
 
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += CG_VMass.GetNumIterations();
 
             H1compFESpace.GetProlongationMatrix()->Mult(X, dv_c);
+            //dbg("dv_c:"); dv_c.Print();
 
-            dvc.MakeRef/*Offset*/(&H1compFESpace, dS_dt, VsizeH1 + c*size);
+            dvc.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
             dvc = dv_c;
          }
+         //dbg("dx:"); dx.Print();
+         //dbg("dv:"); dv.Print();
+         //dbg("de:"); de.Print();
+         //dbg("dS_dt:"); dS_dt.Print();
+         //assert(false);
       } // engine
    }
    else // p_assembly
