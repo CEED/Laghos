@@ -176,7 +176,7 @@ namespace hydrodynamics {
       const int nqp = ir.GetNPoints();
       dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
       const size_t H1_size = H1FESpace.GetVSize();
-      const size_t L2_size = L2FESpace.GetVSize();
+      //const size_t L2_size = L2FESpace.GetVSize();
       const int nqp1D = tensors1D->LQshape1D.Width();
           
       // Energy dof => quads ***************************************************

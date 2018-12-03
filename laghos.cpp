@@ -76,7 +76,6 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    const char *mesh_file = "data/square01_quad.mesh";
-   //const char *mesh_file = "/home/camier1/home/mfem/okina-laghos/data/star.mesh";
    int rs_levels = 0;
    int rp_levels = 0;
    int order_v = 2;
@@ -394,7 +393,7 @@ int main(int argc, char *argv[])
    }
 
    if (okina){
-      pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
+      //pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
       config::Get().PA(p_assembly);
    }
    dbg("LagrangianHydroOperator");

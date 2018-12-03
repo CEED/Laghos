@@ -622,6 +622,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    StdUpdateQuadratureData(S);
 }
 
+// Smooth transition between 0 and 1 for x in [-eps, eps].
+inline double smooth_step_01(double x, double eps)
+{
+   const double y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return 0.0; }
+   if (y > 1.0) { return 1.0; }
+   return (3.0 - 2.0 * y) * y * y;
+}
+
 void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
 {
    if (quad_data_is_current) { return; }
@@ -740,13 +749,15 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
                if (p_assembly)
                {
                   mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
+                  //sgrad_v.Print();
                }
                else
                {
                   v.GetVectorGradient(*T, sgrad_v);
                }
                sgrad_v.Symmetrize();
-               double eig_val_data[3], eig_vec_data[9];
+               double *eig_val_data = mm::malloc<double>(3);
+               double *eig_vec_data = mm::malloc<double>(9);
                if (dim==1)
                {
                   eig_val_data[0] = sgrad_v(0, 0);
@@ -754,18 +765,31 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
                }
                else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
                Vector compr_dir(eig_vec_data, dim);
+               //compr_dir.Print();
                // Computes the initial->physical transformation Jacobian.
+               //Jpr.Print();
                mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
+               //Jpi.Print();
                Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
                // Change of the initial mesh size in the compression direction.
                const double h = quad_data.h0 * ph_dir.Norml2() /
                                 compr_dir.Norml2();
+               //printf("\033[32m\nh = %.15e\033[m",h);
 
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               // The following represents a "smooth" version of the statement
+               // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+               // eps must be scaled appropriately if a different unit system is
+               // being used.
+               const double eps = 1e-12;
+               visc_coeff += 0.5 * rho * h * sound_speed *
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+               
                stress.Add(visc_coeff, sgrad_v);
+               mm::free<double>(eig_val_data);
+               mm::free<double>(eig_vec_data);
             }
 
             // Time step estimate at the point. Here the more relevant length
@@ -801,7 +825,8 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
-   dbg("\033[7mdt_est=%.15e",quad_data.dt_est);
+   //printf("\033[7mdt_est=%.15e\033[m",quad_data.dt_est);
+   //fflush(0); assert(false);
    mm::free<double>(gamma_b);
    mm::free<double>(rho_b);
    mm::free<double>(e_b);
