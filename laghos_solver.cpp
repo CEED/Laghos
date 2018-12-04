@@ -209,10 +209,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
 
          DenseMatrixInverse Jinv(T->Jacobian());
          Jinv.GetInverseMatrix(quad_data.Jac0inv(i*nqp + q));
-
+         
          const double rho0DetJ0 = T->Weight() * rho_vals(q);
+
          quad_data.rho0DetJ0w(i*nqp + q) = rho0DetJ0 *
-                                           integ_rule.IntPoint(q).weight;
+         integ_rule.IntPoint(q).weight;
       }
    }
 
@@ -225,11 +226,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       const size_t Jinv_ksz = quad_data.Jac0inv.SizeK();
       const size_t Jinv_sz = Jinv_isz * Jinv_jsz * Jinv_ksz;
       double *ji_ext_data = (double*)mm::malloc<double>(Jinv_sz);
-      kernels::kmemcpy::rHtoD(ji_ext_data,
-                              quad_data.Jac0inv.Data(),
-                              Jinv_sz*sizeof(double));
+      mm::H2D(ji_ext_data,
+              quad_data.Jac0inv.Data(),
+              Jinv_sz*sizeof(double));
       quad_data.Jac0inv.UseExternalData(ji_ext_data, Jinv_isz, Jinv_jsz, Jinv_ksz);
-
 
       dbg("stressJinvT UseExternalData");
       const size_t si_isz = quad_data.stressJinvT.SizeI();
@@ -237,13 +237,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       const size_t si_ksz = quad_data.stressJinvT.SizeK();
       const size_t si_sz = si_isz * si_jsz * si_ksz;
       double *si_ext_data = (double*)mm::malloc<double>(si_sz);
-      kernels::kmemcpy::rHtoD(si_ext_data,
-                              quad_data.stressJinvT.Data(),
-                              si_sz*sizeof(double));
+      mm::H2D(si_ext_data,
+              quad_data.stressJinvT.Data(),
+              si_sz*sizeof(double));
       quad_data.stressJinvT.UseExternalData(si_ext_data, si_isz, si_jsz, si_ksz);
 #endif
    }
-
+   
    // Initial local mesh size (assumes all mesh elements are of the same type).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;
@@ -297,7 +297,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    }
 
    if (okina)
-   {
+   {      
       push();
       VMassPA->Setup(); // quad_data has been filled, used for SetOperator
       //CG_VMass.SetPreconditioner(VMassPA_prec);
@@ -315,6 +315,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    locCG.SetMaxIter(200);
    locCG.SetPrintLevel(0);
    //pop();
+   
+#ifdef __NVCC__
+   if (okina){
+      dbg("\033[32m[CUDA]");
+      config::Get().Cuda(true);
+   }
+#endif // NVCC
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
@@ -531,6 +538,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
 {
    push();
+   assert(false);
    rho.SetSpace(&L2FESpace);
 
    DenseMatrix Mrho(l2dofs_cnt);

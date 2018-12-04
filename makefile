@@ -138,7 +138,7 @@ MPI_LIB = -L$(MPI_HOME)/lib -lmpi
 # LAGHOS FLAGS *****************************************************************
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) \
 					$(CUB_INC) $(MPI_INC) $(RAJA_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) $(MPI_LIB) $(RAJA_LIBS) $(CUDA_LIBS) -ldl 
+LAGHOS_LIBS = $(MFEM_LIBS) $(MPI_LIB) $(RAJA_LIBS) $(CUDA_LIBS) #-ldl 
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG

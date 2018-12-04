@@ -168,7 +168,6 @@ namespace hydrodynamics {
       timer.sw_qdata.Start();
       Vector* S_p = (Vector*) &S;
       //S_p->Print();assert(false);
-      //S_p->Pull();
       mm::Get().Pull(S_p->GetData());
       //S_p->Push(); // No need to push them back, an .Assign will come after
       const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
@@ -189,22 +188,24 @@ namespace hydrodynamics {
          }*/
       //assert(false);
       Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
-      /*dbg("d_e_quads_data:");
+      mm::Get().Pull(d_e_quads_data);
+      dbg("d_e_quads_data:");
       for (size_t k=0;k<2*H1_size;k+=1){
          printf("%f ",d_e_quads_data[k]);
       }
-      assert(false);*/
+      assert(false);
 
       // Coords to Jacobians ***************************************************
       dbg("Refresh Geom J, invJ & detJ");
       static double *d_grad_x_data = NULL;
-      d_x.MakeRef/*Offset*/(&H1FESpace,*S_p, 0);
+      d_x.MakeRef(&H1FESpace,*S_p, 0);
       Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
-      /*dbg("d_grad_x_data:");
+      mm::Get().Pull(d_grad_x_data);
+      dbg("d_grad_x_data:");
       for (size_t k=0;k<2*H1_size;k+=1){
          printf("%f ",d_grad_x_data[k]);
       }
-      assert(false);*/
+      assert(false);
 
       // Integration Points Weights (tensor) ***********************************
       dbg("Integration Points Weights (tensor,H1FESpace)");
