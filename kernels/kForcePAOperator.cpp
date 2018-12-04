@@ -33,7 +33,7 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
                                    ParFiniteElementSpace &h1f,
                                    ParFiniteElementSpace &l2f,
                                    const IntegrationRule &ir) :
-   AbcForcePAOperator(/**h1f.GetTrueVLayout()*/),
+   AbcForcePAOperator(),
    dim(h1f.GetMesh()->Dimension()),
    nzones(h1f.GetMesh()->GetNE()),
    quad_data(qd),
@@ -55,21 +55,16 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    gVecH1(l2sz)
 {
    push();
-   gVecL2.SetSize(l2sz);//ng.MakeLayout(l2sz));
-   gVecH1.SetSize(h1sz);//ng.MakeLayout(h1sz));
+   gVecL2.SetSize(l2sz);
+   gVecH1.SetSize(h1sz);
    pop();
 }
 
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
-   push();   
-   //const kernels::Vector &rVecL2 = vecL2.Get_PVector()->As<const kernels::Vector>();
-   //mfem::Vector &rgVecL2 = gVecL2.Get_PVector()->As<kernels::Vector>();
-   //const kernels::Vector &rgVecH1 = gVecH1.Get_PVector()->As<const kernels::Vector>();
-   //kernels::Vector &rVecH1 = vecH1.Get_PVector()->As<kernels::Vector>();
-   l2k.GlobalToLocal(/*rV*/vecL2, /*rgV*/gVecL2);
-   dbg("rForceMult");
+   push();
+   l2k.GlobalToLocal(vecL2, gVecL2);
    rForceMult(dim,
               NUM_DOFS_1D,
               NUM_QUAD_1D,
@@ -80,23 +75,17 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               h1D2Q->quadToDof,
               h1D2Q->quadToDofD,
               quad_data->stressJinvT.Data(),
-              gVecL2,//(const double*)rgVecL2.KernelsMem().ptr(),
-              gVecH1);//(double*)rgVecH1.KernelsMem().ptr());
-   dbg("done");
-   h1k.LocalToGlobal(/*r*/gVecH1, /*rV*/vecH1);
-   //pop();
+              gVecL2,
+              gVecH1);
+   h1k.LocalToGlobal(gVecH1, vecH1);
+   pop();
 }
 
 // *************************************************************************
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
    push();
-   //const kernels::Vector &rVecH1 = vecH1.Get_PVector()->As<const kernels::Vector>();
-   //kernels::Vector &rgVecH1 = gVecH1.Get_PVector()->As<kernels::Vector>();
-   //const kernels::Vector &rgVecL2 = gVecL2.Get_PVector()->As<const kernels::Vector>();
-   //kernels::Vector &rVecL2 = vecL2.Get_PVector()->As<kernels::Vector>();
-   h1k.GlobalToLocal(/*rV*/vecH1, /*rgV*/gVecH1);
-   dbg("rForceMultTranspose");
+   h1k.GlobalToLocal(vecH1, gVecH1);
    rForceMultTranspose(dim,
                        NUM_DOFS_1D,
                        NUM_QUAD_1D,
@@ -107,10 +96,10 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        h1D2Q->dofToQuad,
                        h1D2Q->dofToQuadD,
                        (const double*)quad_data->stressJinvT.Data(),
-                       gVecH1,//(const double*)rgVecH1.KernelsMem().ptr(),
-                       gVecL2);//(double*)rgVecL2.KernelsMem().ptr());
-   l2k.LocalToGlobal(/*r*/gVecL2, /*rV*/vecL2);
-   //pop();
+                       gVecH1,
+                       gVecL2);
+   l2k.LocalToGlobal(gVecL2, vecL2);
+   pop();
 }
 
 } // namespace hydrodynamics

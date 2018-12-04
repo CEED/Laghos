@@ -25,12 +25,15 @@ namespace hydrodynamics {
 // **************************************************************************
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D>
-__kernel__ void vecToQuad2D(const int numElements,
-                            const double* __restrict dofToQuad,
-                            const double* __restrict in,
-                            double* __restrict out) {
-   for(int e=0;e<numElements;e+=1)
+         const int NUM_QUAD_1D> static
+void vecToQuad2D(const int numElements,
+                 const double* __restrict dofToQuad,
+                 const double* __restrict in,
+                 double* __restrict out) {
+   GET_CONST_ADRS(dofToQuad);
+   GET_CONST_ADRS(in);
+   GET_ADRS(out);
+   MFEM_FORALL(e, numElements,
    {
       double out_xy[NUM_VDIM][NUM_QUAD_1D][NUM_QUAD_1D];
       for (int v = 0; v < NUM_VDIM; ++v) {
@@ -49,15 +52,15 @@ __kernel__ void vecToQuad2D(const int numElements,
          }
          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
             for (int v = 0; v < NUM_VDIM; ++v) {
-               const double r_gf = in[_ijklNM(v,dx,dy,e,NUM_DOFS_1D,numElements)];
+               const double r_gf = d_in[_ijklNM(v,dx,dy,e,NUM_DOFS_1D,numElements)];
                for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-                  out_x[v][qy] += r_gf * dofToQuad[ijN(qy, dx,NUM_QUAD_1D)];
+                  out_x[v][qy] += r_gf * d_dofToQuad[ijN(qy, dx,NUM_QUAD_1D)];
                }
             }
          }
          for (int v = 0; v < NUM_VDIM; ++v) {
             for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
-               const double d2q = dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
+               const double d2q = d_dofToQuad[ijN(qy, dy,NUM_QUAD_1D)];
                for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
                   out_xy[v][qy][qx] += d2q * out_x[v][qx];
                }
@@ -67,11 +70,11 @@ __kernel__ void vecToQuad2D(const int numElements,
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
             for (int v = 0; v < NUM_VDIM; ++v) {
-               out[_ijklNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = out_xy[v][qy][qx];
+               d_out[_ijklNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = out_xy[v][qy][qx];
             }
          }
       }
-   }
+   });
 }
    
 // ***************************************************************************
@@ -115,8 +118,7 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
       
    assert(dofs1D==2);
    assert(quad1D==4);
-   vecToQuad2D<1,2,4> __config(nzones)
-      (nzones, maps->dofToQuad, d_local_in, *d_out);
+   vecToQuad2D<1,2,4>(nzones, maps->dofToQuad, d_local_in, *d_out);
    pop();
 }
 

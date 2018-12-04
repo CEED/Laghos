@@ -34,7 +34,6 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
      HQgrad1D(H1order + 1, nqp1D),
      LQshape1D(L2order + 1, nqp1D)
 {
-   push();
    // In this miniapp we assume:
    // - Gauss-Legendre quadrature points.
    // - Gauss-Lobatto continuous kinematic basis.
@@ -60,7 +59,6 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
 
 void FastEvaluator::GetL2Values(const Vector &vecL2, Vector &vecQ) const
 {
-   push();
    const int nL2dof1D = tensors1D->LQshape1D.Height(),
              nqp1D    = tensors1D->LQshape1D.Width();
    if (dim == 2)
@@ -112,7 +110,6 @@ void FastEvaluator::GetL2Values(const Vector &vecL2, Vector &vecQ) const
 
 void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
 {
-   push();
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nqp1D    = tensors1D->LQshape1D.Width();
    DenseMatrix X;
@@ -293,7 +290,6 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
 {
-   push();
    const int ip_cnt = IntRule->GetNPoints();
    Vector shape(fe.GetDof());
 
@@ -314,7 +310,6 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
                                              ElementTransformation &Trans,
                                              DenseMatrix &elmat)
 {
-   push();
    const int nqp = IntRule->GetNPoints();
    const int dim = trial_fe.GetDim();
    const int zone_id = Trans.ElementNo;
@@ -353,7 +348,6 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
 
 void ForcePAOperator::Mult(const Vector &vecL2, Vector &vecH1) const
 {
-   push();
    if      (dim == 2) { MultQuad(vecL2, vecH1); }
    else if (dim == 3) { MultHex(vecL2, vecH1); }
    else { MFEM_ABORT("Unsupported dimension"); }
@@ -361,7 +355,6 @@ void ForcePAOperator::Mult(const Vector &vecL2, Vector &vecH1) const
 
 void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
 {
-   push();
    if      (dim == 2) { MultTransposeQuad(vecH1, vecL2); }
    else if (dim == 3) { MultTransposeHex(vecH1, vecL2); }
    else { MFEM_ABORT("Unsupported dimension"); }
@@ -370,7 +363,6 @@ void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
 // Force matrix action on quadrilateral elements in 2D.
 void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 {
-   push();
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nL2dof1D = tensors1D->LQshape1D.Height(),
              nqp1D    = tensors1D->HQshape1D.Width(),
@@ -440,7 +432,6 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
 // Force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 {
-   push();
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nL2dof1D = tensors1D->LQshape1D.Height(),
              nqp1D    = tensors1D->HQshape1D.Width(),
@@ -603,7 +594,6 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
 void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                                         Vector &vecL2) const
 {
-   push();
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nL2dof1D = tensors1D->LQshape1D.Height(),
              nqp1D    = tensors1D->HQshape1D.Width(),
@@ -671,7 +661,6 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
 // Transpose force matrix action on hexahedral elements in 3D.
 void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 {
-   push();
    const int nH1dof1D = tensors1D->HQshape1D.Height(),
              nL2dof1D = tensors1D->LQshape1D.Height(),
              nqp1D    = tensors1D->HQshape1D.Width(),
@@ -823,7 +812,6 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 
 void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   push();
    const H1_QuadrilateralElement *fe_H1 =
       dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
@@ -872,7 +860,6 @@ void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 
 void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
 {
-   push();
    const H1_HexahedronElement *fe_H1 =
       dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
@@ -943,11 +930,9 @@ void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
 
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   push();
    const int comp_size = FESpace.GetNDofs();
    for (int c = 0; c < dim; c++)
    {
-      dbg("c=%d",c);
       Vector x_comp(x.GetData() + c * comp_size, comp_size),
              y_comp(y.GetData() + c * comp_size, comp_size);
       if      (dim == 2) { MultQuad(x_comp, y_comp); }
@@ -959,7 +944,6 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 // Mass matrix action on quadrilateral elements in 2D.
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
-   push();
    const H1_QuadrilateralElement *fe_H1 =
       dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
    const DenseMatrix &HQs = tensors1D->HQshape1D;
@@ -1012,7 +996,6 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 // Mass matrix action on hexahedral elements in 3D.
 void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
-   push();
    const H1_HexahedronElement *fe_H1 =
       dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
    const DenseMatrix &HQs = tensors1D->HQshape1D;
@@ -1100,7 +1083,6 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 
 void LocalMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   push();
    if      (dim == 2) { MultQuad(x, y); }
    else if (dim == 3) { MultHex(x, y); }
    else { MFEM_ABORT("Unsupported dimension"); }
@@ -1109,7 +1091,6 @@ void LocalMassPAOperator::Mult(const Vector &x, Vector &y) const
 // L2 mass matrix action on a single quadrilateral element in 2D.
 void LocalMassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
-   push();
    const DenseMatrix &LQs = tensors1D->LQshape1D;
 
    y.SetSize(x.Size());
@@ -1139,7 +1120,6 @@ void LocalMassPAOperator::MultQuad(const Vector &x, Vector &y) const
 // L2 mass matrix action on a single hexahedral element in 3D.
 void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
-   push();
    const DenseMatrix &LQs = tensors1D->LQshape1D;
 
    y.SetSize(x.Size());

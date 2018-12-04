@@ -16,22 +16,12 @@
 #include "../kernels.hpp"
 
 // *****************************************************************************
-#ifdef __TEMPLATES__
 template<const int NUM_DIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int L2_DOFS_1D,
-         const int H1_DOFS_1D> kernel
-#endif
-void rForceMultTranspose2D(
-#ifndef __TEMPLATES__
-                           const int NUM_DIM,
-                           const int NUM_DOFS_1D,
-                           const int NUM_QUAD_1D,
-                           const int L2_DOFS_1D,
-                           const int H1_DOFS_1D,
-#endif
-                           const int numElements,
+         const int H1_DOFS_1D>
+void rForceMultTranspose2D(const int numElements,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
@@ -39,12 +29,7 @@ void rForceMultTranspose2D(
                            const double* v,
                            double* e) {
    const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-#ifndef __NVCC__
-   forall(el,numElements,
-#else
-  const int el = blockDim.x * blockIdx.x + threadIdx.x;
-  if (el < numElements)
-#endif
+  MFEM_FORALL(el,numElements,
   {
     double vStress[NUM_QUAD_2D];
     for (int i = 0; i < NUM_QUAD_2D; ++i) {
@@ -112,25 +97,22 @@ void rForceMultTranspose2D(
         }
       }
     }
-  }
-#ifndef __NVCC__
-         );
-#endif
+  });
 }
 
-template kernel void rForceMultTranspose2D<2,2,2,1,2>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,3,4,2,3>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,4,6,3,4>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,5,8,4,5>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,6,10,5,6>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,7,12,6,7>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,8,14,7,8>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,9,16,8,9>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,10,18,9,10>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,11,20,10,11>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,12,22,11,12>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,13,24,12,13>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,14,26,13,14>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,15,28,14,15>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,16,30,15,16>(int,double const*,double const*,double const*,double const*,double const*,double*);
-template kernel void rForceMultTranspose2D<2,17,32,16,17>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,2,2,1,2>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,3,4,2,3>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,4,6,3,4>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,5,8,4,5>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,6,10,5,6>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,7,12,6,7>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,8,14,7,8>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,9,16,8,9>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,10,18,9,10>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,11,20,10,11>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,12,22,11,12>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,13,24,12,13>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,14,26,13,14>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,15,28,14,15>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,16,30,15,16>(int,double const*,double const*,double const*,double const*,double const*,double*);
+template void rForceMultTranspose2D<2,17,32,16,17>(int,double const*,double const*,double const*,double const*,double const*,double*);

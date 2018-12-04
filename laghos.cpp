@@ -367,9 +367,6 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
-   // Finished initializing, now push to the device
-   //S.Push();
-
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
    // mesh.
@@ -445,6 +442,14 @@ int main(int argc, char *argv[])
       visit_dc.Save();
    }
 
+   
+#ifdef __NVCC__
+   if (okina){
+      dbg("\033[32m[CUDA]");
+      config::Get().Cuda(true);
+   }
+#endif // NVCC
+
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
@@ -456,7 +461,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   BlockVector S_old(true_offset);
+   BlockVector S_old(true_offset);   
    S_old = S;
    for (int ti = 1; !last_step; ti++)
    {
@@ -474,7 +479,7 @@ int main(int argc, char *argv[])
       // to advance.
       ode_solver->Step(S, t, dt);
       steps++;
-      //S.Print();assert(false);
+      //dbg("S:"); S.Print(); fflush(0); //assert(false);
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);

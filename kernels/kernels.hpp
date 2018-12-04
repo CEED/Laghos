@@ -43,6 +43,9 @@
 #endif // __NVCC__
 
 // *****************************************************************************
+#include "general/okina.hpp"
+
+// *****************************************************************************
 #include "force/force.hpp"
 #include "include/forall.hpp"
 #include "include/offsets.hpp"
