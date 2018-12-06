@@ -21,7 +21,17 @@ double kVectorMin(const size_t, const double*);
 namespace mfem {
 
 namespace hydrodynamics {
-   
+
+
+// Smooth transition between 0 and 1 for x in [-eps, eps].
+inline __host__ __device__ double smooth_step_01(double x, double eps)
+{
+   const double y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return 0.0; }
+   if (y > 1.0) { return 1.0; }
+   return (3.0 - 2.0 * y) * y * y;
+}
+
 // **************************************************************************
 template<const int dim> static
 void qkernel(const int nzones,
@@ -105,7 +115,14 @@ void qkernel(const int nzones,
             // Measure of maximal compression.
             const double mu = eig_val_data[0];
             visc_coeff = 2.0 * rho * h * h * fabs(mu);
-            if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+            // The following represents a "smooth" version of the statement
+            // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+            // eps must be scaled appropriately if a different unit system is
+            // being used.
+            const double eps = 1e-12;
+            visc_coeff += 0.5 * rho * h * sound_speed *
+                          (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+            //if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
             add(dim, dim, visc_coeff, sgrad_v, stress);
          }
          // Time step estimate at the point. Here the more relevant length

@@ -470,10 +470,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       //assert(false);
 #ifdef __NVCC__
-   if (okina){
-      dbg("\033[31m[CUDA]");
-      config::Get().Cuda(false);
-   }
+      if (okina){
+         dbg("\033[31m[CUDA]\033[m");
+         config::Cuda(false);
+      }
 #endif // NVCC
       // Refresh coords to pmesh from sptr just for e_source Assemble
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
@@ -484,10 +484,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
 #ifdef __NVCC__
-   if (okina){
-      dbg("\033[32m[CUDA]");
-      config::Get().Cuda(true);
-   }
+      if (okina){
+         dbg("\033[32m[CUDA]\033[m");
+         config::Cuda(true);
+      }
 #endif // NVCC
    }
 
@@ -846,8 +846,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
-   printf("\033[7mdt_est=%.15e\033[m",quad_data.dt_est);
-   fflush(0); //assert(false);
+   dbg("\033[7mdt_est=%.15e\033[m",quad_data.dt_est);
    mm::free<double>(gamma_b);
    mm::free<double>(rho_b);
    mm::free<double>(e_b);

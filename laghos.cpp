@@ -66,7 +66,7 @@ int problem;
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
-{
+{      
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -87,7 +87,6 @@ int main(int argc, char *argv[])
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
-   bool okina = true;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
@@ -95,6 +94,9 @@ int main(int argc, char *argv[])
    const char *basename = "results/Laghos";
    int partition_type = 111;
    bool qupdate = true;
+   bool okina = true;
+   bool cuda = true;
+   bool occa = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -147,6 +149,9 @@ int main(int argc, char *argv[])
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
+   args.AddOption(&cuda, "-u", "--cuda", "-no-u", "--no-cuda", "Enable CUDA.");
+   args.AddOption(&occa, "-c", "--occa", "-no-c", "--no-occa", "Enable OCCA.");
+
    args.Parse();
    if (!args.Good())
    {
@@ -157,7 +162,6 @@ int main(int argc, char *argv[])
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
-   //assert(false);
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
 
    const int dim = mesh->Dimension();
@@ -341,7 +345,7 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
 
-   dbg("Initialize density and specific internal energy values.");// We interpolate in
+   // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
    // L2 projection to the positive basis in which we actually compute. The goal
    // is to get a high-order representation of the initial condition. Note that
@@ -391,9 +395,8 @@ int main(int argc, char *argv[])
 
    if (okina){
       //pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
-      config::Get().PA(p_assembly);
+      config::PA(p_assembly);
    }
-   dbg("LagrangianHydroOperator");
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
@@ -442,13 +445,12 @@ int main(int argc, char *argv[])
       visit_dc.Save();
    }
 
-   
-#ifdef __NVCC__
+   // OKINA mode setup
    if (okina){
-      dbg("\033[32m[CUDA]");
-      config::Get().Cuda(true);
+      if (cuda) { printf("\033[32m[CUDA]\033[m"); config::Cuda(true);}
+      //if (occa) { assert(false); config::Get().Occa(true); }
+      config::Setup();
    }
-#endif // NVCC
 
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
