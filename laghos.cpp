@@ -93,9 +93,9 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    const char *basename = "results/Laghos";
    int partition_type = 111;
-   bool qupdate = true;
    bool okina = true;
-   bool cuda = true;
+   bool qupdate = true;
+   bool cuda = false;
    bool occa = false;
 
    OptionsParser args(argc, argv);
@@ -125,8 +125,6 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
-   args.AddOption(&okina, "-o", "--okina", "-no-o", "--no-okina",
-                  "Activate OKINA kernels.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -147,6 +145,8 @@ int main(int argc, char *argv[])
                   "of zones in each direction, e.g., the number of zones in direction x\n\t"
                   "must be divisible by the number of MPI tasks in direction x.\n\t"
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
+   args.AddOption(&okina, "-o", "--okina", "-no-o", "--no-okina",
+                  "Activate OKINA kernels.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
    args.AddOption(&cuda, "-u", "--cuda", "-no-u", "--no-cuda", "Enable CUDA.");
@@ -320,7 +320,6 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -394,7 +393,7 @@ int main(int argc, char *argv[])
    }
 
    if (okina){
-      //pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
+      pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
       config::PA(p_assembly);
    }
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
@@ -447,7 +446,12 @@ int main(int argc, char *argv[])
 
    // OKINA mode setup
    if (okina){
-      if (cuda) { printf("\033[32m[CUDA]\033[m"); config::Cuda(true);}
+      if (cuda) {
+         printf("\033[32;1;7m[Laghos] Switching to CUDA\033[m");
+         config::Cuda(true);
+      }else{
+         printf("\033[33;1;7m[Laghos] Staying on HOST!\033[m");
+      }
       //if (occa) { assert(false); config::Get().Occa(true); }
       config::Setup();
    }
@@ -455,11 +459,8 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   dbg("ode_solver->Init");
    ode_solver->Init(oper);
-   dbg("ResetTimeStepEstimate");
    oper.ResetTimeStepEstimate();
-   dbg("GetTimeStepEstimate");
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
@@ -481,7 +482,6 @@ int main(int argc, char *argv[])
       // to advance.
       ode_solver->Step(S, t, dt);
       steps++;
-      //dbg("S:"); S.Print(); fflush(0); //assert(false);
 
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
@@ -525,14 +525,16 @@ int main(int argc, char *argv[])
                assert(t_final==0.5);
                assert(cfl==0.1);
                static int k = 0;
+               const double eps = 1.e-14;
                const double p0_05 = 6.64784928695183e+00;
                const double p0_85 = 7.05378037610656e+00;
-               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<1.e-14);}
-               if (problem==0 and ti==85) {k++; assert(fabs(sqrt_tot_norm-p0_85)<1.e-14);}
-               const double p1_05 = 3.93691011589659e+00;
-               const double p1_62 = 2.89358836598344e+00;
-               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<1.e-14);}
-               if (problem==1 and ti==62) {k++; assert(fabs(sqrt_tot_norm-p1_62)<1.e-14);}
+               //printf("\n\033[32;1msqrt_tot_norm= %.14e\n\033[m",sqrt_tot_norm);
+               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<eps);}
+               if (problem==0 and ti==85) {k++; assert(fabs(sqrt_tot_norm-p0_85)<eps);}
+               const double p1_05 = 3.95799492039829e+00;
+               const double p1_64 = 2.89366778441929e+00;
+               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<eps);}
+               if (problem==1 and ti==64) {k++; assert(fabs(sqrt_tot_norm-p1_64)<eps);}
                if (last_step)
                {
                   if (k==2) { printf("\033[32;7m[Laghos] OK\033[m"); }

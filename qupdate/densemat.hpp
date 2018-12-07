@@ -22,24 +22,24 @@ namespace mfem {
 namespace hydrodynamics {
 
    // **************************************************************************
-   __device__ void multABt(const size_t, const size_t, const size_t,
-                           const double*, const double*, double*);
+   __host__ __device__ void multABt(const size_t, const size_t, const size_t,
+                                    const double*, const double*, double*);
    
    // **************************************************************************
-   __device__ void multAtB(const size_t, const size_t, const size_t,
-                const double*, const double*, double*);
+   __host__ __device__ void multAtB(const size_t, const size_t, const size_t,
+                                    const double*, const double*, double*);
    
    // **************************************************************************
-   __device__ void mult(const size_t, const size_t, const size_t,
-                        const double*, const double*, double*);
+   __host__ __device__ void mult(const size_t, const size_t, const size_t,
+                                 const double*, const double*, double*);
 
    // **************************************************************************
-   __device__ void multV(const size_t, const size_t,
-                         double*, const double*, double*);
+   __host__ __device__ void multV(const size_t, const size_t,
+                                  double*, const double*, double*);
    
    // **************************************************************************
-   __device__ void add(const size_t, const size_t,
-                       const double, const double*, double*);
+   __host__ __device__ void add(const size_t, const size_t,
+                                const double, const double*, double*);
 } // namespace hydrodynamics
 
 } // namespace mfem

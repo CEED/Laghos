@@ -24,7 +24,7 @@ namespace mfem
 namespace hydrodynamics
 {
    // **************************************************************************
-   __device__
+   __host__ __device__
    void multABt(const size_t ah,
                 const size_t aw,
                 const size_t bh,
@@ -48,7 +48,7 @@ namespace hydrodynamics
    }
 
    // **************************************************************************
-   __device__
+   __host__ __device__
    void multAtB(const size_t ah,
                 const size_t aw,
                 const size_t bw,
@@ -69,7 +69,7 @@ namespace hydrodynamics
    }
 
    // **************************************************************************
-   __device__
+   __host__ __device__
    void mult(const size_t ah,
              const size_t aw,
              const size_t bw,
@@ -88,7 +88,7 @@ namespace hydrodynamics
    }
 
    // **************************************************************************
-   __device__
+   __host__ __device__
    void multV(const size_t height,
               const size_t width,
               double *data,
@@ -115,7 +115,7 @@ namespace hydrodynamics
    }
    
    // **************************************************************************
-   __device__
+   __host__ __device__
    void add(const size_t height, const size_t width,
             const double c, const double *A,
             double *D){
