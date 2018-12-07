@@ -97,8 +97,8 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       return;
    }
    assert(dofs.GetData());
-   ess_tdofs.Assign(dofs);
-   mm::Get().Push(ess_tdofs);
+   ess_tdofs = dofs;
+   //mm::Get().Push(ess_tdofs);
    pop();
 }
 

@@ -83,9 +83,11 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
                     const double *d_in,
                     double **d_out) {
    push();
+   dbg("kfes");
    const mfem::kFiniteElementSpace &kfes =
       *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
    const FiniteElementSpace &fes = pfes;
+   dbg("maps");
    const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
       
    const int dim = fes.GetMesh()->Dimension();
@@ -103,11 +105,12 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
    if (!d_local_in){
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
-      
+
+   dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
    kfes.GlobalToLocal(v_in,v_local_in);
-         
+   
    const size_t out_size =  nqp * nzones;
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
@@ -118,6 +121,7 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
       
    assert(dofs1D==2);
    assert(quad1D==4);
+   dbg("vecToQuad2D");
    vecToQuad2D<1,2,4>(nzones, maps->dofToQuad, d_local_in, *d_out);
    pop();
 }

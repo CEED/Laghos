@@ -369,6 +369,7 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   //dbg("e_gf:");e_gf.Print();assert(false);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
@@ -447,10 +448,10 @@ int main(int argc, char *argv[])
    // OKINA mode setup
    if (okina){
       if (cuda) {
-         printf("\033[32;1;7m[Laghos] Switching to CUDA\033[m");
+         printf("\033[32;1;7m[Laghos] Switching to CUDA\033[m\n");
          config::Cuda(true);
       }else{
-         printf("\033[33;1;7m[Laghos] Staying on HOST!\033[m");
+         printf("\033[33;1;7m[Laghos] Staying on HOST!\033[m\n");
       }
       //if (occa) { assert(false); config::Get().Occa(true); }
       config::Setup();

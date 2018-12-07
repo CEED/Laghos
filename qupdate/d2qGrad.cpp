@@ -91,9 +91,11 @@ void Dof2QuadGrad(ParFiniteElementSpace &pfes,
                   const double *d_in,
                   double **d_out){
    push();
+   dbg("kfes");
    const mfem::kFiniteElementSpace &kfes =
       *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
    const FiniteElementSpace &fes = pfes;
+   dbg("maps");
    const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
       
    const int dim = fes.GetMesh()->Dimension();
@@ -112,6 +114,7 @@ void Dof2QuadGrad(ParFiniteElementSpace &pfes,
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
       
+   dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
    kfes.GlobalToLocal(v_in, v_local_in);
@@ -125,7 +128,8 @@ void Dof2QuadGrad(ParFiniteElementSpace &pfes,
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
 
    assert(dofs1D==3);
-   assert(quad1D==4);      
+   assert(quad1D==4);   
+   dbg("qGradVector2D");   
    qGradVector2D<3,4>(nzones,
                       maps->dofToQuad,
                       maps->dofToQuadD,

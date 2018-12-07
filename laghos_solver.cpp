@@ -283,7 +283,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    push();
    dS_dt = 0.0;
-   dbg("dS_dt @%p",dS_dt.GetData());
+   
    UpdateQuadratureData(S);
    Vector* sptr = (Vector*) &S;
 
@@ -358,11 +358,16 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+            dbg("MultTranspose");
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c, B);
+            dbg("Mult");
             H1compFESpace.GetProlongationMatrix()->Mult(dv_c, X);
+            dbg("SetEssentialTrueDofs");
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
+            dbg("EliminateRHS");
             kVMassPA->EliminateRHS(B);
             timer.sw_cgH1.Start();
+            dbg("VMass Mult");
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += CG_VMass.GetNumIterations();
@@ -370,6 +375,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             dvc.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
             dvc = dv_c;
          }
+         dbg("\033[31;1mFOR done");
       } // okina
    }
    else // p_assembly
@@ -400,7 +406,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      if (okina and config::Cuda()){
+      const bool cuda = config::Cuda();
+      dbg("2D Taylor-Green");
+      if (okina and cuda){
          dbg("\033[31m[CUDA]\033[m");
          config::Cuda(false);
       }
@@ -412,10 +420,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (okina and config::Cuda()){
+      if (okina and cuda){
          dbg("\033[32m[CUDA]\033[m");
          config::Cuda(true);
       }
+      mm::Get().Push(*e_source);
+      //assert(false);
    }
 
    Array<int> l2dofs;
@@ -425,9 +435,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    {
       timer.sw_force.Start();
       ForcePA->MultTranspose(v, e_rhs);
-      mm::Get().Pull(e_rhs);
       timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
+      //mm::Get().Pull(e_rhs);
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
@@ -440,7 +450,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          de.SetSubVector(l2dofs, loc_de);
       }
    }
-   else
+   else // p_assembly
    {
       timer.sw_force.Start();
       Force.MultTranspose(v, e_rhs);
@@ -457,8 +467,18 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          de.SetSubVector(l2dofs, loc_de);
       }
    }
+   {
+      static int n_de = 0;
+      //dbg("de:"); de.Print(); mm::Get().Push(de);
+      const double loc_norm = de * de;
+      const double sqrt_tot_norm = sqrt(loc_norm);
+      dbg("|e|=%.15e",sqrt_tot_norm);
+      //if (n_de==1){ assert(false); }
+      n_de+=1;
+   }   
    if (source_type == 1) { delete e_source; }
    quad_data_is_current = false;
+   //dbg("\033[7mS:"); sptr->Print(); mm::Get().Push(*sptr);
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
@@ -589,6 +609,7 @@ void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
    x.MakeRef(&H1FESpace, *sptr, 0);
    v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
    e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
+   //dbg("e:");e.Print();mm::Get().Push(e);
    Vector e_vals, e_loc(l2dofs_cnt), vector_vals(h1dofs_cnt * dim);
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim),
                vecvalMat(vector_vals.GetData(), h1dofs_cnt, dim);

@@ -26,8 +26,8 @@ namespace hydrodynamics {
 // *****************************************************************************
 // * Smooth transition between 0 and 1 for x in [-eps, eps].
 // *****************************************************************************
-inline double smooth_step_01(const double x,
-                             const double eps)
+__host__ __device__
+inline double smooth_step_01(const double x, const double eps)
 {
    const double y = (x + eps) / (2.0 * eps);
    if (y < 0.0) { return 0.0; }
@@ -65,8 +65,7 @@ void qkernel(const int nzones,
    GET_ADRS(dt_est);
    GET_ADRS(stressJinvT);
    
-   //MFEM_FORALL(z, nzones,
-   for(size_t z=0; z<nzones ; z+=1)
+   MFEM_FORALL(z, nzones,
    {
       double min_detJ = infinity;
       double Jinv[dim*dim];
@@ -159,8 +158,7 @@ void qkernel(const int nzones,
             }
          }
       }
-   }//);
-   dbg("done");
+   });
 }
    
 // *****************************************************************************
@@ -186,7 +184,9 @@ void QUpdate(const int dim,
              ParGridFunction &d_v,
              ParGridFunction &d_e)
 {
+   // **************************************************************************
    if (quad_data_is_current) { return; }
+   //dbg("S:");S.Print();mm::Get().Push(S);
    
    // **************************************************************************
    push();
@@ -202,12 +202,16 @@ void QUpdate(const int dim,
    const int nqp = ir.GetNPoints();
    dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
    const size_t H1_size = H1FESpace.GetVSize();
+   const size_t L2_size = L2FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
           
    // Energy dof => quads ******************************************************
    dbg("Energy dof => quads (L2FESpace)");
    static double *d_e_quads_data = NULL;
+   //mm::Get().Push(d_e);
+   //ParGridFunction e; e.SetSize(L2_size);
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
+   //dbg("d_e:");d_e.Print();mm::Get().Push(d_e);
    Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
 
    // Coords to Jacobians ******************************************************
@@ -255,22 +259,31 @@ void QUpdate(const int dim,
    }
 
    // **************************************************************************
+   dbg("h_dt_est");
    const size_t dt_est_sz = nzones;
    static double *h_dt_est = NULL;
    if (!h_dt_est) {
       h_dt_est = (double*) ::malloc(dt_est_sz*sizeof(double));
    }
+   dbg("d_dt_est");
    static double *d_dt_est = NULL;
    if (!d_dt_est){
       d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
+      // force a GET_ADRS to create on device
+      GET_ADRS(d_dt_est);
    }
 
    // **************************************************************************
-   for(size_t k=0; k<dt_est_sz; k+=1)
+   dbg("Syncing *_dt_est");
+   for(size_t k=0; k<dt_est_sz; k+=1){
       h_dt_est[k] = quad_data.dt_est;
-   //mm::Get().Pull(d_dt_est);
-   mm::memcpy(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
-   //mm::Get().Push(d_dt_est);
+      dbg("h_dt_est[%ld]=%.15e",k,h_dt_est[k]);
+   }
+   mm::Get().Pull(d_dt_est);
+   dbg("Memcpy *_dt_est");
+   std::memcpy(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
+   dbg("Pushing d_dt_est");
+   mm::Get().Push(d_dt_est);
    
    // **************************************************************************
    dbg("qkernel");
