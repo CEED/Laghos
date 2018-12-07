@@ -64,10 +64,10 @@ namespace hydrodynamics {
                 ParFiniteElementSpace &L2FESpace,
                 const Vector &S,
                 bool &quad_data_is_current,
-                QuadratureData &quad_data,
+                QuadratureData &quad_data/*,
                 ParGridFunction &dx,
                 ParGridFunction &dv,
-                ParGridFunction &de);
+                ParGridFunction &de*/);
 
 } // namespace hydrodynamics
 

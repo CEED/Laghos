@@ -179,10 +179,10 @@ void QUpdate(const int dim,
              ParFiniteElementSpace &L2FESpace,
              const Vector &S,
              bool &quad_data_is_current,
-             QuadratureData &quad_data,
+             QuadratureData &quad_data/*,
              ParGridFunction &d_x,
              ParGridFunction &d_v,
-             ParGridFunction &d_e)
+             ParGridFunction &d_e*/)
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }
@@ -202,7 +202,7 @@ void QUpdate(const int dim,
    const int nqp = ir.GetNPoints();
    dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
    const size_t H1_size = H1FESpace.GetVSize();
-   const size_t L2_size = L2FESpace.GetVSize();
+   //const size_t L2_size = L2FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
           
    // Energy dof => quads ******************************************************
@@ -210,6 +210,7 @@ void QUpdate(const int dim,
    static double *d_e_quads_data = NULL;
    //mm::Get().Push(d_e);
    //ParGridFunction e; e.SetSize(L2_size);
+   ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
    //dbg("d_e:");d_e.Print();mm::Get().Push(d_e);
    Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
@@ -217,6 +218,7 @@ void QUpdate(const int dim,
    // Coords to Jacobians ******************************************************
    dbg("Refresh Geom J, invJ & detJ");
    static double *d_grad_x_data = NULL;
+   ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
    Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
 
@@ -226,6 +228,7 @@ void QUpdate(const int dim,
    
    // Velocity *****************************************************************
    dbg("Velocity H1_size=%d",H1_size);
+   ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
    static double *d_grad_v_data = NULL;
    Dof2QuadGrad(H1FESpace,ir, d_v, &d_grad_v_data);
@@ -259,31 +262,14 @@ void QUpdate(const int dim,
    }
 
    // **************************************************************************
-   dbg("h_dt_est");
-   const size_t dt_est_sz = nzones;
-   static double *h_dt_est = NULL;
-   if (!h_dt_est) {
-      h_dt_est = (double*) ::malloc(dt_est_sz*sizeof(double));
-   }
    dbg("d_dt_est");
+   const size_t dt_est_sz = nzones;
    static double *d_dt_est = NULL;
    if (!d_dt_est){
       d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
-      // force a GET_ADRS to create on device
-      GET_ADRS(d_dt_est);
    }
-
-   // **************************************************************************
-   dbg("Syncing *_dt_est");
-   for(size_t k=0; k<dt_est_sz; k+=1){
-      h_dt_est[k] = quad_data.dt_est;
-      dbg("h_dt_est[%ld]=%.15e",k,h_dt_est[k]);
-   }
-   mm::Get().Pull(d_dt_est);
-   dbg("Memcpy *_dt_est");
-   std::memcpy(d_dt_est, h_dt_est, dt_est_sz*sizeof(double));
-   dbg("Pushing d_dt_est");
-   mm::Get().Push(d_dt_est);
+   Vector d_dt(d_dt_est, dt_est_sz);
+   d_dt = quad_data.dt_est;
    
    // **************************************************************************
    dbg("qkernel");
