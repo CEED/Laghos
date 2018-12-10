@@ -288,6 +288,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    push();
    dS_dt = 0.0;
+   dbg("dS_dt size=%d",dS_dt.Size());//assert(false);
+      
+   UpdateQuadratureData(S);
    
    Vector* sptr = (Vector*) &S;
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -297,19 +300,28 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    
    dbg("x.MakeRef");
    x_gf.MakeRef(&H1FESpace, *sptr, 0);
+   dbg("x_gf.Pull");
+   //mm::Get().Pull(x_gf); dbg("x_gf"); x_gf.Print();
+   
    dbg("v.MakeRef");
    v_gf.MakeRef(&H1FESpace, *sptr, VsizeH1);
+   //mm::Get().Pull(v_gf); dbg("v_gf"); v_gf.Print();
+   
    dbg("e.MakeRef");
    e_gf.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
-
-   UpdateQuadratureData(S);
+   //mm::Get().Pull(e_gf); dbg("e_gf"); e_gf.Print();
    
    dbg("dx.MakeRef");
-   /*ParGridFunction dx;*/ dx_gf.MakeRef(&H1FESpace, dS_dt, 0);
+   dx_gf.MakeRef(&H1FESpace, dS_dt, 0);
+   //mm::Get().Pull(dx_gf); dbg("dx_gf"); dx_gf.Print();
+   
    dbg("dv.MakeRef");
-   /*ParGridFunction dv;*/ dv_gf.MakeRef(&H1FESpace, dS_dt, VsizeH1);
+   dv_gf.MakeRef(&H1FESpace, dS_dt, VsizeH1);
+   //mm::Get().Pull(dv_gf); dbg("dv_gf"); dv_gf.Print();
+   
    dbg("de.MakeRef");
-   /*ParGridFunction de;*/ de_gf.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   de_gf.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   //mm::Get().Pull(de_gf); dbg("de_gf"); de_gf.Print();
    
    // Set dx_dt = v (explicit).
    dx_gf = v_gf;
@@ -387,8 +399,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             //ParGridFunction dvc;
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
             dvc_gf = dv_c_gf;
+            //mm::Get().Pull(dvc_gf);
+            //dbg("dvc_gf #%d",c);dvc_gf.Print();
          }
          dbg("\033[31;1mFOR done");
+         //mm::Sync(dS_dt);
+         //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0); //assert(false);
       } // okina
    }
    else // p_assembly
@@ -418,13 +434,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
-   {/*
+   {
       const bool cuda = config::Cuda();
       dbg("2D Taylor-Green");
       if (okina and cuda){
-         dbg("\033[31m[CUDA]\033[m");
          config::Cuda(false);
-         }*/
+      }
       // Refresh coords to pmesh from sptr just for e_source Assemble
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       H1FESpace.GetParMesh()->NewNodes(x_gf, false);
@@ -432,12 +447,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
-      e_source->Assemble();/*
+      e_source->Assemble();
       if (okina and cuda){
-         dbg("\033[32m[CUDA]\033[m");
          config::Cuda(true);
          mm::Sync(*e_source);
-         }*/
+      }
    }
 
    Array<int> l2dofs;
@@ -459,6 +473,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          timer.sw_cgL2.Stop();
          timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
          de_gf.SetSubVector(l2dofs, loc_de);
+         //mm::Sync(de_gf);
+         //dbg("de_gf #%d",z);de_gf.Print();
       }
    }
    else // p_assembly
@@ -480,7 +496,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    } 
    if (source_type == 1) { delete e_source; }
    quad_data_is_current = false;
-   //dbg("\033[7mS:"); sptr->Print();
+   //mm::Sync(de_gf);
+   //mm::Sync(*sptr);
+   //dbg("\033[7mS:"); sptr->Print(); fflush(0); //assert(false);
+   //mm::Sync(dS_dt);
+   //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0); assert(false);
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const

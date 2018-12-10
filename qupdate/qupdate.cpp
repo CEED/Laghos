@@ -204,7 +204,7 @@ void QUpdate(const int dim,
    const size_t H1_size = H1FESpace.GetVSize();
    //const size_t L2_size = L2FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
-          
+
    // Energy dof => quads ******************************************************
    dbg("Energy dof => quads (L2FESpace)");
    static double *d_e_quads_data = NULL;
@@ -214,13 +214,14 @@ void QUpdate(const int dim,
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
    //dbg("d_e:");d_e.Print();mm::Get().Push(d_e);
    Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
-
+   
    // Coords to Jacobians ******************************************************
    dbg("Refresh Geom J, invJ & detJ");
    static double *d_grad_x_data = NULL;
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
    Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
+   //assert(false);
 
    // Integration Points Weights (tensor) **************************************
    dbg("Integration Points Weights (tensor,H1FESpace)");
