@@ -97,8 +97,8 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
       return;
    }
    assert(dofs.GetData());
+   dbg("ess_tdofs = dofs");
    ess_tdofs = dofs;
-   //mm::Get().Push(ess_tdofs);
    pop();
 }
 
@@ -107,8 +107,10 @@ void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    push(Wheat);
    if (ess_tdofs_count > 0){
+      mm::Get().Push(ess_tdofs);
       b.SetSubVector(ess_tdofs, 0.0);
    }
+   //b.Print();fflush(0);assert(false);
    pop();
 }
 
@@ -123,6 +125,8 @@ void kMassPAOperator::Mult(const mfem::Vector &x,
    }
    
    assert(distX.Size()==x.Size());
+   //dbg("\033[32;7mXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+   //dbg("x:");x.Print();fflush(0);
    distX = x;
 
 
@@ -130,13 +134,18 @@ void kMassPAOperator::Mult(const mfem::Vector &x,
    {
       distX.SetSubVector(ess_tdofs, 0.0);
    }
-   
+
+   //distX = 1.123456789123456789;
+   //distX.Print(); fflush(0);//assert(false);
    massOperator->Mult(distX, y);
+   //y.Print(); fflush(0); //assert(false);
 
    if (ess_tdofs_count)
    {
       y.SetSubVector(ess_tdofs, 0.0);
    }
+   //y.Print(); fflush(0); // assert(false);
+   //dbg("\033[32;7mYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
    pop();
 }
 

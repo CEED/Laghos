@@ -119,9 +119,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
            static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, H1FESpace)):
            static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, H1compFESpace,
                                                                integ_rule))),
+   EMassPA((!okina)?
+           static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, L2FESpace)):
+           static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, L2FESpace,
+                                                               integ_rule))),
    VMassPA_prec(H1FESpace),
    locEMassPA(&quad_data, l2_fes),
    CG_VMass(H1FESpace.GetParMesh()->GetComm()),
+   CG_EMass(L2FESpace.GetParMesh()->GetComm()),
    locCG(),
    timer(),
    VsizeL2(L2FESpace.GetVSize()),
@@ -273,6 +278,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
       CG_VMass.SetPrintLevel(-1);
+      
+      EMassPA->Setup();
+      CG_EMass.SetOperator(*EMassPA);
+      CG_EMass.iterative_mode = false;
+      CG_EMass.SetRelTol(1e-8);
+      CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+      CG_EMass.SetMaxIter(200);
+      CG_EMass.SetPrintLevel(-1);
    }
 
    locCG.SetOperator(locEMassPA);
@@ -300,28 +313,27 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    
    dbg("x.MakeRef");
    x_gf.MakeRef(&H1FESpace, *sptr, 0);
-   dbg("x_gf.Pull");
-   //mm::Get().Pull(x_gf); dbg("x_gf"); x_gf.Print();
+   //dbg("x_gf"); x_gf.Print();
    
    dbg("v.MakeRef");
    v_gf.MakeRef(&H1FESpace, *sptr, VsizeH1);
-   //mm::Get().Pull(v_gf); dbg("v_gf"); v_gf.Print();
+   //dbg("v_gf"); v_gf.Print();
    
    dbg("e.MakeRef");
    e_gf.MakeRef(&L2FESpace, *sptr, VsizeH1*2);
-   //mm::Get().Pull(e_gf); dbg("e_gf"); e_gf.Print();
+   //dbg("e_gf"); e_gf.Print();
    
    dbg("dx.MakeRef");
    dx_gf.MakeRef(&H1FESpace, dS_dt, 0);
-   //mm::Get().Pull(dx_gf); dbg("dx_gf"); dx_gf.Print();
+   //dbg("dx_gf"); dx_gf.Print();
    
    dbg("dv.MakeRef");
    dv_gf.MakeRef(&H1FESpace, dS_dt, VsizeH1);
-   //mm::Get().Pull(dv_gf); dbg("dv_gf"); dv_gf.Print();
+   //dbg("dv_gf"); dv_gf.Print();
    
    dbg("de.MakeRef");
    de_gf.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
-   //mm::Get().Pull(de_gf); dbg("de_gf"); de_gf.Print();
+   //dbg("de_gf"); de_gf.Print();
    
    // Set dx_dt = v (explicit).
    dx_gf = v_gf;
@@ -338,8 +350,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    if (p_assembly)
    {
       timer.sw_force.Start();
-      ForcePA->Mult(one, rhs);
-
+      ForcePA->Mult(one, rhs); //rhs.Print();fflush(0);assert(false);
       timer.sw_force.Stop();
       rhs *= -1.0;
       
@@ -367,12 +378,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          dbg("\033[31;1mFOR");
          for (int c = 0; c < dim; c++)
          {
-            //ParGridFunction dv_c;
-            //dv_c.SetSize(H1compFESpace.GetVSize());
+            dbg("\t\033[31;1mFOR c=%d",c);
             dv_c_gf = 0.0;
             
-            //ParGridFunction rhs_c;
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
+            //if (c==1) {rhs_c_gf.Print();fflush(0);/*assert(false);*/}
             
             mfem::Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
@@ -384,27 +394,34 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
             dbg("MultTranspose");
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
+            //if (c==1) {B.Print();fflush(0);/*assert(false);*/}
+            
             dbg("Mult");
             H1compFESpace.GetProlongationMatrix()->Mult(dv_c_gf, X);
             dbg("SetEssentialTrueDofs");
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
+            //if (c==1) {c_tdofs.Print();fflush(0);/*assert(false);*/}
             dbg("EliminateRHS");
             kVMassPA->EliminateRHS(B);
+            //if (c==1) {B.Print();fflush(0);assert(false);}
+            
             timer.sw_cgH1.Start();
             dbg("VMass Mult");
+            //if (c==1) {B.Print();fflush(0);assert(false);}
             CG_VMass.Mult(B, X);
+            //if (c==1) {X.Print();fflush(0);assert(false);}
+            
             timer.sw_cgH1.Stop();
             timer.H1cg_iter += CG_VMass.GetNumIterations();
             H1compFESpace.GetProlongationMatrix()->Mult(X, dv_c_gf);
-            //ParGridFunction dvc;
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
             dvc_gf = dv_c_gf;
-            //mm::Get().Pull(dvc_gf);
-            //dbg("dvc_gf #%d",c);dvc_gf.Print();
+            //dbg("dvc_gf #%d",c); dvc_gf.Print();
+            //if (c==1) assert(false);
          }
          dbg("\033[31;1mFOR done");
-         //mm::Sync(dS_dt);
-         //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0); //assert(false);
+         //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0);
+         //assert(false);
       } // okina
    }
    else // p_assembly
@@ -435,6 +452,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
+      //assert(false);
       const bool cuda = config::Cuda();
       dbg("2D Taylor-Green");
       if (okina and cuda){
@@ -449,33 +467,45 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
       if (okina and cuda){
+         e_source->vH2D();
          config::Cuda(true);
-         mm::Sync(*e_source);
       }
    }
 
    Array<int> l2dofs;
-   Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
 
    if (p_assembly)
    {
       timer.sw_force.Start();
+      //dbg("v_gf");v_gf.Print();//assert(false);
+      //v_gf = 1.1234567891234564789;
       ForcePA->MultTranspose(v_gf, e_rhs);
+      //dbg("\033[7me_rhs");e_rhs.Print();//assert(false);
       timer.sw_force.Stop();
+         
       if (e_source) { e_rhs += *e_source; }
-      for (int z = 0; z < nzones; z++)
-      {
-         L2FESpace.GetElementDofs(z, l2dofs);
-         e_rhs.GetSubVector(l2dofs, loc_rhs);
-         locEMassPA.SetZoneId(z);
+         
+      if (not okina){
+         Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+         for (int z = 0; z < nzones; z++)
+         {
+            L2FESpace.GetElementDofs(z, l2dofs);
+            e_rhs.GetSubVector(l2dofs, loc_rhs);
+            locEMassPA.SetZoneId(z);
+            timer.sw_cgL2.Start();
+            locCG.Mult(loc_rhs, loc_de);
+            timer.sw_cgL2.Stop();
+            timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
+            //de_gf.SetSubVector(l2dofs, loc_de);
+         }
+      }else{
          timer.sw_cgL2.Start();
-         locCG.Mult(loc_rhs, loc_de);
+         CG_EMass.Mult(e_rhs, de_gf);
          timer.sw_cgL2.Stop();
-         timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
-         de_gf.SetSubVector(l2dofs, loc_de);
-         //mm::Sync(de_gf);
-         //dbg("de_gf #%d",z);de_gf.Print();
+         timer.L2dof_iter += CG_EMass.GetNumIterations() * l2dofs_cnt;
+         //dbg("de_gf");de_gf.Print();//assert(false);
       }
+      //assert(false);
    }
    else // p_assembly
    {
@@ -483,6 +513,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       Force.MultTranspose(v_gf, e_rhs);
       timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
+      Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
       for (int z = 0; z < nzones; z++)
       {
          L2FESpace.GetElementDofs(z, l2dofs);
@@ -500,7 +531,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    //mm::Sync(*sptr);
    //dbg("\033[7mS:"); sptr->Print(); fflush(0); //assert(false);
    //mm::Sync(dS_dt);
-   //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0); assert(false);
+   //dbg("\033[7mdS_dt:"); dS_dt.Print(); fflush(0); //assert(false);
 }
 
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const

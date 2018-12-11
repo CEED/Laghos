@@ -186,7 +186,7 @@ void QUpdate(const int dim,
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }
-   //dbg("S:");S.Print();mm::Get().Push(S);
+   //dbg("S:"); S.Print(); assert(false);
    
    // **************************************************************************
    push();
@@ -208,11 +208,9 @@ void QUpdate(const int dim,
    // Energy dof => quads ******************************************************
    dbg("Energy dof => quads (L2FESpace)");
    static double *d_e_quads_data = NULL;
-   //mm::Get().Push(d_e);
-   //ParGridFunction e; e.SetSize(L2_size);
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   //dbg("d_e:");d_e.Print();mm::Get().Push(d_e);
+   //dbg("d_e:"); d_e.Print(); assert(false);
    Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
    
    // Coords to Jacobians ******************************************************
@@ -220,17 +218,21 @@ void QUpdate(const int dim,
    static double *d_grad_x_data = NULL;
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
+   //dbg("d_x:"); d_x.Print(); assert(false);
    Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
-   //assert(false);
 
    // Integration Points Weights (tensor) **************************************
    dbg("Integration Points Weights (tensor,H1FESpace)");
    const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(H1FESpace,ir);
-   
+   {
+      //dbg("quadWeights:"); maps->quadWeights.Print(); fflush(0); assert(false);
+   }
+      
    // Velocity *****************************************************************
    dbg("Velocity H1_size=%d",H1_size);
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
+   //dbg("d_v:"); d_v.Print(); assert(false);
    static double *d_grad_v_data = NULL;
    Dof2QuadGrad(H1FESpace,ir, d_v, &d_grad_v_data);
 
@@ -246,8 +248,13 @@ void QUpdate(const int dim,
       d_rho0DetJ0w = (double*)mm::malloc<double>(rho0DetJ0w_sz);
       assert(d_rho0DetJ0w);
       std::memcpy(d_rho0DetJ0w,
-                  quad_data.rho0DetJ0w.GetData(),
+                  quad_data.rho0DetJ0w,
                   rho0DetJ0w_sz*sizeof(double));
+      {
+         Vector v_rho0DetJ0w(d_rho0DetJ0w, rho0DetJ0w_sz);
+         v_rho0DetJ0w.vH2D();
+         //dbg("d_rho0DetJ0w:"); v_rho0DetJ0w.Print(); fflush(0); assert(false);
+      }
    }
 
    // **************************************************************************
@@ -260,6 +267,11 @@ void QUpdate(const int dim,
       std::memcpy(d_Jac0inv,
                   quad_data.Jac0inv.Data(),
                   Jac0inv_sz*sizeof(double));
+      {
+         Vector v_Jac0inv(d_Jac0inv, Jac0inv_sz);
+         v_Jac0inv.vH2D();
+         //dbg("d_Jac0inv:"); v_Jac0inv.Print(); fflush(0); assert(false);
+      }
    }
 
    // **************************************************************************
@@ -271,6 +283,7 @@ void QUpdate(const int dim,
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;
+   //dbg("d_dt:"); d_dt.Print(); fflush(0); assert(false);
    
    // **************************************************************************
    dbg("qkernel");
@@ -295,6 +308,7 @@ void QUpdate(const int dim,
    // **************************************************************************
    quad_data.dt_est = kVectorMin(dt_est_sz, d_dt_est);
    dbg("dt_est=%.16e",quad_data.dt_est);
+   //fflush(0); assert(false);
    
    quad_data_is_current = true;
    timer.sw_qdata.Stop();

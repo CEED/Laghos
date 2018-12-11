@@ -99,6 +99,8 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        gVecH1,
                        gVecL2);
    l2k.LocalToGlobal(gVecL2, vecL2);
+   dbg("\033[32;7m [FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF]");
+   //vecL2.Print(); fflush(0); //assert(false);
    pop();
 }
 

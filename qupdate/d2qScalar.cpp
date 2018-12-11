@@ -83,11 +83,11 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
                     const double *d_in,
                     double **d_out) {
    push();
-   dbg("kfes");
+   dbg("\033[7mkfes");
    const mfem::kFiniteElementSpace &kfes =
       *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
    const FiniteElementSpace &fes = pfes;
-   dbg("maps");
+   dbg("\033[7mmaps");
    const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
       
    const int dim = fes.GetMesh()->Dimension();
@@ -103,17 +103,24 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
    const size_t local_size = numDofs * nzones;
    static double *d_local_in = NULL;
    if (!d_local_in){
+      dbg("Allocating d_local_in");
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
 
-   dbg("GlobalToLocal");
+   dbg("\033[7mGlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
+   //dbg("v_in:");v_in.Print();fflush(0);//assert(false);
    kfes.GlobalToLocal(v_in,v_local_in);
+   //dbg("v_local_in:");v_local_in.Print();
+   //fflush(0);  assert(false);
    
+   dbg("\033[7md_out");
    const size_t out_size =  nqp * nzones;
    if (!(*d_out)){
+      dbg("Allocating d_out");
       *d_out = (double*) mm::malloc<double>(out_size);
+      
    }
       
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
@@ -121,7 +128,7 @@ void Dof2QuadScalar(ParFiniteElementSpace &pfes,
       
    assert(dofs1D==2);
    assert(quad1D==4);
-   dbg("vecToQuad2D");
+   dbg("v\033[7mecToQuad2D");
    vecToQuad2D<1,2,4>(nzones, maps->dofToQuad, d_local_in, *d_out);
    pop();
 }
