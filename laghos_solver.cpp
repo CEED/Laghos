@@ -286,14 +286,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
       CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
       CG_EMass.SetMaxIter(200);
       CG_EMass.SetPrintLevel(-1);
+   }else{
+      locCG.SetOperator(locEMassPA);
+      locCG.iterative_mode = false;
+      locCG.SetRelTol(1e-8);
+      locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+      locCG.SetMaxIter(200);
+      locCG.SetPrintLevel(0);
    }
-
-   locCG.SetOperator(locEMassPA);
-   locCG.iterative_mode = false;
-   locCG.SetRelTol(1e-8);
-   locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-   locCG.SetMaxIter(200);
-   locCG.SetPrintLevel(0);
    pop();
 }
 
@@ -370,7 +370,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          VMassPA->RecoverFEMSolution(X, rhs, dv_gf);
          delete cVMassPA;
       }
-      else
+      else // okina
       {
          // Partial assembly solve for each velocity component
          const int size = H1compFESpace.GetVSize();
@@ -452,10 +452,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      //assert(false);
       const bool cuda = config::Cuda();
       dbg("2D Taylor-Green");
       if (okina and cuda){
+         x_gf.vD2H();
          config::Cuda(false);
       }
       // Refresh coords to pmesh from sptr just for e_source Assemble
@@ -467,26 +467,28 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
       if (okina and cuda){
-         e_source->vH2D();
          config::Cuda(true);
+         x_gf.vH2D();
+         e_source->vH2D();
       }
+      //dbg("\033[7me_source");e_source->Print();assert(false);
    }
 
    Array<int> l2dofs;
-
+   Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+   
    if (p_assembly)
    {
       timer.sw_force.Start();
       //dbg("v_gf");v_gf.Print();//assert(false);
-      //v_gf = 1.1234567891234564789;
       ForcePA->MultTranspose(v_gf, e_rhs);
+      //e_rhs.vD2H();
       //dbg("\033[7me_rhs");e_rhs.Print();//assert(false);
-      timer.sw_force.Stop();
-         
+      //dbg("\033[7me_source");e_source->Print();//assert(false);
+      timer.sw_force.Stop();         
       if (e_source) { e_rhs += *e_source; }
-         
+      //dbg("\033[7me_rhs");e_rhs.Print();//assert(false);
       if (not okina){
-         Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
          for (int z = 0; z < nzones; z++)
          {
             L2FESpace.GetElementDofs(z, l2dofs);
@@ -496,18 +498,22 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
             locCG.Mult(loc_rhs, loc_de);
             timer.sw_cgL2.Stop();
             timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
-            //de_gf.SetSubVector(l2dofs, loc_de);
+            de_gf.SetSubVector(l2dofs, loc_de);
          }
-      }else{
+         //de_gf.vH2D();
+      }
+      else // okina
+      {
          timer.sw_cgL2.Start();
          CG_EMass.Mult(e_rhs, de_gf);
          timer.sw_cgL2.Stop();
          timer.L2dof_iter += CG_EMass.GetNumIterations() * l2dofs_cnt;
          //dbg("de_gf");de_gf.Print();//assert(false);
       }
-      //assert(false);
+      //static int n = 0;
+      //if (n++==9) {dbg("de_gf"); de_gf.Print(); fflush(0); assert(false);}
    }
-   else // p_assembly
+   else // not p_assembly
    {
       timer.sw_force.Start();
       Force.MultTranspose(v_gf, e_rhs);
@@ -545,6 +551,7 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
+   dbg("\033[32;1;7mResetTimeStepEstimate");
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 

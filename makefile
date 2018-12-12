@@ -183,11 +183,13 @@ laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 chk:
 	tput reset
 	CHK=1 ./laghos -cfl 0.1 -p 0
-#	CHK=1 ./laghos -cfl 0.1 -p 0 -u
+	CHK=1 ./laghos -cfl 0.1 -p 0 -u
 	CHK=1 ./laghos -cfl 0.1 -p 1
 	CHK=1 ./laghos -cfl 0.1 -p 1 -u
 	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
+	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q -u
 	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
+	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q -u
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0

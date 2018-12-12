@@ -63,7 +63,6 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
-   push();
    l2k.GlobalToLocal(vecL2, gVecL2);
    rForceMult(dim,
               NUM_DOFS_1D,
@@ -78,13 +77,11 @@ void kForcePAOperator::Mult(const mfem::Vector &vecL2,
               gVecL2,
               gVecH1);
    h1k.LocalToGlobal(gVecH1, vecH1);
-   pop();
 }
 
 // *************************************************************************
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
-   push();
    h1k.GlobalToLocal(vecH1, gVecH1);
    rForceMultTranspose(dim,
                        NUM_DOFS_1D,
@@ -99,9 +96,6 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                        gVecH1,
                        gVecL2);
    l2k.LocalToGlobal(gVecL2, vecL2);
-   dbg("\033[32;7m [FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF]");
-   //vecL2.Print(); fflush(0); //assert(false);
-   pop();
 }
 
 } // namespace hydrodynamics

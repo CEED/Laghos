@@ -283,7 +283,7 @@ void QUpdate(const int dim,
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;
-   //dbg("d_dt:"); d_dt.Print(); fflush(0); assert(false);
+   //dbg("d_dt:"); d_dt.Print(); fflush(0); //assert(false);
    
    // **************************************************************************
    dbg("qkernel");
