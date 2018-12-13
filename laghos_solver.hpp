@@ -21,6 +21,7 @@
 #include "laghos_assembly.hpp"
 #include "kernels/kMassPAOperator.hpp"
 #include "kernels/kForcePAOperator.hpp"
+#include "qupdate/qupdate.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -125,6 +126,7 @@ protected:
    // bool switch to launch QUpdate or StdUpdateQuadratureData
    const bool qupdate;
    const double gamma;
+   mutable QUpdate Q;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],

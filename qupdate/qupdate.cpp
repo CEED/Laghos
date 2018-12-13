@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "qupdate.hpp"
+#include "../laghos_solver.hpp"
 
 double kVectorMin(const size_t, const double*);
 
@@ -160,119 +161,94 @@ void qkernel(const int nzones,
       }
    });
 }
-   
+
 // *****************************************************************************
-// * Last kernel QUpdate
+QUpdate::~QUpdate(){ }
+
 // *****************************************************************************
-void QUpdate(const int dim,
-             const int nzones,
-             const int l2dofs_cnt,
-             const int h1dofs_cnt,
-             const bool use_viscosity,
-             const bool p_assembly,
-             const double cfl,
-             const double gamma,
-             TimingData &timer,
-             Coefficient *material_pcf,
-             const IntegrationRule &ir,
-             ParFiniteElementSpace &H1FESpace,
-             ParFiniteElementSpace &L2FESpace,
-             const Vector &S,
-             bool &quad_data_is_current,
-             QuadratureData &quad_data/*,
-             ParGridFunction &d_x,
-             ParGridFunction &d_v,
-             ParGridFunction &d_e*/)
+QUpdate::QUpdate(const int _dim,
+                 const int _nzones,
+                 const int _l2dofs_cnt,
+                 const int _h1dofs_cnt,
+                 const bool _use_viscosity,
+                 const bool _p_assembly,
+                 const double _cfl,
+                 const double _gamma,
+                 TimingData *_timer,
+                 Coefficient *_material_pcf,
+                 const IntegrationRule &_ir,
+                 ParFiniteElementSpace &_H1FESpace,
+                 ParFiniteElementSpace &_L2FESpace):
+   dim(_dim),
+   nzones(_nzones),
+   l2dofs_cnt(_l2dofs_cnt),
+   h1dofs_cnt(_h1dofs_cnt),
+   use_viscosity(_use_viscosity),
+   p_assembly(_p_assembly),
+   cfl(_cfl),
+   gamma(_gamma),
+   timer(_timer),
+   material_pcf(_material_pcf),
+   ir(_ir),
+   H1FESpace(_H1FESpace),
+   L2FESpace(_L2FESpace),
+   h1_maps(mfem::kDofQuadMaps::Get(H1FESpace,ir)),
+   l2_maps(mfem::kDofQuadMaps::Get(L2FESpace,ir)),
+   h1_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&H1FESpace))),
+   l2_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&L2FESpace))),
+   d_e_quads_data(NULL),
+   d_grad_x_data(NULL),
+   d_grad_v_data(NULL),
+   nqp(ir.GetNPoints())
 {
-   // **************************************************************************
-   if (quad_data_is_current) { return; }
-   //dbg("S:"); S.Print(); assert(false);
-   
-   // **************************************************************************
-   push();
    assert(dim==2);
    assert(p_assembly);
    assert(material_pcf);
+}
+   
+// *****************************************************************************
+// * QUpdate UpdateQuadratureData kernel
+// *****************************************************************************
+void QUpdate::UpdateQuadratureData(const Vector &S,
+                                   bool &quad_data_is_current,
+                                   QuadratureData &quad_data)
+{
+   // **************************************************************************
+   if (quad_data_is_current) { return; }
+   
+   // **************************************************************************
+   timer->sw_qdata.Start();
+   Vector* S_p = (Vector*) &S;
 
    // **************************************************************************
-   timer.sw_qdata.Start();
-   Vector* S_p = (Vector*) &S;
-   const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-   const int numDofs  = fe.GetDof();
-   const int nqp = ir.GetNPoints();
+   //const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
+   //const int numDofs  = fe.GetDof();
+   //const int nqp = ir.GetNPoints();
    dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
    const size_t H1_size = H1FESpace.GetVSize();
-   //const size_t L2_size = L2FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
 
    // Energy dof => quads ******************************************************
    dbg("Energy dof => quads (L2FESpace)");
-   static double *d_e_quads_data = NULL;
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   //dbg("d_e:"); d_e.Print(); assert(false);
-   Dof2QuadScalar(L2FESpace, ir, d_e.GetData(), &d_e_quads_data);
+   Dof2QuadScalar(l2_kfes, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
    
    // Coords to Jacobians ******************************************************
    dbg("Refresh Geom J, invJ & detJ");
-   static double *d_grad_x_data = NULL;
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
-   //dbg("d_x:"); d_x.Print(); assert(false);
-   Dof2QuadGrad(H1FESpace, ir, d_x, &d_grad_x_data);
-
-   // Integration Points Weights (tensor) **************************************
-   dbg("Integration Points Weights (tensor,H1FESpace)");
-   const mfem::kDofQuadMaps* maps = mfem::kDofQuadMaps::Get(H1FESpace,ir);
-   {
-      //dbg("quadWeights:"); maps->quadWeights.Print(); fflush(0); assert(false);
-   }
+   Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
       
    // Velocity *****************************************************************
    dbg("Velocity H1_size=%d",H1_size);
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
-   //dbg("d_v:"); d_v.Print(); assert(false);
-   static double *d_grad_v_data = NULL;
-   Dof2QuadGrad(H1FESpace,ir, d_v, &d_grad_v_data);
+   Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
 
    // **************************************************************************
    const double h1order = (double) H1FESpace.GetOrder(0);
    const double infinity = std::numeric_limits<double>::infinity();
-
-   // **************************************************************************
-   dbg("rho0DetJ0w");
-   const size_t rho0DetJ0w_sz = nzones * nqp;
-   static double *d_rho0DetJ0w = NULL;
-   if (!d_rho0DetJ0w){
-      d_rho0DetJ0w = (double*)mm::malloc<double>(rho0DetJ0w_sz);
-      assert(d_rho0DetJ0w);
-      std::memcpy(d_rho0DetJ0w,
-                  quad_data.rho0DetJ0w,
-                  rho0DetJ0w_sz*sizeof(double));
-      {
-         Vector v_rho0DetJ0w(d_rho0DetJ0w, rho0DetJ0w_sz);
-         v_rho0DetJ0w.vH2D();
-         //dbg("d_rho0DetJ0w:"); v_rho0DetJ0w.Print(); fflush(0); assert(false);
-      }
-   }
-
-   // **************************************************************************
-   dbg("Jac0inv");
-   const size_t Jac0inv_sz = dim * dim * nzones * nqp;
-   static double *d_Jac0inv = NULL;
-   if (!d_Jac0inv){
-      d_Jac0inv = (double*) mm::malloc<double>(Jac0inv_sz);
-      assert(d_Jac0inv);
-      std::memcpy(d_Jac0inv,
-                  quad_data.Jac0inv.Data(),
-                  Jac0inv_sz*sizeof(double));
-      {
-         Vector v_Jac0inv(d_Jac0inv, Jac0inv_sz);
-         v_Jac0inv.vH2D();
-         //dbg("d_Jac0inv:"); v_Jac0inv.Print(); fflush(0); assert(false);
-      }
-   }
 
    // **************************************************************************
    dbg("d_dt_est");
@@ -296,12 +272,12 @@ void QUpdate(const int dim,
               h1order,
               cfl,
               infinity,
-              maps->quadWeights,
+              h1_maps->quadWeights,
               d_grad_x_data,
-              d_rho0DetJ0w,
+              quad_data.rho0DetJ0w,
               d_e_quads_data,
               d_grad_v_data,
-              d_Jac0inv,
+              quad_data.Jac0inv.Data(),
               d_dt_est,
               quad_data.stressJinvT.Data());
    
@@ -311,8 +287,8 @@ void QUpdate(const int dim,
    //fflush(0); assert(false);
    
    quad_data_is_current = true;
-   timer.sw_qdata.Stop();
-   timer.quad_tstep += nzones;
+   timer->sw_qdata.Stop();
+   timer->quad_tstep += nzones;
 }
 
 } // namespace hydrodynamics

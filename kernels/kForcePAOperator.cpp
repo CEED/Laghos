@@ -54,10 +54,8 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    gVecL2(h1sz),
    gVecH1(l2sz)
 {
-   push();
    gVecL2.SetSize(l2sz);
    gVecH1.SetSize(h1sz);
-   pop();
 }
 
 // *****************************************************************************

@@ -17,18 +17,6 @@ namespace mfem
 
 namespace hydrodynamics {
 
-   // *****************************************************************************
-   // * Dof2QuadScalar
-   // *****************************************************************************
-   void Dof2QuadScalar(ParFiniteElementSpace&, const IntegrationRule&,
-                       const double*, double**);
-
-   // *****************************************************************************
-   // * Dof2QuadGrad
-   // *****************************************************************************
-   void Dof2QuadGrad(ParFiniteElementSpace&, const IntegrationRule&,
-                     const double*, double**);
-   
 } // namespace hydrodynamics
    
 } // namespace mfem

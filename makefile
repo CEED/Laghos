@@ -186,6 +186,22 @@ chk:
 	CHK=1 ./laghos -cfl 0.1 -p 0 -u
 	CHK=1 ./laghos -cfl 0.1 -p 1
 	CHK=1 ./laghos -cfl 0.1 -p 1 -u
+
+# chkcpu **************************************************************************
+chkcpu:
+	tput reset
+	CHK=1 ./laghos -cfl 0.1 -p 0
+	CHK=1 ./laghos -cfl 0.1 -p 1
+	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
+	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
+
+# chkall **************************************************************************
+chkall:
+	tput reset
+	CHK=1 ./laghos -cfl 0.1 -p 0
+	CHK=1 ./laghos -cfl 0.1 -p 0 -u
+	CHK=1 ./laghos -cfl 0.1 -p 1
+	CHK=1 ./laghos -cfl 0.1 -p 1 -u
 	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
 	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q -u
 	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q

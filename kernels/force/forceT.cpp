@@ -65,7 +65,6 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* v,
                          double* e)
 {
-   push();
    assert(NUM_DOFS_1D==H1_DOFS_1D);
    assert(L2_DOFS_1D==NUM_DOFS_1D-1);
    assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));

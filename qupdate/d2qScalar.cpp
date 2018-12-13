@@ -76,61 +76,63 @@ void vecToQuad2D(const int numElements,
       }
    });
 }
-   
+
+// *****************************************************************************
+typedef void (*fVecToQuad2D)(const int numElements,
+                             const double* __restrict dofToQuad,
+                             const double* __restrict in,
+                             double* __restrict out);
+
 // ***************************************************************************
-void Dof2QuadScalar(ParFiniteElementSpace &pfes,
-                    const IntegrationRule& ir,
-                    const double *d_in,
-                    double **d_out) {
-   push();
-   dbg("\033[7mkfes");
-   const mfem::kFiniteElementSpace &kfes =
-      *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
-   const FiniteElementSpace &fes = pfes;
-   dbg("\033[7mmaps");
-   const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
-      
+void QUpdate::Dof2QuadScalar(const kFiniteElementSpace *kfes,
+                             const FiniteElementSpace &fes,
+                             const kDofQuadMaps *maps,
+                             const IntegrationRule& ir,
+                             const double *d_in,
+                             double **d_out) {
    const int dim = fes.GetMesh()->Dimension();
+   assert(dim==2);
    const int vdim = fes.GetVDim();
    const int vsize = fes.GetVSize();
-   assert(dim==2);
-   assert(vdim==1);
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const size_t numDofs  = fe.GetDof();
    const size_t nzones = fes.GetNE();
    const size_t nqp = ir.GetNPoints();
-
    const size_t local_size = numDofs * nzones;
+   const size_t out_size =  nqp * nzones;
+   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
+   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   
    static double *d_local_in = NULL;
    if (!d_local_in){
-      dbg("Allocating d_local_in");
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
 
    dbg("\033[7mGlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
-   //dbg("v_in:");v_in.Print();fflush(0);//assert(false);
-   kfes.GlobalToLocal(v_in,v_local_in);
-   //dbg("v_local_in:");v_local_in.Print();
-   //fflush(0);  assert(false);
+   kfes->GlobalToLocal(v_in,v_local_in);
    
-   dbg("\033[7md_out");
-   const size_t out_size =  nqp * nzones;
    if (!(*d_out)){
-      dbg("Allocating d_out");
       *d_out = (double*) mm::malloc<double>(out_size);
-      
    }
-      
-   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
-   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-      
-   assert(dofs1D==2);
-   assert(quad1D==4);
+
    dbg("v\033[7mecToQuad2D");
-   vecToQuad2D<1,2,4>(nzones, maps->dofToQuad, d_local_in, *d_out);
-   pop();
+   assert(vdim==1);   
+   assert(LOG2(vdim)<=4);
+   assert(LOG2(dofs1D)<=4);
+   assert(LOG2(quad1D)<=4);
+   const size_t id = (vdim<<8)|(dofs1D<<4)|(quad1D);
+   static std::unordered_map<unsigned int, fVecToQuad2D> call = {
+      {0x124,&vecToQuad2D<1,2,4>},
+      {0x148,&vecToQuad2D<1,4,8>},
+   };
+   if(!call[id]){
+      printf("\n[Dof2QuadScalar] id \033[33m0x%lX\033[m ",id);
+      fflush(0);
+   }
+   assert(call[id]);
+   call[id](nzones, maps->dofToQuad, d_local_in, *d_out);
 }
 
 } // namespace hydrodynamics

@@ -43,15 +43,11 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
    ess_tdofs(0),
    paBilinearForm(new mfem::PABilinearForm(&pfes_)),
    massOperator(NULL)
-{
-   push(Wheat);
-   pop();
-}
+{ }
 
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-   push(Wheat);
    // PAMassIntegrator Setup
    mfem::PAMassIntegrator *paMassInteg = new mfem::PAMassIntegrator();
    // No setup, it is done in PABilinearForm::Assemble
@@ -67,13 +63,11 @@ void kMassPAOperator::Setup()
    paMassInteg->SetOperator(quad_data->rho0DetJ0w);
 
    paBilinearForm->FormOperator(mfem::Array<int>(), massOperator);
-   //pop();
 }
 
 // *************************************************************************
 void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 {
-   push(Wheat);
    ess_tdofs_count = dofs.Size();
    
    if (ess_tdofs.Size()==0){
@@ -93,56 +87,43 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
    } 
   
    if (ess_tdofs_count == 0) {
-      pop();
       return;
    }
    assert(dofs.GetData());
-   dbg("ess_tdofs = dofs");
    ess_tdofs = dofs;
-   pop();
 }
 
 // *****************************************************************************
 void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
-   //push(Wheat);
    if (ess_tdofs_count > 0){
-      mm::Get().Push(ess_tdofs);
+      mm::push(ess_tdofs);
       b.SetSubVector(ess_tdofs, 0.0);
    }
-   //pop();
 }
 
 // *************************************************************************
 void kMassPAOperator::Mult(const mfem::Vector &x,
                                  mfem::Vector &y) const
-{
-   //push(Wheat);
-   
+{   
    if (distX.Size()!=x.Size()) {
       distX.SetSize(x.Size());
    }
    
    assert(distX.Size()==x.Size());
-   //dbg("x:");x.Print();fflush(0);
    distX = x;
-
 
    if (ess_tdofs_count)
    {
       distX.SetSubVector(ess_tdofs, 0.0);
    }
 
-   //distX.Print(); fflush(0);//assert(false);
    massOperator->Mult(distX, y);
-   //y.Print(); fflush(0); //assert(false);
 
    if (ess_tdofs_count)
    {
       y.SetSubVector(ess_tdofs, 0.0);
    }
-   //y.Print(); fflush(0); // assert(false);
-   pop();
 }
 
 } // namespace hydrodynamics

@@ -18,17 +18,8 @@
 #define MFEM_LAGHOS_QUPDATE
 
 // *****************************************************************************
-#ifdef __NVCC__
-#define __kernel__ __global__
-#define __config(N) <<<((N+256-1)/256),256>>>
-#else
-#define __kernel__
-#define __device__
-#define __config(...)
-#endif
-
-// *****************************************************************************
-#include "../laghos_solver.hpp"
+#include "mfem.hpp"
+#include "../laghos_assembly.hpp"
 #include "d2q.hpp"
 #include "eigen.hpp"
 #include "densemat.hpp"
@@ -47,27 +38,76 @@ namespace mfem {
 double kVectorMin(const size_t, const double*);
 
 namespace hydrodynamics {
+struct TimingData;
+
+// *****************************************************************************
+class QUpdate{
+private:
+   const int dim;
+   const int nzones;
+   const int l2dofs_cnt;
+   const int h1dofs_cnt;
+   const bool use_viscosity;
+   const bool p_assembly;
+   const double cfl;
+   const double gamma;
+   TimingData *timer;
+   mfem::Coefficient *material_pcf;
+   const mfem::IntegrationRule &ir;
+   mfem::ParFiniteElementSpace &H1FESpace;
+   mfem::ParFiniteElementSpace &L2FESpace;
+   mfem::kDofQuadMaps *h1_maps;
+   mfem::kDofQuadMaps *l2_maps;
+   const mfem::kFiniteElementSpace *h1_kfes;
+   const mfem::kFiniteElementSpace *l2_kfes;
+   double *d_e_quads_data;
+   double *d_grad_x_data;
+   double *d_grad_v_data;
+   const int nqp;
+public:
+   // **************************************************************************
+   QUpdate(const int dim,
+           const int nzones,
+           const int l2dofs_cnt,
+           const int h1dofs_cnt,
+           const bool use_viscosity,
+           const bool p_assembly,
+           const double cfl,
+           const double gamma,
+           TimingData *timer,
+           Coefficient *material_pcf,
+           const IntegrationRule &integ_rule,
+           ParFiniteElementSpace &H1FESpace,
+           ParFiniteElementSpace &L2FESpace);
    
    // **************************************************************************
-   void QUpdate(const int dim,
-                const int nzones,
-                const int l2dofs_cnt,
-                const int h1dofs_cnt,
-                const bool use_viscosity,
-                const bool p_assembly,
-                const double cfl,
-                const double gamma,
-                TimingData &timer,
-                Coefficient *material_pcf,
-                const IntegrationRule &integ_rule,
-                ParFiniteElementSpace &H1FESpace,
-                ParFiniteElementSpace &L2FESpace,
-                const Vector &S,
-                bool &quad_data_is_current,
-                QuadratureData &quad_data/*,
-                ParGridFunction &dx,
-                ParGridFunction &dv,
-                ParGridFunction &de*/);
+   ~QUpdate();
+   
+   // **************************************************************************
+   void UpdateQuadratureData(const Vector &S,
+                             bool &quad_data_is_current,
+                             QuadratureData &quad_data);
+
+   // **************************************************************************
+   // * Dof2QuadScalar
+   // **************************************************************************
+   void Dof2QuadScalar(const kFiniteElementSpace *kfes,
+                       const FiniteElementSpace &fes,
+                       const kDofQuadMaps *maps,
+                       const IntegrationRule&,
+                       const double*,
+                       double**);
+   
+   // **************************************************************************
+   // * Dof2QuadGrad
+   // **************************************************************************
+   void Dof2QuadGrad(const kFiniteElementSpace *kfes,
+                     const FiniteElementSpace &fes,
+                     const kDofQuadMaps *maps,
+                     const IntegrationRule&,
+                     const double*,
+                     double**);   
+};
 
 } // namespace hydrodynamics
 

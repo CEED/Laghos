@@ -82,33 +82,35 @@ void qGradVector2D(const int numElements,
       }
    });
 }
-   
+
+// *****************************************************************************
+typedef void (*fGradVector2D)(const int numElements,
+                              const double* __restrict dofToQuad,
+                              const double* __restrict dofToQuadD,
+                              const double* __restrict in,
+                              double* __restrict out);
+              
 // **************************************************************************
-// * Dof2DQuad
-// **************************************************************************
-void Dof2QuadGrad(ParFiniteElementSpace &pfes,
-                  const IntegrationRule& ir,
-                  const double *d_in,
-                  double **d_out){
-   push();
-   dbg("kfes");
-   const mfem::kFiniteElementSpace &kfes =
-      *(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&pfes)));
-   const FiniteElementSpace &fes = pfes;
-   dbg("maps");
-   const mfem::kDofQuadMaps* maps = kDofQuadMaps::Get(fes,ir);
-      
+void QUpdate::Dof2QuadGrad(const kFiniteElementSpace *kfes,
+                           const FiniteElementSpace &fes,
+                           const kDofQuadMaps *maps,
+                           const IntegrationRule& ir,
+                           const double *d_in,
+                           double **d_out){
    const int dim = fes.GetMesh()->Dimension();
-   const int vdim = fes.GetVDim();
-   const int vsize = fes.GetVSize();
    assert(dim==2);
+   const int vdim = fes.GetVDim();
    assert(vdim==2);
+   const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const size_t numDofs  = fe.GetDof();
    const size_t nzones = fes.GetNE();
    const size_t nqp = ir.GetNPoints();
-
    const size_t local_size = vdim * numDofs * nzones;
+   const size_t out_size = vdim * vdim * nqp * nzones;
+   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
+   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   
    static double *d_local_in = NULL;
    if (!d_local_in){
       d_local_in = (double*) mm::malloc<double>(local_size);
@@ -117,25 +119,30 @@ void Dof2QuadGrad(ParFiniteElementSpace &pfes,
    dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
-   kfes.GlobalToLocal(v_in, v_local_in);
+   kfes->GlobalToLocal(v_in, v_local_in);
             
-   const size_t out_size = vdim * vdim * nqp * nzones;
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
-    
-   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
-   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
 
-   assert(dofs1D==3);
-   assert(quad1D==4);   
-   dbg("qGradVector2D");   
-   qGradVector2D<3,4>(nzones,
-                      maps->dofToQuad,
-                      maps->dofToQuadD,
-                      d_local_in,
-                      *d_out);
-   pop();
+   // **************************************************************************
+   assert(LOG2(dofs1D)<=4);
+   assert(LOG2(quad1D)<=4);
+   const size_t id = (dofs1D<<4)|(quad1D);
+   static std::unordered_map<unsigned int, fGradVector2D> call = {
+      {0x34,&qGradVector2D<3,4>},
+      {0x58,&qGradVector2D<5,8>},
+   };
+   if(!call[id]){
+      printf("\n[Dof2QuadGrad] id \033[33m0x%lX\033[m ",id);
+      fflush(0);
+   }
+   assert(call[id]);
+   call[id](nzones,
+            maps->dofToQuad,
+            maps->dofToQuadD,
+            d_local_in,
+            *d_out);
 }
    
 } // namespace hydrodynamics

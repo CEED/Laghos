@@ -460,9 +460,6 @@ int main(int argc, char *argv[])
       config::Setup();
    }
 
-   dbg("Pushing S, to allocate S's base on GPU");
-   S.vH2D();
-
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
@@ -520,7 +517,7 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         e_gf.vD2H();
+         e_gf.Pull();
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
@@ -646,6 +643,7 @@ int main(int argc, char *argv[])
    delete pmesh;
    delete mat_gf_coeff;
 
+   //dbg("Dump:"); mm::Get().Dump();
    return 0;
 }
 
