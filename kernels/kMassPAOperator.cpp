@@ -97,7 +97,6 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 void kMassPAOperator::EliminateRHS(mfem::Vector &b)
 {
    if (ess_tdofs_count > 0){
-      mm::push(ess_tdofs);
       b.SetSubVector(ess_tdofs, 0.0);
    }
 }

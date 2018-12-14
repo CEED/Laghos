@@ -457,7 +457,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       if (okina and cuda){
          config::Cuda(true);
          x_gf.Push();
-         e_source->Push();
       }
       //dbg("\033[7me_source");e_source->Print();assert(false);
    }
