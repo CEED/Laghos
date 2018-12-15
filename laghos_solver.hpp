@@ -121,7 +121,6 @@ protected:
    mutable mfem::Vector one, x, rhs, B, X, e_rhs;
    mutable mfem::ParGridFunction x_gf, v_gf, e_gf;
    mutable mfem::ParGridFunction dx_gf, dv_gf, dvc_gf, de_gf;
-   mutable mfem::ParGridFunction rhs_c_gf, dv_c_gf, kv_gf;
 
    // bool switch to launch QUpdate or StdUpdateQuadratureData
    const bool qupdate;
