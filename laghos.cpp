@@ -395,7 +395,6 @@ int main(int argc, char *argv[])
    }
 
    if (okina){
-      //pmesh->SetCurvature(1, false, -1, Ordering::byVDIM);
       config::PA(p_assembly);
    }
    dbg("LagrangianHydroOperator");

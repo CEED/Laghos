@@ -388,24 +388,17 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      const bool cuda = config::Cuda();
-      dbg("2D Taylor-Green");
-      if (okina and cuda){
-         x_gf.Pull();
-         config::Cuda(false);
-      }
-      // Refresh coords to pmesh from sptr just for e_source Assemble
+      // Refresh coords to pmesh for e_source Assemble
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       H1FESpace.GetParMesh()->NewNodes(x_gf, false);
+      const bool using_cuda = config::Cuda();
+      if (using_cuda) { config::Cuda(false); }
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (okina and cuda){
-         config::Cuda(true);
-         x_gf.Push();
-      }
+      if (using_cuda) { config::Cuda(true); }
    }
 
    Array<int> l2dofs;
