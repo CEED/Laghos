@@ -224,7 +224,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    //const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
    //const int numDofs  = fe.GetDof();
    //const int nqp = ir.GetNPoints();
-   dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
+   //dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
    const size_t H1_size = H1FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
 
