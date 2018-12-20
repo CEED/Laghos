@@ -149,8 +149,8 @@ int main(int argc, char *argv[])
                   "Activate OKINA kernels.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
-   args.AddOption(&cuda, "-u", "--cuda", "-no-u", "--no-cuda", "Enable CUDA.");
-   args.AddOption(&occa, "-c", "--occa", "-no-c", "--no-occa", "Enable OCCA.");
+   args.AddOption(&cuda, "-cu", "--cuda", "-no-cu", "--no-cuda", "Enable CUDA.");
+   args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
 
    args.Parse();
    if (!args.Good())
@@ -394,9 +394,7 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
 
-   if (okina){
-      config::PA(p_assembly);
-   }
+   if (okina){ config::usePA(p_assembly); }
    dbg("LagrangianHydroOperator");
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
@@ -450,13 +448,16 @@ int main(int argc, char *argv[])
    // OKINA mode setup
    if (okina){
       if (cuda) {
-         printf("\033[32;1;7m[Laghos] Switching to CUDA\033[m\n");
-         config::Cuda(true);
-      }else{
-         printf("\033[33;1;7m[Laghos] Staying on HOST!\033[m\n");
+         printf("\033[32;1;7m[Laghos] Using CUDA!\033[m\n");
+         config::useCuda();
       }
-      //if (occa) { assert(false); config::Get().Occa(true); }
-      config::Setup();
+      if (occa) { 
+         printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
+         config::useOcca();
+      }
+      config::enableDevice(0);
+      printf("\033[32;1;7m[Laghos] Switching to Device!\033[m\n");
+      config::SwitchToDevice();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a

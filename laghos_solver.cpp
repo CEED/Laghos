@@ -391,14 +391,23 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       // Refresh coords to pmesh for e_source Assemble
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       H1FESpace.GetParMesh()->NewNodes(x_gf, false);
-      const bool using_cuda = config::Cuda();
-      if (using_cuda) { config::Cuda(false); }
+      
+      const bool using_gpu = config::usingGpu();
+      if (using_gpu) {
+         //printf("\033[32;1;7m[Laghos] SwitchToHost!\033[m\n");
+         dbg("\033[7mSwitchToHost");
+         config::SwitchToHost();
+      }
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (using_cuda) { config::Cuda(true); }
+      if (using_gpu) { 
+         //printf("\033[32;1;7m[Laghos] SwitchToDevice!\033[m\n");
+         dbg("\033[7mSwitchToDevice");
+         config::SwitchToDevice();
+      }
    }
 
    Array<int> l2dofs;
