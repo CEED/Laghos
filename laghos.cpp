@@ -455,9 +455,9 @@ int main(int argc, char *argv[])
          printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
          config::useOcca();
       }
-      config::enableDevice(0);
+      config::enableGpu(0);
       printf("\033[32;1;7m[Laghos] Switching to Device!\033[m\n");
-      config::SwitchToDevice();
+      config::SwitchToGpu();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a

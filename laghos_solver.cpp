@@ -396,7 +396,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       if (using_gpu) {
          //printf("\033[32;1;7m[Laghos] SwitchToHost!\033[m\n");
          dbg("\033[7mSwitchToHost");
-         config::SwitchToHost();
+         config::SwitchToCpu();
       }
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
@@ -406,7 +406,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       if (using_gpu) { 
          //printf("\033[32;1;7m[Laghos] SwitchToDevice!\033[m\n");
          dbg("\033[7mSwitchToDevice");
-         config::SwitchToDevice();
+         config::SwitchToGpu();
       }
    }
 
