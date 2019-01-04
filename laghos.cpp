@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
          config::useOcca();
       }
       config::enableGpu(0);
-      printf("\033[32;1;7m[Laghos] Switching to Device!\033[m\n");
+      //printf("\033[32;1;7m[Laghos] Switching to Device!\033[m\n");
       config::SwitchToGpu();
    }
 

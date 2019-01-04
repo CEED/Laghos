@@ -41,7 +41,9 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
    ir(ir_),
    ess_tdofs_count(0),
    ess_tdofs(0),
-   paBilinearForm(new mfem::PABilinearForm(&pfes_)),
+   paBilinearForm(new mfem::ParBilinearForm(&pfes,
+                                            AssemblyLevel::PARTIAL,
+                                            pfes.GetMesh()->GetNE())),
    massOperator(NULL)
 { }
 
@@ -51,7 +53,7 @@ void kMassPAOperator::Setup()
    // PAMassIntegrator Setup
    mfem::PAMassIntegrator *paMassInteg = new mfem::PAMassIntegrator();
    // No setup, it is done in PABilinearForm::Assemble
-   // paMassInteg->Setup(fes,&ir);
+   //paMassInteg->Setup(fes,&ir);
    assert(ir);
    paMassInteg->SetIntegrationRule(ir); // in NonlinearFormIntegrator
 
@@ -62,7 +64,7 @@ void kMassPAOperator::Setup()
    // Setup has to be done before, which is done in ->Assemble above
    paMassInteg->SetOperator(quad_data->rho0DetJ0w);
 
-   paBilinearForm->FormOperator(mfem::Array<int>(), massOperator);
+   paBilinearForm->FormSystemOperator(mfem::Array<int>(), massOperator);
 }
 
 // *************************************************************************

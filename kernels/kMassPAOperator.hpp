@@ -41,7 +41,7 @@ private:
    const IntegrationRule &ir;
    int ess_tdofs_count;
    mfem::Array<int> ess_tdofs;
-   PABilinearForm *paBilinearForm;
+   ParBilinearForm *paBilinearForm;
    Operator *massOperator;
    mutable mfem::Vector distX;
 public:
