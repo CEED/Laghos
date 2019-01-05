@@ -136,7 +136,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
    x(VsizeH1),
    rhs(VsizeH1),
    B(H1compFESpace.GetTrueVSize()),
-   X(H1compFESpace.GetTrueVSize ()),
+   X(H1compFESpace.GetTrueVSize()),
    e_rhs(VsizeL2),
    // ParGridFunctions
    x_gf(&H1FESpace),
@@ -339,17 +339,17 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
          for (int c = 0; c < dim; c++)
          {
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
-            dvc_gf = 0.0;
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
+            dvc_gf = 0.0;
             Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
             mfem::Array<int> ess_bdr(bdr_attr_max);
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
-            H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+            H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs/*, c*/);
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
-            H1compFESpace.GetProlongationMatrix()->Mult(dvc_gf, X);
+            H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(B);
             timer.sw_cgH1.Start();

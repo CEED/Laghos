@@ -464,6 +464,7 @@ int main(int argc, char *argv[])
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
    dbg("ode_solver->Init");
+   //dbg("oper.Width()=%d",oper.Width()); assert(false);
    ode_solver->Init(oper);
    dbg("oper.ResetTimeStepEstimate");
    oper.ResetTimeStepEstimate();

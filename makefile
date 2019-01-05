@@ -179,33 +179,36 @@ laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(CXXLINK) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
 
+# chkCpu ***********************************************************************
+chkCpu:
+	tput reset
+	CHK=1 ./laghos -cfl 0.1 -p 0
+	CHK=1 ./laghos -cfl 0.1 -p 1
+	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
+	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
+
+# chkCpuMpi ********************************************************************
+chkCpuMpi:
+	tput reset
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0 -no-o -no-q
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1 -no-o -no-q
+
+# chkGpu ***********************************************************************
+chkGpu:
+	tput reset
+	CHK=1 ./laghos -cfl 0.1 -p 0 -cu
+	CHK=1 ./laghos -cfl 0.1 -p 1 -cu
+
+# chkGpuMpi ********************************************************************
+chkGpuMpi:
+	tput reset
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0 -cu
+	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1 -cu
+
 # chk **************************************************************************
-chk:
-	tput reset
-	CHK=1 ./laghos -cfl 0.1 -p 0
-	CHK=1 ./laghos -cfl 0.1 -p 0 -cu
-	CHK=1 ./laghos -cfl 0.1 -p 1
-	CHK=1 ./laghos -cfl 0.1 -p 1 -cu
-
-# chkcpu **************************************************************************
-chkcpu:
-	tput reset
-	CHK=1 ./laghos -cfl 0.1 -p 0
-	CHK=1 ./laghos -cfl 0.1 -p 1
-	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
-	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
-
-# chkall **************************************************************************
-chkall:
-	tput reset
-	CHK=1 ./laghos -cfl 0.1 -p 0
-	CHK=1 ./laghos -cfl 0.1 -p 0 -cu
-	CHK=1 ./laghos -cfl 0.1 -p 1
-	CHK=1 ./laghos -cfl 0.1 -p 1 -cu
-	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
-	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q -cu
-	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
-	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q -cu
+chk: chkCpu chkCpuMpi chkGpu chkGpuMpi
 
 # go ***************************************************************************
 go:;@./laghos -cfl 0.1 -rs 0

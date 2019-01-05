@@ -117,7 +117,7 @@ void QUpdate::Dof2QuadScalar(const kFiniteElementSpace *kfes,
       *d_out = (double*) mm::malloc<double>(out_size);
    }
 
-   dbg("v\033[7mecToQuad2D");
+   dbg("\033[7mvecToQuad2D");
    assert(vdim==1);   
    assert(LOG2(vdim)<=4);
    assert(LOG2(dofs1D)<=4);

@@ -73,25 +73,17 @@ void kMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
    ess_tdofs_count = dofs.Size();
    
    if (ess_tdofs.Size()==0){
-#ifdef MFEM_USE_MPI
       int global_ess_tdofs_count;
       const MPI_Comm comm = pfes.GetParMesh()->GetComm();
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
       assert(global_ess_tdofs_count>0);
       ess_tdofs.SetSize(global_ess_tdofs_count);
-#else
-      assert(ess_tdofs_count>0);
-      ess_tdofs.Resize(ess_tdofs_count);
-#endif
-   } else{
-      assert(ess_tdofs_count<=ess_tdofs.Size());
-   } 
-  
-   if (ess_tdofs_count == 0) {
+   }
+   if (ess_tdofs_count == 0)
+   {
       return;
    }
-   assert(dofs.GetData());
    ess_tdofs = dofs;
 }
 
