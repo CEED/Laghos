@@ -15,7 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-#include "qupdate/qupdate.hpp"
+#include "laghos_assembly.hpp"
+#include "laghos_assembly_kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 

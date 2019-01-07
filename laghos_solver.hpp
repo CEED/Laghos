@@ -19,15 +19,9 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
-#include "kernels/kMassPAOperator.hpp"
-#include "kernels/kForcePAOperator.hpp"
 #include "qupdate/qupdate.hpp"
 
 #ifdef MFEM_USE_MPI
-
-#include <memory>
-#include <iostream>
-#include <fstream>
 
 namespace mfem
 {
