@@ -27,9 +27,6 @@
 #include <unordered_map>
 
 // *****************************************************************************
-#define LOG2(X) ((unsigned) (8*sizeof(unsigned long long)-__builtin_clzll((X))))
-
-// *****************************************************************************
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
