@@ -19,7 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
-#include "qupdate/qupdate.hpp"
+#include "laghos_qupdate.hpp"
 
 #ifdef MFEM_USE_MPI
 

@@ -153,7 +153,7 @@ KERNELS_DIR = $(MAKEFILE_DIR)/kernels
 
 # SOURCE FILES SETUP ***********************************************************
 SOURCE_FILES = laghos.cpp laghos_solver.cpp \
-	            laghos_assembly.cpp laghos_kernels.cpp
+	            laghos_assembly.cpp laghos_kernels.cpp laghos_qupdate.cpp
 # Kernel files setup
 KERNELS_RTC_DIRS = $(KERNELS_DIR) $(KERNELS_DIR)/force qupdate
 KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))

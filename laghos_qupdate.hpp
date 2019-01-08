@@ -17,17 +17,13 @@
 #ifndef MFEM_LAGHOS_QUPDATE
 #define MFEM_LAGHOS_QUPDATE
 
-// *****************************************************************************
 #include "mfem.hpp"
-#include "../laghos_assembly.hpp"
-#include "eigen.hpp"
-#include "densemat.hpp"
+#include "laghos_assembly.hpp"
 
 namespace mfem {
 
-double kVectorMin(const size_t, const double*);
-
 namespace hydrodynamics {
+
 struct TimingData;
 
 // *****************************************************************************
@@ -77,30 +73,10 @@ public:
    void UpdateQuadratureData(const Vector &S,
                              bool &quad_data_is_current,
                              QuadratureData &quad_data);
-
-   // **************************************************************************
-   // * Dof2QuadScalar
-   // **************************************************************************
-   void Dof2QuadScalar(const kFiniteElementSpace *kfes,
-                       const FiniteElementSpace &fes,
-                       const kDofQuadMaps *maps,
-                       const IntegrationRule&,
-                       const double*,
-                       double**);
-   
-   // **************************************************************************
-   // * Dof2QuadGrad
-   // **************************************************************************
-   void Dof2QuadGrad(const kFiniteElementSpace *kfes,
-                     const FiniteElementSpace &fes,
-                     const kDofQuadMaps *maps,
-                     const IntegrationRule&,
-                     const double*,
-                     double**);   
 };
 
 } // namespace hydrodynamics
 
 } // namespace mfem
 
-#endif // LAGHOS_KERNELS_QUPDATE
+#endif // MFEM_LAGHOS_QUPDATE
