@@ -56,7 +56,7 @@ void qGradVector2D(const int numElements,
                const double wDx = d_dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
                const double wx  = d_dofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
                for (int c = 0; c < 2; ++c) {
-                  const double input = d_in[_ijklNM(c,dx,dy,e,NUM_DOFS_1D,numElements)];
+                  const double input = d_in[jkliNM(c,dx,dy,e,NUM_DOFS_1D,numElements)];
                   vDx[ijN(c,qx,2)] += input * wDx;
                   vx[ijN(c,qx,2)] += input * wx;
                }

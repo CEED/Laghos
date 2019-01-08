@@ -52,7 +52,7 @@ void vecToQuad2D(const int numElements,
          }
          for (int dx = 0; dx < NUM_DOFS_1D; ++dx) {
             for (int v = 0; v < NUM_VDIM; ++v) {
-               const double r_gf = d_in[_ijklNM(v,dx,dy,e,NUM_DOFS_1D,numElements)];
+               const double r_gf = d_in[jkliNM(v,dx,dy,e,NUM_DOFS_1D,numElements)];
                for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
                   out_x[v][qy] += r_gf * d_dofToQuad[ijN(qy, dx,NUM_QUAD_1D)];
                }
@@ -70,7 +70,7 @@ void vecToQuad2D(const int numElements,
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy) {
          for (int qx = 0; qx < NUM_QUAD_1D; ++qx) {
             for (int v = 0; v < NUM_VDIM; ++v) {
-               d_out[_ijklNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = out_xy[v][qy][qx];
+               d_out[jkliNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = out_xy[v][qy][qx];
             }
          }
       }

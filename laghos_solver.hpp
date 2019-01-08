@@ -133,7 +133,6 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
-   void StdUpdateQuadratureData(const Vector &S) const;
 
 public:
    LagrangianHydroOperator(const size_t size,

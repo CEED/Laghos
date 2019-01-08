@@ -16,7 +16,7 @@
 
 #include "laghos_solver.hpp"
 #include "laghos_assembly.hpp"
-#include "laghos_assembly_kernels.hpp"
+#include "laghos_kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -555,16 +555,6 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    delete VMassPA;
 }
 
-void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
-{
-   if (qupdate)
-   {
-      Q.UpdateQuadratureData(S,quad_data_is_current,quad_data);
-      return;
-   }
-   StdUpdateQuadratureData(S);
-}
-
 // Smooth transition between 0 and 1 for x in [-eps, eps].
 inline double smooth_step_01(double x, double eps)
 {
@@ -574,8 +564,13 @@ inline double smooth_step_01(double x, double eps)
    return (3.0 - 2.0 * y) * y * y;
 }
 
-void LagrangianHydroOperator::StdUpdateQuadratureData(const Vector &S) const
+void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+   if (qupdate)
+   {
+      return Q.UpdateQuadratureData(S,quad_data_is_current,quad_data);
+   }
+
    if (quad_data_is_current) { return; }
    timer.sw_qdata.Start();
 

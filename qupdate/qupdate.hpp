@@ -20,18 +20,8 @@
 // *****************************************************************************
 #include "mfem.hpp"
 #include "../laghos_assembly.hpp"
-#include "d2q.hpp"
 #include "eigen.hpp"
 #include "densemat.hpp"
-
-// Offsets *********************************************************************
-#define      ijN(i,j,N) (i)+(N)*(j)
-#define     ijkN(i,j,k,N) (i)+(N)*((j)+(N)*(k))
-#define    _ijkN(i,j,k,N) (j)+(N)*((k)+(N)*(i))
-#define    ijNMt(i,j,N,M,t) (t)?((i)+(N)*(j)):((j)+(M)*(i))
-#define    ijkNM(i,j,k,N,M) (i)+(N)*((j)+(M)*(k))
-#define   ijklNM(i,j,k,l,N,M) (i)+(N)*((j)+(N)*((k)+(M)*(l)))
-#define  _ijklNM(i,j,k,l,N,M) (j)+(N)*((k)+(N)*((l)+(M)*(i)))
 
 namespace mfem {
 

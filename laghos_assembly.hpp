@@ -18,7 +18,6 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "laghos_abc.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -130,6 +129,14 @@ public:
                                        DenseMatrix &elmat);
 };
 
+// Abstract base class for the Force PA Operators
+class AbcForcePAOperator : public Operator{
+public:
+   AbcForcePAOperator():Operator(){}
+   virtual void Mult(const Vector&, Vector&) const =0;
+   virtual void MultTranspose(const Vector&, Vector&) const =0;
+};
+
 // Performs partial assembly, which corresponds to (and replaces) the use of the
 // LagrangianHydroOperator::Force global matrix.
 class ForcePAOperator : public AbcForcePAOperator
@@ -161,6 +168,18 @@ public:
    virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
 
    ~ForcePAOperator() { }
+};
+
+// Abstract base class for the Mass PA Operators
+class AbcMassPAOperator : public Operator{
+public:
+   AbcMassPAOperator(const int size):Operator(size){}
+   virtual void Setup() =0;
+   virtual void ComputeDiagonal2D(Vector&) const =0;
+   virtual void ComputeDiagonal3D(Vector&) const =0;
+   virtual void Mult(const Vector&, Vector&) const =0;
+   virtual const Operator *GetProlongation() const =0;
+   virtual const Operator *GetRestriction() const =0;
 };
 
 // Performs partial assembly for the velocity mass matrix.
