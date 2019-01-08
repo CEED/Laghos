@@ -150,18 +150,18 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMult2D(const int numElements,
+void kForceMult2D(const int E,
                   const double* L2DofToQuad,
                   const double* H1QuadToDof,
                   const double* H1QuadToDofD,
                   const double* stressJinvT,
                   const double* e,
                   double* v) {
-  const int NUM_QUAD_2D = Q1D*Q1D;
-  MFEM_FORALL(el,numElements,
+  const int Q2D = Q1D*Q1D;
+  MFEM_FORALL(el,E,
   {
-    double e_xy[NUM_QUAD_2D];
-    for (int i = 0; i < NUM_QUAD_2D; ++i) {
+    double e_xy[Q2D];
+    for (int i = 0; i < Q2D; ++i) {
       e_xy[i] = 0;
     }
     for (int dy = 0; dy < L1D; ++dy) {
@@ -185,7 +185,7 @@ void kForceMult2D(const int numElements,
     for (int c = 0; c < 2; ++c) {
       for (int dy = 0; dy < H1D; ++dy) {
         for (int dx = 0; dx < H1D; ++dx) {
-          v[jkliNM(c,dx,dy,el,D1D,numElements)] = 0.0;
+          v[jkliNM(c,dx,dy,el,D1D,E)] = 0.0;
         }
       }
       for (int qy = 0; qy < Q1D; ++qy) {
@@ -197,9 +197,9 @@ void kForceMult2D(const int numElements,
         }
         for (int qx = 0; qx < Q1D; ++qx) {
            const double esx = e_xy[ijN(qx,qy,Q1D)]  *
-             stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,numElements)];
+             stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,E)];
            const double esy = e_xy[ijN(qx,qy,Q1D)] *
-             stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,numElements)];
+             stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,E)];
           for (int dx = 0; dx < H1D; ++dx) {
             Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1D)];
             xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1D)];
@@ -209,7 +209,7 @@ void kForceMult2D(const int numElements,
           const double wy  = H1QuadToDof[ijN(dy,qy,H1D)];
           const double wDy = H1QuadToDofD[ijN(dy,qy,H1D)];
           for (int dx = 0; dx < H1D; ++dx) {
-            v[jkliNM(c,dx,dy,el,D1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
+            v[jkliNM(c,dx,dy,el,D1D,E)] += wy* Dxy[dx] + wDy*xy[dx];
           }
         }
       }
@@ -223,24 +223,24 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMult3D(const int numElements,
+void kForceMult3D(const int E,
                   const double* L2DofToQuad,
                   const double* H1QuadToDof,
                   const double* H1QuadToDofD,
                   const double* stressJinvT,
                   const double* e,
                   double* v) {
-  const int NUM_QUAD_2D = Q1D*Q1D;
-  const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
-  MFEM_FORALL(el,numElements,
+  const int Q2D = Q1D*Q1D;
+  const int Q3D = Q1D*Q1D*Q1D;
+  MFEM_FORALL(el,E,
   {
-    double e_xyz[NUM_QUAD_3D];
-    for (int i = 0; i < NUM_QUAD_3D; ++i) {
+    double e_xyz[Q3D];
+    for (int i = 0; i < Q3D; ++i) {
       e_xyz[i] = 0;
     }
     for (int dz = 0; dz < L1D; ++dz) {
-      double e_xy[NUM_QUAD_2D];
-      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+      double e_xy[Q2D];
+      for (int i = 0; i < Q2D; ++i) {
         e_xy[i] = 0;
       }
       for (int dy = 0; dy < L1D; ++dy) {
@@ -274,7 +274,7 @@ void kForceMult3D(const int numElements,
       for (int dz = 0; dz < H1D; ++dz) {
         for (int dy = 0; dy < H1D; ++dy) {
           for (int dx = 0; dx < H1D; ++dx) {
-            v[jklmiNM(c,dx,dy,dz,el,D1D,numElements)] = 0;
+            v[jklmiNM(c,dx,dy,dz,el,D1D,E)] = 0;
           }
         }
       }
@@ -294,9 +294,9 @@ void kForceMult3D(const int numElements,
           }
           for (int qx = 0; qx < Q1D; ++qx) {
             const double r_e = e_xyz[ijkN(qx,qy,qz,Q1D)];
-            const double esx = r_e * stressJinvT[xyzeijDQE(0,c,qx,qy,qz,el,DIM,Q1D,numElements)];
-            const double esy = r_e * stressJinvT[xyzeijDQE(1,c,qx,qy,qz,el,DIM,Q1D,numElements)];
-            const double esz = r_e * stressJinvT[xyzeijDQE(2,c,qx,qy,qz,el,DIM,Q1D,numElements)];
+            const double esx = r_e * stressJinvT[xyzeijDQE(0,c,qx,qy,qz,el,DIM,Q1D,E)];
+            const double esy = r_e * stressJinvT[xyzeijDQE(1,c,qx,qy,qz,el,DIM,Q1D,E)];
+            const double esz = r_e * stressJinvT[xyzeijDQE(2,c,qx,qy,qz,el,DIM,Q1D,E)];
             for (int dx = 0; dx < H1D; ++dx) {
               Dx_x[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1D)];
               x_y[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1D)];
@@ -318,7 +318,7 @@ void kForceMult3D(const int numElements,
           const double wDz = H1QuadToDofD[ijN(dz,qz,H1D)];
           for (int dy = 0; dy < H1D; ++dy) {
             for (int dx = 0; dx < H1D; ++dx) {
-              v[jklmiNM(c,dx,dy,dz,el,D1D,numElements)] +=
+              v[jklmiNM(c,dx,dy,dz,el,D1D,E)] +=
                 ((Dxy_x[ijN(dx,dy,H1D)] * wz) +
                  (xDy_y[ijN(dx,dy,H1D)] * wz) +
                  (xy_z[ijN(dx,dy,H1D)]  * wDz));
@@ -331,7 +331,7 @@ void kForceMult3D(const int numElements,
 }
 
 // *****************************************************************************
-typedef void (*fForceMult)(const int numElements,
+typedef void (*fForceMult)(const int E,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
@@ -438,24 +438,24 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMultTranspose2D(const int numElements,
+void kForceMultTranspose2D(const int E,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
                            const double* stressJinvT,
                            const double* v,
                            double* e) {
-   const int NUM_QUAD_2D = Q1D*Q1D;
-  MFEM_FORALL(el,numElements,
+   const int Q2D = Q1D*Q1D;
+  MFEM_FORALL(el,E,
   {
-    double vStress[NUM_QUAD_2D];
-    for (int i = 0; i < NUM_QUAD_2D; ++i) {
+    double vStress[Q2D];
+    for (int i = 0; i < Q2D; ++i) {
       vStress[i] = 0;
     }
     for (int c = 0; c < DIM; ++c) {
-      double v_Dxy[NUM_QUAD_2D];
-      double v_xDy[NUM_QUAD_2D];
-      for (int i = 0; i < NUM_QUAD_2D; ++i) {
+      double v_Dxy[Q2D];
+      double v_xDy[Q2D];
+      for (int i = 0; i < Q2D; ++i) {
         v_Dxy[i] = v_xDy[i] = 0;
       }
       for (int dy = 0; dy < H1D; ++dy) {
@@ -466,7 +466,7 @@ void kForceMultTranspose2D(const int numElements,
         }
 
         for (int dx = 0; dx < H1D; ++dx) {
-          const double r_v = v[jkliNM(c,dx,dy,el,D1D,numElements)];
+          const double r_v = v[jkliNM(c,dx,dy,el,D1D,E)];
           for (int qx = 0; qx < Q1D; ++qx) {
             v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,Q1D)];
             v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,Q1D)];
@@ -485,9 +485,9 @@ void kForceMultTranspose2D(const int numElements,
         for (int qx = 0; qx < Q1D; ++qx) {
           vStress[ijN(qx,qy,Q1D)] +=
             ((v_Dxy[ijN(qx,qy,Q1D)] *
-              stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,numElements)]) +
+              stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,E)]) +
              (v_xDy[ijN(qx,qy,Q1D)] *
-              stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,numElements)]));
+              stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,E)]));
         }
       }
     }
@@ -523,28 +523,27 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMultTranspose3D(const int numElements,
+void kForceMultTranspose3D(const int E,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
                            const double* stressJinvT,
                            const double* v,
                            double* e) {
-   const int E = numElements;
-   const int NUM_QUAD_2D = Q1D*Q1D;
-   const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
+   const int Q2D = Q1D*Q1D;
+   const int Q3D = Q1D*Q1D*Q1D;
    MFEM_FORALL(el,E,
    {
-      double vStress[NUM_QUAD_3D];
-      for (int i = 0; i < NUM_QUAD_3D; ++i) {
+      double vStress[Q3D];
+      for (int i = 0; i < Q3D; ++i) {
          vStress[i] = 0;
       }
       for (int c = 0; c < DIM; ++c) {
          for (int dz = 0; dz < H1D; ++dz) {
-            double Dxy_x[NUM_QUAD_2D];
-            double xDy_y[NUM_QUAD_2D];
-            double xy_z[NUM_QUAD_2D] ;
-            for (int i = 0; i < NUM_QUAD_2D; ++i) {
+            double Dxy_x[Q2D];
+            double xDy_y[Q2D];
+            double xy_z[Q2D] ;
+            for (int i = 0; i < Q2D; ++i) {
                Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
             }
             for (int dy = 0; dy < H1D; ++dy) {
@@ -631,7 +630,7 @@ void kForceMultTranspose3D(const int numElements,
 }
 
 // *****************************************************************************
-typedef void (*fForceMultTranspose)(const int numElements,
+typedef void (*fForceMultTranspose)(const int E,
                                     const double* L2QuadToDof,
                                     const double* H1DofToQuad,
                                     const double* H1DofToQuadD,
