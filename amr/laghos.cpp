@@ -424,7 +424,7 @@ int main(int argc, char *argv[])
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc;
+   int source = 0; bool visc = false;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
@@ -764,7 +764,7 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    true_offset[3] = true_offset[2] + Vsize_l2;
 
    S_tmp = S;
-   S.Update(true_offset, true);
+   S.Update(true_offset);
 
    const Operator* H1Update = H1FESpace->GetUpdateOperator();
    const Operator* L2Update = L2FESpace->GetUpdateOperator();
@@ -777,7 +777,7 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    v_gf.MakeRef(H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(L2FESpace, S, true_offset[2]);
 
-   S_tmp.Update(true_offset, true);
+   S_tmp.Update(true_offset);
 }
 
 
