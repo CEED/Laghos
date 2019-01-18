@@ -399,12 +399,12 @@ static void kForceMult(const int DIM,
       fflush(stdout);
    }
    assert(call[id]);  
-   GET_CONST_ADRS(L2QuadToDof);
-   GET_CONST_ADRS(H1DofToQuad);
-   GET_CONST_ADRS(H1DofToQuadD);
-   GET_CONST_ADRS(stressJinvT);
-   GET_CONST_ADRS(e);
-   GET_ADRS(v);
+   GET_CONST_PTR(L2QuadToDof);
+   GET_CONST_PTR(H1DofToQuad);
+   GET_CONST_PTR(H1DofToQuadD);
+   GET_CONST_PTR(stressJinvT);
+   GET_CONST_PTR(e);
+   GET_PTR(v);
    call[id](nzones,
             d_L2QuadToDof,
             d_H1DofToQuad,
@@ -698,12 +698,12 @@ static void rForceMultTranspose(const int DIM,
       fflush(stdout);
    }
    assert(call[id]);
-   GET_CONST_ADRS(L2QuadToDof);
-   GET_CONST_ADRS(H1DofToQuad);
-   GET_CONST_ADRS(H1DofToQuadD);
-   GET_CONST_ADRS(stressJinvT);
-   GET_CONST_ADRS(v);
-   GET_ADRS(e);
+   GET_CONST_PTR(L2QuadToDof);
+   GET_CONST_PTR(H1DofToQuad);
+   GET_CONST_PTR(H1DofToQuadD);
+   GET_CONST_PTR(stressJinvT);
+   GET_CONST_PTR(v);
+   GET_PTR(e);
    call[id](nzones,
             d_L2QuadToDof,
             d_H1DofToQuad,

@@ -23,7 +23,12 @@ using namespace std;
 
 namespace mfem {
 
-double kVectorMin(const size_t, const double*);
+// *****************************************************************************
+namespace kernels {
+namespace vector {
+double Min(const size_t, const double*);
+}
+}
 
 namespace hydrodynamics {
 
@@ -349,14 +354,14 @@ void qkernel(const int nzones,
              const double *Jac0inv,
              double *dt_est,
              double *stressJinvT){
-   GET_CONST_ADRS(weights);
-   GET_CONST_ADRS(Jacobians);
-   GET_CONST_ADRS(rho0DetJ0w);
-   GET_CONST_ADRS(e_quads);
-   GET_CONST_ADRS(grad_v_ext);
-   GET_CONST_ADRS(Jac0inv);
-   GET_ADRS(dt_est);
-   GET_ADRS(stressJinvT);
+   GET_CONST_PTR(weights);
+   GET_CONST_PTR(Jacobians);
+   GET_CONST_PTR(rho0DetJ0w);
+   GET_CONST_PTR(e_quads);
+   GET_CONST_PTR(grad_v_ext);
+   GET_CONST_PTR(Jac0inv);
+   GET_PTR(dt_est);
+   GET_PTR(stressJinvT);
    
    MFEM_FORALL(z, nzones,
    {
@@ -506,9 +511,9 @@ void vecToQuad2D(const int E,
                  const double* __restrict dofToQuad,
                  const double* __restrict in,
                  double* __restrict out) {
-   GET_CONST_ADRS(dofToQuad);
-   GET_CONST_ADRS(in);
-   GET_ADRS(out);
+   GET_CONST_PTR(dofToQuad);
+   GET_CONST_PTR(in);
+   GET_PTR(out);
    MFEM_FORALL(e, E,
    {
       double out_xy[VDIM][Q1D][Q1D];
@@ -614,10 +619,10 @@ void qGradVector2D(const int E,
                    const double* __restrict in,
                    double* __restrict out){
    const int Q2D = Q1D*Q1D;
-   GET_CONST_ADRS(dofToQuad);
-   GET_CONST_ADRS(dofToQuadD);
-   GET_CONST_ADRS(in);
-   GET_ADRS(out);
+   GET_CONST_PTR(dofToQuad);
+   GET_CONST_PTR(dofToQuadD);
+   GET_CONST_PTR(in);
+   GET_PTR(out);
    MFEM_FORALL(e, E,
    {
       double s_gradv[4*Q2D];
@@ -798,7 +803,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               quad_data.stressJinvT.Data());
    
    // **************************************************************************
-   quad_data.dt_est = kVectorMin(dt_est_sz, d_dt_est);
+   quad_data.dt_est = mfem::kernels::vector::Min(dt_est_sz, d_dt_est);
    dbg("dt_est=%.16e",quad_data.dt_est);
    //fflush(0); assert(false);
    
