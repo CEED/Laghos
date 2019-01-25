@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
          pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, myid+1, myid+15, partitioning);
          delete [] partitioning;
       }
-      else { pmesh = new ParMesh(MPI_COMM_WORLD, myid/16); }
+      else { pmesh = new ParMesh(MPI_COMM_WORLD, (myid/16)*16); }
    }
    else
    {
