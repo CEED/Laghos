@@ -165,9 +165,15 @@ int main(int argc, char *argv[])
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
-   Mesh *mesh = new Mesh(mesh_file, 1, 1);
-   const int dim = mesh->Dimension();
-   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   Mesh *mesh = NULL;
+   int dim;
+   if (myid == 0)
+   {
+      mesh = new Mesh(mesh_file, 1, 1);
+      dim = mesh->Dimension();
+      for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   }
+   MPI_Bcast(&dim, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
    if (p_assembly && dim == 1)
    {
@@ -254,9 +260,16 @@ int main(int argc, char *argv[])
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
    if (product == num_tasks)
    {
-      int *partitioning = mesh->CartesianPartitioning(nxyz);
-      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete [] partitioning;
+      //int *partitioning = mesh->CartesianPartitioning(nxyz);
+      //pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
+
+      if (myid == 0)
+      {
+         int *partitioning = mesh->CartesianPartitioning(nxyz);
+         pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, 1, 7, partitioning);
+         delete [] partitioning;
+      }
+      else { pmesh = new ParMesh(MPI_COMM_WORLD, 0); }
    }
    else
    {
