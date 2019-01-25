@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = NULL;
    int dim;
-   if (myid == 0)
+   if (myid%16 == 0)
    {
       mesh = new Mesh(mesh_file, 1, 1);
       dim = mesh->Dimension();
@@ -263,13 +263,13 @@ int main(int argc, char *argv[])
       //int *partitioning = mesh->CartesianPartitioning(nxyz);
       //pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
 
-      if (myid == 0)
+      if (myid%16 == 0)
       {
          int *partitioning = mesh->CartesianPartitioning(nxyz);
-         pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, 1, 7, partitioning);
+         pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, myid+1, myid+15, partitioning);
          delete [] partitioning;
       }
-      else { pmesh = new ParMesh(MPI_COMM_WORLD, 0); }
+      else { pmesh = new ParMesh(MPI_COMM_WORLD, myid/16); }
    }
    else
    {
