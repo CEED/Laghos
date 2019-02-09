@@ -30,10 +30,12 @@ namespace hydrodynamics
 // *****************************************************************************
 // * Kernel MASS Operator
 // *****************************************************************************
-kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
+kMassPAOperator::kMassPAOperator(Coefficient &q,
+                                 QuadratureData *qd_,
                                  ParFiniteElementSpace &pfes_,
                                  const IntegrationRule &ir_) :
    AbcMassPAOperator(pfes_.GetTrueVSize()),
+   Q(q),
    dim(pfes_.GetMesh()->Dimension()),
    nzones(pfes_.GetMesh()->GetNE()),
    quad_data(qd_),
@@ -51,17 +53,8 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-   // PAMassIntegrator Setup
-   mfem::PAMassIntegrator *paMassInteg = new mfem::PAMassIntegrator();
-   // No setup, it is done in PABilinearForm::Assemble
-   //paMassInteg->Setup(fes,&ir);
-   assert(ir);
-   paMassInteg->SetIntegrationRule(ir); // in NonlinearFormIntegrator
-   // Add mass integretor to PA bilinear form
-   paBilinearForm->AddDomainIntegrator(paMassInteg);
+   paBilinearForm->AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
    paBilinearForm->Assemble();
-   // Setup has to be done before, which is done in ->Assemble above
-   paMassInteg->SetOperator(quad_data->rho0DetJ0w);
    paBilinearForm->FormSystemOperator(mfem::Array<int>(), massOperator);
 }
 
@@ -125,8 +118,8 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    quad_data(qd),
    h1fes(h1f),
    l2fes(l2f),
-   h1k(*(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&h1f)))),
-   l2k(*(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&l2f)))),
+   h1k(*(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&h1f)))),
+   l2k(*(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&l2f)))),
    integ_rule(ir),
    ir1D(IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder())),
    D1D(h1fes.GetFE(0)->GetOrder()+1),
@@ -135,8 +128,8 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    H1D(h1fes.GetFE(0)->GetOrder()+1),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
-   l2D2Q(kDofQuadMaps::Get(l2fes, integ_rule)),
-   h1D2Q(kDofQuadMaps::Get(h1fes, integ_rule)),
+   l2D2Q(DofToQuad::Get(l2fes, integ_rule)),
+   h1D2Q(DofToQuad::Get(h1fes, integ_rule)),
    gVecL2(h1sz),
    gVecH1(l2sz)
 {
@@ -416,20 +409,20 @@ static void kForceMult(const int DIM,
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &vecL2,
                             mfem::Vector &vecH1) const {
-   l2k.GlobalToLocal(vecL2, gVecL2);
+   l2k.L2E(vecL2, gVecL2);
    kForceMult(dim,
               D1D,
               Q1D,
               L1D,
               H1D,
               nzones,
-              l2D2Q->dofToQuad,
-              h1D2Q->quadToDof,
-              h1D2Q->quadToDofD,
+              l2D2Q->B,
+              h1D2Q->Bt,
+              h1D2Q->Gt,
               quad_data->stressJinvT.Data(),
               gVecL2,
               gVecH1);
-   h1k.LocalToGlobal(gVecH1, vecH1);
+   h1k.E2L(gVecH1, vecH1);
 }
 
 // *****************************************************************************
@@ -716,20 +709,20 @@ static void rForceMultTranspose(const int DIM,
 // *************************************************************************
 void kForcePAOperator::MultTranspose(const mfem::Vector &vecH1,
                                      mfem::Vector &vecL2) const {
-   h1k.GlobalToLocal(vecH1, gVecH1);
+   h1k.L2E(vecH1, gVecH1);
    rForceMultTranspose(dim,
                        D1D,
                        Q1D,
                        L1D,
                        H1D,
                        nzones,
-                       l2D2Q->quadToDof,
-                       h1D2Q->dofToQuad,
-                       h1D2Q->dofToQuadD,
+                       l2D2Q->Bt,
+                       h1D2Q->B,
+                       h1D2Q->G,
                        quad_data->stressJinvT.Data(),
                        gVecH1,
                        gVecL2);
-   l2k.LocalToGlobal(gVecL2, vecL2);
+   l2k.E2L(gVecL2, vecL2);
 }
 
 } // namespace hydrodynamics

@@ -61,7 +61,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+MFEM_DEVICE int problem;
 
 void display_banner(ostream & os);
 
@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
 
    if (okina){ config::usePA(p_assembly); }
    dbg("LagrangianHydroOperator");
-   LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
+   LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
                                 qupdate, gamma(S), okina);
@@ -653,7 +653,7 @@ namespace mfem
 namespace hydrodynamics
 {
 
-double rho0(const Vector &x)
+MFEM_HOST_DEVICE double rho0(const Vector &x)
 {
    switch (problem)
    {
@@ -663,11 +663,14 @@ double rho0(const Vector &x)
          else { return 0.1; }
       case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
          else { return 0.125; }
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: return 0.0;
+      // calling a __host__ function from a
+      // __host__ __device__ function is not allowed
+      // default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
-double gamma(const Vector &x)
+MFEM_HOST_DEVICE double gamma(const Vector &x)
 {
    switch (problem)
    {
@@ -676,11 +679,12 @@ double gamma(const Vector &x)
       case 2: return 1.4;
       case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
          else { return 1.5; }
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: return 0.0;
+    //default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
-void v0(const Vector &x, Vector &v)
+MFEM_HOST_DEVICE void v0(const Vector &x, Vector &v)
 {
    switch (problem)
    {
@@ -697,11 +701,12 @@ void v0(const Vector &x, Vector &v)
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
-      default: MFEM_ABORT("Bad number given for problem id!");
+      default:exit(-1);break;
+    //default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
 
-double e0(const Vector &x)
+MFEM_HOST_DEVICE double e0(const Vector &x)
 {
    switch (problem)
    {
@@ -725,7 +730,8 @@ double e0(const Vector &x)
          else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
       case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
          else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: return 0.0;
+    //default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
