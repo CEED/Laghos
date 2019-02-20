@@ -355,15 +355,14 @@ void qkernel(const int nzones,
              const double *Jac0inv,
              double *dt_est,
              double *stressJinvT){
-   GET_CONST_PTR(weights);
-   GET_CONST_PTR(Jacobians);
-   GET_CONST_PTR(rho0DetJ0w);
-   GET_CONST_PTR(e_quads);
-   GET_CONST_PTR(grad_v_ext);
-   GET_CONST_PTR(Jac0inv);
-   GET_PTR(dt_est);
-   GET_PTR(stressJinvT);
-   
+   const DeviceVector d_weights(weights);
+   const DeviceVector d_Jacobians(Jacobians);
+   const DeviceVector d_rho0DetJ0w(rho0DetJ0w);
+   const DeviceVector d_e_quads(e_quads);
+   const DeviceVector d_grad_v_ext(grad_v_ext);
+   const DeviceVector d_Jac0inv(Jac0inv);
+   DeviceVector d_dt_est(dt_est);
+   DeviceVector d_stressJinvT(stressJinvT);   
    MFEM_FORALL(z, nzones,
    {
       double min_detJ = infinity;
@@ -706,7 +705,6 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    if (!d_local_in){
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
-   dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
    kfes->L2E(v_in, v_local_in);
@@ -747,27 +745,20 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    Vector* S_p = (Vector*) &S;
 
    // **************************************************************************
-   //const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-   //const int numDofs  = fe.GetDof();
-   //const int nqp = ir.GetNPoints();
-   //dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
    const int H1_size = H1FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
 
    // Energy dof => quads ******************************************************
-   dbg("Energy dof => quads (L2FESpace)");
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
    Dof2QuadScalar(l2_kfes, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
    
    // Coords to Jacobians ******************************************************
-   dbg("Refresh Geom J, invJ & detJ");
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
    Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
       
    // Velocity *****************************************************************
-   dbg("Velocity H1_size=%d",H1_size);
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
    Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
@@ -777,7 +768,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    const double infinity = std::numeric_limits<double>::infinity();
 
    // **************************************************************************
-   dbg("d_dt_est");
    const int dt_est_sz = nzones;
    static double *d_dt_est = NULL;
    if (!d_dt_est){
@@ -785,10 +775,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;
-   //dbg("d_dt:"); d_dt.Print(); fflush(0); //assert(false);
    
    // **************************************************************************
-   dbg("qkernel");
    assert(dim==2);
    qkernel<2>(nzones,
               nqp,
@@ -810,8 +798,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    
    // **************************************************************************
    quad_data.dt_est = mfem::kernels::vector::Min(dt_est_sz, d_dt_est);
-   dbg("dt_est=%.16e",quad_data.dt_est);
-   //fflush(0); assert(false);
    
    quad_data_is_current = true;
    timer->sw_qdata.Stop();

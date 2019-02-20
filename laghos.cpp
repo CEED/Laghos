@@ -327,7 +327,6 @@ int main(int argc, char *argv[])
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
 
-   dbg("Define GridFunction objects for the x, v and e");
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
@@ -407,7 +406,6 @@ int main(int argc, char *argv[])
    }
 
    if (okina){ config::usePA(p_assembly); }
-   dbg("LagrangianHydroOperator");
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
@@ -475,19 +473,13 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   dbg("ode_solver->Init");
-   //dbg("oper.Width()=%d",oper.Width()); assert(false);
    ode_solver->Init(oper);
-   dbg("oper.ResetTimeStepEstimate");
    oper.ResetTimeStepEstimate();
-   dbg("Get First TimeStepEstimate");
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    //dbg("S:"); S.Print(); fflush(0); assert(false);
    bool last_step = false;
    int steps = 0;
-   dbg("S_old");
    BlockVector S_old(true_offset);
-   dbg("S_old = S");
    S_old = S;
    for (int ti = 1; !last_step; ti++)
    {
@@ -499,7 +491,6 @@ int main(int argc, char *argv[])
       if (steps == max_tsteps) { last_step = true; }
       S_old = S;
       t_old = t;
-      dbg("ResetTimeStepEstimate");
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
@@ -509,12 +500,9 @@ int main(int argc, char *argv[])
       steps++;
 
       // Adaptive time step control.
-      dbg("Adaptive time step control");
       const double dt_est = oper.GetTimeStepEstimate(S);
-      dbg("dt_est=%.15e",dt_est);
       if (dt_est < dt)
       {
-         dbg("Repeating time step");
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;

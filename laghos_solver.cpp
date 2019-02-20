@@ -396,8 +396,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       
       const bool using_gpu = config::usingGpu();
       if (using_gpu) {
-         //printf("\033[32;1;7m[Laghos] SwitchToHost!\033[m\n");
-         dbg("\033[7mSwitchToHost");
          config::SwitchToCpu();
       }
       e_source = new LinearForm(&L2FESpace);
@@ -406,8 +404,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
       if (using_gpu) { 
-         //printf("\033[32;1;7m[Laghos] SwitchToDevice!\033[m\n");
-         dbg("\033[7mSwitchToDevice");
          config::SwitchToGpu();
       }
    }
@@ -475,7 +471,6 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
-   dbg("\033[32;1;7mResetTimeStepEstimate");
    quad_data.dt_est = numeric_limits<double>::infinity();
 }
 
@@ -757,7 +752,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          ++z_id;
       }
    }
-   dbg("\033[7mdt_est=%.16e\n\033[m",quad_data.dt_est);   
    mm::free<double>(gamma_b);
    mm::free<double>(rho_b);
    mm::free<double>(e_b);
