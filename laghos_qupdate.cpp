@@ -16,6 +16,7 @@
 
 #include "laghos_qupdate.hpp"
 #include "laghos_solver.hpp"
+#include "linalg/device.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -506,20 +507,20 @@ QUpdate::QUpdate(const int _dim,
 template<const int VDIM,
          const int D1D,
          const int Q1D> static
-void vecToQuad2D(const int E,
-                 const double* __restrict dofToQuad,
-                 const double* __restrict in,
-                 double* __restrict out) {
-   GET_CONST_PTR(dofToQuad);
-   GET_CONST_PTR(in);
-   GET_PTR(out);
-   MFEM_FORALL(e, E,
+void vecToQuad2D(const int NE,
+                 const double* __restrict _B,
+                 const double* __restrict _x,
+                 double* __restrict _y) {
+   const DeviceMatrix B(_B, Q1D,D1D);
+   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
+   DeviceTensor<4> y(_y, Q1D,Q1D,NE,2);
+   MFEM_FORALL(e, NE,
    {
       double out_xy[VDIM][Q1D][Q1D];
       for (int v = 0; v < VDIM; ++v) {
          for (int qy = 0; qy < Q1D; ++qy) {
             for (int qx = 0; qx < Q1D; ++qx) {
-               out_xy[v][qy][qx] = 0;
+               out_xy[v][qy][qx] = 0.0;
             }
          }
       }
@@ -527,20 +528,20 @@ void vecToQuad2D(const int E,
          double out_x[VDIM][Q1D];
          for (int v = 0; v < VDIM; ++v) {
             for (int qy = 0; qy < Q1D; ++qy) {
-               out_x[v][qy] = 0;
+               out_x[v][qy] = 0.0;
             }
          }
          for (int dx = 0; dx < D1D; ++dx) {
             for (int v = 0; v < VDIM; ++v) {
-               const double r_gf = d_in[jkliNM(v,dx,dy,e,D1D,E)];
+               const double r_gf = x(dx,dy,e,v);
                for (int qy = 0; qy < Q1D; ++qy) {
-                  out_x[v][qy] += r_gf * d_dofToQuad[ijN(qy, dx,Q1D)];
+                  out_x[v][qy] += r_gf * B(qy,dx);
                }
             }
          }
          for (int v = 0; v < VDIM; ++v) {
             for (int qy = 0; qy < Q1D; ++qy) {
-               const double d2q = d_dofToQuad[ijN(qy, dy,Q1D)];
+               const double d2q = B(qy,dy);
                for (int qx = 0; qx < Q1D; ++qx) {
                   out_xy[v][qy][qx] += d2q * out_x[v][qx];
                }
@@ -550,7 +551,7 @@ void vecToQuad2D(const int E,
       for (int qy = 0; qy < Q1D; ++qy) {
          for (int qx = 0; qx < Q1D; ++qx) {
             for (int v = 0; v < VDIM; ++v) {
-               d_out[jkliNM(v, qx, qy, e,Q1D,E)] = out_xy[v][qy][qx];
+               y(qx,qy,e,v) = out_xy[v][qy][qx];
             }
          }
       }
@@ -612,59 +613,64 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
 // **************************************************************************
 template <const int D1D,
           const int Q1D> static
-void qGradVector2D(const int E,
-                   const double* __restrict dofToQuad,
-                   const double* __restrict dofToQuadD,
-                   const double* __restrict in,
-                   double* __restrict out){
-   const int Q2D = Q1D*Q1D;
-   GET_CONST_PTR(dofToQuad);
-   GET_CONST_PTR(dofToQuadD);
-   GET_CONST_PTR(in);
-   GET_PTR(out);
-   MFEM_FORALL(e, E,
+void qGradVector2D(const int NE,
+                   const double* __restrict _B,
+                   const double* __restrict _G,
+                   const double* __restrict _x,
+                   double* __restrict _y){
+   const DeviceMatrix B(_B, Q1D,D1D);
+   const DeviceMatrix G(_G, Q1D,D1D);
+   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
+   DeviceTensor<5> y(_y, 2,2,Q1D,Q1D,NE);
+   MFEM_FORALL(e, NE,
    {
-      double s_gradv[4*Q2D];
-      for (int i = 0; i < (4*Q2D); ++i) {
-         s_gradv[i] = 0.0;
+      double s_gradv[2][2][Q1D][Q1D];
+      for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy) {
+            s_gradv[0][0][qx][qy] = 0.0;
+            s_gradv[0][1][qx][qy] = 0.0;
+            s_gradv[1][0][qx][qy] = 0.0;
+            s_gradv[1][1][qx][qy] = 0.0;
+         }
       }
       for (int dy = 0; dy < D1D; ++dy) {
-         double vDx[2*Q1D];
-         double vx[2*Q1D];
+         double vDx[2][Q1D];
+         double vx[2][Q1D];
          for (int qx = 0; qx < Q1D; ++qx) {
-            for (int vi = 0; vi < 2; ++vi) {
-               vDx[ijN(vi,qx,2)] = 0.0;
-               vx[ijN(vi,qx,2)] = 0.0;
+            for (int c = 0; c < 2; ++c) {
+               vDx[c][qx] = 0.0;
+               vx[c][qx] = 0.0;
             }
          }
          for (int dx = 0; dx < D1D; ++dx) {
             for (int qx = 0; qx < Q1D; ++qx) {
-               const double wDx = d_dofToQuadD[ijN(qx,dx,Q1D)];
-               const double wx  = d_dofToQuad[ijN(qx,dx,Q1D)];
+               const double wDx = G(qx,dx);
+               const double wx  = B(qx,dx);
                for (int c = 0; c < 2; ++c) {
-                  const double input = d_in[jkliNM(c,dx,dy,e,D1D,E)];
-                  vDx[ijN(c,qx,2)] += input * wDx;
-                  vx[ijN(c,qx,2)] += input * wx;
+                  const double input = x(dx,dy,e,c);
+                  vDx[c][qx] += input * wDx;
+                  vx[c][qx] += input * wx;
                }
             }
          }
          for (int qy = 0; qy < Q1D; ++qy) {
-            const double vy  = d_dofToQuad[ijN(qy,dy,Q1D)];
-            const double vDy = d_dofToQuadD[ijN(qy,dy,Q1D)];
+            const double vy  = B(qy,dy);
+            const double vDy = G(qy,dy);
             for (int qx = 0; qx < Q1D; ++qx) {
-               const int q = qx+Q1D*qy;
                for (int c = 0; c < 2; ++c) {
-                  s_gradv[ijkN(c,0,q,2)] += vy*vDx[ijN(c,qx,2)];
-                  s_gradv[ijkN(c,1,q,2)] += vDy*vx[ijN(c,qx,2)];
+                  s_gradv[c][0][qx][qy] += vy*vDx[c][qx];
+                  s_gradv[c][1][qx][qy] += vDy*vx[c][qx];
                }
             }
          }
       }         
-      for (int q = 0; q < Q2D; ++q) {
-         d_out[ijklNM(0,0,q,e,2,Q2D)] = s_gradv[ijkN(0,0,q,2)];
-         d_out[ijklNM(1,0,q,e,2,Q2D)] = s_gradv[ijkN(1,0,q,2)];
-         d_out[ijklNM(0,1,q,e,2,Q2D)] = s_gradv[ijkN(0,1,q,2)];
-         d_out[ijklNM(1,1,q,e,2,Q2D)] = s_gradv[ijkN(1,1,q,2)];
+      for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy) {
+            y(0,0,qx,qy,e) = s_gradv[0][0][qx][qy];
+            y(1,0,qx,qy,e) = s_gradv[1][0][qx][qy];
+            y(0,1,qx,qy,e) = s_gradv[0][1][qx][qy];
+            y(1,1,qx,qy,e) = s_gradv[1][1][qx][qy];
+         }
       }
    });
 }
