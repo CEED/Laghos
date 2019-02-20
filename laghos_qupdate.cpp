@@ -498,7 +498,6 @@ QUpdate::QUpdate(const int _dim,
    d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
-   assert(dim==2);
    assert(p_assembly);
    assert(material_pcf);
 }
@@ -736,7 +735,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }
-   
+
    // **************************************************************************
    timer->sw_qdata.Start();
    Vector* S_p = (Vector*) &S;
@@ -784,6 +783,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    
    // **************************************************************************
    dbg("qkernel");
+   assert(dim==2);
    qkernel<2>(nzones,
               nqp,
               nqp1D,
