@@ -38,7 +38,11 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     bool vec = false);
 
 // These are defined in laghos.cpp
-MFEM_HOST_DEVICE double rho0(const Vector &);
+MFEM_HOST_DEVICE double one(const Vector &);
+MFEM_HOST_DEVICE double rho0_p0(const Vector &);
+MFEM_HOST_DEVICE double rho0_p1(const Vector &);
+MFEM_HOST_DEVICE double rho0_p2(const Vector &);
+MFEM_HOST_DEVICE double rho0_p3(const Vector &);
 MFEM_HOST_DEVICE void v0(const Vector &, Vector &);
 MFEM_HOST_DEVICE double e0(const Vector &);
 MFEM_HOST_DEVICE double gamma(const Vector &);

@@ -16,6 +16,7 @@
 
 #include "laghos_assembly.hpp"
 #include "laghos_kernels.hpp"
+#include "linalg/device.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -139,46 +140,53 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
 
 // *****************************************************************************
 template<const int DIM,
-         const int D1D,
+         const int ND1d,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMult2D(const int E,
+void kForceMult2D(const int NE,
                   const double* L2DofToQuad,
                   const double* H1QuadToDof,
                   const double* H1QuadToDofD,
                   const double* stressJinvT,
                   const double* e,
-                  double* v) {
-   const int Q2D = Q1D*Q1D;
-   MFEM_FORALL(el,E,
+                  double* _v) {
+   const DeviceMatrix L2B(L2DofToQuad, Q1D,L1D);
+   const DeviceMatrix H1Bt(H1QuadToDof, H1D,Q1D);
+   const DeviceMatrix H1Gt(H1QuadToDofD, H1D,Q1D);
+   const DeviceTensor<5> sJit(stressJinvT, Q1D,Q1D,NE,2,2);
+   const DeviceTensor<3> energy(e, L1D, L1D, NE);
+   DeviceTensor<4> v(_v, ND1d,ND1d,NE,2);
+   MFEM_FORALL(e, NE,
    {
-      double e_xy[Q2D];
-      for (int i = 0; i < Q2D; ++i) {
-         e_xy[i] = 0;
+      double e_xy[Q1D][Q1D];
+      for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy) {
+            e_xy[qx][qy] = 0.0;
+         }
       }
       for (int dy = 0; dy < L1D; ++dy) {
          double e_x[Q1D];
          for (int qy = 0; qy < Q1D; ++qy) {
-            e_x[qy] = 0;
+            e_x[qy] = 0.0;
          }
          for (int dx = 0; dx < L1D; ++dx) {
-            const double r_e = e[ijkN(dx,dy,el,L1D)];
+            const double r_e = energy(dx,dy,e);
             for (int qx = 0; qx < Q1D; ++qx) {
-               e_x[qx] += L2DofToQuad[ijN(qx,dx,Q1D)] * r_e;
+               e_x[qx] += L2B(qx,dx) * r_e;
             }
          }
          for (int qy = 0; qy < Q1D; ++qy) {
-            const double wy = L2DofToQuad[ijN(qy,dy,Q1D)];
+            const double wy = L2B(qy,dy);
             for (int qx = 0; qx < Q1D; ++qx) {
-               e_xy[ijN(qx,qy,Q1D)] += wy * e_x[qx];
+               e_xy[qx][qy] += wy * e_x[qx];
             }
          }
       }
       for (int c = 0; c < 2; ++c) {
          for (int dy = 0; dy < H1D; ++dy) {
             for (int dx = 0; dx < H1D; ++dx) {
-               v[jkliNM(c,dx,dy,el,D1D,E)] = 0.0;
+               v(dx,dy,e,c) = 0.0;
             }
          }
          for (int qy = 0; qy < Q1D; ++qy) {
@@ -189,20 +197,18 @@ void kForceMult2D(const int E,
                xy[dx]  = 0.0;
             }
             for (int qx = 0; qx < Q1D; ++qx) {
-               const double esx = e_xy[ijN(qx,qy,Q1D)]  *
-                  stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,E)];
-               const double esy = e_xy[ijN(qx,qy,Q1D)] *
-                  stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,E)];
+               const double esx = e_xy[qx][qy] * sJit(qx,qy,e,0,c);
+               const double esy = e_xy[qx][qy] * sJit(qx,qy,e,1,c);
                for (int dx = 0; dx < H1D; ++dx) {
-                  Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1D)];
-                  xy[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1D)];
+                  Dxy[dx] += esx * H1Gt(dx,qx);
+                  xy[dx]  += esy * H1Bt(dx,qx);
                }
             }
             for (int dy = 0; dy < H1D; ++dy) {
-               const double wy  = H1QuadToDof[ijN(dy,qy,H1D)];
-               const double wDy = H1QuadToDofD[ijN(dy,qy,H1D)];
+               const double wy  = H1Bt(dy,qy);
+               const double wDy = H1Gt(dy,qy);
                for (int dx = 0; dx < H1D; ++dx) {
-                  v[jkliNM(c,dx,dy,el,D1D,E)] += wy* Dxy[dx] + wDy*xy[dx];
+                  v(dx,dy,e,c) += wy* Dxy[dx] + wDy*xy[dx];
                }
             }
          }
@@ -221,11 +227,11 @@ void kForceMult3D(const int E,
                   const double* H1QuadToDof,
                   const double* H1QuadToDofD,
                   const double* stressJinvT,
-                  const double* e,
+                  const double* energy,
                   double* v) {
    const int Q2D = Q1D*Q1D;
    const int Q3D = Q1D*Q1D*Q1D;
-   MFEM_FORALL(el,E,
+   MFEM_FORALL(e,E,
    {
       double e_xyz[Q3D];
       for (int i = 0; i < Q3D; ++i) {
@@ -242,7 +248,7 @@ void kForceMult3D(const int E,
                e_x[qy] = 0;
             }
             for (int dx = 0; dx < L1D; ++dx) {
-               const double r_e = e[ijklN(dx,dy,dz,el,L1D)];
+               const double r_e = energy[ijklN(dx,dy,dz,e,L1D)];
                for (int qx = 0; qx < Q1D; ++qx) {
                   e_x[qx] += L2DofToQuad[ijN(qx,dx,Q1D)] * r_e;
                }
@@ -267,7 +273,7 @@ void kForceMult3D(const int E,
          for (int dz = 0; dz < H1D; ++dz) {
             for (int dy = 0; dy < H1D; ++dy) {
                for (int dx = 0; dx < H1D; ++dx) {
-                  v[jklmiNM(c,dx,dy,dz,el,D1D,E)] = 0;
+                  v[jklmiNM(c,dx,dy,dz,e,D1D,E)] = 0;
                }
             }
          }
@@ -287,9 +293,9 @@ void kForceMult3D(const int E,
                }
                for (int qx = 0; qx < Q1D; ++qx) {
                   const double r_e = e_xyz[ijkN(qx,qy,qz,Q1D)];
-                  const double esx = r_e * stressJinvT[xyzeijDQE(0,c,qx,qy,qz,el,DIM,Q1D,E)];
-                  const double esy = r_e * stressJinvT[xyzeijDQE(1,c,qx,qy,qz,el,DIM,Q1D,E)];
-                  const double esz = r_e * stressJinvT[xyzeijDQE(2,c,qx,qy,qz,el,DIM,Q1D,E)];
+                  const double esx = r_e * stressJinvT[xyzeijDQE(0,c,qx,qy,qz,e,DIM,Q1D,E)];
+                  const double esy = r_e * stressJinvT[xyzeijDQE(1,c,qx,qy,qz,e,DIM,Q1D,E)];
+                  const double esz = r_e * stressJinvT[xyzeijDQE(2,c,qx,qy,qz,e,DIM,Q1D,E)];
                   for (int dx = 0; dx < H1D; ++dx) {
                      Dx_x[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1D)];
                      x_y[dx]  += esy * H1QuadToDof[ijN(dx,qx,H1D)];
@@ -311,7 +317,7 @@ void kForceMult3D(const int E,
                const double wDz = H1QuadToDofD[ijN(dz,qz,H1D)];
                for (int dy = 0; dy < H1D; ++dy) {
                   for (int dx = 0; dx < H1D; ++dx) {
-                     v[jklmiNM(c,dx,dy,dz,el,D1D,E)] +=
+                     v[jklmiNM(c,dx,dy,dz,e,D1D,E)] +=
                         ((Dxy_x[ijN(dx,dy,H1D)] * wz) +
                          (xDy_y[ijN(dx,dy,H1D)] * wz) +
                          (xy_z[ijN(dx,dy,H1D)]  * wDz));
@@ -353,57 +359,57 @@ static void kForceMult(const int DIM,
    assert(LOG2(DIM)<=4);
    assert(LOG2(D1D-2)<=4);
    static std::unordered_map<unsigned long long, fForceMult> call = {
-      {0x20,&kForceMult2D<2,2,2,1,2>},
+      //{0x20,&kForceMult2D<2,2,2,1,2>},
       {0x21,&kForceMult2D<2,3,4,2,3>},
-      {0x22,&kForceMult2D<2,4,6,3,4>},
-      {0x23,&kForceMult2D<2,5,8,4,5>},
-      {0x24,&kForceMult2D<2,6,10,5,6>},
-      {0x25,&kForceMult2D<2,7,12,6,7>},
-      {0x26,&kForceMult2D<2,8,14,7,8>},
-      {0x27,&kForceMult2D<2,9,16,8,9>},
-      {0x28,&kForceMult2D<2,10,18,9,10>},
-      {0x29,&kForceMult2D<2,11,20,10,11>},
-      {0x2A,&kForceMult2D<2,12,22,11,12>},
-      {0x2B,&kForceMult2D<2,13,24,12,13>},
-      {0x2C,&kForceMult2D<2,14,26,13,14>},
-      {0x2D,&kForceMult2D<2,15,28,14,15>},
-      {0x2E,&kForceMult2D<2,16,30,15,16>},
-      {0x2F,&kForceMult2D<2,17,32,16,17>},
+      //{0x22,&kForceMult2D<2,4,6,3,4>},
+      //{0x23,&kForceMult2D<2,5,8,4,5>},
+      //{0x24,&kForceMult2D<2,6,10,5,6>},
+      //{0x25,&kForceMult2D<2,7,12,6,7>},
+      //{0x26,&kForceMult2D<2,8,14,7,8>},
+      //{0x27,&kForceMult2D<2,9,16,8,9>},
+      //{0x28,&kForceMult2D<2,10,18,9,10>},
+      //{0x29,&kForceMult2D<2,11,20,10,11>},
+      //{0x2A,&kForceMult2D<2,12,22,11,12>},
+      //{0x2B,&kForceMult2D<2,13,24,12,13>},
+      //{0x2C,&kForceMult2D<2,14,26,13,14>},
+      //{0x2D,&kForceMult2D<2,15,28,14,15>},
+      //{0x2E,&kForceMult2D<2,16,30,15,16>},
+      //{0x2F,&kForceMult2D<2,17,32,16,17>},
       // 3D
-      {0x30,&kForceMult3D<3,2,2,1,2>},
-      {0x31,&kForceMult3D<3,3,4,2,3>},
-      {0x32,&kForceMult3D<3,4,6,3,4>},
-      {0x33,&kForceMult3D<3,5,8,4,5>},
-      {0x34,&kForceMult3D<3,6,10,5,6>},
-      {0x35,&kForceMult3D<3,7,12,6,7>},
-      {0x36,&kForceMult3D<3,8,14,7,8>},
-      {0x37,&kForceMult3D<3,9,16,8,9>},
-      {0x38,&kForceMult3D<3,10,18,9,10>},
-      {0x39,&kForceMult3D<3,11,20,10,11>},
-      {0x3A,&kForceMult3D<3,12,22,11,12>},
-      {0x3B,&kForceMult3D<3,13,24,12,13>},
-      {0x3C,&kForceMult3D<3,14,26,13,14>},
-      {0x3D,&kForceMult3D<3,15,28,14,15>},
-      {0x3E,&kForceMult3D<3,16,30,15,16>},
-      {0x3F,&kForceMult3D<3,17,32,16,17>},
+      //{0x30,&kForceMult3D<3,2,2,1,2>},
+      //{0x31,&kForceMult3D<3,3,4,2,3>},
+      //{0x32,&kForceMult3D<3,4,6,3,4>},
+      //{0x33,&kForceMult3D<3,5,8,4,5>},
+      //{0x34,&kForceMult3D<3,6,10,5,6>},
+      //{0x35,&kForceMult3D<3,7,12,6,7>},
+      //{0x36,&kForceMult3D<3,8,14,7,8>},
+      //{0x37,&kForceMult3D<3,9,16,8,9>},
+      //{0x38,&kForceMult3D<3,10,18,9,10>},
+      //{0x39,&kForceMult3D<3,11,20,10,11>},
+      //{0x3A,&kForceMult3D<3,12,22,11,12>},
+      //{0x3B,&kForceMult3D<3,13,24,12,13>},
+      //{0x3C,&kForceMult3D<3,14,26,13,14>},
+      //{0x3D,&kForceMult3D<3,15,28,14,15>},
+      //{0x3E,&kForceMult3D<3,16,30,15,16>},
+      //{0x3F,&kForceMult3D<3,17,32,16,17>},
    };
    if (!call[id]){
       printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
       fflush(stdout);
    }
    assert(call[id]);  
-   GET_CONST_PTR(L2QuadToDof);
+   /*GET_CONST_PTR(L2QuadToDof);
    GET_CONST_PTR(H1DofToQuad);
    GET_CONST_PTR(H1DofToQuadD);
    GET_CONST_PTR(stressJinvT);
    GET_CONST_PTR(e);
-   GET_PTR(v);
+   GET_PTR(v);*/
    call[id](nzones,
-            d_L2QuadToDof,
-            d_H1DofToQuad,
-            d_H1DofToQuadD,
-            d_stressJinvT,
-            d_e, d_v);
+            L2QuadToDof,
+            H1DofToQuad,
+            H1DofToQuadD,
+            stressJinvT,
+            e, v);
 }
 
 // *****************************************************************************
@@ -431,15 +437,15 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMultTranspose2D(const int E,
+void kForceMultTranspose2D(const int NE,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
                            const double* stressJinvT,
                            const double* v,
-                           double* e) {
+                           double* energy) {
    const int Q2D = Q1D*Q1D;
-   MFEM_FORALL(el,E,
+   MFEM_FORALL(e, NE,
    {
       double vStress[Q2D];
       for (int i = 0; i < Q2D; ++i) {
@@ -459,7 +465,7 @@ void kForceMultTranspose2D(const int E,
             }
 
             for (int dx = 0; dx < H1D; ++dx) {
-               const double r_v = v[jkliNM(c,dx,dy,el,D1D,E)];
+               const double r_v = v[jkliNM(c,dx,dy,e,D1D,NE)];
                for (int qx = 0; qx < Q1D; ++qx) {
                   v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,Q1D)];
                   v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,Q1D)];
@@ -478,15 +484,15 @@ void kForceMultTranspose2D(const int E,
             for (int qx = 0; qx < Q1D; ++qx) {
                vStress[ijN(qx,qy,Q1D)] +=
                   ((v_Dxy[ijN(qx,qy,Q1D)] *
-                    stressJinvT[xyeijDQE(0,c,qx,qy,el,DIM,Q1D,E)]) +
+                    stressJinvT[xyeijDQE(0,c,qx,qy,e,DIM,Q1D,NE)]) +
                    (v_xDy[ijN(qx,qy,Q1D)] *
-                    stressJinvT[xyeijDQE(1,c,qx,qy,el,DIM,Q1D,E)]));
+                    stressJinvT[xyeijDQE(1,c,qx,qy,e,DIM,Q1D,NE)]));
             }
          }
       }
       for (int dy = 0; dy < L1D; ++dy) {
          for (int dx = 0; dx < L1D; ++dx) {
-            e[ijkN(dx,dy,el,L1D)] = 0;
+            energy[ijkN(dx,dy,e,L1D)] = 0;
          }
       }
       for (int qy = 0; qy < Q1D; ++qy) {
@@ -503,7 +509,7 @@ void kForceMultTranspose2D(const int E,
          for (int dy = 0; dy < L1D; ++dy) {
             const double w = L2QuadToDof[ijN(dy,qy,L1D)];
             for (int dx = 0; dx < L1D; ++dx) {
-               e[ijkN(dx,dy,el,L1D)] += e_x[dx] * w;
+               energy[ijkN(dx,dy,e,L1D)] += e_x[dx] * w;
             }
          }
       }
@@ -516,16 +522,16 @@ template<const int DIM,
          const int Q1D,
          const int L1D,
          const int H1D> static
-void kForceMultTranspose3D(const int E,
+void kForceMultTranspose3D(const int NE,
                            const double* L2QuadToDof,
                            const double* H1DofToQuad,
                            const double* H1DofToQuadD,
                            const double* stressJinvT,
                            const double* v,
-                           double* e) {
+                           double* energy) {
    const int Q2D = Q1D*Q1D;
    const int Q3D = Q1D*Q1D*Q1D;
-   MFEM_FORALL(el,E,
+   MFEM_FORALL(e,NE,
    {
       double vStress[Q3D];
       for (int i = 0; i < Q3D; ++i) {
@@ -546,7 +552,7 @@ void kForceMultTranspose3D(const int E,
                   Dx_x[qx] = x_y[qx] = 0;
                }
                for (int dx = 0; dx < H1D; ++dx) {
-                  const double r_v = v[jklmiNM(c,dx,dy,dz,el,D1D,E)];
+                  const double r_v = v[jklmiNM(c,dx,dy,dz,e,D1D,NE)];
                   for (int qx = 0; qx < Q1D; ++qx) {
                      Dx_x[qx] += r_v * H1DofToQuadD[ijN(qx,dx,Q1D)];
                      x_y[qx]  += r_v * H1DofToQuad[ijN(qx,dx,Q1D)];
@@ -567,14 +573,14 @@ void kForceMultTranspose3D(const int E,
                const double wDz = H1DofToQuadD[ijN(qz,dz,Q1D)];
                for (int qy = 0; qy < Q1D; ++qy) {
                   for (int qx = 0; qx < Q1D; ++qx) {
-                     const int ix = xyzeijDQE(0,c,qx,qy,qz,el,DIM,Q1D,E);
+                     const int ix = xyzeijDQE(0,c,qx,qy,qz,e,DIM,Q1D,NE);
                      const double sx = stressJinvT[ix];
                      vStress[ijkN(qx,qy,qz,Q1D)] +=
                         ((Dxy_x[ijN(qx,qy,Q1D)] * wz * sx) +
                          (xDy_y[ijN(qx,qy,Q1D)] * wz *
-                          stressJinvT[xyzeijDQE(1,c,qx,qy,qz,el,DIM,Q1D,E)]) +
+                          stressJinvT[xyzeijDQE(1,c,qx,qy,qz,e,DIM,Q1D,NE)]) +
                          (xy_z[ijN(qx,qy,Q1D)] * wDz *
-                          stressJinvT[xyzeijDQE(2,c,qx,qy,qz,el,DIM,Q1D,E)]));
+                          stressJinvT[xyzeijDQE(2,c,qx,qy,qz,e,DIM,Q1D,NE)]));
                   }
                }
             }
@@ -583,7 +589,7 @@ void kForceMultTranspose3D(const int E,
       for (int dz = 0; dz < L1D; ++dz) {
          for (int dy = 0; dy < L1D; ++dy) {
             for (int dx = 0; dx < L1D; ++dx) {
-               e[ijklN(dx,dy,dz,el,L1D)] = 0;
+               energy[ijklN(dx,dy,dz,e,L1D)] = 0;
             }
          }
       }
@@ -614,7 +620,7 @@ void kForceMultTranspose3D(const int E,
             const double w = L2QuadToDof[ijN(dz,qz,L1D)];
             for (int dy = 0; dy < L1D; ++dy) {
                for (int dx = 0; dx < L1D; ++dx) {
-                  e[ijklN(dx,dy,dz,el,L1D)] += w * e_xy[ijN(dx,dy,L1D)];
+                  energy[ijklN(dx,dy,dz,e,L1D)] += w * e_xy[ijN(dx,dy,L1D)];
                }
             }
          }
@@ -652,39 +658,39 @@ static void rForceMultTranspose(const int DIM,
    const unsigned int id = ((DIM)<<4)|(D1D-2);
    static std::unordered_map<unsigned long long, fForceMultTranspose> call = {
       // 2D
-      {0x20,&kForceMultTranspose2D<2,2,2,1,2>},
+      //{0x20,&kForceMultTranspose2D<2,2,2,1,2>},
       {0x21,&kForceMultTranspose2D<2,3,4,2,3>},
-      {0x22,&kForceMultTranspose2D<2,4,6,3,4>},
-      {0x23,&kForceMultTranspose2D<2,5,8,4,5>},
-      {0x24,&kForceMultTranspose2D<2,6,10,5,6>},
-      {0x25,&kForceMultTranspose2D<2,7,12,6,7>},
-      {0x26,&kForceMultTranspose2D<2,8,14,7,8>},
-      {0x27,&kForceMultTranspose2D<2,9,16,8,9>},
-      {0x28,&kForceMultTranspose2D<2,10,18,9,10>},
-      {0x29,&kForceMultTranspose2D<2,11,20,10,11>},
-      {0x2A,&kForceMultTranspose2D<2,12,22,11,12>},
-      {0x2B,&kForceMultTranspose2D<2,13,24,12,13>},
-      {0x2C,&kForceMultTranspose2D<2,14,26,13,14>},
-      {0x2D,&kForceMultTranspose2D<2,15,28,14,15>},
-      {0x2E,&kForceMultTranspose2D<2,16,30,15,16>},
-      {0x2F,&kForceMultTranspose2D<2,17,32,16,17>},
+      //{0x22,&kForceMultTranspose2D<2,4,6,3,4>},
+      //{0x23,&kForceMultTranspose2D<2,5,8,4,5>},
+      //{0x24,&kForceMultTranspose2D<2,6,10,5,6>},
+      //{0x25,&kForceMultTranspose2D<2,7,12,6,7>},
+      //{0x26,&kForceMultTranspose2D<2,8,14,7,8>},
+      //{0x27,&kForceMultTranspose2D<2,9,16,8,9>},
+      //{0x28,&kForceMultTranspose2D<2,10,18,9,10>},
+      //{0x29,&kForceMultTranspose2D<2,11,20,10,11>},
+      //{0x2A,&kForceMultTranspose2D<2,12,22,11,12>},
+      //{0x2B,&kForceMultTranspose2D<2,13,24,12,13>},
+      //{0x2C,&kForceMultTranspose2D<2,14,26,13,14>},
+      //{0x2D,&kForceMultTranspose2D<2,15,28,14,15>},
+      //{0x2E,&kForceMultTranspose2D<2,16,30,15,16>},
+      //{0x2F,&kForceMultTranspose2D<2,17,32,16,17>},
       // 3D
-      {0x30,&kForceMultTranspose3D<3,2,2,1,2>},
-      {0x31,&kForceMultTranspose3D<3,3,4,2,3>},
-      {0x32,&kForceMultTranspose3D<3,4,6,3,4>},
-      {0x33,&kForceMultTranspose3D<3,5,8,4,5>},
-      {0x34,&kForceMultTranspose3D<3,6,10,5,6>},
-      {0x35,&kForceMultTranspose3D<3,7,12,6,7>},
-      {0x36,&kForceMultTranspose3D<3,8,14,7,8>},
-      {0x37,&kForceMultTranspose3D<3,9,16,8,9>},
-      {0x38,&kForceMultTranspose3D<3,10,18,9,10>},
-      {0x39,&kForceMultTranspose3D<3,11,20,10,11>},
-      {0x3A,&kForceMultTranspose3D<3,12,22,11,12>},
-      {0x3B,&kForceMultTranspose3D<3,13,24,12,13>},
-      {0x3C,&kForceMultTranspose3D<3,14,26,13,14>},
-      {0x3D,&kForceMultTranspose3D<3,15,28,14,15>},
-      {0x3E,&kForceMultTranspose3D<3,16,30,15,16>},
-      {0x3F,&kForceMultTranspose3D<3,17,32,16,17>},
+      //{0x30,&kForceMultTranspose3D<3,2,2,1,2>},
+      //{0x31,&kForceMultTranspose3D<3,3,4,2,3>},
+      //{0x32,&kForceMultTranspose3D<3,4,6,3,4>},
+      //{0x33,&kForceMultTranspose3D<3,5,8,4,5>},
+      //{0x34,&kForceMultTranspose3D<3,6,10,5,6>},
+      //{0x35,&kForceMultTranspose3D<3,7,12,6,7>},
+      //{0x36,&kForceMultTranspose3D<3,8,14,7,8>},
+      //{0x37,&kForceMultTranspose3D<3,9,16,8,9>},
+      //{0x38,&kForceMultTranspose3D<3,10,18,9,10>},
+      //{0x39,&kForceMultTranspose3D<3,11,20,10,11>},
+      //{0x3A,&kForceMultTranspose3D<3,12,22,11,12>},
+      //{0x3B,&kForceMultTranspose3D<3,13,24,12,13>},
+      //{0x3C,&kForceMultTranspose3D<3,14,26,13,14>},
+      //{0x3D,&kForceMultTranspose3D<3,15,28,14,15>},
+      //{0x3E,&kForceMultTranspose3D<3,16,30,15,16>},
+      //{0x3F,&kForceMultTranspose3D<3,17,32,16,17>},
    };
    if (!call[id]) {
       printf("\n[rForceMultTranspose] id \033[33m0x%X\033[m ",id);

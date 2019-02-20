@@ -352,7 +352,11 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
+   FunctionCoefficient rho_coeff(problem==0?hydrodynamics::rho0_p0:
+                                 problem==1?hydrodynamics::rho0_p1:
+                                 problem==2?hydrodynamics::rho0_p2:
+                                 problem==3?hydrodynamics::rho0_p3:
+                                 hydrodynamics::one);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -653,21 +657,16 @@ namespace mfem
 namespace hydrodynamics
 {
 
-MFEM_HOST_DEVICE double rho0(const Vector &x)
-{
-   switch (problem)
-   {
-      case 0: return 1.0;
-      case 1: return 1.0;
-      case 2: if (x(0) < 0.5) { return 1.0; }
-         else { return 0.1; }
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-         else { return 0.125; }
-      default: return 0.0;
-      // calling a __host__ function from a
-      // __host__ __device__ function is not allowed
-      // default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
-   }
+MFEM_HOST_DEVICE double one(const Vector &x) { return 1.0; }
+MFEM_HOST_DEVICE double rho0_p0(const Vector &x) { return 1.0; }
+MFEM_HOST_DEVICE double rho0_p1(const Vector &x) { return 1.0; }
+MFEM_HOST_DEVICE double rho0_p2(const Vector &x) {
+   if (x(0) < 0.5) { return 1.0; }
+   else { return 0.1; }
+}
+MFEM_HOST_DEVICE double rho0_p3(const Vector &x) {
+   if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
+   else { return 0.125; }
 }
 
 MFEM_HOST_DEVICE double gamma(const Vector &x)
@@ -726,10 +725,10 @@ MFEM_HOST_DEVICE double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+      case 2: if (x(0) < 0.5) { return 1.0 / rho0_p2(x) / (gamma(x) - 1.0); }
+         else { return 0.1 / rho0_p2(x) / (gamma(x) - 1.0); }
+      case 3: if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma(x) - 1.0); }
+         else { return 1.0 / rho0_p3(x) / (gamma(x) - 1.0); }
       default: return 0.0;
     //default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }

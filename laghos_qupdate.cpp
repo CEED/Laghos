@@ -26,7 +26,7 @@ namespace mfem {
 // *****************************************************************************
 namespace kernels {
 namespace vector {
-double Min(const size_t, const double*);
+double Min(const int, const double*);
 }
 }
 
@@ -36,20 +36,20 @@ namespace hydrodynamics {
 // * Dense matrix
 // *****************************************************************************
 __host__ __device__ static
-void multABt(const size_t ah,
-             const size_t aw,
-             const size_t bh,
+void multABt(const int ah,
+             const int aw,
+             const int bh,
              const double* __restrict__ A,
              const double* __restrict__ B,
              double* __restrict__ C){
-   const size_t ah_x_bh = ah*bh;
-   for(size_t i=0; i<ah_x_bh; i+=1)
+   const int ah_x_bh = ah*bh;
+   for(int i=0; i<ah_x_bh; i+=1)
       C[i] = 0.0;  
-   for(size_t k=0; k<aw; k+=1) {
+   for(int k=0; k<aw; k+=1) {
       double *c = C;
-      for(size_t j=0; j<bh; j+=1){
+      for(int j=0; j<bh; j+=1){
          const double bjk = B[j];
-         for(size_t i=0; i<ah; i+=1)
+         for(int i=0; i<ah; i+=1)
             c[i] += A[i] * bjk;            
          c += ah;
       }
@@ -60,17 +60,17 @@ void multABt(const size_t ah,
 
 // *****************************************************************************
 __host__ __device__ static
-void mult(const size_t ah,
-          const size_t aw,
-          const size_t bw,
+void mult(const int ah,
+          const int aw,
+          const int bw,
           const double* __restrict__ B,
           const double* __restrict__ C,
           double* __restrict__ A){
-   const size_t ah_x_aw = ah*aw;
-   for (size_t i = 0; i < ah_x_aw; i++) A[i] = 0.0;
-   for (size_t j = 0; j < aw; j++) {
-      for (size_t k = 0; k < bw; k++) {
-         for (size_t i = 0; i < ah; i++) {
+   const int ah_x_aw = ah*aw;
+   for (int i = 0; i < ah_x_aw; i++) A[i] = 0.0;
+   for (int j = 0; j < aw; j++) {
+      for (int k = 0; k < bw; k++) {
+         for (int i = 0; i < ah; i++) {
             A[i+j*ah] += B[i+k*ah] * C[k+j*bw];
          }
       }
@@ -79,25 +79,25 @@ void mult(const size_t ah,
 
 // *****************************************************************************
 __host__ __device__ static
-void multV(const size_t height,
-           const size_t width,
+void multV(const int height,
+           const int width,
            double *data,
            const double* __restrict__ x,
            double* __restrict__ y) {
    if (width == 0) {
-      for (size_t row = 0; row < height; row++) 
+      for (int row = 0; row < height; row++) 
          y[row] = 0.0;         
       return;
    }
    double *d_col = data;
    double x_col = x[0];
-   for (size_t row = 0; row < height; row++) {
+   for (int row = 0; row < height; row++) {
       y[row] = x_col*d_col[row];
    }
    d_col += height;
-   for (size_t col = 1; col < width; col++) {
+   for (int col = 1; col < width; col++) {
       x_col = x[col];
-      for (size_t row = 0; row < height; row++) {
+      for (int row = 0; row < height; row++) {
          y[row] += x_col*d_col[row];
       }
       d_col += height;
@@ -106,11 +106,11 @@ void multV(const size_t height,
    
 // *****************************************************************************
 __host__ __device__ static
-void add(const size_t height, const size_t width,
+void add(const int height, const int width,
          const double c, const double *A,
          double *D){
-   for (size_t j = 0; j < width; j++){
-      for (size_t i = 0; i < height; i++) {
+   for (int j = 0; j < width; j++){
+      for (int i = 0; i < height; i++) {
          D[i*width+j] += c * A[i*width+j];
       }
    }
@@ -120,12 +120,12 @@ void add(const size_t height, const size_t width,
 // * Eigen
 // *****************************************************************************
 __host__ __device__  static
-double norml2(const size_t size, const double *data) {
+double norml2(const int size, const double *data) {
    if (0 == size) return 0.0;
    if (1 == size) return std::abs(data[0]);
    double scale = 0.0;
    double sum = 0.0;
-   for (size_t i = 0; i < size; i++) {
+   for (int i = 0; i < size; i++) {
       if (data[i] != 0.0)
       {
          const double absdata = fabs(data[i]);
@@ -160,7 +160,7 @@ inline double det3D(const double *d){
    
 // *****************************************************************************
 __host__ __device__ static
-double det(const size_t dim, const double *J){
+double det(const int dim, const double *J){
    if (dim==2) return det2D(J);
    if (dim==3) return det3D(J);
    assert(false);
@@ -169,7 +169,7 @@ double det(const size_t dim, const double *J){
 
 // *****************************************************************************
 __host__ __device__ static
-void calcInverse2D(const size_t n, const double *a, double *i){
+void calcInverse2D(const int n, const double *a, double *i){
    const double d = det(n,a);
    const double t = 1.0 / d;
    i[0*n+0] =  a[1*n+1] * t ;
@@ -180,9 +180,9 @@ void calcInverse2D(const size_t n, const double *a, double *i){
    
 // *****************************************************************************
 __host__ __device__ static
-void symmetrize(const size_t n, double* __restrict__ d){
-   for (size_t i = 0; i<n; i++){
-      for (size_t j = 0; j<i; j++) {
+void symmetrize(const int n, double* __restrict__ d){
+   for (int i = 0; i<n; i++){
+      for (int j = 0; j<i; j++) {
          const double a = 0.5 * (d[i*n+j] + d[j*n+i]);
          d[j*n+i] = d[i*n+j] = a;
       }
@@ -224,7 +224,7 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
    
 // *****************************************************************************
 __host__ __device__ static
-void calcEigenvalues(const size_t n, const double *d,
+void calcEigenvalues(const int n, const double *d,
                      double *lambda,
                      double *vec) {
    assert(n == 2);   
@@ -451,7 +451,7 @@ void qkernel(const int nzones,
          for(int k=0;k<dim*dim;k+=1) stressJiT[k] *= weight * detJ;
          for (int vd = 0 ; vd < dim; vd++) {
             for (int gd = 0; gd < dim; gd++) {
-               const size_t offset = zdx + nqp*nzones*(gd+vd*dim);
+               const int offset = zdx + nqp*nzones*(gd+vd*dim);
                d_stressJinvT[offset] = stressJiT[vd+gd*dim];
             }
          }
@@ -576,11 +576,11 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
    const int vdim = fes.GetVDim();
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const size_t numDofs  = fe.GetDof();
-   const size_t nzones = fes.GetNE();
-   const size_t nqp = ir.GetNPoints();
-   const size_t local_size = numDofs * nzones;
-   const size_t out_size =  nqp * nzones;
+   const int numDofs  = fe.GetDof();
+   const int nzones = fes.GetNE();
+   const int nqp = ir.GetNPoints();
+   const int local_size = numDofs * nzones;
+   const int out_size =  nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    static double *d_local_in = NULL;
@@ -597,7 +597,7 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
    assert(LOG2(vdim)<=4);
    assert(LOG2(dofs1D)<=4);
    assert(LOG2(quad1D)<=4);
-   const size_t id = (vdim<<8)|(dofs1D<<4)|(quad1D);
+   const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call = {
       {0x124,&vecToQuad2D<1,2,4>},
       {0x148,&vecToQuad2D<1,4,8>},
@@ -690,11 +690,11 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    assert(vdim==2);
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const size_t numDofs  = fe.GetDof();
-   const size_t nzones = fes.GetNE();
-   const size_t nqp = ir.GetNPoints();
-   const size_t local_size = vdim * numDofs * nzones;
-   const size_t out_size = vdim * vdim * nqp * nzones;
+   const int numDofs  = fe.GetDof();
+   const int nzones = fes.GetNE();
+   const int nqp = ir.GetNPoints();
+   const int local_size = vdim * numDofs * nzones;
+   const int out_size = vdim * vdim * nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    static double *d_local_in = NULL;
@@ -710,7 +710,7 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    }
    assert(LOG2(dofs1D)<=4);
    assert(LOG2(quad1D)<=4);
-   const size_t id = (dofs1D<<4)|(quad1D);
+   const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call = {
       {0x34,&qGradVector2D<3,4>},
       {0x58,&qGradVector2D<5,8>},
@@ -746,7 +746,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    //const int numDofs  = fe.GetDof();
    //const int nqp = ir.GetNPoints();
    //dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
-   const size_t H1_size = H1FESpace.GetVSize();
+   const int H1_size = H1FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
 
    // Energy dof => quads ******************************************************
@@ -773,7 +773,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    dbg("d_dt_est");
-   const size_t dt_est_sz = nzones;
+   const int dt_est_sz = nzones;
    static double *d_dt_est = NULL;
    if (!d_dt_est){
       d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
