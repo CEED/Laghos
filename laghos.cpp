@@ -61,7 +61,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-MFEM_DEVICE int problem;
+int problem;
 
 void display_banner(ostream & os);
 
@@ -370,7 +370,11 @@ int main(int argc, char *argv[])
    }
    else
    {
-      FunctionCoefficient e_coeff(e0);
+      FunctionCoefficient e_coeff(problem==0?hydrodynamics::e0_p0:
+                                  problem==1?hydrodynamics::e0_p1:
+                                  problem==2?hydrodynamics::e0_p2:
+                                  problem==3?hydrodynamics::e0_p3:
+                                  hydrodynamics::zero);
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
@@ -382,7 +386,11 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   FunctionCoefficient mat_coeff(problem==0?hydrodynamics::gamma_p0:
+                                 problem==1?hydrodynamics::gamma_p1:
+                                 problem==2?hydrodynamics::gamma_p2:
+                                 problem==3?hydrodynamics::gamma_p3:
+                                 hydrodynamics::zero);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
@@ -657,7 +665,23 @@ namespace mfem
 namespace hydrodynamics
 {
 
+// *****************************************************************************
 MFEM_HOST_DEVICE double one(const Vector &x) { return 1.0; }
+MFEM_HOST_DEVICE double zero(const Vector &x) { return 0.0; }
+
+// *****************************************************************************
+double rho0(const Vector &x)
+{
+   switch (problem)
+   {
+      case 0: return 1.0;
+      case 1: return 1.0;
+      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.0 : 0.125;
+      case 4: return 1.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   }
+}
 MFEM_HOST_DEVICE double rho0_p0(const Vector &x) { return 1.0; }
 MFEM_HOST_DEVICE double rho0_p1(const Vector &x) { return 1.0; }
 MFEM_HOST_DEVICE double rho0_p2(const Vector &x) {
@@ -669,21 +693,29 @@ MFEM_HOST_DEVICE double rho0_p3(const Vector &x) {
    else { return 0.125; }
 }
 
-MFEM_HOST_DEVICE double gamma(const Vector &x)
+// *****************************************************************************
+double gamma(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 5./3.;
-      case 1: return 1.4;
-      case 2: return 1.4;
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-         else { return 1.5; }
-      default: return 0.0;
-    //default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   case 0: return 5./3.;
+   case 1: return 1.4;
+   case 2: return 1.4;
+   case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
+      else { return 1.5; }
+   default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
+MFEM_HOST_DEVICE double gamma_p0(const Vector &x) { return 5./3.; }
+MFEM_HOST_DEVICE double gamma_p1(const Vector &x) { return 1.4; }
+MFEM_HOST_DEVICE double gamma_p2(const Vector &x) { return 1.4; }
+MFEM_HOST_DEVICE double gamma_p3(const Vector &x) {
+   if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
+   else { return 1.5; }
+}
 
-MFEM_HOST_DEVICE void v0(const Vector &x, Vector &v)
+// *****************************************************************************
+void v0(const Vector &x, Vector &v)
 {
    switch (problem)
    {
@@ -700,12 +732,25 @@ MFEM_HOST_DEVICE void v0(const Vector &x, Vector &v)
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
-      default:exit(-1);break;
-    //default: MFEM_ABORT("Bad number given for problem id!");
+      default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
+MFEM_HOST_DEVICE void v0_p0(const Vector &x, Vector &v){
+   v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
+   v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+   if (x.Size() == 3)
+   {
+      v(0) *= cos(M_PI*x(2));
+      v(1) *= cos(M_PI*x(2));
+      v(2) = 0.0;
+   }
+}
+MFEM_HOST_DEVICE void v0_p1(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
+MFEM_HOST_DEVICE void v0_p2(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
+MFEM_HOST_DEVICE void v0_p3(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
 
-MFEM_HOST_DEVICE double e0(const Vector &x)
+// *****************************************************************************
+double e0(const Vector &x)
 {
    switch (problem)
    {
@@ -729,9 +774,31 @@ MFEM_HOST_DEVICE double e0(const Vector &x)
          else { return 0.1 / rho0_p2(x) / (gamma(x) - 1.0); }
       case 3: if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma(x) - 1.0); }
          else { return 1.0 / rho0_p3(x) / (gamma(x) - 1.0); }
-      default: return 0.0;
-    //default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
+}
+MFEM_HOST_DEVICE double e0_p0(const Vector &x){
+   const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+   double val;
+   if (x.Size() == 2)
+   {
+      val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+   }
+   else
+   {
+      val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                     (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+   }
+   return val/denom;
+}
+MFEM_HOST_DEVICE double e0_p1(const Vector &x){ return 0.0; }
+MFEM_HOST_DEVICE double e0_p2(const Vector &x){
+   if (x(0) < 0.5) { return 1.0 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
+   else { return 0.1 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
+}
+MFEM_HOST_DEVICE double e0_p3(const Vector &x){
+   if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
+   else { return 1.0 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
 }
 
 } // namespace hydrodynamics
