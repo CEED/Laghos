@@ -489,10 +489,10 @@ QUpdate::QUpdate(const int _dim,
    ir(_ir),
    H1FESpace(_H1FESpace),
    L2FESpace(_L2FESpace),
-   h1_maps(mfem::DofToQuad::Get(H1FESpace,ir)),
-   l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
-   h1_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&H1FESpace))),
-   l2_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&L2FESpace))),
+   h1_maps(mfem::kDofQuadMaps::Get(H1FESpace,ir)),
+   l2_maps(mfem::kDofQuadMaps::Get(L2FESpace,ir)),
+   h1_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&H1FESpace))),
+   l2_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&L2FESpace))),
    d_e_quads_data(NULL),
    d_grad_x_data(NULL),
    d_grad_v_data(NULL),
@@ -565,9 +565,9 @@ typedef void (*fVecToQuad2D)(const int E,
                              double* __restrict out);
 
 // ***************************************************************************
-static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
+static void Dof2QuadScalar(const kFiniteElementSpace *kfes,
                            const FiniteElementSpace &fes,
-                           const DofToQuad *maps,
+                           const kDofQuadMaps *maps,
                            const IntegrationRule& ir,
                            const double *d_in,
                            double **d_out) {
@@ -589,7 +589,7 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
-   kfes->L2E(v_in,v_local_in);
+   kfes->GlobalToLocal(v_in,v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
@@ -607,7 +607,7 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
       fflush(0);
    }
    assert(call[id]);
-   call[id](nzones, maps->B, d_local_in, *d_out);
+   call[id](nzones, maps->dofToQuad, d_local_in, *d_out);
 }
 
 // **************************************************************************
@@ -678,9 +678,9 @@ typedef void (*fGradVector2D)(const int E,
                               double* __restrict out);
               
 // **************************************************************************
-static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
+static void Dof2QuadGrad(const kFiniteElementSpace *kfes,
                          const FiniteElementSpace &fes,
-                         const DofToQuad *maps,
+                         const kDofQuadMaps *maps,
                          const IntegrationRule& ir,
                          const double *d_in,
                          double **d_out){
@@ -704,7 +704,7 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
-   kfes->L2E(v_in, v_local_in);
+   kfes->GlobalToLocal(v_in, v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
@@ -721,8 +721,8 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    }
    assert(call[id]);
    call[id](nzones,
-            maps->B,
-            maps->G,
+            maps->dofToQuad,
+            maps->dofToQuadD,
             d_local_in,
             *d_out);
 }
@@ -793,7 +793,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               h1order,
               cfl,
               infinity,
-              h1_maps->W,
+              h1_maps->quadWeights,
               d_grad_x_data,
               quad_data.rho0DetJ0w,
               d_e_quads_data,

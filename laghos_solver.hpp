@@ -38,10 +38,10 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     bool vec = false);
 
 // These are defined in laghos.cpp
-MFEM_HOST_DEVICE double rho0(const Vector &);
-MFEM_HOST_DEVICE void v0(const Vector &, Vector &);
-MFEM_HOST_DEVICE double e0(const Vector &);
-MFEM_HOST_DEVICE double gamma(const Vector &);
+double rho0(const Vector &);
+void v0(const Vector &, Vector &);
+double e0(const Vector &);
+double gamma(const Vector &);
 
 struct TimingData
 {
@@ -135,8 +135,7 @@ protected:
    void UpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(Coefficient &q,
-                           const size_t size,
+   LagrangianHydroOperator(const size_t size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &essential_tdofs,

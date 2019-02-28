@@ -37,12 +37,12 @@ private:
    const int dim, nzones;
    QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
-   const FiniteElementSpaceExtension &h1k, &l2k;
+   const kFiniteElementSpace &h1k, &l2k;
    const IntegrationRule &integ_rule, &ir1D;
    const int D1D, Q1D;
    const int L1D, H1D;
    const int h1sz, l2sz;
-   const DofToQuad *l2D2Q, *h1D2Q;
+   const kDofQuadMaps *l2D2Q, *h1D2Q;
    mutable mfem::Vector gVecL2, gVecH1;
 public:
    kForcePAOperator(QuadratureData*,
@@ -57,7 +57,6 @@ public:
 class kMassPAOperator : public AbcMassPAOperator
 {
 private:
-   Coefficient &Q;
    const int dim, nzones;
    QuadratureData *quad_data;
    ParFiniteElementSpace &pfes;
@@ -69,8 +68,7 @@ private:
    Operator *massOperator;
    mutable mfem::Vector distX;
 public:
-   kMassPAOperator(Coefficient &q,
-                   QuadratureData*,
+   kMassPAOperator(QuadratureData*,
                    ParFiniteElementSpace&,
                    const IntegrationRule&);
    virtual void Setup();
