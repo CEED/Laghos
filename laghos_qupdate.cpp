@@ -489,8 +489,8 @@ QUpdate::QUpdate(const int _dim,
    ir(_ir),
    H1FESpace(_H1FESpace),
    L2FESpace(_L2FESpace),
-   h1_maps(mfem::kDofQuadMaps::Get(H1FESpace,ir)),
-   l2_maps(mfem::kDofQuadMaps::Get(L2FESpace,ir)),
+   h1_maps(mfem::DofToQuad::Get(H1FESpace,ir)),
+   l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
    h1_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&H1FESpace))),
    l2_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&L2FESpace))),
    d_e_quads_data(NULL),
@@ -567,7 +567,7 @@ typedef void (*fVecToQuad2D)(const int E,
 // ***************************************************************************
 static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
                            const FiniteElementSpace &fes,
-                           const kDofQuadMaps *maps,
+                           const DofToQuad *maps,
                            const IntegrationRule& ir,
                            const double *d_in,
                            double **d_out) {
@@ -607,7 +607,7 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
       fflush(0);
    }
    assert(call[id]);
-   call[id](nzones, maps->dofToQuad, d_local_in, *d_out);
+   call[id](nzones, maps->B, d_local_in, *d_out);
 }
 
 // **************************************************************************
@@ -680,7 +680,7 @@ typedef void (*fGradVector2D)(const int E,
 // **************************************************************************
 static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
                          const FiniteElementSpace &fes,
-                         const kDofQuadMaps *maps,
+                         const DofToQuad *maps,
                          const IntegrationRule& ir,
                          const double *d_in,
                          double **d_out){
@@ -721,8 +721,8 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    }
    assert(call[id]);
    call[id](nzones,
-            maps->dofToQuad,
-            maps->dofToQuadD,
+            maps->B,
+            maps->G,
             d_local_in,
             *d_out);
 }
@@ -793,7 +793,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               h1order,
               cfl,
               infinity,
-              h1_maps->quadWeights,
+              h1_maps->W,
               d_grad_x_data,
               quad_data.rho0DetJ0w,
               d_e_quads_data,

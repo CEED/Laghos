@@ -42,7 +42,7 @@ private:
    const int D1D, Q1D;
    const int L1D, H1D;
    const int h1sz, l2sz;
-   const kDofQuadMaps *l2D2Q, *h1D2Q;
+   const DofToQuad *l2D2Q, *h1D2Q;
    mutable mfem::Vector gVecL2, gVecH1;
 public:
    kForcePAOperator(QuadratureData*,
