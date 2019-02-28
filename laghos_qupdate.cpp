@@ -491,8 +491,8 @@ QUpdate::QUpdate(const int _dim,
    L2FESpace(_L2FESpace),
    h1_maps(mfem::kDofQuadMaps::Get(H1FESpace,ir)),
    l2_maps(mfem::kDofQuadMaps::Get(L2FESpace,ir)),
-   h1_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&H1FESpace))),
-   l2_kfes(new kFiniteElementSpace(static_cast<FiniteElementSpace*>(&L2FESpace))),
+   h1_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&H1FESpace))),
+   l2_kfes(new FiniteElementSpaceExtension(*static_cast<FiniteElementSpace*>(&L2FESpace))),
    d_e_quads_data(NULL),
    d_grad_x_data(NULL),
    d_grad_v_data(NULL),
@@ -565,7 +565,7 @@ typedef void (*fVecToQuad2D)(const int E,
                              double* __restrict out);
 
 // ***************************************************************************
-static void Dof2QuadScalar(const kFiniteElementSpace *kfes,
+static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
                            const FiniteElementSpace &fes,
                            const kDofQuadMaps *maps,
                            const IntegrationRule& ir,
@@ -589,7 +589,7 @@ static void Dof2QuadScalar(const kFiniteElementSpace *kfes,
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
-   kfes->GlobalToLocal(v_in,v_local_in);
+   kfes->L2E(v_in,v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
@@ -678,7 +678,7 @@ typedef void (*fGradVector2D)(const int E,
                               double* __restrict out);
               
 // **************************************************************************
-static void Dof2QuadGrad(const kFiniteElementSpace *kfes,
+static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
                          const FiniteElementSpace &fes,
                          const kDofQuadMaps *maps,
                          const IntegrationRule& ir,
@@ -704,7 +704,7 @@ static void Dof2QuadGrad(const kFiniteElementSpace *kfes,
    dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
-   kfes->GlobalToLocal(v_in, v_local_in);
+   kfes->L2E(v_in, v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
