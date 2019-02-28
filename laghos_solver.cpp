@@ -77,7 +77,8 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
+LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
+                                                 const size_t size,
                                                  ParFiniteElementSpace &h1_fes,
                                                  ParFiniteElementSpace &l2_fes,
                                                  const Array<int> &essential_tdofs,
@@ -118,11 +119,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const size_t size,
                                                                  l2_fes, integ_rule))),
    VMassPA((!okina)?
            static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, H1FESpace)):
-           static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, H1compFESpace,
+           static_cast<AbcMassPAOperator*>(new kMassPAOperator(q, &quad_data, H1compFESpace,
                                                                integ_rule))),
    EMassPA((!okina)?
            static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, L2FESpace)):
-           static_cast<AbcMassPAOperator*>(new kMassPAOperator(&quad_data, L2FESpace,
+           static_cast<AbcMassPAOperator*>(new kMassPAOperator(q, &quad_data, L2FESpace,
                                                                integ_rule))),
    VMassPA_prec(H1FESpace),
    locEMassPA(&quad_data, l2_fes),

@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
 
    if (okina){ config::usePA(p_assembly); }
    dbg("LagrangianHydroOperator");
-   LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
+   LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
                                 qupdate, gamma(S), okina);

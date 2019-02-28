@@ -30,10 +30,12 @@ namespace hydrodynamics
 // *****************************************************************************
 // * Kernel MASS Operator
 // *****************************************************************************
-kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
+kMassPAOperator::kMassPAOperator(Coefficient &q,
+                                 QuadratureData *qd_,
                                  ParFiniteElementSpace &pfes_,
                                  const IntegrationRule &ir_) :
    AbcMassPAOperator(pfes_.GetTrueVSize()),
+   Q(q),
    dim(pfes_.GetMesh()->Dimension()),
    nzones(pfes_.GetMesh()->GetNE()),
    quad_data(qd_),
@@ -51,17 +53,8 @@ kMassPAOperator::kMassPAOperator(QuadratureData *qd_,
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-   // PAMassIntegrator Setup
-   mfem::PAMassIntegrator *paMassInteg = new mfem::PAMassIntegrator();
-   // No setup, it is done in PABilinearForm::Assemble
-   //paMassInteg->Setup(fes,&ir);
-   assert(ir);
-   paMassInteg->SetIntegrationRule(ir); // in NonlinearFormIntegrator
-   // Add mass integretor to PA bilinear form
-   paBilinearForm->AddDomainIntegrator(paMassInteg);
+   paBilinearForm->AddDomainIntegrator(new mfem::PAMassIntegrator(Q,&ir));
    paBilinearForm->Assemble();
-   // Setup has to be done before, which is done in ->Assemble above
-   paMassInteg->SetOperator(quad_data->rho0DetJ0w);
    paBilinearForm->FormSystemOperator(mfem::Array<int>(), massOperator);
 }
 

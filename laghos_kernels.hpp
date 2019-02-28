@@ -57,6 +57,7 @@ public:
 class kMassPAOperator : public AbcMassPAOperator
 {
 private:
+   Coefficient &Q;
    const int dim, nzones;
    QuadratureData *quad_data;
    ParFiniteElementSpace &pfes;
@@ -68,7 +69,8 @@ private:
    Operator *massOperator;
    mutable mfem::Vector distX;
 public:
-   kMassPAOperator(QuadratureData*,
+   kMassPAOperator(Coefficient &q,
+                   QuadratureData*,
                    ParFiniteElementSpace&,
                    const IntegrationRule&);
    virtual void Setup();

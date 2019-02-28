@@ -135,7 +135,8 @@ protected:
    void UpdateQuadratureData(const Vector &S) const;
 
 public:
-   LagrangianHydroOperator(const size_t size,
+   LagrangianHydroOperator(Coefficient &q,
+                           const size_t size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &essential_tdofs,
