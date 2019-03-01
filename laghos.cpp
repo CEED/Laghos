@@ -654,8 +654,8 @@ namespace hydrodynamics
 {
 
 // *****************************************************************************
-MFEM_HOST_DEVICE double one(const Vector &x) { return 1.0; }
-MFEM_HOST_DEVICE double zero(const Vector &x) { return 0.0; }
+double one(const Vector &x) { return 1.0; }
+double zero(const Vector &x) { return 0.0; }
 
 // *****************************************************************************
 double rho0(const Vector &x)
@@ -670,13 +670,13 @@ double rho0(const Vector &x)
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-MFEM_HOST_DEVICE double rho0_p0(const Vector &x) { return 1.0; }
-MFEM_HOST_DEVICE double rho0_p1(const Vector &x) { return 1.0; }
-MFEM_HOST_DEVICE double rho0_p2(const Vector &x) {
+double rho0_p0(const Vector &x) { return 1.0; }
+double rho0_p1(const Vector &x) { return 1.0; }
+double rho0_p2(const Vector &x) {
    if (x(0) < 0.5) { return 1.0; }
    else { return 0.1; }
 }
-MFEM_HOST_DEVICE double rho0_p3(const Vector &x) {
+double rho0_p3(const Vector &x) {
    if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
    else { return 0.125; }
 }
@@ -694,10 +694,10 @@ double gamma(const Vector &x)
    default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-MFEM_HOST_DEVICE double gamma_p0(const Vector &x) { return 5./3.; }
-MFEM_HOST_DEVICE double gamma_p1(const Vector &x) { return 1.4; }
-MFEM_HOST_DEVICE double gamma_p2(const Vector &x) { return 1.4; }
-MFEM_HOST_DEVICE double gamma_p3(const Vector &x) {
+double gamma_p0(const Vector &x) { return 5./3.; }
+double gamma_p1(const Vector &x) { return 1.4; }
+double gamma_p2(const Vector &x) { return 1.4; }
+double gamma_p3(const Vector &x) {
    if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
    else { return 1.5; }
 }
@@ -723,7 +723,7 @@ void v0(const Vector &x, Vector &v)
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
-MFEM_HOST_DEVICE void v0_p0(const Vector &x, Vector &v){
+void v0_p0(const Vector &x, Vector &v){
    v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
    v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
    if (x.Size() == 3)
@@ -733,9 +733,9 @@ MFEM_HOST_DEVICE void v0_p0(const Vector &x, Vector &v){
       v(2) = 0.0;
    }
 }
-MFEM_HOST_DEVICE void v0_p1(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
-MFEM_HOST_DEVICE void v0_p2(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
-MFEM_HOST_DEVICE void v0_p3(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
+void v0_p1(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
+void v0_p2(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
+void v0_p3(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
 
 // *****************************************************************************
 double e0(const Vector &x)
@@ -765,7 +765,7 @@ double e0(const Vector &x)
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-MFEM_HOST_DEVICE double e0_p0(const Vector &x){
+double e0_p0(const Vector &x){
    const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
    double val;
    if (x.Size() == 2)
@@ -779,12 +779,12 @@ MFEM_HOST_DEVICE double e0_p0(const Vector &x){
    }
    return val/denom;
 }
-MFEM_HOST_DEVICE double e0_p1(const Vector &x){ return 0.0; }
-MFEM_HOST_DEVICE double e0_p2(const Vector &x){
+double e0_p1(const Vector &x){ return 0.0; }
+double e0_p2(const Vector &x){
    if (x(0) < 0.5) { return 1.0 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
    else { return 0.1 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
 }
-MFEM_HOST_DEVICE double e0_p3(const Vector &x){
+double e0_p3(const Vector &x){
    if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
    else { return 1.0 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
 }

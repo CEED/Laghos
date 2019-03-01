@@ -54,7 +54,7 @@ kMassPAOperator::kMassPAOperator(Coefficient &q,
 // *****************************************************************************
 void kMassPAOperator::Setup()
 {
-   paBilinearForm->AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
+   paBilinearForm->AddDomainIntegrator(new mfem::PAMassIntegrator(Q,&ir));
    paBilinearForm->Assemble();
    paBilinearForm->FormSystemOperator(mfem::Array<int>(), massOperator);
 }
