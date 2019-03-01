@@ -16,6 +16,7 @@
 
 #include "laghos_qupdate.hpp"
 #include "laghos_solver.hpp"
+#include "linalg/device.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -26,7 +27,7 @@ namespace mfem {
 // *****************************************************************************
 namespace kernels {
 namespace vector {
-double Min(const size_t, const double*);
+double Min(const int, const double*);
 }
 }
 
@@ -36,20 +37,20 @@ namespace hydrodynamics {
 // * Dense matrix
 // *****************************************************************************
 __host__ __device__ static
-void multABt(const size_t ah,
-             const size_t aw,
-             const size_t bh,
+void multABt(const int ah,
+             const int aw,
+             const int bh,
              const double* __restrict__ A,
              const double* __restrict__ B,
              double* __restrict__ C){
-   const size_t ah_x_bh = ah*bh;
-   for(size_t i=0; i<ah_x_bh; i+=1)
+   const int ah_x_bh = ah*bh;
+   for(int i=0; i<ah_x_bh; i+=1)
       C[i] = 0.0;  
-   for(size_t k=0; k<aw; k+=1) {
+   for(int k=0; k<aw; k+=1) {
       double *c = C;
-      for(size_t j=0; j<bh; j+=1){
+      for(int j=0; j<bh; j+=1){
          const double bjk = B[j];
-         for(size_t i=0; i<ah; i+=1)
+         for(int i=0; i<ah; i+=1)
             c[i] += A[i] * bjk;            
          c += ah;
       }
@@ -60,17 +61,17 @@ void multABt(const size_t ah,
 
 // *****************************************************************************
 __host__ __device__ static
-void mult(const size_t ah,
-          const size_t aw,
-          const size_t bw,
+void mult(const int ah,
+          const int aw,
+          const int bw,
           const double* __restrict__ B,
           const double* __restrict__ C,
           double* __restrict__ A){
-   const size_t ah_x_aw = ah*aw;
-   for (size_t i = 0; i < ah_x_aw; i++) A[i] = 0.0;
-   for (size_t j = 0; j < aw; j++) {
-      for (size_t k = 0; k < bw; k++) {
-         for (size_t i = 0; i < ah; i++) {
+   const int ah_x_aw = ah*aw;
+   for (int i = 0; i < ah_x_aw; i++) A[i] = 0.0;
+   for (int j = 0; j < aw; j++) {
+      for (int k = 0; k < bw; k++) {
+         for (int i = 0; i < ah; i++) {
             A[i+j*ah] += B[i+k*ah] * C[k+j*bw];
          }
       }
@@ -79,25 +80,25 @@ void mult(const size_t ah,
 
 // *****************************************************************************
 __host__ __device__ static
-void multV(const size_t height,
-           const size_t width,
+void multV(const int height,
+           const int width,
            double *data,
            const double* __restrict__ x,
            double* __restrict__ y) {
    if (width == 0) {
-      for (size_t row = 0; row < height; row++) 
+      for (int row = 0; row < height; row++) 
          y[row] = 0.0;         
       return;
    }
    double *d_col = data;
    double x_col = x[0];
-   for (size_t row = 0; row < height; row++) {
+   for (int row = 0; row < height; row++) {
       y[row] = x_col*d_col[row];
    }
    d_col += height;
-   for (size_t col = 1; col < width; col++) {
+   for (int col = 1; col < width; col++) {
       x_col = x[col];
-      for (size_t row = 0; row < height; row++) {
+      for (int row = 0; row < height; row++) {
          y[row] += x_col*d_col[row];
       }
       d_col += height;
@@ -106,11 +107,11 @@ void multV(const size_t height,
    
 // *****************************************************************************
 __host__ __device__ static
-void add(const size_t height, const size_t width,
+void add(const int height, const int width,
          const double c, const double *A,
          double *D){
-   for (size_t j = 0; j < width; j++){
-      for (size_t i = 0; i < height; i++) {
+   for (int j = 0; j < width; j++){
+      for (int i = 0; i < height; i++) {
          D[i*width+j] += c * A[i*width+j];
       }
    }
@@ -120,12 +121,12 @@ void add(const size_t height, const size_t width,
 // * Eigen
 // *****************************************************************************
 __host__ __device__  static
-double norml2(const size_t size, const double *data) {
+double norml2(const int size, const double *data) {
    if (0 == size) return 0.0;
    if (1 == size) return std::abs(data[0]);
    double scale = 0.0;
    double sum = 0.0;
-   for (size_t i = 0; i < size; i++) {
+   for (int i = 0; i < size; i++) {
       if (data[i] != 0.0)
       {
          const double absdata = fabs(data[i]);
@@ -160,7 +161,7 @@ inline double det3D(const double *d){
    
 // *****************************************************************************
 __host__ __device__ static
-double det(const size_t dim, const double *J){
+double det(const int dim, const double *J){
    if (dim==2) return det2D(J);
    if (dim==3) return det3D(J);
    assert(false);
@@ -169,7 +170,7 @@ double det(const size_t dim, const double *J){
 
 // *****************************************************************************
 __host__ __device__ static
-void calcInverse2D(const size_t n, const double *a, double *i){
+void calcInverse2D(const int n, const double *a, double *i){
    const double d = det(n,a);
    const double t = 1.0 / d;
    i[0*n+0] =  a[1*n+1] * t ;
@@ -180,9 +181,9 @@ void calcInverse2D(const size_t n, const double *a, double *i){
    
 // *****************************************************************************
 __host__ __device__ static
-void symmetrize(const size_t n, double* __restrict__ d){
-   for (size_t i = 0; i<n; i++){
-      for (size_t j = 0; j<i; j++) {
+void symmetrize(const int n, double* __restrict__ d){
+   for (int i = 0; i<n; i++){
+      for (int j = 0; j<i; j++) {
          const double a = 0.5 * (d[i*n+j] + d[j*n+i]);
          d[j*n+i] = d[i*n+j] = a;
       }
@@ -224,7 +225,7 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
    
 // *****************************************************************************
 __host__ __device__ static
-void calcEigenvalues(const size_t n, const double *d,
+void calcEigenvalues(const int n, const double *d,
                      double *lambda,
                      double *vec) {
    assert(n == 2);   
@@ -354,15 +355,14 @@ void qkernel(const int nzones,
              const double *Jac0inv,
              double *dt_est,
              double *stressJinvT){
-   GET_CONST_PTR(weights);
-   GET_CONST_PTR(Jacobians);
-   GET_CONST_PTR(rho0DetJ0w);
-   GET_CONST_PTR(e_quads);
-   GET_CONST_PTR(grad_v_ext);
-   GET_CONST_PTR(Jac0inv);
-   GET_PTR(dt_est);
-   GET_PTR(stressJinvT);
-   
+   const DeviceVector d_weights(weights);
+   const DeviceVector d_Jacobians(Jacobians);
+   const DeviceVector d_rho0DetJ0w(rho0DetJ0w);
+   const DeviceVector d_e_quads(e_quads);
+   const DeviceVector d_grad_v_ext(grad_v_ext);
+   const DeviceVector d_Jac0inv(Jac0inv);
+   DeviceVector d_dt_est(dt_est);
+   DeviceVector d_stressJinvT(stressJinvT);   
    MFEM_FORALL(z, nzones,
    {
       double min_detJ = infinity;
@@ -451,7 +451,7 @@ void qkernel(const int nzones,
          for(int k=0;k<dim*dim;k+=1) stressJiT[k] *= weight * detJ;
          for (int vd = 0 ; vd < dim; vd++) {
             for (int gd = 0; gd < dim; gd++) {
-               const size_t offset = zdx + nqp*nzones*(gd+vd*dim);
+               const int offset = zdx + nqp*nzones*(gd+vd*dim);
                d_stressJinvT[offset] = stressJiT[vd+gd*dim];
             }
          }
@@ -498,7 +498,6 @@ QUpdate::QUpdate(const int _dim,
    d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
-   assert(dim==2);
    assert(p_assembly);
    assert(material_pcf);
 }
@@ -507,20 +506,20 @@ QUpdate::QUpdate(const int _dim,
 template<const int VDIM,
          const int D1D,
          const int Q1D> static
-void vecToQuad2D(const int E,
-                 const double* __restrict dofToQuad,
-                 const double* __restrict in,
-                 double* __restrict out) {
-   GET_CONST_PTR(dofToQuad);
-   GET_CONST_PTR(in);
-   GET_PTR(out);
-   MFEM_FORALL(e, E,
+void vecToQuad2D(const int NE,
+                 const double* __restrict _B,
+                 const double* __restrict _x,
+                 double* __restrict _y) {
+   const DeviceMatrix B(_B, Q1D,D1D);
+   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
+   DeviceTensor<4> y(_y, Q1D,Q1D,NE,2);
+   MFEM_FORALL(e, NE,
    {
       double out_xy[VDIM][Q1D][Q1D];
       for (int v = 0; v < VDIM; ++v) {
          for (int qy = 0; qy < Q1D; ++qy) {
             for (int qx = 0; qx < Q1D; ++qx) {
-               out_xy[v][qy][qx] = 0;
+               out_xy[v][qy][qx] = 0.0;
             }
          }
       }
@@ -528,20 +527,20 @@ void vecToQuad2D(const int E,
          double out_x[VDIM][Q1D];
          for (int v = 0; v < VDIM; ++v) {
             for (int qy = 0; qy < Q1D; ++qy) {
-               out_x[v][qy] = 0;
+               out_x[v][qy] = 0.0;
             }
          }
          for (int dx = 0; dx < D1D; ++dx) {
             for (int v = 0; v < VDIM; ++v) {
-               const double r_gf = d_in[jkliNM(v,dx,dy,e,D1D,E)];
+               const double r_gf = x(dx,dy,e,v);
                for (int qy = 0; qy < Q1D; ++qy) {
-                  out_x[v][qy] += r_gf * d_dofToQuad[ijN(qy, dx,Q1D)];
+                  out_x[v][qy] += r_gf * B(qy,dx);
                }
             }
          }
          for (int v = 0; v < VDIM; ++v) {
             for (int qy = 0; qy < Q1D; ++qy) {
-               const double d2q = d_dofToQuad[ijN(qy, dy,Q1D)];
+               const double d2q = B(qy,dy);
                for (int qx = 0; qx < Q1D; ++qx) {
                   out_xy[v][qy][qx] += d2q * out_x[v][qx];
                }
@@ -551,7 +550,7 @@ void vecToQuad2D(const int E,
       for (int qy = 0; qy < Q1D; ++qy) {
          for (int qx = 0; qx < Q1D; ++qx) {
             for (int v = 0; v < VDIM; ++v) {
-               d_out[jkliNM(v, qx, qy, e,Q1D,E)] = out_xy[v][qy][qx];
+               y(qx,qy,e,v) = out_xy[v][qy][qx];
             }
          }
       }
@@ -576,11 +575,11 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
    const int vdim = fes.GetVDim();
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const size_t numDofs  = fe.GetDof();
-   const size_t nzones = fes.GetNE();
-   const size_t nqp = ir.GetNPoints();
-   const size_t local_size = numDofs * nzones;
-   const size_t out_size =  nqp * nzones;
+   const int numDofs  = fe.GetDof();
+   const int nzones = fes.GetNE();
+   const int nqp = ir.GetNPoints();
+   const int local_size = numDofs * nzones;
+   const int out_size =  nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    static double *d_local_in = NULL;
@@ -597,7 +596,7 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
    assert(LOG2(vdim)<=4);
    assert(LOG2(dofs1D)<=4);
    assert(LOG2(quad1D)<=4);
-   const size_t id = (vdim<<8)|(dofs1D<<4)|(quad1D);
+   const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call = {
       {0x124,&vecToQuad2D<1,2,4>},
       {0x148,&vecToQuad2D<1,4,8>},
@@ -613,59 +612,64 @@ static void Dof2QuadScalar(const FiniteElementSpaceExtension *kfes,
 // **************************************************************************
 template <const int D1D,
           const int Q1D> static
-void qGradVector2D(const int E,
-                   const double* __restrict dofToQuad,
-                   const double* __restrict dofToQuadD,
-                   const double* __restrict in,
-                   double* __restrict out){
-   const int Q2D = Q1D*Q1D;
-   GET_CONST_PTR(dofToQuad);
-   GET_CONST_PTR(dofToQuadD);
-   GET_CONST_PTR(in);
-   GET_PTR(out);
-   MFEM_FORALL(e, E,
+void qGradVector2D(const int NE,
+                   const double* __restrict _B,
+                   const double* __restrict _G,
+                   const double* __restrict _x,
+                   double* __restrict _y){
+   const DeviceMatrix B(_B, Q1D,D1D);
+   const DeviceMatrix G(_G, Q1D,D1D);
+   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
+   DeviceTensor<5> y(_y, 2,2,Q1D,Q1D,NE);
+   MFEM_FORALL(e, NE,
    {
-      double s_gradv[4*Q2D];
-      for (int i = 0; i < (4*Q2D); ++i) {
-         s_gradv[i] = 0.0;
+      double s_gradv[2][2][Q1D][Q1D];
+      for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy) {
+            s_gradv[0][0][qx][qy] = 0.0;
+            s_gradv[0][1][qx][qy] = 0.0;
+            s_gradv[1][0][qx][qy] = 0.0;
+            s_gradv[1][1][qx][qy] = 0.0;
+         }
       }
       for (int dy = 0; dy < D1D; ++dy) {
-         double vDx[2*Q1D];
-         double vx[2*Q1D];
+         double vDx[2][Q1D];
+         double vx[2][Q1D];
          for (int qx = 0; qx < Q1D; ++qx) {
-            for (int vi = 0; vi < 2; ++vi) {
-               vDx[ijN(vi,qx,2)] = 0.0;
-               vx[ijN(vi,qx,2)] = 0.0;
+            for (int c = 0; c < 2; ++c) {
+               vDx[c][qx] = 0.0;
+               vx[c][qx] = 0.0;
             }
          }
          for (int dx = 0; dx < D1D; ++dx) {
             for (int qx = 0; qx < Q1D; ++qx) {
-               const double wDx = d_dofToQuadD[ijN(qx,dx,Q1D)];
-               const double wx  = d_dofToQuad[ijN(qx,dx,Q1D)];
+               const double wDx = G(qx,dx);
+               const double wx  = B(qx,dx);
                for (int c = 0; c < 2; ++c) {
-                  const double input = d_in[jkliNM(c,dx,dy,e,D1D,E)];
-                  vDx[ijN(c,qx,2)] += input * wDx;
-                  vx[ijN(c,qx,2)] += input * wx;
+                  const double input = x(dx,dy,e,c);
+                  vDx[c][qx] += input * wDx;
+                  vx[c][qx] += input * wx;
                }
             }
          }
          for (int qy = 0; qy < Q1D; ++qy) {
-            const double vy  = d_dofToQuad[ijN(qy,dy,Q1D)];
-            const double vDy = d_dofToQuadD[ijN(qy,dy,Q1D)];
+            const double vy  = B(qy,dy);
+            const double vDy = G(qy,dy);
             for (int qx = 0; qx < Q1D; ++qx) {
-               const int q = qx+Q1D*qy;
                for (int c = 0; c < 2; ++c) {
-                  s_gradv[ijkN(c,0,q,2)] += vy*vDx[ijN(c,qx,2)];
-                  s_gradv[ijkN(c,1,q,2)] += vDy*vx[ijN(c,qx,2)];
+                  s_gradv[c][0][qx][qy] += vy*vDx[c][qx];
+                  s_gradv[c][1][qx][qy] += vDy*vx[c][qx];
                }
             }
          }
       }         
-      for (int q = 0; q < Q2D; ++q) {
-         d_out[ijklNM(0,0,q,e,2,Q2D)] = s_gradv[ijkN(0,0,q,2)];
-         d_out[ijklNM(1,0,q,e,2,Q2D)] = s_gradv[ijkN(1,0,q,2)];
-         d_out[ijklNM(0,1,q,e,2,Q2D)] = s_gradv[ijkN(0,1,q,2)];
-         d_out[ijklNM(1,1,q,e,2,Q2D)] = s_gradv[ijkN(1,1,q,2)];
+      for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy) {
+            y(0,0,qx,qy,e) = s_gradv[0][0][qx][qy];
+            y(1,0,qx,qy,e) = s_gradv[1][0][qx][qy];
+            y(0,1,qx,qy,e) = s_gradv[0][1][qx][qy];
+            y(1,1,qx,qy,e) = s_gradv[1][1][qx][qy];
+         }
       }
    });
 }
@@ -690,18 +694,17 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    assert(vdim==2);
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const size_t numDofs  = fe.GetDof();
-   const size_t nzones = fes.GetNE();
-   const size_t nqp = ir.GetNPoints();
-   const size_t local_size = vdim * numDofs * nzones;
-   const size_t out_size = vdim * vdim * nqp * nzones;
+   const int numDofs  = fe.GetDof();
+   const int nzones = fes.GetNE();
+   const int nqp = ir.GetNPoints();
+   const int local_size = vdim * numDofs * nzones;
+   const int out_size = vdim * vdim * nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    static double *d_local_in = NULL;
    if (!d_local_in){
       d_local_in = (double*) mm::malloc<double>(local_size);
    }
-   dbg("GlobalToLocal");
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
    kfes->L2E(v_in, v_local_in);
@@ -710,7 +713,7 @@ static void Dof2QuadGrad(const FiniteElementSpaceExtension *kfes,
    }
    assert(LOG2(dofs1D)<=4);
    assert(LOG2(quad1D)<=4);
-   const size_t id = (dofs1D<<4)|(quad1D);
+   const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call = {
       {0x34,&qGradVector2D<3,4>},
       {0x58,&qGradVector2D<5,8>},
@@ -736,33 +739,26 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }
-   
+
    // **************************************************************************
    timer->sw_qdata.Start();
    Vector* S_p = (Vector*) &S;
 
    // **************************************************************************
-   //const mfem::FiniteElement& fe = *H1FESpace.GetFE(0);
-   //const int numDofs  = fe.GetDof();
-   //const int nqp = ir.GetNPoints();
-   //dbg("numDofs=%d, nqp=%d, nzones=%d",numDofs,nqp,nzones);
-   const size_t H1_size = H1FESpace.GetVSize();
+   const int H1_size = H1FESpace.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
 
    // Energy dof => quads ******************************************************
-   dbg("Energy dof => quads (L2FESpace)");
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
    Dof2QuadScalar(l2_kfes, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
    
    // Coords to Jacobians ******************************************************
-   dbg("Refresh Geom J, invJ & detJ");
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
    Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
       
    // Velocity *****************************************************************
-   dbg("Velocity H1_size=%d",H1_size);
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
    Dof2QuadGrad(h1_kfes, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
@@ -772,18 +768,16 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    const double infinity = std::numeric_limits<double>::infinity();
 
    // **************************************************************************
-   dbg("d_dt_est");
-   const size_t dt_est_sz = nzones;
+   const int dt_est_sz = nzones;
    static double *d_dt_est = NULL;
    if (!d_dt_est){
       d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;
-   //dbg("d_dt:"); d_dt.Print(); fflush(0); //assert(false);
    
    // **************************************************************************
-   dbg("qkernel");
+   assert(dim==2);
    qkernel<2>(nzones,
               nqp,
               nqp1D,
@@ -804,8 +798,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    
    // **************************************************************************
    quad_data.dt_est = mfem::kernels::vector::Min(dt_est_sz, d_dt_est);
-   dbg("dt_est=%.16e",quad_data.dt_est);
-   //fflush(0); assert(false);
    
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
