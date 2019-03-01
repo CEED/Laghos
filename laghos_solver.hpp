@@ -38,32 +38,10 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     bool vec = false);
 
 // These are defined in laghos.cpp
-double one(const Vector &);
-double zero(const Vector &);
-
 double rho0(const Vector &);
-double rho0_p0(const Vector &);
-double rho0_p1(const Vector &);
-double rho0_p2(const Vector &);
-double rho0_p3(const Vector &);
-
-double gamma(const Vector &);
-double gamma_p0(const Vector &);
-double gamma_p1(const Vector &);
-double gamma_p2(const Vector &);
-double gamma_p3(const Vector &);
-
 void v0(const Vector &, Vector &);
-void v0_p0(const Vector &, Vector &);
-void v0_p1(const Vector &, Vector &);
-void v0_p2(const Vector &, Vector &);
-void v0_p3(const Vector &, Vector &);
-
 double e0(const Vector &);
-double e0_p0(const Vector &);
-double e0_p1(const Vector &);
-double e0_p2(const Vector &);
-double e0_p3(const Vector &);
+double gamma(const Vector &);
 
 struct TimingData
 {

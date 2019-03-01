@@ -351,11 +351,7 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(problem==0?hydrodynamics::rho0_p0:
-                                 problem==1?hydrodynamics::rho0_p1:
-                                 problem==2?hydrodynamics::rho0_p2:
-                                 problem==3?hydrodynamics::rho0_p3:
-                                 hydrodynamics::one);
+   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -369,11 +365,7 @@ int main(int argc, char *argv[])
    }
    else
    {
-      FunctionCoefficient e_coeff(problem==0?hydrodynamics::e0_p0:
-                                  problem==1?hydrodynamics::e0_p1:
-                                  problem==2?hydrodynamics::e0_p2:
-                                  problem==3?hydrodynamics::e0_p3:
-                                  hydrodynamics::zero);
+      FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
@@ -385,11 +377,7 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(problem==0?hydrodynamics::gamma_p0:
-                                 problem==1?hydrodynamics::gamma_p1:
-                                 problem==2?hydrodynamics::gamma_p2:
-                                 problem==3?hydrodynamics::gamma_p3:
-                                 hydrodynamics::zero);
+   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
@@ -653,56 +641,33 @@ namespace mfem
 namespace hydrodynamics
 {
 
-// *****************************************************************************
-double one(const Vector &x) { return 1.0; }
-double zero(const Vector &x) { return 0.0; }
-
-// *****************************************************************************
 double rho0(const Vector &x)
 {
    switch (problem)
    {
       case 0: return 1.0;
       case 1: return 1.0;
-      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.0 : 0.125;
-      case 4: return 1.0;
+      case 2: if (x(0) < 0.5) { return 1.0; }
+         else { return 0.1; }
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
+         else { return 0.125; }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-double rho0_p0(const Vector &x) { return 1.0; }
-double rho0_p1(const Vector &x) { return 1.0; }
-double rho0_p2(const Vector &x) {
-   if (x(0) < 0.5) { return 1.0; }
-   else { return 0.1; }
-}
-double rho0_p3(const Vector &x) {
-   if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-   else { return 0.125; }
-}
 
-// *****************************************************************************
 double gamma(const Vector &x)
 {
    switch (problem)
    {
-   case 0: return 5./3.;
-   case 1: return 1.4;
-   case 2: return 1.4;
-   case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-      else { return 1.5; }
-   default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      case 0: return 5./3.;
+      case 1: return 1.4;
+      case 2: return 1.4;
+      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
+         else { return 1.5; }
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-double gamma_p0(const Vector &x) { return 5./3.; }
-double gamma_p1(const Vector &x) { return 1.4; }
-double gamma_p2(const Vector &x) { return 1.4; }
-double gamma_p3(const Vector &x) {
-   if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-   else { return 1.5; }
-}
 
-// *****************************************************************************
 void v0(const Vector &x, Vector &v)
 {
    switch (problem)
@@ -723,21 +688,7 @@ void v0(const Vector &x, Vector &v)
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
-void v0_p0(const Vector &x, Vector &v){
-   v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
-   v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
-   if (x.Size() == 3)
-   {
-      v(0) *= cos(M_PI*x(2));
-      v(1) *= cos(M_PI*x(2));
-      v(2) = 0.0;
-   }
-}
-void v0_p1(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
-void v0_p2(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
-void v0_p3(const Vector &x, Vector &v){ v(0) = v(1) = v(2) = 0.0; }
 
-// *****************************************************************************
 double e0(const Vector &x)
 {
    switch (problem)
@@ -758,35 +709,12 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: if (x(0) < 0.5) { return 1.0 / rho0_p2(x) / (gamma(x) - 1.0); }
-         else { return 0.1 / rho0_p2(x) / (gamma(x) - 1.0); }
-      case 3: if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma(x) - 1.0); }
-         else { return 1.0 / rho0_p3(x) / (gamma(x) - 1.0); }
+      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+         else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
+      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
+         else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
-}
-double e0_p0(const Vector &x){
-   const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-   double val;
-   if (x.Size() == 2)
-   {
-      val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
-   }
-   else
-   {
-      val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                     (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
-   }
-   return val/denom;
-}
-double e0_p1(const Vector &x){ return 0.0; }
-double e0_p2(const Vector &x){
-   if (x(0) < 0.5) { return 1.0 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
-   else { return 0.1 / rho0_p2(x) / (gamma_p2(x) - 1.0); }
-}
-double e0_p3(const Vector &x){
-   if (x(0) > 1.0) { return 0.1 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
-   else { return 1.0 / rho0_p3(x) / (gamma_p3(x) - 1.0); }
 }
 
 } // namespace hydrodynamics
