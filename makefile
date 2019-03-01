@@ -16,7 +16,7 @@
 
 # SETUP ************************************************************************
 CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/okina-femker
+MFEM_DIR ?= $(HOME)/home/mfem/okina
 MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
 NV_ARCH ?= -g -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
 # -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
