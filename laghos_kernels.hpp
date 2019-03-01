@@ -37,7 +37,7 @@ private:
    const int dim, nzones;
    QuadratureData *quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
-   const FiniteElementSpaceExtension &h1k, &l2k;
+   const E2LOperator &h1k, &l2k;
    const IntegrationRule &integ_rule, &ir1D;
    const int D1D, Q1D;
    const int L1D, H1D;

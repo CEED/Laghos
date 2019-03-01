@@ -44,8 +44,8 @@ private:
    mfem::ParFiniteElementSpace &L2FESpace;
    mfem::DofToQuad *h1_maps;
    mfem::DofToQuad *l2_maps;
-   const mfem::FiniteElementSpaceExtension *h1_kfes;
-   const mfem::FiniteElementSpaceExtension *l2_kfes;
+   const mfem::E2LOperator *h1_e2l;
+   const mfem::E2LOperator *l2_e2l;
    double *d_e_quads_data;
    double *d_grad_x_data;
    double *d_grad_v_data;
