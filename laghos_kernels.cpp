@@ -119,8 +119,8 @@ kForcePAOperator::kForcePAOperator(QuadratureData *qd,
    quad_data(qd),
    h1fes(h1f),
    l2fes(l2f),
-   h1k(*(new E2LOperator(*static_cast<FiniteElementSpace*>(&h1f)))),
-   l2k(*(new E2LOperator(*static_cast<FiniteElementSpace*>(&l2f)))),
+   h1restrict(*(new ElemRestriction(*static_cast<FiniteElementSpace*>(&h1f)))),
+   l2restrict(*(new ElemRestriction(*static_cast<FiniteElementSpace*>(&l2f)))),
    integ_rule(ir),
    ir1D(IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder())),
    D1D(h1fes.GetFE(0)->GetOrder()+1),
@@ -384,7 +384,7 @@ static void kForceMult(const int DIM,
 // *****************************************************************************
 void kForcePAOperator::Mult(const mfem::Vector &x,
                             mfem::Vector &y) const {
-   l2k.Mult(x, gVecL2);
+   l2restrict.Mult(x, gVecL2);
    kForceMult(dim,
               D1D,
               Q1D,
@@ -397,7 +397,7 @@ void kForcePAOperator::Mult(const mfem::Vector &x,
               quad_data->stressJinvT.Data(),
               gVecL2,
               gVecH1);
-   h1k.MultTranspose(gVecH1, y);
+   h1restrict.MultTranspose(gVecH1, y);
 }
 
 // *****************************************************************************
@@ -662,7 +662,7 @@ static void rForceMultTranspose(const int DIM,
 // *************************************************************************
 void kForcePAOperator::MultTranspose(const mfem::Vector &x,
                                      mfem::Vector &y) const {
-   h1k.Mult(x, gVecH1);
+   h1restrict.Mult(x, gVecH1);
    rForceMultTranspose(dim,
                        D1D,
                        Q1D,
@@ -675,7 +675,7 @@ void kForcePAOperator::MultTranspose(const mfem::Vector &x,
                        quad_data->stressJinvT.Data(),
                        gVecH1,
                        gVecL2);
-   l2k.MultTranspose(gVecL2, y);
+   l2restrict.MultTranspose(gVecL2, y);
 }
 
 } // namespace hydrodynamics

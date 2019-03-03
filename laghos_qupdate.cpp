@@ -491,8 +491,8 @@ QUpdate::QUpdate(const int _dim,
    L2FESpace(_L2FESpace),
    h1_maps(mfem::DofToQuad::Get(H1FESpace,ir)),
    l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
-   h1_e2l(new E2LOperator(*static_cast<FiniteElementSpace*>(&H1FESpace))),
-   l2_e2l(new E2LOperator(*static_cast<FiniteElementSpace*>(&L2FESpace))),
+   h1_ElemRestrict(new ElemRestriction(*static_cast<FiniteElementSpace*>(&H1FESpace))),
+   l2_ElemRestrict(new ElemRestriction(*static_cast<FiniteElementSpace*>(&L2FESpace))),
    d_e_quads_data(NULL),
    d_grad_x_data(NULL),
    d_grad_v_data(NULL),
@@ -564,7 +564,7 @@ typedef void (*fVecToQuad2D)(const int E,
                              double* __restrict out);
 
 // ***************************************************************************
-static void Dof2QuadScalar(const E2LOperator *e2l,
+static void Dof2QuadScalar(const ElemRestriction *erestrict,
                            const FiniteElementSpace &fes,
                            const DofToQuad *maps,
                            const IntegrationRule& ir,
@@ -588,7 +588,7 @@ static void Dof2QuadScalar(const E2LOperator *e2l,
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
-   e2l->Mult(v_in,v_local_in);
+   erestrict->Mult(v_in,v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
@@ -682,7 +682,7 @@ typedef void (*fGradVector2D)(const int E,
                               double* __restrict out);
               
 // **************************************************************************
-static void Dof2QuadGrad(const E2LOperator *e2l,
+static void Dof2QuadGrad(const ElemRestriction *erestrict,
                          const FiniteElementSpace &fes,
                          const DofToQuad *maps,
                          const IntegrationRule& ir,
@@ -707,7 +707,7 @@ static void Dof2QuadGrad(const E2LOperator *e2l,
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
-   e2l->Mult(v_in, v_local_in);
+   erestrict->Mult(v_in, v_local_in);
    if (!(*d_out)){
       *d_out = (double*) mm::malloc<double>(out_size);
    }
@@ -751,17 +751,17 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    // Energy dof => quads ******************************************************
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   Dof2QuadScalar(l2_e2l, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
+   Dof2QuadScalar(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
    
    // Coords to Jacobians ******************************************************
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
-   Dof2QuadGrad(h1_e2l, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
       
    // Velocity *****************************************************************
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
-   Dof2QuadGrad(h1_e2l, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
 
    // **************************************************************************
    const double h1order = (double) H1FESpace.GetOrder(0);
