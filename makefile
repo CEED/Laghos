@@ -106,7 +106,7 @@ CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp \
-               laghos_okina.cpp laghos_qupdate.cpp
+               laghos_qupdate.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp

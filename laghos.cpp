@@ -107,6 +107,8 @@ int main(int argc, char *argv[])
    bool qupdate = false;
    bool cuda = false;
    bool occa = false;
+   bool raja = false;
+   bool check = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -165,6 +167,8 @@ int main(int argc, char *argv[])
                   "Enable or disable QUpdate function.");
    args.AddOption(&cuda, "-cu", "--cuda", "-no-cu", "--no-cuda", "Enable CUDA.");
    args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
+   args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
+   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk", "Enable RAJA.");
 
    args.Parse();
    if (!args.Good())
@@ -499,8 +503,11 @@ int main(int argc, char *argv[])
          printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
          config::useOcca();
       }
+      if (raja) { 
+         printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
+         config::useRaja();
+      }
       config::enableGpu(0);
-      //printf("\033[32;1;7m[Laghos] Switching to Device!\033[m\n");
       config::SwitchToGpu();
    }
 
@@ -561,36 +568,44 @@ int main(int argc, char *argv[])
                        pmesh->GetComm());
          if (mpi.Root())
          {
+            const double sqrt_tot_norm = sqrt(tot_norm);
             cout << fixed;
             cout << "step " << setw(5) << ti
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt(tot_norm) << endl;
-            // 2D Taylor-Green & Sedov problems
-            if (getenv("CHK"))
+                 << sqrt_tot_norm << endl;
+            // 2D Taylor-Green & Sedov problems checks
+            if (check)
             {
                // Default options only checks
                assert(rs_levels==0 and rp_levels==0);
                assert(order_v==2);
                assert(order_e==1);
                assert(ode_solver_type==4);
-               assert(t_final==0.5);
-               assert(cfl==0.1);
+               assert(t_final==0.6);
+               assert(cfl==0.5);
                static int k = 0;
                const double eps = 1.e-14;
-               const double p0_05 = 6.64784928695183e+00;
-               const double p0_85 = 7.05378037610656e+00;
-               if (problem==0 and ti==05) {k++; assert(fabs(sqrt(tot_norm)-p0_05)<eps);}
-               if (problem==0 and ti==85) {k++; assert(fabs(sqrt(tot_norm)-p0_85)<eps);}
-               const double p1_05 = 3.95799492039829e+00;
-               const double p1_64 = 2.89366778441929e+00;
-               if (problem==1 and ti==05) {k++; assert(fabs(sqrt(tot_norm)-p1_05)<eps);}
-               if (problem==1 and ti==64) {k++; assert(fabs(sqrt(tot_norm)-p1_64)<eps);}
+               const double p0_05 = 6.54653862453438e+00;
+               const double p0_27 = 7.58857635779292e+00;
+               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<eps);}
+               if (problem==0 and ti==27) {k++; assert(fabs(sqrt_tot_norm-p0_27)<eps);}
+               const double p1_05 = 3.50825494522579e+00;
+               const double p1_15 = 2.75644459682321e+00;
+               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<eps);}
+               if (problem==1 and ti==15) {k++; assert(fabs(sqrt_tot_norm-p1_15)<eps);}
                if (last_step)
                {
-                  if (k==2) { printf("\033[32;7m[Laghos] OK\033[m"); }
-                  else { return printf("\033[31;7m[Laghos] ERROR\033[m"); }
+                  if (k==2)
+                  {
+                     printf("\033[32;7m[Laghos] Check OK\033[m");
+                  }
+                  else
+                  {
+                     printf("\033[31;7m[Laghos] Check ERROR\033[m");
+                     return -1;
+                  }
                }
             }
          }

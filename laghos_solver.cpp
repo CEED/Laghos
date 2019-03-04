@@ -15,7 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-#include "laghos_okina.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -120,18 +119,20 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    evaluator(H1FESpace, &tensors1D),
    Force(&l2_fes, &h1_fes),
    ForcePA((!okina)?
-           static_cast<AbcForcePAOperator*>(new ForcePAOperator(&quad_data, h1_fes,
-                                                                 l2_fes, &tensors1D)):
-           static_cast<AbcForcePAOperator*>(new kForcePAOperator(&quad_data, h1_fes,
-                                                                 l2_fes, integ_rule))),
+           static_cast<AbcForcePAOperator*>(
+              new ForcePAOperator(&quad_data, h1_fes,l2_fes, &tensors1D)):
+           static_cast<AbcForcePAOperator*>(
+              new OkinaForcePAOperator(&quad_data, h1_fes,l2_fes, integ_rule))),
    VMassPA((!okina)?
-           static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, H1FESpace, &tensors1D)):
-           static_cast<AbcMassPAOperator*>(new kMassPAOperator(q, &quad_data, H1compFESpace,
-                                                               integ_rule, &tensors1D))),
+           static_cast<AbcMassPAOperator*>(
+              new  MassPAOperator(&quad_data, H1FESpace, &tensors1D)):
+           static_cast<AbcMassPAOperator*>(
+              new OkinaMassPAOperator(q, &quad_data, H1compFESpace, integ_rule, &tensors1D))),
    EMassPA((!okina)?
-           static_cast<AbcMassPAOperator*>(new  MassPAOperator(&quad_data, L2FESpace, &tensors1D)):
-           static_cast<AbcMassPAOperator*>(new kMassPAOperator(q, &quad_data, L2FESpace,
-                                                               integ_rule, &tensors1D))),
+           static_cast<AbcMassPAOperator*>(
+              new  MassPAOperator(&quad_data, L2FESpace, &tensors1D)):
+           static_cast<AbcMassPAOperator*>(
+              new OkinaMassPAOperator(q, &quad_data, L2FESpace, integ_rule, &tensors1D))),
    VMassPA_prec(okina?H1compFESpace:H1FESpace),
    locEMassPA(&quad_data, l2_fes, &tensors1D),
    CG_VMass(H1FESpace.GetParMesh()->GetComm()),
@@ -325,7 +326,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          ParGridFunction rhs_c_gf(&H1compFESpace);
          ParGridFunction dvc_gf(&H1compFESpace);
          const int size = H1compFESpace.GetVSize();
-         kMassPAOperator *kVMassPA = static_cast<kMassPAOperator*>(VMassPA);
+         OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
          for (int c = 0; c < dim; c++)
          {
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
@@ -394,6 +395,10 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
+      // Refresh coords to pmesh for e_source Assemble
+      //Vector* sptr = (Vector*) &S;
+      //x_gf.MakeRef(&H1FESpace, *sptr, 0);
+      //H1FESpace.GetParMesh()->NewNodes(x_gf, false);      
       const bool using_gpu = config::usingGpu();
       if (using_gpu) { config::SwitchToCpu(); }
       e_source = new LinearForm(&L2FESpace);

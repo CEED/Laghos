@@ -18,6 +18,7 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
+#include "general/okina.hpp"
 
 namespace mfem
 {
@@ -163,6 +164,29 @@ public:
    ~ForcePAOperator() { }
 };
 
+// Okina PA force operator
+class OkinaForcePAOperator : public AbcForcePAOperator
+{
+private:
+   const int dim, nzones;
+   QuadratureData *quad_data;
+   const ParFiniteElementSpace &h1fes, &l2fes;
+   const ElemRestriction &h1restrict, &l2restrict;
+   const IntegrationRule &integ_rule, &ir1D;
+   const int D1D, Q1D;
+   const int L1D, H1D;
+   const int h1sz, l2sz;
+   const DofToQuad *l2D2Q, *h1D2Q;
+   mutable Vector gVecL2, gVecH1;
+public:
+   OkinaForcePAOperator(QuadratureData*,
+                        ParFiniteElementSpace&,
+                        ParFiniteElementSpace&,
+                        const IntegrationRule&);
+   virtual void Mult(const Vector&, Vector&) const;
+   virtual void MultTranspose(const Vector&, Vector&) const;
+};
+
 // Abstract base class for the Mass PA Operators
 class AbcMassPAOperator : public Operator{
 public:
@@ -202,6 +226,37 @@ public:
    void ComputeDiagonal2D(Vector &diag) const;
    void ComputeDiagonal3D(Vector &diag) const;
 
+   virtual const Operator *GetProlongation() const
+   { return FESpace.GetProlongationMatrix(); }
+   virtual const Operator *GetRestriction() const
+   { return FESpace.GetRestrictionMatrix(); }
+};
+
+// Okina PA mass operator
+class OkinaMassPAOperator : public AbcMassPAOperator
+{
+private:
+   const MPI_Comm comm;
+   const int dim, nzones;
+   QuadratureData *quad_data;
+   FiniteElementSpace &FESpace;
+   ParBilinearForm pabf;
+   int ess_tdofs_count;
+   mfem::Array<int> ess_tdofs;
+   Operator *massOperator;
+   mutable mfem::Vector distX;
+   Tensors1D *tensors1D;
+public:
+   OkinaMassPAOperator(Coefficient&,
+                       QuadratureData*,
+                       ParFiniteElementSpace&,
+                       const IntegrationRule&,
+                       Tensors1D *t1D);
+   void SetEssentialTrueDofs(mfem::Array<int>&);
+   void EliminateRHS(mfem::Vector&);
+   virtual void Mult(const mfem::Vector&, mfem::Vector&) const;
+   virtual void ComputeDiagonal2D(Vector &diag) const;
+   virtual void ComputeDiagonal3D(Vector&) const;
    virtual const Operator *GetProlongation() const
    { return FESpace.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
