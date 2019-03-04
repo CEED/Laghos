@@ -498,7 +498,7 @@ QUpdate::QUpdate(const int _dim,
    d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
-   assert(p_assembly);
+   //assert(p_assembly);
    assert(material_pcf);
 }
    
@@ -602,7 +602,7 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
       {0x148,&vecToQuad2D<1,4,8>},
    };
    if(!call[id]){
-      printf("\n[Dof2QuadScalar] id \033[33m0x%lX\033[m ",id);
+      printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
    assert(call[id]);
@@ -719,7 +719,7 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
       {0x58,&qGradVector2D<5,8>},
    };
    if(!call[id]){
-      printf("\n[Dof2QuadGrad] id \033[33m0x%lX\033[m ",id);
+      printf("\n[Dof2QuadGrad] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
    assert(call[id]);
@@ -735,7 +735,8 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
 // *****************************************************************************
 void QUpdate::UpdateQuadratureData(const Vector &S,
                                    bool &quad_data_is_current,
-                                   QuadratureData &quad_data)
+                                   QuadratureData &quad_data,
+                                   const Tensors1D *tensors1D)
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }

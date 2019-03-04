@@ -33,27 +33,31 @@
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
-// Sample runs:
-//    mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/square01_tri.mesh  -rs 1 -tf 0.75
-//    mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh    -rs 1 -tf 2.0
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8
-//    mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 0 -tf 0.8 -ok 7 -ot 6
-//    mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh    -rs 2 -tf 0.6
-//    mpirun -np 8 laghos -p 2 -m data/segment01.mesh     -rs 5 -tf 0.2
-//    mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0
-//    mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh        -rs 1 -tf 3.0
-//
 // Test problems:
 //    p = 0  --> Taylor-Green vortex (smooth problem).
 //    p = 1  --> Sedov blast.
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
-
+//    p = 4  --> Gresho vortex (smooth problem).
+//
+// Sample runs: see README.md, section 'Verification of Results'.
+//
+// Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
+// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
+// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
+// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
+// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
+// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
+// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
+// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
+// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
+// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
+// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "laghos_solver.hpp"
-#include <memory>
-#include <iostream>
+#include "laghos_timeinteg.hpp"
 #include <fstream>
 
 using namespace std;
@@ -63,10 +67,14 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
+double rho0(const Vector &);
+void v0(const Vector &, Vector &);
+double e0(const Vector &);
+double gamma(const Vector &);
 void display_banner(ostream & os);
 
 int main(int argc, char *argv[])
-{      
+{
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -75,26 +83,28 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
-   const char *mesh_file = "data/square01_quad.mesh";
-   int rs_levels = 0;
+   problem = 1;
+   const char *mesh_file = "data/cube01_hex.mesh";
+   int rs_levels = 2;
    int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
+   bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
    int partition_type = 111;
-   bool okina = true;
-   bool qupdate = true;
+   bool okina = false;
+   bool qupdate = false;
    bool cuda = false;
    bool occa = false;
 
@@ -112,7 +122,8 @@ int main(int argc, char *argv[])
                   "Order (degree) of the thermodynamic finite element space.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
-                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6.");
+                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
+                  "            7 - RK2Avg.");
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
@@ -125,6 +136,9 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
+   args.AddOption(&impose_visc, "-iv", "--impose-viscosity", "-niv",
+                  "--no-impose-viscosity",
+                  "Use active viscosity terms even for smooth problems.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -163,7 +177,6 @@ int main(int argc, char *argv[])
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
-
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
@@ -179,18 +192,17 @@ int main(int argc, char *argv[])
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit;
-   int *nxyz = new int[3];
+   int *nxyz = new int[dim];
    switch (partition_type)
    {
       case 11:
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
          for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         if (dim == 2) { nxyz[2] = 0; }
          break;
       case 21: // 2D
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
-         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = 0;
+         nxyz[0] = 2 * unit; nxyz[1] = unit;
          break;
       case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
@@ -215,6 +227,30 @@ int main(int argc, char *argv[])
       case 432: // 3D.
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
+         break;
+      case 511: // 3D.
+         unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 521: // 3D.
+         unit = floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 522: // 3D.
+         unit = floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
+         break;
+      case 911: // 3D.
+         unit = floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = unit; nxyz[2] = unit;
+         break;
+      case 921: // 3D.
+         unit = floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
+         break;
+      case 922: // 3D.
+         unit = floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2);
+         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
          break;
       default:
          if (myid == 0)
@@ -260,6 +296,7 @@ int main(int argc, char *argv[])
    if (myid == 0)
    { cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl; }
 
+
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -267,7 +304,7 @@ int main(int argc, char *argv[])
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
-   
+
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
@@ -292,6 +329,7 @@ int main(int argc, char *argv[])
       case 3: ode_solver = new RK3SSPSolver; break;
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
+      case 7: ode_solver = new RK2AvgSolver; break;
       default:
          if (myid == 0)
          {
@@ -320,6 +358,7 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
+
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -336,8 +375,7 @@ int main(int argc, char *argv[])
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
 
-   // Initialize x_gf using the starting mesh coordinates. This also links the
-   // mesh positions to the values in x_gf.
+   // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
 
    // Initialize the velocity.
@@ -351,7 +389,7 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(hydrodynamics::rho0);
+   FunctionCoefficient rho_coeff(rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -369,7 +407,6 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   //dbg("S:"); S.Print(); fflush(0); //assert(false);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
@@ -377,12 +414,12 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(hydrodynamics::gamma);
+   FunctionCoefficient mat_coeff(gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc = false;
+   int source = 0; bool visc = true;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
@@ -390,22 +427,27 @@ int main(int argc, char *argv[])
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
+      case 4: visc = false; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
+   if (impose_visc) { visc = true; }
 
-   if (okina){ config::usePA(p_assembly); }
+   if (okina) { config::usePA(p_assembly); }
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
-                                qupdate, gamma(S), okina);
-   //dbg("S:"); S.Print(); fflush(0); //assert(false);
-   
+                                qupdate, gamma(S), okina,
+                                H1FEC.GetBasisType());
+
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
    ParGridFunction rho_gf;
    if (visualization || visit) { oper.ComputeDensity(rho_gf); }
+
+   const double energy_init = oper.InternalEnergy(e_gf) +
+                              oper.KineticEnergy(v_gf);
 
    if (visualization)
    {
@@ -421,8 +463,12 @@ int main(int argc, char *argv[])
       const int Ww = 350, Wh = 350; // window size
       int offx = Ww+10; // window offsets
 
-      VisualizeField(vis_rho, vishost, visport, rho_gf,
-                     "Density", Wx, Wy, Ww, Wh);
+      if (problem != 0 && problem != 4)
+      {
+         VisualizeField(vis_rho, vishost, visport, rho_gf,
+                        "Density", Wx, Wy, Ww, Wh);
+      }
+
       Wx += offx;
       VisualizeField(vis_v, vishost, visport, v_gf,
                      "Velocity", Wx, Wy, Ww, Wh);
@@ -464,11 +510,9 @@ int main(int argc, char *argv[])
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
-   //dbg("S:"); S.Print(); fflush(0); assert(false);
    bool last_step = false;
    int steps = 0;
-   BlockVector S_old(true_offset);
-   S_old = S;
+   BlockVector S_old(S);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -477,6 +521,7 @@ int main(int argc, char *argv[])
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
+
       S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
@@ -484,7 +529,6 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       ode_solver->Step(S, t, dt);
-      //dbg("\033[7mS:"); S.Print(); fflush(0); //assert(false);
       steps++;
 
       // Adaptive time step control.
@@ -500,9 +544,15 @@ int main(int argc, char *argv[])
          S = S_old;
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
+         if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      // Make sure that the mesh corresponds to the new solution state. This is
+      // needed, because some time integrators use different S-type vectors
+      // and the oper object might have redirected the mesh positions to those.
+      pmesh->NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
@@ -511,13 +561,12 @@ int main(int argc, char *argv[])
                        pmesh->GetComm());
          if (mpi.Root())
          {
-            const double sqrt_tot_norm = sqrt(tot_norm);
             cout << fixed;
             cout << "step " << setw(5) << ti
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt_tot_norm << endl;
+                 << sqrt(tot_norm) << endl;
             // 2D Taylor-Green & Sedov problems
             if (getenv("CHK"))
             {
@@ -532,13 +581,12 @@ int main(int argc, char *argv[])
                const double eps = 1.e-14;
                const double p0_05 = 6.64784928695183e+00;
                const double p0_85 = 7.05378037610656e+00;
-               //printf("\n\033[32;1msqrt_tot_norm= %.14e\n\033[m",sqrt_tot_norm);
-               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<eps);}
-               if (problem==0 and ti==85) {k++; assert(fabs(sqrt_tot_norm-p0_85)<eps);}
+               if (problem==0 and ti==05) {k++; assert(fabs(sqrt(tot_norm)-p0_05)<eps);}
+               if (problem==0 and ti==85) {k++; assert(fabs(sqrt(tot_norm)-p0_85)<eps);}
                const double p1_05 = 3.95799492039829e+00;
                const double p1_64 = 2.89366778441929e+00;
-               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<eps);}
-               if (problem==1 and ti==64) {k++; assert(fabs(sqrt_tot_norm-p1_64)<eps);}
+               if (problem==1 and ti==05) {k++; assert(fabs(sqrt(tot_norm)-p1_05)<eps);}
+               if (problem==1 and ti==64) {k++; assert(fabs(sqrt(tot_norm)-p1_64)<eps);}
                if (last_step)
                {
                   if (k==2) { printf("\033[32;7m[Laghos] OK\033[m"); }
@@ -558,8 +606,12 @@ int main(int argc, char *argv[])
             int Ww = 350, Wh = 350; // window size
             int offx = Ww+10; // window offsets
 
-            VisualizeField(vis_rho, vishost, visport, rho_gf,
-                           "Density", Wx, Wy, Ww, Wh);
+            if (problem != 0 && problem != 4)
+            {
+               VisualizeField(vis_rho, vishost, visport, rho_gf,
+                              "Density", Wx, Wy, Ww, Wh);
+            }
+
             Wx += offx;
             VisualizeField(vis_v, vishost, visport,
                            v_gf, "Velocity", Wx, Wy, Ww, Wh);
@@ -616,9 +668,34 @@ int main(int argc, char *argv[])
       case 2: steps *= 2; break;
       case 3: steps *= 3; break;
       case 4: steps *= 4; break;
-      case 6: steps *= 6;
+      case 6: steps *= 6; break;
+      case 7: steps *= 2;
    }
    oper.PrintTimingData(mpi.Root(), steps);
+
+   const double energy_final = oper.InternalEnergy(e_gf) +
+                               oper.KineticEnergy(v_gf);
+   if (mpi.Root())
+   {
+      cout << endl;
+      cout << "Energy  diff: " << scientific << setprecision(2)
+           << fabs(energy_init - energy_final) << endl;
+   }
+
+   // Print the error.
+   // For problems 0 and 4 the exact velocity is constant in time.
+   if (problem == 0 || problem == 4)
+   {
+      const double error_max = v_gf.ComputeMaxError(v_coeff),
+                   error_l1  = v_gf.ComputeL1Error(v_coeff),
+                   error_l2  = v_gf.ComputeL2Error(v_coeff);
+      if (mpi.Root())
+      {
+         cout << "L_inf  error: " << error_max << endl
+              << "L_1    error: " << error_l1 << endl
+              << "L_2    error: " << error_l2 << endl;
+      }
+   }
 
    if (visualization)
    {
@@ -631,15 +708,8 @@ int main(int argc, char *argv[])
    delete pmesh;
    delete mat_gf_coeff;
 
-   //dbg("Dump:"); mm::Get().Dump();
    return 0;
 }
-
-namespace mfem
-{
-
-namespace hydrodynamics
-{
 
 double rho0(const Vector &x)
 {
@@ -647,10 +717,9 @@ double rho0(const Vector &x)
    {
       case 0: return 1.0;
       case 1: return 1.0;
-      case 2: if (x(0) < 0.5) { return 1.0; }
-         else { return 0.1; }
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-         else { return 0.125; }
+      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.0 : 0.125;
+      case 4: return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -662,10 +731,15 @@ double gamma(const Vector &x)
       case 0: return 5./3.;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-         else { return 1.5; }
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 4: return 5.0 / 3.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
+}
+
+double rad(double x, double y)
+{
+   return sqrt(x*x + y*y);
 }
 
 void v0(const Vector &x, Vector &v)
@@ -685,6 +759,22 @@ void v0(const Vector &x, Vector &v)
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
+      case 4:
+      {
+         const double r = rad(x(0), x(1));
+         if (r < 0.2)
+         {
+            v(0) =  5.0 * x(1);
+            v(1) = -5.0 * x(0);
+         }
+         else if (r < 0.4)
+         {
+            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
+            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+         }
+         else { v = 0.0; }
+         break;
+      }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -709,17 +799,29 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
+                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
+                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
+      case 4:
+      {
+         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
+         const double gamma = 5.0 / 3.0;
+         if (r < 0.2)
+         {
+            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
+         }
+         else if (r < 0.4)
+         {
+            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
+            const double t2 = 20.0 * r - 4.0 * log(r);
+            return (t1 - t2) / (gamma - 1.0);
+         }
+         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+      }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
-
-} // namespace hydrodynamics
-
-} // namespace mfem
 
 void display_banner(ostream & os)
 {

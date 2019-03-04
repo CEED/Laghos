@@ -105,10 +105,12 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos_s.cpp laghos_solver_s.cpp laghos_assembly_s.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_timeinteg.cpp \
+               ../laghos_assembly.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver_s.hpp laghos_assembly_s.hpp
+HEADER_FILES = laghos_solver.hpp laghos_timeinteg.hpp \
+               ../laghos_assembly.hpp
 
 # Targets
 
@@ -138,10 +140,10 @@ $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 MFEM_TESTS = laghos
 include $(TEST_MK)
 # Testing: Specific execution options
-RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
+RUN_MPI =
 test: laghos
 	@$(call mfem-test,$<, $(RUN_MPI), Laghos miniapp,\
-	-p 0 -m data/square01_quad.mesh -rs 3 -tf 0.1)
+	-p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.1)
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
 

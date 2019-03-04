@@ -19,11 +19,6 @@
 
 #include "mfem.hpp"
 
-#ifdef MFEM_USE_MPI
-
-#include <memory>
-#include <iostream>
-
 namespace mfem
 {
 
@@ -73,25 +68,24 @@ struct Tensors1D
    // H1 shape functions and gradients, L2 shape functions.
    DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
 
-   Tensors1D(int H1order, int L2order, int nqp1D);
+   Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
 };
-extern const Tensors1D *tensors1D;
 
 class FastEvaluator
 {
    const int dim;
-   ParFiniteElementSpace &H1FESpace;
+   FiniteElementSpace &H1FESpace;
+   Tensors1D *tensors1D;
 
 public:
-   FastEvaluator(ParFiniteElementSpace &h1fes)
-      : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes) { }
+   FastEvaluator(FiniteElementSpace &h1fes, Tensors1D *t1D)
+      : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes), tensors1D(t1D) { }
 
    void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
    // The input vec is an H1 function with dim components, over a zone.
    // The output is J_ij = d(vec_i) / d(x_j) with ij = 1 .. dim.
    void GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const;
 };
-extern const FastEvaluator *evaluator;
 
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
@@ -102,7 +96,6 @@ private:
    const QuadratureData &quad_data;
 
 public:
-   using LinearFormIntegrator::AssembleRHSElementVect;
    DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
 
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
@@ -129,7 +122,7 @@ public:
 // Abstract base class for the Force PA Operators
 class AbcForcePAOperator : public Operator{
 public:
-   AbcForcePAOperator():Operator(){}
+   AbcForcePAOperator(): Operator(){}
    virtual void Mult(const Vector&, Vector&) const =0;
    virtual void MultTranspose(const Vector&, Vector&) const =0;
 };
@@ -142,7 +135,8 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &H1FESpace, &L2FESpace;
+   FiniteElementSpace &H1FESpace, &L2FESpace;
+   Tensors1D *tensors1D;
 
    // Force matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &vecL2, Vector &vecH1) const;
@@ -156,10 +150,12 @@ private:
 
 public:
    ForcePAOperator(QuadratureData *quad_data_,
-                   ParFiniteElementSpace &h1fes, ParFiniteElementSpace &l2fes)
+                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes,
+                   Tensors1D *t1D)
       : AbcForcePAOperator(),
         dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes) { }
+        quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes),
+        tensors1D(t1D) { }
 
    virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
    virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
@@ -171,7 +167,6 @@ public:
 class AbcMassPAOperator : public Operator{
 public:
    AbcMassPAOperator(const int size):Operator(size){}
-   virtual void Setup() =0;
    virtual void ComputeDiagonal2D(Vector&) const =0;
    virtual void ComputeDiagonal3D(Vector&) const =0;
    virtual void Mult(const Vector&, Vector&) const =0;
@@ -186,7 +181,8 @@ private:
    const int dim, nzones;
 
    QuadratureData *quad_data;
-   ParFiniteElementSpace &FESpace;
+   FiniteElementSpace &FESpace;
+   Tensors1D *tensors1D;
 
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
@@ -194,15 +190,15 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   MassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
+                  Tensors1D *t1D)
       : AbcMassPAOperator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes)
-   { }
+        quad_data(quad_data_), FESpace(fes), tensors1D(t1D) { }
 
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
-   void Setup() {}
+
    void ComputeDiagonal2D(Vector &diag) const;
    void ComputeDiagonal3D(Vector &diag) const;
 
@@ -217,15 +213,19 @@ class DiagonalSolver : public Solver
 {
 private:
    Vector diag;
-   ParFiniteElementSpace &FESpace;
+   FiniteElementSpace &FESpace;
 
 public:
-   DiagonalSolver(ParFiniteElementSpace &fes)
+   DiagonalSolver(FiniteElementSpace &fes)
       : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
 
    void SetDiagonal(Vector &d)
    {
       const Operator *P = FESpace.GetProlongationMatrix();
+
+      // Happens when this is called by the serial version of Laghos.
+      if (P == NULL) { diag = d; return; }
+
       diag.SetSize(P->Width());
       P->MultTranspose(d, diag);
    }
@@ -246,6 +246,7 @@ private:
    int zone_id;
 
    QuadratureData *quad_data;
+   Tensors1D *tensors1D;
 
    // Mass matrix action on a quadrilateral element in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
@@ -253,11 +254,12 @@ private:
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, ParFiniteElementSpace &fes)
+   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
+                       Tensors1D *t1D)
       : Operator(fes.GetFE(0)->GetDof()),
         dim(fes.GetMesh()->Dimension()), zone_id(0),
-        quad_data(quad_data_)
-   { }
+        quad_data(quad_data_), tensors1D(t1D) { }
+
    void SetZoneId(int zid) { zone_id = zid; }
 
    virtual void Mult(const Vector &x, Vector &y) const;
@@ -266,7 +268,5 @@ public:
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS_ASSEMBLY

@@ -1,0 +1,57 @@
+               __                __
+              / /   ____  ____  / /_  ____  _____
+             / /   / __ `/ __ `/ __ \/ __ \/ ___/
+            / /___/ /_/ / /_/ / / / / /_/ (__  )
+           /_____/\__,_/\__, /_/ /_/\____/____/
+                       /____/
+
+        High-order Lagrangian Hydrodynamics Miniapp
+
+
+Version 2.0, released on Nov 19, 2018
+=====================================
+
+- Added a CUDA version of Laghos in the cuda/ directory.
+
+- Added a RAJA version of Laghos in the raja/ directory.
+
+- Added an OCCA version of Laghos in the occa/ directory.
+
+- Added an AMR (adaptive mesh refinement) version in the amr/ directory.
+
+- Replaced a viscosity "if statement" with a smooth step function.
+
+- When using partial assembly (-pa option), support the Bernstein positive basis
+  for the velocity .
+
+- Added Travis CI regression testing on GitHub.
+
+
+Version 1.1, released on Sep 28, 2018
+=====================================
+
+- Added a new example: Gresho vortex.
+
+- Added instructions for building the CUDA and RAJA versions.
+
+- Added a conservative time integrator (RK2Avg).
+
+- Added computation of total energy.
+
+- Split the LagrangianHydroOperator::Mult() into separate functions for
+  assembly, velocity solve, internal energy solve.
+
+- Improved the computations of the matrix diagonal by contracting the squares of
+  the B matrices.
+
+- Added diagonal preconditioners for both partial and full assembly.
+
+- Fixed a bug in the evaluation of the material gamma values.
+
+- Additional meshes that can be used for scaling tests.
+
+
+Version 1.0, released on Dec 7, 2017
+====================================
+
+- Initial release.

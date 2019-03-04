@@ -1,7 +1,0 @@
-# Object and library files
-*.o
-*.so
-
-# OS-specific: Mac
-*.dSYM
-.DS_Store

@@ -14,28 +14,6 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-# SETUP ************************************************************************
-CUDA_DIR ?= /usr/local/cuda
-MFEM_DIR ?= $(HOME)/home/mfem/okina
-MPI_HOME ?= $(HOME)/usr/local/openmpi/3.0.0
-NV_ARCH ?= -g -arch=sm_60 #-gencode arch=compute_52,code=sm_52 -gencode arch=compute_60,code=sm_60
-# -fPIC #-std=c++11 -m64 #-DNDEBUG=1 #-D__NVVP__ #-D__NVVP__ # -DLAGHOS_DEBUG -D__NVVP__
-
-# number of proc to use for compilation stage
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
-
-# fetch current/working directory
-pwd = $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
-
-kernels = $(pwd)/kernels
-
-# OKRTC ************************************************************************
-#OKRTC_DIR ?= ~/usr/local/okrtc
-ifneq ($(wildcard $(OKRTC_DIR)/bin/okrtc),)
-	OKRTC ?= dbg=1 $(OKRTC_DIR)/bin/okrtc
-endif
-
-# ******************************************************************************
 define LAGHOS_HELP_MSG
 
 Laghos makefile targets:
@@ -73,6 +51,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
+MFEM_DIR = ../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -95,7 +74,7 @@ endif
 
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = $(MFEM_CXXFLAGS)
+CXXFLAGS = -g $(MFEM_CXXFLAGS)
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -105,7 +84,7 @@ CFLAGS = -O3
 LDFLAGS =
 
 OPTIM_OPTS = -O3
-DEBUG_OPTS = -g #-Wall
+DEBUG_OPTS = -g -Wall
 LAGHOS_DEBUG = $(MFEM_DEBUG)
 ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    ifeq ($(LAGHOS_DEBUG),YES)
@@ -115,30 +94,8 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-# CXXFLAGS ADDONS **************************************************************
-CXXFLAGS += $(CXXEXTRA)
-
-# NVCC *************************************************************************
-ifneq (,$(nvcc))
-	CXXEXTRA = --device-c
-	CXXLINK = $(NV_ARCH)
-	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
-else
-#	CXXEXTRA += -Wall
-endif
-
-# all, targets & laghos ********************************************************
-all:;@$(MAKE) -j $(CPU) laghos
-nv nvcc cuda:;$(MAKE) nvcc=1 templates=1 all
-
-# MPI **************************************************************************
-MPI_INC = -I$(MPI_HOME)/include 
-MPI_LIB = -L$(MPI_HOME)/lib -lmpi
-
-# LAGHOS FLAGS *****************************************************************
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) \
-					$(CUB_INC) $(MPI_INC) $(RAJA_INC)
-LAGHOS_LIBS = $(MFEM_LIBS) $(MPI_LIB) $(RAJA_LIBS) $(CUDA_LIBS) #-ldl 
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
+LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -148,105 +105,27 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-MAKEFILE_DIR = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
-KERNELS_DIR = $(MAKEFILE_DIR)/kernels
-
-# SOURCE FILES SETUP ***********************************************************
-SOURCE_FILES = laghos.cpp laghos_solver.cpp \
-	            laghos_assembly.cpp laghos_kernels.cpp laghos_qupdate.cpp
-# Kernel files setup
-KERNELS_RTC_DIRS = $(KERNELS_DIR) $(KERNELS_DIR)/force qupdate
-KERNELS_RTC_SRC_FILES = $(foreach dir,$(KERNELS_RTC_DIRS),$(wildcard $(dir)/*.cpp))
-
-# OBJECT FILES *****************************************************************
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp \
+               laghos_okina.cpp laghos_qupdate.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-OBJECT_KERNELS = $(KERNELS_RTC_SRC_FILES:.cpp=.o)
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
-# HEADER FILES *****************************************************************
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
+# Targets
 
-# Targets **********************************************************************
 .PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
-	cd $(<D); $(CCC) -c $(abspath $<)
+	cd $(<D); $(CCC) -c $(<F)
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
-# ******************************************************************************
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-laghos:	$(OBJECT_FILES) $(OBJECT_KERNELS) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) $(CXXLINK) -o laghos $(OBJECT_FILES) $(OBJECT_KERNELS) $(LIBS)
+laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
 
-# chkCpu ***********************************************************************
-chkCpu:
-	tput reset
-	CHK=1 ./laghos -cfl 0.1 -p 0
-	CHK=1 ./laghos -cfl 0.1 -p 1
-	CHK=1 ./laghos -cfl 0.1 -p 0 -no-o -no-q
-	CHK=1 ./laghos -cfl 0.1 -p 1 -no-o -no-q
-
-# chkCpuMpi ********************************************************************
-chkCpuMpi:
-	tput reset
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0 -no-o -no-q
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1 -no-o -no-q
-
-# chkGpu ***********************************************************************
-chkGpu:
-	tput reset
-	CHK=1 ./laghos -cfl 0.1 -p 0 -cu
-	CHK=1 ./laghos -cfl 0.1 -p 1 -cu
-
-# chkGpuMpi ********************************************************************
-chkGpuMpi:
-	tput reset
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 0 -cu
-	CHK=1 mpirun -n 2 ./laghos -cfl 0.1 -p 1 -cu
-
-# chk **************************************************************************
-chk: chkCpu chkCpuMpi chkGpu chkGpuMpi
-
-# go ***************************************************************************
-go:;@./laghos -cfl 0.1 -rs 0
-go1:;@./laghos -cfl 0.1 -rs 0 -p 1
-pgo:;@mpirun -n 2 ./laghos -cfl 0.1 -rs 0
-pgo2:;@DBG=1 mpirun -xterm -1! -n 2 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-#pgo:;@mpirun -n 2 -xterm -1! --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0
-
-ng:;@./laghos -cfl 0.1 -rs 0 -ng
-ng1:;@./laghos -cfl 0.1 -rs 0 -ng -p 1
-ng1q:;@./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
-png:;@mpirun -n 1 ./laghos -cfl 0.1 -ng
-png1:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1
-png1q:;@mpirun -n 3 ./laghos -cfl 0.1 -rs 0 -ng -p 1 -q
-png2:;mpirun -n 2 ./laghos -cfl 0.1 -ng
-png3:;mpirun -n 3 ./laghos -cfl 0.1 -ng
-
-#dng:;@cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng #-cgt 0 -cgm 2
-#mng:;cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1
-#ddng:;@DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -cgt 0 -cgm 2
-
-#ng1:;DBG=1 ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-#mng1:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-#mng2:;DBG=1 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 2
-#dng1:;DBG=1 cuda-gdb --args ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-
-#vng:;@valgrind ./laghos -cfl 0.1 -rs 0 -ms 1 -ng
-#mpng2:;@DBG=1 mpirun -xterm -1! -n 2 cuda-memcheck ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-#vpng2:;@DBG=1 mpirun -xterm -1! -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 0 -ng -ms 1 -cgt 0 -cgm 1
-
-#png2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -ng
-#vpng2d:;@DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 2 -ng -ms 1
-#png:;@mpirun -n 2 --tag-output --merge-stderr-to-stdout ./laghos -cfl 0.1 -rs 0 -ng
-#png:;@mpirun -n 2 -xterm 1 ./laghos -cfl 0.1 -rs 0 -ng
-#pngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 2 ./laghos -cfl 0.1 -rs 1 -ms 2 -ng
-#vpng:;@mpirun -n 2 valgrind ./laghos -cfl 0.1 -rs 2 -ms 1 -ng
-#vpngd:;DBG=1 mpirun -xterm -1! --merge-stderr-to-stdout -n 3 valgrind --leak-check=full --track-origins=yes ./laghos -cfl 0.1 -rs 1 -ms 1 -ng
+all: laghos
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -256,11 +135,6 @@ debug:
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
-$(OBJECT_KERNELS): override MFEM_DIR = $(MFEM_DIR2)
-
-#rtc:;@echo OBJECT_KERNELS=$(OBJECT_KERNELS)
-$(OBJECT_KERNELS): %.o: %.cpp
-	$(OKRTC) $(CCC) -o $(@) -c $(MPI_INC) -I$(realpath $(dir $(<))) $(<)
 
 MFEM_TESTS = laghos
 include $(TEST_MK)
@@ -276,10 +150,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-cln clean: clean-build clean-exec
+clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *.so *~ *.dSYM kernels/*.o $(OBJECT_KERNELS)
+	rm -rf laghos *.o *~ *.dSYM
 clean-exec:
 	rm -rf ./results
 

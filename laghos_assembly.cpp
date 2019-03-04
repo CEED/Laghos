@@ -16,8 +16,6 @@
 
 #include "laghos_assembly.hpp"
 
-#ifdef MFEM_USE_MPI
-
 using namespace std;
 
 namespace mfem
@@ -26,17 +24,14 @@ namespace mfem
 namespace hydrodynamics
 {
 
-const Tensors1D *tensors1D = NULL;
-const FastEvaluator *evaluator = NULL;
-
-Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
+Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v)
    : HQshape1D(H1order + 1, nqp1D),
      HQgrad1D(H1order + 1, nqp1D),
      LQshape1D(L2order + 1, nqp1D)
 {
    // In this miniapp we assume:
    // - Gauss-Legendre quadrature points.
-   // - Gauss-Lobatto continuous kinematic basis.
+   // - Gauss-Lobatto OR Bernstein continuous kinematic basis.
    // - Bernstein discontinuous thermodynamic basis.
 
    const double *quad1D_pos = poly1d.GetPoints(nqp1D - 1,
@@ -48,7 +43,12 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D)
    {
       HQshape1D.GetColumnReference(q, col);
       HQgrad1D.GetColumnReference(q, grad_col);
-      basisH1.Eval(quad1D_pos[q], col, grad_col);
+      if (bernstein_v)
+      {
+         poly1d.CalcBernstein(H1order, quad1D_pos[q],
+                              col.GetData(), grad_col.GetData());
+      }
+      else { basisH1.Eval(quad1D_pos[q], col, grad_col); }
    }
    for (int q = 0; q < nqp1D; q++)
    {
@@ -120,8 +120,8 @@ void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
       DenseMatrix HQ(nH1dof1D, nqp1D), QQ(nqp1D, nqp1D);
       Vector x(nH1dof);
 
-      const H1_QuadrilateralElement *fe =
-         dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
+      const TensorBasisElement *fe =
+         dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
       const Array<int> &dof_map = fe->GetDofMap();
 
       for (int c = 0; c < 2; c++)
@@ -170,8 +170,8 @@ void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
                   Q_HQ(nqp1D, nH1dof1D*nqp1D), QQ_Q(nqp1D * nqp1D, nqp1D);
       Vector x(nH1dof);
 
-      const H1_HexahedronElement *fe =
-         dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
+      const TensorBasisElement *fe =
+         dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
       const Array<int> &dof_map = fe->GetDofMap();
 
       for (int c = 0; c < 3; c++)
@@ -377,8 +377,8 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
    DenseMatrix QQd(nqp1D, nqp1D);
    double *data_qd = QQd.GetData(), *data_q = QQ.GetData();
 
-   const H1_QuadrilateralElement *fe =
-      dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
+   const TensorBasisElement *fe =
+      dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    vecH1 = 0.0;
@@ -454,8 +454,8 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
                HHHy(nH1dof1D * nH1dof1D, nH1dof1D),
                HHHz(nH1dof1D * nH1dof1D, nH1dof1D);
 
-   const H1_HexahedronElement *fe =
-      dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
+   const TensorBasisElement *fe =
+      dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    vecH1 = 0.0;
@@ -606,8 +606,8 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
                QQc(nqp1D, nqp1D), QQ(nqp1D, nqp1D);
    double *qqc = QQc.GetData();
 
-   const H1_QuadrilateralElement *fe =
-      dynamic_cast<const H1_QuadrilateralElement *>(H1FESpace.GetFE(0));
+   const TensorBasisElement *fe =
+      dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    for (int z = 0; z < nzones; z++)
@@ -680,8 +680,8 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
    DenseMatrix QQ_Q(nqp1D * nqp1D, nqp1D),  QQ_Qc(nqp1D * nqp1D, nqp1D);
    double *qqqc = QQ_Qc.GetData();
 
-   const H1_HexahedronElement *fe =
-      dynamic_cast<const H1_HexahedronElement *>(H1FESpace.GetFE(0));
+   const TensorBasisElement *fe =
+      dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
    const Array<int> &dof_map = fe->GetDofMap();
 
    for (int z = 0; z < nzones; z++)
@@ -812,8 +812,8 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 
 void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   const H1_QuadrilateralElement *fe_H1 =
-      dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
+   const TensorBasisElement *fe_H1 =
+      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
    const DenseMatrix &HQs = tensors1D->HQshape1D;
 
@@ -860,8 +860,8 @@ void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 
 void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
 {
-   const H1_HexahedronElement *fe_H1 =
-      dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
+   const TensorBasisElement *fe_H1 =
+      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
    const DenseMatrix &HQs = tensors1D->HQshape1D;
 
@@ -944,13 +944,12 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 // Mass matrix action on quadrilateral elements in 2D.
 void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 {
-   const H1_QuadrilateralElement *fe_H1 =
-      dynamic_cast<const H1_QuadrilateralElement *>(FESpace.GetFE(0));
+   const TensorBasisElement *fe_H1 =
+      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
    const DenseMatrix &HQs = tensors1D->HQshape1D;
 
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
-   DenseMatrix HQ(ndof1D, nqp1D);
-   DenseMatrix QQ(nqp1D, nqp1D);
+   DenseMatrix HQ(ndof1D, nqp1D), QQ(nqp1D, nqp1D);
    Vector xz(ndof1D * ndof1D), yz(ndof1D * ndof1D);
    DenseMatrix X(xz.GetData(), ndof1D, ndof1D),
                Y(yz.GetData(), ndof1D, ndof1D);
@@ -996,8 +995,8 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
 // Mass matrix action on hexahedral elements in 3D.
 void MassPAOperator::MultHex(const Vector &x, Vector &y) const
 {
-   const H1_HexahedronElement *fe_H1 =
-      dynamic_cast<const H1_HexahedronElement *>(FESpace.GetFE(0));
+   const TensorBasisElement *fe_H1 =
+      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
    const DenseMatrix &HQs = tensors1D->HQshape1D;
 
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width();
@@ -1187,5 +1186,3 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
