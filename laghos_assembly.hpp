@@ -44,9 +44,6 @@ struct QuadratureData
    // determinant of the Jacobian and the integration weight. It must be
    // recomputed in every time step.
    DenseTensor stressJinvT;
-#ifdef __NVCC__
-   //DenseTensor d_stressJinvT;
-#endif
 
    // Quadrature data used for full/partial assembly of the mass matrices. At
    // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
