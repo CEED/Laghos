@@ -436,7 +436,6 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   if (okina) { config::usePA(p_assembly); }
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
@@ -499,20 +498,20 @@ int main(int argc, char *argv[])
       if (cuda)
       {
          printf("\033[32;1;7m[Laghos] Using CUDA!\033[m\n");
-         config::useCuda();
+         config::UseCuda();
       }
       if (occa)
       {
          printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
-         config::useOcca();
+         config::UseOcca();
       }
       if (raja)
       {
          printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
-         config::useRaja();
+         config::UseRaja();
       }
-      config::enableGpu(0);
-      config::SwitchToGpu();
+      config::EnableDevice();
+      config::SwitchToDevice();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
@@ -682,7 +681,7 @@ int main(int argc, char *argv[])
       }
    }
 
-   config::SwitchToCpu();
+   config::SwitchToHost();
 
    switch (ode_solver_type)
    {

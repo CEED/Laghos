@@ -398,14 +398,14 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       //Vector* sptr = (Vector*) &S;
       //x_gf.MakeRef(&H1FESpace, *sptr, 0);
       //H1FESpace.GetParMesh()->NewNodes(x_gf, false);
-      const bool using_gpu = config::usingGpu();
-      if (using_gpu) { config::SwitchToCpu(); }
+      const bool using_gpu = config::UsingDevice();
+      if (using_gpu) { config::SwitchToHost(); }
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (using_gpu) { config::SwitchToGpu(); }
+      if (using_gpu) { config::SwitchToDevice(); }
    }
    Array<int> l2dofs;
    Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
