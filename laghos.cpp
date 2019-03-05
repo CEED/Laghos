@@ -682,6 +682,8 @@ int main(int argc, char *argv[])
       }
    }
 
+   config::SwitchToCpu();
+
    switch (ode_solver_type)
    {
       case 2: steps *= 2; break;

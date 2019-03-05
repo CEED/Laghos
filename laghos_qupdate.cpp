@@ -202,7 +202,7 @@ double det(const int dim, const double *J)
 __host__ __device__ static
 void calcInverse2D(const int n, const double *a, double *i)
 {
-   const double d = det(n,a);
+   const double d = det2D(a);
    const double t = 1.0 / d;
    i[0*n+0] =  a[1*n+1] * t ;
    i[0*n+1] = -a[0*n+1] * t ;
@@ -385,10 +385,10 @@ inline double smooth_step_01(const double x, const double eps)
 }
 
 // *****************************************************************************
-// * qkernel
+// * qupdate
 // *****************************************************************************
 template<const int dim> static
-void qkernel(const int nzones,
+void qupdate(const int nzones,
              const int nqp,
              const int nqp1D,
              const double gamma,
@@ -550,10 +550,8 @@ QUpdate::QUpdate(const int _dim,
    L2FESpace(_L2FESpace),
    h1_maps(mfem::DofToQuad::Get(H1FESpace,ir)),
    l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
-   h1_ElemRestrict(new ElemRestriction(*static_cast<FiniteElementSpace*>
-                                       (&H1FESpace))),
-   l2_ElemRestrict(new ElemRestriction(*static_cast<FiniteElementSpace*>
-                                       (&L2FESpace))),
+   h1_ElemRestrict(new ElemRestriction(H1FESpace)),
+   l2_ElemRestrict(new ElemRestriction(L2FESpace)),
    d_e_quads_data(NULL),
    d_grad_x_data(NULL),
    d_grad_v_data(NULL),
@@ -881,7 +879,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    assert(dim==2);
-   qkernel<2>(nzones,
+   qupdate<2>(nzones,
               nqp,
               nqp1D,
               gamma,
@@ -901,7 +899,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    quad_data.dt_est = mfem::kernels::vector::Min(dt_est_sz, d_dt_est);
-
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
    timer->quad_tstep += nzones;

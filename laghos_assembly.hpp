@@ -93,6 +93,7 @@ public:
 // projection of the density.
 class DensityIntegrator : public LinearFormIntegrator
 {
+   using LinearFormIntegrator::AssembleRHSElementVect;
 private:
    const QuadratureData &quad_data;
 
@@ -286,7 +287,11 @@ public:
 
    virtual void Mult(const Vector &x, Vector &y) const
    {
-      for (int i = 0; i < x.Size(); i++) { y(i) = x(i) / diag(i); }
+      const int N = x.Size();
+      const DeviceVector d_diag(diag,N);
+      const DeviceVector d_x(x,N);
+      DeviceVector d_y(y,N);
+      MFEM_FORALL(i, N, d_y(i) = d_x(i) / d_diag(i););
    }
    virtual void SetOperator(const Operator &op) { }
 };

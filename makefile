@@ -14,6 +14,13 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
+# SETUP ************************************************************************
+CUDA_DIR ?= /usr/local/cuda
+NV_ARCH ?= -arch=sm_60
+
+# number of proc to use for compilation stage **********************************
+CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+
 define LAGHOS_HELP_MSG
 
 Laghos makefile targets:
@@ -74,7 +81,7 @@ endif
 
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = -g $(MFEM_CXXFLAGS)
+CXXFLAGS = $(MFEM_CXXFLAGS)
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -95,7 +102,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
 endif
 
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS)
+LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
@@ -123,9 +130,18 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(CXX) $(CXXFLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
-all: laghos
+all:;@$(MAKE) -j $(CPU) laghos
+
+# NVCC *************************************************************************
+ifneq (,$(nvcc))
+	CXXEXTRA = --device-c
+#	CXXLINK = $(NV_ARCH)
+#	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
+#   CXXFLAGS += $(CXXEXTRA)
+endif
+nv nvcc cuda:;$(MAKE) nvcc=1 all
 
 check chk:
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
