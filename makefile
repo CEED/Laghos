@@ -134,22 +134,23 @@ laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 
 all:;@$(MAKE) -j $(CPU) laghos
 
-# NVCC *************************************************************************
-ifneq (,$(nvcc))
-	CXXEXTRA = --device-c
-#	CXXLINK = $(NV_ARCH)
-#	CUDA_LIBS = -lcuda -lcudart -lcudadevrt -lnvToolsExt
-#   CXXFLAGS += $(CXXEXTRA)
-endif
-nv nvcc cuda:;$(MAKE) nvcc=1 all
-
-check chk:
+check chk chkCpu:
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
+
+chkGpu:
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q -cu
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q -cu
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
