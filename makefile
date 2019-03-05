@@ -127,6 +127,14 @@ laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 
 all: laghos
 
+check chk:
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
+	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
+
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
 

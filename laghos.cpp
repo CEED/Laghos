@@ -494,16 +494,20 @@ int main(int argc, char *argv[])
    }
 
    // OKINA mode setup
-   if (okina){
-      if (cuda) {
+   if (okina)
+   {
+      if (cuda)
+      {
          printf("\033[32;1;7m[Laghos] Using CUDA!\033[m\n");
          config::useCuda();
       }
-      if (occa) { 
+      if (occa)
+      {
          printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
          config::useOcca();
       }
-      if (raja) { 
+      if (raja)
+      {
          printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
          config::useRaja();
       }

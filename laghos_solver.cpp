@@ -118,23 +118,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
              h1_basis_type == BasisType::Positive),
    evaluator(H1FESpace, &tensors1D),
    Force(&l2_fes, &h1_fes),
-   ForcePA((!okina)?
-           static_cast<AbcForcePAOperator*>(
-              new ForcePAOperator(&quad_data, h1_fes,l2_fes, &tensors1D)):
-           static_cast<AbcForcePAOperator*>(
-              new OkinaForcePAOperator(&quad_data, h1_fes,l2_fes, integ_rule))),
-   VMassPA((!okina)?
-           static_cast<AbcMassPAOperator*>(
-              new  MassPAOperator(&quad_data, H1FESpace, &tensors1D)):
-           static_cast<AbcMassPAOperator*>(
-              new OkinaMassPAOperator(q, &quad_data, H1compFESpace, integ_rule, &tensors1D))),
-   EMassPA((!okina)?
-           static_cast<AbcMassPAOperator*>(
-              new  MassPAOperator(&quad_data, L2FESpace, &tensors1D)):
-           static_cast<AbcMassPAOperator*>(
-              new OkinaMassPAOperator(q, &quad_data, L2FESpace, integ_rule, &tensors1D))),
    VMassPA_prec(okina?H1compFESpace:H1FESpace),
-   locEMassPA(&quad_data, l2_fes, &tensors1D),
+   locEMassPA(quad_data, l2_fes, &tensors1D),
    CG_VMass(H1FESpace.GetParMesh()->GetComm()),
    CG_EMass(L2FESpace.GetParMesh()->GetComm()),
    locCG(),
@@ -147,6 +132,20 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
      &timer, material_pcf, integ_rule,
      H1FESpace, L2FESpace)
 {
+   if (not okina)
+   {
+      ForcePA = new ForcePAOperator(quad_data, h1_fes,l2_fes, &tensors1D);
+      VMassPA = new MassPAOperator(quad_data, H1FESpace, &tensors1D);
+      EMassPA = new MassPAOperator(quad_data, L2FESpace, &tensors1D);
+   }
+   else
+   {
+      ForcePA = new OkinaForcePAOperator(quad_data, h1_fes,l2_fes, integ_rule);
+      VMassPA = new OkinaMassPAOperator(q, quad_data, H1compFESpace, integ_rule,
+                                        &tensors1D);
+      EMassPA = new OkinaMassPAOperator(q, quad_data, L2FESpace, integ_rule,
+                                        &tensors1D);
+   }
 
    GridFunctionCoefficient rho_coeff(&rho0);
 
@@ -398,7 +397,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       // Refresh coords to pmesh for e_source Assemble
       //Vector* sptr = (Vector*) &S;
       //x_gf.MakeRef(&H1FESpace, *sptr, 0);
-      //H1FESpace.GetParMesh()->NewNodes(x_gf, false);      
+      //H1FESpace.GetParMesh()->NewNodes(x_gf, false);
       const bool using_gpu = config::usingGpu();
       if (using_gpu) { config::SwitchToCpu(); }
       e_source = new LinearForm(&L2FESpace);
@@ -417,7 +416,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }
-      if (not okina){
+      if (not okina)
+      {
          for (int z = 0; z < nzones; z++)
          {
             L2FESpace.GetElementDofs(z, l2dofs);

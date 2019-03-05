@@ -399,7 +399,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // QQd_k1_k2 *= stress_k1_k2(c,0)  -- stress that scales d[v_c]_dx.
          // HQ_i2_k1   = HQs_i2_k2 QQ_k1_k2 -- contract in y direction.
          // HHx_i1_i2  = HQg_i1_k1 HQ_i2_k1 -- gradients in x direction.
-         double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
+         double *d = quad_data.stressJinvT(c).GetData() + z*nqp;
          for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQshape1D, QQd, HQ);
          MultABt(tensors1D->HQgrad1D, HQ, HHx);
@@ -407,7 +407,7 @@ void ForcePAOperator::MultQuad(const Vector &vecL2, Vector &vecH1) const
          // QQd_k1_k2 *= stress_k1_k2(c,1) -- stress that scales d[v_c]_dy.
          // HQ_i2_k1  = HQg_i2_k2 QQ_k1_k2 -- gradients in y direction.
          // HHy_i1_i2 = HQ_i1_k1 HQ_i2_k1  -- contract in x direction.
-         d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { data_qd[q] = data_q[q] * d[q]; }
          MultABt(tensors1D->HQgrad1D, QQd, HQ);
          MultABt(tensors1D->HQshape1D, HQ, HHy);
@@ -491,7 +491,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
       for (int c = 0; c < 3; c++)
       {
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
-         double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
+         double *d = quad_data.stressJinvT(c).GetData() + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQs_i2_k2 -- contract  in y direction.
@@ -517,7 +517,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
          MultABt(HH_Q, tensors1D->HQshape1D, HHHx);
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
-         d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- gradients in y direction.
@@ -543,7 +543,7 @@ void ForcePAOperator::MultHex(const Vector &vecL2, Vector &vecH1) const
          MultABt(HH_Q, tensors1D->HQshape1D, HHHy);
 
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
-         d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] = qqq[q] * d[q]; }
 
          // QHQ_k1_i2_k3  = QQQc_k1_k2_k3 HQg_i2_k2 -- contract  in y direction.
@@ -632,7 +632,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
          // QQc_k1_k2 *= stress_k1_k2(c,0)  -- stress that scales d[v_c]_dx.
          MultAtB(V, tensors1D->HQgrad1D, HQ);
          MultAtB(HQ, tensors1D->HQshape1D, QQc);
-         double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
+         double *d = quad_data.stressJinvT(c).GetData() + z*nqp;
          for (int q = 0; q < nqp; q++) { qqc[q] *= d[q]; }
          // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
          QQ += QQc;
@@ -642,7 +642,7 @@ void ForcePAOperator::MultTransposeQuad(const Vector &vecH1,
          // QQc_k1_k2 *= stress_k1_k2(c,1)  -- stress that scales d[v_c]_dy.
          MultAtB(V, tensors1D->HQshape1D, HQ);
          MultAtB(HQ, tensors1D->HQgrad1D, QQc);
-         d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { qqc[q] *= d[q]; }
          // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
          QQ += QQc;
@@ -723,7 +723,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
             }
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,0) -- stress scaling d[v_c]_dx.
-         double *d = quad_data->stressJinvT(c).GetData() + z*nqp;
+         double *d = quad_data.stressJinvT(c).GetData() + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,0) * d[v_c]_dx) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
@@ -750,7 +750,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
             }
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,1) -- stress scaling d[v_c]_dy.
-         d = quad_data->stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 1*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,1) * d[v_c]_dy) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
@@ -777,7 +777,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
             }
          }
          // QQQc_k1_k2_k3 *= stress_k1_k2_k3(c,2) -- stress scaling d[v_c]_dz.
-         d = quad_data->stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
+         d = quad_data.stressJinvT(c).GetData() + 2*nzones*nqp + z*nqp;
          for (int q = 0; q < nqp; q++) { qqqc[q] *= d[q]; }
          // Add the (stress(c,2) * d[v_c]_dz) part of (stress:grad_v).
          QQ_Q += QQ_Qc;
@@ -813,7 +813,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 static void ComputeDiagonal2D(const int height,
                               const int nzones,
                               const bool okina,
-                              const QuadratureData *quad_data,
+                              const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
                               Vector &diag)
@@ -843,7 +843,7 @@ static void ComputeDiagonal2D(const int height,
 
    for (int z = 0; z < nzones; z++)
    {
-      DenseMatrix QQ(quad_data->rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
+      DenseMatrix QQ(quad_data.rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
 
       // HQ_i1_k2 = HQs_i1_k1^2 QQ_k1_k2    -- contract in x direction.
       // Y_i1_i2  = HQ_i1_k2    HQs_i2_k2^2 -- contract in y direction.
@@ -858,8 +858,8 @@ static void ComputeDiagonal2D(const int height,
       }
    }
 
-   if (okina) return;
-   
+   if (okina) { return; }
+
    for (int i = 0; i < height / 2; i++)
    {
       diag(i + height / 2) = diag(i);
@@ -876,7 +876,7 @@ void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 static void ComputeDiagonal3D(const int height,
                               const int nzones,
                               const bool okina,
-                              const QuadratureData *quad_data,
+                              const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
                               Vector &diag)
@@ -909,7 +909,7 @@ static void ComputeDiagonal3D(const int height,
 
    for (int z = 0; z < nzones; z++)
    {
-      DenseMatrix QQ_Q(quad_data->rho0DetJ0w.GetData() + z*nqp,
+      DenseMatrix QQ_Q(quad_data.rho0DetJ0w.GetData() + z*nqp,
                        nqp1D * nqp1D, nqp1D);
 
       // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2^2  -- contract in y direction.
@@ -942,7 +942,7 @@ static void ComputeDiagonal3D(const int height,
       }
    }
 
-   if (okina) return;
+   if (okina) { return; }
 
    for (int i = 0; i < height / 3; i++)
    {
@@ -1014,7 +1014,7 @@ void MassPAOperator::MultQuad(const Vector &x, Vector &y) const
       MultAtB(HQs, HQ, QQ);
 
       // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-      double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
+      double *d = quad_data.rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qq[q] *= d[q]; }
 
       // HQ_i1_k2 = HQs_i1_k1 QQ_k1_k2 -- contract in x direction.
@@ -1085,7 +1085,7 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
       }
 
       // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
-      double *d = quad_data->rho0DetJ0w.GetData() + z*nqp;
+      double *d = quad_data.rho0DetJ0w.GetData() + z*nqp;
       for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
 
       // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2 -- contract in y direction.
@@ -1144,7 +1144,7 @@ void LocalMassPAOperator::MultQuad(const Vector &x, Vector &y) const
    MultAtB(LQs, LQ, QQ);
 
    // QQ_k1_k2 *= quad_data_k1_k2 -- scaling with quadrature values.
-   const double *d = quad_data->rho0DetJ0w.GetData() + zone_id*nqp;
+   const double *d = quad_data.rho0DetJ0w.GetData() + zone_id*nqp;
    for (int q = 0; q < nqp; q++) { qq[q] *= d[q]; }
 
    // LQ_i1_k2 = LQs_i1_k1 QQ_k1_k2 -- contract in x direction.
@@ -1194,7 +1194,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
    }
 
    // QQQ_k1_k2_k3 *= quad_data_k1_k2_k3 -- scaling with quadrature values.
-   double *d = quad_data->rho0DetJ0w.GetData() + zone_id*nqp;
+   double *d = quad_data.rho0DetJ0w.GetData() + zone_id*nqp;
    for (int q = 0; q < nqp; q++) { qqq[q] *= d[q]; }
 
    // QLQ_k1_i2_k3 = QQQ_k1_k2_k3 LQs_i2_k2 -- contract in y direction.
@@ -1224,7 +1224,7 @@ void LocalMassPAOperator::MultHex(const Vector &x, Vector &y) const
 // * Okina PA mass operator
 // *****************************************************************************
 OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
-                                         QuadratureData *qd,
+                                         const QuadratureData &qd,
                                          ParFiniteElementSpace &pfes,
                                          const IntegrationRule &ir,
                                          Tensors1D *t1D) :
@@ -1246,10 +1246,11 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
 }
 
 // *****************************************************************************
-void OkinaMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
+void OkinaMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size()==0){
+   if (ess_tdofs.Size()==0)
+   {
       int global_ess_tdofs_count;
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
@@ -1264,18 +1265,19 @@ void OkinaMassPAOperator::SetEssentialTrueDofs(mfem::Array<int> &dofs)
 }
 
 // *****************************************************************************
-void OkinaMassPAOperator::EliminateRHS(mfem::Vector &b)
+void OkinaMassPAOperator::EliminateRHS(Vector &b) const
 {
-   if (ess_tdofs_count > 0){
+   if (ess_tdofs_count > 0)
+   {
       b.SetSubVector(ess_tdofs, 0.0);
    }
 }
 
 // *****************************************************************************
-void OkinaMassPAOperator::Mult(const mfem::Vector &x,
-                               mfem::Vector &y) const
-{   
-   if (distX.Size()!=x.Size()) {
+void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
+{
+   if (distX.Size()!=x.Size())
+   {
       distX.SetSize(x.Size());
    }
    assert(distX.Size()==x.Size());
@@ -1302,7 +1304,7 @@ void OkinaMassPAOperator::ComputeDiagonal2D(Vector &diag) const
 // *****************************************************************************
 // * Okina PA force operator
 // *****************************************************************************
-OkinaForcePAOperator::OkinaForcePAOperator(QuadratureData *qd,
+OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
                                            ParFiniteElementSpace &h1f,
                                            ParFiniteElementSpace &l2f,
                                            const IntegrationRule &ir) :
@@ -1343,7 +1345,8 @@ void kForceMult2D(const int NE,
                   const double* _Gt,
                   const double* _sJit,
                   const double* _e,
-                  double* _v) {
+                  double* _v)
+{
    const DeviceMatrix L2B(_B, Q1D,L1D);
    const DeviceMatrix H1Bt(_Bt, H1D,Q1D);
    const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
@@ -1353,54 +1356,71 @@ void kForceMult2D(const int NE,
    MFEM_FORALL(e, NE,
    {
       double e_xy[Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx) {
-         for (int qy = 0; qy < Q1D; ++qy) {
+      for (int qx = 0; qx < Q1D; ++qx)
+      {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             e_xy[qx][qy] = 0.0;
          }
       }
-      for (int dy = 0; dy < L1D; ++dy) {
+      for (int dy = 0; dy < L1D; ++dy)
+      {
          double e_x[Q1D];
-         for (int qy = 0; qy < Q1D; ++qy) {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             e_x[qy] = 0.0;
          }
-         for (int dx = 0; dx < L1D; ++dx) {
+         for (int dx = 0; dx < L1D; ++dx)
+         {
             const double r_e = energy(dx,dy,e);
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                e_x[qx] += L2B(qx,dx) * r_e;
             }
          }
-         for (int qy = 0; qy < Q1D; ++qy) {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             const double wy = L2B(qy,dy);
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                e_xy[qx][qy] += wy * e_x[qx];
             }
          }
       }
-      for (int c = 0; c < 2; ++c) {
-         for (int dy = 0; dy < H1D; ++dy) {
-            for (int dx = 0; dx < H1D; ++dx) {
+      for (int c = 0; c < 2; ++c)
+      {
+         for (int dy = 0; dy < H1D; ++dy)
+         {
+            for (int dx = 0; dx < H1D; ++dx)
+            {
                velocity(dx,dy,e,c) = 0.0;
             }
          }
-         for (int qy = 0; qy < Q1D; ++qy) {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             double Dxy[H1D];
             double xy[H1D];
-            for (int dx = 0; dx < H1D; ++dx) {
+            for (int dx = 0; dx < H1D; ++dx)
+            {
                Dxy[dx] = 0.0;
                xy[dx]  = 0.0;
             }
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                const double esx = e_xy[qx][qy] * sJit(qx,qy,e,0,c);
                const double esy = e_xy[qx][qy] * sJit(qx,qy,e,1,c);
-               for (int dx = 0; dx < H1D; ++dx) {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
                   Dxy[dx] += esx * H1Gt(dx,qx);
                   xy[dx]  += esy * H1Bt(dx,qx);
                }
             }
-            for (int dy = 0; dy < H1D; ++dy) {
+            for (int dy = 0; dy < H1D; ++dy)
+            {
                const double wy  = H1Bt(dy,qy);
                const double wDy = H1Gt(dy,qy);
-               for (int dx = 0; dx < H1D; ++dx) {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
                   velocity(dx,dy,e,c) += wy* Dxy[dx] + wDy*xy[dx];
                }
             }
@@ -1421,7 +1441,8 @@ void kForceMult3D(const int NE,
                   const double* _Gt,
                   const double* _sJit,
                   const double* _e,
-                  double* _v) {
+                  double* _v)
+{
    const DeviceMatrix L2B(_B, Q1D,L1D);
    const DeviceMatrix H1Bt(_Bt, H1D,Q1D);
    const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
@@ -1431,97 +1452,128 @@ void kForceMult3D(const int NE,
    MFEM_FORALL(e, NE,
    {
       double e_xyz[Q1D][Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx) {
-         for (int qy = 0; qy < Q1D; ++qy) {
-            for (int qz = 0; qz < Q1D; ++qz) {
+      for (int qx = 0; qx < Q1D; ++qx)
+      {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
+            for (int qz = 0; qz < Q1D; ++qz)
+            {
                e_xyz[qx][qy][qz] = 0.0;
             }
          }
       }
-      for (int dz = 0; dz < L1D; ++dz) {
+      for (int dz = 0; dz < L1D; ++dz)
+      {
          double e_xy[Q1D][Q1D];
-         for (int qx = 0; qx < Q1D; ++qx) {
-            for (int qy = 0; qy < Q1D; ++qy) {
+         for (int qx = 0; qx < Q1D; ++qx)
+         {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
                e_xy[qx][qy] = 0.0;
             }
          }
-         for (int dy = 0; dy < L1D; ++dy) {
+         for (int dy = 0; dy < L1D; ++dy)
+         {
             double e_x[Q1D];
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                e_x[qx] = 0.0;
             }
-            for (int dx = 0; dx < L1D; ++dx) {
+            for (int dx = 0; dx < L1D; ++dx)
+            {
                const double r_e = energy(dx,dy,dz,e);
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   e_x[qx] += L2B(qx,dx) * r_e;
                }
             }
-            for (int qy = 0; qy < Q1D; ++qy) {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
                const double wy = L2B(qy,dy);
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   e_xy[qx][qy] += wy * e_x[qx];
                }
             }
          }
-         for (int qz = 0; qz < Q1D; ++qz) {
+         for (int qz = 0; qz < Q1D; ++qz)
+         {
             const double wz = L2B(qz,dz);
-            for (int qy = 0; qy < Q1D; ++qy) {
-               for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   e_xyz[qx][qy][qz] += wz * e_xy[qx][qy];
                }
             }
          }
       }
-      for (int c = 0; c < 3; ++c) {
-         for (int dz = 0; dz < H1D; ++dz) {
-            for (int dy = 0; dy < H1D; ++dy) {
-               for (int dx = 0; dx < H1D; ++dx) {
+      for (int c = 0; c < 3; ++c)
+      {
+         for (int dz = 0; dz < H1D; ++dz)
+         {
+            for (int dy = 0; dy < H1D; ++dy)
+            {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
                   velocity(dx,dy,dz,e,c) = 0.0;
                }
             }
          }
-         for (int qz = 0; qz < Q1D; ++qz) {
+         for (int qz = 0; qz < Q1D; ++qz)
+         {
             double Dxy_x[H1D][H1D];
             double xDy_y[H1D][H1D];
             double xy_z[H1D][H1D] ;
-            for (int dx = 0; dx < H1D; ++dx) {
-               for (int dy = 0; dy < H1D; ++dy) {
+            for (int dx = 0; dx < H1D; ++dx)
+            {
+               for (int dy = 0; dy < H1D; ++dy)
+               {
                   Dxy_x[dx][dy] = xDy_y[dx][dy] = xy_z[dx][dy] = 0.0;
                }
             }
-            for (int qy = 0; qy < Q1D; ++qy) {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
                double Dx_x[H1D];
                double x_y[H1D];
                double x_z[H1D];
-               for (int dx = 0; dx < H1D; ++dx) {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
                   Dx_x[dx] = x_y[dx] = x_z[dx] = 0.0;
                }
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   const double r_e = e_xyz[qx][qy][qz];
                   const double esx = r_e * sJit(qx,qy,qz,e,0,c);
                   const double esy = r_e * sJit(qx,qy,qz,e,1,c);
                   const double esz = r_e * sJit(qx,qy,qz,e,2,c);
-                  for (int dx = 0; dx < H1D; ++dx) {
+                  for (int dx = 0; dx < H1D; ++dx)
+                  {
                      Dx_x[dx] += esx * H1Gt(dx,qx);
                      x_y[dx]  += esy * H1Bt(dx,qx);
                      x_z[dx]  += esz * H1Bt(dx,qx);
                   }
                }
-               for (int dy = 0; dy < H1D; ++dy) {
+               for (int dy = 0; dy < H1D; ++dy)
+               {
                   const double wy  = H1Bt(dy,qy);
                   const double wDy = H1Gt(dy,qy);
-                  for (int dx = 0; dx < H1D; ++dx) {
+                  for (int dx = 0; dx < H1D; ++dx)
+                  {
                      Dxy_x[dx][dy] += Dx_x[dx] * wy;
                      xDy_y[dx][dy] += x_y[dx]  * wDy;
                      xy_z[dx][dy]  += x_z[dx]  * wy;
                   }
                }
             }
-            for (int dz = 0; dz < H1D; ++dz) {
+            for (int dz = 0; dz < H1D; ++dz)
+            {
                const double wz  = H1Bt(dz,qz);
                const double wDz = H1Gt(dz,qz);
-               for (int dy = 0; dy < H1D; ++dy) {
-                  for (int dx = 0; dx < H1D; ++dx) {
+               for (int dy = 0; dy < H1D; ++dy)
+               {
+                  for (int dx = 0; dx < H1D; ++dx)
+                  {
                      velocity(dx,dy,dz,e,c) +=
                         ((Dxy_x[dx][dy] * wz) +
                          (xDy_y[dx][dy] * wz) +
@@ -1536,12 +1588,12 @@ void kForceMult3D(const int NE,
 
 // *****************************************************************************
 typedef void (*fForceMult)(const int E,
-                           const double* L2QuadToDof,
-                           const double* H1DofToQuad,
-                           const double* H1DofToQuadD,
-                           const double* stressJinvT,
-                           const double* e,
-                           double* v);
+                           const double *L2QuadToDof,
+                           const double *H1DofToQuad,
+                           const double *H1DofToQuadD,
+                           const double *stressJinvT,
+                           const double *e,
+                           double *v);
 
 // *****************************************************************************
 static void kForceMult(const int DIM,
@@ -1550,24 +1602,24 @@ static void kForceMult(const int DIM,
                        const int L1D,
                        const int H1D,
                        const int NE,
-                       const double* B,
-                       const double* Bt,
-                       const double* Gt,
-                       const double* stressJinvT,
-                       const double* e,
-                       double* v)
+                       const double *B,
+                       const double *Bt,
+                       const double *Gt,
+                       const double *stressJinvT,
+                       const double *e,
+                       double *v)
 {
-   assert(Q1D==2*(D1D-1));
    assert(D1D==H1D);
    assert(L1D==D1D-1);
-   const unsigned int id = ((DIM)<<4)|(D1D-2);
-   assert(LOG2(DIM)<=4);
-   assert(LOG2(D1D-2)<=4);
-   static std::unordered_map<unsigned long long, fForceMult> call = {
-      {0x21,&kForceMult2D<2,3,4,2,3>},
-      {0x31,&kForceMult3D<3,3,4,2,3>},
+   assert(Q1D==2*(D1D-1));
+   const unsigned int id = ((DIM)<<4)|(D1D);
+   static std::unordered_map<unsigned long long, fForceMult> call =
+   {
+      {0x23,&kForceMult2D<2,3,4,2,3>},
+      {0x33,&kForceMult3D<3,3,4,2,3>},
    };
-   if (!call[id]){
+   if (!call[id])
+   {
       printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
       fflush(stdout);
    }
@@ -1575,8 +1627,8 @@ static void kForceMult(const int DIM,
 }
 
 // *****************************************************************************
-void OkinaForcePAOperator::Mult(const mfem::Vector &x,
-                            mfem::Vector &y) const {
+void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
+{
    l2restrict.Mult(x, gVecL2);
    kForceMult(dim,
               D1D,
@@ -1587,7 +1639,7 @@ void OkinaForcePAOperator::Mult(const mfem::Vector &x,
               l2D2Q->B,
               h1D2Q->Bt,
               h1D2Q->Gt,
-              quad_data->stressJinvT.Data(),
+              quad_data.stressJinvT.Data(),
               gVecL2,
               gVecH1);
    h1restrict.MultTranspose(gVecH1, y);
@@ -1605,7 +1657,8 @@ void kForceMultTranspose2D(const int NE,
                            const double* _G,
                            const double* _sJit,
                            const double* _v,
-                           double* _e) {
+                           double* _e)
+{
    const DeviceMatrix L2Bt(_Bt, L1D,Q1D);
    const DeviceMatrix H1B(_B, Q1D,H1D);
    const DeviceMatrix H1G(_G, Q1D,H1D);
@@ -1615,44 +1668,57 @@ void kForceMultTranspose2D(const int NE,
    MFEM_FORALL(e, NE,
    {
       double vStress[Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx) {
-         for (int qy = 0; qy < Q1D; ++qy) {
+      for (int qx = 0; qx < Q1D; ++qx)
+      {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             vStress[qx][qy] = 0.0;
          }
       }
-      for (int c = 0; c < DIM; ++c) {
+      for (int c = 0; c < DIM; ++c)
+      {
          double v_Dxy[Q1D][Q1D];
          double v_xDy[Q1D][Q1D];
-         for (int qx = 0; qx < Q1D; ++qx) {
-            for (int qy = 0; qy < Q1D; ++qy) {
-            v_Dxy[qx][qy] = v_xDy[qx][qy] = 0.0;
+         for (int qx = 0; qx < Q1D; ++qx)
+         {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
+               v_Dxy[qx][qy] = v_xDy[qx][qy] = 0.0;
             }
          }
-         for (int dy = 0; dy < H1D; ++dy) {
+         for (int dy = 0; dy < H1D; ++dy)
+         {
             double v_x[Q1D];
             double v_Dx[Q1D];
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                v_x[qx] = v_Dx[qx] = 0.0;
             }
 
-            for (int dx = 0; dx < H1D; ++dx) {
+            for (int dx = 0; dx < H1D; ++dx)
+            {
                const double r_v = velocity(dx,dy,e,c);
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   v_x[qx]  += r_v * H1B(qx,dx);
                   v_Dx[qx] += r_v * H1G(qx,dx);
                }
             }
-            for (int qy = 0; qy < Q1D; ++qy) {
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
                const double wy  = H1B(qy,dy);
                const double wDy = H1G(qy,dy);
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   v_Dxy[qx][qy] += v_Dx[qx] * wy;
                   v_xDy[qx][qy] += v_x[qx]  * wDy;
                }
             }
          }
-         for (int qy = 0; qy < Q1D; ++qy) {
-            for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                const double sJitx = sJit(qx,qy,e,0,c);
                const double sJity = sJit(qx,qy,e,1,c);
                vStress[qx][qy] +=
@@ -1660,25 +1726,33 @@ void kForceMultTranspose2D(const int NE,
             }
          }
       }
-      for (int dy = 0; dy < L1D; ++dy) {
-         for (int dx = 0; dx < L1D; ++dx) {
+      for (int dy = 0; dy < L1D; ++dy)
+      {
+         for (int dx = 0; dx < L1D; ++dx)
+         {
             energy(dx,dy,e) = 0.0;
          }
       }
-      for (int qy = 0; qy < Q1D; ++qy) {
+      for (int qy = 0; qy < Q1D; ++qy)
+      {
          double e_x[L1D];
-         for (int dx = 0; dx < L1D; ++dx) {
+         for (int dx = 0; dx < L1D; ++dx)
+         {
             e_x[dx] = 0.0;
          }
-         for (int qx = 0; qx < Q1D; ++qx) {
+         for (int qx = 0; qx < Q1D; ++qx)
+         {
             const double r_v = vStress[qx][qy];
-            for (int dx = 0; dx < L1D; ++dx) {
+            for (int dx = 0; dx < L1D; ++dx)
+            {
                e_x[dx] += r_v * L2Bt(dx,qx);
             }
          }
-         for (int dy = 0; dy < L1D; ++dy) {
+         for (int dy = 0; dy < L1D; ++dy)
+         {
             const double w = L2Bt(dy,qy);
-            for (int dx = 0; dx < L1D; ++dx) {
+            for (int dx = 0; dx < L1D; ++dx)
+            {
                energy(dx,dy,e) += e_x[dx] * w;
             }
          }
@@ -1693,66 +1767,83 @@ template<const int DIM,
          const int L1D,
          const int H1D> static
 void kForceMultTranspose3D(const int NE,
-                           const double* _Bt,
-                           const double* _B,
-                           const double* _G,
-                           const double* _sJit,
-                           const double* _v,
-                           double* _e) {
-   const DeviceMatrix L2Bt(_Bt, L1D,Q1D);
-   const DeviceMatrix H1B(_B, Q1D,H1D);
-   const DeviceMatrix H1G(_G, Q1D,H1D);
+                           const double *Bt,
+                           const double *B,
+                           const double *G,
+                           const double *_sJit,
+                           const double *_v,
+                           double *_e)
+{
+   const DeviceMatrix L2Bt(Bt, L1D,Q1D);
+   const DeviceMatrix H1B(B, Q1D,H1D);
+   const DeviceMatrix H1G(G, Q1D,H1D);
    const DeviceTensor<6> sJit(_sJit, Q1D,Q1D,Q1D,NE,3,3);
    const DeviceTensor<5> velocity(_v, D1D,D1D,D1D,NE,3);
    DeviceTensor<4> energy(_e, L1D,L1D,L1D,NE);
    MFEM_FORALL(e,NE,
    {
       double vStress[Q1D][Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx) {
-         for (int qy = 0; qy < Q1D; ++qy) {
-            for (int qz = 0; qz < Q1D; ++qz) {
+      for (int qx = 0; qx < Q1D; ++qx)
+      {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
+            for (int qz = 0; qz < Q1D; ++qz)
+            {
                vStress[qx][qy][qz] = 0.0;
             }
          }
       }
-      for (int c = 0; c < DIM; ++c) {
-         for (int dz = 0; dz < H1D; ++dz) {
+      for (int c = 0; c < DIM; ++c)
+      {
+         for (int dz = 0; dz < H1D; ++dz)
+         {
             double Dxy_x[Q1D][Q1D];
             double xDy_y[Q1D][Q1D];
             double xy_z[Q1D][Q1D];
-            for (int qx = 0; qx < Q1D; ++qx) {
-               for (int qy = 0; qy < Q1D; ++qy) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
+               for (int qy = 0; qy < Q1D; ++qy)
+               {
                   Dxy_x[qx][qy] = xDy_y[qx][qy] = xy_z[qx][qy] = 0.0;
                }
             }
-            for (int dy = 0; dy < H1D; ++dy) {
+            for (int dy = 0; dy < H1D; ++dy)
+            {
                double Dx_x[Q1D];
                double x_y[Q1D];
-               for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
                   Dx_x[qx] = x_y[qx] = 0;
                }
-               for (int dx = 0; dx < H1D; ++dx) {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
                   const double r_v = velocity(dx,dy,dz,e,c);
-                  for (int qx = 0; qx < Q1D; ++qx) {
+                  for (int qx = 0; qx < Q1D; ++qx)
+                  {
                      Dx_x[qx] += r_v * H1G(qx,dx);
                      x_y[qx]  += r_v * H1B(qx,dx);
                   }
                }
-               for (int qy = 0; qy < Q1D; ++qy) {
+               for (int qy = 0; qy < Q1D; ++qy)
+               {
                   const double wy  = H1B(qy,dy);
                   const double wDy = H1G(qy,dy);
-                  for (int qx = 0; qx < Q1D; ++qx) {
+                  for (int qx = 0; qx < Q1D; ++qx)
+                  {
                      Dxy_x[qx][qy] += Dx_x[qx] * wy;
                      xDy_y[qx][qy] += x_y[qx]  * wDy;
                      xy_z[qx][qy]  += x_y[qx]  * wy;
                   }
                }
             }
-            for (int qz = 0; qz < Q1D; ++qz) {
+            for (int qz = 0; qz < Q1D; ++qz)
+            {
                const double wz  = H1B(qz,dz);
                const double wDz = H1G(qz,dz);
-               for (int qy = 0; qy < Q1D; ++qy) {
-                  for (int qx = 0; qx < Q1D; ++qx) {
+               for (int qy = 0; qy < Q1D; ++qy)
+               {
+                  for (int qx = 0; qx < Q1D; ++qx)
+                  {
                      vStress[qx][qy][qz] +=
                         ((Dxy_x[qx][qy] * wz * sJit(qx,qy,qz,e,0,c)) +
                          (xDy_y[qx][qy] * wz * sJit(qx,qy,qz,e,1,c)) +
@@ -1762,42 +1853,57 @@ void kForceMultTranspose3D(const int NE,
             }
          }
       }
-      for (int dz = 0; dz < L1D; ++dz) {
-         for (int dy = 0; dy < L1D; ++dy) {
-            for (int dx = 0; dx < L1D; ++dx) {
+      for (int dz = 0; dz < L1D; ++dz)
+      {
+         for (int dy = 0; dy < L1D; ++dy)
+         {
+            for (int dx = 0; dx < L1D; ++dx)
+            {
                energy(dx,dy,dz,e) = 0.0;
             }
          }
       }
-      for (int qz = 0; qz < Q1D; ++qz) {
+      for (int qz = 0; qz < Q1D; ++qz)
+      {
          double e_xy[L1D][L1D];
-         for (int dx = 0; dx < L1D; ++dx) {
-            for (int dy = 0; dy < L1D; ++dy) {
+         for (int dx = 0; dx < L1D; ++dx)
+         {
+            for (int dy = 0; dy < L1D; ++dy)
+            {
                e_xy[dx][dy] = 0.0;
             }
          }
-         for (int qy = 0; qy < Q1D; ++qy) {
+         for (int qy = 0; qy < Q1D; ++qy)
+         {
             double e_x[L1D];
-            for (int dx = 0; dx < L1D; ++dx) {
+            for (int dx = 0; dx < L1D; ++dx)
+            {
                e_x[dx] = 0.0;
             }
-            for (int qx = 0; qx < Q1D; ++qx) {
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
                const double r_v = vStress[qx][qy][qz];
-               for (int dx = 0; dx < L1D; ++dx) {
+               for (int dx = 0; dx < L1D; ++dx)
+               {
                   e_x[dx] += r_v * L2Bt(dx,qx);
                }
             }
-            for (int dy = 0; dy < L1D; ++dy) {
+            for (int dy = 0; dy < L1D; ++dy)
+            {
                const double w = L2Bt(dy,qy);
-               for (int dx = 0; dx < L1D; ++dx) {
+               for (int dx = 0; dx < L1D; ++dx)
+               {
                   e_xy[dx][dy] += e_x[dx] * w;
                }
             }
          }
-         for (int dz = 0; dz < L1D; ++dz) {
+         for (int dz = 0; dz < L1D; ++dz)
+         {
             const double w = L2Bt(dz,qz);
-            for (int dy = 0; dy < L1D; ++dy) {
-               for (int dx = 0; dx < L1D; ++dx) {
+            for (int dy = 0; dy < L1D; ++dy)
+            {
+               for (int dx = 0; dx < L1D; ++dx)
+               {
                   energy(dx,dy,dz,e) += w * e_xy[dx][dy];
                }
             }
@@ -1807,13 +1913,13 @@ void kForceMultTranspose3D(const int NE,
 }
 
 // *****************************************************************************
-typedef void (*fForceMultTranspose)(const int E,
-                                    const double* L2QuadToDof,
-                                    const double* H1DofToQuad,
-                                    const double* H1DofToQuadD,
-                                    const double* stressJinvT,
-                                    const double* v,
-                                    double* e);
+typedef void (*fForceMultTranspose)(const int nzones,
+                                    const double *L2QuadToDof,
+                                    const double *H1DofToQuad,
+                                    const double *H1DofToQuadD,
+                                    const double *stressJinvT,
+                                    const double *v,
+                                    double *e);
 
 // *****************************************************************************
 static void rForceMultTranspose(const int DIM,
@@ -1822,23 +1928,24 @@ static void rForceMultTranspose(const int DIM,
                                 const int L1D,
                                 const int H1D,
                                 const int nzones,
-                                const double* L2QuadToDof,
-                                const double* H1DofToQuad,
-                                const double* H1DofToQuadD,
-                                const double* stressJinvT,
-                                const double* v,
-                                double* e)
+                                const double *L2QuadToDof,
+                                const double *H1DofToQuad,
+                                const double *H1DofToQuadD,
+                                const double *stressJinvT,
+                                const double *v,
+                                double *e)
 {
    assert(D1D==H1D);
    assert(L1D==D1D-1);
    assert(Q1D==2*(D1D-1));
-   assert(Q1D==2*(D1D-1));
-   const unsigned int id = ((DIM)<<4)|(D1D-2);
-   static std::unordered_map<unsigned long long, fForceMultTranspose> call = {
-      {0x21,&kForceMultTranspose2D<2,3,4,2,3>},
-      {0x31,&kForceMultTranspose3D<3,3,4,2,3>},
+   const unsigned int id = ((DIM)<<4)|(D1D);
+   static std::unordered_map<unsigned long long, fForceMultTranspose> call =
+   {
+      {0x23,&kForceMultTranspose2D<2,3,4,2,3>},
+      {0x33,&kForceMultTranspose3D<3,3,4,2,3>},
    };
-   if (!call[id]) {
+   if (!call[id])
+   {
       printf("\n[rForceMultTranspose] id \033[33m0x%X\033[m ",id);
       fflush(stdout);
    }
@@ -1853,8 +1960,8 @@ static void rForceMultTranspose(const int DIM,
 }
 
 // *************************************************************************
-void OkinaForcePAOperator::MultTranspose(const mfem::Vector &x,
-                                         mfem::Vector &y) const {
+void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
+{
    h1restrict.Mult(x, gVecH1);
    rForceMultTranspose(dim,
                        D1D,
@@ -1865,7 +1972,7 @@ void OkinaForcePAOperator::MultTranspose(const mfem::Vector &x,
                        l2D2Q->Bt,
                        h1D2Q->B,
                        h1D2Q->G,
-                       quad_data->stressJinvT.Data(),
+                       quad_data.stressJinvT.Data(),
                        gVecH1,
                        gVecL2);
    l2restrict.MultTranspose(gVecL2, y);

@@ -120,10 +120,13 @@ public:
                                        DenseMatrix &elmat);
 };
 
+// *****************************************************************************
 // Abstract base class for the Force PA Operators
-class AbcForcePAOperator : public Operator{
+// *****************************************************************************
+class AbcForcePAOperator : public Operator
+{
 public:
-   AbcForcePAOperator(): Operator(){}
+   AbcForcePAOperator(): Operator() {}
    virtual void Mult(const Vector&, Vector&) const =0;
    virtual void MultTranspose(const Vector&, Vector&) const =0;
 };
@@ -134,8 +137,7 @@ class ForcePAOperator : public AbcForcePAOperator
 {
 private:
    const int dim, nzones;
-
-   QuadratureData *quad_data;
+   const QuadratureData &quad_data;
    FiniteElementSpace &H1FESpace, &L2FESpace;
    Tensors1D *tensors1D;
 
@@ -150,7 +152,7 @@ private:
    void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
 
 public:
-   ForcePAOperator(QuadratureData *quad_data_,
+   ForcePAOperator(const QuadratureData &quad_data_,
                    FiniteElementSpace &h1fes, FiniteElementSpace &l2fes,
                    Tensors1D *t1D)
       : AbcForcePAOperator(),
@@ -169,7 +171,7 @@ class OkinaForcePAOperator : public AbcForcePAOperator
 {
 private:
    const int dim, nzones;
-   QuadratureData *quad_data;
+   const QuadratureData &quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
    const ElemRestriction &h1restrict, &l2restrict;
    const IntegrationRule &integ_rule, &ir1D;
@@ -179,7 +181,7 @@ private:
    const DofToQuad *l2D2Q, *h1D2Q;
    mutable Vector gVecL2, gVecH1;
 public:
-   OkinaForcePAOperator(QuadratureData*,
+   OkinaForcePAOperator(const QuadratureData&,
                         ParFiniteElementSpace&,
                         ParFiniteElementSpace&,
                         const IntegrationRule&);
@@ -187,13 +189,16 @@ public:
    virtual void MultTranspose(const Vector&, Vector&) const;
 };
 
+// *****************************************************************************
 // Abstract base class for the Mass PA Operators
-class AbcMassPAOperator : public Operator{
+// *****************************************************************************
+class AbcMassPAOperator : public Operator
+{
 public:
-   AbcMassPAOperator(const int size):Operator(size){}
+   AbcMassPAOperator(const int size):Operator(size) {}
+   virtual void Mult(const Vector&, Vector&) const =0;
    virtual void ComputeDiagonal2D(Vector&) const =0;
    virtual void ComputeDiagonal3D(Vector&) const =0;
-   virtual void Mult(const Vector&, Vector&) const =0;
    virtual const Operator *GetProlongation() const =0;
    virtual const Operator *GetRestriction() const =0;
 };
@@ -203,29 +208,23 @@ class MassPAOperator : public AbcMassPAOperator
 {
 private:
    const int dim, nzones;
-
-   QuadratureData *quad_data;
-   FiniteElementSpace &FESpace;
+   const QuadratureData &quad_data;
+   const FiniteElementSpace &FESpace;
    Tensors1D *tensors1D;
-
    // Mass matrix action on quadrilateral elements in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
    // Mass matrix action on hexahedral elements in 3D.
    void MultHex(const Vector &x, Vector &y) const;
-
 public:
-   MassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
-                  Tensors1D *t1D)
+   MassPAOperator(QuadratureData &qd,
+                  FiniteElementSpace &fes, Tensors1D *t1D)
       : AbcMassPAOperator(fes.GetVSize()),
         dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), FESpace(fes), tensors1D(t1D) { }
-
+        quad_data(qd), FESpace(fes), tensors1D(t1D) { }
    // Mass matrix action.
    virtual void Mult(const Vector &x, Vector &y) const;
-
    void ComputeDiagonal2D(Vector &diag) const;
    void ComputeDiagonal3D(Vector &diag) const;
-
    virtual const Operator *GetProlongation() const
    { return FESpace.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
@@ -238,7 +237,7 @@ class OkinaMassPAOperator : public AbcMassPAOperator
 private:
    const MPI_Comm comm;
    const int dim, nzones;
-   QuadratureData *quad_data;
+   const QuadratureData &quad_data;
    FiniteElementSpace &FESpace;
    ParBilinearForm pabf;
    int ess_tdofs_count;
@@ -248,19 +247,19 @@ private:
    Tensors1D *tensors1D;
 public:
    OkinaMassPAOperator(Coefficient&,
-                       QuadratureData*,
+                       const QuadratureData&,
                        ParFiniteElementSpace&,
                        const IntegrationRule&,
                        Tensors1D *t1D);
-   void SetEssentialTrueDofs(mfem::Array<int>&);
-   void EliminateRHS(mfem::Vector&);
-   virtual void Mult(const mfem::Vector&, mfem::Vector&) const;
+   virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector &diag) const;
    virtual void ComputeDiagonal3D(Vector&) const;
    virtual const Operator *GetProlongation() const
    { return FESpace.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
    { return FESpace.GetRestrictionMatrix(); }
+   virtual void SetEssentialTrueDofs(Array<int>&);
+   virtual void EliminateRHS(Vector&) const;
 };
 
 // Scales by the inverse diagonal of the MassPAOperator.
@@ -299,17 +298,16 @@ class LocalMassPAOperator : public Operator
 private:
    const int dim;
    int zone_id;
-
-   QuadratureData *quad_data;
+   const QuadratureData &quad_data;
    Tensors1D *tensors1D;
-
    // Mass matrix action on a quadrilateral element in 2D.
    void MultQuad(const Vector &x, Vector &y) const;
    // Mass matrix action on a hexahedral element in 3D.
    void MultHex(const Vector &x, Vector &y) const;
 
 public:
-   LocalMassPAOperator(QuadratureData *quad_data_, FiniteElementSpace &fes,
+   LocalMassPAOperator(const QuadratureData &quad_data_,
+                       FiniteElementSpace &fes,
                        Tensors1D *t1D)
       : Operator(fes.GetFE(0)->GetDof()),
         dim(fes.GetMesh()->Dimension()), zone_id(0),
