@@ -162,7 +162,9 @@ gpu:
 
 gpumpi:
 	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q -cu
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q -cu
 	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q -cu
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q -cu
 
 chk: cpu mpi gpu gpumpi
 

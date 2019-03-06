@@ -340,7 +340,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-            dbg("MultTranspose");
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
