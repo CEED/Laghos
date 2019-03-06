@@ -958,13 +958,6 @@ void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
                                            diag);
 }
 
-void OkinaMassPAOperator::ComputeDiagonal3D(Vector &diag) const
-{
-   return hydrodynamics::ComputeDiagonal3D(height, nzones, true,
-                                           quad_data, FESpace, tensors1D,
-                                           diag);
-}
-
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    const int comp_size = FESpace.GetNDofs();
@@ -1117,6 +1110,9 @@ void MassPAOperator::MultHex(const Vector &x, Vector &y) const
    }
 }
 
+// *****************************************************************************
+// * LocalMassPAOperator
+// *****************************************************************************
 void LocalMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    if      (dim == 2) { MultQuad(x, y); }
@@ -1296,7 +1292,14 @@ void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 // *****************************************************************************
 void OkinaMassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   return hydrodynamics::ComputeDiagonal2D(height, nzones, true,
+   return hydrodynamics::ComputeDiagonal2D(FESpace.GetVSize(), nzones, true,
+                                           quad_data, FESpace, tensors1D,
+                                           diag);
+}
+
+void OkinaMassPAOperator::ComputeDiagonal3D(Vector &diag) const
+{
+   return hydrodynamics::ComputeDiagonal3D(FESpace.GetVSize(), nzones, true,
                                            quad_data, FESpace, tensors1D,
                                            diag);
 }

@@ -134,7 +134,9 @@ laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 
 all:;@$(MAKE) -j $(CPU) laghos
 
-check chk chkCpu:
+check chk: chkCpu chkMpi
+
+chkCpu:
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
@@ -142,7 +144,21 @@ check chk chkCpu:
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
 
-chkGpu:
+chkMpi:
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
+	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
+
+chkGpu: chkMpi
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q
@@ -151,6 +167,10 @@ chkGpu:
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q
 	./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q -cu
+
+chkGpuMpi:
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 0 -o -q -cu
+	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh -c -p 1 -o -q -cu
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
