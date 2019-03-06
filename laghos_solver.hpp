@@ -59,6 +59,8 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    ParFiniteElementSpace &H1FESpace, &L2FESpace;
    mutable ParFiniteElementSpace H1compFESpace;
+   const int VsizeL2;
+   const int VsizeH1;
 
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
@@ -112,6 +114,9 @@ protected:
    const bool qupdate;
    const double gamma;
    mutable QUpdate Q;
+   
+   mutable Vector X, B, one, rhs, e_rhs;
+   mutable ParGridFunction rhs_c_gf, dvc_gf;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],

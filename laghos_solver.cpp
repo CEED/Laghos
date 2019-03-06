@@ -95,6 +95,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    TimeDependentOperator(size),
    H1FESpace(h1_fes), L2FESpace(l2_fes),
    H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
+   VsizeL2(L2FESpace.GetVSize()),
+   VsizeH1(H1FESpace.GetVSize()),
    x_gf(&H1FESpace),
    ess_tdofs(essential_tdofs),
    dim(h1_fes.GetMesh()->Dimension()),
@@ -130,8 +132,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    Q(dim, nzones, l2dofs_cnt, h1dofs_cnt,
      use_viscosity, p_assembly, cfl, gamma,
      &timer, material_pcf, integ_rule,
-     H1FESpace, L2FESpace)
+     H1FESpace, L2FESpace),
+   X(H1compFESpace.GetTrueVSize()),
+   B(H1compFESpace.GetTrueVSize()),
+   one(VsizeL2),
+   rhs(VsizeH1),
+   e_rhs(VsizeL2),
+   rhs_c_gf(&H1compFESpace),
+   dvc_gf(&H1compFESpace)
 {
+   one = 1.0;
    if (not okina)
    {
       ForcePA = new ForcePAOperator(quad_data, h1_fes,l2_fes, &tensors1D);
@@ -283,16 +293,12 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
-   const int VsizeL2 = L2FESpace.GetVSize();
-   const int VsizeH1 = H1FESpace.GetVSize();
-
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
    dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
    dv = 0.0;
 
-   Vector one(VsizeL2), rhs(VsizeH1), B, X; one = 1.0;
    if (p_assembly)
    {
       timer.sw_force.Start();
@@ -320,10 +326,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       else // okina
       {
          // Partial assembly solve for each velocity component
-         Vector X(H1compFESpace.GetTrueVSize());
-         Vector B(H1compFESpace.GetTrueVSize());
-         ParGridFunction rhs_c_gf(&H1compFESpace);
-         ParGridFunction dvc_gf(&H1compFESpace);
          const int size = H1compFESpace.GetVSize();
          OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
          for (int c = 0; c < dim; c++)
@@ -338,6 +340,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
+            dbg("MultTranspose");
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
@@ -381,9 +384,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
-   const int VsizeL2 = L2FESpace.GetVSize();
-   const int VsizeH1 = H1FESpace.GetVSize();
-
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction de;
@@ -408,7 +408,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       if (using_gpu) { config::SwitchToDevice(); }
    }
    Array<int> l2dofs;
-   Vector e_rhs(VsizeL2), loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    if (p_assembly)
    {
       timer.sw_force.Start();
@@ -418,6 +417,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       if (e_source) { e_rhs += *e_source; }
       if (not okina)
       {
+         Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
          for (int z = 0; z < nzones; z++)
          {
             L2FESpace.GetElementDofs(z, l2dofs);
