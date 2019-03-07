@@ -898,7 +898,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               quad_data.stressJinvT.Data());
 
    // **************************************************************************
-   quad_data.dt_est = mfem::kernels::vector::Min(dt_est_sz, d_dt_est);
+   quad_data.dt_est = mfem::Min(dt_est_sz, d_dt_est);
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
    timer->quad_tstep += nzones;
