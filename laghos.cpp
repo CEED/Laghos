@@ -106,6 +106,7 @@ int main(int argc, char *argv[])
    bool okina = false;
    bool qupdate = false;
    bool cuda = false;
+   bool omp  = false;
    bool occa = false;
    bool raja = false;
    bool check = false;
@@ -168,7 +169,8 @@ int main(int argc, char *argv[])
    args.AddOption(&cuda, "-cu", "--cuda", "-no-cu", "--no-cuda", "Enable CUDA.");
    args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
    args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
-   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk", "Enable RAJA.");
+   args.AddOption(&omp,  "-om", "--omp",  "-no-om", "--no-omp",  "Enable OpenMP.");
+   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk", "Enable 2D checks.");
 
    args.Parse();
    if (!args.Good())
@@ -509,6 +511,11 @@ int main(int argc, char *argv[])
       {
          printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
          config::UseRaja();
+      }
+      if (omp)
+      {
+         printf("\033[32;1;7m[Laghos] Using OpenMP!\033[m\n");
+         config::UseOmp();
       }
       config::EnableDevice();
       config::SwitchToDevice();

@@ -1617,9 +1617,10 @@ static void kForceMult(const int DIM,
    assert(Q1D==2*(D1D-1));
    const unsigned int id = ((DIM)<<4)|(D1D);
    static std::unordered_map<unsigned long long, fForceMult> call =
-   {
-      {0x23,&kForceMult2D<2,3,4,2,3>},
-      {0x33,&kForceMult3D<3,3,4,2,3>},
+      {  // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
+         {0x23,&kForceMult2D<2,3,4,2,3>},
+         {0x24,&kForceMult2D<2,4,6,3,4>},
+         {0x33,&kForceMult3D<3,3,4,2,3>},
    };
    if (!call[id])
    {
@@ -1943,10 +1944,11 @@ static void rForceMultTranspose(const int DIM,
    assert(Q1D==2*(D1D-1));
    const unsigned int id = ((DIM)<<4)|(D1D);
    static std::unordered_map<unsigned long long, fForceMultTranspose> call =
-   {
-      {0x23,&kForceMultTranspose2D<2,3,4,2,3>},
-      {0x33,&kForceMultTranspose3D<3,3,4,2,3>},
-   };
+      {  // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
+         {0x23,&kForceMultTranspose2D<2,3,4,2,3>},
+         {0x24,&kForceMultTranspose2D<2,4,6,3,4>},
+         {0x33,&kForceMultTranspose3D<3,3,4,2,3>},
+      };
    if (!call[id])
    {
       printf("\n[rForceMultTranspose] id \033[33m0x%X\033[m ",id);
