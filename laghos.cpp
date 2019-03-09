@@ -60,6 +60,19 @@
 #include "laghos_timeinteg.hpp"
 #include <fstream>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
+long getMemoryUsage() 
+{
+   struct rusage usage;
+   const long mega = 1024*1024;
+   if (0 == getrusage(RUSAGE_SELF, &usage))
+      return usage.ru_maxrss / mega; // bytes
+   else
+      return 0;
+}
+
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
@@ -355,6 +368,7 @@ int main(int argc, char *argv[])
            << glob_size_h1 << endl;
       cout << "Number of specific internal energy dofs: "
            << glob_size_l2 << endl;
+      cout << "Initial memory usage: \033[33m" << getMemoryUsage() << " MB\033[m" <<endl;
    }
 
    int Vsize_l2 = L2FESpace.GetVSize();
@@ -497,26 +511,10 @@ int main(int argc, char *argv[])
    // OKINA mode setup
    if (okina)
    {
-      if (cuda)
-      {
-         printf("\033[32;1;7m[Laghos] Using CUDA!\033[m\n");
-         config::UseCuda();
-      }
-      if (occa)
-      {
-         printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
-         config::UseOcca();
-      }
-      if (raja)
-      {
-         printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
-         config::UseRaja();
-      }
-      if (omp)
-      {
-         printf("\033[32;1;7m[Laghos] Using OpenMP!\033[m\n");
-         config::UseOmp();
-      }
+      if (cuda) { config::UseCuda(); }
+      if (occa) { config::UseOcca(); }
+      if (raja) { config::UseRaja(); }
+      if (omp) { config::UseOmp(); }
       config::EnableDevice();
       config::SwitchToDevice();
    }
@@ -576,6 +574,8 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
+         long mem = getMemoryUsage(), mem_max;
+         MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
          if (mpi.Root())
          {
             const double sqrt_tot_norm = sqrt(tot_norm);
@@ -584,7 +584,9 @@ int main(int argc, char *argv[])
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt_tot_norm << endl;
+                 << sqrt_tot_norm
+                 << ",\tmem: \033[33m" << mem_max << " MB\033[m"
+                 << endl;
             // 2D Taylor-Green & Sedov problems checks
             if (check)
             {
