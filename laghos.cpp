@@ -359,20 +359,18 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-
+   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
+   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
    if (mpi.Root())
    {
-      cout << "Number of kinematic (position, velocity) dofs: "
-           << glob_size_h1 << endl;
-      cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
-      cout << "Initial memory usage: \033[33m" << getMemoryUsage() << " MB\033[m" <<endl;
+      cout << "Number of kinematic (position, velocity) global dofs: "
+           << glob_size_h1 << ", local: " << Vsize_h1 << endl;
+      cout << "Number of specific internal energy global dofs: "
+           << glob_size_l2 << ", local: " << Vsize_l2 << endl;
    }
 
-   int Vsize_l2 = L2FESpace.GetVSize();
-   int Vsize_h1 = H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
@@ -528,6 +526,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+   long mem, mem_max, mem_sum;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -574,8 +573,9 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
-         long mem = getMemoryUsage(), mem_max;
+         mem = getMemoryUsage();
          MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+         MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          if (mpi.Root())
          {
             const double sqrt_tot_norm = sqrt(tot_norm);
@@ -585,7 +585,8 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
                  << sqrt_tot_norm
-                 << ",\tmem: \033[33m" << mem_max << " MB\033[m"
+                 << ", mmax: \033[33m" << mem_max << "MB\033[m"
+                 << ", msum: \033[31m" << mem_sum << "MB\033[m"
                  << endl;
             // 2D Taylor-Green & Sedov problems checks
             if (check)
