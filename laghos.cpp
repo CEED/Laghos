@@ -60,6 +60,19 @@
 #include "laghos_timeinteg.hpp"
 #include <fstream>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
+long getMemoryUsage() 
+{
+   struct rusage usage;
+   const long mega = 1024*1024;
+   if (0 == getrusage(RUSAGE_SELF, &usage))
+      return usage.ru_maxrss / mega; // bytes
+   else
+      return 0;
+}
+
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
@@ -346,19 +359,18 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-
+   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
+   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
    if (mpi.Root())
    {
-      cout << "Number of kinematic (position, velocity) dofs: "
-           << glob_size_h1 << endl;
-      cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
+      cout << "Number of kinematic (position, velocity) global dofs: "
+           << glob_size_h1 << ", local: " << Vsize_h1 << endl;
+      cout << "Number of specific internal energy global dofs: "
+           << glob_size_l2 << ", local: " << Vsize_l2 << endl;
    }
 
-   int Vsize_l2 = L2FESpace.GetVSize();
-   int Vsize_h1 = H1FESpace.GetVSize();
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
@@ -497,26 +509,10 @@ int main(int argc, char *argv[])
    // OKINA mode setup
    if (okina)
    {
-      if (cuda)
-      {
-         printf("\033[32;1;7m[Laghos] Using CUDA!\033[m\n");
-         config::UseCuda();
-      }
-      if (occa)
-      {
-         printf("\033[32;1;7m[Laghos] Using OCCA!\033[m\n");
-         config::UseOcca();
-      }
-      if (raja)
-      {
-         printf("\033[32;1;7m[Laghos] Using RAJA!\033[m\n");
-         config::UseRaja();
-      }
-      if (omp)
-      {
-         printf("\033[32;1;7m[Laghos] Using OpenMP!\033[m\n");
-         config::UseOmp();
-      }
+      if (cuda) { config::UseCuda(); }
+      if (occa) { config::UseOcca(); }
+      if (raja) { config::UseRaja(); }
+      if (omp) { config::UseOmp(); }
       config::EnableDevice();
       config::SwitchToDevice();
    }
@@ -530,6 +526,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+   long mem, mem_max, mem_sum;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -576,6 +573,9 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
+         mem = getMemoryUsage();
+         MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+         MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          if (mpi.Root())
          {
             const double sqrt_tot_norm = sqrt(tot_norm);
@@ -584,7 +584,10 @@ int main(int argc, char *argv[])
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt_tot_norm << endl;
+                 << sqrt_tot_norm
+                 << ", mmax: \033[33m" << mem_max << "MB\033[m"
+                 << ", msum: \033[31m" << mem_sum << "MB\033[m"
+                 << endl;
             // 2D Taylor-Green & Sedov problems checks
             if (check)
             {
