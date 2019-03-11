@@ -44,12 +44,12 @@ struct TimingData
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
    // These accumulate the total processed dofs or quad points:
-   // #(CG iterations) for the H1 CG solve.
+   // #dofs  * #(CG iterations) for the H1 CG solve.
    // #dofs  * #(CG iterations) for the L2 CG solve.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   int H1cg_iter, L2dof_iter, quad_tstep;
+   int H1dof_iter, L2dof_iter, quad_tstep;
 
-   TimingData() : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
+   TimingData() : H1dof_iter(0), L2dof_iter(0), quad_tstep(0) { }
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -59,8 +59,15 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    ParFiniteElementSpace &H1FESpace, &L2FESpace;
    mutable ParFiniteElementSpace H1compFESpace;
-   const int VsizeL2;
-   const int VsizeH1;
+
+   // FE spaces local and global sizes
+   const int H1Vsize;
+   const int H1TVSize;
+   const HYPRE_Int H1GTVSize;
+   const int H1compGTVSize;
+   const int L2Vsize;
+   const int L2TVSize;
+   const HYPRE_Int L2GTVSize;
 
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;

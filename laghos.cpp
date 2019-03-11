@@ -56,21 +56,23 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
-#include "laghos_solver.hpp"
-#include "laghos_timeinteg.hpp"
 #include <fstream>
-
 #include <sys/time.h>
 #include <sys/resource.h>
 
-long getMemoryUsage() 
+#include "laghos_solver.hpp"
+#include "laghos_timeinteg.hpp"
+
+long GetMaxRssMB() 
 {
    struct rusage usage;
-   const long mega = 1024*1024;
-   if (0 == getrusage(RUSAGE_SELF, &usage))
-      return usage.ru_maxrss / mega; // bytes
-   else
-      return 0;
+   if (getrusage(RUSAGE_SELF, &usage)) return -1; 
+#ifndef __APPLE__
+   const long unit = 1024; // kilo
+#else
+   const long unit = 1024*1024; // mega 
+#endif
+   return usage.ru_maxrss/unit; // mega bytes
 }
 
 using namespace std;
@@ -123,6 +125,7 @@ int main(int argc, char *argv[])
    bool occa = false;
    bool raja = false;
    bool check = false;
+   bool mem_usage = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -184,6 +187,7 @@ int main(int argc, char *argv[])
    args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
    args.AddOption(&omp,  "-om", "--omp",  "-no-om", "--no-omp",  "Enable OpenMP.");
    args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk", "Enable 2D checks.");
+   args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem", "Enable memory usage.");
 
    args.Parse();
    if (!args.Good())
@@ -365,10 +369,10 @@ int main(int argc, char *argv[])
    const int Vsize_h1 = H1FESpace.GetVSize();
    if (mpi.Root())
    {
-      cout << "Number of kinematic (position, velocity) global dofs: "
-           << glob_size_h1 << ", local: " << Vsize_h1 << endl;
-      cout << "Number of specific internal energy global dofs: "
-           << glob_size_l2 << ", local: " << Vsize_l2 << endl;
+      cout << "Number of local/global kinematic (position, velocity) dofs: "
+           << Vsize_h1 << "/" << glob_size_h1 << endl;
+      cout << "Number of local/global specific internal energy dofs: "
+           << Vsize_l2 << "/" << glob_size_l2 << endl;
    }
 
 
@@ -573,9 +577,11 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
-         mem = getMemoryUsage();
-         MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-         MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+         if (mem_usage){
+            mem = GetMaxRssMB();
+            MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+            MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+         }
          if (mpi.Root())
          {
             const double sqrt_tot_norm = sqrt(tot_norm);
@@ -584,10 +590,13 @@ int main(int argc, char *argv[])
                  << ",\tt = " << setw(5) << setprecision(4) << t
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
-                 << sqrt_tot_norm
-                 << ", mmax: \033[33m" << mem_max << "MB\033[m"
-                 << ", msum: \033[31m" << mem_sum << "MB\033[m"
-                 << endl;
+                 << sqrt_tot_norm;
+            if (mem_usage){
+               cout << ", mem max/sum: "
+                    << mem_max << "/"
+                    << mem_sum << " MB";
+            }
+            cout << endl;
             // 2D Taylor-Green & Sedov problems checks
             if (check)
             {

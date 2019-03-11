@@ -95,8 +95,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    TimeDependentOperator(size),
    H1FESpace(h1_fes), L2FESpace(l2_fes),
    H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
-   VsizeL2(L2FESpace.GetVSize()),
-   VsizeH1(H1FESpace.GetVSize()),
+   
+   H1Vsize(H1FESpace.GetVSize()),
+   H1TVSize(H1FESpace.TrueVSize()),
+   H1GTVSize(H1FESpace.GlobalTrueVSize()),
+   H1compGTVSize(H1compFESpace.GlobalTrueVSize()),
+   L2Vsize(L2FESpace.GetVSize()),
+   L2TVSize(L2FESpace.TrueVSize()),
+   L2GTVSize(L2FESpace.GlobalTrueVSize()),
    x_gf(&H1FESpace),
    ess_tdofs(essential_tdofs),
    dim(h1_fes.GetMesh()->Dimension()),
@@ -135,9 +141,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
      H1FESpace, L2FESpace),
    X(H1compFESpace.GetTrueVSize()),
    B(H1compFESpace.GetTrueVSize()),
-   one(VsizeL2),
-   rhs(VsizeH1),
-   e_rhs(VsizeL2),
+   one(L2Vsize),
+   rhs(H1Vsize),
+   e_rhs(L2Vsize),
    rhs_c_gf(&H1compFESpace),
    dvc_gf(&H1compFESpace)
 {
@@ -251,14 +257,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(3);
+      CG_VMass.SetPrintLevel(0);
 
       CG_EMass.SetOperator(*EMassPA);
       CG_EMass.iterative_mode = false;
       CG_EMass.SetRelTol(1e-8);
       CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
       CG_EMass.SetMaxIter(200);
-      CG_EMass.SetPrintLevel(-1);
+      CG_EMass.SetPrintLevel(0);
    }
 }
 
@@ -296,7 +302,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
-   dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
+   dv.MakeRef(&H1FESpace, dS_dt, H1Vsize);
    dv = 0.0;
 
    if (p_assembly)
@@ -319,7 +325,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          timer.sw_cgH1.Start();
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
-         timer.H1cg_iter += cg.GetNumIterations();
+         timer.H1dof_iter += H1TVSize * cg.GetNumIterations();
          VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
       }
@@ -330,7 +336,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
          for (int c = 0; c < dim; c++)
          {
-            dvc_gf.MakeRef(&H1compFESpace, dS_dt, VsizeH1 + c*size);
+            dvc_gf.MakeRef(&H1compFESpace, dS_dt, H1Vsize + c*size);
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
             dvc_gf = 0.0;
             Array<int> c_tdofs;
@@ -347,7 +353,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
-            timer.H1cg_iter += CG_VMass.GetNumIterations();
+            const int H1compTVSize = H1compFESpace.GetTrueVSize();
+            timer.H1dof_iter += H1compTVSize * CG_VMass.GetNumIterations();
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -372,7 +379,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
-      timer.H1cg_iter += cg.GetNumIterations();
+      timer.H1dof_iter += H1TVSize * cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 }
@@ -386,17 +393,13 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction de;
-   de.MakeRef(&L2FESpace, dS_dt, VsizeH1*2);
+   de.MakeRef(&L2FESpace, dS_dt, H1Vsize*2);
    de = 0.0;
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      // Refresh coords to pmesh for e_source Assemble
-      //Vector* sptr = (Vector*) &S;
-      //x_gf.MakeRef(&H1FESpace, *sptr, 0);
-      //H1FESpace.GetParMesh()->NewNodes(x_gf, false);
       const bool using_gpu = config::UsingDevice();
       if (using_gpu) { config::SwitchToHost(); }
       e_source = new LinearForm(&L2FESpace);
@@ -425,8 +428,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
             timer.sw_cgL2.Start();
             locCG.Mult(loc_rhs, loc_de);
             timer.sw_cgL2.Stop();
-            timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
+            timer.L2dof_iter += l2dofs_cnt * locCG.GetNumIterations();
             de.SetSubVector(l2dofs, loc_de);
+            //assert(l2dofs_cnt==loc_de.Size());
          }
       }
       else // okina
@@ -434,7 +438,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Start();
          CG_EMass.Mult(e_rhs, de);
          timer.sw_cgL2.Stop();
-         timer.L2dof_iter += CG_EMass.GetNumIterations() * l2dofs_cnt;
+         const int L2VSize = L2FESpace.GetVSize();
+         timer.L2dof_iter += L2TVSize * CG_EMass.GetNumIterations();
+         //assert(L2TVSize==de.Size());
       }
    }
    else // not p_assembly
@@ -451,7 +457,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Start();
          Me_inv(z).Mult(loc_rhs, loc_de);
          timer.sw_cgL2.Stop();
-         timer.L2dof_iter += l2dofs_cnt;
+         timer.L2dof_iter += l2dofs_cnt * locCG.GetNumIterations();
          de.SetSubVector(l2dofs, loc_de);
       }
    }
@@ -545,31 +551,30 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
-   HYPRE_Int mydata[2], alldata[2];
-   mydata[0] = timer.L2dof_iter;
-   mydata[1] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0,
+   HYPRE_Int mydata[3], alldata[3];
+   mydata[0] = timer.H1dof_iter;
+   mydata[1] = timer.L2dof_iter;
+   mydata[2] = timer.quad_tstep;
+   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0,
               H1FESpace.GetComm());
 
    if (IamRoot)
    {
-      const HYPRE_Int H1gsize = H1FESpace.GlobalTrueVSize(),
-                      L2gsize = L2FESpace.GlobalTrueVSize();
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * H1gsize * timer.H1cg_iter / rt_max[0] << endl;
+           << 1e-6 * alldata[0] / rt_max[0] << endl;
       cout << endl;
       cout << "CG (L2) total time: " << rt_max[1] << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / rt_max[1] << endl;
+           << 1e-6 * alldata[1] / rt_max[1] << endl;
       cout << endl;
       // The Force operator is applied twice per time step, on the H1 and the L2
       // vectors, respectively.
       cout << "Forces total time: " << rt_max[2] << endl;
       cout << "Forces rate (megadofs x timesteps / second): "
-           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[2] << endl;
+           << 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[2] << endl;
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
@@ -577,7 +582,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
-           << 1e-6 * steps * (H1gsize + L2gsize) / rt_max[4] << endl;
+           << 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[4] << endl;
    }
 }
 
