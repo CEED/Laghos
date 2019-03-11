@@ -64,7 +64,7 @@ protected:
    const int H1Vsize;
    const int H1TVSize;
    const HYPRE_Int H1GTVSize;
-   const int H1compGTVSize;
+   const int H1compTVSize;
    const int L2Vsize;
    const int L2TVSize;
    const HYPRE_Int L2GTVSize;
