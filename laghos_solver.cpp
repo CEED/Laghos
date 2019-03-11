@@ -251,7 +251,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(-1);
+      CG_VMass.SetPrintLevel(3);
 
       CG_EMass.SetOperator(*EMassPA);
       CG_EMass.iterative_mode = false;

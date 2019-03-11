@@ -6,9 +6,9 @@ from pylab import *
 #rc('lines',  linestyle=None, marker='.', markersize=3)
 rc('legend', fontsize=10)
 
-txt_pa  = loadtxt("timings_3d_pa");
-txt_fa  = loadtxt("timings_3d_fa");
-txt_oc  = loadtxt("timings_3d_occa");
+txt_pa  = loadtxt("timings_2d_pa");
+#txt_fa  = loadtxt("timings_2d_fa");
+#txt_oc  = loadtxt("timings_3d_occa");
 
 def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
   cm=get_cmap('Set1') # 'Accent', 'Dark2', 'Set1', 'Set2', 'Set3'
@@ -54,8 +54,8 @@ def make_plot(column, label_prefix, line_style, txt, title=None, fig=None):
   return fig
 
 f1 = make_plot(8, 'PA: ', 'o-', txt_pa, title='Total Rate')
-f2 = make_plot(8, 'FA: ', 'o-', txt_fa, title='Total Rate')
-f3 = make_plot(8, 'OCCA: ', 'o-', txt_oc, title='Total Rate')
+#f2 = make_plot(8, 'FA: ', 'o-', txt_fa, title='Total Rate')
+#f3 = make_plot(8, 'OCCA: ', 'o-', txt_oc, title='Total Rate')
 #f1.savefig('laghos_3D_TT_PA.png', dpi=300, bbox_inches='tight')
 #f2.savefig('laghos_3D_TT_FA.png', dpi=300, bbox_inches='tight')
 #f3.savefig('laghos_3D_TT_OC.png', dpi=300, bbox_inches='tight')
