@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
    bool raja = false;
    bool check = false;
    bool mem_usage = false;
-     
+
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
@@ -317,10 +317,10 @@ int main(int argc, char *argv[])
                      "Expected " << mesh->SpaceDimension() << " integers with the "
                      "option --cartesian-partitioning.");
          MFEM_VERIFY(!cartesian_partitioning || num_tasks == cproduct,
-           "Expected cartesian partitioning product to match number of ranks.");
+                     "Expected cartesian partitioning product to match number of ranks.");
       }
       int *partitioning = cartesian_partitioning ? mesh->CartesianPartitioning(cxyz):
-         mesh->CartesianPartitioning(nxyz);
+                          mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete [] partitioning;
    }

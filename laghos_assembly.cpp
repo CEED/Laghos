@@ -1621,6 +1621,7 @@ static void kForceMult(const int DIM,
       // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
       {0x23,&kForceMult2D<2,3,4,2,3>},
       {0x24,&kForceMult2D<2,4,6,3,4>},
+      {0x25,&kForceMult2D<2,5,8,4,5>},
       {0x33,&kForceMult3D<3,3,4,2,3>},
    };
    if (!call[id])
@@ -1949,6 +1950,7 @@ static void rForceMultTranspose(const int DIM,
       // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
       {0x23,&kForceMultTranspose2D<2,3,4,2,3>},
       {0x24,&kForceMultTranspose2D<2,4,6,3,4>},
+      {0x25,&kForceMultTranspose2D<2,5,8,4,5>},
       {0x33,&kForceMultTranspose3D<3,3,4,2,3>},
    };
    if (!call[id])
