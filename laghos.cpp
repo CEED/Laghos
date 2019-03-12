@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
    const char *mesh_file = "data/cube01_hex.mesh";
    int rs_levels = 2;
    int rp_levels = 0;
+   Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
@@ -126,7 +127,7 @@ int main(int argc, char *argv[])
    bool raja = false;
    bool check = false;
    bool mem_usage = false;
-
+     
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
@@ -134,6 +135,8 @@ int main(int argc, char *argv[])
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
+   args.AddOption(&cxyz, "-c", "--cartesian-partitioning",
+                  "Use Cartesian partitioning.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
@@ -186,11 +189,10 @@ int main(int argc, char *argv[])
    args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
    args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
    args.AddOption(&omp,  "-om", "--omp",  "-no-om", "--no-omp",  "Enable OpenMP.");
-   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk",
+   args.AddOption(&check, "-chk", "--chk", "-no-chk", "--no-chk",
                   "Enable 2D checks.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
                   "Enable memory usage.");
-
    args.Parse();
    if (!args.Good())
    {
@@ -213,7 +215,11 @@ int main(int argc, char *argv[])
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
-
+   const int mesh_NE = mesh->GetNE();
+   if (mpi.Root())
+   {
+      cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
+   }
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit;
@@ -237,6 +243,10 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
+      case 31: // 2D
+         unit = floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2);
+         nxyz[0] = 3 * unit; nxyz[1] = unit;
+         break;
       case 311: // 3D.
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 3 * unit; nxyz[1] = unit; nxyz[2] = unit;
@@ -245,6 +255,10 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
          nxyz[0] = 3 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
+      case 32: // 2D
+         unit = floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2);
+         nxyz[0] = 3 * unit / 2; nxyz[1] = unit;
+         break;
       case 322: // 3D.
          unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 3 * unit / 2; nxyz[1] = unit; nxyz[2] = unit;
@@ -252,6 +266,10 @@ int main(int argc, char *argv[])
       case 432: // 3D.
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
+         break;
+      case 51: // 2D
+         unit = floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = unit;
          break;
       case 511: // 3D.
          unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
@@ -286,11 +304,23 @@ int main(int argc, char *argv[])
          MPI_Finalize();
          return 3;
    }
-   int product = 1;
-   for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   if (product == num_tasks)
+   int nproduct = 1;
+   for (int d = 0; d < dim; d++) { nproduct *= nxyz[d]; }
+   const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
+   if (nproduct == num_tasks || cartesian_partitioning)
    {
-      int *partitioning = mesh->CartesianPartitioning(nxyz);
+      if (cartesian_partitioning)
+      {
+         int cproduct = 1;
+         for (int d = 0; d < dim; d++) { cproduct *= cxyz[d]; }
+         MFEM_VERIFY(!cartesian_partitioning || cxyz.Size() == dim,
+                     "Expected " << mesh->SpaceDimension() << " integers with the "
+                     "option --cartesian-partitioning.");
+         MFEM_VERIFY(!cartesian_partitioning || num_tasks == cproduct,
+           "Expected cartesian partitioning product to match number of ranks.");
+      }
+      int *partitioning = cartesian_partitioning ? mesh->CartesianPartitioning(cxyz):
+         mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete [] partitioning;
    }
@@ -529,6 +559,7 @@ int main(int argc, char *argv[])
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
+   max_tsteps -= 1;
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
@@ -565,7 +596,9 @@ int main(int argc, char *argv[])
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
-         ti--; continue;
+         steps--;
+         ti--;
+         continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
