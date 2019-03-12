@@ -121,7 +121,7 @@ protected:
    const bool qupdate;
    const double gamma;
    mutable QUpdate Q;
-   
+
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
 

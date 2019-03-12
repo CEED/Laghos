@@ -95,7 +95,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    TimeDependentOperator(size),
    H1FESpace(h1_fes), L2FESpace(l2_fes),
    H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
-   
+
    H1Vsize(H1FESpace.GetVSize()),
    H1TVSize(H1FESpace.TrueVSize()),
    H1GTVSize(H1FESpace.GlobalTrueVSize()),

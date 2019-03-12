@@ -63,14 +63,14 @@
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
 
-long GetMaxRssMB() 
+long GetMaxRssMB()
 {
    struct rusage usage;
-   if (getrusage(RUSAGE_SELF, &usage)) return -1; 
+   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
 #ifndef __APPLE__
    const long unit = 1024; // kilo
 #else
-   const long unit = 1024*1024; // mega 
+   const long unit = 1024*1024; // mega
 #endif
    return usage.ru_maxrss/unit; // mega bytes
 }
@@ -186,8 +186,10 @@ int main(int argc, char *argv[])
    args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
    args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
    args.AddOption(&omp,  "-om", "--omp",  "-no-om", "--no-omp",  "Enable OpenMP.");
-   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk", "Enable 2D checks.");
-   args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem", "Enable memory usage.");
+   args.AddOption(&check, "-c", "--chk", "-no-chk", "--no-chk",
+                  "Enable 2D checks.");
+   args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
+                  "Enable memory usage.");
 
    args.Parse();
    if (!args.Good())
@@ -577,7 +579,8 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
-         if (mem_usage){
+         if (mem_usage)
+         {
             mem = GetMaxRssMB();
             MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
@@ -591,8 +594,9 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << setw(5) << setprecision(6) << dt
                  << ",\t|e| = " << setprecision(10)
                  << sqrt_tot_norm;
-            if (mem_usage){
-               cout << ", mem max/sum: "
+            if (mem_usage)
+            {
+               cout << ", mem: "
                     << mem_max << "/"
                     << mem_sum << " MB";
             }
