@@ -132,10 +132,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    CG_EMass(L2FESpace.GetParMesh()->GetComm()),
    locCG(),
    timer(okina? H1compTVSize:
-                H1TVSize,
+         H1TVSize,
          okina? L2TVSize:
-                p_assembly? l2dofs_cnt:
-                            1),
+         p_assembly? l2dofs_cnt:
+         1),
    // QUpdate bool and inputs
    qupdate(qupt),
    gamma(gm),
@@ -575,7 +575,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
-      cout << "alldata[0]=" << alldata[0];
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
            << 1e-6 * alldata[0] / rt_max[0] << endl;
       cout << endl;
