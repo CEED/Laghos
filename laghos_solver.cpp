@@ -131,7 +131,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    CG_VMass(H1FESpace.GetParMesh()->GetComm()),
    CG_EMass(L2FESpace.GetParMesh()->GetComm()),
    locCG(),
-   timer(),
+   timer(okina? H1compTVSize:
+                H1TVSize,
+         okina? L2TVSize:
+                p_assembly? l2dofs_cnt:
+                            1),
    // QUpdate bool and inputs
    qupdate(qupt),
    gamma(gm),
@@ -325,8 +329,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          timer.sw_cgH1.Start();
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
-         const int cg_num_iter = cg.GetNumIterations();
-         timer.H1dof_iter += H1TVSize * max(1, cg_num_iter);
+         const HYPRE_Int cg_num_iter = cg.GetNumIterations();
+         //timer.H1dof = H1TVSize;
+         timer.H1iter += max(1, cg_num_iter);
          VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
       }
@@ -354,8 +359,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
-            const int cg_num_iter = CG_VMass.GetNumIterations();
-            timer.H1dof_iter += H1compTVSize * max(1, cg_num_iter);
+            const HYPRE_Int cg_num_iter = CG_VMass.GetNumIterations();
+            //timer.H1dof = H1compTVSize;
+            timer.H1iter += max(1, cg_num_iter);
+            MFEM_ASSERT(timer.H1iter>0, "timer.H1iter overflow");
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -380,8 +387,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
-      const int cg_num_iter = cg.GetNumIterations();
-      timer.H1dof_iter += H1TVSize * max(1, cg_num_iter);
+      const HYPRE_Int cg_num_iter = cg.GetNumIterations();
+      // H1TVSize
+      timer.H1iter += max(1, cg_num_iter);
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 }
@@ -430,8 +438,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
             timer.sw_cgL2.Start();
             locCG.Mult(loc_rhs, loc_de);
             timer.sw_cgL2.Stop();
-            const int cg_num_iter = locCG.GetNumIterations();
-            timer.L2dof_iter += l2dofs_cnt * max(1, cg_num_iter);
+            const HYPRE_Int cg_num_iter = locCG.GetNumIterations();
+            //timer.L2dof = l2dofs_cnt;
+            timer.L2iter += max(1, cg_num_iter);
             de.SetSubVector(l2dofs, loc_de);
          }
       }
@@ -440,8 +449,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Start();
          CG_EMass.Mult(e_rhs, de);
          timer.sw_cgL2.Stop();
-         const int cg_num_iter = CG_EMass.GetNumIterations();
-         timer.L2dof_iter += L2TVSize * max(1, cg_num_iter);
+         const HYPRE_Int cg_num_iter = CG_EMass.GetNumIterations();
+         //timer.L2dof = L2TVSize;
+         timer.L2iter += max(1, cg_num_iter);
       }
    }
    else // not p_assembly
@@ -458,7 +468,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Start();
          Me_inv(z).Mult(loc_rhs, loc_de);
          timer.sw_cgL2.Stop();
-         timer.L2dof_iter += l2dofs_cnt;
+         //timer.L2dof = 1;
+         timer.L2iter += 1;
          de.SetSubVector(l2dofs, loc_de);
       }
    }
@@ -553,8 +564,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
 
    HYPRE_Int mydata[3], alldata[3];
-   mydata[0] = timer.H1dof_iter;
-   mydata[1] = timer.L2dof_iter;
+   mydata[0] = timer.H1dof * timer.H1iter;
+   mydata[1] = timer.L2dof * timer.L2iter;
    mydata[2] = timer.quad_tstep;
    MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0,
               H1FESpace.GetComm());
@@ -564,6 +575,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
+      cout << "alldata[0]=" << alldata[0];
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
            << 1e-6 * alldata[0] / rt_max[0] << endl;
       cout << endl;

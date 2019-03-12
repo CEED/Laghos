@@ -365,16 +365,16 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-   const int Vsize_l2 = L2FESpace.GetVSize();
-   const int Vsize_h1 = H1FESpace.GetVSize();
+   const HYPRE_Int H1GTVSize = H1FESpace.GlobalTrueVSize();
+   const HYPRE_Int L2GTVSize = L2FESpace.GlobalTrueVSize();
+   const int H1Vsize = H1FESpace.GetVSize();
+   const int L2Vsize = L2FESpace.GetVSize();
    if (mpi.Root())
    {
       cout << "Number of local/global kinematic (position, velocity) dofs: "
-           << Vsize_h1 << "/" << glob_size_h1 << endl;
+           << H1Vsize << "/" << H1GTVSize << endl;
       cout << "Number of local/global specific internal energy dofs: "
-           << Vsize_l2 << "/" << glob_size_l2 << endl;
+           << L2Vsize << "/" << L2GTVSize << endl;
    }
 
 
@@ -385,9 +385,9 @@ int main(int argc, char *argv[])
 
    Array<int> true_offset(4);
    true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
+   true_offset[1] = true_offset[0] + H1Vsize;
+   true_offset[2] = true_offset[1] + H1Vsize;
+   true_offset[3] = true_offset[2] + L2Vsize;
    BlockVector S(true_offset);
 
    // Define GridFunction objects for the position, velocity and specific

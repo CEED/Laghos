@@ -43,13 +43,18 @@ struct TimingData
    // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
-   // These accumulate the total processed dofs or quad points:
-   // #dofs  * #(CG iterations) for the H1 CG solve.
-   // #dofs  * #(CG iterations) for the L2 CG solve.
-   // #quads * #(RK sub steps) for the quadrature data computations.
-   int H1dof_iter, L2dof_iter, quad_tstep;
+   // These store the number of dofs in the coresponding CG
+   const HYPRE_Int H1dof, L2dof;
 
-   TimingData() : H1dof_iter(0), L2dof_iter(0), quad_tstep(0) { }
+   // These accumulate the total processed dofs or quad points:
+   // #(CG iterations) for the H1 CG solve.
+   // #(CG iterations) for the L2 CG solve.
+   // #quads * #(RK sub steps) for the quadrature data computations.
+   HYPRE_Int H1iter, L2iter;
+   HYPRE_Int quad_tstep;
+
+   TimingData(const HYPRE_Int h1d, const HYPRE_Int l2d) :
+      H1dof(h1d), L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
