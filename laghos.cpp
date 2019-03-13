@@ -63,18 +63,6 @@
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
 
-long GetMaxRssMB()
-{
-   struct rusage usage;
-   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
-#ifndef __APPLE__
-   const long unit = 1024; // kilo
-#else
-   const long unit = 1024*1024; // mega
-#endif
-   return usage.ru_maxrss/unit; // mega bytes
-}
-
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
@@ -87,6 +75,8 @@ void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma(const Vector &);
 void display_banner(ostream & os);
+
+static long GetMaxRssMB();
 
 int main(int argc, char *argv[])
 {
@@ -756,6 +746,15 @@ int main(int argc, char *argv[])
       cout << endl;
       cout << "Energy  diff: " << scientific << setprecision(2)
            << fabs(energy_init - energy_final) << endl;
+      if (mem_usage)
+      {
+         mem = GetMaxRssMB();
+         MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+         MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+         cout << "Maximum memory resident set size: "
+              << mem_max << "/"
+              << mem_sum << " MB";
+      }
    }
 
    // Print the error.
@@ -908,4 +907,16 @@ void display_banner(ostream & os)
       << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
       << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
       << "               /____/                       " << endl << endl;
+}
+
+static long GetMaxRssMB()
+{
+   struct rusage usage;
+   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
+#ifndef __APPLE__
+   const long unit = 1024; // kilo
+#else
+   const long unit = 1024*1024; // mega
+#endif
+   return usage.ru_maxrss/unit; // mega bytes
 }
