@@ -252,7 +252,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    locCG.SetRelTol(1e-8);
    locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
    locCG.SetMaxIter(200);
-   locCG.SetPrintLevel(0);
+   locCG.SetPrintLevel(-1);
 
    if (okina)
    {
@@ -261,14 +261,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(0);
+      CG_VMass.SetPrintLevel(-1);
 
       CG_EMass.SetOperator(*EMassPA);
       CG_EMass.iterative_mode = false;
       CG_EMass.SetRelTol(1e-8);
       CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
       CG_EMass.SetMaxIter(200);
-      CG_EMass.SetPrintLevel(0);
+      CG_EMass.SetPrintLevel(-1);
    }
 }
 
@@ -325,7 +325,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          cg.SetOperator(*cVMassPA);
          cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
          cg.SetMaxIter(cg_max_iter);
-         cg.SetPrintLevel(0);
+         cg.SetPrintLevel(-1);
          timer.sw_cgH1.Start();
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
@@ -383,7 +383,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       cg.SetOperator(A);
       cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
       cg.SetMaxIter(cg_max_iter);
-      cg.SetPrintLevel(0);
+      cg.SetPrintLevel(-1);
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();

@@ -741,20 +741,22 @@ int main(int argc, char *argv[])
 
    const double energy_final = oper.InternalEnergy(e_gf) +
                                oper.KineticEnergy(v_gf);
+   if (mem_usage)
+   {
+      mem = GetMaxRssMB();
+      MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+      MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+   }
+
    if (mpi.Root())
    {
       cout << endl;
       cout << "Energy  diff: " << scientific << setprecision(2)
            << fabs(energy_init - energy_final) << endl;
-      if (mem_usage)
-      {
-         mem = GetMaxRssMB();
-         MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-         MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
-         cout << "Maximum memory resident set size: "
-              << mem_max << "/"
-              << mem_sum << " MB";
-      }
+      cout << "Maximum memory resident set size: "
+           << mem_max << "/"
+           << mem_sum << " MB"
+           << endl;
    }
 
    // Print the error.
