@@ -131,11 +131,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    CG_VMass(H1FESpace.GetParMesh()->GetComm()),
    CG_EMass(L2FESpace.GetParMesh()->GetComm()),
    locCG(),
-   timer(okina? H1compTVSize:
-         H1TVSize,
-         okina? L2TVSize:
-         p_assembly? l2dofs_cnt:
-         1),
+   // Energy solver can be global, local or just a direct inverse
+   timer(okina? L2TVSize: p_assembly? l2dofs_cnt: 1),
    // QUpdate bool and inputs
    qupdate(qupt),
    gamma(gm),
@@ -330,8 +327,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
          const HYPRE_Int cg_num_iter = cg.GetNumIterations();
-         //timer.H1dof = H1TVSize;
-         timer.H1iter += max(1, cg_num_iter);
+         timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
          VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
       }
@@ -360,9 +356,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
             const HYPRE_Int cg_num_iter = CG_VMass.GetNumIterations();
-            //timer.H1dof = H1compTVSize;
-            timer.H1iter += max(1, cg_num_iter);
-            MFEM_ASSERT(timer.H1iter>0, "timer.H1iter overflow");
+            timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
+            MFEM_VERIFY(timer.H1iter>0, "timer.H1iter overflow");
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -388,8 +383,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
       const HYPRE_Int cg_num_iter = cg.GetNumIterations();
-      // H1TVSize
-      timer.H1iter += max(1, cg_num_iter);
+      timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 }
@@ -439,8 +433,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
             locCG.Mult(loc_rhs, loc_de);
             timer.sw_cgL2.Stop();
             const HYPRE_Int cg_num_iter = locCG.GetNumIterations();
-            //timer.L2dof = l2dofs_cnt;
-            timer.L2iter += max(1, cg_num_iter);
+            timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
             de.SetSubVector(l2dofs, loc_de);
          }
       }
@@ -450,8 +443,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          CG_EMass.Mult(e_rhs, de);
          timer.sw_cgL2.Stop();
          const HYPRE_Int cg_num_iter = CG_EMass.GetNumIterations();
-         //timer.L2dof = L2TVSize;
-         timer.L2iter += max(1, cg_num_iter);
+         timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
       }
    }
    else // not p_assembly
@@ -468,7 +460,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Start();
          Me_inv(z).Mult(loc_rhs, loc_de);
          timer.sw_cgL2.Stop();
-         //timer.L2dof = 1;
          timer.L2iter += 1;
          de.SetSubVector(l2dofs, loc_de);
       }
@@ -555,32 +546,34 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
 {
-   double my_rt[5], rt_max[5];
+   const MPI_Comm com = H1FESpace.GetComm();
+   double my_rt[5], rt_min[5], rt_max[5];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
    my_rt[2] = timer.sw_force.RealTime();
    my_rt[3] = timer.sw_qdata.RealTime();
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
-   MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, H1FESpace.GetComm());
+   MPI_Reduce(my_rt, rt_min, 5, MPI_DOUBLE, MPI_MIN, 0, com);
+   MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
-   HYPRE_Int mydata[3], alldata[3];
-   mydata[0] = timer.H1dof * timer.H1iter;
-   mydata[1] = timer.L2dof * timer.L2iter;
-   mydata[2] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0,
-              H1FESpace.GetComm());
+   HYPRE_Int mydata[2], alldata[2];
+   mydata[0] = timer.L2dof * timer.L2iter;
+   mydata[1] = timer.quad_tstep;
+   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0, com);
 
    if (IamRoot)
    {
       using namespace std;
       cout << endl;
-      cout << "CG (H1) total time: " << rt_max[0] << endl;
+      cout << "CG (H1) total time: " << rt_max[0] << " (" << rt_min[0] << ")" << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / rt_max[0] << endl;
+           << 1e-6 * H1GTVSize * timer.H1iter / rt_max[0] << " ("
+           << 1e-6 * H1GTVSize * timer.H1iter / rt_min[0] << ")" << endl;
       cout << endl;
-      cout << "CG (L2) total time: " << rt_max[1] << endl;
+      cout << "CG (L2) total time: " << rt_max[1] << " (" << rt_min[1] << ")" << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[1] / rt_max[1] << endl;
+           << 1e-6 * alldata[0] / rt_max[1] << " ("
+           << 1e-6 * alldata[0] / rt_min[1] << ")" << endl;
       cout << endl;
       // The Force operator is applied twice per time step, on the H1 and the L2
       // vectors, respectively.
@@ -590,7 +583,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << 1e-6 * alldata[2] * integ_rule.GetNPoints() / rt_max[3] << endl;
+           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
@@ -690,7 +683,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
             else { gamma_b[idx] = material_pcf->Eval(*T, ip); }
             rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-            e_b[idx]   = max(0.0, e_vals(q));
+            e_b[idx]   = fmax(0.0, e_vals(q));
          }
          ++z_id;
       }
