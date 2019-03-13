@@ -549,7 +549,6 @@ int main(int argc, char *argv[])
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
-   max_tsteps -= 1;
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
@@ -586,9 +585,7 @@ int main(int argc, char *argv[])
          oper.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
-         steps--;
-         ti--;
-         continue;
+         ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
