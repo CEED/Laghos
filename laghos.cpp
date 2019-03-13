@@ -257,6 +257,10 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
          break;
+      case 49: // 2D
+         unit = floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2);
+         nxyz[0] = 4 * unit / 9; nxyz[1] = unit;
+         break;
       case 51: // 2D
          unit = floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2);
          nxyz[0] = 5 * unit; nxyz[1] = unit;
