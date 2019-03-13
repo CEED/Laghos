@@ -320,14 +320,14 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          CGSolver cg(H1FESpace.GetParMesh()->GetComm());
          cg.SetPreconditioner(VMassPA_prec);
          cg.SetOperator(*cVMassPA);
-         cg.SetRelTol(cg_rel_tol); cg.SetAbsTol(0.0);
+         cg.SetRelTol(cg_rel_tol);
+         cg.SetAbsTol(0.0);
          cg.SetMaxIter(cg_max_iter);
          cg.SetPrintLevel(-1);
          timer.sw_cgH1.Start();
          cg.Mult(B, X);
          timer.sw_cgH1.Stop();
-         const HYPRE_Int cg_num_iter = cg.GetNumIterations();
-         timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
+         timer.H1iter += cg.GetNumIterations();
          VMassPA->RecoverFEMSolution(X, rhs, dv);
          delete cVMassPA;
       }
@@ -355,9 +355,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
-            const HYPRE_Int cg_num_iter = CG_VMass.GetNumIterations();
-            timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
-            MFEM_VERIFY(timer.H1iter>0, "timer.H1iter overflow");
+            timer.H1iter += CG_VMass.GetNumIterations();
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -382,8 +380,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
-      const HYPRE_Int cg_num_iter = cg.GetNumIterations();
-      timer.H1iter += (cg_num_iter==0) ? 1 : cg_num_iter;
+      timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
 }
@@ -547,13 +544,12 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
 {
    const MPI_Comm com = H1FESpace.GetComm();
-   double my_rt[5], rt_min[5], rt_max[5];
+   double my_rt[5], rt_max[5];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
    my_rt[2] = timer.sw_force.RealTime();
    my_rt[3] = timer.sw_qdata.RealTime();
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
-   MPI_Reduce(my_rt, rt_min, 5, MPI_DOUBLE, MPI_MIN, 0, com);
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_Int mydata[2], alldata[2];
@@ -565,15 +561,16 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
    {
       using namespace std;
       cout << endl;
-      cout << "CG (H1) total time: " << rt_max[0] << " (" << rt_min[0] << ")" << endl;
+      cout << "CG (H1) total time: " << rt_max[0] << endl;
+      dbg("H1GTVSize: %d", H1GTVSize);
+      dbg("timer.H1iter: %d", timer.H1iter);
+      dbg("rt_max[0]: %f", rt_max[0]);
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * H1GTVSize * timer.H1iter / rt_max[0] << " ("
-           << 1e-6 * H1GTVSize * timer.H1iter / rt_min[0] << ")" << endl;
+           << 1e-6 * H1GTVSize * timer.H1iter / rt_max[0] << endl;
       cout << endl;
-      cout << "CG (L2) total time: " << rt_max[1] << " (" << rt_min[1] << ")" << endl;
+      cout << "CG (L2) total time: " << rt_max[1] << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / rt_max[1] << " ("
-           << 1e-6 * alldata[0] / rt_min[1] << ")" << endl;
+           << 1e-6 * alldata[0] / rt_max[1] << endl;
       cout << endl;
       // The Force operator is applied twice per time step, on the H1 and the L2
       // vectors, respectively.

@@ -225,6 +225,22 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = unit;
          break;
+      case 31: // 2D
+         unit = floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2);
+         nxyz[0] = 3 * unit; nxyz[1] = unit;
+         break;
+      case 32: // 2D
+         unit = floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2);
+         nxyz[0] = 3 * unit / 2; nxyz[1] = unit;
+         break;
+      case 49: // 2D
+         unit = floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2);
+         nxyz[0] = 4 * unit / 9; nxyz[1] = unit;
+         break;
+      case 51: // 2D
+         unit = floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2);
+         nxyz[0] = 5 * unit; nxyz[1] = unit;
+         break;
       case 211: // 3D.
          unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
@@ -232,10 +248,6 @@ int main(int argc, char *argv[])
       case 221: // 3D.
          unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
-         break;
-      case 31: // 2D
-         unit = floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2);
-         nxyz[0] = 3 * unit; nxyz[1] = unit;
          break;
       case 311: // 3D.
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
@@ -245,10 +257,6 @@ int main(int argc, char *argv[])
          unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
          nxyz[0] = 3 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
-      case 32: // 2D
-         unit = floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2);
-         nxyz[0] = 3 * unit / 2; nxyz[1] = unit;
-         break;
       case 322: // 3D.
          unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 3 * unit / 2; nxyz[1] = unit; nxyz[2] = unit;
@@ -256,14 +264,6 @@ int main(int argc, char *argv[])
       case 432: // 3D.
          unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
-         break;
-      case 49: // 2D
-         unit = floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2);
-         nxyz[0] = 4 * unit / 9; nxyz[1] = unit;
-         break;
-      case 51: // 2D
-         unit = floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2);
-         nxyz[0] = 5 * unit; nxyz[1] = unit;
          break;
       case 511: // 3D.
          unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
