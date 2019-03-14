@@ -1236,7 +1236,7 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
    massOperator(NULL),
    tensors1D(t1D)
 {
-   pabf.AddDomainIntegrator(new mfem::PAMassIntegrator(Q,&ir));
+   pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
    pabf.Assemble();
    pabf.FormSystemOperator(mfem::Array<int>(), massOperator);
 }
