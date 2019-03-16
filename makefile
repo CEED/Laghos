@@ -14,12 +14,8 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-# SETUP ************************************************************************
-CUDA_DIR ?= /usr/local/cuda
-NV_ARCH ?= -arch=sm_60
-
 # number of proc to use for compilation stage **********************************
-CPU = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+NPROC = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
 
 define LAGHOS_HELP_MSG
 
@@ -101,7 +97,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
+LAGHOS_FLAGS = $(MFEM_LANGUAGE) $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -132,41 +128,7 @@ laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(CXX) $(CXXFLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
-all:;@$(MAKE) -j $(CPU) laghos
-
-cpu:
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q
-
-mpi:
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q
-
-gpu:
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q -cu
-	./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q -cu
-
-gpumpi:
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q -cu
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 0 -o -q -cu
-	mpirun -n 2 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q -cu
-	mpirun -n 3 ./laghos -rs 0 -m data/square01_quad.mesh --chk -p 1 -o -q -cu
-
-chk: cpu mpi gpu gpumpi
+all:;@$(MAKE) -j $(NPROC) laghos
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -180,18 +142,55 @@ $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 MFEM_TESTS = laghos
 include $(TEST_MK)
 # Testing: Specific execution options
-RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
-test: laghos
-	@$(call mfem-test,$<, $(RUN_MPI), Laghos miniapp,\
+RUN_MPI_2 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 2
+RUN_MPI_3 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 3
+RUN_MPI_4 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
+test: laghos test_cpu_seq test_cpu_mpi \
+		$(if $(MFEM_CXX:nvcc=),,test_gpu_seq test_gpu_mpi)
+	@$(call mfem-test,$<, $(RUN_MPI_4), Laghos miniapp,\
 	-p 0 -m data/square01_quad.mesh -rs 3 -tf 0.1)
+tst : ;@$(MAKE) -j $(NPROC) test
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
+
+TEST_OPTS = -rs 0 -m data/square01_quad.mesh --chk
+test_cpu_seq: laghos
+	@$(call mfem-test,$<,,P0      , $(TEST_OPTS) -p 0)
+	@$(call mfem-test,$<,,P0 -o   , $(TEST_OPTS) -p 0 -o)
+	@$(call mfem-test,$<,,P0 -o -q, $(TEST_OPTS) -p 0 -o -q)
+	@$(call mfem-test,$<,,P1      , $(TEST_OPTS) -p 1)
+	@$(call mfem-test,$<,,P1 -o   , $(TEST_OPTS) -p 1 -o)
+	@$(call mfem-test,$<,,P1 -o -q, $(TEST_OPTS) -p 1 -o -q)
+
+test_cpu_mpi: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_3),P0      , $(TEST_OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_3),P0 -o   , $(TEST_OPTS) -p 0 -o)
+	@$(call mfem-test,$<,$(RUN_MPI_3),P0 -o -q, $(TEST_OPTS) -p 0 -o -q)
+	@$(call mfem-test,$<,$(RUN_MPI_3),P1      , $(TEST_OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_3),P1 -o   , $(TEST_OPTS) -p 1 -o)
+	@$(call mfem-test,$<,$(RUN_MPI_3),P1 -o -q, $(TEST_OPTS) -p 1 -o -q)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P0      , $(TEST_OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P0 -o   , $(TEST_OPTS) -p 0 -o)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P0 -o -q, $(TEST_OPTS) -p 0 -o -q)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P1      , $(TEST_OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P1 -o   , $(TEST_OPTS) -p 1 -o)
+	@$(call mfem-test,$<,$(RUN_MPI_4),P1 -o -q, $(TEST_OPTS) -p 1 -o -q)
+
+test_gpu_seq: laghos
+	@$(call mfem-test,$<,,GPU P0 -o -q, $(TEST_OPTS) -p 0 -o -q -cu)
+	@$(call mfem-test,$<,,GPU P1 -o -q, $(TEST_OPTS) -p 1 -o -q -cu)
+
+test_gpu_mpi: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_2),GPU P0 -o -q, $(TEST_OPTS) -p 0 -o -q -cu)
+	@$(call mfem-test,$<,$(RUN_MPI_2),GPU P1 -o -q, $(TEST_OPTS) -p 1 -o -q -cu)
+	@$(call mfem-test,$<,$(RUN_MPI_3),GPU P0 -o -q, $(TEST_OPTS) -p 0 -o -q -cu)
+	@$(call mfem-test,$<,$(RUN_MPI_3),GPU P1 -o -q, $(TEST_OPTS) -p 1 -o -q -cu)
 
 # Generate an error message if the MFEM library is not built and exit
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-clean: clean-build clean-exec
+cln clean: clean-build clean-exec
 
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM
