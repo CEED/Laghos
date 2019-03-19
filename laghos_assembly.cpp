@@ -1614,20 +1614,22 @@ static void kForceMult(const int DIM,
 {
    assert(D1D==H1D);
    assert(L1D==D1D-1);
-   assert(Q1D==2*(D1D-1));
-   const unsigned int id = ((DIM)<<4)|(D1D);
+   const unsigned int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<unsigned long long, fForceMult> call =
    {
-      // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
-      {0x23,&kForceMult2D<2,3,4,2,3>},
-      {0x24,&kForceMult2D<2,4,6,3,4>},
-      {0x25,&kForceMult2D<2,5,8,4,5>},
-      {0x33,&kForceMult3D<3,3,4,2,3>},
+      // DIM, D1D, Q1, L1D(=D1D-1), H1D(=D1D)
+      {0x234,&kForceMult2D<2,3,4,2,3>},
+      {0x244,&kForceMult2D<2,4,4,3,4>},
+      {0x245,&kForceMult2D<2,4,5,3,4>},
+      {0x246,&kForceMult2D<2,4,6,3,4>},
+      {0x258,&kForceMult2D<2,5,8,4,5>},
+      {0x334,&kForceMult3D<3,3,4,2,3>},
    };
    if (!call[id])
    {
-      printf("\n[rForceMult] id \033[33m0x%X\033[m ",id);
-      fflush(stdout);
+      printf("\n%s:%d\nUnknown kernel with dim=%d, D1D=%d and Q1D=%d",
+             __FILE__, __LINE__, DIM, D1D, Q1D);
+      mfem_error("kForceMult kernel not instanciated");
    }
    call[id](NE, B, Bt, Gt, stressJinvT, e, v);
 }
@@ -1928,7 +1930,7 @@ typedef void (*fForceMultTranspose)(const int nzones,
                                     double *e);
 
 // *****************************************************************************
-static void rForceMultTranspose(const int DIM,
+static void kForceMultTranspose(const int DIM,
                                 const int D1D,
                                 const int Q1D,
                                 const int L1D,
@@ -1943,20 +1945,22 @@ static void rForceMultTranspose(const int DIM,
 {
    assert(D1D==H1D);
    assert(L1D==D1D-1);
-   assert(Q1D==2*(D1D-1));
-   const unsigned int id = ((DIM)<<4)|(D1D);
+   const unsigned int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<unsigned long long, fForceMultTranspose> call =
    {
-      // DIM, D1D, Q1D=2*(D1D-1), L1D(=D1D-1), H1D(=D1D)
-      {0x23,&kForceMultTranspose2D<2,3,4,2,3>},
-      {0x24,&kForceMultTranspose2D<2,4,6,3,4>},
-      {0x25,&kForceMultTranspose2D<2,5,8,4,5>},
-      {0x33,&kForceMultTranspose3D<3,3,4,2,3>},
+      // DIM, D1D, Q1D, L1D(=D1D-1), H1D(=D1D)
+      {0x234,&kForceMultTranspose2D<2,3,4,2,3>},
+      {0x244,&kForceMultTranspose2D<2,4,4,3,4>},
+      {0x245,&kForceMultTranspose2D<2,4,5,3,4>},
+      {0x246,&kForceMultTranspose2D<2,4,6,3,4>},
+      {0x258,&kForceMultTranspose2D<2,5,8,4,5>},
+      {0x334,&kForceMultTranspose3D<3,3,4,2,3>},
    };
    if (!call[id])
    {
-      printf("\n[rForceMultTranspose] id \033[33m0x%X\033[m ",id);
-      fflush(stdout);
+      printf("\n%s:%d\nUnknown kernel with dim=%d, D1D=%d and Q1D=%d",
+             __FILE__, __LINE__, DIM, D1D, Q1D);
+      mfem_error("kForceMultTranspose kernel not instanciated");
    }
    assert(call[id]);
    call[id](nzones,
@@ -1972,7 +1976,7 @@ static void rForceMultTranspose(const int DIM,
 void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
 {
    h1restrict.Mult(x, gVecH1);
-   rForceMultTranspose(dim,
+   kForceMultTranspose(dim,
                        D1D,
                        Q1D,
                        L1D,

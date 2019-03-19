@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
    Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
+   int order_q = -1;
    int ode_solver_type = 4;
    double t_final = 0.6;
    double cfl = 0.5;
@@ -132,6 +133,8 @@ int main(int argc, char *argv[])
                   "Order (degree) of the kinematic finite element space.");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
+   args.AddOption(&order_q, "-oq", "--order-intrule",
+                  "Order  of the integration rule.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
@@ -483,7 +486,7 @@ int main(int argc, char *argv[])
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter,
-                                qupdate, gamma(S), okina,
+                                order_q, qupdate, gamma(S), okina,
                                 H1FEC.GetBasisType());
 
    socketstream vis_rho, vis_v, vis_e;
@@ -557,6 +560,7 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem, mem_max, mem_sum;
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)

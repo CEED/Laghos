@@ -500,8 +500,11 @@ void qupdate(const int nzones,
          }
          else
          {
-            const double cfl_inv_dt = cfl / inv_dt;
-            d_dt_est[z] = fmin(d_dt_est[z], cfl_inv_dt);
+            if (inv_dt>0.0)
+            {
+               const double cfl_inv_dt = cfl / inv_dt;
+               d_dt_est[z] = fmin(d_dt_est[z], cfl_inv_dt);
+            }
          }
          // Quadrature data for partial assembly of the force operator.
          multABt(dim, dim, dim, stress, Jinv, stressJiT);
@@ -678,6 +681,8 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
    {
       {0x124,&vecToQuad2D<1,2,4>},
+      {0x134,&vecToQuad2D<1,3,4>},
+      {0x135,&vecToQuad2D<1,3,5>},
       {0x136,&vecToQuad2D<1,3,6>},
       {0x148,&vecToQuad2D<1,4,8>},
    };
@@ -815,6 +820,8 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    static std::unordered_map<unsigned int, fGradVector2D> call =
    {
       {0x34,&qGradVector2D<3,4>},
+      {0x44,&qGradVector2D<4,4>},
+      {0x45,&qGradVector2D<4,5>},
       {0x46,&qGradVector2D<4,6>},
       {0x58,&qGradVector2D<5,8>},
    };

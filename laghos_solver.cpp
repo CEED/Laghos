@@ -88,6 +88,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
                                                  const bool pa,
                                                  const double cgt,
                                                  const int cgiter,
+                                                 const int order_q,
                                                  const bool qupt,
                                                  const double gm,
                                                  const bool ok,
@@ -95,7 +96,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    TimeDependentOperator(size),
    H1FESpace(h1_fes), L2FESpace(l2_fes),
    H1compFESpace(h1_fes.GetParMesh(), h1_fes.FEColl(), 1),
-
    H1Vsize(H1FESpace.GetVSize()),
    H1TVSize(H1FESpace.TrueVSize()),
    H1GTVSize(H1FESpace.GlobalTrueVSize()),
@@ -118,6 +118,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    Me(l2dofs_cnt, l2dofs_cnt, nzones),
    Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
    integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(0),
+                           (order_q>0)? order_q :
                            3*h1_fes.GetOrder(0) + l2_fes.GetOrder(0) - 1)),
    quad_data(dim, nzones, integ_rule.GetNPoints()),
    quad_data_is_current(false), forcemat_is_assembled(false),
@@ -167,14 +168,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    GridFunctionCoefficient rho_coeff(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
-   MassIntegrator mi(rho_coeff, &integ_rule);
-   for (int i = 0; i < nzones; i++)
+   if (!p_assembly)
    {
-      DenseMatrixInverse inv(&Me(i));
-      mi.AssembleElementMatrix(*l2_fes.GetFE(i),
-                               *l2_fes.GetElementTransformation(i), Me(i));
-      inv.Factor();
-      inv.GetInverseMatrix(Me_inv(i));
+      MassIntegrator mi(rho_coeff, &integ_rule);
+      for (int i = 0; i < nzones; i++)
+      {
+         DenseMatrixInverse inv(&Me(i));
+         mi.AssembleElementMatrix(*l2_fes.GetFE(i),
+                                  *l2_fes.GetElementTransformation(i), Me(i));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_inv(i));
+      }
    }
 
    // Standard assembly for the velocity mass matrix.
@@ -709,7 +713,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             CalcInverse(Jpr, Jinv);
             const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
                          p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
-
             stress = 0.0;
             for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
@@ -773,9 +776,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             }
             else
             {
-               quad_data.dt_est = min(quad_data.dt_est, cfl * (1.0 / inv_dt) );
+               if (inv_dt>0.0)
+               {
+                  quad_data.dt_est = min(quad_data.dt_est, cfl*(1.0/inv_dt));
+               }
             }
-
             // Quadrature data for partial assembly of the force operator.
             MultABt(stress, Jinv, stressJiT);
             stressJiT *= integ_rule.IntPoint(q).weight * detJ;

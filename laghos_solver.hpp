@@ -152,7 +152,8 @@ public:
                            const int source_type_, const double cfl_,
                            Coefficient *material_, const bool visc, const bool pa,
                            const double cgt, const int cgiter,
-                           const bool qupdate, const double gamma, const bool okina,
+                           const int order_q, const bool qupdate,
+                           const double gamma, const bool okina,
                            int h1_basis_type);
 
    // Solve for dx_dt, dv_dt and de_dt.
