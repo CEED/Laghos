@@ -1355,6 +1355,8 @@ void kForceMult2D(const int NE,
    const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
    const DeviceTensor<5> sJit(_sJit, Q1D,Q1D,NE,2,2);
    const DeviceTensor<3> energy(_e, L1D, L1D, NE);
+   const double eps1 = numeric_limits<double>::epsilon();
+   const double eps2 = eps1*eps1;
    DeviceTensor<4> velocity(_v, D1D,D1D,NE,2);
    MFEM_FORALL(e, NE,
    {
@@ -1429,6 +1431,20 @@ void kForceMult2D(const int NE,
             }
          }
       }
+      for (int c = 0; c < 2; ++c)
+      {
+         for (int dy = 0; dy < H1D; ++dy)
+         {
+            for (int dx = 0; dx < H1D; ++dx)
+            {
+               const double v = velocity(dx,dy,e,c);
+               if (fabs(v) < eps2)
+               {
+                  velocity(dx,dy,e,c) = 0.0;
+               }
+            }
+         }
+      }
    });
 }
 
@@ -1451,6 +1467,8 @@ void kForceMult3D(const int NE,
    const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
    const DeviceTensor<6> sJit(_sJit, Q1D,Q1D,Q1D,NE,3,3);
    const DeviceTensor<4> energy(_e, L1D, L1D, L1D, NE);
+   const double eps1 = numeric_limits<double>::epsilon();
+   const double eps2 = eps1*eps1;
    DeviceTensor<5> velocity(_v, D1D,D1D,D1D,NE,3);
    MFEM_FORALL(e, NE,
    {
@@ -1581,6 +1599,23 @@ void kForceMult3D(const int NE,
                         ((Dxy_x[dx][dy] * wz) +
                          (xDy_y[dx][dy] * wz) +
                          (xy_z[dx][dy] * wDz));
+                  }
+               }
+            }
+         }
+      }
+      for (int c = 0; c < 3; ++c)
+      {
+         for (int dz = 0; dz < H1D; ++dz)
+         {
+            for (int dy = 0; dy < H1D; ++dy)
+            {
+               for (int dx = 0; dx < H1D; ++dx)
+               {
+                  const double v = velocity(dx,dy,dz,e,c);
+                  if (fabs(v) < eps2)
+                  {
+                     velocity(dx,dy,dz,e,c) = 0.0;
                   }
                }
             }

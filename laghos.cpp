@@ -56,9 +56,6 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
-#include <cfenv>
-#pragma STDC FENV_ACCESS on
-
 #include <fstream>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -563,11 +560,6 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem, mem_max, mem_sum;
-   
-   fenv_t fe;
-   if (feholdexcept(&fe)!=0){
-      mfem_error("Could not set FPU to trap no exceptions.");
-   }
 
    for (int ti = 1; !last_step; ti++)
    {
@@ -768,10 +760,13 @@ int main(int argc, char *argv[])
       cout << endl;
       cout << "Energy  diff: " << scientific << setprecision(2)
            << fabs(energy_init - energy_final) << endl;
-      cout << "Maximum memory resident set size: "
-           << mem_max << "/"
-           << mem_sum << " MB"
-           << endl;
+      if (mem_usage)
+      {
+         cout << "Maximum memory resident set size: "
+              << mem_max << "/"
+              << mem_sum << " MB"
+              << endl;
+      }
    }
 
    // Print the error.
