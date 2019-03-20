@@ -803,7 +803,7 @@ double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.0 : 0.125;
+      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
       case 4: return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }

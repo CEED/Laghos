@@ -263,8 +263,8 @@ To make sure the results are correct, we tabulate reference final iterations
 |  3. | 1154 | 0.001655 | 46.3033960530   |
 |  4. |  560 | 0.002449 | 134.0861672235  |
 |  5. |  413 | 0.000470 | 32.0120774101   |
-|  6. | 5301 | 0.000360 | 141.8352298401  |
-|  7. |  975 | 0.001601 | 144.2461751623  |
+|  6. | 2872 | 0.000064 | 56.5470233805   |
+|  7. |  528 | 0.000180 | 56.5053488122   |
 |  8. |  776 | 0.000045 | 409.8243172608  |
 
 An implementation is considered valid if the final energy values are all within
