@@ -566,9 +566,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       using namespace std;
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
-      dbg("H1GTVSize: %d", H1GTVSize);
-      dbg("timer.H1iter: %d", timer.H1iter);
-      dbg("rt_max[0]: %f", rt_max[0]);
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
            << 1e-6 * H1GTVSize * timer.H1iter / rt_max[0] << endl;
       cout << endl;

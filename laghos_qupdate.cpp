@@ -674,9 +674,6 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
       *d_out = (double*) mm::malloc<double>(out_size);
    }
    assert(vdim==1);
-   assert(LOG2(vdim)<=4);
-   assert(LOG2(dofs1D)<=4);
-   assert(LOG2(quad1D)<=4);
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
    {
@@ -814,8 +811,6 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    {
       *d_out = (double*) mm::malloc<double>(out_size);
    }
-   assert(LOG2(dofs1D)<=4);
-   assert(LOG2(quad1D)<=4);
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call =
    {
