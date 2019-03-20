@@ -733,8 +733,6 @@ int main(int argc, char *argv[])
    }
 
    config::SwitchToHost();
-   feclearexcept(FE_ALL_EXCEPT);
-   feupdateenv(&fe);
 
    switch (ode_solver_type)
    {
