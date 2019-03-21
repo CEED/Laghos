@@ -359,7 +359,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
-            timer.H1iter += CG_VMass.GetNumIterations();
+            timer.H1iter += CG_VMass.GetNumIterations()/dim;
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -581,8 +581,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
            << 1e-6 * alldata[0] / rt_max[1] << endl;
       cout << endl;
-      // The Force operator is applied twice per time step, on the H1 and the L2
-      // vectors, respectively.
       cout << "Forces total time: " << rt_max[2] << endl;
       cout << "Forces rate (megadofs x timesteps / second): "
            << FOM2 << endl;
@@ -600,24 +598,24 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
       cout << endl;
       cout << "| Zones   " << "| H1 dofs " << "| L2 dofs " << "| QP "
-           << "| N dofs  "
-           << "| FOM1  " << "| T1   "
-           << "| FOM2  " << "| T2   "
-           << "| FOM3  " << "| T3   "
-           << "| FOM   " << "| TT   |"<< endl;
-      cout << setprecision(2);
+           << "| N dofs   "
+           << "| FOM1    " << "| T1    "
+           << "| FOM2   " << "| T2   "
+           << "| FOM3   " << "| T3   "
+           << "| FOM    " << "| TT   |"<< endl;
+      cout << setprecision(3);
       cout << "| " << setw(8) << GNZones
            << "| " << setw(8) << H1GTVSize
            << "| " << setw(8) << L2GTVSize
            << "| " << setw(3) << QPT
-           << "| " << setw(8) << ndofs
-           << "| " << setw(6) << FOM1
-           << "| " << setw(5) << rt_max[0]
-           << "| " << setw(6) << FOM2
+           << "| " << setw(9) << ndofs
+           << "| " << setw(8) << FOM1
+           << "| " << setw(6) << rt_max[0]
+           << "| " << setw(7) << FOM2
            << "| " << setw(5) << rt_max[2]
-           << "| " << setw(6) << FOM3
+           << "| " << setw(7) << FOM3
            << "| " << setw(5) << rt_max[3]
-           << "| " << setw(6) << FOM
+           << "| " << setw(7) << FOM
            << "| " << setw(5) << rt_max[4]
            << "| " << endl;
    }
