@@ -175,7 +175,7 @@ public:
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
-   void PrintTimingData(bool IamRoot, int steps) const;
+   void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
 
    int GetH1VSize() const { return H1FESpace.GetVSize(); }
 };

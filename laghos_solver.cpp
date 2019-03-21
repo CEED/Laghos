@@ -545,7 +545,8 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
    return glob_ke;
 }
 
-void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
+void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
+                                              const bool fom) const
 {
    const MPI_Comm com = H1FESpace.GetComm();
    double my_rt[5], rt_max[5];
@@ -556,18 +557,25 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, rt_max, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
-   HYPRE_Int mydata[2], alldata[2];
+   HYPRE_Int mydata[3], alldata[3];
    mydata[0] = timer.L2dof * timer.L2iter;
    mydata[1] = timer.quad_tstep;
-   MPI_Reduce(mydata, alldata, 2, HYPRE_MPI_INT, MPI_SUM, 0, com);
+   mydata[2] = nzones;
+   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0, com);
 
    if (IamRoot)
    {
       using namespace std;
+      // FOM = (FOM1 * time1 + FOM2 * time2 + FOM3 * time3) / (time1 + time2 + time3)
+      const double FOM1 = 1e-6 * H1GTVSize * timer.H1iter / rt_max[0];
+      const double FOM2 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[2];
+      const double FOM3 = 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3];
+      const double FOM = (FOM1 * rt_max[0] + FOM2 * rt_max[2] + FOM3 *rt_max[3]) /
+                         rt_max[4];
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * H1GTVSize * timer.H1iter / rt_max[0] << endl;
+           << FOM1 << endl;
       cout << endl;
       cout << "CG (L2) total time: " << rt_max[1] << endl;
       cout << "CG (L2) rate (megadofs x cg_iterations / second): "
@@ -577,15 +585,41 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps) const
       // vectors, respectively.
       cout << "Forces total time: " << rt_max[2] << endl;
       cout << "Forces rate (megadofs x timesteps / second): "
-           << 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[2] << endl;
+           << FOM2 << endl;
       cout << endl;
       cout << "UpdateQuadData total time: " << rt_max[3] << endl;
       cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3] << endl;
+           << FOM3 << endl;
       cout << endl;
       cout << "Major kernels total time (seconds): " << rt_max[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
-           << 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[4] << endl;
+           << FOM << endl;
+      if (!fom) { return; }
+      const int QPT = integ_rule.GetNPoints();
+      const HYPRE_Int GNZones = alldata[2];
+      const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
+      cout << endl;
+      cout << "| Zones   " << "| H1 dofs " << "| L2 dofs " << "| QP "
+           << "| N dofs  "
+           << "| FOM1  " << "| T1   "
+           << "| FOM2  " << "| T2   "
+           << "| FOM3  " << "| T3   "
+           << "| FOM   " << "| TT   |"<< endl;
+      cout << setprecision(2);
+      cout << "| " << setw(8) << GNZones
+           << "| " << setw(8) << H1GTVSize
+           << "| " << setw(8) << L2GTVSize
+           << "| " << setw(3) << QPT
+           << "| " << setw(8) << ndofs
+           << "| " << setw(6) << FOM1
+           << "| " << setw(5) << rt_max[0]
+           << "| " << setw(6) << FOM2
+           << "| " << setw(5) << rt_max[2]
+           << "| " << setw(6) << FOM3
+           << "| " << setw(5) << rt_max[3]
+           << "| " << setw(6) << FOM
+           << "| " << setw(5) << rt_max[4]
+           << "| " << endl;
    }
 }
 

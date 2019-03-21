@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
    bool raja = false;
    bool check = false;
    bool mem_usage = false;
+   bool fom = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -186,6 +187,8 @@ int main(int argc, char *argv[])
                   "Enable 2D checks.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
                   "Enable memory usage.");
+   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
+                  "Enable figure of merit output.");
    args.Parse();
    if (!args.Good())
    {
@@ -742,7 +745,7 @@ int main(int argc, char *argv[])
       case 6: steps *= 6; break;
       case 7: steps *= 2;
    }
-   oper.PrintTimingData(mpi.Root(), steps);
+   oper.PrintTimingData(mpi.Root(), steps, fom);
 
    const double energy_final = oper.InternalEnergy(e_gf) +
                                oper.KineticEnergy(v_gf);
