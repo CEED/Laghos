@@ -359,7 +359,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
-            timer.H1iter += CG_VMass.GetNumIterations()/dim;
+            timer.H1iter += CG_VMass.GetNumIterations();
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
          }
       } // okina
@@ -567,7 +567,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    {
       using namespace std;
       // FOM = (FOM1 * time1 + FOM2 * time2 + FOM3 * time3) / (time1 + time2 + time3)
-      const double FOM1 = 1e-6 * H1GTVSize * timer.H1iter / rt_max[0];
+      const HYPRE_Int H1iter = okina ? (timer.H1iter/dim) : timer.H1iter;
+      const double FOM1 = 1e-6 * H1GTVSize * H1iter / rt_max[0];
       const double FOM2 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[2];
       const double FOM3 = 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3];
       const double FOM = (FOM1 * rt_max[0] + FOM2 * rt_max[2] + FOM3 *rt_max[3]) /
