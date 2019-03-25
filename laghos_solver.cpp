@@ -84,6 +84,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
                                                  Coefficient *material_,
                                                  bool visc, bool pa,
                                                  double cgt, int cgiter,
+                                                 double ftz,
                                                  int h1_basis_type)
    : TimeDependentOperator(size),
      H1FESpace(h1_fes), L2FESpace(l2_fes),
@@ -94,6 +95,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
      h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
      source_type(source_type_), cfl(cfl_),
      use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
+     ftz_tol(ftz),
      material_pcf(material_),
      Mv(&h1_fes), Mv_spmat_copy(),
      Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -244,6 +246,16 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    {
       timer.sw_force.Start();
       ForcePA.Mult(one, rhs);
+      if (ftz_tol>0.0)
+      {
+         for (int i = 0; i < VsizeH1; i++)
+         {
+            if (fabs(rhs[i]) < ftz_tol)
+            {
+               rhs[i] = 0.0;
+            }
+         }
+      }
       timer.sw_force.Stop();
       rhs.Neg();
 
