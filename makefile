@@ -78,6 +78,7 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
+LDFLAGS  = $(if $(CXX:nvcc=),$(CXXFLAGS),$(filter-out -x=cu,$(CXXFLAGS)))
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -97,7 +98,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(MFEM_LANGUAGE) $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -126,7 +127,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CXX) $(CXXFLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(CXX) $(LDFLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
 
@@ -186,14 +187,14 @@ test_cpu_mpi: laghos
 	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -o -q, $(OPTS) -p 1 -o -q)
 
 test_gpu_seq: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -cu)
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -cu)
+	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
+	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
 
 test_gpu_mpi: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -cu)
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -cu)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -cu)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -cu)
+	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
+	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
+	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
+	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
 
 # Generate an error message if the MFEM library is not built and exit
 $(CONFIG_MK) $(MFEM_LIB_FILE):

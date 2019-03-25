@@ -16,7 +16,7 @@
 
 #include "laghos_qupdate.hpp"
 #include "laghos_solver.hpp"
-#include "linalg/device.hpp"
+#include "linalg/dtensor.hpp"
 
 #ifdef MFEM_USE_MPI
 

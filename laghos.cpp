@@ -112,10 +112,7 @@ int main(int argc, char *argv[])
    int partition_type = 111;
    bool okina = false;
    bool qupdate = false;
-   bool cuda = false;
-   bool omp  = false;
-   bool occa = false;
-   bool raja = false;
+   const char *device = "";
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
@@ -179,10 +176,8 @@ int main(int argc, char *argv[])
                   "Activate OKINA kernels.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
-   args.AddOption(&cuda, "-cu", "--cuda", "-no-cu", "--no-cuda", "Enable CUDA.");
-   args.AddOption(&occa, "-oc", "--occa", "-no-oc", "--no-occa", "Enable OCCA.");
-   args.AddOption(&raja, "-ra", "--raja", "-no-ra", "--no-raja", "Enable RAJA.");
-   args.AddOption(&omp,  "-om", "--omp",  "-no-om", "--no-omp",  "Enable OpenMP.");
+   args.AddOption(&device, "-d", "--device",
+                  "Device configuration, e.g. 'cuda', 'omp', 'raja', 'occa'.");
    args.AddOption(&check, "-chk", "--chk", "-no-chk", "--no-chk",
                   "Enable 2D checks.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
@@ -542,15 +537,12 @@ int main(int argc, char *argv[])
       visit_dc.Save();
    }
 
-   // OKINA mode setup
+   // Set device config parameters from the command line options and
+   // switch to working on the device.
    if (okina)
    {
-      if (cuda) { config::UseCuda(); }
-      if (occa) { config::UseOcca(); }
-      if (raja) { config::UseRaja(); }
-      if (omp) { config::UseOmp(); }
-      config::EnableDevice();
-      config::SwitchToDevice();
+      Device::Configure(device);
+      Device::Enable();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
@@ -735,7 +727,8 @@ int main(int argc, char *argv[])
       }
    }
 
-   config::SwitchToHost();
+   // Switch back to the host.
+   Device::Disable();
 
    switch (ode_solver_type)
    {

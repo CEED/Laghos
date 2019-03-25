@@ -405,14 +405,14 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      const bool using_gpu = config::UsingDevice();
-      if (using_gpu) { config::SwitchToHost(); }
+      const bool using_gpu = Device::UsingDevice();
+      if (using_gpu) { Device::Disable(); }
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (using_gpu) { config::SwitchToDevice(); }
+      if (using_gpu) { Device::Enable(); }
    }
    Array<int> l2dofs;
    if (p_assembly)
