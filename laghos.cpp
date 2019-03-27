@@ -628,22 +628,23 @@ int main(int argc, char *argv[])
             if (check)
             {
                // Default options only checks
-               assert(rs_levels==0 and rp_levels==0);
-               assert(order_v==2);
-               assert(order_e==1);
-               assert(ode_solver_type==4);
-               assert(t_final==0.6);
-               assert(cfl==0.5);
+               MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
+               MFEM_VERIFY(order_v==2, "check: order_v");
+               MFEM_VERIFY(order_e==1, "check: order_e");
+               MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
+               MFEM_VERIFY(t_final==0.6, "check: t_final");
+               MFEM_VERIFY(cfl==0.5, "check: cfl");
                static int k = 0;
                const double eps = 1.e-14;
                const double p0_05 = 6.54653862453438e+00;
                const double p0_27 = 7.58857635779292e+00;
-               if (problem==0 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p0_05)<eps);}
-               if (problem==0 and ti==27) {k++; assert(fabs(sqrt_tot_norm-p0_27)<eps);}
+               const double stm = sqrt_tot_norm;
+               if (problem==0 and ti==05) {k++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
+               if (problem==0 and ti==27) {k++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
                const double p1_05 = 3.50825494522579e+00;
                const double p1_15 = 2.75644459682321e+00;
-               if (problem==1 and ti==05) {k++; assert(fabs(sqrt_tot_norm-p1_05)<eps);}
-               if (problem==1 and ti==15) {k++; assert(fabs(sqrt_tot_norm-p1_15)<eps);}
+               if (problem==1 and ti==05) {k++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
+               if (problem==1 and ti==15) {k++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
                if (last_step)
                {
                   if (k==2)

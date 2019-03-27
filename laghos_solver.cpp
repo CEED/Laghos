@@ -347,7 +347,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             dvc_gf = 0.0;
             Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
-            mfem::Array<int> ess_bdr(bdr_attr_max);
+            Array<int> ess_bdr(bdr_attr_max);
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
@@ -405,14 +405,16 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      const bool using_gpu = Device::UsingDevice();
-      if (using_gpu) { Device::Disable(); }
+      Vector* sptr = (Vector*) &S;
+      x_gf.MakeRef(&H1FESpace, *sptr, 0);
+      x_gf.Pull();
+      Device::PushDisable();
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      if (using_gpu) { Device::Enable(); }
+      Device::Pop();
    }
    Array<int> l2dofs;
    if (p_assembly)

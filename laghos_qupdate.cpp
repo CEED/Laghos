@@ -40,7 +40,7 @@ namespace hydrodynamics
 // *****************************************************************************
 // * Dense matrix
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void multABt(const int ah,
              const int aw,
              const int bh,
@@ -71,7 +71,7 @@ void multABt(const int ah,
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void mult(const int ah,
           const int aw,
           const int bw,
@@ -94,7 +94,7 @@ void mult(const int ah,
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void multV(const int height,
            const int width,
            double *data,
@@ -128,7 +128,7 @@ void multV(const int height,
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void add(const int height, const int width,
          const double c, const double *A,
          double *D)
@@ -145,7 +145,7 @@ void add(const int height, const int width,
 // *****************************************************************************
 // * Eigen
 // *****************************************************************************
-__host__ __device__  static
+MFEM_HOST_DEVICE  static
 double norml2(const int size, const double *data)
 {
    if (0 == size) { return 0.0; }
@@ -172,14 +172,14 @@ double norml2(const int size, const double *data)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline double det2D(const double *d)
 {
    return d[0] * d[3] - d[1] * d[2];
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline double det3D(const double *d)
 {
    return
@@ -189,17 +189,17 @@ inline double det3D(const double *d)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 double det(const int dim, const double *J)
 {
    if (dim==2) { return det2D(J); }
    if (dim==3) { return det3D(J); }
-   assert(false);
+   MFEM_ASSERT(false, "dim!=2 && dim!=3");
    return 0.0;
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void calcInverse2D(const int n, const double *a, double *i)
 {
    const double d = det2D(a);
@@ -211,7 +211,7 @@ void calcInverse2D(const int n, const double *a, double *i)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void symmetrize(const int n, double* __restrict__ d)
 {
    for (int i = 0; i<n; i++)
@@ -225,7 +225,7 @@ void symmetrize(const int n, double* __restrict__ d)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline double cpysign(const double x, const double y)
 {
    if ((x < 0 && y > 0) || (x > 0 && y < 0))
@@ -236,7 +236,7 @@ inline double cpysign(const double x, const double y)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline void eigensystem2S(const double &d12, double &d1, double &d2,
                           double &c, double &s)
 {
@@ -268,12 +268,12 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 void calcEigenvalues(const int n, const double *d,
                      double *lambda,
                      double *vec)
 {
-   assert(n == 2);
+   MFEM_ASSERT(n==2, "n!=2");
    double d0 = d[0];
    double d2 = d[2]; // use the upper triangular entry
    double d3 = d[3];
@@ -300,7 +300,7 @@ void calcEigenvalues(const int n, const double *d,
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline void getScalingFactor(const double &d_max, double &mult)
 {
    int d_exp;
@@ -322,10 +322,10 @@ inline void getScalingFactor(const double &d_max, double &mult)
 }
 
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 double calcSingularvalue(const int n, const int i, const double *d)
 {
-   assert (n == 2);
+   MFEM_ASSERT(n==2, "n!=2");
 
    double d0, d1, d2, d3;
    d0 = d[0];
@@ -375,7 +375,7 @@ double calcSingularvalue(const int n, const int i, const double *d)
 // *****************************************************************************
 // * Smooth transition between 0 and 1 for x in [-eps, eps].
 // *****************************************************************************
-__host__ __device__ static
+MFEM_HOST_DEVICE static
 inline double smooth_step_01(const double x, const double eps)
 {
    const double y = (x + eps) / (2.0 * eps);
@@ -560,8 +560,7 @@ QUpdate::QUpdate(const int _dim,
    d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
-   //assert(p_assembly);
-   assert(material_pcf);
+   MFEM_ASSERT(material_pcf, "!material_pcf");
 }
 
 // **************************************************************************
@@ -650,7 +649,7 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
                            double **d_out)
 {
    const int dim = fes.GetMesh()->Dimension();
-   assert(dim==2);
+   MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
@@ -673,7 +672,7 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    {
       *d_out = (double*) mm::malloc<double>(out_size);
    }
-   assert(vdim==1);
+   MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
    {
@@ -688,7 +687,6 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
       printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   assert(call[id]);
    call[id](nzones, maps->B, d_local_in, *d_out);
 }
 
@@ -787,9 +785,9 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
                          double **d_out)
 {
    const int dim = fes.GetMesh()->Dimension();
-   assert(dim==2);
+   MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
-   assert(vdim==2);
+   MFEM_ASSERT(vdim==2, "vdim!=2");
    const int vsize = fes.GetVSize();
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const int numDofs  = fe.GetDof();
@@ -825,7 +823,6 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
       printf("\n[Dof2QuadGrad] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   assert(call[id]);
    call[id](nzones,
             maps->B,
             maps->G,
@@ -882,7 +879,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    d_dt = quad_data.dt_est;
 
    // **************************************************************************
-   assert(dim==2);
+   MFEM_ASSERT(dim==2, "dim!=2");
    qupdate<2>(nzones,
               nqp,
               nqp1D,

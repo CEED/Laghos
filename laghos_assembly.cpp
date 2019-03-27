@@ -1250,7 +1250,7 @@ void OkinaMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
       int global_ess_tdofs_count;
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
                     1, MPI_INT, MPI_SUM, comm);
-      assert(global_ess_tdofs_count>0);
+      MFEM_VERIFY(global_ess_tdofs_count>0, "!(global_ess_tdofs_count>0)");
       ess_tdofs.SetSize(global_ess_tdofs_count);
    }
    if (ess_tdofs_count == 0)
@@ -1276,7 +1276,6 @@ void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
    {
       distX.SetSize(x.Size());
    }
-   assert(distX.Size()==x.Size());
    distX = x;
    if (ess_tdofs_count)
    {
@@ -1647,8 +1646,8 @@ static void kForceMult(const int DIM,
                        const double *e,
                        double *v)
 {
-   assert(D1D==H1D);
-   assert(L1D==D1D-1);
+   MFEM_ASSERT(D1D==H1D, "D1D!=H1D");
+   MFEM_ASSERT(L1D==D1D-1,"L1D!=D1D-1");
    const unsigned int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<unsigned long long, fForceMult> call =
    {
@@ -1978,8 +1977,8 @@ static void kForceMultTranspose(const int DIM,
                                 const double *v,
                                 double *e)
 {
-   assert(D1D==H1D);
-   assert(L1D==D1D-1);
+   MFEM_ASSERT(D1D==H1D,"D1D!=H1D");
+   MFEM_ASSERT(L1D==D1D-1, "L1D!=D1D-1");
    const unsigned int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<unsigned long long, fForceMultTranspose> call =
    {
@@ -1997,7 +1996,6 @@ static void kForceMultTranspose(const int DIM,
              __FILE__, __LINE__, DIM, D1D, Q1D);
       mfem_error("kForceMultTranspose kernel not instanciated");
    }
-   assert(call[id]);
    call[id](nzones,
             L2QuadToDof,
             H1DofToQuad,
