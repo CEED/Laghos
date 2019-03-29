@@ -70,7 +70,7 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
-double rho0(const Vector &);
+double rho0(const DeviceVector3 &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma(const Vector &);
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
                   "Enable or disable QUpdate function.");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration, e.g. 'cuda', 'omp', 'raja', 'occa'.");
-   args.AddOption(&check, "-chk", "--chk", "-no-chk", "--no-chk",
+   args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
                   "Enable memory usage.");
@@ -555,6 +555,7 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem, mem_max, mem_sum;
+   int checks = 0;
 
    for (int ti = 1; !last_step; ti++)
    {
@@ -624,40 +625,6 @@ int main(int argc, char *argv[])
                     << mem_sum << " MB";
             }
             cout << endl;
-            // 2D Taylor-Green & Sedov problems checks
-            if (check)
-            {
-               // Default options only checks
-               MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
-               MFEM_VERIFY(order_v==2, "check: order_v");
-               MFEM_VERIFY(order_e==1, "check: order_e");
-               MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-               MFEM_VERIFY(t_final==0.6, "check: t_final");
-               MFEM_VERIFY(cfl==0.5, "check: cfl");
-               static int k = 0;
-               const double eps = 1.e-14;
-               const double p0_05 = 6.54653862453438e+00;
-               const double p0_27 = 7.58857635779292e+00;
-               const double stm = sqrt_tot_norm;
-               if (problem==0 and ti==05) {k++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
-               if (problem==0 and ti==27) {k++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
-               const double p1_05 = 3.50825494522579e+00;
-               const double p1_15 = 2.75644459682321e+00;
-               if (problem==1 and ti==05) {k++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
-               if (problem==1 and ti==15) {k++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
-               if (last_step)
-               {
-                  if (k==2)
-                  {
-                     printf("\033[32;7m[Laghos] Check OK\033[m");
-                  }
-                  else
-                  {
-                     printf("\033[31;7m[Laghos] Check ERROR\033[m");
-                     return -1;
-                  }
-               }
-            }
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
@@ -726,10 +693,50 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
+
+      // Problems checks
+      if (check)
+      {
+         double loc_norm = e_gf * e_gf, tot_norm;
+         MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
+                       pmesh->GetComm());
+         const double stm = sqrt(tot_norm);
+         // Default options only checks
+         MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
+         MFEM_VERIFY(order_v==2, "check: order_v");
+         MFEM_VERIFY(order_e==1, "check: order_e");
+         MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
+         MFEM_VERIFY(t_final==0.6, "check: t_final");
+         MFEM_VERIFY(cfl==0.5, "check: cfl");
+         const double eps = 1.e-14;
+         const double p0_05 = 6.54653862453438e+00;
+         const double p0_27 = 7.58857635779292e+00;
+         if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
+         if (problem==0 and ti==27) {checks++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
+         const double p1_05 = 3.50825494522579e+00;
+         const double p1_15 = 2.75644459682321e+00;
+         if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
+         if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
+         const double p2_05 = 1.020745795651244e+01;
+         const double p2_59 = 1.721590205901897e+01;
+         if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
+         if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+         const double p3_05 = 8.0;
+         const double p3_16 = 8.0;
+         if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
+         if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+         const double p4_05 = 3.436923188323578e+01;
+         const double p4_52 = 2.682244912720685e+01;
+         if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
+         if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+      }
    }
 
    // Switch back to the host.
    Device::Disable();
+
+   // Do the final checks
+   MFEM_VERIFY((!check)||(checks==2), "[Laghos] Check error");
 
    switch (ode_solver_type)
    {
@@ -793,7 +800,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-double rho0(const Vector &x)
+double rho0(const DeviceVector3 &x)
 {
    switch (problem)
    {
@@ -863,6 +870,7 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
+   const double rho0x = rho0(DeviceVector3(x[0],x[1],x[2]));
    switch (problem)
    {
       case 0:
@@ -881,10 +889,10 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0x / (gamma(x) - 1.0)
+                        : 0.1 / rho0x / (gamma(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0x / (gamma(x) - 1.0)
+                        : 1.0 / rho0x / (gamma(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
