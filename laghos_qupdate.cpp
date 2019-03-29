@@ -194,7 +194,9 @@ double det(const int dim, const double *J)
 {
    if (dim==2) { return det2D(J); }
    if (dim==3) { return det3D(J); }
+#ifndef MFEM_USE_CUDA
    MFEM_ASSERT(false, "dim!=2 && dim!=3");
+#endif
    return 0.0;
 }
 
@@ -273,7 +275,9 @@ void calcEigenvalues(const int n, const double *d,
                      double *lambda,
                      double *vec)
 {
+#ifndef MFEM_USE_CUDA
    MFEM_ASSERT(n==2, "n!=2");
+#endif
    double d0 = d[0];
    double d2 = d[2]; // use the upper triangular entry
    double d3 = d[3];
@@ -325,7 +329,9 @@ inline void getScalingFactor(const double &d_max, double &mult)
 MFEM_HOST_DEVICE static
 double calcSingularvalue(const int n, const int i, const double *d)
 {
+#ifndef MFEM_USE_CUDA
    MFEM_ASSERT(n==2, "n!=2");
+#endif
 
    double d0, d1, d2, d3;
    d0 = d[0];

@@ -76,6 +76,7 @@ double e0(const Vector &);
 double gamma(const Vector &);
 void display_banner(ostream & os);
 
+
 static long GetMaxRssMB();
 
 int main(int argc, char *argv[])
@@ -401,7 +402,6 @@ int main(int argc, char *argv[])
       cout << "Number of local/global specific internal energy dofs: "
            << L2Vsize << "/" << L2GTVSize << endl;
    }
-
 
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position

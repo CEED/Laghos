@@ -75,7 +75,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
+LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
                                                  const int size,
                                                  ParFiniteElementSpace &h1_fes,
                                                  ParFiniteElementSpace &l2_fes,
@@ -159,18 +159,19 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    else
    {
       ForcePA = new OkinaForcePAOperator(quad_data, h1_fes,l2_fes, integ_rule);
-      VMassPA = new OkinaMassPAOperator(q, quad_data, H1compFESpace, integ_rule,
+      VMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, H1compFESpace,
+                                        integ_rule,
                                         &tensors1D);
-      EMassPA = new OkinaMassPAOperator(q, quad_data, L2FESpace, integ_rule,
+      EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace, integ_rule,
                                         &tensors1D);
    }
 
-   GridFunctionCoefficient rho_coeff(&rho0);
+   GridFunctionCoefficient rho_coeff_gf(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
    if (!p_assembly)
    {
-      MassIntegrator mi(rho_coeff, &integ_rule);
+      MassIntegrator mi(rho_coeff_gf, &integ_rule);
       for (int i = 0; i < nzones; i++)
       {
          DenseMatrixInverse inv(&Me(i));
@@ -182,7 +183,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &q,
    }
 
    // Standard assembly for the velocity mass matrix.
-   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff, &integ_rule);
+   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &integ_rule);
    Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
@@ -408,13 +409,13 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       Vector* sptr = (Vector*) &S;
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       x_gf.Pull();
-      Device::PushDisable();
+      Device::Disable();
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      Device::Pop();
+      Device::Enable();
    }
    Array<int> l2dofs;
    if (p_assembly)
