@@ -669,14 +669,14 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    static double *d_local_in = NULL;
    if (!d_local_in)
    {
-      d_local_in = (double*) mm::malloc<double>(local_size);
+      d_local_in = (double*) mm::New<double>(local_size);
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
    erestrict->Mult(v_in,v_local_in);
    if (!(*d_out))
    {
-      *d_out = (double*) mm::malloc<double>(out_size);
+      *d_out = (double*) mm::New<double>(out_size);
    }
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
@@ -806,14 +806,14 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    static double *d_local_in = NULL;
    if (!d_local_in)
    {
-      d_local_in = (double*) mm::malloc<double>(local_size);
+      d_local_in = (double*) mm::New<double>(local_size);
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
    erestrict->Mult(v_in, v_local_in);
    if (!(*d_out))
    {
-      *d_out = (double*) mm::malloc<double>(out_size);
+      *d_out = (double*) mm::New<double>(out_size);
    }
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call =
@@ -879,13 +879,13 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    static double *d_dt_est = NULL;
    if (!d_dt_est)
    {
-      d_dt_est = (double*)mm::malloc<double>(dt_est_sz);
+      d_dt_est = (double*)mm::New<double>(dt_est_sz);
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;
 
    // **************************************************************************
-   MFEM_ASSERT(dim==2, "dim!=2");
+   MFEM_VERIFY(dim==2, "Only UpdateQuadratureData with dim==2 is supported");
    qupdate<2>(nzones,
               nqp,
               nqp1D,
