@@ -70,7 +70,7 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
-double rho0(const DeviceVector3 &);
+double rho0(const Vector3 &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma(const Vector &);
@@ -800,7 +800,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-double rho0(const DeviceVector3 &x)
+double rho0(const Vector3 &x)
 {
    switch (problem)
    {
@@ -870,7 +870,7 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
-   const double rho0x = rho0(DeviceVector3(x[0],x[1],x[2]));
+   const double rho0x = rho0(Vector3(x[0],x[1],x[2]));
    switch (problem)
    {
       case 0:
