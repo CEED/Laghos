@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
    int partition_type = 111;
    bool okina = false;
    bool qupdate = false;
-   const char *device = "";
+   const char *device = "cpu";
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
    args.AddOption(&device, "-d", "--device",
-                  "Device configuration, e.g. 'cuda', 'omp', 'raja', 'occa'.");
+                  "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
@@ -542,6 +542,7 @@ int main(int argc, char *argv[])
    if (okina)
    {
       Device::Configure(device);
+      Device::Print();
       Device::Enable();
    }
 

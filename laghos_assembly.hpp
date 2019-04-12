@@ -18,7 +18,8 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "general/okina.hpp"
+#include "general/forall.hpp"
+#include "linalg/dtensor.hpp"
 
 namespace mfem
 {
@@ -243,7 +244,7 @@ private:
    ParBilinearForm pabf;
    int ess_tdofs_count;
    mfem::Array<int> ess_tdofs;
-   Operator *massOperator;
+   OperatorPtr massOperator;
    mutable mfem::Vector distX;
    Tensors1D *tensors1D;
 public:

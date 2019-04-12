@@ -17,6 +17,7 @@
 #include "laghos_qupdate.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/dtensor.hpp"
+#include "general/forall.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -40,7 +41,7 @@ namespace hydrodynamics
 // *****************************************************************************
 // * Dense matrix
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void multABt(const int ah,
              const int aw,
              const int bh,
@@ -71,7 +72,7 @@ void multABt(const int ah,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void mult(const int ah,
           const int aw,
           const int bw,
@@ -94,7 +95,7 @@ void mult(const int ah,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void multV(const int height,
            const int width,
            double *data,
@@ -128,7 +129,7 @@ void multV(const int height,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void add(const int height, const int width,
          const double c, const double *A,
          double *D)
@@ -145,7 +146,7 @@ void add(const int height, const int width,
 // *****************************************************************************
 // * Eigen
 // *****************************************************************************
-MFEM_HOST_DEVICE  static
+MFEM_ATTR_HOST_DEVICE  static
 double norml2(const int size, const double *data)
 {
    if (0 == size) { return 0.0; }
@@ -172,14 +173,14 @@ double norml2(const int size, const double *data)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline double det2D(const double *d)
 {
    return d[0] * d[3] - d[1] * d[2];
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline double det3D(const double *d)
 {
    return
@@ -189,7 +190,7 @@ inline double det3D(const double *d)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 double det(const int dim, const double *J)
 {
    if (dim==2) { return det2D(J); }
@@ -201,7 +202,7 @@ double det(const int dim, const double *J)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void calcInverse2D(const int n, const double *a, double *i)
 {
    const double d = det2D(a);
@@ -213,7 +214,7 @@ void calcInverse2D(const int n, const double *a, double *i)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void symmetrize(const int n, double* __restrict__ d)
 {
    for (int i = 0; i<n; i++)
@@ -227,7 +228,7 @@ void symmetrize(const int n, double* __restrict__ d)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline double cpysign(const double x, const double y)
 {
    if ((x < 0 && y > 0) || (x > 0 && y < 0))
@@ -238,7 +239,7 @@ inline double cpysign(const double x, const double y)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline void eigensystem2S(const double &d12, double &d1, double &d2,
                           double &c, double &s)
 {
@@ -270,7 +271,7 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 void calcEigenvalues(const int n, const double *d,
                      double *lambda,
                      double *vec)
@@ -304,7 +305,7 @@ void calcEigenvalues(const int n, const double *d,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline void getScalingFactor(const double &d_max, double &mult)
 {
    int d_exp;
@@ -326,7 +327,7 @@ inline void getScalingFactor(const double &d_max, double &mult)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 double calcSingularvalue(const int n, const int i, const double *d)
 {
 #ifndef MFEM_USE_CUDA
@@ -381,7 +382,7 @@ double calcSingularvalue(const int n, const int i, const double *d)
 // *****************************************************************************
 // * Smooth transition between 0 and 1 for x in [-eps, eps].
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_ATTR_HOST_DEVICE static
 inline double smooth_step_01(const double x, const double eps)
 {
    const double y = (x + eps) / (2.0 * eps);
@@ -669,14 +670,14 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    static double *d_local_in = NULL;
    if (!d_local_in)
    {
-      d_local_in = (double*) mm::New<double>(local_size);
+      d_local_in = (double*) mfem::New<double>(local_size);
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in,local_size);
    erestrict->Mult(v_in,v_local_in);
    if (!(*d_out))
    {
-      *d_out = (double*) mm::New<double>(out_size);
+      *d_out = (double*) mfem::New<double>(out_size);
    }
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
@@ -806,14 +807,14 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    static double *d_local_in = NULL;
    if (!d_local_in)
    {
-      d_local_in = (double*) mm::New<double>(local_size);
+      d_local_in = (double*) mfem::New<double>(local_size);
    }
    Vector v_in = Vector((double*)d_in, vsize);
    Vector v_local_in = Vector(d_local_in, local_size);
    erestrict->Mult(v_in, v_local_in);
    if (!(*d_out))
    {
-      *d_out = (double*) mm::New<double>(out_size);
+      *d_out = (double*) mfem::New<double>(out_size);
    }
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call =
@@ -879,7 +880,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    static double *d_dt_est = NULL;
    if (!d_dt_est)
    {
-      d_dt_est = (double*)mm::New<double>(dt_est_sz);
+      d_dt_est = (double*)mfem::New<double>(dt_est_sz);
    }
    Vector d_dt(d_dt_est, dt_est_sz);
    d_dt = quad_data.dt_est;

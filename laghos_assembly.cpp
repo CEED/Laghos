@@ -1230,15 +1230,15 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
    nzones(pfes.GetMesh()->GetNE()),
    quad_data(qd),
    FESpace(pfes),
-   pabf(&pfes, AssemblyLevel::PARTIAL, nzones),
+   pabf(&pfes),
    ess_tdofs_count(0),
    ess_tdofs(0),
-   massOperator(NULL),
    tensors1D(t1D)
 {
+   pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
    pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
    pabf.Assemble();
-   pabf.FormSystemOperator(mfem::Array<int>(), massOperator);
+   pabf.FormSystemMatrix(mfem::Array<int>(), massOperator);
 }
 
 // *****************************************************************************
