@@ -18,6 +18,7 @@
 #include "laghos_solver.hpp"
 #include "linalg/dtensor.hpp"
 #include "general/forall.hpp"
+#include <unordered_map>
 
 #ifdef MFEM_USE_MPI
 
