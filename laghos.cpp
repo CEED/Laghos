@@ -709,7 +709,7 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
          MFEM_VERIFY(t_final==0.6, "check: t_final");
          MFEM_VERIFY(cfl==0.5, "check: cfl");
-         const double eps = 1.e-14;
+         const double eps = 1.e-13;
          const double p0_05 = 6.54653862453438e+00;
          const double p0_27 = 7.58857635779292e+00;
          if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
@@ -719,7 +719,7 @@ int main(int argc, char *argv[])
          if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
          if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
          const double p2_05 = 1.020745795651244e+01;
-         const double p2_59 = 1.721590205901897e+01;
+         const double p2_59 = 1.72159020590190e+01;
          if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
          if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
          const double p3_05 = 8.0;

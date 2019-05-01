@@ -409,13 +409,13 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       Vector* sptr = (Vector*) &S;
       x_gf.MakeRef(&H1FESpace, *sptr, 0);
       x_gf.Pull();
-      Device::Disable();
+      Device::Disable(true);
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      Device::Enable();
+      Device::Enable(true);
    }
    Array<int> l2dofs;
    if (p_assembly)
