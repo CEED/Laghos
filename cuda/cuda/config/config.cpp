@@ -14,7 +14,9 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
+#if defined(OPEN_MPI) && OPEN_MPI
 #include <mpi-ext.h>
+#endif
 #include <unistd.h>
 
 namespace mfem
