@@ -44,4 +44,14 @@
 #include "include/offsets.hpp"
 #include "include/kernels.hpp"
 
+#define CUCHK(call) {   \
+    cudaError_t err = call;  \
+    if( cudaSuccess != err) {  \
+      fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",     \
+              __FILE__, __LINE__, cudaGetErrorString( err) );           \
+      fflush(stderr);                                                   \
+      exit(EXIT_FAILURE);                                               \
+    } }
+
+
 #endif // LAGHOS_CUDA_KERNELS_CUDA
