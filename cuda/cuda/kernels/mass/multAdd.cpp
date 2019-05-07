@@ -289,7 +289,7 @@ void rMassMultAdd2D_v2(const int numElements,
     {
       double t = 0;
       for (int dy = 0; dy < NUM_DOFS_1D; ++dy) {
-        t += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]*sol_x[dy][qx];
+        t += matrix[dy][qy]*sol_x[dy][qx];
       }
       sol_xy[qy][qx] = t;
     }
@@ -335,7 +335,6 @@ void rMassMultAdd2D_v2(const int numElements,
       double t = 0;
       for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
       {    
-        // t += quadToDof[ijN(dy,qy,NUM_DOFS_1D)] * sol_x[qy][dx];
         t += matrix[qy][dy] * sol_x[qy][dx];
       }
       solOut[ijkN(dx,dy,e,NUM_DOFS_1D)] = t;
