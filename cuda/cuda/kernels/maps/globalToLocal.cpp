@@ -44,6 +44,29 @@ void rGlobalToLocal0(const int globalEntries,
    }
 }
 
+extern "C" kernel
+void rGlobalToLocal1(const int globalEntries,
+                     const int NUM_VDIM,
+                     const bool VDIM_ORDERING,
+                     const int localEntries,
+                     const int *map,                     
+                     const double* __restrict globalX,
+                     double* __restrict localX)                     
+{
+   const int i = blockDim.x * blockIdx.x + threadIdx.x;
+   if (i < localEntries)
+   {
+     const int gid = map[i];
+     for (int v = 0; v < NUM_VDIM; ++v)
+     {
+       const int g_offset = ijNMt(v,gid,NUM_VDIM,globalEntries,VDIM_ORDERING);
+       const double dofValue = globalX[g_offset];
+       const int l_offset = ijNMt(v,i,NUM_VDIM,localEntries,VDIM_ORDERING);
+       localX[l_offset] = dofValue;
+     }
+   }
+}
+
 // *****************************************************************************
 void rGlobalToLocal(const int NUM_VDIM,
                     const bool VDIM_ORDERING,
@@ -51,9 +74,15 @@ void rGlobalToLocal(const int NUM_VDIM,
                     const int localEntries,
                     const int* __restrict offsets,
                     const int* __restrict indices,
+                    const int* __restrict map,                    
                     const double* __restrict globalX,
                     double* __restrict localX)
 {
-   cuKer(rGlobalToLocal,globalEntries,NUM_VDIM,VDIM_ORDERING,
-         localEntries,offsets,indices,globalX,localX);
+  int block = 256;
+  int grid = (localEntries + block - 1) / block;
+  rGlobalToLocal1<<<grid, block>>>(globalEntries,NUM_VDIM,VDIM_ORDERING,
+                                   localEntries,map,globalX,localX);
+  CUCHK(cudaGetLastError());    
+  // cuKer(rGlobalToLocal,globalEntries,NUM_VDIM,VDIM_ORDERING,
+  //       localEntries,offsets,indices,globalX,localX);
 }

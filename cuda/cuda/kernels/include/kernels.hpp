@@ -127,7 +127,7 @@ void rIniGeom(const int, const int, const int, const int,
 
 // *****************************************************************************
 void rGlobalToLocal(const int, const bool, const int, const int,
-                    const int* restrict, const int* restrict,
+                    const int* restrict, const int* restrict, const int* restrict,
                     const double* restrict, double* restrict);
 
 void rLocalToGlobal(const int, const bool, const int,
