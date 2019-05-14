@@ -589,28 +589,22 @@ void rMassMultAdd(const int DIM,
    rMassMultAdd3D_v2<DOFS,QUAD><<<grid,blck>>>                                \
      (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y)
    
-   if (DIM == 2)
-   {
-     if (NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_2d(2,4,8); }
-     else if (NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4) { call_2d(3,4,8); }
-     else if (NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6) { call_2d(3,6,6); }
-     else if (NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6) { call_2d(4,6,6); }
-     else if (NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8) { call_2d(4,8,2); }
-     else if (NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8) { call_2d(5,8,2); }
-     else if (NUM_DOFS_1D == 5 && NUM_QUAD_1D == 10) { call_2d(5,10,1); }
-     else if (NUM_DOFS_1D == 6 && NUM_QUAD_1D == 10) { call_2d(6,10,1); }
-   }
-   else if (DIM == 3)
-   {
-     if (NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_3d(2,4,2); }
-     else if (NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4) { call_3d(3,4,4); }
-     else if (NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6) { call_3d(3,6,3); }
-     else if (NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6) { call_3d(4,6,4); }
-     else if (NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8) { call_3d(4,8,2); }
-     else if (NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8) { call_3d(5,8,2); }
-     else if (NUM_DOFS_1D == 5 && NUM_QUAD_1D == 10) { call_3d(5,10,2); }
-     else if (NUM_DOFS_1D == 6 && NUM_QUAD_1D == 10) { call_3d(6,10,2); }
-   }
+   if (DIM == 2 && NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_2d(2,4,8); }
+   else if (DIM == 2 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4) { call_2d(3,4,8); }
+   else if (DIM == 2 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6) { call_2d(3,6,6); }
+   else if (DIM == 2 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6) { call_2d(4,6,6); }
+   else if (DIM == 2 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8) { call_2d(4,8,2); }
+   else if (DIM == 2 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8) { call_2d(5,8,2); }
+   else if (DIM == 2 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 10) { call_2d(5,10,1); }
+   else if (DIM == 2 && NUM_DOFS_1D == 6 && NUM_QUAD_1D == 10) { call_2d(6,10,1); }
+   else if (DIM == 3 && NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_3d(2,4,2); }
+   else if (DIM == 3 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4) { call_3d(3,4,4); }
+   else if (DIM == 3 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6) { call_3d(3,6,3); }
+   else if (DIM == 3 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6) { call_3d(4,6,4); }
+   else if (DIM == 3 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8) { call_3d(4,8,2); }
+   else if (DIM == 3 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8) { call_3d(5,8,2); }
+   else if (DIM == 3 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 10) { call_3d(5,10,2); }
+   else if (DIM == 3 && NUM_DOFS_1D == 6 && NUM_QUAD_1D == 10) { call_3d(6,10,2); }
    else
    {
      if (!call[id])

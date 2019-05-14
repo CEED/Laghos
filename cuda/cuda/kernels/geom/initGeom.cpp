@@ -141,6 +141,53 @@ void rIniGeom2D(const int numElements,
    }
 }
 
+template<const int NUM_DOFS,
+         const int NUM_QUAD,
+         const int BY> kernel
+void rIniGeom2D_v2(const int numElements,
+                const double* restrict dofToQuadD,
+                const double* restrict nodes,
+                double* restrict J,
+                double* restrict invJ,
+                double* restrict detJ)
+{
+  const int el = blockIdx.x*BY+threadIdx.y;
+  __shared__ double buf[BY][3*NUM_DOFS];
+  double *s_nodes;
+  s_nodes = (double*)(buf + threadIdx.y);  
+  for (int d = threadIdx.x; d < NUM_DOFS; d += blockDim.x)
+  {
+    s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,el,2,NUM_DOFS)];
+    s_nodes[ijN(1,d,2)] = nodes[ijkNM(1,d,el,2,NUM_DOFS)];
+  }
+  __syncthreads();
+  for (int q = threadIdx.x; q < NUM_QUAD; q += blockDim.x)
+  {
+    double J11 = 0; double J12 = 0;
+    double J21 = 0; double J22 = 0;
+    for (int d = 0; d < NUM_DOFS; ++d)
+    {
+      const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
+      const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
+      const double x = s_nodes[ijN(0,d,2)];
+      const double y = s_nodes[ijN(1,d,2)];
+      J11 += (wx * x); J12 += (wx * y);
+      J21 += (wy * x); J22 += (wy * y);
+    }
+    const double r_detJ = (J11 * J22)-(J12 * J21);
+    J[ijklNM(0, 0, q, el,2,NUM_QUAD)] = J11;
+    J[ijklNM(1, 0, q, el,2,NUM_QUAD)] = J12;
+    J[ijklNM(0, 1, q, el,2,NUM_QUAD)] = J21;
+    J[ijklNM(1, 1, q, el,2,NUM_QUAD)] = J22;
+    const double r_idetJ = 1.0 / r_detJ;
+    invJ[ijklNM(0, 0, q, el,2,NUM_QUAD)] =  J22 * r_idetJ;
+    invJ[ijklNM(1, 0, q, el,2,NUM_QUAD)] = -J12 * r_idetJ;
+    invJ[ijklNM(0, 1, q, el,2,NUM_QUAD)] = -J21 * r_idetJ;
+    invJ[ijklNM(1, 1, q, el,2,NUM_QUAD)] =  J11 * r_idetJ;
+    detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
+  }
+}
+
 // *****************************************************************************
 template<const int NUM_DOFS,
          const int NUM_QUAD> kernel
@@ -184,7 +231,7 @@ void rIniGeom3D(const int numElements,
          const double r_detJ = ((J11 * J22 * J33) + (J12 * J23 * J31) +
                                 (J13 * J21 * J32) -
                                 (J13 * J22 * J31)-(J12 * J21 * J33)-(J11 * J23 * J32));
-         J[ijklNM(0, 0, q, e,3,NUM_QUAD)] = J11;
+         J[ijklNM(0, 0, q, e,3,NUM_QUAD)] = J11; 
          J[ijklNM(1, 0, q, e,3,NUM_QUAD)] = J12;
          J[ijklNM(2, 0, q, e,3,NUM_QUAD)] = J13;
          J[ijklNM(0, 1, q, e,3,NUM_QUAD)] = J21;
@@ -211,6 +258,71 @@ void rIniGeom3D(const int numElements,
    }
 }
 
+template<const int NUM_DOFS,
+         const int NUM_QUAD> kernel
+void rIniGeom3D_v2(const int numElements,
+                   const double* restrict dofToQuadD,
+                   const double* restrict nodes,
+                   double* restrict J,
+                   double* restrict invJ,
+                   double* restrict detJ)
+{
+   const int e = blockIdx.x;
+   __shared__ double s_nodes[3*NUM_DOFS];
+   for (int d = threadIdx.x; d < NUM_DOFS; d += blockDim.x)
+   {
+     s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
+     s_nodes[ijN(1,d,3)] = nodes[ijkNM(1, d, e,3,NUM_DOFS)];
+     s_nodes[ijN(2,d,3)] = nodes[ijkNM(2, d, e,3,NUM_DOFS)];
+   }
+   __syncthreads();
+   for (int q = threadIdx.x; q < NUM_QUAD; q += blockDim.x)
+   {
+     double J11 = 0; double J12 = 0; double J13 = 0;
+     double J21 = 0; double J22 = 0; double J23 = 0;
+     double J31 = 0; double J32 = 0; double J33 = 0;
+     for (int d = 0; d < NUM_DOFS; ++d)
+     {
+       const double wx = dofToQuadD[ijkNM(0, q, d,3,NUM_QUAD)];
+       const double wy = dofToQuadD[ijkNM(1, q, d,3,NUM_QUAD)];
+       const double wz = dofToQuadD[ijkNM(2, q, d,3,NUM_QUAD)];
+       const double x = s_nodes[ijN(0, d,3)];
+       const double y = s_nodes[ijN(1, d,3)];
+       const double z = s_nodes[ijN(2, d,3)];
+       J11 += (wx * x); J12 += (wx * y); J13 += (wx * z);
+       J21 += (wy * x); J22 += (wy * y); J23 += (wy * z);
+       J31 += (wz * x); J32 += (wz * y); J33 += (wz * z);
+     }
+     const double r_detJ = ((J11 * J22 * J33) + (J12 * J23 * J31) +
+                            (J13 * J21 * J32) -
+                            (J13 * J22 * J31)-(J12 * J21 * J33)-(J11 * J23 * J32));
+     J[ijklNM(0, 0, q, e,3,NUM_QUAD)] = J11; 
+     J[ijklNM(1, 0, q, e,3,NUM_QUAD)] = J12;
+     J[ijklNM(2, 0, q, e,3,NUM_QUAD)] = J13;
+     J[ijklNM(0, 1, q, e,3,NUM_QUAD)] = J21;
+     J[ijklNM(1, 1, q, e,3,NUM_QUAD)] = J22;
+     J[ijklNM(2, 1, q, e,3,NUM_QUAD)] = J23;
+     J[ijklNM(0, 2, q, e,3,NUM_QUAD)] = J31;
+     J[ijklNM(1, 2, q, e,3,NUM_QUAD)] = J32;
+     J[ijklNM(2, 2, q, e,3,NUM_QUAD)] = J33;
+
+     const double r_idetJ = 1.0 / r_detJ;
+     invJ[ijklNM(0, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J22 * J33)-(J23 * J32));
+     invJ[ijklNM(1, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J32 * J13)-(J33 * J12));
+     invJ[ijklNM(2, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J12 * J23)-(J13 * J22));
+
+     invJ[ijklNM(0, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J23 * J31)-(J21 * J33));
+     invJ[ijklNM(1, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J33 * J11)-(J31 * J13));
+     invJ[ijklNM(2, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J13 * J21)-(J11 * J23));
+
+     invJ[ijklNM(0, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J21 * J32)-(J22 * J31));
+     invJ[ijklNM(1, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J31 * J12)-(J32 * J11));
+     invJ[ijklNM(2, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J11 * J22)-(J12 * J21));
+     detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
+   }
+}
+
+
 // *****************************************************************************
 typedef void (*fIniGeom)(const int numElements,
                          const double* restrict dofToQuadD,
@@ -231,13 +343,8 @@ void rIniGeom(const int DIM,
               double* restrict invJ,
               double* restrict detJ)
 {
-   const int blck = CUDA_BLOCK_SIZE;
-   const int grid = (numElements+blck-1)/blck;
-   const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
-   const unsigned int quad1D = IROOT(DIM,NUM_QUAD);
-   const unsigned int id = (DIM<<4)|(dofs1D-2);
-   assert(LOG2(DIM)<=4);
-   assert(LOG2(dofs1D-2)<=4);
+  const unsigned int dofs1D = IROOT(DIM,NUM_DOFS);
+  const unsigned int quad1D = IROOT(DIM,NUM_QUAD);  
    if (quad1D!=2*(dofs1D-1))
    {
       return exit(
@@ -249,10 +356,10 @@ void rIniGeom(const int DIM,
    {
       // 2D
       {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},
-      {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
-      {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
-      {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
-      {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
+      // {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
+      // {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
+      // {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
+      // {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
       {0x25,&rIniGeom2D<7*7,(7*2-2)*(7*2-2)>},
       {0x26,&rIniGeom2D<8*8,(8*2-2)*(8*2-2)>},
       {0x27,&rIniGeom2D<9*9,(9*2-2)*(9*2-2)>},
@@ -266,10 +373,10 @@ void rIniGeom(const int DIM,
       {0x2F,&rIniGeom2D<17*17,(17*2-2)*(17*2-2)>},
       // 3D
       {0x30,&rIniGeom3D<2*2*2,2*2*2>},
-      {0x31,&rIniGeom3D<3*3*3,4*4*4>},
-      {0x32,&rIniGeom3D<4*4*4,6*6*6>},
-      {0x33,&rIniGeom3D<5*5*5,8*8*8>},
-      {0x34,&rIniGeom3D<6*6*6,10*10*10>},
+      // {0x31,&rIniGeom3D<3*3*3,4*4*4>},
+      // {0x32,&rIniGeom3D<4*4*4,6*6*6>},
+      // {0x33,&rIniGeom3D<5*5*5,8*8*8>},
+      // {0x34,&rIniGeom3D<6*6*6,10*10*10>},
       {0x35,&rIniGeom3D<7*7*7,12*12*12>},
       {0x36,&rIniGeom3D<8*8*8,14*14*14>},
       {0x37,&rIniGeom3D<9*9*9,16*16*16>},
@@ -282,12 +389,71 @@ void rIniGeom(const int DIM,
       {0x3E,&rIniGeom3D<16*16*16,30*30*30>},
       {0x3F,&rIniGeom3D<17*17*17,32*32*32>},
    };
-   if (!call[id])
+   int grid = numElements;
+
+   if (DIM == 2 && NUM_DOFS == 3*3)
    {
-      printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);
-      fflush(stdout);
+     const int BY = 4;
+     grid = numElements/BY;
+     dim3 blck(16,BY);
+     rIniGeom2D_v2<3*3, 4*4, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
    }
-   assert(call[id]);
-   call0(id,grid,blck,
-         numElements,dofToQuadD,nodes,J,invJ,detJ);
+   else if (DIM == 2 && NUM_DOFS == 4*4)
+   {
+     const int BY = 4;
+     grid = numElements/BY;     
+     dim3 blck(36,BY);
+     rIniGeom2D_v2<4*4, 6*6, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }   
+   else if (DIM == 2 && NUM_DOFS == 5*5)
+   {
+     const int BY = 2;
+     grid = numElements/BY;
+     dim3 blck(64,BY);
+     rIniGeom2D_v2<5*5, 8*8, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }
+   else if (DIM == 2 && NUM_DOFS == 6*6)
+   {
+     const int BY = 1;
+     grid = numElements/BY;
+     dim3 blck(100,BY);
+     rIniGeom2D_v2<6*6, 10*10, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }   
+   else if (DIM == 3 && NUM_DOFS == 3*3*3)
+   {
+     const int blck = 4*4*4;
+     rIniGeom3D_v2<3*3*3, 4*4*4><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }
+   else if (DIM == 3 && NUM_DOFS == 4*4*4)
+   {
+     const int blck = 6*6*6;
+     rIniGeom3D_v2<4*4*4, 6*6*6><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }
+   else if (DIM == 3 && NUM_DOFS == 5*5*5)
+   {
+     const int blck = 128;
+     rIniGeom3D_v2<5*5*5, 8*8*8><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }
+   else if (DIM == 3 && NUM_DOFS == 6*6*6)
+   {
+     const int blck = 128;
+     rIniGeom3D_v2<6*6*6, 10*10*10><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }   
+   else
+   {
+     const int blck = CUDA_BLOCK_SIZE;
+     const int grid = (numElements+blck-1)/blck;
+     const unsigned int id = (DIM<<4)|(dofs1D-2);
+     assert(LOG2(DIM)<=4);
+     assert(LOG2(dofs1D-2)<=4);   
+     if (!call[id])
+     {
+       printf("\n[rIniGeom] id \033[33m0x%X\033[m ",id);
+       fflush(stdout);
+     }
+     assert(call[id]);
+     call0(id,grid,blck,
+           numElements,dofToQuadD,nodes,J,invJ,detJ);
+   }
+   CUCHK(cudaGetLastError());
 }
