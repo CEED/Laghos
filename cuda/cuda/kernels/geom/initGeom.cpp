@@ -356,10 +356,10 @@ void rIniGeom(const int DIM,
    {
       // 2D
       {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},
-      // {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
-      // {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
-      // {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
-      // {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
+      {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
+      {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
+      {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
+      {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
       {0x25,&rIniGeom2D<7*7,(7*2-2)*(7*2-2)>},
       {0x26,&rIniGeom2D<8*8,(8*2-2)*(8*2-2)>},
       {0x27,&rIniGeom2D<9*9,(9*2-2)*(9*2-2)>},
@@ -373,10 +373,10 @@ void rIniGeom(const int DIM,
       {0x2F,&rIniGeom2D<17*17,(17*2-2)*(17*2-2)>},
       // 3D
       {0x30,&rIniGeom3D<2*2*2,2*2*2>},
-      // {0x31,&rIniGeom3D<3*3*3,4*4*4>},
-      // {0x32,&rIniGeom3D<4*4*4,6*6*6>},
-      // {0x33,&rIniGeom3D<5*5*5,8*8*8>},
-      // {0x34,&rIniGeom3D<6*6*6,10*10*10>},
+      {0x31,&rIniGeom3D<3*3*3,4*4*4>},
+      {0x32,&rIniGeom3D<4*4*4,6*6*6>},
+      {0x33,&rIniGeom3D<5*5*5,8*8*8>},
+      {0x34,&rIniGeom3D<6*6*6,10*10*10>},
       {0x35,&rIniGeom3D<7*7*7,12*12*12>},
       {0x36,&rIniGeom3D<8*8*8,14*14*14>},
       {0x37,&rIniGeom3D<9*9*9,16*16*16>},
@@ -388,56 +388,52 @@ void rIniGeom(const int DIM,
       {0x3D,&rIniGeom3D<15*15*15,28*28*28>},
       {0x3E,&rIniGeom3D<16*16*16,30*30*30>},
       {0x3F,&rIniGeom3D<17*17*17,32*32*32>},
+      
    };
-   int grid = numElements;
 
+#define call_2d(DOFS,QUAD,BY) \
+   int grid = numElements/BY; \
+   dim3 blck(QUAD*QUAD,BY); \
+   rIniGeom2D_v2<DOFS*DOFS,QUAD*QUAD,BY><<<grid,blck>>>( \
+     numElements,dofToQuadD,nodes,J,invJ,detJ)
+#define call_3d_smem(DOFS,QUAD,BX) \
+   int grid = numElements; \
+   dim3 blck(BX,1,1);\
+   rIniGeom3D_v2<DOFS*DOFS*DOFS,QUAD*QUAD*QUAD><<<grid,blck>>>( \
+     numElements,dofToQuadD,nodes,J,invJ,detJ)
+   
+   
    if (DIM == 2 && NUM_DOFS == 3*3)
    {
-     const int BY = 4;
-     grid = numElements/BY;
-     dim3 blck(16,BY);
-     rIniGeom2D_v2<3*3, 4*4, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_2d(3,4,4);
    }
    else if (DIM == 2 && NUM_DOFS == 4*4)
    {
-     const int BY = 4;
-     grid = numElements/BY;     
-     dim3 blck(36,BY);
-     rIniGeom2D_v2<4*4, 6*6, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_2d(4,6,4);
    }   
    else if (DIM == 2 && NUM_DOFS == 5*5)
    {
-     const int BY = 2;
-     grid = numElements/BY;
-     dim3 blck(64,BY);
-     rIniGeom2D_v2<5*5, 8*8, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_2d(5,8,2);
    }
    else if (DIM == 2 && NUM_DOFS == 6*6)
    {
-     const int BY = 1;
-     grid = numElements/BY;
-     dim3 blck(100,BY);
-     rIniGeom2D_v2<6*6, 10*10, BY><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_2d(6,10,1);
    }   
    else if (DIM == 3 && NUM_DOFS == 3*3*3)
    {
-     const int blck = 4*4*4;
-     rIniGeom3D_v2<3*3*3, 4*4*4><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_3d_smem(3,4,(4*4*4));
    }
    else if (DIM == 3 && NUM_DOFS == 4*4*4)
    {
-     const int blck = 6*6*6;
-     rIniGeom3D_v2<4*4*4, 6*6*6><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_3d_smem(4,6,(6*6*6));
    }
    else if (DIM == 3 && NUM_DOFS == 5*5*5)
    {
-     const int blck = 128;
-     rIniGeom3D_v2<5*5*5, 8*8*8><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_3d_smem(5,8,128);
    }
    else if (DIM == 3 && NUM_DOFS == 6*6*6)
    {
-     const int blck = 128;
-     rIniGeom3D_v2<6*6*6, 10*10*10><<<grid, blck>>>(numElements,dofToQuadD,nodes,J,invJ,detJ);
+     call_3d_smem(6,10,128);
    }   
    else
    {

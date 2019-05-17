@@ -53,4 +53,9 @@
                              exit(EXIT_FAILURE);                                               \
     } }
 
+extern double *gbuf;
+extern int rMassMultAdd3D_BufSize;
+extern int rUpdateQuadratureData3D_BufSize;
+extern int numSM;
+
 #endif // LAGHOS_CUDA_KERNELS_CUDA

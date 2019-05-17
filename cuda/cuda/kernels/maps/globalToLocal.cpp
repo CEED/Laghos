@@ -82,7 +82,8 @@ void rGlobalToLocal(const int NUM_VDIM,
   int grid = (localEntries + block - 1) / block;
   rGlobalToLocal1<<<grid, block>>>(globalEntries,NUM_VDIM,VDIM_ORDERING,
                                    localEntries,map,globalX,localX);
-  CUCHK(cudaGetLastError());    
   // cuKer(rGlobalToLocal,globalEntries,NUM_VDIM,VDIM_ORDERING,
   //       localEntries,offsets,indices,globalX,localX);
+  CUCHK(cudaGetLastError());    
+  
 }

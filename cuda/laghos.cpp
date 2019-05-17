@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,uvm,aware,share,hcpo,sync,rs_levels);
+                        cuda,uvm,aware,share,hcpo,sync,rs_levels,order_v);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.

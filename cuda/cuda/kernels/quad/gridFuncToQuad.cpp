@@ -235,7 +235,7 @@ void rGridFuncToQuad3D(const int numElements,
       }
    }
 }
-
+ 
 // *****************************************************************************
 typedef void (*fGridFuncToQuad)(const int numElements,
                                 const double* restrict dofToQuad,

@@ -17,6 +17,11 @@
 #include <mpi-ext.h>
 #include <unistd.h>
 
+double *gbuf;
+int rMassMultAdd3D_BufSize;
+int rUpdateQuadratureData3D_BufSize;
+int numSM;
+
 namespace mfem
 {
 
@@ -82,6 +87,30 @@ static void printDevProp(cudaDeviceProp devProp)
           (devProp.kernelExecTimeoutEnabled ? "Yes" : "No"));
 }
 
+void initGPUBuf(const int order_v)
+{
+  const int NUM_QUAD_1D = order_v*2;
+  const int NUM_DOFS_1D = order_v + 1;
+  const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+  const int NUM_DOFS_2D = NUM_DOFS_1D*NUM_DOFS_1D;
+
+  int maxBufSize = 0;  
+  rMassMultAdd3D_BufSize = (2*NUM_QUAD_3D + NUM_QUAD_2D)*sizeof(double);
+  printf("rMassMultAdd3D_BufSize = %d B\n", rMassMultAdd3D_BufSize);
+  maxBufSize = max(maxBufSize, rMassMultAdd3D_BufSize);
+  
+  rUpdateQuadratureData3D_BufSize =
+    (9*NUM_QUAD_3D + 6*NUM_DOFS_2D*NUM_QUAD_1D + 9*NUM_DOFS_1D*NUM_QUAD_2D)*sizeof(double);
+  printf("rUpdateQuadratureData3D_BufSize = %d B\n", rUpdateQuadratureData3D_BufSize);
+  maxBufSize = max(maxBufSize, rUpdateQuadratureData3D_BufSize);
+  
+  cudaDeviceGetAttribute(&numSM, cudaDevAttrMultiProcessorCount, 0);     
+  cudaMalloc(&gbuf, numSM*maxBufSize);
+  printf("GPU temp global buffer size = %f MB\n",
+         (float)numSM*maxBufSize/(1024.0*1024.0));
+}
+  
 // ***************************************************************************
 // *   Setup
 // ***************************************************************************
@@ -93,7 +122,8 @@ void rconfig::Setup(const int _mpi_rank,
                     const bool _share,
                     const bool _hcpo,
                     const bool _sync,
-                    const int rs_levels)
+                    const int rs_levels,
+                    const int order_v)
 {
    mpi_rank=_mpi_rank;
    mpi_size=_mpi_size;
@@ -190,6 +220,7 @@ void rconfig::Setup(const int _mpi_rank,
    hStream=new CUstream;
    cuStreamCreate(hStream, CU_STREAM_DEFAULT);
    cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+   initGPUBuf(order_v);
 }
 
 // ***************************************************************************

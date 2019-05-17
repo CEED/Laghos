@@ -62,7 +62,8 @@ public:
    void Setup(const int,const int, const bool cuda,
               const bool uvm, const bool aware,
               const bool share, const bool hcpo,
-              const bool sync, const int rs_levels);
+              const bool sync, const int rs_levels,
+              const int order_v);
    // *************************************************************************
    bool IAmAlone();
    bool GeomNeedsUpdate(const int);
