@@ -157,6 +157,8 @@ public:
                            const double gamma, const bool okina,
                            int h1_basis_type);
 
+   ~LagrangianHydroOperator();
+
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 

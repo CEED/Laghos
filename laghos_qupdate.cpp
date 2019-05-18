@@ -531,7 +531,13 @@ void qupdate(const int nzones,
 }
 
 // *****************************************************************************
-QUpdate::~QUpdate() { }
+QUpdate::~QUpdate()
+{
+   delete l2_ElemRestrict;
+   delete h1_ElemRestrict;
+   // delete l2_maps; // FIXME: can lead to double delete
+   // delete h1_maps; // FIXME: can lead to double delete
+}
 
 // *****************************************************************************
 QUpdate::QUpdate(const int _dim,

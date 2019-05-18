@@ -1336,6 +1336,12 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    gVecH1.SetSize(h1sz);
 }
 
+OkinaForcePAOperator::~OkinaForcePAOperator()
+{
+   delete &l2restrict;
+   delete &h1restrict;
+}
+
 // *****************************************************************************
 template<const int DIM,
          const int D1D,

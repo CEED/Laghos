@@ -182,8 +182,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    GridFunctionCoefficient rho_coeff_gf(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
-   if (!p_assembly)
+   // if (!p_assembly)
+   if (true)
    {
+      // Regardless of the value of 'p_assembly', 'Me' is used in the
+      // computation of the internal energy which is used twice: once at the
+      // start and once at the end of the time stepping.
       MassIntegrator mi(rho_coeff_gf, &integ_rule);
       for (int i = 0; i < nzones; i++)
       {
@@ -286,6 +290,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       CG_EMass.SetMaxIter(200);
       CG_EMass.SetPrintLevel(-1);
    }
+}
+
+LagrangianHydroOperator::~LagrangianHydroOperator()
+{
+   delete EMassPA;
+   delete VMassPA;
+   delete ForcePA;
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
