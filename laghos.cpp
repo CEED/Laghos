@@ -472,7 +472,7 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   e_gf.ReadWriteAccess(); // sync the data location of e_gf with its base, S
+   // sync the data location of e_gf with its base, S
    e_gf.GetMemory().SyncAliasToBase(S.GetMemory(), e_gf.Size());
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
@@ -602,6 +602,13 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
+      // data in S. This operation simply updates the Memory validity flags of
+      // the sub-vectors to match those of S.
+      x_gf.GetMemory().SyncWith(S.GetMemory());
+      v_gf.GetMemory().SyncWith(S.GetMemory());
+      e_gf.GetMemory().SyncWith(S.GetMemory());
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
