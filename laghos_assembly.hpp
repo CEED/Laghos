@@ -289,10 +289,10 @@ public:
    virtual void Mult(const Vector &x, Vector &y) const
    {
       const int N = x.Size();
-      const DeviceVector d_diag(diag,N);
-      const DeviceVector d_x(x,N);
-      DeviceVector d_y(y,N);
-      MFEM_FORALL(i, N, d_y(i) = d_x(i) / d_diag(i););
+      auto d_diag = diag.ReadAccess();
+      auto d_x = x.ReadAccess();
+      auto d_y = y.WriteAccess();
+      MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
    }
    virtual void SetOperator(const Operator &op) { }
 };

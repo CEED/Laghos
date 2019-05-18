@@ -193,6 +193,15 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
+   // Set device config parameters from the command line options and
+   // switch to working on the device.
+   if (okina)
+   {
+      Device::Configure(device);
+      if (mpi.Root()) { Device::Print(); }
+      Device::Enable();
+   }
+
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -413,7 +422,7 @@ int main(int argc, char *argv[])
    true_offset[1] = true_offset[0] + H1Vsize;
    true_offset[2] = true_offset[1] + H1Vsize;
    true_offset[3] = true_offset[2] + L2Vsize;
-   BlockVector S(true_offset);
+   BlockVector S(true_offset, Device::GetMemoryType());
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
@@ -426,10 +435,14 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
+   // sync the data location of x_gf with its base, S
+   x_gf.GetMemory().SyncAliasToBase(S.GetMemory(), x_gf.Size());
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   // sync the data location of v_gf with its base, S
+   v_gf.GetMemory().SyncAliasToBase(S.GetMemory(), v_gf.Size());
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -438,7 +451,10 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(rho0);
+   // FunctionCoefficient rho_coeff(rho0);
+   ConstantCoefficient rho_coeff(1.0);
+   MFEM_VERIFY(problem == 0 || problem == 1 || problem == 4,
+               "non-constant initial density is not supported yet");
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -456,6 +472,8 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   e_gf.ReadWriteAccess(); // sync the data location of e_gf with its base, S
+   e_gf.GetMemory().SyncAliasToBase(S.GetMemory(), e_gf.Size());
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
@@ -535,15 +553,6 @@ int main(int argc, char *argv[])
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();
-   }
-
-   // Set device config parameters from the command line options and
-   // switch to working on the device.
-   if (okina)
-   {
-      Device::Configure(device);
-      Device::Print();
-      Device::Enable();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
@@ -733,8 +742,9 @@ int main(int argc, char *argv[])
       }
    }
 
+   // FIXME: remove the commented code below
    // Switch back to the host.
-   Device::Disable();
+   // Device::Disable();
 
    // Do the final checks
    MFEM_VERIFY((!check)||(checks==2), "[Laghos] Check error");

@@ -72,6 +72,7 @@ protected:
    const int L2Vsize;
    const int L2TVSize;
    const HYPRE_Int L2GTVSize;
+   Array<int> block_offsets;
 
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
@@ -159,6 +160,9 @@ public:
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
+   virtual MemoryClass GetMemoryClass() const
+   { return Device::GetMemoryClass(); }
+
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
@@ -178,6 +182,8 @@ public:
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
 
    int GetH1VSize() const { return H1FESpace.GetVSize(); }
+
+   const Array<int> &GetBlockOffsets() const { return block_offsets; }
 };
 
 class TaylorCoefficient : public Coefficient

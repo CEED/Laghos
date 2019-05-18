@@ -33,17 +33,22 @@ void HydroODESolver::Init(TimeDependentOperator &_f)
    MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
 }
 
+void RK2AvgSolver::Init(TimeDependentOperator &_f)
+{
+   HydroODESolver::Init(_f);
+   const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
+   V.SetSize(block_offsets[1], mem_type);
+   dS_dt.Update(block_offsets, mem_type);
+   S0.Update(block_offsets, mem_type);
+}
+
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
-   const int Vsize = hydro_oper->GetH1VSize();
-   Vector V(Vsize), dS_dt(S.Size()), S0(S);
-
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   Vector dv_dt, v0, dx_dt;
-   v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
-   dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
-   dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+   Vector &dv_dt = dS_dt.GetBlock(1);
+   Vector &v0 = S0.GetBlock(1);
+   Vector &dx_dt = dS_dt.GetBlock(0);
 
    // In each sub-step:
    // - Update the global state Vector S.

@@ -103,6 +103,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    L2Vsize(L2FESpace.GetVSize()),
    L2TVSize(L2FESpace.TrueVSize()),
    L2GTVSize(L2FESpace.GlobalTrueVSize()),
+   block_offsets(4),
    x_gf(&H1FESpace),
    ess_tdofs(essential_tdofs),
    dim(h1_fes.GetMesh()->Dimension()),
@@ -149,6 +150,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    rhs_c_gf(&H1compFESpace),
    dvc_gf(&H1compFESpace)
 {
+   block_offsets[0] = 0;
+   block_offsets[1] = block_offsets[0] + H1Vsize;
+   block_offsets[2] = block_offsets[1] + H1Vsize;
+   block_offsets[3] = block_offsets[2] + L2Vsize;
+
    one = 1.0;
    if (not okina)
    {
@@ -164,6 +170,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
                                         &tensors1D);
       EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace, integ_rule,
                                         &tensors1D);
+      // Inside the above constructors for mass, there is reordering of the mesh
+      // nodes which is performed on the host. Since the mesh nodes are a
+      // subvector, so we need to sync with the rest of the base vector (which
+      // is assumed to be in the memory space used by the mfem::Device).
+      H1FESpace.GetParMesh()->GetNodes()->ReadWriteAccess();
+      // FIXME: do the above with a method in Memory that syncs aliases with
+      // their base Memory. How do we get the base here?
    }
 
    GridFunctionCoefficient rho_coeff_gf(&rho0);
@@ -263,7 +276,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(-1);
+      CG_VMass.SetPrintLevel(0);
+      // CG_VMass.SetPrintLevel(3);
 
       CG_EMass.SetOperator(*EMassPA);
       CG_EMass.iterative_mode = false;
@@ -345,7 +359,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          {
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, H1Vsize + c*size);
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
-            dvc_gf = 0.0;
+            // dvc_gf = 0.0; // initialized above
             Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
             Array<int> ess_bdr(bdr_attr_max);
@@ -362,6 +376,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             timer.sw_cgH1.Stop();
             timer.H1iter += CG_VMass.GetNumIterations();
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
+            // We need to sync the subvector 'dvc_gf' with its base vector
+            // because it may have been moved to a different memory space.
+            dvc_gf.GetMemory().SyncAliasToBase(dS_dt.GetMemory(),
+                                               dvc_gf.Size());
          }
       } // okina
    }
@@ -406,16 +424,18 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      Vector* sptr = (Vector*) &S;
-      x_gf.MakeRef(&H1FESpace, *sptr, 0);
-      x_gf.Pull();
-      Device::Disable(true);
+      // FIXME: remove the commented code below
+      // Vector* sptr = (Vector*) &S;
+      // x_gf.MakeRef(&H1FESpace, *sptr, 0);
+      // x_gf.Pull();
+      // Device::Disable(true);
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
-      Device::Enable(true);
+      // FIXME: remove the commented code below
+      // Device::Enable(true);
    }
    Array<int> l2dofs;
    if (p_assembly)
@@ -448,6 +468,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.sw_cgL2.Stop();
          const HYPRE_Int cg_num_iter = CG_EMass.GetNumIterations();
          timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
+         // Move the memory location of the subvector 'de' to the memory
+         // location of the base vector 'dS_dt'.
+         de.GetMemory().SyncAliasToBase(dS_dt.GetMemory(), de.Size());
       }
    }
    else // not p_assembly

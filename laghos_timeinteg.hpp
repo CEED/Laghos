@@ -43,8 +43,14 @@ public:
 
 class RK2AvgSolver : public HydroODESolver
 {
+protected:
+   Vector V;
+   BlockVector dS_dt, S0;
+
 public:
    RK2AvgSolver() { }
+
+   virtual void Init(TimeDependentOperator &_f);
 
    virtual void Step(Vector &S, double &t, double &dt);
 };

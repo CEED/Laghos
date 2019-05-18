@@ -1343,21 +1343,22 @@ template<const int DIM,
          const int L1D,
          const int H1D> static
 void kForceMult2D(const int NE,
-                  const double* _B,
-                  const double* _Bt,
-                  const double* _Gt,
-                  const double* _sJit,
-                  const double* _e,
-                  double* _v)
+                  const Array<double> &_B,
+                  const Array<double> &_Bt,
+                  const Array<double> &_Gt,
+                  const DenseTensor &_sJit,
+                  const Vector &_e,
+                  Vector &_v)
 {
-   const DeviceMatrix L2B(_B, Q1D,L1D);
-   const DeviceMatrix H1Bt(_Bt, H1D,Q1D);
-   const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
-   const DeviceTensor<5> sJit(_sJit, Q1D,Q1D,NE,2,2);
-   const DeviceTensor<3> energy(_e, L1D, L1D, NE);
+   auto L2B = Reshape(_B.ReadAccess(), Q1D, L1D);
+   auto H1Bt = Reshape(_Bt.ReadAccess(), H1D, Q1D);
+   auto H1Gt = Reshape(_Gt.ReadAccess(), H1D, Q1D);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
+                       Q1D,Q1D,NE,2,2);
+   auto energy = Reshape(_e.ReadAccess(), L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   DeviceTensor<4> velocity(_v, D1D,D1D,NE,2);
+   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,NE,2);
    MFEM_FORALL(e, NE,
    {
       double e_xy[Q1D][Q1D];
@@ -1455,21 +1456,22 @@ template<const int DIM,
          const int L1D,
          const int H1D> static
 void kForceMult3D(const int NE,
-                  const double* _B,
-                  const double* _Bt,
-                  const double* _Gt,
-                  const double* _sJit,
-                  const double* _e,
-                  double* _v)
+                  const Array<double> &_B,
+                  const Array<double> &_Bt,
+                  const Array<double> &_Gt,
+                  const DenseTensor &_sJit,
+                  const Vector &_e,
+                  Vector &_v)
 {
-   const DeviceMatrix L2B(_B, Q1D,L1D);
-   const DeviceMatrix H1Bt(_Bt, H1D,Q1D);
-   const DeviceMatrix H1Gt(_Gt, H1D,Q1D);
-   const DeviceTensor<6> sJit(_sJit, Q1D,Q1D,Q1D,NE,3,3);
-   const DeviceTensor<4> energy(_e, L1D, L1D, L1D, NE);
+   auto L2B = Reshape(_B.ReadAccess(), Q1D,L1D);
+   auto H1Bt = Reshape(_Bt.ReadAccess(), H1D,Q1D);
+   auto H1Gt = Reshape(_Gt.ReadAccess(), H1D,Q1D);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
+                       Q1D,Q1D,Q1D,NE,3,3);
+   auto energy = Reshape(_e.ReadAccess(), L1D, L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   DeviceTensor<5> velocity(_v, D1D,D1D,D1D,NE,3);
+   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,D1D,NE,3);
    MFEM_FORALL(e, NE,
    {
       double e_xyz[Q1D][Q1D][Q1D];
@@ -1626,12 +1628,12 @@ void kForceMult3D(const int NE,
 
 // *****************************************************************************
 typedef void (*fForceMult)(const int E,
-                           const double *L2QuadToDof,
-                           const double *H1DofToQuad,
-                           const double *H1DofToQuadD,
-                           const double *stressJinvT,
-                           const double *e,
-                           double *v);
+                           const Array<double> &B,
+                           const Array<double> &Bt,
+                           const Array<double> &Gt,
+                           const DenseTensor &stressJinvT,
+                           const Vector &e,
+                           Vector &v);
 
 // *****************************************************************************
 static void kForceMult(const int DIM,
@@ -1640,12 +1642,12 @@ static void kForceMult(const int DIM,
                        const int L1D,
                        const int H1D,
                        const int NE,
-                       const double *B,
-                       const double *Bt,
-                       const double *Gt,
-                       const double *stressJinvT,
-                       const double *e,
-                       double *v)
+                       const Array<double> &B,
+                       const Array<double> &Bt,
+                       const Array<double> &Gt,
+                       const DenseTensor &stressJinvT,
+                       const Vector &e,
+                       Vector &v)
 {
    MFEM_ASSERT(D1D==H1D, "D1D!=H1D");
    MFEM_ASSERT(L1D==D1D-1,"L1D!=D1D-1");
@@ -1682,7 +1684,7 @@ void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
               l2D2Q->B,
               h1D2Q->Bt,
               h1D2Q->Gt,
-              quad_data.stressJinvT.Data(),
+              quad_data.stressJinvT,
               gVecL2,
               gVecH1);
    h1restrict.MultTranspose(gVecH1, y);
@@ -1695,19 +1697,20 @@ template<const int DIM,
          const int L1D,
          const int H1D> static
 void kForceMultTranspose2D(const int NE,
-                           const double* _Bt,
-                           const double* _B,
-                           const double* _G,
-                           const double* _sJit,
-                           const double* _v,
-                           double* _e)
+                           const Array<double> &_Bt,
+                           const Array<double> &_B,
+                           const Array<double> &_G,
+                           const DenseTensor &_sJit,
+                           const Vector &_v,
+                           Vector &_e)
 {
-   const DeviceMatrix L2Bt(_Bt, L1D,Q1D);
-   const DeviceMatrix H1B(_B, Q1D,H1D);
-   const DeviceMatrix H1G(_G, Q1D,H1D);
-   const DeviceTensor<5> sJit(_sJit, Q1D,Q1D,NE,2,2);
-   const DeviceTensor<4> velocity(_v, D1D,D1D,NE,2);
-   DeviceTensor<3> energy(_e, L1D, L1D, NE);
+   auto L2Bt = Reshape(_Bt.ReadAccess(), L1D,Q1D);
+   auto H1B = Reshape(_B.ReadAccess(), Q1D,H1D);
+   auto H1G = Reshape(_G.ReadAccess(), Q1D,H1D);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
+                       Q1D,Q1D,NE,2,2);
+   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,NE,2);
+   auto energy = Reshape(_e.WriteAccess(), L1D, L1D, NE);
    MFEM_FORALL(e, NE,
    {
       double vStress[Q1D][Q1D];
@@ -1810,19 +1813,20 @@ template<const int DIM,
          const int L1D,
          const int H1D> static
 void kForceMultTranspose3D(const int NE,
-                           const double *Bt,
-                           const double *B,
-                           const double *G,
-                           const double *_sJit,
-                           const double *_v,
-                           double *_e)
+                           const Array<double> &Bt,
+                           const Array<double> &B,
+                           const Array<double> &G,
+                           const DenseTensor &_sJit,
+                           const Vector &_v,
+                           Vector &_e)
 {
-   const DeviceMatrix L2Bt(Bt, L1D,Q1D);
-   const DeviceMatrix H1B(B, Q1D,H1D);
-   const DeviceMatrix H1G(G, Q1D,H1D);
-   const DeviceTensor<6> sJit(_sJit, Q1D,Q1D,Q1D,NE,3,3);
-   const DeviceTensor<5> velocity(_v, D1D,D1D,D1D,NE,3);
-   DeviceTensor<4> energy(_e, L1D,L1D,L1D,NE);
+   auto L2Bt = Reshape(Bt.ReadAccess(), L1D,Q1D);
+   auto H1B = Reshape(B.ReadAccess(), Q1D,H1D);
+   auto H1G = Reshape(G.ReadAccess(), Q1D,H1D);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
+                       Q1D,Q1D,Q1D,NE,3,3);
+   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,D1D,NE,3);
+   auto energy = Reshape(_e.WriteAccess(), L1D,L1D,L1D,NE);
    MFEM_FORALL(e,NE,
    {
       double vStress[Q1D][Q1D][Q1D];
@@ -1957,12 +1961,12 @@ void kForceMultTranspose3D(const int NE,
 
 // *****************************************************************************
 typedef void (*fForceMultTranspose)(const int nzones,
-                                    const double *L2QuadToDof,
-                                    const double *H1DofToQuad,
-                                    const double *H1DofToQuadD,
-                                    const double *stressJinvT,
-                                    const double *v,
-                                    double *e);
+                                    const Array<double> &Bt,
+                                    const Array<double> &B,
+                                    const Array<double> &G,
+                                    const DenseTensor &sJit,
+                                    const Vector &v,
+                                    Vector &e);
 
 // *****************************************************************************
 static void kForceMultTranspose(const int DIM,
@@ -1971,12 +1975,12 @@ static void kForceMultTranspose(const int DIM,
                                 const int L1D,
                                 const int H1D,
                                 const int nzones,
-                                const double *L2QuadToDof,
-                                const double *H1DofToQuad,
-                                const double *H1DofToQuadD,
-                                const double *stressJinvT,
-                                const double *v,
-                                double *e)
+                                const Array<double> &L2QuadToDof,
+                                const Array<double> &H1DofToQuad,
+                                const Array<double> &H1DofToQuadD,
+                                const DenseTensor &stressJinvT,
+                                const Vector &v,
+                                Vector &e)
 {
    MFEM_ASSERT(D1D==H1D,"D1D!=H1D");
    MFEM_ASSERT(L1D==D1D-1, "L1D!=D1D-1");
@@ -2019,7 +2023,7 @@ void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
                        l2D2Q->Bt,
                        h1D2Q->B,
                        h1D2Q->G,
-                       quad_data.stressJinvT.Data(),
+                       quad_data.stressJinvT,
                        gVecH1,
                        gVecL2);
    l2restrict.MultTranspose(gVecL2, y);

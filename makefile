@@ -78,7 +78,6 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
-LDFLAGS  = $(if $(CXX:nvcc=),$(CXXFLAGS),$(filter-out -x=cu,$(CXXFLAGS)))
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -109,15 +108,16 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp \
-               laghos_qupdate.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp\
+ laghos_timeinteg.cpp laghos_qupdate.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
+.PHONY: all clean distclean install status info opt debug test style\
+	clean-build clean-exec
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -127,7 +127,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CXX) $(LDFLAGS) -ccbin mpicxx -o laghos $(OBJECT_FILES) $(LIBS)
+	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
 

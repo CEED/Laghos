@@ -405,23 +405,24 @@ void qupdate(const int nzones,
              const double h1order,
              const double cfl,
              const double infinity,
-             const double *weights,
-             const double *Jacobians,
-             const double *rho0DetJ0w,
-             const double *e_quads,
-             const double *grad_v_ext,
-             const double *Jac0inv,
-             double *dt_est,
-             double *stressJinvT)
+             const Array<double> &weights,
+             const Vector &Jacobians,
+             const Vector &rho0DetJ0w,
+             const Vector &e_quads,
+             const Vector &grad_v_ext,
+             const DenseTensor &Jac0inv,
+             Vector &dt_est,
+             DenseTensor &stressJinvT)
 {
-   const DeviceVector d_weights(weights);
-   const DeviceVector d_Jacobians(Jacobians);
-   const DeviceVector d_rho0DetJ0w(rho0DetJ0w);
-   const DeviceVector d_e_quads(e_quads);
-   const DeviceVector d_grad_v_ext(grad_v_ext);
-   const DeviceVector d_Jac0inv(Jac0inv);
-   DeviceVector d_dt_est(dt_est);
-   DeviceVector d_stressJinvT(stressJinvT);
+   auto d_weights = weights.ReadAccess();
+   auto d_Jacobians = Jacobians.ReadAccess();
+   auto d_rho0DetJ0w = rho0DetJ0w.ReadAccess();
+   auto d_e_quads = e_quads.ReadAccess();
+   auto d_grad_v_ext = grad_v_ext.ReadAccess();
+   auto d_Jac0inv = ReadAccess(Jac0inv.GetMemory(), Jac0inv.TotalSize());
+   auto d_dt_est = dt_est.ReadWriteAccess();
+   auto d_stressJinvT = WriteAccess(stressJinvT.GetMemory(),
+                                    stressJinvT.TotalSize());
    MFEM_FORALL(z, nzones,
    {
       double min_detJ = infinity;
@@ -563,9 +564,6 @@ QUpdate::QUpdate(const int _dim,
    l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
    h1_ElemRestrict(new ElemRestriction(H1FESpace)),
    l2_ElemRestrict(new ElemRestriction(L2FESpace)),
-   d_e_quads_data(NULL),
-   d_grad_x_data(NULL),
-   d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
    MFEM_ASSERT(material_pcf, "!material_pcf");
@@ -576,13 +574,13 @@ template<const int VDIM,
          const int D1D,
          const int Q1D> static
 void vecToQuad2D(const int NE,
-                 const double* __restrict _B,
-                 const double* __restrict _x,
-                 double* __restrict _y)
+                 const Array<double> &_B,
+                 const Vector &_x,
+                 Vector &_y)
 {
-   const DeviceMatrix B(_B, Q1D,D1D);
-   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
-   DeviceTensor<4> y(_y, Q1D,Q1D,NE,2);
+   auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
+   auto x = Reshape(_x.ReadAccess(), D1D,D1D,NE,2);
+   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,NE,2);
    MFEM_FORALL(e, NE,
    {
       double out_xy[VDIM][Q1D][Q1D];
@@ -644,22 +642,22 @@ void vecToQuad2D(const int NE,
 
 // *****************************************************************************
 typedef void (*fVecToQuad2D)(const int E,
-                             const double* __restrict dofToQuad,
-                             const double* __restrict in,
-                             double* __restrict out);
+                             const Array<double> &dofToQuad,
+                             const Vector &in,
+                             Vector &out);
 
 // ***************************************************************************
 static void Dof2QuadScalar(const ElemRestriction *erestrict,
                            const FiniteElementSpace &fes,
                            const DofToQuad *maps,
                            const IntegrationRule& ir,
-                           const double *d_in,
-                           double **d_out)
+                           const Vector &d_in,
+                           Vector &d_out)
 {
    const int dim = fes.GetMesh()->Dimension();
    MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
-   const int vsize = fes.GetVSize();
+   // const int vsize = fes.GetVSize(); // not used
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
@@ -668,18 +666,9 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    const int out_size =  nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   static double *d_local_in = NULL;
-   if (!d_local_in)
-   {
-      d_local_in = (double*) mfem::New<double>(local_size);
-   }
-   Vector v_in = Vector((double*)d_in, vsize);
-   Vector v_local_in = Vector(d_local_in,local_size);
-   erestrict->Mult(v_in,v_local_in);
-   if (!(*d_out))
-   {
-      *d_out = (double*) mfem::New<double>(out_size);
-   }
+   Vector v_local_in(local_size);
+   erestrict->Mult(d_in,v_local_in);
+   d_out.SetSize(out_size);
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
@@ -695,22 +684,22 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
       printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   call[id](nzones, maps->B, d_local_in, *d_out);
+   call[id](nzones, maps->B, v_local_in, d_out);
 }
 
 // **************************************************************************
 template <const int D1D,
           const int Q1D> static
 void qGradVector2D(const int NE,
-                   const double* __restrict _B,
-                   const double* __restrict _G,
-                   const double* __restrict _x,
-                   double* __restrict _y)
+                   const Array<double> &_B,
+                   const Array<double> &_G,
+                   const Vector &_x,
+                   Vector &_y)
 {
-   const DeviceMatrix B(_B, Q1D,D1D);
-   const DeviceMatrix G(_G, Q1D,D1D);
-   const DeviceTensor<4> x(_x, D1D,D1D,NE,2);
-   DeviceTensor<5> y(_y, 2,2,Q1D,Q1D,NE);
+   auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
+   auto G = Reshape(_G.ReadAccess(), Q1D,D1D);
+   auto x = Reshape(_x.ReadAccess(), D1D,D1D,NE,2);
+   auto y = Reshape(_y.WriteAccess(), 2,2,Q1D,Q1D,NE);
    MFEM_FORALL(e, NE,
    {
       double s_gradv[2][2][Q1D][Q1D];
@@ -779,24 +768,24 @@ void qGradVector2D(const int NE,
 
 // *****************************************************************************
 typedef void (*fGradVector2D)(const int E,
-                              const double* __restrict dofToQuad,
-                              const double* __restrict dofToQuadD,
-                              const double* __restrict in,
-                              double* __restrict out);
+                              const Array<double> &dofToQuad,
+                              const Array<double> &dofToQuadD,
+                              const Vector &in,
+                              Vector &out);
 
 // **************************************************************************
 static void Dof2QuadGrad(const ElemRestriction *erestrict,
                          const FiniteElementSpace &fes,
                          const DofToQuad *maps,
                          const IntegrationRule& ir,
-                         const double *d_in,
-                         double **d_out)
+                         const Vector &d_in,
+                         Vector &d_out)
 {
    const int dim = fes.GetMesh()->Dimension();
    MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
    MFEM_ASSERT(vdim==2, "vdim!=2");
-   const int vsize = fes.GetVSize();
+   // const int vsize = fes.GetVSize(); // not used
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
@@ -805,18 +794,9 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    const int out_size = vdim * vdim * nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   static double *d_local_in = NULL;
-   if (!d_local_in)
-   {
-      d_local_in = (double*) mfem::New<double>(local_size);
-   }
-   Vector v_in = Vector((double*)d_in, vsize);
-   Vector v_local_in = Vector(d_local_in, local_size);
-   erestrict->Mult(v_in, v_local_in);
-   if (!(*d_out))
-   {
-      *d_out = (double*) mfem::New<double>(out_size);
-   }
+   Vector v_local_in(local_size);
+   erestrict->Mult(d_in, v_local_in);
+   d_out.SetSize(out_size);
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fGradVector2D> call =
    {
@@ -834,8 +814,8 @@ static void Dof2QuadGrad(const ElemRestriction *erestrict,
    call[id](nzones,
             maps->B,
             maps->G,
-            d_local_in,
-            *d_out);
+            v_local_in,
+            d_out);
 }
 
 // *****************************************************************************
@@ -860,17 +840,17 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    // Energy dof => quads ******************************************************
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   Dof2QuadScalar(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, &d_e_quads_data);
+   Dof2QuadScalar(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, d_e_quads_data);
 
    // Coords to Jacobians ******************************************************
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
-   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x, &d_grad_x_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x, d_grad_x_data);
 
    // Velocity *****************************************************************
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
-   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v, &d_grad_v_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v, d_grad_v_data);
 
    // **************************************************************************
    const double h1order = (double) H1FESpace.GetOrder(0);
@@ -878,13 +858,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    const int dt_est_sz = nzones;
-   static double *d_dt_est = NULL;
-   if (!d_dt_est)
-   {
-      d_dt_est = (double*)mfem::New<double>(dt_est_sz);
-   }
-   Vector d_dt(d_dt_est, dt_est_sz);
-   d_dt = quad_data.dt_est;
+   Vector d_dt_est(dt_est_sz);
+   d_dt_est = quad_data.dt_est;
 
    // **************************************************************************
    MFEM_VERIFY(dim==2, "Only UpdateQuadratureData with dim==2 is supported");
@@ -902,12 +877,12 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               quad_data.rho0DetJ0w,
               d_e_quads_data,
               d_grad_v_data,
-              quad_data.Jac0inv.Data(),
+              quad_data.Jac0inv,
               d_dt_est,
-              quad_data.stressJinvT.Data());
+              quad_data.stressJinvT);
 
    // **************************************************************************
-   quad_data.dt_est = mfem::Min(dt_est_sz, d_dt_est);
+   quad_data.dt_est = d_dt_est.Min();
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
    timer->quad_tstep += nzones;

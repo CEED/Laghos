@@ -46,9 +46,9 @@ private:
    mfem::DofToQuad *l2_maps;
    const mfem::ElemRestriction *h1_ElemRestrict;
    const mfem::ElemRestriction *l2_ElemRestrict;
-   double *d_e_quads_data;
-   double *d_grad_x_data;
-   double *d_grad_v_data;
+   Vector d_e_quads_data;
+   Vector d_grad_x_data;
+   Vector d_grad_v_data;
    const int nqp;
 public:
    // **************************************************************************
