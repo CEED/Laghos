@@ -607,21 +607,25 @@ void rMassMultAdd(const int DIM,
      rMassMultAdd2D_v2<DOFS,QUAD,BZ><<<grid,blck>>>                            \
        (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y)
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
-   if (rMassMultAdd3D_BufSize <= 98304) { \
-     if (rMassMultAdd3D_BufSize > 49152) { \
-       int maxbytes = 98304; \
-       cudaFuncSetAttribute(rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
-                            cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes); \
-     } \
-     int grid = numElements;                    \
-     dim3 blck(QUAD,QUAD,BZ);                                           \
-     rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK><<<grid,blck,rMassMultAdd3D_BufSize,0>>> \
-       (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,NULL,rMassMultAdd3D_BufSize); \
-   } else { \
-     int grid = numSM;      \
-     dim3 blck(QUAD,QUAD,BZ);                                           \
-     rMassMultAdd3D_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK><<<grid,blck>>> \
-       (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,gbuf,rMassMultAdd3D_BufSize); \
+  if (rMassMultAdd3D_BufSize <= 98304) {   \
+    cudaFuncSetCacheConfig(rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
+                           cudaFuncCachePreferShared);                  \
+    if (rMassMultAdd3D_BufSize > 49152) {                               \
+      int maxbytes = 98304;                                             \
+      cudaFuncSetAttribute(rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
+                           cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes); \
+    }                                                                   \
+    int grid = numElements;                                             \
+    dim3 blck(QUAD,QUAD,BZ);                                            \
+    rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK><<<grid,blck,rMassMultAdd3D_BufSize,0>>> \
+      (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,NULL,rMassMultAdd3D_BufSize); \
+  } else {                                                            \
+    cudaFuncSetCacheConfig(rMassMultAdd3D_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>, \
+                           cudaFuncCachePreferL1);                      \
+    int grid = numSM;                                                 \
+    dim3 blck(QUAD,QUAD,BZ);                                            \
+    rMassMultAdd3D_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK><<<grid,blck>>>   \
+      (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,gbuf,rMassMultAdd3D_BufSize); \
    }
    
    if (DIM == 2 && NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_2d(2,4,8); }

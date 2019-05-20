@@ -219,7 +219,6 @@ void rconfig::Setup(const int _mpi_rank,
    cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
    hStream=new CUstream;
    cuStreamCreate(hStream, CU_STREAM_DEFAULT);
-   cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
    initGPUBuf(order_v);
 }
 

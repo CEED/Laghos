@@ -1023,6 +1023,8 @@ void rUpdateQuadratureData(const double GAMMA,
 
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
    if (rUpdateQuadratureData3D_BufSize <= 98304) {\
+     cudaFuncSetCacheConfig(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
+                            cudaFuncCachePreferShared);                 \
      if (rUpdateQuadratureData3D_BufSize > 49152) { \
        int maxbytes = 98304; \
        cudaFuncSetAttribute(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
@@ -1037,6 +1039,8 @@ void rUpdateQuadratureData(const double GAMMA,
          v,e,rho0DetJ0w,invJ0,J,invJ,detJ,                              \
          stressJinvT,dtEst,NULL,rUpdateQuadratureData3D_BufSize);       \
    } else { \
+     cudaFuncSetCacheConfig(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>, \
+                            cudaFuncCachePreferL1);                     \
      dim3 blck(QUAD,QUAD,BZ);                    \
      int grid = numSM;                                     \
      rUpdateQuadratureData3D_v2<3,DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>   \
