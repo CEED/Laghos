@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
    // L2 projection to the positive basis in which we actually compute. The goal
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
-   // time evolution.
+   // time evolution.   
    ParGridFunction rho(&L2FESpace);
    FunctionCoefficient rho_coeff(hydrodynamics::rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
       case 3: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
-
+   
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
                                 visc, p_assembly, cg_tol, cg_max_iter);
@@ -416,14 +416,18 @@ int main(int argc, char *argv[])
 
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
-   // defines the Mult() method that used by the time integrators.
+   // defines the Mult() method that used by the time integrators.   
    ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    CudaVector S_old(S);
-
+   {
+     size_t free, tot;
+     cudaMemGetInfo(&free, &tot);
+     printf("final used = %f GB\n", (double)(tot - free)/(1024.0*1024.0*1024.0));
+   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)

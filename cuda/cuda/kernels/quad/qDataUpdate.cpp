@@ -559,8 +559,7 @@ void rUpdateQuadratureData3D(const double GAMMA,
    }
 }
 
-template<const int NUM_DIM,
-         const int NUM_DOFS_1D,         
+template<const int NUM_DOFS_1D,         
          const int NUM_QUAD_1D,
          const int USE_SMEM,
          const int BLOCK,
@@ -587,32 +586,36 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
                                 double *gbuf,
                                 int bufSize)
 {
+  const int NUM_DIM = 3;
   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
   int tid = threadIdx.x + threadIdx.y*blockDim.x + threadIdx.z*blockDim.x*blockDim.y;
   extern __shared__ double sbuf[];
-  // __shared__ double s_gradv[9*NUM_QUAD_3D];
-  // __shared__ double vDx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D];
-  // __shared__ double vx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D];     
-  // __shared__ double vDxy[NUM_DOFS_1D][3*NUM_QUAD_2D] ;
-  // __shared__ double vxDy[NUM_DOFS_1D][3*NUM_QUAD_2D] ;
-  // __shared__ double vxy[NUM_DOFS_1D][3*NUM_QUAD_2D]  ;
-  double *s_gradv;
-  double (*vDx)[NUM_DOFS_1D][3*NUM_QUAD_1D], (*vx)[NUM_DOFS_1D][3*NUM_QUAD_1D];
-  double (*vDxy)[3*NUM_QUAD_2D], (*vxDy)[3*NUM_QUAD_2D], (*vxy)[3*NUM_QUAD_2D];
   double *buf_ptr;
   
   if (USE_SMEM)
     buf_ptr = sbuf;
   else
     buf_ptr = (double*)((char*)gbuf + blockIdx.x*bufSize);
-  s_gradv = buf_ptr;
-  vDx = (double (*)[NUM_DOFS_1D][3*NUM_QUAD_1D])(buf_ptr + 9*NUM_QUAD_3D);
-  vx = vDx + NUM_DOFS_1D;
-  vDxy =
-    (double (*)[3*NUM_QUAD_2D])(buf_ptr + 9*NUM_QUAD_3D + 2*NUM_DOFS_1D*NUM_DOFS_1D*3*NUM_QUAD_1D);
-  vxDy = vDxy + NUM_DOFS_1D;
-  vxy = vxDy + NUM_DOFS_1D;
+
+  // __shared__ double s_gradv[9*NUM_QUAD_3D];
+  //                   vDx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D],
+  //                   vx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D],
+  //                   vDxy[NUM_DOFS_1D][3*NUM_QUAD_2D],
+  //                   vxDy[NUM_DOFS_1D][3*NUM_QUAD_2D],
+  //                   vxy[NUM_DOFS_1D][3*NUM_QUAD_2D]  ;  
+  double *s_gradv,
+    (*vDx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
+    (*vx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
+    (*vDxy)[3*NUM_QUAD_2D],
+    (*vxDy)[3*NUM_QUAD_2D],
+    (*vxy)[3*NUM_QUAD_2D];
+  mallocBuf((void**)&s_gradv, (void**)&buf_ptr, 9*NUM_QUAD_3D*sizeof(double));
+  mallocBuf((void**)&vDx    , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+  mallocBuf((void**)&vx     , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+  mallocBuf((void**)&vDxy   , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+  mallocBuf((void**)&vxDy   , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+  mallocBuf((void**)&vxy    , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));  
   
   for (int el = blockIdx.x; el < numElements; el += gridDim.x)
   {
@@ -1003,66 +1006,48 @@ void rUpdateQuadratureData(const double GAMMA,
       {0x2E,&rUpdateQuadratureData2D<2,30*30,30,16>},
       {0x2F,&rUpdateQuadratureData2D<2,32*32,32,17>},
       // 3D
-      {0x30,&rUpdateQuadratureData3D<3,2*2*2,2,2>},
-      {0x31,&rUpdateQuadratureData3D<3,4*4*4,4,3>},
-      {0x32,&rUpdateQuadratureData3D<3,6*6*6,6,4>},
-      {0x33,&rUpdateQuadratureData3D<3,8*8*8,8,5>},
-      {0x34,&rUpdateQuadratureData3D<3,10*10*10,10,6>},
-      {0x35,&rUpdateQuadratureData3D<3,12*12*12,12,7>},
-      {0x36,&rUpdateQuadratureData3D<3,14*14*14,14,8>},
-      {0x37,&rUpdateQuadratureData3D<3,16*16*16,16,9>},
-      {0x38,&rUpdateQuadratureData3D<3,18*18*18,18,10>},
-      {0x39,&rUpdateQuadratureData3D<3,20*20*20,20,11>},
-      {0x3A,&rUpdateQuadratureData3D<3,22*22*22,22,12>},
-      {0x3B,&rUpdateQuadratureData3D<3,24*24*24,24,13>},
-      {0x3C,&rUpdateQuadratureData3D<3,26*26*26,26,14>},
-      {0x3D,&rUpdateQuadratureData3D<3,28*28*28,28,15>},
-      {0x3E,&rUpdateQuadratureData3D<3,30*30*30,30,16>},
-      {0x3F,&rUpdateQuadratureData3D<3,32*32*32,32,17>},
+      // {0x30,&rUpdateQuadratureData3D<3,2*2*2,2,2>},
+      // {0x31,&rUpdateQuadratureData3D<3,4*4*4,4,3>},
+      // {0x32,&rUpdateQuadratureData3D<3,6*6*6,6,4>},
+      // {0x33,&rUpdateQuadratureData3D<3,8*8*8,8,5>},
+      // {0x34,&rUpdateQuadratureData3D<3,10*10*10,10,6>},
+      // {0x35,&rUpdateQuadratureData3D<3,12*12*12,12,7>},
+      // {0x36,&rUpdateQuadratureData3D<3,14*14*14,14,8>},
+      // {0x37,&rUpdateQuadratureData3D<3,16*16*16,16,9>},
+      // {0x38,&rUpdateQuadratureData3D<3,18*18*18,18,10>},
+      // {0x39,&rUpdateQuadratureData3D<3,20*20*20,20,11>},
+      // {0x3A,&rUpdateQuadratureData3D<3,22*22*22,22,12>},
+      // {0x3B,&rUpdateQuadratureData3D<3,24*24*24,24,13>},
+      // {0x3C,&rUpdateQuadratureData3D<3,26*26*26,26,14>},
+      // {0x3D,&rUpdateQuadratureData3D<3,28*28*28,28,15>},
+      // {0x3E,&rUpdateQuadratureData3D<3,30*30*30,30,16>},
+      // {0x3F,&rUpdateQuadratureData3D<3,32*32*32,32,17>},
    };
 
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
-   if (rUpdateQuadratureData3D_BufSize <= 98304) {\
-     cudaFuncSetCacheConfig(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
-                            cudaFuncCachePreferShared);                 \
-     if (rUpdateQuadratureData3D_BufSize > 49152) { \
-       int maxbytes = 98304; \
-       cudaFuncSetAttribute(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
-                        cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes); \
-     } \
-     dim3 blck(QUAD,QUAD,BZ);                                           \
-     int grid = nzones;                                                 \
-     rUpdateQuadratureData3D_v2<3,DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>      \
-       <<<grid,blck,rUpdateQuadratureData3D_BufSize,0>>>(               \
-         GAMMA,H0,CFL,USE_VISCOSITY,                                    \
-         nzones,dofToQuad,dofToQuadD,quadWeights,                       \
-         v,e,rho0DetJ0w,invJ0,J,invJ,detJ,                              \
-         stressJinvT,dtEst,NULL,rUpdateQuadratureData3D_BufSize);       \
-   } else { \
-     cudaFuncSetCacheConfig(rUpdateQuadratureData3D_v2<3,DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>, \
-                            cudaFuncCachePreferL1);                     \
-     dim3 blck(QUAD,QUAD,BZ);                    \
-     int grid = numSM;                                     \
-     rUpdateQuadratureData3D_v2<3,DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>   \
-       <<<grid,blck>>>(       \
-         GAMMA,H0,CFL,USE_VISCOSITY,                            \
-         nzones,dofToQuad,dofToQuadD,quadWeights,               \
-         v,e,rho0DetJ0w,invJ0,J,invJ,detJ,                      \
-         stressJinvT,dtEst,gbuf,rUpdateQuadratureData3D_BufSize);       \
-   }
+   call_3d_ker(rUpdateQuadratureData3D,nzones,DOFS,QUAD,BZ,NBLOCK,\
+               GAMMA,H0,CFL,USE_VISCOSITY,                        \
+               nzones,dofToQuad,dofToQuadD,quadWeights,           \
+               v,e,rho0DetJ0w,invJ0,J,invJ,detJ,                  \
+               stressJinvT,dtEst,gbuf,rUpdateQuadratureData3D_BufSize)               
 
-   if (NUM_DIM == 3 && NUM_DOFS_1D == 4)
-   {
-     call_3d(4,6,6,1);
-   }
-   else if (NUM_DIM == 3 && NUM_DOFS_1D == 5)
-   {
-     call_3d(5,8,8,1);
-   }
-   else if (NUM_DIM == 3 && NUM_DOFS_1D == 7)
-   {
-     call_3d(7,12,4,1);
-   }
+   // 3D
+   if      (id == 0x30) { call_3d(2 ,2 ,2,1); }
+   else if (id == 0x31) { call_3d(3 ,4 ,4,1); }   
+   else if (id == 0x32) { call_3d(4 ,6 ,6,1); }
+   else if (id == 0x33) { call_3d(5 ,8 ,8,1); }
+   else if (id == 0x34) { call_3d(6 ,10,2,1); }   
+   else if (id == 0x35) { call_3d(7 ,12,2,1); }
+   else if (id == 0x36) { call_3d(8 ,14,2,1); }
+   else if (id == 0x37) { call_3d(9 ,16,2,1); }
+   else if (id == 0x38) { call_3d(10,18,2,1); }
+   else if (id == 0x39) { call_3d(11,20,2,1); }
+   else if (id == 0x3A) { call_3d(12,22,2,1); }
+   else if (id == 0x3B) { call_3d(13,24,1,1); }
+   else if (id == 0x3C) { call_3d(14,26,1,1); }
+   else if (id == 0x3D) { call_3d(15,28,1,1); }
+   else if (id == 0x3E) { call_3d(16,30,1,1); }
+   else if (id == 0x3F) { call_3d(17,32,1,1); }                  
    else
    {
      if (!call[id])

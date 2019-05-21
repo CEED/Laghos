@@ -343,7 +343,6 @@ void rMassMultAdd2D_v2(const int numElements,
   
 }
 
-
 template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int USE_SMEM,
@@ -362,20 +361,19 @@ void rMassMultAdd3D_v2(const int numElements,
                        int bufSize)
 {
   extern __shared__ double sbuf[];
-  double (*buf1)[NUM_QUAD_1D][NUM_QUAD_1D], (*buf2)[NUM_QUAD_1D][NUM_QUAD_1D];
-  double (*matrix)[NUM_QUAD_1D];
   double *buf_ptr;
   if (USE_SMEM)
     buf_ptr = sbuf;
   else
     buf_ptr = (double*)((char*)gbuf + blockIdx.x*bufSize);
-  buf1 = (double (*)[NUM_QUAD_1D][NUM_QUAD_1D])buf_ptr;
-  buf2 = buf1 + NUM_QUAD_1D;
-  matrix = (double (*)[NUM_QUAD_1D])(buf_ptr + 2*NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D);
-   
-  // __shared__ double buf1[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
-  // __shared__ double buf2[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D];
-  // __shared__ double matrix[NUM_QUAD_1D][NUM_QUAD_1D];
+
+  // __shared__ double buf1[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D],
+  //                   buf2[NUM_QUAD_1D][NUM_QUAD_1D][NUM_QUAD_1D],
+  //                   matrix[NUM_QUAD_1D][NUM_QUAD_1D];  
+  double (*buf1)[NUM_QUAD_1D][NUM_QUAD_1D], (*buf2)[NUM_QUAD_1D][NUM_QUAD_1D], (*matrix)[NUM_QUAD_1D];
+  mallocBuf((void**)&buf1  , (void**)&buf_ptr, NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D*sizeof(double));
+  mallocBuf((void**)&buf2  , (void**)&buf_ptr, NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D*sizeof(double));
+  mallocBuf((void**)&matrix, (void**)&buf_ptr, NUM_QUAD_1D*NUM_QUAD_1D*sizeof(double));
   
   double (*sol_xyz)[NUM_QUAD_1D][NUM_QUAD_1D];
   double (*sol_xy)[NUM_QUAD_1D][NUM_QUAD_1D];
@@ -582,91 +580,77 @@ void rMassMultAdd(const int DIM,
       {0x20D0E,&rMassMultAdd2D<14,28>},  {0x20E0E,&rMassMultAdd2D<15,28>},
       {0x20E0F,&rMassMultAdd2D<15,30>},  {0x20F0F,&rMassMultAdd2D<16,30>},
       {0x20F10,&rMassMultAdd2D<16,32>},  {0x21010,&rMassMultAdd2D<17,32>},
-      // 3D
-      {0x30001,&rMassMultAdd3D<1,2>},    {0x30101,&rMassMultAdd3D<2,2>},
-      {0x30102,&rMassMultAdd3D<2,4>},    {0x30202,&rMassMultAdd3D<3,4>},
-      {0x30203,&rMassMultAdd3D<3,6>},    {0x30303,&rMassMultAdd3D<4,6>},
-      {0x30304,&rMassMultAdd3D<4,8>},    {0x30404,&rMassMultAdd3D<5,8>},
-      {0x30405,&rMassMultAdd3D<5,10>},   {0x30505,&rMassMultAdd3D<6,10>},
-      {0x30506,&rMassMultAdd3D<6,12>},   {0x30606,&rMassMultAdd3D<7,12>},
-      {0x30607,&rMassMultAdd3D<7,14>},   {0x30707,&rMassMultAdd3D<8,14>},
-      {0x30708,&rMassMultAdd3D<8,16>},   {0x30808,&rMassMultAdd3D<9,16>},
-      {0x30809,&rMassMultAdd3D<9,18>},   {0x30909,&rMassMultAdd3D<10,18>},
-      {0x3090A,&rMassMultAdd3D<10,20>},  {0x30A0A,&rMassMultAdd3D<11,20>},
-      {0x30A0B,&rMassMultAdd3D<11,22>},  {0x30B0B,&rMassMultAdd3D<12,22>},
-      {0x30B0C,&rMassMultAdd3D<12,24>},  {0x30C0C,&rMassMultAdd3D<13,24>},
-      {0x30C0D,&rMassMultAdd3D<13,26>},  {0x30D0D,&rMassMultAdd3D<14,26>},
-      {0x30D0E,&rMassMultAdd3D<14,28>},  {0x30E0E,&rMassMultAdd3D<15,28>},
-      {0x30E0F,&rMassMultAdd3D<15,30>},  {0x30F0F,&rMassMultAdd3D<16,30>},
-      {0x30F10,&rMassMultAdd3D<16,32>},  {0x31010,&rMassMultAdd3D<17,32>},
+      // // 3D
+      // {0x30001,&rMassMultAdd3D<1,2>},    {0x30101,&rMassMultAdd3D<2,2>},
+      // {0x30102,&rMassMultAdd3D<2,4>},    {0x30202,&rMassMultAdd3D<3,4>},
+      // {0x30203,&rMassMultAdd3D<3,6>},    {0x30303,&rMassMultAdd3D<4,6>},
+      // {0x30304,&rMassMultAdd3D<4,8>},    {0x30404,&rMassMultAdd3D<5,8>},
+      // {0x30405,&rMassMultAdd3D<5,10>},   {0x30505,&rMassMultAdd3D<6,10>},
+      // {0x30506,&rMassMultAdd3D<6,12>},   {0x30606,&rMassMultAdd3D<7,12>},
+      // {0x30607,&rMassMultAdd3D<7,14>},   {0x30707,&rMassMultAdd3D<8,14>},
+      // {0x30708,&rMassMultAdd3D<8,16>},   {0x30808,&rMassMultAdd3D<9,16>},
+      // {0x30809,&rMassMultAdd3D<9,18>},   {0x30909,&rMassMultAdd3D<10,18>},
+      // {0x3090A,&rMassMultAdd3D<10,20>},  {0x30A0A,&rMassMultAdd3D<11,20>},
+      // {0x30A0B,&rMassMultAdd3D<11,22>},  {0x30B0B,&rMassMultAdd3D<12,22>},
+      // {0x30B0C,&rMassMultAdd3D<12,24>},  {0x30C0C,&rMassMultAdd3D<13,24>},
+      // {0x30C0D,&rMassMultAdd3D<13,26>},  {0x30D0D,&rMassMultAdd3D<14,26>},
+      // {0x30D0E,&rMassMultAdd3D<14,28>},  {0x30E0E,&rMassMultAdd3D<15,28>},
+      // {0x30E0F,&rMassMultAdd3D<15,30>},  {0x30F0F,&rMassMultAdd3D<16,30>},
+      // {0x30F10,&rMassMultAdd3D<16,32>},  {0x31010,&rMassMultAdd3D<17,32>},
    };
 
+   
 #define call_2d(DOFS,QUAD,BZ) \
      int grid = numElements/BZ; \
      dim3 blck(QUAD,QUAD,BZ); \
      rMassMultAdd2D_v2<DOFS,QUAD,BZ><<<grid,blck>>>                            \
-       (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y)
+       (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y)   
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
-  if (rMassMultAdd3D_BufSize <= 98304) {   \
-    cudaFuncSetCacheConfig(rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
-                           cudaFuncCachePreferShared);                  \
-    if (rMassMultAdd3D_BufSize > 49152) {                               \
-      int maxbytes = 98304;                                             \
-      cudaFuncSetAttribute(rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK>, \
-                           cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes); \
-    }                                                                   \
-    int grid = numElements;                                             \
-    dim3 blck(QUAD,QUAD,BZ);                                            \
-    rMassMultAdd3D_v2<DOFS,QUAD,1,QUAD*QUAD*BZ,NBLOCK><<<grid,blck,rMassMultAdd3D_BufSize,0>>> \
-      (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,NULL,rMassMultAdd3D_BufSize); \
-  } else {                                                            \
-    cudaFuncSetCacheConfig(rMassMultAdd3D_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK>, \
-                           cudaFuncCachePreferL1);                      \
-    int grid = numSM;                                                 \
-    dim3 blck(QUAD,QUAD,BZ);                                            \
-    rMassMultAdd3D_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK><<<grid,blck>>>   \
-      (numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,gbuf,rMassMultAdd3D_BufSize); \
-   }
-   
-   if (DIM == 2 && NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4) { call_2d(2,4,8); }
-   else if (DIM == 2 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4) { call_2d(3,4,8); }
-   else if (DIM == 2 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6) { call_2d(3,6,6); }
-   else if (DIM == 2 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6) { call_2d(4,6,6); }
-   else if (DIM == 2 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8) { call_2d(4,8,2); }
-   else if (DIM == 2 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8) { call_2d(5,8,2); }
-   else if (DIM == 2 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 10) { call_2d(5,10,1); }
-   else if (DIM == 2 && NUM_DOFS_1D == 6 && NUM_QUAD_1D == 10) { call_2d(6,10,1); }
-   else if (DIM == 3 && NUM_DOFS_1D == 2 && NUM_QUAD_1D == 4)
-   {
-     call_3d(2,4,2,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 4)
-   {
-     call_3d(3,4,4,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 3 && NUM_QUAD_1D == 6)
-   {
-     call_3d(3,6,3,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 6)
-   {
-     call_3d(4,6,4,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 4 && NUM_QUAD_1D == 8)
-   {
-     call_3d(4,8,2,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 5 && NUM_QUAD_1D == 8)
-   {
-     call_3d(5,8,2,1);
-   }
-   else if (DIM == 3 && NUM_DOFS_1D == 6 && NUM_QUAD_1D == 12)
-   {
-     call_3d(6,12,2,1);
-   }   
-   else if (DIM == 3 && NUM_DOFS_1D == 7 && NUM_QUAD_1D == 12) {
-     call_3d(7,12,2,1);
-   }   
+   call_3d_ker(rMassMultAdd3D,numElements,DOFS,QUAD,BZ,NBLOCK,\
+               numElements,dofToQuad,dofToQuadD,quadToDof,quadToDofD,op,x,y,gbuf,rMassMultAdd3D_BufSize)
+
+   // 2D
+   if      (id == 0x20102) { call_2d(2 ,4 ,8); }
+   else if (id == 0x20202) { call_2d(3 ,4 ,8); }
+   else if (id == 0x20203) { call_2d(3 ,6 ,6); }
+   else if (id == 0x20303) { call_2d(4 ,6 ,6); }
+   else if (id == 0x20304) { call_2d(4 ,8 ,2); }
+   else if (id == 0x20404) { call_2d(5 ,8 ,2); }
+   else if (id == 0x20405) { call_2d(5 ,10,1); }
+   else if (id == 0x20505) { call_2d(6 ,10,1); }
+   // 3D
+   else if (id == 0x30001) { call_3d(1 ,2 ,2,1); }
+   else if (id == 0x30101) { call_3d(2 ,2 ,2,1); }   
+   else if (id == 0x30102) { call_3d(2 ,4 ,2,1); }
+   else if (id == 0x30202) { call_3d(3 ,4 ,4,1); }
+   else if (id == 0x30203) { call_3d(3 ,6 ,3,1); }
+   else if (id == 0x30303) { call_3d(4 ,6 ,4,1); }
+   else if (id == 0x30304) { call_3d(4 ,8 ,2,1); }
+   else if (id == 0x30404) { call_3d(5 ,8 ,2,1); }
+   else if (id == 0x30405) { call_3d(5 ,10,2,1); }
+   else if (id == 0x30505) { call_3d(6 ,10,2,1); }   
+   else if (id == 0x30506) { call_3d(6 ,12,2,1); }   
+   else if (id == 0x30606) { call_3d(7 ,12,2,1); }
+   else if (id == 0x30607) { call_3d(7 ,14,2,1); }   
+   else if (id == 0x30707) { call_3d(8 ,14,2,1); }
+   else if (id == 0x30708) { call_3d(8 ,16,4,1); }   
+   else if (id == 0x30808) { call_3d(9 ,16,4,1); }
+   else if (id == 0x30809) { call_3d(9 ,18,2,1); }   
+   else if (id == 0x30909) { call_3d(10,18,2,1); }
+   else if (id == 0x3090A) { call_3d(10,20,2,1); }   
+   else if (id == 0x30A0A) { call_3d(11,20,2,1); }
+   else if (id == 0x30A0B) { call_3d(11,22,2,1); }   
+   else if (id == 0x30B0B) { call_3d(12,22,2,1); }
+   else if (id == 0x30B0C) { call_3d(12,24,1,1); }      
+   else if (id == 0x30C0C) { call_3d(13,24,1,1); }
+   else if (id == 0x30C0D) { call_3d(13,26,1,1); }      
+   else if (id == 0x30D0D) { call_3d(14,26,1,1); }
+   else if (id == 0x30D0E) { call_3d(14,28,1,1); }      
+   else if (id == 0x30E0E) { call_3d(15,28,1,1); }
+   else if (id == 0x30E0F) { call_3d(15,30,1,1); }      
+   else if (id == 0x30F0F) { call_3d(16,30,1,1); }
+   else if (id == 0x30F10) { call_3d(16,32,1,1); }      
+   else if (id == 0x31010) { call_3d(17,32,1,1); }         
    else
    {
      if (!call[id])
