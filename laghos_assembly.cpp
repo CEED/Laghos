@@ -1318,9 +1318,7 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    h1fes(h1f),
    l2fes(l2f),
    h1restrict(h1f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-   //new ElemRestriction(*static_cast<FiniteElementSpace*>(&h1f)))),
    l2restrict(l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-   //(new ElemRestriction(*static_cast<FiniteElementSpace*>(&l2f)))),
    integ_rule(ir),
    ir1D(IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder())),
    D1D(h1fes.GetFE(0)->GetOrder()+1),
@@ -1329,8 +1327,8 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    H1D(h1fes.GetFE(0)->GetOrder()+1),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
-   l2D2Q(&l2fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),//DofToQuad::Get(l2fes, integ_rule)),
-   h1D2Q(&h1fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),//DofToQuad::Get(h1fes, integ_rule)),
+   l2D2Q(&l2fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),
+   h1D2Q(&h1fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),
    gVecL2(l2sz),
    gVecH1(h1sz)
 {
@@ -1340,12 +1338,6 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    MFEM_ASSERT(!l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
    gVecL2.SetSize(l2sz);
    gVecH1.SetSize(h1sz);
-}
-
-OkinaForcePAOperator::~OkinaForcePAOperator()
-{
-   delete &l2restrict;
-   delete &h1restrict;
 }
 
 // *****************************************************************************

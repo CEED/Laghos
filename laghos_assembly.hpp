@@ -187,7 +187,6 @@ public:
                         ParFiniteElementSpace&,
                         ParFiniteElementSpace&,
                         const IntegrationRule&);
-   ~OkinaForcePAOperator();
    virtual void Mult(const Vector&, Vector&) const;
    virtual void MultTranspose(const Vector&, Vector&) const;
 };

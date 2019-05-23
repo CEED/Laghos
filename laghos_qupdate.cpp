@@ -440,7 +440,7 @@ void qupdate(const int nzones,
       {
          const int zdx = z * nqp + q;
          //const int zdx_ = z*nqp*dim*dim + q;
-         const int zdx1 = z*nqp*dim + q;
+         //const int zdx1 = z*nqp*dim + q;
          const double weight =  d_weights[q];
          const double inv_weight = 1. / weight;
          const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
@@ -535,15 +535,6 @@ void qupdate(const int nzones,
 }
 
 // *****************************************************************************
-QUpdate::~QUpdate()
-{
-   delete l2_ElemRestrict;
-   delete h1_ElemRestrict;
-   // delete l2_maps; // FIXME: can lead to double delete
-   // delete h1_maps; // FIXME: can lead to double delete
-}
-
-// *****************************************************************************
 QUpdate::QUpdate(const int _dim,
                  const int _nzones,
                  const int _l2dofs_cnt,
@@ -574,9 +565,6 @@ QUpdate::QUpdate(const int _dim,
    l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    h1_ElemRestrict(H1FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
    l2_ElemRestrict(L2FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-   //d_e_quads_data(NULL),
-   //d_grad_x_data(NULL),
-   //d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
    MFEM_ASSERT(material_pcf, "!material_pcf");
@@ -670,23 +658,14 @@ static void Dof2QuadScalar(const Operator *erestrict,
    const int dim = fes.GetMesh()->Dimension();
    MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
-   // const int vsize = fes.GetVSize(); // not used
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
    const int nqp = ir.GetNPoints();
-//   const int local_size = numDofs * nzones;
    const int out_size =  nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   //Vector v_local_in(local_size);
-   //erestrict->Mult(d_in,v_local_in);
    d_out.SetSize(out_size);
-   /*
-   if (!(*d_out))
-   {
-      *d_out = (double*) mfem::New<double>(out_size);
-      }*/
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
@@ -702,7 +681,7 @@ static void Dof2QuadScalar(const Operator *erestrict,
       printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   call[id](nzones, maps->B, d_in, *d_out);
+   call[id](nzones, maps->B, d_in, d_out);
 }
 
 // **************************************************************************
@@ -803,7 +782,6 @@ static void Dof2QuadGrad(const Operator *erestrict,
    MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
    MFEM_ASSERT(vdim==2, "vdim!=2");
-   // const int vsize = fes.GetVSize(); // not used
    const mfem::FiniteElement& fe = *fes.GetFE(0);
    const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
@@ -890,7 +868,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               h1order,
               cfl,
               infinity,
-              ir.GetWeights(),//h1_maps->W,
+              ir.GetWeights(),
               d_grad_x_data,
               quad_data.rho0DetJ0w,
               d_e_quads_data,

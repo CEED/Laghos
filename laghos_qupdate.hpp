@@ -67,9 +67,6 @@ public:
            ParFiniteElementSpace &L2FESpace);
    
    // **************************************************************************
-   ~QUpdate();
-   
-   // **************************************************************************
    void UpdateQuadratureData(const Vector &S,
                              bool &quad_data_is_current,
                              QuadratureData &quad_data,

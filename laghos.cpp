@@ -70,7 +70,7 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 int problem;
 
-double rho0(const Vector3 &);
+double rho0(const Vector &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma(const Vector &);
@@ -451,14 +451,25 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   // FunctionCoefficient rho_coeff(rho0);
-   ConstantCoefficient rho_coeff(1.0);
-   MFEM_VERIFY(problem == 0 || problem == 1 || problem == 4,
-               "non-constant initial density is not supported yet");
+   FunctionCoefficient rho_fct_coeff(rho0);
+   /* Put in bilininteg_mass.cpp:
+     static inline MFEM_ATTR_HOST_DEVICE
+     double LaghosRho0(const double problem, const double *x)
+     {
+     if (problem == -2.0) return (x[0] < 0.5) ? 1.0 : 0.1;
+     if (problem == -3.0) return (x[0] > 1.0 && x[1] > 1.5) ? 0.125 : 1.0;
+     return 1.0;
+     }
+     // and in MassIntegrator::AssemblePA:
+     const double x[2] = { X(q,0,e), X(q,1,e)};
+     const double coeff = LaghosRho0(constant, x);
+     v(q,e) =  w[q] * coeff * detJ;
+   */
+   ConstantCoefficient rho_coeff(problem==2?-2.0:problem==3?-3.0:1.0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
-   l2_rho.ProjectCoefficient(rho_coeff);
+   l2_rho.ProjectCoefficient(rho_fct_coeff);
    rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
    {
@@ -818,7 +829,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-double rho0(const Vector3 &x)
+double rho0(const Vector &x)
 {
    switch (problem)
    {
@@ -888,7 +899,7 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
-   const double rho0x = rho0(Vector3(x[0],x[1],x[2]));
+   const double rho0x = rho0(x);
    switch (problem)
    {
       case 0:
