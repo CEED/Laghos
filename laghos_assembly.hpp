@@ -175,7 +175,7 @@ private:
    const int dim, nzones;
    const QuadratureData &quad_data;
    const ParFiniteElementSpace &h1fes, &l2fes;
-   const ElemRestriction &h1restrict, &l2restrict;
+   const Operator *h1restrict, *l2restrict;
    const IntegrationRule &integ_rule, &ir1D;
    const int D1D, Q1D;
    const int L1D, H1D;

@@ -1317,8 +1317,10 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    quad_data(qd),
    h1fes(h1f),
    l2fes(l2f),
-   h1restrict(*(new ElemRestriction(*static_cast<FiniteElementSpace*>(&h1f)))),
-   l2restrict(*(new ElemRestriction(*static_cast<FiniteElementSpace*>(&l2f)))),
+   h1restrict(h1f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   //new ElemRestriction(*static_cast<FiniteElementSpace*>(&h1f)))),
+   l2restrict(l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   //(new ElemRestriction(*static_cast<FiniteElementSpace*>(&l2f)))),
    integ_rule(ir),
    ir1D(IntRules.Get(Geometry::SEGMENT, integ_rule.GetOrder())),
    D1D(h1fes.GetFE(0)->GetOrder()+1),
@@ -1327,11 +1329,15 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    H1D(h1fes.GetFE(0)->GetOrder()+1),
    h1sz(h1fes.GetVDim() * h1fes.GetFE(0)->GetDof() * nzones),
    l2sz(l2fes.GetFE(0)->GetDof() * nzones),
-   l2D2Q(DofToQuad::Get(l2fes, integ_rule)),
-   h1D2Q(DofToQuad::Get(h1fes, integ_rule)),
-   gVecL2(h1sz),
-   gVecH1(l2sz)
+   l2D2Q(&l2fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),//DofToQuad::Get(l2fes, integ_rule)),
+   h1D2Q(&h1fes.GetFE(0)->GetDofToQuad(integ_rule, DofToQuad::TENSOR)),//DofToQuad::Get(h1fes, integ_rule)),
+   gVecL2(l2sz),
+   gVecH1(h1sz)
 {
+   MFEM_ASSERT(l2D2Q,"l2D2Q");
+   MFEM_ASSERT(h1D2Q,"h1D2Q");
+   MFEM_ASSERT(h1f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
+   MFEM_ASSERT(!l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
    gVecL2.SetSize(l2sz);
    gVecH1.SetSize(h1sz);
 }
@@ -1364,7 +1370,7 @@ void kForceMult2D(const int NE,
    auto energy = Reshape(_e.ReadAccess(), L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,NE,2);
+   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,2,NE);
    MFEM_FORALL(e, NE,
    {
       double e_xy[Q1D][Q1D];
@@ -1405,7 +1411,7 @@ void kForceMult2D(const int NE,
          {
             for (int dx = 0; dx < H1D; ++dx)
             {
-               velocity(dx,dy,e,c) = 0.0;
+               velocity(dx,dy,c,e) = 0.0;
             }
          }
          for (int qy = 0; qy < Q1D; ++qy)
@@ -1433,7 +1439,7 @@ void kForceMult2D(const int NE,
                const double wDy = H1Gt(dy,qy);
                for (int dx = 0; dx < H1D; ++dx)
                {
-                  velocity(dx,dy,e,c) += wy* Dxy[dx] + wDy*xy[dx];
+                  velocity(dx,dy,c,e) += wy* Dxy[dx] + wDy*xy[dx];
                }
             }
          }
@@ -1444,10 +1450,10 @@ void kForceMult2D(const int NE,
          {
             for (int dx = 0; dx < H1D; ++dx)
             {
-               const double v = velocity(dx,dy,e,c);
+               const double v = velocity(dx,dy,c,e);
                if (fabs(v) < eps2)
                {
-                  velocity(dx,dy,e,c) = 0.0;
+                  velocity(dx,dy,c,e) = 0.0;
                }
             }
          }
@@ -1477,7 +1483,7 @@ void kForceMult3D(const int NE,
    auto energy = Reshape(_e.ReadAccess(), L1D, L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,D1D,NE,3);
+   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,D1D,3,NE);
    MFEM_FORALL(e, NE,
    {
       double e_xyz[Q1D][Q1D][Q1D];
@@ -1545,7 +1551,7 @@ void kForceMult3D(const int NE,
             {
                for (int dx = 0; dx < H1D; ++dx)
                {
-                  velocity(dx,dy,dz,e,c) = 0.0;
+                  velocity(dx,dy,dz,c,e) = 0.0;
                }
             }
          }
@@ -1603,7 +1609,7 @@ void kForceMult3D(const int NE,
                {
                   for (int dx = 0; dx < H1D; ++dx)
                   {
-                     velocity(dx,dy,dz,e,c) +=
+                     velocity(dx,dy,dz,c,e) +=
                         ((Dxy_x[dx][dy] * wz) +
                          (xDy_y[dx][dy] * wz) +
                          (xy_z[dx][dy] * wDz));
@@ -1620,10 +1626,10 @@ void kForceMult3D(const int NE,
             {
                for (int dx = 0; dx < H1D; ++dx)
                {
-                  const double v = velocity(dx,dy,dz,e,c);
+                  const double v = velocity(dx,dy,dz,c,e);
                   if (fabs(v) < eps2)
                   {
-                     velocity(dx,dy,dz,e,c) = 0.0;
+                     velocity(dx,dy,dz,c,e) = 0.0;
                   }
                }
             }
@@ -1680,7 +1686,17 @@ static void kForceMult(const int DIM,
 // *****************************************************************************
 void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
 {
-   l2restrict.Mult(x, gVecL2);
+   if (l2restrict)
+   {
+      l2restrict->Mult(x, gVecL2);
+   }
+   else
+   {
+      MFEM_ASSERT(x.Size() == gVecL2.Size(), "x.Size() == gVecL2.Size()");
+      gVecL2 = x;
+   }
+   //printf("\n\033[32m[Forec::Mult] %d, %d, x*x=%.15e \033[m", x.Size(), gVecL2.Size(), x*x);fflush(0);
+   //x.Print();
    kForceMult(dim,
               D1D,
               Q1D,
@@ -1693,7 +1709,11 @@ void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
               quad_data.stressJinvT,
               gVecL2,
               gVecH1);
-   h1restrict.MultTranspose(gVecH1, y);
+   //printf("\n\033[32m[Forec::Mult] gVecH1=%.15e \033[m", gVecH1*gVecH1);fflush(0);
+   //gVecH1.Print();
+   h1restrict->MultTranspose(gVecH1, y);
+   //printf("\n\033[32m[Forec::Mult] y=%.15e \033[m", y*y);fflush(0);
+   //y.Print();
 }
 
 // *****************************************************************************
@@ -1713,9 +1733,8 @@ void kForceMultTranspose2D(const int NE,
    auto L2Bt = Reshape(_Bt.ReadAccess(), L1D,Q1D);
    auto H1B = Reshape(_B.ReadAccess(), Q1D,H1D);
    auto H1G = Reshape(_G.ReadAccess(), Q1D,H1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
-                       Q1D,Q1D,NE,2,2);
-   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,NE,2);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2), Q1D,Q1D,NE,2,2);
+   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,2,NE);
    auto energy = Reshape(_e.WriteAccess(), L1D, L1D, NE);
    MFEM_FORALL(e, NE,
    {
@@ -1749,7 +1768,7 @@ void kForceMultTranspose2D(const int NE,
 
             for (int dx = 0; dx < H1D; ++dx)
             {
-               const double r_v = velocity(dx,dy,e,c);
+               const double r_v = velocity(dx,dy,c,e);
                for (int qx = 0; qx < Q1D; ++qx)
                {
                   v_x[qx]  += r_v * H1B(qx,dx);
@@ -1831,7 +1850,7 @@ void kForceMultTranspose3D(const int NE,
    auto H1G = Reshape(G.ReadAccess(), Q1D,H1D);
    auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
                        Q1D,Q1D,Q1D,NE,3,3);
-   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,D1D,NE,3);
+   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,D1D,3,NE);
    auto energy = Reshape(_e.WriteAccess(), L1D,L1D,L1D,NE);
    MFEM_FORALL(e,NE,
    {
@@ -1870,7 +1889,7 @@ void kForceMultTranspose3D(const int NE,
                }
                for (int dx = 0; dx < H1D; ++dx)
                {
-                  const double r_v = velocity(dx,dy,dz,e,c);
+                  const double r_v = velocity(dx,dy,dz,c,e);
                   for (int qx = 0; qx < Q1D; ++qx)
                   {
                      Dx_x[qx] += r_v * H1G(qx,dx);
@@ -2019,7 +2038,7 @@ static void kForceMultTranspose(const int DIM,
 // *************************************************************************
 void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
 {
-   h1restrict.Mult(x, gVecH1);
+   h1restrict->Mult(x, gVecH1);
    kForceMultTranspose(dim,
                        D1D,
                        Q1D,
@@ -2032,7 +2051,15 @@ void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
                        quad_data.stressJinvT,
                        gVecH1,
                        gVecL2);
-   l2restrict.MultTranspose(gVecL2, y);
+   if (l2restrict)
+   {
+      l2restrict->MultTranspose(gVecL2, y);
+   }
+   else
+   {
+      MFEM_ASSERT(y.Size() == gVecL2.Size(), "y.Size() == gVecL2.Size()");
+      y = gVecL2;
+   }
 }
 
 } // namespace hydrodynamics

@@ -42,10 +42,10 @@ private:
    const mfem::IntegrationRule &ir;
    mfem::ParFiniteElementSpace &H1FESpace;
    mfem::ParFiniteElementSpace &L2FESpace;
-   mfem::DofToQuad *h1_maps;
-   mfem::DofToQuad *l2_maps;
-   const mfem::ElemRestriction *h1_ElemRestrict;
-   const mfem::ElemRestriction *l2_ElemRestrict;
+   const mfem::DofToQuad *h1_maps;
+   const mfem::DofToQuad *l2_maps;
+   const Operator *h1_ElemRestrict;
+   const Operator *l2_ElemRestrict;
    Vector d_e_quads_data;
    Vector d_grad_x_data;
    Vector d_grad_v_data;

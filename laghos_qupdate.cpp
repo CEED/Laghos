@@ -439,9 +439,12 @@ void qupdate(const int nzones,
       for (int q = 0; q < nqp; q++)   // this for-loop should be kernel'd too
       {
          const int zdx = z * nqp + q;
+         //const int zdx_ = z*nqp*dim*dim + q;
+         const int zdx1 = z*nqp*dim + q;
          const double weight =  d_weights[q];
          const double inv_weight = 1. / weight;
-         const double *J = d_Jacobians + zdx*dim*dim;
+         const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
+         const double J[4] = {_J[0], _J[nqp], _J[2*nqp], _J[3*nqp]};
          const double detJ = det(dim,J);
          min_detJ = fmin(min_detJ,detJ);
          calcInverse2D(dim,J,Jinv);
@@ -461,7 +464,8 @@ void qupdate(const int nzones,
             // eigenvector of the symmetric velocity gradient gives the
             // direction of maximal compression. This is used to define the
             // relative change of the initial length scale.
-            const double *dV = d_grad_v_ext + zdx*dim*dim;
+            const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);//+ zdx*dim*dim;
+            const double dV[4] = {_dV[0], _dV[nqp], _dV[2*nqp], _dV[3*nqp]};
             mult(dim,dim,dim, dV, Jinv, sgrad_v);
             symmetrize(dim,sgrad_v);
             if (dim==1)
@@ -566,10 +570,13 @@ QUpdate::QUpdate(const int _dim,
    ir(_ir),
    H1FESpace(_H1FESpace),
    L2FESpace(_L2FESpace),
-   h1_maps(mfem::DofToQuad::Get(H1FESpace,ir)),
-   l2_maps(mfem::DofToQuad::Get(L2FESpace,ir)),
-   h1_ElemRestrict(new ElemRestriction(H1FESpace)),
-   l2_ElemRestrict(new ElemRestriction(L2FESpace)),
+   h1_maps(&H1FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
+   l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
+   h1_ElemRestrict(H1FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   l2_ElemRestrict(L2FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   //d_e_quads_data(NULL),
+   //d_grad_x_data(NULL),
+   //d_grad_v_data(NULL),
    nqp(ir.GetNPoints())
 {
    MFEM_ASSERT(material_pcf, "!material_pcf");
@@ -585,8 +592,8 @@ void vecToQuad2D(const int NE,
                  Vector &_y)
 {
    auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
-   auto x = Reshape(_x.ReadAccess(), D1D,D1D,NE,2);
-   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,NE,2);
+   auto x = Reshape(_x.ReadAccess(), D1D,D1D,VDIM,NE);
+   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,VDIM,NE);
    MFEM_FORALL(e, NE,
    {
       double out_xy[VDIM][Q1D][Q1D];
@@ -614,7 +621,7 @@ void vecToQuad2D(const int NE,
          {
             for (int v = 0; v < VDIM; ++v)
             {
-               const double r_gf = x(dx,dy,e,v);
+               const double r_gf = x(dx,dy,v,e);
                for (int qy = 0; qy < Q1D; ++qy)
                {
                   out_x[v][qy] += r_gf * B(qy,dx);
@@ -639,7 +646,7 @@ void vecToQuad2D(const int NE,
          {
             for (int v = 0; v < VDIM; ++v)
             {
-               y(qx,qy,e,v) = out_xy[v][qy][qx];
+               y(qx,qy,v,e) = out_xy[v][qy][qx];
             }
          }
       }
@@ -653,7 +660,7 @@ typedef void (*fVecToQuad2D)(const int E,
                              Vector &out);
 
 // ***************************************************************************
-static void Dof2QuadScalar(const ElemRestriction *erestrict,
+static void Dof2QuadScalar(const Operator *erestrict,
                            const FiniteElementSpace &fes,
                            const DofToQuad *maps,
                            const IntegrationRule& ir,
@@ -668,13 +675,18 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
    const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
    const int nqp = ir.GetNPoints();
-   const int local_size = numDofs * nzones;
+//   const int local_size = numDofs * nzones;
    const int out_size =  nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   Vector v_local_in(local_size);
-   erestrict->Mult(d_in,v_local_in);
+   //Vector v_local_in(local_size);
+   //erestrict->Mult(d_in,v_local_in);
    d_out.SetSize(out_size);
+   /*
+   if (!(*d_out))
+   {
+      *d_out = (double*) mfem::New<double>(out_size);
+      }*/
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<unsigned int, fVecToQuad2D> call =
@@ -690,7 +702,7 @@ static void Dof2QuadScalar(const ElemRestriction *erestrict,
       printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   call[id](nzones, maps->B, v_local_in, d_out);
+   call[id](nzones, maps->B, d_in, *d_out);
 }
 
 // **************************************************************************
@@ -704,8 +716,8 @@ void qGradVector2D(const int NE,
 {
    auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
    auto G = Reshape(_G.ReadAccess(), Q1D,D1D);
-   auto x = Reshape(_x.ReadAccess(), D1D,D1D,NE,2);
-   auto y = Reshape(_y.WriteAccess(), 2,2,Q1D,Q1D,NE);
+   auto x = Reshape(_x.ReadAccess(), D1D,D1D,2,NE);
+   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,2,2,NE);
    MFEM_FORALL(e, NE,
    {
       double s_gradv[2][2][Q1D][Q1D];
@@ -739,7 +751,7 @@ void qGradVector2D(const int NE,
                const double wx  = B(qx,dx);
                for (int c = 0; c < 2; ++c)
                {
-                  const double input = x(dx,dy,e,c);
+                  const double input = x(dx,dy,c,e);
                   vDx[c][qx] += input * wDx;
                   vx[c][qx] += input * wx;
                }
@@ -763,10 +775,10 @@ void qGradVector2D(const int NE,
       {
          for (int qy = 0; qy < Q1D; ++qy)
          {
-            y(0,0,qx,qy,e) = s_gradv[0][0][qx][qy];
-            y(1,0,qx,qy,e) = s_gradv[1][0][qx][qy];
-            y(0,1,qx,qy,e) = s_gradv[0][1][qx][qy];
-            y(1,1,qx,qy,e) = s_gradv[1][1][qx][qy];
+            y(qx,qy,0,0,e) = s_gradv[0][0][qx][qy];
+            y(qx,qy,1,0,e) = s_gradv[1][0][qx][qy];
+            y(qx,qy,0,1,e) = s_gradv[0][1][qx][qy];
+            y(qx,qy,1,1,e) = s_gradv[1][1][qx][qy];
          }
       }
    });
@@ -780,7 +792,7 @@ typedef void (*fGradVector2D)(const int E,
                               Vector &out);
 
 // **************************************************************************
-static void Dof2QuadGrad(const ElemRestriction *erestrict,
+static void Dof2QuadGrad(const Operator *erestrict,
                          const FiniteElementSpace &fes,
                          const DofToQuad *maps,
                          const IntegrationRule& ir,
@@ -878,7 +890,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
               h1order,
               cfl,
               infinity,
-              h1_maps->W,
+              ir.GetWeights(),//h1_maps->W,
               d_grad_x_data,
               quad_data.rho0DetJ0w,
               d_e_quads_data,
