@@ -341,9 +341,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       ForcePA->Mult(one, rhs);
       timer.sw_force.Stop();
       rhs.Neg();
-      //rhs = 1.0;
-      //printf("\n\033[33m[SolveVelocity] rhs*rhs=%.15e \033[m", rhs*rhs);fflush(0);
-      //rhs.Print();
 
       if (not okina)
       {
@@ -372,7 +369,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          {
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, H1Vsize + c*size);
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
-            // dvc_gf = 0.0; // initialized above
             Array<int> c_tdofs;
             const int bdr_attr_max = H1FESpace.GetMesh()->bdr_attributes.Max();
             Array<int> ess_bdr(bdr_attr_max);
@@ -381,11 +377,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
             H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
-            //printf("\n\t\033[33m[SolveVelocity] B*B=%.15e \033[m", B*B);fflush(0);
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(B);
-            //printf("\n\t\033[33m[SolveVelocity] B*B=%.15e \033[m", B*B);fflush(0);
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
@@ -397,7 +391,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                                dvc_gf.Size());
          }
       } // okina
-      //printf("\n\033[33m[SolveVelocity] dv*dv=%.15e \033[m", dv*dv);fflush(0);
    }
    else
    {
@@ -440,11 +433,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = NULL;
    if (source_type == 1) // 2D Taylor-Green.
    {
-      // FIXME: remove the commented code below
-      // Vector* sptr = (Vector*) &S;
-      // x_gf.MakeRef(&H1FESpace, *sptr, 0);
-      // x_gf.Pull();
-      // Device::Disable(true);
       e_source = new LinearForm(&L2FESpace);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &integ_rule);

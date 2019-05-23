@@ -436,13 +436,13 @@ int main(int argc, char *argv[])
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
    // sync the data location of x_gf with its base, S
-   x_gf.GetMemory().SyncAliasToBase(S.GetMemory(), x_gf.Size());
+   x_gf.SyncAlias(S);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    // sync the data location of v_gf with its base, S
-   v_gf.GetMemory().SyncAliasToBase(S.GetMemory(), v_gf.Size());
+   v_gf.SyncAlias(S);
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -484,7 +484,7 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
    // sync the data location of e_gf with its base, S
-   e_gf.GetMemory().SyncAliasToBase(S.GetMemory(), e_gf.Size());
+   e_gf.SyncAlias(S);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
@@ -617,9 +617,9 @@ int main(int argc, char *argv[])
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
       // the sub-vectors to match those of S.
-      x_gf.GetMemory().SyncWith(S.GetMemory());
-      v_gf.GetMemory().SyncWith(S.GetMemory());
-      e_gf.GetMemory().SyncWith(S.GetMemory());
+      //x_gf.SyncMemory(S);
+      //v_gf.SyncMemory(S);
+      //e_gf.SyncMemory(S);
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors

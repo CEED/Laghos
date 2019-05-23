@@ -1687,8 +1687,6 @@ void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
       MFEM_ASSERT(x.Size() == gVecL2.Size(), "x.Size() == gVecL2.Size()");
       gVecL2 = x;
    }
-   //printf("\n\033[32m[Forec::Mult] %d, %d, x*x=%.15e \033[m", x.Size(), gVecL2.Size(), x*x);fflush(0);
-   //x.Print();
    kForceMult(dim,
               D1D,
               Q1D,
@@ -1701,11 +1699,7 @@ void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
               quad_data.stressJinvT,
               gVecL2,
               gVecH1);
-   //printf("\n\033[32m[Forec::Mult] gVecH1=%.15e \033[m", gVecH1*gVecH1);fflush(0);
-   //gVecH1.Print();
    h1restrict->MultTranspose(gVecH1, y);
-   //printf("\n\033[32m[Forec::Mult] y=%.15e \033[m", y*y);fflush(0);
-   //y.Print();
 }
 
 // *****************************************************************************
@@ -1725,7 +1719,8 @@ void kForceMultTranspose2D(const int NE,
    auto L2Bt = Reshape(_Bt.ReadAccess(), L1D,Q1D);
    auto H1B = Reshape(_B.ReadAccess(), Q1D,H1D);
    auto H1G = Reshape(_G.ReadAccess(), Q1D,H1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2), Q1D,Q1D,NE,2,2);
+   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2), Q1D,Q1D,NE,2,
+                       2);
    auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,2,NE);
    auto energy = Reshape(_e.WriteAccess(), L1D, L1D, NE);
    MFEM_FORALL(e, NE,
@@ -2043,15 +2038,8 @@ void OkinaForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
                        quad_data.stressJinvT,
                        gVecH1,
                        gVecL2);
-   if (l2restrict)
-   {
-      l2restrict->MultTranspose(gVecL2, y);
-   }
-   else
-   {
-      MFEM_ASSERT(y.Size() == gVecL2.Size(), "y.Size() == gVecL2.Size()");
-      y = gVecL2;
-   }
+   if (l2restrict) { l2restrict->MultTranspose(gVecL2, y); }
+   else { y = gVecL2; }
 }
 
 } // namespace hydrodynamics

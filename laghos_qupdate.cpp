@@ -439,8 +439,6 @@ void qupdate(const int nzones,
       for (int q = 0; q < nqp; q++)   // this for-loop should be kernel'd too
       {
          const int zdx = z * nqp + q;
-         //const int zdx_ = z*nqp*dim*dim + q;
-         //const int zdx1 = z*nqp*dim + q;
          const double weight =  d_weights[q];
          const double inv_weight = 1. / weight;
          const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
@@ -563,8 +561,10 @@ QUpdate::QUpdate(const int _dim,
    L2FESpace(_L2FESpace),
    h1_maps(&H1FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   h1_ElemRestrict(H1FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-   l2_ElemRestrict(L2FESpace.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   h1_ElemRestrict(H1FESpace.GetElementRestriction(
+                      ElementDofOrdering::LEXICOGRAPHIC)),
+   l2_ElemRestrict(L2FESpace.GetElementRestriction(
+                      ElementDofOrdering::LEXICOGRAPHIC)),
    nqp(ir.GetNPoints())
 {
    MFEM_ASSERT(material_pcf, "!material_pcf");
