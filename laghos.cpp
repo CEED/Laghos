@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
    int partition_type = 111;
    bool okina = false;
    bool qupdate = false;
-   const char *device = "cpu";
+   const char *dev_opt = "cpu";
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
                   "Activate OKINA kernels.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
-   args.AddOption(&device, "-d", "--device",
+   args.AddOption(&dev_opt, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
@@ -193,13 +193,12 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   // Set device config parameters from the command line options and
-   // switch to working on the device.
+   // Configure the device from the command line options
+   Device device;
    if (okina)
    {
-      Device::Configure(device);
-      if (mpi.Root()) { Device::Print(); }
-      Device::Enable();
+      device.Configure(dev_opt);
+      if (mpi.Root()) { device.Print(); }
    }
 
    // Read the serial mesh from the given mesh file on all processors.
