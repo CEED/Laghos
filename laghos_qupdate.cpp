@@ -414,14 +414,14 @@ void qupdate(const int nzones,
              Vector &dt_est,
              DenseTensor &stressJinvT)
 {
-   auto d_weights = weights.ReadAccess();
-   auto d_Jacobians = Jacobians.ReadAccess();
-   auto d_rho0DetJ0w = rho0DetJ0w.ReadAccess();
-   auto d_e_quads = e_quads.ReadAccess();
-   auto d_grad_v_ext = grad_v_ext.ReadAccess();
-   auto d_Jac0inv = ReadAccess(Jac0inv.GetMemory(), Jac0inv.TotalSize());
-   auto d_dt_est = dt_est.ReadWriteAccess();
-   auto d_stressJinvT = WriteAccess(stressJinvT.GetMemory(),
+   auto d_weights = weights.Read();
+   auto d_Jacobians = Jacobians.Read();
+   auto d_rho0DetJ0w = rho0DetJ0w.Read();
+   auto d_e_quads = e_quads.Read();
+   auto d_grad_v_ext = grad_v_ext.Read();
+   auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
+   auto d_dt_est = dt_est.ReadWrite();
+   auto d_stressJinvT = Write(stressJinvT.GetMemory(),
                                     stressJinvT.TotalSize());
    MFEM_FORALL(z, nzones,
    {
@@ -579,9 +579,9 @@ void vecToQuad2D(const int NE,
                  const Vector &_x,
                  Vector &_y)
 {
-   auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
-   auto x = Reshape(_x.ReadAccess(), D1D,D1D,VDIM,NE);
-   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,VDIM,NE);
+   auto B = Reshape(_B.Read(), Q1D,D1D);
+   auto x = Reshape(_x.Read(), D1D,D1D,VDIM,NE);
+   auto y = Reshape(_y.Write(), Q1D,Q1D,VDIM,NE);
    MFEM_FORALL(e, NE,
    {
       double out_xy[VDIM][Q1D][Q1D];
@@ -693,10 +693,10 @@ void qGradVector2D(const int NE,
                    const Vector &_x,
                    Vector &_y)
 {
-   auto B = Reshape(_B.ReadAccess(), Q1D,D1D);
-   auto G = Reshape(_G.ReadAccess(), Q1D,D1D);
-   auto x = Reshape(_x.ReadAccess(), D1D,D1D,2,NE);
-   auto y = Reshape(_y.WriteAccess(), Q1D,Q1D,2,2,NE);
+   auto B = Reshape(_B.Read(), Q1D,D1D);
+   auto G = Reshape(_G.Read(), Q1D,D1D);
+   auto x = Reshape(_x.Read(), D1D,D1D,2,NE);
+   auto y = Reshape(_y.Write(), Q1D,Q1D,2,2,NE);
    MFEM_FORALL(e, NE,
    {
       double s_gradv[2][2][Q1D][Q1D];

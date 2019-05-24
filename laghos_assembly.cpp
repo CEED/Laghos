@@ -1354,15 +1354,15 @@ void kForceMult2D(const int NE,
                   const Vector &_e,
                   Vector &_v)
 {
-   auto L2B = Reshape(_B.ReadAccess(), Q1D, L1D);
-   auto H1Bt = Reshape(_Bt.ReadAccess(), H1D, Q1D);
-   auto H1Gt = Reshape(_Gt.ReadAccess(), H1D, Q1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
+   auto L2B = Reshape(_B.Read(), Q1D, L1D);
+   auto H1Bt = Reshape(_Bt.Read(), H1D, Q1D);
+   auto H1Gt = Reshape(_Gt.Read(), H1D, Q1D);
+   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
                        Q1D,Q1D,NE,2,2);
-   auto energy = Reshape(_e.ReadAccess(), L1D, L1D, NE);
+   auto energy = Reshape(_e.Read(), L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,2,NE);
+   auto velocity = Reshape(_v.Write(), D1D,D1D,2,NE);
    MFEM_FORALL(e, NE,
    {
       double e_xy[Q1D][Q1D];
@@ -1467,15 +1467,15 @@ void kForceMult3D(const int NE,
                   const Vector &_e,
                   Vector &_v)
 {
-   auto L2B = Reshape(_B.ReadAccess(), Q1D,L1D);
-   auto H1Bt = Reshape(_Bt.ReadAccess(), H1D,Q1D);
-   auto H1Gt = Reshape(_Gt.ReadAccess(), H1D,Q1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
+   auto L2B = Reshape(_B.Read(), Q1D,L1D);
+   auto H1Bt = Reshape(_Bt.Read(), H1D,Q1D);
+   auto H1Gt = Reshape(_Gt.Read(), H1D,Q1D);
+   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
                        Q1D,Q1D,Q1D,NE,3,3);
-   auto energy = Reshape(_e.ReadAccess(), L1D, L1D, L1D, NE);
+   auto energy = Reshape(_e.Read(), L1D, L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.WriteAccess(), D1D,D1D,D1D,3,NE);
+   auto velocity = Reshape(_v.Write(), D1D,D1D,D1D,3,NE);
    MFEM_FORALL(e, NE,
    {
       double e_xyz[Q1D][Q1D][Q1D];
@@ -1716,13 +1716,13 @@ void kForceMultTranspose2D(const int NE,
                            const Vector &_v,
                            Vector &_e)
 {
-   auto L2Bt = Reshape(_Bt.ReadAccess(), L1D,Q1D);
-   auto H1B = Reshape(_B.ReadAccess(), Q1D,H1D);
-   auto H1G = Reshape(_G.ReadAccess(), Q1D,H1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*NE*2*2), Q1D,Q1D,NE,2,
+   auto L2Bt = Reshape(_Bt.Read(), L1D,Q1D);
+   auto H1B = Reshape(_B.Read(), Q1D,H1D);
+   auto H1G = Reshape(_G.Read(), Q1D,H1D);
+   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2), Q1D,Q1D,NE,2,
                        2);
-   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,2,NE);
-   auto energy = Reshape(_e.WriteAccess(), L1D, L1D, NE);
+   auto velocity = Reshape(_v.Read(), D1D,D1D,2,NE);
+   auto energy = Reshape(_e.Write(), L1D, L1D, NE);
    MFEM_FORALL(e, NE,
    {
       double vStress[Q1D][Q1D];
@@ -1832,13 +1832,13 @@ void kForceMultTranspose3D(const int NE,
                            const Vector &_v,
                            Vector &_e)
 {
-   auto L2Bt = Reshape(Bt.ReadAccess(), L1D,Q1D);
-   auto H1B = Reshape(B.ReadAccess(), Q1D,H1D);
-   auto H1G = Reshape(G.ReadAccess(), Q1D,H1D);
-   auto sJit = Reshape(ReadAccess(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
+   auto L2Bt = Reshape(Bt.Read(), L1D,Q1D);
+   auto H1B = Reshape(B.Read(), Q1D,H1D);
+   auto H1G = Reshape(G.Read(), Q1D,H1D);
+   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
                        Q1D,Q1D,Q1D,NE,3,3);
-   auto velocity = Reshape(_v.ReadAccess(), D1D,D1D,D1D,3,NE);
-   auto energy = Reshape(_e.WriteAccess(), L1D,L1D,L1D,NE);
+   auto velocity = Reshape(_v.Read(), D1D,D1D,D1D,3,NE);
+   auto energy = Reshape(_e.Write(), L1D,L1D,L1D,NE);
    MFEM_FORALL(e,NE,
    {
       double vStress[Q1D][Q1D][Q1D];

@@ -174,7 +174,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
       // is assumed to be in the memory space used by the mfem::Device).
-      H1FESpace.GetParMesh()->GetNodes()->ReadWriteAccess();
+      H1FESpace.GetParMesh()->GetNodes()->ReadWrite();
       // FIXME: do the above with a method in Memory that syncs aliases with
       // their base Memory. How do we get the base here?
    }
@@ -387,8 +387,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
             // We need to sync the subvector 'dvc_gf' with its base vector
             // because it may have been moved to a different memory space.
-            dvc_gf.GetMemory().SyncAliasToBase(dS_dt.GetMemory(),
-                                               dvc_gf.Size());
+            dvc_gf.GetMemory().SyncAlias(dS_dt.GetMemory(), dvc_gf.Size());
          }
       } // okina
    }
@@ -472,7 +471,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
          // Move the memory location of the subvector 'de' to the memory
          // location of the base vector 'dS_dt'.
-         de.GetMemory().SyncAliasToBase(dS_dt.GetMemory(), de.Size());
+         de.GetMemory().SyncAlias(dS_dt.GetMemory(), de.Size());
       }
    }
    else // not p_assembly
