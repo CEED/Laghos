@@ -435,13 +435,13 @@ int main(int argc, char *argv[])
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
    // sync the data location of x_gf with its base, S
-   x_gf.SyncAlias(S);
+   x_gf.SyncAliasMemory(S);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    // sync the data location of v_gf with its base, S
-   v_gf.SyncAlias(S);
+   v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
    // sync the data location of e_gf with its base, S
-   e_gf.SyncAlias(S);
+   e_gf.SyncAliasMemory(S);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on a function that stays constant on the moving
