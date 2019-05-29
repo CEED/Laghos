@@ -44,15 +44,6 @@
 #include "include/offsets.hpp"
 #include "include/kernels.hpp"
 
-#define CUCHK(call) {   \
-    cudaError_t err = call;  \
-    if( cudaSuccess != err) {  \
-                             fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",     \
-                                     __FILE__, __LINE__, cudaGetErrorString( err) );           \
-                             fflush(stderr);                                                   \
-                             exit(EXIT_FAILURE);                                               \
-    } }
-
 extern double *gbuf;
 extern int rMassMultAdd3D_BufSize;
 extern int rUpdateQuadratureData3D_BufSize;
