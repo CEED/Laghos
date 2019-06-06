@@ -161,16 +161,16 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   // CUDA set device & options
-   // **************************************************************************
-   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,uvm,aware,share,hcpo,sync,rs_levels,order_v);
-
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
    const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+
+   // CUDA set device & options
+   // **************************************************************************
+   rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
+                        cuda,uvm,aware,share,hcpo,sync,rs_levels,order_v,dim);   
 
    if (p_assembly && dim == 1)
    {

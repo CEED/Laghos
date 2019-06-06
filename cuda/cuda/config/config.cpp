@@ -157,7 +157,8 @@ void rconfig::Setup(const int _mpi_rank,
                     const bool _hcpo,
                     const bool _sync,
                     const int rs_levels,
-                    const int order_v)
+                    const int order_v,
+                    const int dim)
 {
    mpi_rank=_mpi_rank;
    mpi_size=_mpi_size;
@@ -253,7 +254,8 @@ void rconfig::Setup(const int _mpi_rank,
    cuCtxCreate(&cuContext, CU_CTX_SCHED_AUTO, cuDevice);
    hStream=new CUstream;
    cuStreamCreate(hStream, CU_STREAM_DEFAULT);
-   initGPUBuf(order_v);
+   if (dim == 3) 
+     initGPUBuf(order_v);
 }
 
 // ***************************************************************************

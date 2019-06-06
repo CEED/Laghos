@@ -63,7 +63,8 @@ public:
               const bool uvm, const bool aware,
               const bool share, const bool hcpo,
               const bool sync, const int rs_levels,
-              const int order_v);
+              const int order_v,
+              const int dim);
    // *************************************************************************
    bool IAmAlone();
    bool GeomNeedsUpdate(const int);
