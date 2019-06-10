@@ -141,9 +141,12 @@ void rIniGeom2D(const int numElements,
    }
 }
 
-template<const int NUM_DOFS,
-         const int NUM_QUAD,
-         const int BY> kernel
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int BZ,
+         const int NBLOCK>
+__launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ,NBLOCK)
+kernel
 void rIniGeom2D_v2(const int numElements,
                 const double* restrict dofToQuadD,
                 const double* restrict nodes,
@@ -151,41 +154,44 @@ void rIniGeom2D_v2(const int numElements,
                 double* restrict invJ,
                 double* restrict detJ)
 {
-  const int el = blockIdx.x*BY+threadIdx.y;
-  __shared__ double buf[BY][3*NUM_DOFS];
-  double *s_nodes;
-  s_nodes = (double*)(buf + threadIdx.y);  
-  for (int d = threadIdx.x; d < NUM_DOFS; d += blockDim.x)
-  {
-    s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,el,2,NUM_DOFS)];
-    s_nodes[ijN(1,d,2)] = nodes[ijkNM(1,d,el,2,NUM_DOFS)];
-  }
-  __syncthreads();
-  for (int q = threadIdx.x; q < NUM_QUAD; q += blockDim.x)
-  {
-    double J11 = 0; double J12 = 0;
-    double J21 = 0; double J22 = 0;
-    for (int d = 0; d < NUM_DOFS; ++d)
-    {
-      const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
-      const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
-      const double x = s_nodes[ijN(0,d,2)];
-      const double y = s_nodes[ijN(1,d,2)];
-      J11 += (wx * x); J12 += (wx * y);
-      J21 += (wy * x); J22 += (wy * y);
-    }
-    const double r_detJ = (J11 * J22)-(J12 * J21);
-    J[ijklNM(0, 0, q, el,2,NUM_QUAD)] = J11;
-    J[ijklNM(1, 0, q, el,2,NUM_QUAD)] = J12;
-    J[ijklNM(0, 1, q, el,2,NUM_QUAD)] = J21;
-    J[ijklNM(1, 1, q, el,2,NUM_QUAD)] = J22;
-    const double r_idetJ = 1.0 / r_detJ;
-    invJ[ijklNM(0, 0, q, el,2,NUM_QUAD)] =  J22 * r_idetJ;
-    invJ[ijklNM(1, 0, q, el,2,NUM_QUAD)] = -J12 * r_idetJ;
-    invJ[ijklNM(0, 1, q, el,2,NUM_QUAD)] = -J21 * r_idetJ;
-    invJ[ijklNM(1, 1, q, el,2,NUM_QUAD)] =  J11 * r_idetJ;
-    detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
-  }
+   const int NUM_DOFS = NUM_DOFS_1D*NUM_DOFS_1D;
+   const int NUM_QUAD = NUM_QUAD_1D*NUM_QUAD_1D;
+   const int el = blockIdx.x*BZ+threadIdx.z;
+   int tid = threadIdx.x + threadIdx.y*blockDim.x;
+   __shared__ double buf[BZ][3*NUM_DOFS];
+   double *s_nodes;
+   s_nodes = (double*)(buf + threadIdx.z);  
+   for (int d = tid; d < NUM_DOFS; d += blockDim.x*blockDim.y)
+   {
+      s_nodes[ijN(0,d,2)] = nodes[ijkNM(0,d,el,2,NUM_DOFS)];
+      s_nodes[ijN(1,d,2)] = nodes[ijkNM(1,d,el,2,NUM_DOFS)];
+   }
+   __syncthreads();
+   for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y)
+   {
+      double J11 = 0; double J12 = 0;
+      double J21 = 0; double J22 = 0;
+      for (int d = 0; d < NUM_DOFS; ++d)
+      {
+         const double wx = dofToQuadD[ijkNM(0,q,d,2,NUM_QUAD)];
+         const double wy = dofToQuadD[ijkNM(1,q,d,2,NUM_QUAD)];
+         const double x = s_nodes[ijN(0,d,2)];
+         const double y = s_nodes[ijN(1,d,2)];
+         J11 += (wx * x); J12 += (wx * y);
+         J21 += (wy * x); J22 += (wy * y);
+      }
+      const double r_detJ = (J11 * J22)-(J12 * J21);
+      J[ijklNM(0, 0, q, el,2,NUM_QUAD)] = J11;
+      J[ijklNM(1, 0, q, el,2,NUM_QUAD)] = J12;
+      J[ijklNM(0, 1, q, el,2,NUM_QUAD)] = J21;
+      J[ijklNM(1, 1, q, el,2,NUM_QUAD)] = J22;
+      const double r_idetJ = 1.0 / r_detJ;
+      invJ[ijklNM(0, 0, q, el,2,NUM_QUAD)] =  J22 * r_idetJ;
+      invJ[ijklNM(1, 0, q, el,2,NUM_QUAD)] = -J12 * r_idetJ;
+      invJ[ijklNM(0, 1, q, el,2,NUM_QUAD)] = -J21 * r_idetJ;
+      invJ[ijklNM(1, 1, q, el,2,NUM_QUAD)] =  J11 * r_idetJ;
+      detJ[ijN(q, el,NUM_QUAD)] = r_detJ;
+   }
 }
 
 // *****************************************************************************
@@ -279,64 +285,64 @@ void rIniGeom3D_v2(const int numElements,
    extern __shared__ double sbuf[];
    double* s_nodes;
    if (USE_SMEM) 
-     s_nodes = sbuf;
+      s_nodes = sbuf;
    else 
-     s_nodes = (double*)((char*)gbuf + blockIdx.x*bufSize);
+      s_nodes = (double*)((char*)gbuf + blockIdx.x*bufSize);
    
    for (int e = blockIdx.x; e < numElements; e += gridDim.x)
    {
-     __syncthreads();
-     for (int d = tid; d < NUM_DOFS; d += blockDim.x*blockDim.y*blockDim.z)
-     {
-       s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
-       s_nodes[ijN(1,d,3)] = nodes[ijkNM(1, d, e,3,NUM_DOFS)];
-       s_nodes[ijN(2,d,3)] = nodes[ijkNM(2, d, e,3,NUM_DOFS)];
-     }
-     __syncthreads();
-     for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y*blockDim.z)
-     {
-       double J11 = 0; double J12 = 0; double J13 = 0;
-       double J21 = 0; double J22 = 0; double J23 = 0;
-       double J31 = 0; double J32 = 0; double J33 = 0;
-       for (int d = 0; d < NUM_DOFS; ++d)
-       {
-         const double wx = dofToQuadD[ijkNM(0, q, d,3,NUM_QUAD)];
-         const double wy = dofToQuadD[ijkNM(1, q, d,3,NUM_QUAD)];
-         const double wz = dofToQuadD[ijkNM(2, q, d,3,NUM_QUAD)];
-         const double x = s_nodes[ijN(0, d,3)];
-         const double y = s_nodes[ijN(1, d,3)];
-         const double z = s_nodes[ijN(2, d,3)];
-         J11 += (wx * x); J12 += (wx * y); J13 += (wx * z);
-         J21 += (wy * x); J22 += (wy * y); J23 += (wy * z);
-         J31 += (wz * x); J32 += (wz * y); J33 += (wz * z);
-       }
-       const double r_detJ = ((J11 * J22 * J33) + (J12 * J23 * J31) +
-                              (J13 * J21 * J32) -
-                              (J13 * J22 * J31)-(J12 * J21 * J33)-(J11 * J23 * J32));
-       J[ijklNM(0, 0, q, e,3,NUM_QUAD)] = J11; 
-       J[ijklNM(1, 0, q, e,3,NUM_QUAD)] = J12;
-       J[ijklNM(2, 0, q, e,3,NUM_QUAD)] = J13;
-       J[ijklNM(0, 1, q, e,3,NUM_QUAD)] = J21;
-       J[ijklNM(1, 1, q, e,3,NUM_QUAD)] = J22;
-       J[ijklNM(2, 1, q, e,3,NUM_QUAD)] = J23;
-       J[ijklNM(0, 2, q, e,3,NUM_QUAD)] = J31;
-       J[ijklNM(1, 2, q, e,3,NUM_QUAD)] = J32;
-       J[ijklNM(2, 2, q, e,3,NUM_QUAD)] = J33;
+      __syncthreads();
+      for (int d = tid; d < NUM_DOFS; d += blockDim.x*blockDim.y*blockDim.z)
+      {
+         s_nodes[ijN(0,d,3)] = nodes[ijkNM(0, d, e,3,NUM_DOFS)];
+         s_nodes[ijN(1,d,3)] = nodes[ijkNM(1, d, e,3,NUM_DOFS)];
+         s_nodes[ijN(2,d,3)] = nodes[ijkNM(2, d, e,3,NUM_DOFS)];
+      }
+      __syncthreads();
+      for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y*blockDim.z)
+      {
+         double J11 = 0; double J12 = 0; double J13 = 0;
+         double J21 = 0; double J22 = 0; double J23 = 0;
+         double J31 = 0; double J32 = 0; double J33 = 0;
+         for (int d = 0; d < NUM_DOFS; ++d)
+         {
+            const double wx = dofToQuadD[ijkNM(0, q, d,3,NUM_QUAD)];
+            const double wy = dofToQuadD[ijkNM(1, q, d,3,NUM_QUAD)];
+            const double wz = dofToQuadD[ijkNM(2, q, d,3,NUM_QUAD)];
+            const double x = s_nodes[ijN(0, d,3)];
+            const double y = s_nodes[ijN(1, d,3)];
+            const double z = s_nodes[ijN(2, d,3)];
+            J11 += (wx * x); J12 += (wx * y); J13 += (wx * z);
+            J21 += (wy * x); J22 += (wy * y); J23 += (wy * z);
+            J31 += (wz * x); J32 += (wz * y); J33 += (wz * z);
+         }
+         const double r_detJ = ((J11 * J22 * J33) + (J12 * J23 * J31) +
+                                (J13 * J21 * J32) -
+                                (J13 * J22 * J31)-(J12 * J21 * J33)-(J11 * J23 * J32));
+         J[ijklNM(0, 0, q, e,3,NUM_QUAD)] = J11; 
+         J[ijklNM(1, 0, q, e,3,NUM_QUAD)] = J12;
+         J[ijklNM(2, 0, q, e,3,NUM_QUAD)] = J13;
+         J[ijklNM(0, 1, q, e,3,NUM_QUAD)] = J21;
+         J[ijklNM(1, 1, q, e,3,NUM_QUAD)] = J22;
+         J[ijklNM(2, 1, q, e,3,NUM_QUAD)] = J23;
+         J[ijklNM(0, 2, q, e,3,NUM_QUAD)] = J31;
+         J[ijklNM(1, 2, q, e,3,NUM_QUAD)] = J32;
+         J[ijklNM(2, 2, q, e,3,NUM_QUAD)] = J33;
 
-       const double r_idetJ = 1.0 / r_detJ;
-       invJ[ijklNM(0, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J22 * J33)-(J23 * J32));
-       invJ[ijklNM(1, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J32 * J13)-(J33 * J12));
-       invJ[ijklNM(2, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J12 * J23)-(J13 * J22));
+         const double r_idetJ = 1.0 / r_detJ;
+         invJ[ijklNM(0, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J22 * J33)-(J23 * J32));
+         invJ[ijklNM(1, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J32 * J13)-(J33 * J12));
+         invJ[ijklNM(2, 0, q, e,3,NUM_QUAD)] = r_idetJ * ((J12 * J23)-(J13 * J22));
 
-       invJ[ijklNM(0, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J23 * J31)-(J21 * J33));
-       invJ[ijklNM(1, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J33 * J11)-(J31 * J13));
-       invJ[ijklNM(2, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J13 * J21)-(J11 * J23));
+         invJ[ijklNM(0, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J23 * J31)-(J21 * J33));
+         invJ[ijklNM(1, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J33 * J11)-(J31 * J13));
+         invJ[ijklNM(2, 1, q, e,3,NUM_QUAD)] = r_idetJ * ((J13 * J21)-(J11 * J23));
 
-       invJ[ijklNM(0, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J21 * J32)-(J22 * J31));
-       invJ[ijklNM(1, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J31 * J12)-(J32 * J11));
-       invJ[ijklNM(2, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J11 * J22)-(J12 * J21));
-       detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
-     }
+         invJ[ijklNM(0, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J21 * J32)-(J22 * J31));
+         invJ[ijklNM(1, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J31 * J12)-(J32 * J11));
+         invJ[ijklNM(2, 2, q, e,3,NUM_QUAD)] = r_idetJ * ((J11 * J22)-(J12 * J21));
+         detJ[ijN(q, e,NUM_QUAD)] = r_detJ;
+      }
    }
 }
 
@@ -374,22 +380,22 @@ void rIniGeom(const int DIM,
    static std::unordered_map<unsigned int, fIniGeom> call =
    {
       // 2D
-      {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},
-      {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
-      {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
-      {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
-      {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
-      {0x25,&rIniGeom2D<7*7,(7*2-2)*(7*2-2)>},
-      {0x26,&rIniGeom2D<8*8,(8*2-2)*(8*2-2)>},
-      {0x27,&rIniGeom2D<9*9,(9*2-2)*(9*2-2)>},
-      {0x28,&rIniGeom2D<10*10,(10*2-2)*(10*2-2)>},
-      {0x29,&rIniGeom2D<11*11,(11*2-2)*(11*2-2)>},
-      {0x2A,&rIniGeom2D<12*12,(12*2-2)*(12*2-2)>},
-      {0x2B,&rIniGeom2D<13*13,(13*2-2)*(13*2-2)>},
-      {0x2C,&rIniGeom2D<14*14,(14*2-2)*(14*2-2)>},
-      {0x2D,&rIniGeom2D<15*15,(15*2-2)*(15*2-2)>},
-      {0x2E,&rIniGeom2D<16*16,(16*2-2)*(16*2-2)>},
-      {0x2F,&rIniGeom2D<17*17,(17*2-2)*(17*2-2)>},
+      // {0x20,&rIniGeom2D<2*2,(2*2-2)*(2*2-2)>},
+      // {0x21,&rIniGeom2D<3*3,(3*2-2)*(3*2-2)>},
+      // {0x22,&rIniGeom2D<4*4,(4*2-2)*(4*2-2)>},
+      // {0x23,&rIniGeom2D<5*5,(5*2-2)*(5*2-2)>},
+      // {0x24,&rIniGeom2D<6*6,(6*2-2)*(6*2-2)>},
+      // {0x25,&rIniGeom2D<7*7,(7*2-2)*(7*2-2)>},
+      // {0x26,&rIniGeom2D<8*8,(8*2-2)*(8*2-2)>},
+      // {0x27,&rIniGeom2D<9*9,(9*2-2)*(9*2-2)>},
+      // {0x28,&rIniGeom2D<10*10,(10*2-2)*(10*2-2)>},
+      // {0x29,&rIniGeom2D<11*11,(11*2-2)*(11*2-2)>},
+      // {0x2A,&rIniGeom2D<12*12,(12*2-2)*(12*2-2)>},
+      // {0x2B,&rIniGeom2D<13*13,(13*2-2)*(13*2-2)>},
+      // {0x2C,&rIniGeom2D<14*14,(14*2-2)*(14*2-2)>},
+      // {0x2D,&rIniGeom2D<15*15,(15*2-2)*(15*2-2)>},
+      // {0x2E,&rIniGeom2D<16*16,(16*2-2)*(16*2-2)>},
+      // {0x2F,&rIniGeom2D<17*17,(17*2-2)*(17*2-2)>},
       // 3D
       // {0x30,&rIniGeom3D<2*2*2,2*2*2>},
       // {0x31,&rIniGeom3D<3*3*3,4*4*4>},
@@ -410,20 +416,30 @@ void rIniGeom(const int DIM,
       
    };
 
-#define call_2d(DOFS,QUAD,BY) \
-   int grid = numElements/BY; \
-   dim3 blck(QUAD*QUAD,BY); \
-   rIniGeom2D_v2<DOFS*DOFS,QUAD*QUAD,BY><<<grid,blck>>>( \
-     numElements,dofToQuadD,nodes,J,invJ,detJ)
+#define call_2d(DOFS,QUAD,BZ,NBLOCK)                  \
+   call_2d_ker(rIniGeom2D,numElements,DOFS,QUAD,BZ,NBLOCK,\
+               numElements,dofToQuadD,nodes,J,invJ,detJ)
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
    call_3d_ker(rIniGeom3D,numElements,DOFS,QUAD,BZ,NBLOCK, \
                numElements,dofToQuadD,nodes,J,invJ,detJ,gbuf,rIniGeom3D_BufSize)
 
    // 2D
-   if      (id == 0x21) { call_2d(3 ,4 ,4); }
-   else if (id == 0x22) { call_2d(4 ,6 ,4); }   
-   else if (id == 0x23) { call_2d(5 ,8 ,2); }
-   else if (id == 0x24) { call_2d(6 ,10,1); }
+   if      (id == 0x20) { call_2d(2 ,2,16,1); }
+   else if (id == 0x21) { call_2d(3 ,4 ,4,1); }
+   else if (id == 0x22) { call_2d(4 ,6 ,4,1); }   
+   else if (id == 0x23) { call_2d(5 ,8 ,2,1); }
+   else if (id == 0x24) { call_2d(6 ,10,1,1); }
+   else if (id == 0x25) { call_2d(7 ,12,1,1); }   
+   else if (id == 0x26) { call_2d(8 ,14,1,1); }
+   else if (id == 0x27) { call_2d(9 ,16,1,1); }
+   else if (id == 0x28) { call_2d(10,18,1,1); }   
+   else if (id == 0x29) { call_2d(11,20,1,1); }
+   else if (id == 0x2A) { call_2d(12,22,1,1); }
+   else if (id == 0x2B) { call_2d(13,24,1,1); }   
+   else if (id == 0x2C) { call_2d(14,26,1,1); }
+   else if (id == 0x2D) { call_2d(15,28,1,1); }
+   else if (id == 0x2E) { call_2d(16,30,1,1); }
+   else if (id == 0x2F) { call_2d(17,32,1,1); }   
    // 3D
    else if (id == 0x30) { call_3d(2 ,2 ,2,1); }   
    else if (id == 0x31) { call_3d(3 ,4 ,4,1); }

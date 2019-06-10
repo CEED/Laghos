@@ -32,6 +32,12 @@
                CUDA_BLOCK_SIZE>>>(end,__VA_ARGS__)
 #define cuKerGBS(name,grid,block,end,...) name ## 0<<<grid,block>>>(end,__VA_ARGS__)
 #define call0(id,grid,blck,...) call[id]<<<grid,blck>>>(__VA_ARGS__)
+#define call_2d_ker(KER,NEL,DOFS,QUAD,BZ,NBLOCK,...) \
+   dim3 blck(QUAD,QUAD,BZ);                            \
+   cudaFuncSetCacheConfig(KER##_v2<DOFS,QUAD,BZ,NBLOCK>,    \
+                          cudaFuncCachePreferShared);                   \
+   int grid = (NEL + BZ - 1)/BZ;                                           \
+   KER##_v2<DOFS,QUAD,BZ,NBLOCK><<<grid,blck>>>(__VA_ARGS__); 
 #define call_3d_ker(KER,NEL,DOFS,QUAD,BZ,NBLOCK,...) \
    dim3 blck(QUAD,QUAD,BZ);                            \
    if (KER##_BufSize <= MaxSharedMemoryPerBlockOptin) {   \

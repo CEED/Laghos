@@ -59,6 +59,62 @@ void rGridFuncToQuad1D(const int numElements,
 }
 
 // *****************************************************************************
+template<const int NUM_DOFS_1D,
+         const int NUM_QUAD_1D,
+         const int BZ,
+         const int NBLOCK>
+__launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ, NBLOCK)
+kernel
+void rGridFuncToQuad2D_v2(const int numElements,
+                          const double* restrict dofToQuad,
+                          const int* restrict l2gMap,
+                          const double* restrict gf,
+                          double* restrict out)
+{
+   const int NUM_VDIM = 1;
+   int e = blockIdx.x*BZ + threadIdx.z;
+   if (e >= numElements) return;
+   __shared__ double buf1[BZ][NUM_DOFS_1D][NUM_VDIM][NUM_QUAD_1D];
+   double (*out_x)[NUM_VDIM][NUM_QUAD_1D] = (double (*)[NUM_VDIM][NUM_QUAD_1D])
+      (buf1 + threadIdx.z); 
+      
+      
+   for (int dy = threadIdx.y; dy < NUM_DOFS_1D; dy += blockDim.y)
+   {
+      for (int v = 0; v < NUM_VDIM; ++v)
+      {                  
+         for (int qy = threadIdx.x; qy < NUM_QUAD_1D; qy += blockDim.x)
+         {
+            double t = 0;
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
+            {
+               const int gid = l2gMap[ijkN(dx, dy, e,NUM_DOFS_1D)];            
+               t += gf[v + gid*NUM_VDIM] * dofToQuad[ijN(qy, dx,NUM_QUAD_1D)];
+            }
+            out_x[dy][v][qy] = t;
+         }
+      }
+   }
+   __syncthreads();
+
+   for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+   {
+      for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+      {
+         for (int v = 0; v < NUM_VDIM; ++v)
+         {            
+            double t = 0;
+            for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
+            {               
+               t += dofToQuad[ijN(qy, dy,NUM_QUAD_1D)] * out_x[dy][v][qx];
+            }
+            out[_ijklNM(v, qx, qy, e,NUM_QUAD_1D,numElements)] = t;
+         }
+      }
+   }
+}
+
+
 template<const int NUM_VDIM,
          const int NUM_DOFS_1D,
          const int NUM_QUAD_1D> kernel
@@ -371,22 +427,22 @@ void rGridFuncToQuad(const int DIM,
    static std::unordered_map<unsigned int, fGridFuncToQuad> call =
    {
       // 2D
-      {0x210,&rGridFuncToQuad2D<1,1,2>},
-      {0x211,&rGridFuncToQuad2D<1,2,4>},
-      {0x212,&rGridFuncToQuad2D<1,3,6>},
-      {0x213,&rGridFuncToQuad2D<1,4,8>},
-      {0x214,&rGridFuncToQuad2D<1,5,10>},
-      {0x215,&rGridFuncToQuad2D<1,6,12>},
-      {0x216,&rGridFuncToQuad2D<1,7,14>},
-      {0x217,&rGridFuncToQuad2D<1,8,16>},
-      {0x218,&rGridFuncToQuad2D<1,9,18>},
-      {0x219,&rGridFuncToQuad2D<1,10,20>},
-      {0x21A,&rGridFuncToQuad2D<1,11,22>},
-      {0x21B,&rGridFuncToQuad2D<1,12,24>},
-      {0x21C,&rGridFuncToQuad2D<1,13,26>},
-      {0x21D,&rGridFuncToQuad2D<1,14,28>},
-      {0x21E,&rGridFuncToQuad2D<1,15,30>},
-      {0x21F,&rGridFuncToQuad2D<1,16,32>},
+      // {0x210,&rGridFuncToQuad2D<1,1,2>},
+      // {0x211,&rGridFuncToQuad2D<1,2,4>},
+      // {0x212,&rGridFuncToQuad2D<1,3,6>},
+      // {0x213,&rGridFuncToQuad2D<1,4,8>},
+      // {0x214,&rGridFuncToQuad2D<1,5,10>},
+      // {0x215,&rGridFuncToQuad2D<1,6,12>},
+      // {0x216,&rGridFuncToQuad2D<1,7,14>},
+      // {0x217,&rGridFuncToQuad2D<1,8,16>},
+      // {0x218,&rGridFuncToQuad2D<1,9,18>},
+      // {0x219,&rGridFuncToQuad2D<1,10,20>},
+      // {0x21A,&rGridFuncToQuad2D<1,11,22>},
+      // {0x21B,&rGridFuncToQuad2D<1,12,24>},
+      // {0x21C,&rGridFuncToQuad2D<1,13,26>},
+      // {0x21D,&rGridFuncToQuad2D<1,14,28>},
+      // {0x21E,&rGridFuncToQuad2D<1,15,30>},
+      // {0x21F,&rGridFuncToQuad2D<1,16,32>},
 
       // 3D
       // {0x310,&rGridFuncToQuad3D<1,1,2>},
@@ -407,11 +463,32 @@ void rGridFuncToQuad(const int DIM,
       // {0x31F,&rGridFuncToQuad3D<1,16,32>},
    };
 
+#define call_2d(DOFS,QUAD,BZ,NBLOCK) \
+   call_2d_ker(rGridFuncToQuad2D,numElements,DOFS,QUAD,BZ,NBLOCK,\
+               numElements,dofToQuad,l2gMap,gf,out)
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
    call_3d_ker(rGridFuncToQuad3D,numElements,DOFS,QUAD,BZ,NBLOCK,\
                numElements,dofToQuad,l2gMap,gf,out,gbuf,rGridFuncToQuad3D_BufSize)
- 
-   if      (id == 0x310) { call_3d(1 ,2 ,2,1); }
+   
+   // 2D
+   if      (id == 0x210) { call_2d(1 ,2,16,1); }
+   else if (id == 0x211) { call_2d(2 ,4 ,8,1); }   
+   else if (id == 0x212) { call_2d(3 ,6 ,4,1); }
+   else if (id == 0x213) { call_2d(4 ,8 ,2,1); }   
+   else if (id == 0x214) { call_2d(5 ,10,1,1); }
+   else if (id == 0x215) { call_2d(6 ,12,1,1); }   
+   else if (id == 0x216) { call_2d(7 ,14,1,1); }
+   else if (id == 0x217) { call_2d(8 ,16,1,1); }   
+   else if (id == 0x218) { call_2d(9 ,18,1,1); }
+   else if (id == 0x219) { call_2d(10,20,1,1); }   
+   else if (id == 0x21A) { call_2d(11,22,1,1); }
+   else if (id == 0x21B) { call_2d(12,24,1,1); }   
+   else if (id == 0x21C) { call_2d(13,26,1,1); }
+   else if (id == 0x21D) { call_2d(14,28,1,1); }   
+   else if (id == 0x21E) { call_2d(15,30,1,1); }
+   else if (id == 0x21F) { call_2d(16,32,1,1); }   
+   // 3D
+   else if (id == 0x310) { call_3d(1 ,2 ,2,1); }
    else if (id == 0x311) { call_3d(2 ,4 ,4,1); }   
    else if (id == 0x312) { call_3d(3 ,6 ,6,1); }
    else if (id == 0x313) { call_3d(4 ,8 ,8,1); }
