@@ -49,28 +49,27 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
    int tid = threadIdx.x + threadIdx.y*blockDim.x;
    __shared__ double buf1[BZ][VDIMQ];
    __shared__ double buf2[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];
-   __shared__ double buf3[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];      
+   // __shared__ double buf3[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];      
 
    double *s_gradv = (double*)(buf1 + threadIdx.z);
    double (*vDx)[DIM*NUM_QUAD_1D] =
       (double (*)[DIM*NUM_QUAD_1D])(buf2 + threadIdx.z);
-   double (*vx)[DIM*NUM_QUAD_1D] =
-      (double (*)[DIM*NUM_QUAD_1D])(buf3 + threadIdx.z);
-  
+   // double (*vx)[DIM*NUM_QUAD_1D] =
+   //    (double (*)[DIM*NUM_QUAD_1D])(buf3 + threadIdx.z);
+   double (*vx)[DIM*NUM_QUAD_1D] = vDx;
+   
    for (int dy = threadIdx.y; dy < NUM_DOFS_1D; dy += blockDim.y)
    {
       for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
       {
          for (int c = 0; c < DIM; ++c)
          {
-            double t1 = 0, t2 = 0;
+            double t = 0;
             for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
             {             
-               t1 += dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
-               t2 += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+               t += dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
             }
-            vDx[dy][ijN(c,qx,DIM)] = t1;
-            vx[dy][ijN(c,qx,DIM)] = t2;
+            vDx[dy][ijN(c,qx,DIM)] = t;
          }
       }
    }
@@ -82,18 +81,49 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
       {
          for (int c = 0; c < DIM; ++c)
          {
-            double t1 = 0, t2 = 0;
+            double t = 0;
             for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
             {          
-               t1 += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]*vDx[dy][ijN(c,qx,DIM)];
-               t2 += dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)]*vx[dy][ijN(c,qx,DIM)];
+               t += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]*vDx[dy][ijN(c,qx,DIM)];
             }
-            s_gradv[ijkN(c,0,qx+qy*NUM_QUAD_1D,DIM)] = t1;
-            s_gradv[ijkN(c,1,qx+qy*NUM_QUAD_1D,DIM)] = t2;
+            s_gradv[ijkN(c,0,qx+qy*NUM_QUAD_1D,DIM)] = t;
+         }
+      }
+   }
+   __syncthreads();   
+   for (int dy = threadIdx.y; dy < NUM_DOFS_1D; dy += blockDim.y)
+   {
+      for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+      {
+         for (int c = 0; c < DIM; ++c)
+         {
+            double t = 0;
+            for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
+            {             
+               t += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+            }
+            vx[dy][ijN(c,qx,DIM)] = t;
          }
       }
    }
    __syncthreads();
+    
+   for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+   {
+      for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+      {
+         for (int c = 0; c < DIM; ++c)
+         {
+            double t = 0;
+            for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
+            {          
+               t += dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)]*vx[dy][ijN(c,qx,DIM)];
+            }
+            s_gradv[ijkN(c,1,qx+qy*NUM_QUAD_1D,DIM)] = t;
+         }
+      }
+   }
+   __syncthreads();   
 
    for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y)
    {
@@ -105,14 +135,14 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
       const double invJ_01 = invJ[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
       const double invJ_11 = invJ[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
 
-      q_gradv[ijN(0,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_00)+(s_gradv[ijkN(1,0,q,
-                                                                            2)]*invJ_01));
-      q_gradv[ijN(1,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_10)+(s_gradv[ijkN(1,0,q,
-                                                                            2)]*invJ_11));
-      q_gradv[ijN(0,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_00)+(s_gradv[ijkN(1,1,q,
-                                                                            2)]*invJ_01));
-      q_gradv[ijN(1,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_10)+(s_gradv[ijkN(1,1,q,
-                                                                            2)]*invJ_11));
+      q_gradv[ijN(0,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_00)+
+                             (s_gradv[ijkN(1,0,q,2)]*invJ_01));
+      q_gradv[ijN(1,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_10)+
+                             (s_gradv[ijkN(1,0,q,2)]*invJ_11));
+      q_gradv[ijN(0,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_00)+
+                             (s_gradv[ijkN(1,1,q,2)]*invJ_01));
+      q_gradv[ijN(1,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_10)+
+                             (s_gradv[ijkN(1,1,q,2)]*invJ_11));
 
       const double q_Jw = detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
 
@@ -1200,7 +1230,7 @@ void rUpdateQuadratureData(const double GAMMA,
       // {0x2C,&rUpdateQuadratureData2D<2,26*26,26,14>},
       // {0x2D,&rUpdateQuadratureData2D<2,28*28,28,15>},
       // {0x2E,&rUpdateQuadratureData2D<2,30*30,30,16>},
-      {0x2F,&rUpdateQuadratureData2D<2,32*32,32,17>},
+      // {0x2F,&rUpdateQuadratureData2D<2,32*32,32,17>},
       // 3D
       // {0x30,&rUpdateQuadratureData3D<3,2*2*2,2,2>},
       // {0x31,&rUpdateQuadratureData3D<3,4*4*4,4,3>},
@@ -1249,6 +1279,7 @@ void rUpdateQuadratureData(const double GAMMA,
    else if (id == 0x2C) { call_2d(14,26,1,1); }
    else if (id == 0x2D) { call_2d(15,28,1,1); }
    else if (id == 0x2E) { call_2d(16,30,1,1); }
+   else if (id == 0x2F) { call_2d(17,32,1,1); }
    // 3D   
    else if (id == 0x30) { call_3d(2 ,2 ,2,1); }
    else if (id == 0x31) { call_3d(3 ,4 ,4,1); }   
