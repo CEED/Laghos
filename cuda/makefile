@@ -20,9 +20,9 @@ CUDA_DIR ?= $(dir $(shell which nvcc))../
 MPI_HOME ?= $(dir $(shell which mpicc))../
 MPI_INCFLAGS = -I$(MPI_HOME)/include
 
-NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
+NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
 NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
-            -lcuda -lcudart -lcudadevrt -lnvToolsExt
+            -lcuda -lcudart -lcudadevrt -lnvToolsExt 
 
 define LAGHOS_HELP_MSG
 
@@ -83,8 +83,8 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
 endif
 
 CXX = nvcc
-CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = $(MFEM_CXXFLAGS)
+CPPFLAGS = $(MFEM_CPPFLAGS) 
+CXXFLAGS = $(MFEM_CXXFLAGS) 
 
 # MFEM config does not define C compiler
 CC     = gcc

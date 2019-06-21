@@ -33,11 +33,14 @@ CudaCommD::~CudaCommD() { }
 // * kCopyFromTable
 // ***************************************************************************
 template <class T> static __global__
-void k_CopyGroupToBuffer(T *buf,const T *data,const int *dofs)
+void k_CopyGroupToBuffer(T *buf,const T *data,const int *dofs,const int ndofs)
 {
    const int j = blockDim.x * blockIdx.x + threadIdx.x;
-   const int idx = dofs[j];
-   buf[j]=data[idx];
+   if (j < ndofs)
+   {
+      const int idx = dofs[j];
+      buf[j]=data[idx];
+   }
 }
 
 // ***************************************************************************
@@ -49,7 +52,9 @@ T *d_CopyGroupToBuffer_k(const T *d_ldata,T *d_buf,
 {
    const int ndofs = d_dofs.RowSize(group);
    const int *dofs = d_dofs.GetRow(group);
-   k_CopyGroupToBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
+   const int block = 64;
+   const int grid = (ndofs + block - 1) / block;
+   k_CopyGroupToBuffer<<<grid,block>>>(d_buf,d_ldata,dofs,ndofs);   
    return d_buf + ndofs;
 }
 
@@ -76,11 +81,14 @@ T *CudaCommD::d_CopyGroupToBuffer(const T *d_ldata, T *d_buf,
 // * k_CopyGroupFromBuffer
 // ***************************************************************************
 template <class T> static __global__
-void k_CopyGroupFromBuffer(const T *buf,T *data,const int *dofs)
+void k_CopyGroupFromBuffer(const T *buf,T *data,const int *dofs,const int ndofs)
 {
    const int j = blockDim.x * blockIdx.x + threadIdx.x;
-   const int idx = dofs[j];
-   data[idx]=buf[j];
+   if (j < ndofs)
+   {
+      const int idx = dofs[j];
+      data[idx]=buf[j];
+   }
 }
 
 // ***************************************************************************
@@ -93,7 +101,9 @@ const T *CudaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
    assert(layout==0);
    const int ndofs = d_group_ldof.RowSize(group);
    const int *dofs = d_group_ldof.GetRow(group);
-   k_CopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
+   const int block = 64;
+   const int grid = (ndofs + block - 1) / block;
+   k_CopyGroupFromBuffer<<<grid,block>>>(d_buf,d_ldata,dofs,ndofs);
    return d_buf + ndofs;
 }
 
@@ -101,14 +111,17 @@ const T *CudaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
 // * kAtomicAdd
 // ***************************************************************************
 template <class T>
-static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value)
+static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value, const int nldofs)
 {
    const int i = blockDim.x * blockIdx.x + threadIdx.x;
-   const int idx = dofs[i];
-   adrs[idx] += value[i];
+   if (i < nldofs)
+   {
+      const int idx = dofs[i];
+      adrs[idx] += value[i];
+   }
 }
-template __global__ void kAtomicAdd<int>(int*, const int*, int*);
-template __global__ void kAtomicAdd<double>(double*, const int*, double*);
+template __global__ void kAtomicAdd<int>(int*, const int*, int*, const int);
+template __global__ void kAtomicAdd<double>(double*, const int*, double*, const int);
 
 // ***************************************************************************
 // * ReduceGroupFromBuffer
@@ -125,7 +138,9 @@ const T *CudaCommD::d_ReduceGroupFromBuffer(const T *d_buf, T *d_ldata,
    opd.buf = const_cast<T*>(d_buf);
    opd.ldofs = const_cast<int*>(d_group_ltdof.GetRow(group));
    assert(opd.nb == 1);
-   kAtomicAdd<<<opd.nldofs,1>>>(opd.ldata,opd.ldofs,opd.buf);
+   const int block = 64;
+   const int grid = (opd.nldofs + block - 1) / block;
+   kAtomicAdd<<<grid,block>>>(opd.ldata,opd.ldofs,opd.buf,opd.nldofs);
    return d_buf + opd.nldofs;
 }
 

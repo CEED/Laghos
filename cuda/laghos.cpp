@@ -423,10 +423,11 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    CudaVector S_old(S);
+   if (mpi.Root())
    {
      size_t free, tot;
      cudaMemGetInfo(&free, &tot);
-     printf("final used = %f GB\n", (double)(tot - free)/(1024.0*1024.0*1024.0));
+     printf("GPU memory usage = %f GB\n", (double)(tot - free)/(1024.0*1024.0*1024.0));
    }
    for (int ti = 1; !last_step; ti++)
    {
