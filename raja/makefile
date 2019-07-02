@@ -17,8 +17,7 @@
 enableCuda= 0
 enableHip = 1
 
-# RAJA_DIR ?= /usr/local/raja
-RAJA_DIR ?= ${PWD}/RAJA
+RAJA_DIR ?= /usr/local/raja
 RAJA_INCFLAGS = -I$(RAJA_DIR)/include -I$(RAJA_DIR)/tpl/cub -I$(RAJA_DIR)/tpl/rocPRIM/rocprim/include  
 RAJA_LIBS = -fopenmp $(RAJA_DIR)/lib/libRAJA.a
 RAJA_CXXFLAGS = 
