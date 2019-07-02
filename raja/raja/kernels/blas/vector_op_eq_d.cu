@@ -29,5 +29,10 @@ extern "C" __global__ void d_vector_op_eq(const int N,
                                           double* __restrict v0){
   const size_t blockSize = 128;
   const size_t gridSize = (N+blockSize-1)/blockSize;
+#if defined(RAJA_ENABLE_CUDA)
   d_vector_op_eq0<<<gridSize,blockSize>>>(N,c0,v0);
+#elif defined(RAJA_ENABLE_HIP)
+	hipLaunchKernelGGL((d_vector_op_eq0),dim3(gridSize),dim3(blockSize), 0, 0,
+  										N,c0,v0);
+#endif
 }

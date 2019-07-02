@@ -17,6 +17,7 @@
 #define LAGHOS_RAJA_KERNELS_FORALL
 
 // *****************************************************************************
+#if defined(RAJA_ENABLE_CUDA)
 #define CUDA_BLOCK_SIZE 256
 
 #define cu_device __device__
@@ -30,12 +31,36 @@
 #define ReduceDecl(type,var,ini) \
   RAJA::Reduce ## type<sq_reduce, RAJA::Real_type> var(ini);
 #define ReduceForall(i,max,body) \
-  RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
+  RAJA::forall<sq_exec>(RAJA::RangeSegment(0, max),[=]sq_device(RAJA::Index_type i) {body});
 
 #define forall(i,max,body)                                              \
    if (mfem::rconfig::Get().Cuda())                                     \
-      RAJA::forall<cu_exec>(0,max,[=]cu_device(RAJA::Index_type i) {body}); \
+      RAJA::forall<cu_exec>(RAJA::RangeSegment(0, max),[=]cu_device(RAJA::Index_type i) {body}); \
    else                                                                 \
-      RAJA::forall<sq_exec>(0,max,[=]sq_device(RAJA::Index_type i) {body});
+      RAJA::forall<sq_exec>(RAJA::RangeSegment(0, max),[=]sq_device(RAJA::Index_type i) {body});
+
+#elif defined(RAJA_ENABLE_HIP)
+#define HIP_BLOCK_SIZE 256
+
+#define hip_device __device__
+#define hip_exec RAJA::hip_exec<HIP_BLOCK_SIZE>
+#define hip_reduce RAJA::hip_reduce<HIP_BLOCK_SIZE>
+
+#define sq_device __host__
+#define sq_exec RAJA::seq_exec
+#define sq_reduce RAJA::seq_reduce
+
+#define ReduceDecl(type,var,ini) \
+  RAJA::Reduce ## type<sq_reduce, RAJA::Real_type> var(ini);
+#define ReduceForall(i,max,body) \
+  RAJA::forall<sq_exec>(RAJA::RangeSegment(0, max),[=]sq_device(RAJA::Index_type i) {body});
+
+#define forall(i,max,body)                                              \
+   if (mfem::rconfig::Get().Hip())                                     \
+      RAJA::forall<hip_exec>(RAJA::RangeSegment(0, max),[=]hip_device(RAJA::Index_type i) {body}); \
+   else                                                                 \
+      RAJA::forall<sq_exec>(RAJA::RangeSegment(0, max),[=]sq_device(RAJA::Index_type i) {body});
+
+#endif
 
 #endif // LAGHOS_RAJA_KERNELS_FORALL

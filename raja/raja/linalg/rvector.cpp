@@ -8,6 +8,9 @@
 // MFEM is free software; you can redistribute it and/or modify it under the
 // terms of the GNU Lesser General Public License (as published by the Free
 // Software Foundation) version 2.1 dated February 1999.
+/////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2018,2019 Advanced Micro Devices, Inc.
+/////////////////////////////////////////////////////////////////////////////////
 #include "../raja.hpp"
 
 namespace mfem
@@ -62,7 +65,8 @@ RajaVector::RajaVector(const Vector& v):size(v.Size()),data(alloc(size)),
 // Device 2 Host ***************************************************************
 RajaVector::operator Vector()
 {
-   if (!rconfig::Get().Cuda()) { return Vector(data,size); }
+   if (!rconfig::Get().Cuda() && !rconfig::Get().Hip())
+      { return Vector(data,size); }
    double *h_data= (double*) ::malloc(bytes());
    rmemcpy::rDtoH(h_data,data,bytes());
    Vector mfem_vector(h_data,size);
@@ -72,7 +76,8 @@ RajaVector::operator Vector()
 
 RajaVector::operator Vector() const
 {
-   if (!rconfig::Get().Cuda()) { return Vector(data,size); }
+   if (!rconfig::Get().Cuda() && !rconfig::Get().Hip())
+      { return Vector(data,size); }
    double *h_data= (double*) ::malloc(bytes());
    rmemcpy::rDtoH(h_data,data,bytes());
    Vector mfem_vector(h_data,size);
@@ -115,7 +120,8 @@ RajaVector& RajaVector::operator=(const RajaVector& v)
 RajaVector& RajaVector::operator=(const Vector& v)
 {
    size=v.Size();
-   if (!rconfig::Get().Cuda()) { SetSize(size,v.GetData()); }
+   if (!rconfig::Get().Cuda() && !rconfig::Get().Hip())
+      { SetSize(size,v.GetData()); }
    else { rHtoD(data,v.GetData(),bytes()); }
    own = false;
    return *this;
@@ -153,7 +159,8 @@ RajaVector& RajaVector::operator+=(const Vector& v)
 {
    double *d_v_data;
    assert(v.GetData());
-   if (!rconfig::Get().Cuda()) { d_v_data=v.GetData(); }
+   if (!rconfig::Get().Cuda() && !rconfig::Get().Hip())
+      { d_v_data=v.GetData(); }
    else { rmemcpy::rHtoD(d_v_data = alloc(size),v.GetData(),bytes()); }
    vector_vec_add(size, data, d_v_data);
    return *this;
