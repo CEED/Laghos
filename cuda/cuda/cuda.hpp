@@ -24,6 +24,7 @@
 // CUDA ************************************************************************
 #include <cuda.h>
 #include <nvToolsExt.h>
+#include <cuda_runtime_api.h>
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"
@@ -39,7 +40,7 @@
 #include "./general/array.hpp"
 #include "./general/table.hpp"
 #include "./general/commd.hpp"
- 
+
 // LAGHOS/cuda/linalg **********************************************************
 #include "./linalg/vector.hpp"
 #include "./linalg/operator.hpp"

@@ -14,15 +14,16 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-NV_ARCH ?= -arch=sm_70
+NV_ARCH ?= -arch=sm_60
 CUDA_DIR ?= $(dir $(shell which nvcc))../
 
 MPI_HOME ?= $(dir $(shell which mpicc))../
 MPI_INCFLAGS = -I$(MPI_HOME)/include
 
-NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
-NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
-            -lcuda -lcudart -lcudadevrt -lnvToolsExt 
+#NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
+NVCC_CXXFLAGS = -g -m64 --restrict -Xcompiler -Wall
+#NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64
+NVCC_LIBS = -L$(MPI_HOME)/lib -lmpi -lcuda -lcudart -lcudadevrt -lnvToolsExt 
 
 define LAGHOS_HELP_MSG
 

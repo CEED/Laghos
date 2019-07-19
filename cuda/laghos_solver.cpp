@@ -140,6 +140,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
+   //printf("\n\033[32m[LagrangianHydroOperator] H0: %.14e\033[m", quad_data.h0);
 
    quad_data.dqMaps = CudaDofQuadMaps::Get(H1FESpace,integ_rule);
    quad_data.geom = CudaGeometry::Get(H1FESpace,integ_rule);
@@ -395,6 +396,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
    ElementTransformation *T = H1FESpace.GetElementTransformation(0);
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
+
+   const double h1order = (double) H1FESpace.GetOrder(0);
+
    if (rconfig::Get().Share())
       rUpdateQuadratureDataS(gamma,
                              quad_data.h0,
@@ -420,6 +424,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
    else
       rUpdateQuadratureData(gamma,
                             quad_data.h0,
+                            h1order,
                             cfl,
                             use_viscosity,
                             dim,
@@ -439,7 +444,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
                             quad_data.geom->detJ,
                             quad_data.stressJinvT,
                             quad_data.dtEst);
-
    quad_data.dt_est = quad_data.dtEst.Min();
    quad_data_is_current = true;
    timer.sw_qdata.Stop();

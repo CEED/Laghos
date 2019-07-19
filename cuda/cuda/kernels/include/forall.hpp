@@ -37,7 +37,7 @@
    cudaFuncSetCacheConfig(KER##_v2<DOFS,QUAD,BZ,NBLOCK>,    \
                           cudaFuncCachePreferShared);                   \
    int grid = (NEL + BZ - 1)/BZ;                                           \
-   KER##_v2<DOFS,QUAD,BZ,NBLOCK><<<grid,blck>>>(__VA_ARGS__); 
+   KER##_v2<DOFS,QUAD,BZ,NBLOCK><<<grid,blck>>>(__VA_ARGS__);
 #define call_3d_ker(KER,NEL,DOFS,QUAD,BZ,NBLOCK,...) \
    dim3 blck(QUAD,QUAD,BZ);                            \
    if (KER##_BufSize <= MaxSharedMemoryPerBlockOptin) {   \
@@ -55,6 +55,6 @@
                             cudaFuncCachePreferL1);                     \
      int grid = numSM;                                                  \
      KER##_v2<DOFS,QUAD,0,QUAD*QUAD*BZ,NBLOCK><<<grid,blck>>>(__VA_ARGS__);    \
-   } 
+   }
 
 #endif // LAGHOS_CUDA_KERNELS_FORALL

@@ -14,6 +14,77 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
+#include <limits>
+
+using namespace std;
+
+__device__ static
+inline void getScalingFactor(const double &d_max, double &mult)
+{
+   int d_exp;
+   if (d_max > 0.)
+   {
+      mult = frexp(d_max, &d_exp);
+      if (d_exp == numeric_limits<double>::max_exponent)
+      {
+         mult *= numeric_limits<double>::radix;
+      }
+      mult = d_max/mult;
+   }
+   else
+   {
+      mult = 1.;
+   }
+   // mult = 2^d_exp is such that d_max/mult is in [0.5,1)
+   // or in other words d_max is in the interval [0.5,1)*mult
+}
+__device__ static
+double calcSingularvalue(const int n, const int i, const double *d)
+{
+   double d0, d1, d2, d3;
+   d0 = d[0];
+   d1 = d[1];
+   d2 = d[2];
+   d3 = d[3];
+   double mult;
+
+   {
+      double d_max = fabs(d0);
+      if (d_max < fabs(d1)) { d_max = fabs(d1); }
+      if (d_max < fabs(d2)) { d_max = fabs(d2); }
+      if (d_max < fabs(d3)) { d_max = fabs(d3); }
+
+      getScalingFactor(d_max, mult);
+   }
+
+   d0 /= mult;
+   d1 /= mult;
+   d2 /= mult;
+   d3 /= mult;
+
+   double t = 0.5*((d0+d2)*(d0-d2)+(d1-d3)*(d1+d3));
+   double s = d0*d2 + d1*d3;
+   s = sqrt(0.5*(d0*d0 + d1*d1 + d2*d2 + d3*d3) + sqrt(t*t + s*s));
+
+   if (s == 0.0)
+   {
+      return 0.0;
+   }
+   t = fabs(d0*d3 - d1*d2) / s;
+   if (t > s)
+   {
+      if (i == 0)
+      {
+         return t*mult;
+      }
+      return s*mult;
+   }
+   if (i == 0)
+   {
+      return s*mult;
+   }
+   return t*mult;
+}
 
 // *****************************************************************************
 template<const int NUM_DOFS_1D,
@@ -24,6 +95,7 @@ __launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ,NBLOCK)
 kernel
 void rUpdateQuadratureData2D_v2(const double GAMMA,
                                 const double H0,
+                                const double h1order,
                                 const double CFL,
                                 const bool USE_VISCOSITY,
                                 const int numElements,
@@ -43,13 +115,13 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
    const int NUM_QUAD = NUM_QUAD_1D*NUM_QUAD_1D;
    const int DIM = 2;
    const int VDIMQ = DIM*DIM*NUM_QUAD;
-  
+
    const int el = blockIdx.x*BZ+threadIdx.z;
-   if (el >= numElements) return;
+   if (el >= numElements) { return; }
    int tid = threadIdx.x + threadIdx.y*blockDim.x;
    __shared__ double buf1[BZ][VDIMQ];
    __shared__ double buf2[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];
-   // __shared__ double buf3[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];      
+   // __shared__ double buf3[BZ][NUM_DOFS_1D][DIM*NUM_QUAD_1D];
 
    double *s_gradv = (double*)(buf1 + threadIdx.z);
    double (*vDx)[DIM*NUM_QUAD_1D] =
@@ -57,7 +129,7 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
    // double (*vx)[DIM*NUM_QUAD_1D] =
    //    (double (*)[DIM*NUM_QUAD_1D])(buf3 + threadIdx.z);
    double (*vx)[DIM*NUM_QUAD_1D] = vDx;
-   
+
    for (int dy = threadIdx.y; dy < NUM_DOFS_1D; dy += blockDim.y)
    {
       for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
@@ -66,15 +138,16 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
          {
             double t = 0;
             for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
-            {             
-               t += dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+            {
+               t += dofToQuadD[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,
+                                                                 numElements)];
             }
             vDx[dy][ijN(c,qx,DIM)] = t;
          }
       }
    }
    __syncthreads();
-    
+
    for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
    {
       for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
@@ -83,14 +156,14 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
          {
             double t = 0;
             for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
-            {          
+            {
                t += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]*vDx[dy][ijN(c,qx,DIM)];
             }
             s_gradv[ijkN(c,0,qx+qy*NUM_QUAD_1D,DIM)] = t;
          }
       }
    }
-   __syncthreads();   
+   __syncthreads();
    for (int dy = threadIdx.y; dy < NUM_DOFS_1D; dy += blockDim.y)
    {
       for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
@@ -99,15 +172,16 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
          {
             double t = 0;
             for (int dx = 0; dx < NUM_DOFS_1D; ++dx)
-            {             
-               t += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
+            {
+               t += dofToQuad[ijN(qx,dx,NUM_QUAD_1D)]*v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,
+                                                                numElements)];
             }
             vx[dy][ijN(c,qx,DIM)] = t;
          }
       }
    }
    __syncthreads();
-    
+
    for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
    {
       for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
@@ -116,14 +190,14 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
          {
             double t = 0;
             for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
-            {          
+            {
                t += dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)]*vx[dy][ijN(c,qx,DIM)];
             }
             s_gradv[ijkN(c,1,qx+qy*NUM_QUAD_1D,DIM)] = t;
          }
       }
    }
-   __syncthreads();   
+   __syncthreads();
 
    for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y)
    {
@@ -160,11 +234,11 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
       q_gradv[ijN(1,0,2)] = gradv10;
       q_gradv[ijN(0,1,2)] = gradv10;
 
-      double comprDirX = 1;
-      double comprDirY = 0;
+      //double comprDirX = 1;
+      //double comprDirY = 0;
       double minEig = 0;
       // linalg/densemat.cpp: Eigensystem2S()
-      if (gradv10 == 0)
+      if (gradv10 == 0.0)
       {
          minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
       }
@@ -177,28 +251,32 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
          {
             t = -t;
          }
-         const double c = sqrt(1.0 / (1.0+t*t));
-         const double s = c*t;
+         //const double c = sqrt(1.0 / (1.0+t*t));
+         //const double s = c*t;
          t *= gradv10;
          if ((gradv00-t) <= (gradv11+t))
          {
             minEig = gradv00-t;
-            comprDirX = c;
-            comprDirY = -s;
+            //comprDirX = c;
+            //comprDirY = -s;
          }
          else
          {
             minEig = gradv11+t;
-            comprDirX = s;
-            comprDirY = c;
+            //comprDirX = s;
+            //comprDirY = c;
          }
       }
-
       // Computes the initial->physical transformation Jacobian.
       const double J_00 = J[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
       const double J_10 = J[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
       const double J_01 = J[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
       const double J_11 = J[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
+      const double xJ[4] = {J_00, J_10, J_01, J_11};
+      const int dim = 2;
+      const double sv = calcSingularvalue(dim, dim-1, xJ);
+      const double q_h = sv / h1order;
+      /*
       const double invJ0_00 = invJ0[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
       const double invJ0_10 = invJ0[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
       const double invJ0_01 = invJ0[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
@@ -209,10 +287,12 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
       const double Jpi_11 = ((J_01*invJ0_10)+(J_11*invJ0_11));
       const double physDirX = (Jpi_00*comprDirX)+(Jpi_10*comprDirY);
       const double physDirY = (Jpi_01*comprDirX)+(Jpi_11*comprDirY);
-      const double q_h = H0*sqrt((physDirX*physDirX)+(physDirY*physDirY));
+      const double isv = sqrt((physDirX*physDirX)+(physDirY*physDirY));
+      const double q_h = H0 * isv;*/
       // TODO: soundSpeed will be an input as well (function call or values per q)
       const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
-      dtEst[ijN(q,el,NUM_QUAD)] = CFL*q_h / soundSpeed;
+      const double cfl_inv_dt = CFL*q_h / soundSpeed;
+      dtEst[ijN(q,el,NUM_QUAD)] = cfl_inv_dt;
       if (USE_VISCOSITY)
       {
          // TODO: Check how we can extract outside of kernel
@@ -406,6 +486,8 @@ void rUpdateQuadratureData2D(const double GAMMA,
          // TODO: soundSpeed will be an input as well (function call or values per q)
          const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
          dtEst[ijN(q,el,NUM_QUAD)] = CFL*q_h / soundSpeed;
+         //const double cfl_inv_dt = CFL*q_h / soundSpeed;
+         //dtEst[el] = fmin(dtEst[el], cfl_inv_dt);
          if (USE_VISCOSITY)
          {
             // TODO: Check how we can extract outside of kernel
@@ -526,7 +608,7 @@ void rUpdateQuadratureData3D(const double GAMMA,
             }
          }
          // for (int qz = 0; qz < NUM_DOFS_1D; ++qz)
-         for (int qz = 0; qz < NUM_QUAD_1D; ++qz)         
+         for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
          {
             const double wz  = dofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
             const double wDz = dofToQuadD[ijN(qz,dz,NUM_QUAD_1D)];
@@ -788,7 +870,7 @@ void rUpdateQuadratureData3D(const double GAMMA,
    }
 }
 
-template<const int NUM_DOFS_1D,         
+template<const int NUM_DOFS_1D,
          const int NUM_QUAD_1D,
          const int USE_SMEM,
          const int BLOCK,
@@ -796,21 +878,21 @@ template<const int NUM_DOFS_1D,
 __launch_bounds__(BLOCK, NBLOCK)
 kernel
 void rUpdateQuadratureData3D_v2(const double GAMMA,
-                             const double H0,
-                             const double CFL,
-                             const bool USE_VISCOSITY,
-                             const int numElements,
-                             const double* restrict dofToQuad,
-                             const double* restrict dofToQuadD,
-                             const double* restrict quadWeights,
-                             const double* restrict v,
-                             const double* restrict e,
-                             const double* restrict rho0DetJ0w,
-                             const double* restrict invJ0,
-                             const double* restrict J,
-                             const double* restrict invJ,
-                             const double* restrict detJ,
-                             double* restrict stressJinvT,
+                                const double H0,
+                                const double CFL,
+                                const bool USE_VISCOSITY,
+                                const int numElements,
+                                const double* restrict dofToQuad,
+                                const double* restrict dofToQuadD,
+                                const double* restrict quadWeights,
+                                const double* restrict v,
+                                const double* restrict e,
+                                const double* restrict rho0DetJ0w,
+                                const double* restrict invJ0,
+                                const double* restrict J,
+                                const double* restrict invJ,
+                                const double* restrict detJ,
+                                double* restrict stressJinvT,
                                 double* restrict dtEst,
                                 double *gbuf,
                                 int bufSize)
@@ -818,34 +900,44 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
    const int NUM_DIM = 3;
    const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
    const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
-   int tid = threadIdx.x + threadIdx.y*blockDim.x + threadIdx.z*blockDim.x*blockDim.y;
+   int tid = threadIdx.x + threadIdx.y*blockDim.x +
+             threadIdx.z*blockDim.x*blockDim.y;
    extern __shared__ double sbuf[];
    double *buf_ptr;
-  
+
    if (USE_SMEM)
+   {
       buf_ptr = sbuf;
+   }
    else
+   {
       buf_ptr = (double*)((char*)gbuf + blockIdx.x*bufSize);
+   }
 
    // __shared__ double s_gradv[9*NUM_QUAD_3D];
    //                   vDx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D],
    //                   vx[NUM_DOFS_1D][NUM_DOFS_1D][3*NUM_QUAD_1D],
    //                   vDxy[NUM_DOFS_1D][3*NUM_QUAD_2D],
    //                   vxDy[NUM_DOFS_1D][3*NUM_QUAD_2D],
-   //                   vxy[NUM_DOFS_1D][3*NUM_QUAD_2D]  ;  
+   //                   vxy[NUM_DOFS_1D][3*NUM_QUAD_2D]  ;
    double *s_gradv,
-      (*vDx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
-      (*vx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
-      (*vDxy)[3*NUM_QUAD_2D],
-      (*vxDy)[3*NUM_QUAD_2D],
-      (*vxy)[3*NUM_QUAD_2D];
+          (*vDx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
+          (*vx)[NUM_DOFS_1D][3*NUM_QUAD_1D],
+          (*vDxy)[3*NUM_QUAD_2D],
+          (*vxDy)[3*NUM_QUAD_2D],
+          (*vxy)[3*NUM_QUAD_2D];
    mallocBuf((void**)&s_gradv, (void**)&buf_ptr, 9*NUM_QUAD_3D*sizeof(double));
-   mallocBuf((void**)&vDx    , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
-   mallocBuf((void**)&vx     , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
-   mallocBuf((void**)&vDxy   , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
-   mallocBuf((void**)&vxDy   , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
-   mallocBuf((void**)&vxy    , (void**)&buf_ptr, 3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));  
-  
+   mallocBuf((void**)&vDx    , (void**)&buf_ptr,
+             3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+   mallocBuf((void**)&vx     , (void**)&buf_ptr,
+             3*NUM_DOFS_1D*NUM_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+   mallocBuf((void**)&vDxy   , (void**)&buf_ptr,
+             3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+   mallocBuf((void**)&vxDy   , (void**)&buf_ptr,
+             3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+   mallocBuf((void**)&vxy    , (void**)&buf_ptr,
+             3*NUM_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+
    for (int el = blockIdx.x; el < numElements; el += gridDim.x)
    {
       for (int dz = threadIdx.z; dz < NUM_DOFS_1D; dz += blockDim.z)
@@ -871,7 +963,7 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
          }
       }
       __syncthreads();
-    
+
       for (int dz = threadIdx.z; dz < NUM_DOFS_1D; dz += blockDim.z)
       {
          for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
@@ -882,7 +974,7 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
                {
                   double t1 = 0, t2 = 0, t3 = 0;
                   for (int dy = 0; dy < NUM_DOFS_1D; ++dy)
-                  {  
+                  {
                      t1 += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)] *vDx[dz][dy][ijN(vi,qx,3)];
                      t2 += dofToQuadD[ijN(qy,dy,NUM_QUAD_1D)]*vx[dz][dy][ijN(vi,qx,3)];
                      t3 += dofToQuad[ijN(qy,dy,NUM_QUAD_1D)]*vx[dz][dy][ijN(vi,qx,3)];
@@ -895,8 +987,8 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
          }
       }
       __syncthreads();
-    
-      for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)                  
+
+      for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
       {
          for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
          {
@@ -907,7 +999,7 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
                {
                   double t1 = 0, t2 = 0, t3 = 0;
                   for (int dz = 0; dz < NUM_DOFS_1D; ++dz)
-                  {  
+                  {
                      t1 += dofToQuad[ijN(qz,dz,NUM_QUAD_1D)]*vDxy[dz][ijkNM(vi,qx,qy,3,NUM_QUAD_1D)];
                      t2 += dofToQuad[ijN(qz,dz,NUM_QUAD_1D)]*vxDy[dz][ijkNM(vi,qx,qy,3,NUM_QUAD_1D)];
                      t3 += dofToQuadD[ijN(qz,dz,NUM_QUAD_1D)]*vxy[dz][ijkNM(vi,qx,qy,3,NUM_QUAD_1D)];
@@ -1168,6 +1260,7 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
 // *****************************************************************************
 typedef void (*fUpdateQuadratureData)(const double GAMMA,
                                       const double H0,
+                                      const double h1order,
                                       const double CFL,
                                       const bool USE_VISCOSITY,
                                       const int numElements,
@@ -1187,6 +1280,7 @@ typedef void (*fUpdateQuadratureData)(const double GAMMA,
 // *****************************************************************************
 void rUpdateQuadratureData(const double GAMMA,
                            const double H0,
+                           const double h1order,
                            const double CFL,
                            const bool USE_VISCOSITY,
                            const int NUM_DIM,
@@ -1252,21 +1346,21 @@ void rUpdateQuadratureData(const double GAMMA,
 
 #define call_2d(DOFS,QUAD,BZ,NBLOCK)      \
    call_2d_ker(rUpdateQuadratureData2D,nzones,DOFS,QUAD,BZ,NBLOCK,\
-           GAMMA,H0,CFL,USE_VISCOSITY, \
+           GAMMA,H0,h1order,CFL,USE_VISCOSITY, \
            nzones,dofToQuad,dofToQuadD,quadWeights, \
            v,e,rho0DetJ0w,invJ0,J,invJ,detJ, \
-           stressJinvT,dtEst)                         
+           stressJinvT,dtEst)
 #define call_3d(DOFS,QUAD,BZ,NBLOCK) \
    call_3d_ker(rUpdateQuadratureData3D,nzones,DOFS,QUAD,BZ,NBLOCK,\
                GAMMA,H0,CFL,USE_VISCOSITY,                        \
                nzones,dofToQuad,dofToQuadD,quadWeights,           \
                v,e,rho0DetJ0w,invJ0,J,invJ,detJ,                  \
-               stressJinvT,dtEst,gbuf,rUpdateQuadratureData3D_BufSize)               
+               stressJinvT,dtEst,gbuf,rUpdateQuadratureData3D_BufSize)
 
    // 2D
    if      (id == 0x20) { call_2d(2 ,2,16,1); }
    else if (id == 0x21) { call_2d(3 ,4 ,8,1); }
-   else if (id == 0x22) { call_2d(4 ,6 ,4,1); }   
+   else if (id == 0x22) { call_2d(4 ,6 ,4,1); }
    else if (id == 0x23) { call_2d(5 ,8 ,2,1); }
    else if (id == 0x24) { call_2d(6 ,10,1,1); }
    else if (id == 0x25) { call_2d(7 ,12,1,1); }
@@ -1280,12 +1374,13 @@ void rUpdateQuadratureData(const double GAMMA,
    else if (id == 0x2D) { call_2d(15,28,1,1); }
    else if (id == 0x2E) { call_2d(16,30,1,1); }
    else if (id == 0x2F) { call_2d(17,32,1,1); }
-   // 3D   
+   // 3D
+   /*
    else if (id == 0x30) { call_3d(2 ,2 ,2,1); }
-   else if (id == 0x31) { call_3d(3 ,4 ,4,1); }   
+   else if (id == 0x31) { call_3d(3 ,4 ,4,1); }
    else if (id == 0x32) { call_3d(4 ,6 ,6,1); }
    else if (id == 0x33) { call_3d(5 ,8 ,8,1); }
-   else if (id == 0x34) { call_3d(6 ,10,2,1); }   
+   else if (id == 0x34) { call_3d(6 ,10,2,1); }
    else if (id == 0x35) { call_3d(7 ,12,2,1); }
    else if (id == 0x36) { call_3d(8 ,14,2,1); }
    else if (id == 0x37) { call_3d(9 ,16,2,1); }
@@ -1296,22 +1391,23 @@ void rUpdateQuadratureData(const double GAMMA,
    else if (id == 0x3C) { call_3d(14,26,1,1); }
    else if (id == 0x3D) { call_3d(15,28,1,1); }
    else if (id == 0x3E) { call_3d(16,30,1,1); }
-   else if (id == 0x3F) { call_3d(17,32,1,1); }                  
+   else if (id == 0x3F) { call_3d(17,32,1,1); }
+   */
    else
    {
-     const int blck = CUDA_BLOCK_SIZE;
-     const int grid = (nzones+blck-1)/blck;
-     if (!call[id])
-     {
-       printf("\n[rUpdateQuadratureData] id \033[33m0x%X\033[m ",id);
-       fflush(stdout);
-     }
-     assert(call[id]);
-     call0(id,grid,blck,
-           GAMMA,H0,CFL,USE_VISCOSITY,
-           nzones,dofToQuad,dofToQuadD,quadWeights,
-           v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
-           stressJinvT,dtEst);
+      const int blck = CUDA_BLOCK_SIZE;
+      const int grid = (nzones+blck-1)/blck;
+      if (!call[id])
+      {
+         printf("\n[rUpdateQuadratureData] id \033[33m0x%X\033[m ",id);
+         fflush(stdout);
+      }
+      assert(call[id]);
+      call0(id,grid,blck,
+            GAMMA,H0,h1order,CFL,USE_VISCOSITY,
+            nzones,dofToQuad,dofToQuadD,quadWeights,
+            v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
+            stressJinvT,dtEst);
    }
-   CUCHK(cudaGetLastError()); 
+   CUCHK(cudaGetLastError());
 }
