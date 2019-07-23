@@ -63,7 +63,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-static int problem = 0;
+static int problem = 1;
 
 void display_banner(ostream & os);
 
@@ -78,17 +78,18 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    const char *mesh_file = "../data/square01_quad.mesh";
-   int rs_levels = 0;
+   int rs_levels = 2;
    int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
    int ode_solver_type = 4;
-   double t_final = 0.5;
+   double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
+   bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
@@ -99,6 +100,7 @@ int main(int argc, char *argv[])
    bool share = false;
    bool hcpo = false; // do Host Conforming Prolongation Operation
    bool sync = false;
+   bool check = false;
 
    const char *basename = "results/Laghos";
    OptionsParser args(argc, argv);
@@ -128,6 +130,9 @@ int main(int argc, char *argv[])
    args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
                   "--full-assembly",
                   "Activate 1D tensor-based assembly (partial assembly).");
+   args.AddOption(&impose_visc, "-iv", "--impose-viscosity", "-niv",
+                  "--no-impose-viscosity",
+                  "Use active viscosity terms even for smooth problems.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -152,6 +157,8 @@ int main(int argc, char *argv[])
    // Not usable Options *******************************************************
    args.AddOption(&share, "-share", "--share", "-no-share", "--no-share",
                   "Enable or disable SHARE kernels (WIP, not usable).");
+   args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
+                  "Enable 2D checks.");
    args.Parse();
    if (!args.Good())
    {
@@ -355,7 +362,7 @@ int main(int argc, char *argv[])
    Coefficient *material_pcf = new FunctionCoefficient(hydrodynamics::gamma);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc=false;
+   int source = 0; bool visc = true;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; }
@@ -363,8 +370,10 @@ int main(int argc, char *argv[])
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
+      case 4: visc = false; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
+   if (impose_visc) { visc = true; }
 
    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                 essential_tdofs, d_rho, source, cfl, material_pcf,
@@ -422,6 +431,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    CudaVector S_old(S);
+   int checks = 0;
    if (mpi.Root())
    {
       size_t free, tot;
@@ -547,6 +557,47 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
+      // Problems checks
+      if (check)
+      {
+         double loc_norm = d_e_gf * d_e_gf, tot_norm;
+         MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
+                       pmesh->GetComm());
+         const double stm = sqrt(tot_norm);
+         // Default options only checks
+         MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
+         MFEM_VERIFY(order_v==2, "check: order_v");
+         MFEM_VERIFY(order_e==1, "check: order_e");
+         MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
+         MFEM_VERIFY(t_final==0.6, "check: t_final");
+         MFEM_VERIFY(cfl==0.5, "check: cfl");
+         const double eps = 1.e-13;
+         const double p0_05 = 6.54653862453438e+00;
+         const double p0_27 = 7.58857635779292e+00;
+         if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
+         if (problem==0 and ti==27) {checks++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
+         const double p1_05 = 3.50825494522579e+00;
+         const double p1_15 = 2.75644459682321e+00;
+         if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
+         if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
+         const double p2_05 = 1.020745795651244e+01;
+         const double p2_59 = 1.72159020590190e+01;
+         if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
+         if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+         const double p3_05 = 8.0;
+         const double p3_16 = 8.0;
+         if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
+         if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+         const double p4_05 = 3.436923188323578e+01;
+         const double p4_52 = 2.682244912720685e+01;
+         if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
+         if (problem==4 and ti==52)
+         {
+            checks++;
+            printf("\n%.15e %.15e", stm, p4_52);
+            MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");
+         }
+      }
    }
 
    switch (ode_solver_type)
@@ -583,10 +634,9 @@ double rho0(const Vector &x)
    {
       case 0: return 1.0;
       case 1: return 1.0;
-      case 2: if (x(0) < 0.5) { return 1.0; }
-         else { return 0.1; }
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.0; }
-         else { return 0.125; }
+      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
+      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+      case 4: return 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -598,10 +648,15 @@ double gamma(const Vector &x)
       case 0: return 5./3.;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: if (x(0) > 1.0 && x(1) <= 1.5) { return 1.4; }
-         else { return 1.5; }
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 4: return 5.0 / 3.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
+}
+
+double rad(double x, double y)
+{
+   return sqrt(x*x + y*y);
 }
 
 void v0(const Vector &x, Vector &v)
@@ -621,12 +676,29 @@ void v0(const Vector &x, Vector &v)
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
+      case 4:
+      {
+         const double r = rad(x(0), x(1));
+         if (r < 0.2)
+         {
+            v(0) =  5.0 * x(1);
+            v(1) = -5.0 * x(0);
+         }
+         else if (r < 0.4)
+         {
+            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
+            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+         }
+         else { v = 0.0; }
+         break;
+      }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
 
 double e0(const Vector &x)
 {
+   const double rho0x = rho0(x);
    switch (problem)
    {
       case 0:
@@ -645,13 +717,30 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: if (x(0) < 0.5) { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-      case 3: if (x(0) > 1.0) { return 0.1 / rho0(x) / (gamma(x) - 1.0); }
-         else { return 1.0 / rho0(x) / (gamma(x) - 1.0); }
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0x / (gamma(x) - 1.0)
+                        : 0.1 / rho0x / (gamma(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0x / (gamma(x) - 1.0)
+                        : 1.0 / rho0x / (gamma(x) - 1.0);
+      case 4:
+      {
+         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
+         const double gamma = 5.0 / 3.0;
+         if (r < 0.2)
+         {
+            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
+         }
+         else if (r < 0.4)
+         {
+            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
+            const double t2 = 20.0 * r - 4.0 * log(r);
+            return (t1 - t2) / (gamma - 1.0);
+         }
+         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+      }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
+
 
 } // namespace hydrodynamics
 

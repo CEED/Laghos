@@ -140,8 +140,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
-   //printf("\n\033[32m[LagrangianHydroOperator] H0: %.14e\033[m", quad_data.h0);
-
    quad_data.dqMaps = CudaDofQuadMaps::Get(H1FESpace,integ_rule);
    quad_data.geom = CudaGeometry::Get(H1FESpace,integ_rule);
    quad_data.Jac0inv = quad_data.geom->invJ;
@@ -215,6 +213,7 @@ void LagrangianHydroOperator::Mult(const CudaVector &S, CudaVector &dS_dt) const
 
    CudaVector dx = dS_dt.GetRange(0, VsizeH1);
    CudaVector dv = dS_dt.GetRange(VsizeH1, VsizeH1);
+   dv = 0.0;
    CudaVector de = dS_dt.GetRange(2*VsizeH1, VsizeL2);
 
    // Set dx_dt = v (explicit)
@@ -225,10 +224,8 @@ void LagrangianHydroOperator::Mult(const CudaVector &S, CudaVector &dS_dt) const
    ForcePA.Mult(one, rhs);
    timer.sw_force.Stop();
    rhs.Neg();
-
    // Partial assembly solve for each velocity component.
    const int size = H1compFESpace.GetVSize();
-
    for (int c = 0; c < dim; c++)
    {
       rhs_c = rhs.GetRange(c*size, size);
@@ -240,23 +237,17 @@ void LagrangianHydroOperator::Mult(const CudaVector &S, CudaVector &dS_dt) const
       ess_bdr = 0; ess_bdr[c] = 1;
       // Essential true dofs as if there's only one component.
       H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-
       dv_c = 0.0;
-
       H1compFESpace.GetProlongationOperator()->MultTranspose(rhs_c, B);
       H1compFESpace.GetRestrictionOperator()->Mult(dv_c, X);
-
       VMassPA.SetEssentialTrueDofs(c_tdofs);
       VMassPA.EliminateRHS(B);
-
       timer.sw_cgH1.Start();
       CG_VMass.Mult(B, X);
       timer.sw_cgH1.Stop();
       timer.H1cg_iter += CG_VMass.GetNumIterations();
-      //printf("\n[H1cg_iter] %d",timer.H1cg_iter);
       H1compFESpace.GetProlongationOperator()->Mult(X, dv_c);
    }
-
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = NULL;
@@ -378,6 +369,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
 
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
+   const int h1order = (double) H1FESpace.GetOrder(0);
 
    const CudaVector x = S.GetRange(0, vSize);
    CudaVector v = S.GetRange(vSize, vSize);
@@ -397,7 +389,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
    const IntegrationPoint &ip = integ_rule.IntPoint(0);
    const double gamma = material_pcf->Eval(*T, ip);
 
-   const double h1order = (double) H1FESpace.GetOrder(0);
+   const double infinity = std::numeric_limits<double>::infinity();
+   quad_data.dtEst = quad_data.dt_est;
 
    if (rconfig::Get().Share())
       rUpdateQuadratureDataS(gamma,
@@ -426,6 +419,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
                             quad_data.h0,
                             h1order,
                             cfl,
+                            infinity,
                             use_viscosity,
                             dim,
                             NUM_QUAD,

@@ -74,10 +74,9 @@ void rInitQuadratureData(const int, const int,
                          const double* restrict, const double* restrict,
                          const double* restrict, double* restrict);
 
-void rUpdateQuadratureData(const double, const double, const double,
-                           const double,
-                           const bool, const int, const int, const int,
-                           const int, const int,
+void rUpdateQuadratureData(const double, const double, const int,
+                           const double, const double, const bool,
+                           const int, const int, const int, const int, const int,
                            const double* restrict, const double* restrict,
                            const double* restrict, const double* restrict,
                            const double* restrict, const double* restrict,

@@ -18,72 +18,219 @@
 
 using namespace std;
 
-__device__ static
-inline void getScalingFactor(const double &d_max, double &mult)
+// *****************************************************************************
+__device__ inline double getScalingFactor(const double d_max)
 {
    int d_exp;
-   if (d_max > 0.)
+   if (d_max > 0.0)
    {
-      mult = frexp(d_max, &d_exp);
+      double mult = frexp(d_max, &d_exp);
       if (d_exp == numeric_limits<double>::max_exponent)
       {
          mult *= numeric_limits<double>::radix;
       }
-      mult = d_max/mult;
+      return d_max/mult;
    }
-   else
-   {
-      mult = 1.;
-   }
+   return 1.0;
    // mult = 2^d_exp is such that d_max/mult is in [0.5,1)
    // or in other words d_max is in the interval [0.5,1)*mult
 }
-__device__ static
-double calcSingularvalue(const int n, const int i, const double *d)
+
+// *****************************************************************************
+__device__ double calcSingularvalue(const int n, const int i, const double *d)
 {
-   double d0, d1, d2, d3;
-   d0 = d[0];
-   d1 = d[1];
-   d2 = d[2];
-   d3 = d[3];
-   double mult;
+   const double J0 = d[0];
+   const double J1 = d[1];
+   const double J2 = d[2];
+   const double J3 = d[3];
+   double J_max = fabs(J0);
+   if (J_max < fabs(J1)) { J_max = fabs(J1); }
+   if (J_max < fabs(J2)) { J_max = fabs(J2); }
+   if (J_max < fabs(J3)) { J_max = fabs(J3); }
+   const double mult = getScalingFactor(J_max);
+   const double d0 = J0/mult;
+   const double d1 = J1/mult;
+   const double d2 = J2/mult;
+   const double d3 = J3/ mult;
+   const double t = 0.5*((d0+d2)*(d0-d2)+(d1-d3)*(d1+d3));
+   const double s = d0*d2 + d1*d3;
+   const double s1 = sqrt(0.5*(d0*d0 + d1*d1 + d2*d2 + d3*d3) + sqrt(t*t + s*s));
+   if (s1 == 0.0) { return 0.0; }
+   const double t1 = fabs(d0*d3 - d1*d2) / s1;
+   if (t1 > s1) { return s1*mult; }
+   return t1*mult;
+}
 
+// *****************************************************************************
+__device__ inline double cpysign(const double x, const double y)
+{
+   if ((x < 0 && y > 0) || (x > 0 && y < 0))
    {
-      double d_max = fabs(d0);
-      if (d_max < fabs(d1)) { d_max = fabs(d1); }
-      if (d_max < fabs(d2)) { d_max = fabs(d2); }
-      if (d_max < fabs(d3)) { d_max = fabs(d3); }
-
-      getScalingFactor(d_max, mult);
+      return -x;
    }
+   return x;
+}
 
-   d0 /= mult;
-   d1 /= mult;
-   d2 /= mult;
-   d3 /= mult;
-
-   double t = 0.5*((d0+d2)*(d0-d2)+(d1-d3)*(d1+d3));
-   double s = d0*d2 + d1*d3;
-   s = sqrt(0.5*(d0*d0 + d1*d1 + d2*d2 + d3*d3) + sqrt(t*t + s*s));
-
-   if (s == 0.0)
+// *****************************************************************************
+__device__ inline void eigensystem2S(const double &d12, double &d1, double &d2,
+                                     double &c, double &s)
+{
+   const double epsilon = 1.e-16;
+   const double sqrt_1_eps = sqrt(1./epsilon);
+   if (d12 == 0.)
    {
-      return 0.0;
+      c = 1.;
+      s = 0.;
    }
-   t = fabs(d0*d3 - d1*d2) / s;
-   if (t > s)
+   else
    {
-      if (i == 0)
+      // "The Symmetric Eigenvalue Problem", B. N. Parlett, pp.189-190
+      double t, zeta = (d2 - d1)/(2*d12);
+      if (fabs(zeta) < sqrt_1_eps)
       {
-         return t*mult;
+         t = cpysign(1./(fabs(zeta) + sqrt(1. + zeta*zeta)), zeta);
       }
-      return s*mult;
+      else
+      {
+         t = cpysign(0.5/fabs(zeta), zeta);
+      }
+      c = sqrt(1./(1. + t*t));
+      s = c*t;
+      t *= d12;
+      d1 -= t;
+      d2 += t;
    }
-   if (i == 0)
+}
+
+// *****************************************************************************
+__device__ inline void calcEigenvalues2D(const double *d,
+                                         double *val, double *vec)
+{
+   double d0 = d[0];
+   double d2 = d[2]; // use the upper triangular entry
+   double d3 = d[3];
+   double c, s;
+   eigensystem2S(d2, d0, d3, c, s);
+   if (d0 <= d3)
    {
-      return s*mult;
+      val[0] = d0; val[1] = d3;
+      vec[0] =  c;
+      vec[1] = -s;
+      vec[2] =  s;
+      vec[3] =  c;
    }
-   return t*mult;
+   else
+   {
+      val[0] = d3; val[1] = d0;
+      vec[0] =  s;
+      vec[1] =  c;
+      vec[2] =  c;
+      vec[3] = -s;
+   }
+}
+
+// *****************************************************************************
+__device__ inline void mult(const int ah,
+                            const int aw,
+                            const int bw,
+                            const double* __restrict__ B,
+                            const double* __restrict__ C,
+                            double* __restrict__ A)
+{
+   const int ah_x_aw = ah*aw;
+   for (int i = 0; i < ah_x_aw; i++) { A[i] = 0.0; }
+   for (int j = 0; j < aw; j++)
+   {
+      for (int k = 0; k < bw; k++)
+      {
+         for (int i = 0; i < ah; i++)
+         {
+            A[i+j*ah] += B[i+k*ah] * C[k+j*bw];
+         }
+      }
+   }
+}
+
+// *****************************************************************************
+__device__ inline void multV(const int height,
+                             const int width,
+                             double *data,
+                             const double* __restrict__ x,
+                             double* __restrict__ y)
+{
+   if (width == 0)
+   {
+      for (int row = 0; row < height; row++)
+      {
+         y[row] = 0.0;
+      }
+      return;
+   }
+   double *d_col = data;
+   double x_col = x[0];
+   for (int row = 0; row < height; row++)
+   {
+      y[row] = x_col*d_col[row];
+   }
+   d_col += height;
+   for (int col = 1; col < width; col++)
+   {
+      x_col = x[col];
+      for (int row = 0; row < height; row++)
+      {
+         y[row] += x_col*d_col[row];
+      }
+      d_col += height;
+   }
+}
+
+// *****************************************************************************
+__device__  static
+double norml2(const int size, const double *data)
+{
+   if (0 == size) { return 0.0; }
+   if (1 == size) { return std::abs(data[0]); }
+   double scale = 0.0;
+   double sum = 0.0;
+   for (int i = 0; i < size; i++)
+   {
+      if (data[i] != 0.0)
+      {
+         const double absdata = fabs(data[i]);
+         if (scale <= absdata)
+         {
+            const double sqr_arg = scale / absdata;
+            sum = 1.0 + sum * (sqr_arg * sqr_arg);
+            scale = absdata;
+            continue;
+         } // end if scale <= absdata
+         const double sqr_arg = absdata / scale;
+         sum += (sqr_arg * sqr_arg); // else scale > absdata
+      } // end if data[i] != 0
+   }
+   return scale * sqrt(sum);
+}
+
+// *****************************************************************************
+__device__ inline double smooth_step_01(const double x, const double eps)
+{
+   const double y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return 0.0; }
+   if (y > 1.0) { return 1.0; }
+   return (3.0 - 2.0 * y) * y * y;
+}
+
+// *****************************************************************************
+__device__ inline void symmetrize(const int n, double* __restrict__ d)
+{
+   for (int i = 0; i<n; i++)
+   {
+      for (int j = 0; j<i; j++)
+      {
+         const double a = 0.5 * (d[i*n+j] + d[j*n+i]);
+         d[j*n+i] = d[i*n+j] = a;
+      }
+   }
 }
 
 // *****************************************************************************
@@ -95,8 +242,9 @@ __launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ,NBLOCK)
 kernel
 void rUpdateQuadratureData2D_v2(const double GAMMA,
                                 const double H0,
-                                const double h1order,
+                                const int h1order,
                                 const double CFL,
+                                const double infinity,
                                 const bool USE_VISCOSITY,
                                 const int numElements,
                                 const double* restrict dofToQuad,
@@ -112,9 +260,10 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
                                 double* restrict stressJinvT,
                                 double* restrict dtEst)
 {
+   constexpr int DIM = 2;
    const int NUM_QUAD = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int DIM = 2;
    const int VDIMQ = DIM*DIM*NUM_QUAD;
+   double min_detJ = infinity;
 
    const int el = blockIdx.x*BZ+threadIdx.z;
    if (el >= numElements) { return; }
@@ -201,113 +350,104 @@ void rUpdateQuadratureData2D_v2(const double GAMMA,
 
    for (int q = tid; q < NUM_QUAD; q += blockDim.x*blockDim.y)
    {
-      double q_gradv[DIM*DIM];
-      double q_stress[DIM*DIM];
-
-      const double invJ_00 = invJ[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
-      const double invJ_10 = invJ[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
-      const double invJ_01 = invJ[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
-      const double invJ_11 = invJ[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
-
-      q_gradv[ijN(0,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_00)+
-                             (s_gradv[ijkN(1,0,q,2)]*invJ_01));
-      q_gradv[ijN(1,0,2)] = ((s_gradv[ijkN(0,0,q,2)]*invJ_10)+
-                             (s_gradv[ijkN(1,0,q,2)]*invJ_11));
-      q_gradv[ijN(0,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_00)+
-                             (s_gradv[ijkN(1,1,q,2)]*invJ_01));
-      q_gradv[ijN(1,1,2)] = ((s_gradv[ijkN(0,1,q,2)]*invJ_10)+
-                             (s_gradv[ijkN(1,1,q,2)]*invJ_11));
-
-      const double q_Jw = detJ[ijN(q,el,NUM_QUAD)]*quadWeights[q];
-
+      const double det = detJ[ijN(q,el,NUM_QUAD)];
+      min_detJ = fmin(min_detJ, det);
+      const double q_Jw = det * quadWeights[q];
       const double q_rho = rho0DetJ0w[ijN(q,el,NUM_QUAD)] / q_Jw;
       const double q_e   = fmax(0.0,e[ijN(q,el,NUM_QUAD)]);
-
-      // TODO: Input OccaVector eos(q,e) -> (stress,soundSpeed)
-      const double s = -(GAMMA-1.0)*q_rho*q_e;
-      q_stress[ijN(0,0,2)] = s; q_stress[ijN(1,0,2)] = 0;
-      q_stress[ijN(0,1,2)] = 0; q_stress[ijN(1,1,2)] = s;
-
-      const double gradv00 = q_gradv[ijN(0,0,2)];
-      const double gradv11 = q_gradv[ijN(1,1,2)];
-      const double gradv10 = 0.5*(q_gradv[ijN(1,0,2)]+q_gradv[ijN(0,1,2)]);
-      q_gradv[ijN(1,0,2)] = gradv10;
-      q_gradv[ijN(0,1,2)] = gradv10;
-
-      //double comprDirX = 1;
-      //double comprDirY = 0;
-      double minEig = 0;
-      // linalg/densemat.cpp: Eigensystem2S()
-      if (gradv10 == 0.0)
-      {
-         minEig = (gradv00 < gradv11) ? gradv00 : gradv11;
-      }
-      else
-      {
-         const double zeta  = (gradv11-gradv00) / (2.0*gradv10);
-         const double azeta = fabs(zeta);
-         double t = 1.0 / (azeta+sqrt(1.0+zeta*zeta));
-         if ((t < 0) != (zeta < 0))
-         {
-            t = -t;
-         }
-         //const double c = sqrt(1.0 / (1.0+t*t));
-         //const double s = c*t;
-         t *= gradv10;
-         if ((gradv00-t) <= (gradv11+t))
-         {
-            minEig = gradv00-t;
-            //comprDirX = c;
-            //comprDirY = -s;
-         }
-         else
-         {
-            minEig = gradv11+t;
-            //comprDirX = s;
-            //comprDirY = c;
-         }
-      }
-      // Computes the initial->physical transformation Jacobian.
+      const double p = -(GAMMA-1.0)*q_rho*q_e;
+      const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
+      // *****************************************************************
+      double q_stress[DIM*DIM];
+      q_stress[ijN(0,0,2)] = p; q_stress[ijN(1,0,2)] = 0.0;
+      q_stress[ijN(0,1,2)] = 0.0; q_stress[ijN(1,1,2)] = p;
+      // *****************************************************************
       const double J_00 = J[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
       const double J_10 = J[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
       const double J_01 = J[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
       const double J_11 = J[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
       const double xJ[4] = {J_00, J_10, J_01, J_11};
-      const int dim = 2;
-      const double sv = calcSingularvalue(dim, dim-1, xJ);
-      const double q_h = sv / h1order;
-      /*
+      // *****************************************************************
+      const double invJ_00 = invJ[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
+      const double invJ_10 = invJ[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
+      const double invJ_01 = invJ[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
+      const double invJ_11 = invJ[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
+      const double xiJ[4] = {invJ_00, invJ_10, invJ_01, invJ_11};
+      // *****************************************************************
       const double invJ0_00 = invJ0[ijklNM(0,0,q,el,DIM,NUM_QUAD)];
       const double invJ0_10 = invJ0[ijklNM(1,0,q,el,DIM,NUM_QUAD)];
       const double invJ0_01 = invJ0[ijklNM(0,1,q,el,DIM,NUM_QUAD)];
       const double invJ0_11 = invJ0[ijklNM(1,1,q,el,DIM,NUM_QUAD)];
-      const double Jpi_00 = ((J_00*invJ0_00)+(J_10*invJ0_01));
-      const double Jpi_10 = ((J_00*invJ0_10)+(J_10*invJ0_11));
-      const double Jpi_01 = ((J_01*invJ0_00)+(J_11*invJ0_01));
-      const double Jpi_11 = ((J_01*invJ0_10)+(J_11*invJ0_11));
-      const double physDirX = (Jpi_00*comprDirX)+(Jpi_10*comprDirY);
-      const double physDirY = (Jpi_01*comprDirX)+(Jpi_11*comprDirY);
-      const double isv = sqrt((physDirX*physDirX)+(physDirY*physDirY));
-      const double q_h = H0 * isv;*/
-      // TODO: soundSpeed will be an input as well (function call or values per q)
-      const double soundSpeed = sqrt(GAMMA*(GAMMA-1.0)*q_e);
-      const double cfl_inv_dt = CFL*q_h / soundSpeed;
-      dtEst[ijN(q,el,NUM_QUAD)] = cfl_inv_dt;
+      const double xiJ0[4] = {invJ0_00, invJ0_10, invJ0_01, invJ0_11};
+      // *****************************************************************
+      double visc_coeff = 0.0;
       if (USE_VISCOSITY)
       {
-         // TODO: Check how we can extract outside of kernel
-         const double mu = minEig;
-         double coeff = 2.0*q_rho*q_h*q_h*fabs(mu);
-         if (mu < 0)
-         {
-            coeff += 0.5*q_rho*q_h*soundSpeed;
-         }
+         // Compression-based length scale at the point. The first
+         // eigenvector of the symmetric velocity gradient gives the
+         // direction of maximal compression. This is used to define the
+         // relative change of the initial length scale.const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);
+         double q_gradv[DIM*DIM];
+         const double dV[4] = {s_gradv[ijkN(0,0,q,2)],
+                               s_gradv[ijkN(1,0,q,2)],
+                               s_gradv[ijkN(0,1,q,2)],
+                               s_gradv[ijkN(1,1,q,2)]
+                              };
+         mult(DIM,DIM,DIM, dV, xiJ, q_gradv);
+         symmetrize(DIM, q_gradv);
+         double eig_val_data[3];
+         double eig_vec_data[9];
+         double compr_dir[DIM];
+         double ph_dir[DIM];
+         double Jpi[DIM*DIM];
+         calcEigenvalues2D(q_gradv, eig_val_data, eig_vec_data);
+         for (int k=0; k<DIM; k+=1) { compr_dir[k] = eig_vec_data[k]; }
+         // Computes the initial->physical transformation Jacobian.
+         mult(DIM,DIM,DIM, xJ, xiJ0, Jpi);
+         multV(DIM, DIM, Jpi, compr_dir, ph_dir);
+         // Change of the initial mesh size in the compression direction.
+         const double h = H0 * norml2(DIM, ph_dir) / norml2(DIM, compr_dir);
+         // Measure of maximal compression.
+         const double mu = eig_val_data[0];
+         visc_coeff = 2.0 * q_rho * h * h * fabs(mu);
+         // The following represents a "smooth" version of the statement
+         // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+         // eps must be scaled appropriately if a different unit system is
+         // being used.
+         const double eps = 1e-12;
+         visc_coeff += 0.5 * q_rho * h * soundSpeed *
+                       (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+         //if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
          for (int y = 0; y < DIM; ++y)
          {
             for (int x = 0; x < DIM; ++x)
             {
-               q_stress[ijN(x,y,2)] += coeff*q_gradv[ijN(x,y,2)];
+               q_stress[ijN(x,y,2)] += visc_coeff * q_gradv[ijN(x,y,2)];
             }
+         }
+      }
+      // Time step estimate at the point. Here the more relevant length
+      // scale is related to the actual mesh deformation; we use the min
+      // singular value of the ref->physical Jacobian. In addition, the
+      // time step estimate should be aware of the presence of shocks.
+      const double sv = calcSingularvalue(DIM, DIM-1, xJ);
+      const double h_min = sv / h1order;
+      const double inv_h_min = 1. / h_min;
+      const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / q_rho ;
+      const double inv_dt = soundSpeed * inv_h_min
+                            + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+      if (min_detJ < 0.0)
+      {
+         // This will force repetition of the step with smaller dt.
+         dtEst[ijN(q,el,NUM_QUAD)] = 0.0;
+      }
+      else
+      {
+         if (inv_dt>0.0)
+         {
+            const double cfl_inv_dt = CFL / inv_dt;
+            dtEst[ijN(q,el,NUM_QUAD)] =
+               fmin(dtEst[ijN(q,el,NUM_QUAD)], cfl_inv_dt);
          }
       }
       const double S00 = q_stress[ijN(0,0,2)];
@@ -1260,8 +1400,9 @@ void rUpdateQuadratureData3D_v2(const double GAMMA,
 // *****************************************************************************
 typedef void (*fUpdateQuadratureData)(const double GAMMA,
                                       const double H0,
-                                      const double h1order,
+                                      const int h1order,
                                       const double CFL,
+                                      const double infinity,
                                       const bool USE_VISCOSITY,
                                       const int numElements,
                                       const double* restrict dofToQuad,
@@ -1280,8 +1421,9 @@ typedef void (*fUpdateQuadratureData)(const double GAMMA,
 // *****************************************************************************
 void rUpdateQuadratureData(const double GAMMA,
                            const double H0,
-                           const double h1order,
+                           const int h1order,
                            const double CFL,
+                           const double infinity,
                            const bool USE_VISCOSITY,
                            const int NUM_DIM,
                            const int NUM_QUAD,
@@ -1346,7 +1488,7 @@ void rUpdateQuadratureData(const double GAMMA,
 
 #define call_2d(DOFS,QUAD,BZ,NBLOCK)      \
    call_2d_ker(rUpdateQuadratureData2D,nzones,DOFS,QUAD,BZ,NBLOCK,\
-           GAMMA,H0,h1order,CFL,USE_VISCOSITY, \
+           GAMMA,H0,h1order,CFL,infinity,USE_VISCOSITY, \
            nzones,dofToQuad,dofToQuadD,quadWeights, \
            v,e,rho0DetJ0w,invJ0,J,invJ,detJ, \
            stressJinvT,dtEst)
@@ -1404,7 +1546,7 @@ void rUpdateQuadratureData(const double GAMMA,
       }
       assert(call[id]);
       call0(id,grid,blck,
-            GAMMA,H0,h1order,CFL,USE_VISCOSITY,
+            GAMMA,H0,h1order,CFL,infinity,USE_VISCOSITY,
             nzones,dofToQuad,dofToQuadD,quadWeights,
             v,e,rho0DetJ0w,invJ0,J,invJ,detJ,
             stressJinvT,dtEst);

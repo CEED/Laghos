@@ -259,3 +259,36 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+# ******************************************************************************
+checks check: laghos test_gpu_seq #test_gpu_mpi_3 test_gpu_mpi_4
+chk : ;@$(MAKE) -j $(NPROC) check
+P0=Taylor  Green
+P1=Sedov   blast
+P2=1D Sod  shock
+P3=Triple  point
+P4=Gresho vortex
+RUN_MPI_1 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 1
+RUN_MPI_2 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 2
+RUN_MPI_3 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 3
+OPTS = -rs 0 -m ../data/square01_quad.mesh -cgt 1e-13 --checks
+test_gpu_seq: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -pa  , $(OPTS) -p 4)
+
+test_gpu_mpi_3: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -pa  , $(OPTS) -p 4)
+
+test_gpu_mpi_4: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -pa  , $(OPTS) -p 4)
