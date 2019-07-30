@@ -62,7 +62,9 @@ public:
    void Setup(const int,const int, const bool cuda,
               const bool uvm, const bool aware,
               const bool share, const bool hcpo,
-              const bool sync, const int rs_levels);
+              const bool sync, const int rs_levels,
+              const int order_v,
+              const int dim);
    // *************************************************************************
    bool IAmAlone();
    bool GeomNeedsUpdate(const int);
@@ -80,7 +82,7 @@ public:
    inline bool Share() { return share; }
    inline bool Hcpo() { return hcpo; }
    inline bool Sync() { return sync; }
-   inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
+   inline bool Nvvp(bool flip = false) { if (flip) nvvp=!nvvp; return nvvp; }
    inline int MaxXGridSize() { return maxXGridSize; }
    inline int MaxXThreadsDim() { return maxXThreadsDim; }
    // *************************************************************************

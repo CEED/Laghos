@@ -140,6 +140,7 @@ void CudaFiniteElementSpace::GlobalToLocal(const CudaVector& globalVec,
                   localEntries,
                   offsets,
                   indices,
+                  map,                  
                   globalVec,
                   localVec);
 }

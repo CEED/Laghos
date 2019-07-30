@@ -16,6 +16,26 @@
 #ifndef LAGHOS_CUDA_MALLOC
 #define LAGHOS_CUDA_MALLOC
 
+#define CUCHK(call) {   \
+    cudaError_t err = call;  \
+    if( cudaSuccess != err) {  \
+                             fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",     \
+                                     __FILE__, __LINE__, cudaGetErrorString( err) );           \
+                             fflush(stderr);                                                   \
+                             exit(EXIT_FAILURE);                                               \
+    } }
+
+#define CUCHK2(call) {   \
+    CUresult err = call;  \
+    if(CUDA_SUCCESS != err) {  \
+      const char *str; \
+      cuGetErrorString(err, &str); \
+      fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",     \
+              __FILE__, __LINE__, str);           \
+      fflush(stderr);                                                   \
+      exit(EXIT_FAILURE);                                               \
+    } }
+
 namespace mfem
 {
 
@@ -27,15 +47,19 @@ template<class T> struct rmalloc: public rmemcpy
    inline void* operator new (size_t n, bool lock_page = false)
    {
       if (!rconfig::Get().Cuda()) { return ::new T[n]; }
-      void *ptr;
+      void *ptr = NULL;
+      if (n == 0) return ptr; 
       if (!rconfig::Get().Uvm())
       {
-         if (lock_page) { cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE); }
-         else { cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)); }
+        if (lock_page) { CUCHK2(cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE)); }
+         else
+         {
+           CUCHK2(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+         }
       }
       else
       {
-         cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL);
+        CUCHK2(cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL));
       }
       return ptr;
    }
@@ -52,7 +76,7 @@ template<class T> struct rmalloc: public rmemcpy
       }
       else
       {
-         cuMemFree((CUdeviceptr)ptr); // or cuMemFreeHost if page_locked was used
+        CUCHK2(cuMemFree((CUdeviceptr)ptr)); // or cuMemFreeHost if page_locked was used
       }
       ptr = nullptr;
    }

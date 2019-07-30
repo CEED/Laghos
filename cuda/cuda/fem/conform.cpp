@@ -75,19 +75,25 @@ void cuLastCheck()
 // ***************************************************************************
 // * k_Mult
 // ***************************************************************************
+template <int BLOCK>
 static __global__
 void k_Mult(double *y, const double *x,
             const int *external_ldofs, const int m)
 {
-   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-   if (i>=m) { return; }
-   const int j = (i>0)?external_ldofs[i-1]+1:0;
-   const int end = external_ldofs[i];
-   for (int k=0; k<(end-j); k+=1)
+   const int i = blockIdx.x;
+   __shared__ int j,end;
+   if (threadIdx.x == 0)
+   {
+      j = (i>0)?external_ldofs[i-1]+1:0;
+      end = external_ldofs[i];
+   }
+   __syncthreads();
+   for (int k=threadIdx.x; k<(end-j); k+=BLOCK)
    {
       y[j+k]=x[j-i+k];
    }
 }
+   
 static __global__
 void k_Mult2(double *y, const double *x, const int *external_ldofs,
              const int m, const int base)
@@ -115,10 +121,11 @@ void CudaConformingProlongationOperator::d_Mult(const CudaVector &x,
    if (m>0)
    {
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
+      
       if (m>maxXThDim)
-      {
-         const int kTpB=64;
-         k_Mult<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
+      {         
+         const int kTpB=256;
+         k_Mult<kTpB><<<m,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
          cuLastCheck();
       }
       else
@@ -145,19 +152,24 @@ void CudaConformingProlongationOperator::d_Mult(const CudaVector &x,
 // ***************************************************************************
 // * k_Mult
 // ***************************************************************************
+template <int BLOCK>
 static __global__
 void k_MultTranspose(double *y, const double *x,
                      const int *external_ldofs, const int m)
 {
-   const int i = blockDim.x * blockIdx.x + threadIdx.x;
-   if (i>=m) { return; }
-   const int j = (i>0)?external_ldofs[i-1]+1:0;
-   const int end = external_ldofs[i];
-   for (int k=0; k<(end-j); k+=1)
+   const int i = blockIdx.x;
+   __shared__ int j,end;
+   if (threadIdx.x == 0)
+   {
+      j = (i>0)?external_ldofs[i-1]+1:0;
+      end = external_ldofs[i];
+   }
+   __syncthreads();
+   for (int k=threadIdx.x; k<(end-j); k+=BLOCK)
    {
       y[j-i+k]=x[j+k];
    }
-}
+}   
 
 static __global__
 void k_MultTranspose2(double *y, const double *x,
@@ -188,8 +200,8 @@ void CudaConformingProlongationOperator::d_MultTranspose(const CudaVector &x,
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim)
       {
-         const int kTpB=64;
-         k_MultTranspose<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
+         const int kTpB=256;
+         k_MultTranspose<kTpB><<<m,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);         
          cuLastCheck();
       }
       else

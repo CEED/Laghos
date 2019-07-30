@@ -23,6 +23,8 @@
 
 // CUDA ************************************************************************
 #include <cuda.h>
+#include <nvToolsExt.h>
+#include <cuda_runtime_api.h>
 
 // MFEM/fem  *******************************************************************
 #include "fem/gridfunc.hpp"

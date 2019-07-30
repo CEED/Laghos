@@ -14,15 +14,16 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-NV_ARCH ?= -arch=sm_61
-CUDA_DIR ?= /usr/local/cuda
+NV_ARCH ?= -arch=sm_60
+CUDA_DIR ?= $(dir $(shell which nvcc))../
 
-MPI_HOME ?= /usr/local/mpi
+MPI_HOME ?= $(dir $(shell which mpicc))../
 MPI_INCFLAGS = -I$(MPI_HOME)/include
 
-NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH)
-NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
-            -lcuda -lcudart -lcudadevrt -lnvToolsExt
+#NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
+NVCC_CXXFLAGS = -g -m64 --restrict -Xcompiler -Wall
+#NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64
+NVCC_LIBS = -L$(MPI_HOME)/lib -lmpi -lcuda -lcudart -lcudadevrt -lnvToolsExt 
 
 define LAGHOS_HELP_MSG
 
@@ -83,8 +84,8 @@ ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
 endif
 
 CXX = nvcc
-CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = $(MFEM_CXXFLAGS)
+CPPFLAGS = $(MFEM_CPPFLAGS) 
+CXXFLAGS = $(MFEM_CXXFLAGS) 
 
 # MFEM config does not define C compiler
 CC     = gcc
@@ -258,3 +259,36 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+# ******************************************************************************
+checks check: laghos test_gpu_seq #test_gpu_mpi_3 test_gpu_mpi_4
+chk : ;@$(MAKE) -j $(NPROC) check
+P0=Taylor  Green
+P1=Sedov   blast
+P2=1D Sod  shock
+P3=Triple  point
+P4=Gresho vortex
+RUN_MPI_1 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 1
+RUN_MPI_2 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 2
+RUN_MPI_3 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 3
+OPTS = -rs 0 -m ../data/square01_quad.mesh -cgt 1e-13 --checks
+test_gpu_seq: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -pa  , $(OPTS) -p 4)
+
+test_gpu_mpi_3: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -pa  , $(OPTS) -p 4)
+
+test_gpu_mpi_4: laghos
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -pa  , $(OPTS) -p 0)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -pa  , $(OPTS) -p 1)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -pa  , $(OPTS) -p 2)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -pa  , $(OPTS) -p 3)
+	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -pa  , $(OPTS) -p 4)

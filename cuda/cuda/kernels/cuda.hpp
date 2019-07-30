@@ -44,4 +44,19 @@
 #include "include/offsets.hpp"
 #include "include/kernels.hpp"
 
+extern double *gbuf;
+extern int rMassMultAdd3D_BufSize;
+extern int rUpdateQuadratureData3D_BufSize;
+extern int rIniGeom3D_BufSize;
+extern int rForceMult3D_BufSize;
+extern int rForceMultTranspose3D_BufSize;
+extern int rGridFuncToQuad3D_BufSize;
+extern int numSM, MaxSharedMemoryPerBlock, MaxSharedMemoryPerBlockOptin;
+
+__device__ __forceinline__ void mallocBuf(void** ptr, void** buf_ptr, int size)
+{
+  *ptr = *buf_ptr;
+  *buf_ptr = (char*)(*ptr) + size;
+}
+
 #endif // LAGHOS_CUDA_KERNELS_CUDA

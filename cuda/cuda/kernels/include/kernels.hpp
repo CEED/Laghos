@@ -74,9 +74,9 @@ void rInitQuadratureData(const int, const int,
                          const double* restrict, const double* restrict,
                          const double* restrict, double* restrict);
 
-void rUpdateQuadratureData(const double, const double, const double,
-                           const bool, const int, const int, const int,
-                           const int, const int,
+void rUpdateQuadratureData(const double, const double, const int,
+                           const double, const double, const bool,
+                           const int, const int, const int, const int, const int,
                            const double* restrict, const double* restrict,
                            const double* restrict, const double* restrict,
                            const double* restrict, const double* restrict,
@@ -127,7 +127,7 @@ void rIniGeom(const int, const int, const int, const int,
 
 // *****************************************************************************
 void rGlobalToLocal(const int, const bool, const int, const int,
-                    const int* restrict, const int* restrict,
+                    const int* restrict, const int* restrict, const int* restrict,
                     const double* restrict, double* restrict);
 
 void rLocalToGlobal(const int, const bool, const int,
