@@ -16,6 +16,9 @@
 #ifndef LAGHOS_CUDA_PROLONG_OP
 #define LAGHOS_CUDA_PROLONG_OP
 
+#include "../fem/prolong.hpp"
+#include "../linalg/operator.hpp"
+
 namespace mfem
 {
 

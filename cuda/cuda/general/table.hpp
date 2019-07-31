@@ -16,6 +16,9 @@
 #ifndef LAGHOS_CUDA_TABLE
 #define LAGHOS_CUDA_TABLE
 
+#include "general/table.hpp"
+#include "../general/malloc.hpp"
+
 namespace mfem
 {
 
@@ -26,7 +29,7 @@ private:
    int *I = NULL;
    int *J = NULL;
 public:
-   CudaTable(const Table&);
+   CudaTable(const mfem::Table&);
    inline int Size() {return size;}
    int RowSize(int i) const { return I[i+1]-I[i]; }
    const int *GetRow(int i) const { return J+I[i]; }

@@ -16,6 +16,8 @@
 #ifndef LAGHOS_CUDA_SOLVERS
 #define LAGHOS_CUDA_SOLVERS
 
+#include "../linalg/operator.hpp"
+
 #ifdef MFEM_USE_MPI
 #include <mpi.h>
 #endif

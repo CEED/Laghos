@@ -1,13 +1,18 @@
-// Copyright (c) 2010, Lawrence Livermore National Security, LLC. Produced at
-// the Lawrence Livermore National Laboratory. LLNL-CODE-443211. All Rights
-// reserved. See file COPYRIGHT for details.
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
 //
-// This file is part of the MFEM library. For more information and source code
-// availability see http://mfem.org.
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
 //
-// MFEM is free software; you can redistribute it and/or modify it under the
-// terms of the GNU Lesser General Public License (as published by the Free
-// Software Foundation) version 2.1 dated February 1999.
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
 
 namespace mfem
@@ -54,7 +59,7 @@ T *d_CopyGroupToBuffer_k(const T *d_ldata,T *d_buf,
    const int *dofs = d_dofs.GetRow(group);
    const int block = 64;
    const int grid = (ndofs + block - 1) / block;
-   k_CopyGroupToBuffer<<<grid,block>>>(d_buf,d_ldata,dofs,ndofs);   
+   k_CopyGroupToBuffer<<<grid,block>>>(d_buf,d_ldata,dofs,ndofs);
    return d_buf + ndofs;
 }
 
@@ -111,7 +116,8 @@ const T *CudaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
 // * kAtomicAdd
 // ***************************************************************************
 template <class T>
-static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value, const int nldofs)
+static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value,
+                                  const int nldofs)
 {
    const int i = blockDim.x * blockIdx.x + threadIdx.x;
    if (i < nldofs)
@@ -121,7 +127,8 @@ static __global__ void kAtomicAdd(T* adrs, const int* dofs,T *value, const int n
    }
 }
 template __global__ void kAtomicAdd<int>(int*, const int*, int*, const int);
-template __global__ void kAtomicAdd<double>(double*, const int*, double*, const int);
+template __global__ void kAtomicAdd<double>(double*, const int*, double*,
+                                            const int);
 
 // ***************************************************************************
 // * ReduceGroupFromBuffer

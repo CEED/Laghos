@@ -369,7 +369,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const CudaVector &S) const
 
    const int vSize = H1FESpace.GetVSize();
    const int eSize = L2FESpace.GetVSize();
-   const int h1order = (double) H1FESpace.GetOrder(0);
+   const int h1order = H1FESpace.GetOrder(0);
 
    const CudaVector x = S.GetRange(0, vSize);
    CudaVector v = S.GetRange(vSize, vSize);

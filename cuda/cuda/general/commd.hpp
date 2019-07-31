@@ -20,6 +20,9 @@
 #include <mpi.h>
 #endif
 
+#include "./commd.hpp"
+#include "./memcpy.hpp"
+
 namespace mfem
 {
 

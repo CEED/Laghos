@@ -16,6 +16,9 @@
 #ifndef LAGHOS_CUDA_ODE
 #define LAGHOS_CUDA_ODE
 
+#include "../linalg/operator.hpp"
+#include "../linalg/vector.hpp"
+
 namespace mfem
 {
 

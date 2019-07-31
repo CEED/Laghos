@@ -16,6 +16,10 @@
 #ifndef LAGHOS_CUDA_MALLOC
 #define LAGHOS_CUDA_MALLOC
 
+#include <cstddef>
+#include "memcpy.hpp"
+#include "../config/config.hpp"
+
 #define CUCHK(call) {   \
     cudaError_t err = call;  \
     if( cudaSuccess != err) {  \
@@ -48,18 +52,18 @@ template<class T> struct rmalloc: public rmemcpy
    {
       if (!rconfig::Get().Cuda()) { return ::new T[n]; }
       void *ptr = NULL;
-      if (n == 0) return ptr; 
+      if (n == 0) { return ptr; }
       if (!rconfig::Get().Uvm())
       {
-        if (lock_page) { CUCHK2(cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE)); }
+         if (lock_page) { CUCHK2(cuMemHostAlloc(&ptr, n*sizeof(T), CU_MEMHOSTALLOC_PORTABLE)); }
          else
          {
-           CUCHK2(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
+            CUCHK2(cuMemAlloc((CUdeviceptr*)&ptr, n*sizeof(T)));
          }
       }
       else
       {
-        CUCHK2(cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL));
+         CUCHK2(cuMemAllocManaged((CUdeviceptr*)&ptr, n*sizeof(T),CU_MEM_ATTACH_GLOBAL));
       }
       return ptr;
    }
@@ -76,7 +80,7 @@ template<class T> struct rmalloc: public rmemcpy
       }
       else
       {
-        CUCHK2(cuMemFree((CUdeviceptr)ptr)); // or cuMemFreeHost if page_locked was used
+         CUCHK2(cuMemFree((CUdeviceptr)ptr)); // or cuMemFreeHost if page_locked was used
       }
       ptr = nullptr;
    }

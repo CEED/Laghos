@@ -16,16 +16,18 @@
 #ifndef LAGHOS_CUDA_MEMCPY
 #define LAGHOS_CUDA_MEMCPY
 
+#include <cstddef>
+
 namespace mfem
 {
 
 // ***************************************************************************
 struct rmemcpy
 {
-   static void* rHtoH(void*, const void*, std::size_t, const bool =false);
-   static void* rHtoD(void*, const void*, std::size_t, const bool =false);
-   static void* rDtoH(void*, const void*, std::size_t, const bool =false);
-   static void* rDtoD(void*, const void*, std::size_t, const bool =false);
+   static void* rHtoH(void*, const void*, int, const bool =false);
+   static void* rHtoD(void*, const void*, int, const bool =false);
+   static void* rDtoH(void*, const void*, int, const bool =false);
+   static void* rDtoD(void*, const void*, int, const bool =false);
 };
 
 } // mfem

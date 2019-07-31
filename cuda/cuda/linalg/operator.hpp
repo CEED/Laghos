@@ -16,6 +16,12 @@
 #ifndef LAGHOS_CUDA_OPERATOR
 #define LAGHOS_CUDA_OPERATOR
 
+#include <cassert>
+#include <cstddef>
+
+#include "../general/memcpy.hpp"
+#include "./vector.hpp"
+
 namespace mfem
 {
 
@@ -27,10 +33,11 @@ protected:
    int width;
 public:
    explicit CudaOperator(int s = 0) { height = width = s; }
+   virtual ~CudaOperator() {}
    CudaOperator(int h, int w) { height = h; width = w; }
    inline int Height() const { return height; }
    inline int Width() const { return width; }
-   virtual void Mult(const CudaVector &x, CudaVector &y) const  { assert(false); };
+   virtual void Mult(const CudaVector &x, CudaVector &y) const  { assert(false); }
    virtual void MultTranspose(const CudaVector &x, CudaVector &y) const { assert(false); }
    virtual const CudaOperator *GetProlongation() const { assert(false); return NULL; }
    virtual const CudaOperator *GetRestriction() const  { assert(false); return NULL; }

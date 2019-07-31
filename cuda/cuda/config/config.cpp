@@ -17,6 +17,8 @@
 #include <mpi-ext.h>
 #include <unistd.h>
 
+#include <cuda.h>
+
 double *gbuf;
 int rMassMultAdd3D_BufSize;
 int rUpdateQuadratureData3D_BufSize;
@@ -106,22 +108,29 @@ void initGPUBuf(const int order_v, int rank)
    const int NUM_DOFS_3D = NUM_DOFS_1D*NUM_DOFS_1D*NUM_DOFS_1D;
    const int H1_DOFS_1D  = NUM_DOFS_1D;
    const int L2_DOFS_1D  = NUM_DOFS_1D - 1;
-   //const int L2_DOFS_2D  = L2_DOFS_1D * L2_DOFS_1D;
+   const int SIZEOF_DOUBLE = static_cast<int>(sizeof(double));
 
    int maxBufSize = 0;
-   rMassMultAdd3D_BufSize = (2*NUM_QUAD_3D + NUM_QUAD_2D)*sizeof(double);
+   rMassMultAdd3D_BufSize = (2*NUM_QUAD_3D + NUM_QUAD_2D) * SIZEOF_DOUBLE;
    rUpdateQuadratureData3D_BufSize =
-      (9*NUM_QUAD_3D + 6*NUM_DOFS_2D*NUM_QUAD_1D + 9*NUM_DOFS_1D*NUM_QUAD_2D)*sizeof(
-         double);
-   rIniGeom3D_BufSize = 3*NUM_DOFS_3D*sizeof(double);
-   rForceMult3D_BufSize = (NUM_QUAD_3D + 3*NUM_QUAD_2D*H1_DOFS_1D +
+      (9*NUM_QUAD_3D +
+       6*NUM_DOFS_2D*NUM_QUAD_1D +
+       9*NUM_DOFS_1D*NUM_QUAD_2D) * SIZEOF_DOUBLE;
+   rIniGeom3D_BufSize = 3*NUM_DOFS_3D * SIZEOF_DOUBLE;
+   rForceMult3D_BufSize = (NUM_QUAD_3D +
+                           3*NUM_QUAD_2D*H1_DOFS_1D +
                            3*NUM_QUAD_1D*H1_DOFS_1D*H1_DOFS_1D +
-                           2*NUM_QUAD_1D*H1_DOFS_1D + L2_DOFS_1D*NUM_QUAD_1D)*sizeof(double);
+                           2*NUM_QUAD_1D*H1_DOFS_1D +
+                           L2_DOFS_1D*NUM_QUAD_1D) * SIZEOF_DOUBLE;
    rForceMultTranspose3D_BufSize =
-      (NUM_QUAD_3D + 2*H1_DOFS_1D*H1_DOFS_1D*NUM_QUAD_1D + 3*H1_DOFS_1D*NUM_QUAD_2D +
-       2*H1_DOFS_1D*NUM_QUAD_1D + L2_DOFS_1D*NUM_QUAD_1D)*sizeof(double);
-   rGridFuncToQuad3D_BufSize = (NUM_DOFS_1D*NUM_QUAD_2D + NUM_DOFS_2D*NUM_QUAD_1D +
-                                NUM_DOFS_1D*NUM_QUAD_1D)*sizeof(double);
+      (NUM_QUAD_3D +
+       2*H1_DOFS_1D*H1_DOFS_1D*NUM_QUAD_1D +
+       3*H1_DOFS_1D*NUM_QUAD_2D +
+       2*H1_DOFS_1D*NUM_QUAD_1D +
+       L2_DOFS_1D*NUM_QUAD_1D) * SIZEOF_DOUBLE;
+   rGridFuncToQuad3D_BufSize = (NUM_DOFS_1D*NUM_QUAD_2D +
+                                NUM_DOFS_2D*NUM_QUAD_1D +
+                                NUM_DOFS_1D*NUM_QUAD_1D) * SIZEOF_DOUBLE;
 
    if (rank == 0)
    {
@@ -134,14 +143,15 @@ void initGPUBuf(const int order_v, int rank)
       printf("rGridFuncToQuad3D_BufSize = %d B\n", rGridFuncToQuad3D_BufSize);
    }
 
-   maxBufSize = max(maxBufSize, rUpdateQuadratureData3D_BufSize);
-   maxBufSize = max(maxBufSize, rMassMultAdd3D_BufSize);
-   maxBufSize = max(maxBufSize, rIniGeom3D_BufSize);
-   maxBufSize = max(maxBufSize, rForceMult3D_BufSize);
-   maxBufSize = max(maxBufSize, rForceMultTranspose3D_BufSize);
+   maxBufSize = std::max(maxBufSize, rUpdateQuadratureData3D_BufSize);
+   maxBufSize = std::max(maxBufSize, rMassMultAdd3D_BufSize);
+   maxBufSize = std::max(maxBufSize, rIniGeom3D_BufSize);
+   maxBufSize = std::max(maxBufSize, rForceMult3D_BufSize);
+   maxBufSize = std::max(maxBufSize, rForceMultTranspose3D_BufSize);
 
    cudaDeviceGetAttribute(&numSM, cudaDevAttrMultiProcessorCount, 0);
-   cudaMalloc(&gbuf, numSM*maxBufSize);
+   const size_t L1_buffer_total_size = static_cast<size_t>(numSM*maxBufSize);
+   cudaMalloc((void**)&gbuf, L1_buffer_total_size);
 
    cudaDeviceGetAttribute(&MaxSharedMemoryPerBlockOptin,
                           cudaDevAttrMaxSharedMemoryPerBlockOptin, 0);
@@ -152,7 +162,7 @@ void initGPUBuf(const int order_v, int rank)
    if (rank == 0)
    {
       printf("L1 buffer total size = %f MB\n",
-             (float)numSM*maxBufSize/(1024.0*1024.0));
+             static_cast<double>(L1_buffer_total_size)/(1024.0*1024.0));
       printf("MaxSharedMemoryPerBlock = %d, MaxSharedMemoryPerBlockOptin = %d\n",
              MaxSharedMemoryPerBlock, MaxSharedMemoryPerBlockOptin);
    }
@@ -280,7 +290,7 @@ bool rconfig::IAmAlone()
 }
 
 // ***************************************************************************
-bool rconfig::GeomNeedsUpdate(const int sequence)
+bool rconfig::GeomNeedsUpdate(const long sequence)
 {
    assert(sequence==0);
    return (sequence!=0);

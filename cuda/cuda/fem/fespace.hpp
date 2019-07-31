@@ -16,6 +16,11 @@
 #ifndef LAGHOS_CUDA_FESPACE
 #define LAGHOS_CUDA_FESPACE
 
+#include "fem/pfespace.hpp"
+
+#include "general/array.hpp"
+#include "../linalg/operator.hpp"
+
 namespace mfem
 {
 

@@ -20,64 +20,65 @@ namespace mfem
 
 // *************************************************************************
 void* rmemcpy::rHtoH(void *dest, const void *src,
-                     std::size_t bytes, const bool async)
+                     int bytes, const bool async)
 {
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
-   std::memcpy(dest,src,bytes);
+   std::memcpy(dest,src, static_cast<size_t>(bytes));
    return dest;
 }
 
 // *************************************************************************
 void* rmemcpy::rHtoD(void *dest, const void *src,
-                     std::size_t bytes, const bool async)
+                     int bytes, const bool async)
 {
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
-   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,static_cast<size_t>(bytes)); }
    if (!rconfig::Get().Uvm())
    {
-      cuMemcpyHtoD((CUdeviceptr)dest,src,bytes);
+      cuMemcpyHtoD((CUdeviceptr)dest,src,static_cast<size_t>(bytes));
    }
-   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,static_cast<size_t>(bytes)); }
    return dest;
 }
 
 // ***************************************************************************
 void* rmemcpy::rDtoH(void *dest, const void *src,
-                     std::size_t bytes, const bool async)
+                     int bytes, const bool async)
 {
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
-   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,static_cast<size_t>(bytes)); }
    if (!rconfig::Get().Uvm())
    {
-      cuMemcpyDtoH(dest,(CUdeviceptr)src,bytes);
+      cuMemcpyDtoH(dest,(CUdeviceptr)src,static_cast<size_t>(bytes));
    }
-   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,static_cast<size_t>(bytes)); }
    return dest;
 }
 
 // ***************************************************************************
 void* rmemcpy::rDtoD(void *dest, const void *src,
-                     std::size_t bytes, const bool async)
+                     int bytes, const bool async)
 {
    if (bytes==0) { return dest; }
    assert(src); assert(dest);
-   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,bytes); }
+   if (!rconfig::Get().Cuda()) { return std::memcpy(dest,src,static_cast<size_t>(bytes)); }
    if (!rconfig::Get().Uvm())
    {
       if (!async)
       {
-         cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,bytes);
+         cuMemcpyDtoD((CUdeviceptr)dest,(CUdeviceptr)src,static_cast<size_t>(bytes));
       }
       else
       {
          const CUstream s = *rconfig::Get().Stream();
-         cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,bytes,s);
+         cuMemcpyDtoDAsync((CUdeviceptr)dest,(CUdeviceptr)src,static_cast<size_t>(bytes),
+                           s);
       }
    }
-   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,bytes); }
+   else { cuMemcpy((CUdeviceptr)dest,(CUdeviceptr)src,static_cast<size_t>(bytes)); }
    return dest;
 }
 

@@ -103,7 +103,7 @@ private:
    int nzones;
    CudaFiniteElementSpace &fes;
    const IntegrationRule &integ_rule;
-   unsigned int ess_tdofs_count;
+   int ess_tdofs_count;
    CudaArray<int> ess_tdofs;
    CudaBilinearForm bilinearForm;
    CudaOperator *massOperator;

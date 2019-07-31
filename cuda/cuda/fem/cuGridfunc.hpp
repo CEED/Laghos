@@ -16,6 +16,10 @@
 #ifndef LAGHOS_CUDA_GRIDFUNC
 #define LAGHOS_CUDA_GRIDFUNC
 
+#include "../fem/fespace.hpp"
+#include "../fem/fespace.hpp"
+#include "../linalg/vector.hpp"
+
 namespace mfem
 {
 

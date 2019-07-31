@@ -16,6 +16,14 @@
 #ifndef LAGHOS_CUDA_CONFORM_PROLONGATION_OP
 #define LAGHOS_CUDA_CONFORM_PROLONGATION_OP
 
+#include "fem/pfespace.hpp"
+
+#include "general/array.hpp"
+#include "../general/array.hpp"
+#include "../general/commd.hpp"
+#include "../linalg/operator.hpp"
+#include "../linalg/vector.hpp"
+
 namespace mfem
 {
 
@@ -31,7 +39,7 @@ protected:
    int kMaxTh;
 public:
    CudaConformingProlongationOperator(ParFiniteElementSpace &);
-   ~CudaConformingProlongationOperator();
+   virtual ~CudaConformingProlongationOperator();
    void d_Mult(const CudaVector &x, CudaVector &y) const;
    void d_MultTranspose(const CudaVector &x, CudaVector &y) const;
    void h_Mult(const Vector &x, Vector &y) const;

@@ -16,6 +16,15 @@
 #ifndef LAGHOS_CUDA_CONFIG
 #define LAGHOS_CUDA_CONFIG
 
+extern double *gbuf;
+extern int rMassMultAdd3D_BufSize;
+extern int rUpdateQuadratureData3D_BufSize;
+extern int rIniGeom3D_BufSize;
+extern int rForceMult3D_BufSize;
+extern int rForceMultTranspose3D_BufSize;
+extern int rGridFuncToQuad3D_BufSize;
+extern int numSM, MaxSharedMemoryPerBlock, MaxSharedMemoryPerBlockOptin;
+
 namespace mfem
 {
 
@@ -67,7 +76,7 @@ public:
               const int dim);
    // *************************************************************************
    bool IAmAlone();
-   bool GeomNeedsUpdate(const int);
+   bool GeomNeedsUpdate(const long);
    bool DoHostConformingProlongationOperator();
    // *************************************************************************
    inline int Rank() { return mpi_rank; }
@@ -82,7 +91,7 @@ public:
    inline bool Share() { return share; }
    inline bool Hcpo() { return hcpo; }
    inline bool Sync() { return sync; }
-   inline bool Nvvp(bool flip = false) { if (flip) nvvp=!nvvp; return nvvp; }
+   inline bool Nvvp(bool flip = false) { if (flip) { nvvp=!nvvp; } return nvvp; }
    inline int MaxXGridSize() { return maxXGridSize; }
    inline int MaxXThreadsDim() { return maxXThreadsDim; }
    // *************************************************************************

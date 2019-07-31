@@ -16,34 +16,41 @@
 #ifndef LAGHOS_CUDA_VECTOR
 #define LAGHOS_CUDA_VECTOR
 
+#include <cstddef>
+
+#include "linalg/vector.hpp"
+
+#include "../general/malloc.hpp"
+#include "../general/array.hpp"
+
 namespace mfem
 {
 
 class CudaVector : public rmalloc<double>
 {
 private:
-   size_t size = 0;
+   int size = 0;
    double* data = NULL;
    bool own = true;
 public:
    CudaVector(): size(0),data(NULL),own(true) {}
    CudaVector(const CudaVector&);
    CudaVector(const CudaVector*);
-   CudaVector(const size_t);
-   CudaVector(const size_t,double);
+   CudaVector(const int);
+   CudaVector(const int, double);
    CudaVector(const Vector& v);
    CudaVector(CudaArray<double>& v);
    operator Vector();
    operator Vector() const;
-   double* alloc(const size_t);
+   double* alloc(const int);
    inline double* ptr() const { return data;}
    inline double* GetData() const { return data;}
    inline operator double* () { return data; }
    inline operator const double* () const { return data; }
    void Print(std::ostream& = std::cout, int = 8) const;
-   void SetSize(const size_t,const void* =NULL);
-   inline size_t Size() const { return size; }
-   inline size_t bytes() const { return size*sizeof(double); }
+   void SetSize(const int,const void* =NULL);
+   inline int Size() const { return size; }
+   inline int bytes() const { return size*static_cast<int>(sizeof(double)); }
    double operator* (const CudaVector& v) const;
    CudaVector& operator = (const CudaVector& v);
    CudaVector& operator = (const Vector& v);
@@ -54,7 +61,7 @@ public:
    CudaVector& operator *=(const double d);
    CudaVector& Add(const double a, const CudaVector& Va);
    void Neg();
-   CudaVector* GetRange(const size_t, const size_t) const;
+   CudaVector* GetRange(const int, const int) const;
    void SetSubVector(const CudaArray<int> &, const double, const int);
    double Min() const;
    ~CudaVector();

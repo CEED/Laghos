@@ -16,6 +16,15 @@
 #ifndef LAGHOS_CUDA_BILININTEG
 #define LAGHOS_CUDA_BILININTEG
 
+#include <string>
+#include <cassert>
+#include "fem/intrules.hpp"
+#include "fem/gridfunc.hpp"
+#include "../fem/fespace.hpp"
+#include "../fem/bilinearform.hpp"
+#include "../general/array.hpp"
+#include "../linalg/vector.hpp"
+
 namespace mfem
 {
 
@@ -95,8 +104,8 @@ protected:
    const IntegrationRule* ir = NULL;
    CudaDofQuadMaps* maps;
    CudaDofQuadMaps* mapsTranspose;
-private:
 public:
+   virtual ~CudaIntegrator() {}
    virtual std::string GetName() = 0;
    void SetIntegrationRule(const IntegrationRule& ir_);
    const IntegrationRule& GetIntegrationRule() const;

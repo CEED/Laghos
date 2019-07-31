@@ -16,6 +16,8 @@
 #ifndef LAGHOS_CUDA_RESTRICT_OP
 #define LAGHOS_CUDA_RESTRICT_OP
 
+#include "../linalg/operator.hpp"
+
 namespace mfem
 {
 

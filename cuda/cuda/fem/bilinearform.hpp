@@ -16,6 +16,13 @@
 #ifndef LAGHOS_CUDA_BILINEARFORM
 #define LAGHOS_CUDA_BILINEARFORM
 
+#include <vector>
+#include "mesh/mesh.hpp"
+#include "../general/array.hpp"
+#include "../linalg/vector.hpp"
+#include "../linalg/operator.hpp"
+#include "../fem/fespace.hpp"
+
 namespace mfem
 {
 

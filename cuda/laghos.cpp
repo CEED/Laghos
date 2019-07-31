@@ -191,7 +191,8 @@ int main(int argc, char *argv[])
    // **************************************************************************
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize();
-   const int partitions = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+   const int partitions = static_cast<int>(floor(pow(num_tasks,
+                                                     1.0 / dim) + 1e-2));
    int *nxyz = new int[dim];
    int product = 1;
    for (int d = 0; d < dim; d++)
@@ -560,6 +561,7 @@ int main(int argc, char *argv[])
       // Problems checks
       if (check)
       {
+         const double eps = 1.e-13;
          double loc_norm = d_e_gf * d_e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
@@ -569,9 +571,8 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(order_v==2, "check: order_v");
          MFEM_VERIFY(order_e==1, "check: order_e");
          MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final==0.6, "check: t_final");
+         MFEM_VERIFY(fabs(t_final-0.6)<eps, "check: t_final");
          MFEM_VERIFY(cfl==0.5, "check: cfl");
-         const double eps = 1.e-13;
          const double p0_05 = 6.54653862453438e+00;
          const double p0_27 = 7.58857635779292e+00;
          if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}

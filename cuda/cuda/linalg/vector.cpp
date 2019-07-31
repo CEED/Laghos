@@ -1,13 +1,18 @@
-// Copyright (c) 2010, Lawrence Livermore National Security, LLC. Produced at
-// the Lawrence Livermore National Laboratory. LLNL-CODE-443211. All Rights
-// reserved. See file COPYRIGHT for details.
+// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
+// reserved. See files LICENSE and NOTICE for details.
 //
-// This file is part of the MFEM library. For more information and source code
-// availability see http://mfem.org.
+// This file is part of CEED, a collection of benchmarks, miniapps, software
+// libraries and APIs for efficient high-order finite element and spectral
+// element discretizations for exascale applications. For more information and
+// source code availability see http://github.com/ceed.
 //
-// MFEM is free software; you can redistribute it and/or modify it under the
-// terms of the GNU Lesser General Public License (as published by the Free
-// Software Foundation) version 2.1 dated February 1999.
+// The CEED research is supported by the Exascale Computing Project 17-SC-20-SC,
+// a collaborative effort of two U.S. Department of Energy organizations (Office
+// of Science and the National Nuclear Security Administration) responsible for
+// the planning and preparation of a capable exascale ecosystem, including
+// software, applications, hardware, advanced system engineering and early
+// testbed platforms, in support of the nation's exascale computing imperative.
 #include "../cuda.hpp"
 
 namespace mfem
@@ -20,13 +25,13 @@ CudaVector::~CudaVector()
 }
 
 // ***************************************************************************
-double* CudaVector::alloc(const size_t sz)
+double* CudaVector::alloc(const int sz)
 {
-   return (double*) rmalloc::operator new (sz);
+   return (double*) rmalloc::operator new (static_cast<size_t>(sz));
 }
 
 // ***************************************************************************
-void CudaVector::SetSize(const size_t sz, const void* ptr)
+void CudaVector::SetSize(const int sz, const void* ptr)
 {
    own=true;
    size = sz;
@@ -35,8 +40,8 @@ void CudaVector::SetSize(const size_t sz, const void* ptr)
 }
 
 // ***************************************************************************
-CudaVector::CudaVector(const size_t sz):size(sz),data(alloc(sz)),own(true) {}
-CudaVector::CudaVector(const size_t sz,double value):
+CudaVector::CudaVector(const int sz):size(sz),data(alloc(sz)),own(true) {}
+CudaVector::CudaVector(const int sz,double value):
    size(sz),data(alloc(sz)),own(true)
 {
    *this=value;
@@ -56,14 +61,14 @@ CudaVector::CudaVector(const Vector& v):size(v.Size()),data(alloc(size)),
    own(true)
 {
    assert(v.GetData());
-   rmemcpy::rHtoD(data,v.GetData(),size*sizeof(double));
+   rmemcpy::rHtoD(data,v.GetData(),size*static_cast<int>(sizeof(double)));
 }
 
 // Device 2 Host ***************************************************************
 CudaVector::operator Vector()
 {
    if (!rconfig::Get().Cuda()) { return Vector(data,size); }
-   double *h_data= (double*) ::malloc(bytes());
+   double *h_data= (double*) ::malloc(static_cast<size_t>(bytes()));
    rmemcpy::rDtoH(h_data,data,bytes());
    Vector mfem_vector(h_data,size);
    mfem_vector.MakeDataOwner();
@@ -73,7 +78,7 @@ CudaVector::operator Vector()
 CudaVector::operator Vector() const
 {
    if (!rconfig::Get().Cuda()) { return Vector(data,size); }
-   double *h_data= (double*) ::malloc(bytes());
+   double *h_data= (double*) ::malloc(static_cast<size_t>(bytes()));
    rmemcpy::rDtoH(h_data,data,bytes());
    Vector mfem_vector(h_data,size);
    mfem_vector.MakeDataOwner();
@@ -83,18 +88,18 @@ CudaVector::operator Vector() const
 // ***************************************************************************
 void CudaVector::Print(std::ostream& out, int width) const
 {
-   double *h_data = (double*) ::malloc(bytes());
+   double *h_data = (double*) ::malloc(static_cast<size_t>(bytes()));
    rmemcpy::rDtoH(h_data,data,bytes());
-   for (size_t i=0; i<size; i+=1)
+   for (int i=0; i<size; i+=1)
    {
-      printf("\n\t[%ld] %.15e",i,h_data[i]);
+      printf("\n\t[%d] %.15e", i, h_data[i]);
    }
    free(h_data);
 }
 
 // ***************************************************************************
-CudaVector* CudaVector::GetRange(const size_t offset,
-                                 const size_t entries) const
+CudaVector* CudaVector::GetRange(const int offset,
+                                 const int entries) const
 {
    static CudaVector ref;
    ref.size = entries;

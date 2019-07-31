@@ -112,7 +112,8 @@ void CudaMassOperator::SetEssentialTrueDofs(Array<int> &dofs)
    if (ess_tdofs_count == 0) { return; }
    assert(ess_tdofs_count>0);
    assert(dofs.GetData());
-   rHtoD(ess_tdofs.ptr(),dofs.GetData(),ess_tdofs_count*sizeof(int));
+   rHtoD(ess_tdofs.ptr(), dofs.GetData(),
+         ess_tdofs_count*static_cast<int>(sizeof(int)));
 }
 
 // *****************************************************************************
