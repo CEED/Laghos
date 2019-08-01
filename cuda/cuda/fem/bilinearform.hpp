@@ -89,8 +89,8 @@ public:
 class CudaConstrainedOperator : public CudaOperator
 {
 protected:
-   CudaOperator *A;
-   bool own_A;
+   CudaOperator *RAP;
+   bool own;
    CudaArray<int> constraintList;
    int constraintIndices;
    mutable CudaVector z, w;

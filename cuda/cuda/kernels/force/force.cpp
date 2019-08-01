@@ -16,11 +16,11 @@
 #include "../cuda.hpp"
 
 // *****************************************************************************
-template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+template<const int D1D,
+         const int Q1D,
          const int BZ,
          const int NBLOCK>
-__launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ, NBLOCK)
+__launch_bounds__(Q1D*Q1D*BZ, NBLOCK)
 kernel
 static void rForceMult2D_v2(const int numElements,
                             const double* restrict L2DofToQuad,
@@ -32,59 +32,58 @@ static void rForceMult2D_v2(const int numElements,
 {
    int el = blockIdx.x*BZ + threadIdx.z;
    if (el >= numElements) { return; }
-   const int NUM_DIM = 2;
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int L2_DOFS_1D = NUM_DOFS_1D-1;
-   const int H1_DOFS_1D = NUM_DOFS_1D;
-   __shared__ double buf1[BZ][NUM_QUAD_2D];
-   __shared__ double buf2[BZ][NUM_QUAD_1D][H1_DOFS_1D];
-   __shared__ double buf3[BZ][NUM_QUAD_1D][H1_DOFS_1D];
+   const int Q2D = Q1D*Q1D;
+   const int L2_DOFS_1D = D1D-1;
+   const int H1_DOFS_1D = D1D;
+   __shared__ double buf1[BZ][Q2D];
+   __shared__ double buf2[BZ][Q1D][H1_DOFS_1D];
+   __shared__ double buf3[BZ][Q1D][H1_DOFS_1D];
    double *e_xy = (double*)(buf1 + threadIdx.z);
    double (*Dxy)[H1_DOFS_1D] = (double (*)[H1_DOFS_1D])(buf2 + threadIdx.z);
    double (*xy)[H1_DOFS_1D] = (double (*)[H1_DOFS_1D])(buf3 + threadIdx.z);
    // e_x reuses Dxy
-   double (*e_x)[NUM_QUAD_1D] = (double (*)[NUM_QUAD_1D])Dxy;
+   double (*e_x)[Q1D] = (double (*)[Q1D])Dxy;
 
    for (int dy = threadIdx.y; dy < L2_DOFS_1D; dy += blockDim.y)
    {
-      for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+      for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
       {
          double t = 0;
          for (int dx = 0; dx < L2_DOFS_1D; ++dx)
          {
-            t += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * e[ijkN(dx,dy,el,L2_DOFS_1D)];
+            t += L2DofToQuad[ijN(qx,dx,Q1D)] * e[ijkN(dx,dy,el,L2_DOFS_1D)];
          }
          e_x[dy][qx] = t;
       }
    }
    __syncthreads();
-   for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+   for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
    {
-      for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+      for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
       {
          double t = 0;
          for (int dy = 0; dy < L2_DOFS_1D; ++dy)
          {
-            t += L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)] * e_x[dy][qx];
+            t += L2DofToQuad[ijN(qy,dy,Q1D)] * e_x[dy][qx];
          }
-         e_xy[ijN(qx,qy,NUM_QUAD_1D)] = t;
+         e_xy[ijN(qx,qy,Q1D)] = t;
       }
    }
    __syncthreads();
    for (int c = 0; c < 2; ++c)
    {
-      for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+      for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
       {
          for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
          {
             double t1 = 0, t2 = 0;
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               t1 += e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                     stressJinvT[ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)] *
+               t1 += e_xy[ijN(qx,qy,Q1D)] *
+                     stressJinvT[ijklmNM(0,c,qx,qy,el,2,Q1D)] *
                      H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
-               t2  += e_xy[ijN(qx,qy,NUM_QUAD_1D)] *
-                      stressJinvT[ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)] *
+               t2  += e_xy[ijN(qx,qy,Q1D)] *
+                      stressJinvT[ijklmNM(1,c,qx,qy,el,2,Q1D)] *
                       H1QuadToDof[ijN(dx,qx,H1_DOFS_1D)];
             }
             Dxy[qy][dx] = t1;
@@ -97,12 +96,12 @@ static void rForceMult2D_v2(const int numElements,
          for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
          {
             double t = 0;
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            for (int qy = 0; qy < Q1D; ++qy)
             {
                t += H1QuadToDof[ijN(dy,qy,H1_DOFS_1D)] * Dxy[qy][dx] +
                     H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)]*xy[qy][dx];
             }
-            v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] = t;
+            v[_ijklNM(c,dx,dy,el,D1D,numElements)] = t;
          }
       }
       __syncthreads();
@@ -110,9 +109,8 @@ static void rForceMult2D_v2(const int numElements,
 }
 
 
-template<const int NUM_DIM,
-         const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+template<const int D1D,
+         const int Q1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
 static void rForceMult2D(const int numElements,
@@ -123,36 +121,36 @@ static void rForceMult2D(const int numElements,
                          const double* restrict e,
                          double* restrict v)
 {
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+   constexpr int Q2D = Q1D*Q1D;
    const int el = blockDim.x * blockIdx.x + threadIdx.x;
    if (el < numElements)
    {
-      double e_xy[NUM_QUAD_2D];
-      for (int i = 0; i < NUM_QUAD_2D; ++i)
+      double e_xy[Q2D];
+      for (int i = 0; i < Q2D; ++i)
       {
          e_xy[i] = 0;
       }
       for (int dy = 0; dy < L2_DOFS_1D; ++dy)
       {
-         double e_x[NUM_QUAD_1D];
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+         double e_x[Q1D];
+         for (int qy = 0; qy < Q1D; ++qy)
          {
             e_x[qy] = 0;
          }
          for (int dx = 0; dx < L2_DOFS_1D; ++dx)
          {
             const double r_e = e[ijkN(dx,dy,el,L2_DOFS_1D)];
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
+               e_x[qx] += L2DofToQuad[ijN(qx,dx,Q1D)] * r_e;
             }
          }
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+         for (int qy = 0; qy < Q1D; ++qy)
          {
-            const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            const double wy = L2DofToQuad[ijN(qy,dy,Q1D)];
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
+               e_xy[ijN(qx,qy,Q1D)] += wy * e_x[qx];
             }
          }
       }
@@ -162,10 +160,10 @@ static void rForceMult2D(const int numElements,
          {
             for (int dx = 0; dx < H1_DOFS_1D; ++dx)
             {
-               v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] = 0.0;
+               v[_ijklNM(c,dx,dy,el,D1D,numElements)] = 0.0;
             }
          }
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+         for (int qy = 0; qy < Q1D; ++qy)
          {
             double Dxy[H1_DOFS_1D];
             double xy[H1_DOFS_1D];
@@ -174,12 +172,12 @@ static void rForceMult2D(const int numElements,
                Dxy[dx] = 0.0;
                xy[dx]  = 0.0;
             }
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               const double esx = e_xy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(0,c,qx,qy,
-                                                                                     el,NUM_DIM,NUM_QUAD_1D)];
-               const double esy = e_xy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(1,c,qx,qy,
-                                                                                     el,NUM_DIM,NUM_QUAD_1D)];
+               const double esx = e_xy[ijN(qx,qy,Q1D)] *
+                                  stressJinvT[ijklmNM(0,c,qx,qy,el,2,Q1D)];
+               const double esy = e_xy[ijN(qx,qy,Q1D)] *
+                                  stressJinvT[ijklmNM(1,c,qx,qy,el,2,Q1D)];
                for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                {
                   Dxy[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
@@ -192,7 +190,7 @@ static void rForceMult2D(const int numElements,
                const double wDy = H1QuadToDofD[ijN(dy,qy,H1_DOFS_1D)];
                for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                {
-                  v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
+                  v[_ijklNM(c,dx,dy,el,D1D,numElements)] += wy* Dxy[dx] + wDy*xy[dx];
                }
             }
          }
@@ -201,11 +199,8 @@ static void rForceMult2D(const int numElements,
 }
 
 // *****************************************************************************
-template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
-         const int BZ,
-         const int NBLOCK>
-__launch_bounds__(NUM_QUAD_1D*NUM_QUAD_1D*BZ, NBLOCK)
+template<const int D1D, const int Q1D, const int BZ, const int NBLOCK>
+__launch_bounds__(Q1D*Q1D*BZ, NBLOCK)
 kernel
 static void rForceMultTranspose2D_v2(const int numElements,
                                      const double* restrict L2QuadToDof,
@@ -217,45 +212,44 @@ static void rForceMultTranspose2D_v2(const int numElements,
 {
    int el = blockIdx.x*BZ + threadIdx.z;
    if (el >= numElements) { return; }
-   const int NUM_DIM = 2;
-   const int L2_DOFS_1D = NUM_DOFS_1D - 1;
-   const int H1_DOFS_1D = NUM_DOFS_1D;
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+   const int L2_DOFS_1D = D1D - 1;
+   const int H1_DOFS_1D = D1D;
+   const int Q2D = Q1D*Q1D;
    // const int el = blockDim.x * blockIdx.x + threadIdx.x;
    // if (el < numElements)
    int tid = threadIdx.x + threadIdx.y*blockDim.x;
    {
-      __shared__ double buf1[BZ][NUM_QUAD_2D];
-      __shared__ double buf2[BZ][H1_DOFS_1D][NUM_QUAD_1D];
-      __shared__ double buf3[BZ][H1_DOFS_1D][NUM_QUAD_1D];
-      __shared__ double buf4[BZ][NUM_QUAD_2D];
-      __shared__ double buf5[BZ][NUM_QUAD_2D];
+      __shared__ double buf1[BZ][Q2D];
+      __shared__ double buf2[BZ][H1_DOFS_1D][Q1D];
+      __shared__ double buf3[BZ][H1_DOFS_1D][Q1D];
+      __shared__ double buf4[BZ][Q2D];
+      __shared__ double buf5[BZ][Q2D];
       double *vStress = (double*)(buf1 + threadIdx.z);
-      double (*v_x)[NUM_QUAD_1D] = (double (*)[NUM_QUAD_1D])(buf2 + threadIdx.z);
-      double (*v_Dx)[NUM_QUAD_1D] = (double (*)[NUM_QUAD_1D])(buf3 + threadIdx.z);
+      double (*v_x)[Q1D] = (double (*)[Q1D])(buf2 + threadIdx.z);
+      double (*v_Dx)[Q1D] = (double (*)[Q1D])(buf3 + threadIdx.z);
       double *v_Dxy = (double *)(buf4 + threadIdx.z);
       double *v_xDy = (double *)(buf5 + threadIdx.z);
       // e_x reuses v_Dxy
       double (*e_x)[L2_DOFS_1D] = (double (*)[L2_DOFS_1D])v_Dxy;
 
-      for (int i = tid; i < NUM_QUAD_2D; i += blockDim.x*blockDim.y)
+      for (int i = tid; i < Q2D; i += blockDim.x*blockDim.y)
       {
          vStress[i] = 0;
       }
       __syncthreads();
-      for (int c = 0; c < NUM_DIM; ++c)
+      for (int c = 0; c < 2; ++c)
       {
          for (int dy = threadIdx.y; dy < H1_DOFS_1D; dy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
                double t1 = 0, t2 = 0;
                for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                {
-                  t1 += v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] * H1DofToQuad[ijN(qx,dx,
-                                                                                         NUM_QUAD_1D)];
-                  t2 += v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)] * H1DofToQuadD[ijN(qx,dx,
-                                                                                          NUM_QUAD_1D)];
+                  t1 += v[_ijklNM(c,dx,dy,el,D1D,numElements)] * H1DofToQuad[ijN(qx,dx,
+                                                                                 Q1D)];
+                  t2 += v[_ijklNM(c,dx,dy,el,D1D,numElements)] * H1DofToQuadD[ijN(qx,dx,
+                                                                                  Q1D)];
                }
                v_x[dy][qx] = t1;
                v_Dx[dy][qx] = t2;
@@ -263,45 +257,45 @@ static void rForceMultTranspose2D_v2(const int numElements,
          }
          __syncthreads();
 
-         for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+         for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
                double t1 = 0, t2 = 0;
                for (int dy = 0; dy < H1_DOFS_1D; ++dy)
                {
-                  t1 += v_Dx[dy][qx] * H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-                  t2 += v_x[dy][qx]  * H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
+                  t1 += v_Dx[dy][qx] * H1DofToQuad[ijN(qy,dy,Q1D)];
+                  t2 += v_x[dy][qx]  * H1DofToQuadD[ijN(qy,dy,Q1D)];
                }
-               v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] = t1;
-               v_xDy[ijN(qx,qy,NUM_QUAD_1D)] = t2;
+               v_Dxy[ijN(qx,qy,Q1D)] = t1;
+               v_xDy[ijN(qx,qy,Q1D)] = t2;
             }
          }
          __syncthreads();
 
-         for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+         for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
-               const double sJitx = stressJinvT[ijklmNM(0,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
-               const double sJity = stressJinvT[ijklmNM(1,c,qx,qy,el,NUM_DIM,NUM_QUAD_1D)];
-               vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
-                  ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] * sJitx)
+               const double sJitx = stressJinvT[ijklmNM(0,c,qx,qy,el,2,Q1D)];
+               const double sJity = stressJinvT[ijklmNM(1,c,qx,qy,el,2,Q1D)];
+               vStress[ijN(qx,qy,Q1D)] +=
+                  ((v_Dxy[ijN(qx,qy,Q1D)] * sJitx)
                    +
-                   (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] * sJity));
+                   (v_xDy[ijN(qx,qy,Q1D)] * sJity));
             }
          }
          __syncthreads();
       }
 
-      for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+      for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
       {
          for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
          {
             double t = 0;
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               t += vStress[ijN(qx,qy,NUM_QUAD_1D)] * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
+               t += vStress[ijN(qx,qy,Q1D)] * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
             }
             e_x[qy][dx] = t;
          }
@@ -313,7 +307,7 @@ static void rForceMultTranspose2D_v2(const int numElements,
          for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
          {
             double t = 0;
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            for (int qy = 0; qy < Q1D; ++qy)
             {
                t += e_x[qy][dx] * L2QuadToDof[ijN(dy,qy,L2_DOFS_1D)];
             }
@@ -324,8 +318,8 @@ static void rForceMultTranspose2D_v2(const int numElements,
 }
 
 template<const int NUM_DIM,
-         const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+         const int D1D,
+         const int Q1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
 static void rForceMultTranspose2D(const int numElements,
@@ -336,61 +330,61 @@ static void rForceMultTranspose2D(const int numElements,
                                   const double* restrict v,
                                   double* restrict e)
 {
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
+   const int Q2D = Q1D*Q1D;
    const int el = blockDim.x * blockIdx.x + threadIdx.x;
    if (el < numElements)
    {
-      double vStress[NUM_QUAD_2D];
-      for (int i = 0; i < NUM_QUAD_2D; ++i)
+      double vStress[Q2D];
+      for (int i = 0; i < Q2D; ++i)
       {
          vStress[i] = 0;
       }
       for (int c = 0; c < NUM_DIM; ++c)
       {
-         double v_Dxy[NUM_QUAD_2D];
-         double v_xDy[NUM_QUAD_2D];
-         for (int i = 0; i < NUM_QUAD_2D; ++i)
+         double v_Dxy[Q2D];
+         double v_xDy[Q2D];
+         for (int i = 0; i < Q2D; ++i)
          {
             v_Dxy[i] = v_xDy[i] = 0;
          }
          for (int dy = 0; dy < H1_DOFS_1D; ++dy)
          {
-            double v_x[NUM_QUAD_1D];
-            double v_Dx[NUM_QUAD_1D];
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            double v_x[Q1D];
+            double v_Dx[Q1D];
+            for (int qx = 0; qx < Q1D; ++qx)
             {
                v_x[qx] = v_Dx[qx] = 0;
             }
 
             for (int dx = 0; dx < H1_DOFS_1D; ++dx)
             {
-               const double r_v = v[_ijklNM(c,dx,dy,el,NUM_DOFS_1D,numElements)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               const double r_v = v[_ijklNM(c,dx,dy,el,D1D,numElements)];
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-                  v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+                  v_x[qx]  += r_v * H1DofToQuad[ijN(qx,dx,Q1D)];
+                  v_Dx[qx] += r_v * H1DofToQuadD[ijN(qx,dx,Q1D)];
                }
             }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            for (int qy = 0; qy < Q1D; ++qy)
             {
-               const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-               const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               const double wy  = H1DofToQuad[ijN(qy,dy,Q1D)];
+               const double wDy = H1DofToQuadD[ijN(qy,dy,Q1D)];
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] += v_Dx[qx] * wy;
-                  v_xDy[ijN(qx,qy,NUM_QUAD_1D)] += v_x[qx]  * wDy;
+                  v_Dxy[ijN(qx,qy,Q1D)] += v_Dx[qx] * wy;
+                  v_xDy[ijN(qx,qy,Q1D)] += v_x[qx]  * wDy;
                }
             }
          }
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+         for (int qy = 0; qy < Q1D; ++qy)
          {
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               vStress[ijN(qx,qy,NUM_QUAD_1D)] +=
-                  ((v_Dxy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(0,c,qx,qy,el,NUM_DIM,
-                                                                        NUM_QUAD_1D)]) +
-                   (v_xDy[ijN(qx,qy,NUM_QUAD_1D)] * stressJinvT[ijklmNM(1,c,qx,qy,el,NUM_DIM,
-                                                                        NUM_QUAD_1D)]));
+               vStress[ijN(qx,qy,Q1D)] +=
+                  ((v_Dxy[ijN(qx,qy,Q1D)] * stressJinvT[ijklmNM(0,c,qx,qy,el,NUM_DIM,
+                                                                Q1D)]) +
+                   (v_xDy[ijN(qx,qy,Q1D)] * stressJinvT[ijklmNM(1,c,qx,qy,el,NUM_DIM,
+                                                                Q1D)]));
             }
          }
       }
@@ -401,16 +395,16 @@ static void rForceMultTranspose2D(const int numElements,
             e[ijkN(dx,dy,el,L2_DOFS_1D)] = 0;
          }
       }
-      for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+      for (int qy = 0; qy < Q1D; ++qy)
       {
          double e_x[L2_DOFS_1D];
          for (int dx = 0; dx < L2_DOFS_1D; ++dx)
          {
             e_x[dx] = 0;
          }
-         for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+         for (int qx = 0; qx < Q1D; ++qx)
          {
-            const double r_v = vStress[ijN(qx,qy,NUM_QUAD_1D)];
+            const double r_v = vStress[ijN(qx,qy,Q1D)];
             for (int dx = 0; dx < L2_DOFS_1D; ++dx)
             {
                e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
@@ -430,8 +424,8 @@ static void rForceMultTranspose2D(const int numElements,
 
 // *****************************************************************************
 template<const int NUM_DIM,
-         const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+         const int D1D,
+         const int Q1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
 void rForceMult3D(const int numElements,
@@ -442,8 +436,8 @@ void rForceMult3D(const int numElements,
                   const double* restrict e,
                   double* restrict v)
 {
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+   const int Q2D = Q1D*Q1D;
+   const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
    const int el = blockDim.x * blockIdx.x + threadIdx.x;
    if (el < numElements)
    {
@@ -454,43 +448,43 @@ void rForceMult3D(const int numElements,
       }
       for (int dz = 0; dz < L2_DOFS_1D; ++dz)
       {
-         double e_xy[NUM_QUAD_2D];
-         for (int i = 0; i < NUM_QUAD_2D; ++i)
+         double e_xy[Q2D];
+         for (int i = 0; i < Q2D; ++i)
          {
             e_xy[i] = 0;
          }
          for (int dy = 0; dy < L2_DOFS_1D; ++dy)
          {
-            double e_x[NUM_QUAD_1D];
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            double e_x[Q1D];
+            for (int qy = 0; qy < Q1D; ++qy)
             {
                e_x[qy] = 0;
             }
             for (int dx = 0; dx < L2_DOFS_1D; ++dx)
             {
                const double r_e = e[ijklN(dx,dy,dz,el,L2_DOFS_1D)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  e_x[qx] += L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)] * r_e;
+                  e_x[qx] += L2DofToQuad[ijN(qx,dx,Q1D)] * r_e;
                }
             }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            for (int qy = 0; qy < Q1D; ++qy)
             {
-               const double wy = L2DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               const double wy = L2DofToQuad[ijN(qy,dy,Q1D)];
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  e_xy[ijN(qx,qy,NUM_QUAD_1D)] += wy * e_x[qx];
+                  e_xy[ijN(qx,qy,Q1D)] += wy * e_x[qx];
                }
             }
          }
-         for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+         for (int qz = 0; qz < Q1D; ++qz)
          {
-            const double wz = L2DofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            const double wz = L2DofToQuad[ijN(qz,dz,Q1D)];
+            for (int qy = 0; qy < Q1D; ++qy)
             {
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] += wz * e_xy[ijN(qx,qy,NUM_QUAD_1D)];
+                  e_xyz[ijkN(qx,qy,qz,Q1D)] += wz * e_xy[ijN(qx,qy,Q1D)];
                }
             }
          }
@@ -503,11 +497,11 @@ void rForceMult3D(const int numElements,
             {
                for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                {
-                  v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)] = 0;
+                  v[_ijklmNM(c,dx,dy,dz,el,D1D,numElements)] = 0;
                }
             }
          }
-         for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+         for (int qz = 0; qz < Q1D; ++qz)
          {
             double Dxy_x[H1_DOFS_1D * H1_DOFS_1D];
             double xDy_y[H1_DOFS_1D * H1_DOFS_1D];
@@ -516,7 +510,7 @@ void rForceMult3D(const int numElements,
             {
                Dxy_x[d] = xDy_y[d] = xy_z[d] = 0;
             }
-            for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+            for (int qy = 0; qy < Q1D; ++qy)
             {
                double Dx_x[H1_DOFS_1D];
                double x_y[H1_DOFS_1D];
@@ -525,15 +519,15 @@ void rForceMult3D(const int numElements,
                {
                   Dx_x[dx] = x_y[dx] = x_z[dx] = 0;
                }
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  const double r_e = e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)];
+                  const double r_e = e_xyz[ijkN(qx,qy,qz,Q1D)];
                   const double esx = r_e * stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,NUM_DIM,
-                                                                NUM_QUAD_1D)];
+                                                                Q1D)];
                   const double esy = r_e * stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,
-                                                                NUM_QUAD_1D)];
+                                                                Q1D)];
                   const double esz = r_e * stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,NUM_DIM,
-                                                                NUM_QUAD_1D)];
+                                                                Q1D)];
                   for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                   {
                      Dx_x[dx] += esx * H1QuadToDofD[ijN(dx,qx,H1_DOFS_1D)];
@@ -561,7 +555,7 @@ void rForceMult3D(const int numElements,
                {
                   for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                   {
-                     v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)] +=
+                     v[_ijklmNM(c,dx,dy,dz,el,D1D,numElements)] +=
                         ((Dxy_x[ijN(dx,dy,H1_DOFS_1D)] * wz) +
                          (xDy_y[ijN(dx,dy,H1_DOFS_1D)] * wz) +
                          (xy_z[ijN(dx,dy,H1_DOFS_1D)]  * wDz));
@@ -573,8 +567,8 @@ void rForceMult3D(const int numElements,
    }
 }
 
-template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+template<const int D1D,
+         const int Q1D,
          const int USE_SMEM,
          const int BLOCK,
          const int NBLOCK> kernel
@@ -589,12 +583,11 @@ void rForceMult3D_v2(const int numElements,
                      double* gbuf,
                      int bufSize)
 {
-   const int NUM_DIM = 3;
-   const int L2_DOFS_1D = NUM_DOFS_1D - 1;
-   const int H1_DOFS_1D = NUM_DOFS_1D;
+   const int L2_DOFS_1D = D1D - 1;
+   const int H1_DOFS_1D = D1D;
    extern __shared__ double sbuf[];
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+   const int Q2D = Q1D*Q1D;
+   const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
    double *buf_ptr;
    if (USE_SMEM)
    {
@@ -605,60 +598,60 @@ void rForceMult3D_v2(const int numElements,
       buf_ptr = (double*)((char*)gbuf + blockIdx.x*bufSize);
    }
 
-   // __shared__ double s_L2DofToQuad[L2_DOFS_1D][NUM_QUAD_1D],
-   //                   s_H1QuadToDof[NUM_QUAD_1D][H1_DOFS_1D],
-   //                   s_H1QuadToDofD[NUM_QUAD_1D][H1_DOFS_1D],
+   // __shared__ double s_L2DofToQuad[L2_DOFS_1D][Q1D],
+   //                   s_H1QuadToDof[Q1D][H1_DOFS_1D],
+   //                   s_H1QuadToDofD[Q1D][H1_DOFS_1D],
    //                   e_xyz[NUM_QUAD_3D],
-   //                   e_x[L2_DOFS_1D][L2_DOFS_1D][NUM_QUAD_1D],
-   //                   e_xy[L2_DOFS_1D][NUM_QUAD_2D],
-   //                   Dx_x[NUM_QUAD_1D][NUM_QUAD_1D][H1_DOFS_1D],
-   //                   x_y[NUM_QUAD_1D][NUM_QUAD_1D][H1_DOFS_1D],
-   //                   x_z[NUM_QUAD_1D][NUM_QUAD_1D][H1_DOFS_1D],
-   //                   Dxy_x[NUM_QUAD_1D][H1_DOFS_1D*H1_DOFS_1D],
-   //                   xDy_y[NUM_QUAD_1D][H1_DOFS_1D*H1_DOFS_1D],
-   //                   xy_z[NUM_QUAD_1D][H1_DOFS_1D*H1_DOFS_1D];
+   //                   e_x[L2_DOFS_1D][L2_DOFS_1D][Q1D],
+   //                   e_xy[L2_DOFS_1D][Q2D],
+   //                   Dx_x[Q1D][Q1D][H1_DOFS_1D],
+   //                   x_y[Q1D][Q1D][H1_DOFS_1D],
+   //                   x_z[Q1D][Q1D][H1_DOFS_1D],
+   //                   Dxy_x[Q1D][H1_DOFS_1D*H1_DOFS_1D],
+   //                   xDy_y[Q1D][H1_DOFS_1D*H1_DOFS_1D],
+   //                   xy_z[Q1D][H1_DOFS_1D*H1_DOFS_1D];
    double *e_xyz,
-          (*e_x)[L2_DOFS_1D][NUM_QUAD_1D],
-          (*e_xy)[NUM_QUAD_2D],
-          (*Dx_x)[NUM_QUAD_1D][H1_DOFS_1D], (*x_y)[NUM_QUAD_1D][H1_DOFS_1D],
-          (*x_z)[NUM_QUAD_1D][H1_DOFS_1D],
+          (*e_x)[L2_DOFS_1D][Q1D],
+          (*e_xy)[Q2D],
+          (*Dx_x)[Q1D][H1_DOFS_1D], (*x_y)[Q1D][H1_DOFS_1D],
+          (*x_z)[Q1D][H1_DOFS_1D],
           (*Dxy_x)[H1_DOFS_1D*H1_DOFS_1D], (*xDy_y)[H1_DOFS_1D*H1_DOFS_1D],
           (*xy_z)[H1_DOFS_1D*H1_DOFS_1D],
-          (*s_L2DofToQuad)[NUM_QUAD_1D],
+          (*s_L2DofToQuad)[Q1D],
           (*s_H1QuadToDof)[H1_DOFS_1D], (*s_H1QuadToDofD)[H1_DOFS_1D];
    mallocBuf((void**)&e_xyz, (void**)&buf_ptr, NUM_QUAD_3D*sizeof(double));
    mallocBuf((void**)&Dx_x,  (void**)&buf_ptr,
-             H1_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+             H1_DOFS_1D*Q2D*sizeof(double));
    mallocBuf((void**)&x_y,   (void**)&buf_ptr,
-             H1_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+             H1_DOFS_1D*Q2D*sizeof(double));
    mallocBuf((void**)&x_z,   (void**)&buf_ptr,
-             H1_DOFS_1D*NUM_QUAD_2D*sizeof(double));
+             H1_DOFS_1D*Q2D*sizeof(double));
    mallocBuf((void**)&Dxy_x, (void**)&buf_ptr,
-             NUM_QUAD_1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
+             Q1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
    mallocBuf((void**)&xDy_y, (void**)&buf_ptr,
-             NUM_QUAD_1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
+             Q1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
    mallocBuf((void**)&xy_z,  (void**)&buf_ptr,
-             NUM_QUAD_1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
+             Q1D*H1_DOFS_1D*H1_DOFS_1D*sizeof(double));
    mallocBuf((void**)&s_L2DofToQuad , (void**)&buf_ptr,
-             L2_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             L2_DOFS_1D*Q1D*sizeof(double));
    mallocBuf((void**)&s_H1QuadToDof , (void**)&buf_ptr,
-             NUM_QUAD_1D*H1_DOFS_1D*sizeof(double));
+             Q1D*H1_DOFS_1D*sizeof(double));
    mallocBuf((void**)&s_H1QuadToDofD, (void**)&buf_ptr,
-             NUM_QUAD_1D*H1_DOFS_1D*sizeof(double));
+             Q1D*H1_DOFS_1D*sizeof(double));
    // e_x & e_xy reuses buffer space
-   e_x = (double (*)[L2_DOFS_1D][NUM_QUAD_1D])e_xyz;
-   e_xy = (double (*)[NUM_QUAD_2D])Dx_x;
+   e_x = (double (*)[L2_DOFS_1D][Q1D])e_xyz;
+   e_xy = (double (*)[Q2D])Dx_x;
 
    if (threadIdx.z == 0)
    {
       for (int dx = threadIdx.y; dx < L2_DOFS_1D; dx += blockDim.y)
       {
-         for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+         for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
          {
-            s_L2DofToQuad[dx][qx] = L2DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+            s_L2DofToQuad[dx][qx] = L2DofToQuad[ijN(qx,dx,Q1D)];
          }
       }
-      for (int qx = threadIdx.y; qx < NUM_QUAD_1D; qx += blockDim.y)
+      for (int qx = threadIdx.y; qx < Q1D; qx += blockDim.y)
       {
          for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
          {
@@ -675,7 +668,7 @@ void rForceMult3D_v2(const int numElements,
       {
          for (int dy = threadIdx.y; dy < L2_DOFS_1D; dy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
                double t = 0;
                for (int dx = 0; dx < L2_DOFS_1D; ++dx)
@@ -689,55 +682,55 @@ void rForceMult3D_v2(const int numElements,
       __syncthreads();
       for (int dz = threadIdx.z; dz < L2_DOFS_1D; dz += blockDim.z)
       {
-         for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+         for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
                double t = 0;
                for (int dy = 0; dy < L2_DOFS_1D; ++dy)
                {
                   t += s_L2DofToQuad[dy][qy] * e_x[dz][dy][qx];
                }
-               e_xy[dz][ijN(qx,qy,NUM_QUAD_1D)] = t;
+               e_xy[dz][ijN(qx,qy,Q1D)] = t;
             }
          }
       }
       __syncthreads();
-      for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+      for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
       {
-         for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+         for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
          {
-            for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+            for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
             {
                double t = 0;
                for (int dz = 0; dz < L2_DOFS_1D; ++dz)
                {
-                  t += s_L2DofToQuad[dz][qz] * e_xy[dz][ijN(qx,qy,NUM_QUAD_1D)];
+                  t += s_L2DofToQuad[dz][qz] * e_xy[dz][ijN(qx,qy,Q1D)];
                }
-               e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] = t;
+               e_xyz[ijkN(qx,qy,qz,Q1D)] = t;
             }
          }
       }
       for (int c = 0; c < 3; ++c)
       {
          __syncthreads();
-         for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+         for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
          {
-            for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+            for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
             {
                for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
                {
                   double t1 = 0, t2 = 0, t3 = 0;
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+                  for (int qx = 0; qx < Q1D; ++qx)
                   {
-                     t1 += e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] *
-                           stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)] *
+                     t1 += e_xyz[ijkN(qx,qy,qz,Q1D)] *
+                           stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,3,Q1D)] *
                            s_H1QuadToDofD[qx][dx];
-                     t2  += e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] *
-                            stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)] *
+                     t2  += e_xyz[ijkN(qx,qy,qz,Q1D)] *
+                            stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,3,Q1D)] *
                             s_H1QuadToDof[qx][dx];
-                     t3  += e_xyz[ijkN(qx,qy,qz,NUM_QUAD_1D)] *
-                            stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)] *
+                     t3  += e_xyz[ijkN(qx,qy,qz,Q1D)] *
+                            stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,3,Q1D)] *
                             s_H1QuadToDof[qx][dx];
                   }
                   Dx_x[qz][qy][dx] = t1;
@@ -748,14 +741,14 @@ void rForceMult3D_v2(const int numElements,
          }
          __syncthreads();
 
-         for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+         for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
          {
             for (int dy = threadIdx.y; dy < H1_DOFS_1D; dy += blockDim.y)
             {
                for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
                {
                   double t1 = 0, t2 = 0, t3 = 0;
-                  for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+                  for (int qy = 0; qy < Q1D; ++qy)
                   {
                      t1 += Dx_x[qz][qy][dx] * s_H1QuadToDof[qy][dy];
                      t2 += x_y[qz][qy][dx] * s_H1QuadToDofD[qy][dy];
@@ -776,13 +769,13 @@ void rForceMult3D_v2(const int numElements,
                for (int dx = threadIdx.x; dx < H1_DOFS_1D; dx += blockDim.x)
                {
                   double t = 0;
-                  for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+                  for (int qz = 0; qz < Q1D; ++qz)
                   {
                      t += Dxy_x[qz][ijN(dx,dy,H1_DOFS_1D)] * s_H1QuadToDof[qz][dz] +
                           xDy_y[qz][ijN(dx,dy,H1_DOFS_1D)] * s_H1QuadToDof[qz][dz] +
                           xy_z[qz][ijN(dx,dy,H1_DOFS_1D)] * s_H1QuadToDofD[qz][dz];
                   }
-                  v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)] = t;
+                  v[_ijklmNM(c,dx,dy,dz,el,D1D,numElements)] = t;
                }
             }
          }
@@ -793,8 +786,8 @@ void rForceMult3D_v2(const int numElements,
 
 // *****************************************************************************
 template<const int NUM_DIM,
-         const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+         const int D1D,
+         const int Q1D,
          const int L2_DOFS_1D,
          const int H1_DOFS_1D> kernel
 static void rForceMultTranspose3D(const int numElements,
@@ -805,8 +798,8 @@ static void rForceMultTranspose3D(const int numElements,
                                   const double* restrict v,
                                   double* restrict e)
 {
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+   const int Q2D = Q1D*Q1D;
+   const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
    const int el = blockDim.x * blockIdx.x + threadIdx.x;
    if (el < numElements)
    {
@@ -819,57 +812,57 @@ static void rForceMultTranspose3D(const int numElements,
       {
          for (int dz = 0; dz < H1_DOFS_1D; ++dz)
          {
-            double Dxy_x[NUM_QUAD_2D];
-            double xDy_y[NUM_QUAD_2D];
-            double xy_z[NUM_QUAD_2D] ;
-            for (int i = 0; i < NUM_QUAD_2D; ++i)
+            double Dxy_x[Q2D];
+            double xDy_y[Q2D];
+            double xy_z[Q2D] ;
+            for (int i = 0; i < Q2D; ++i)
             {
                Dxy_x[i] = xDy_y[i] = xy_z[i] = 0;
             }
             for (int dy = 0; dy < H1_DOFS_1D; ++dy)
             {
-               double Dx_x[NUM_QUAD_1D];
-               double x_y[NUM_QUAD_1D];
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               double Dx_x[Q1D];
+               double x_y[Q1D];
+               for (int qx = 0; qx < Q1D; ++qx)
                {
                   Dx_x[qx] = x_y[qx] = 0;
                }
                for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                {
-                  const double r_v = v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,numElements)];
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+                  const double r_v = v[_ijklmNM(c,dx,dy,dz,el,D1D,numElements)];
+                  for (int qx = 0; qx < Q1D; ++qx)
                   {
-                     Dx_x[qx] += r_v * H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
-                     x_y[qx]  += r_v * H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
+                     Dx_x[qx] += r_v * H1DofToQuadD[ijN(qx,dx,Q1D)];
+                     x_y[qx]  += r_v * H1DofToQuad[ijN(qx,dx,Q1D)];
                   }
                }
-               for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+               for (int qy = 0; qy < Q1D; ++qy)
                {
-                  const double wy  = H1DofToQuad[ijN(qy,dy,NUM_QUAD_1D)];
-                  const double wDy = H1DofToQuadD[ijN(qy,dy,NUM_QUAD_1D)];
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+                  const double wy  = H1DofToQuad[ijN(qy,dy,Q1D)];
+                  const double wDy = H1DofToQuadD[ijN(qy,dy,Q1D)];
+                  for (int qx = 0; qx < Q1D; ++qx)
                   {
-                     Dxy_x[ijN(qx,qy,NUM_QUAD_1D)] += Dx_x[qx] * wy;
-                     xDy_y[ijN(qx,qy,NUM_QUAD_1D)] += x_y[qx]  * wDy;
-                     xy_z[ijN(qx,qy,NUM_QUAD_1D)]  += x_y[qx]  * wy;
+                     Dxy_x[ijN(qx,qy,Q1D)] += Dx_x[qx] * wy;
+                     xDy_y[ijN(qx,qy,Q1D)] += x_y[qx]  * wDy;
+                     xy_z[ijN(qx,qy,Q1D)]  += x_y[qx]  * wy;
                   }
                }
             }
-            for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+            for (int qz = 0; qz < Q1D; ++qz)
             {
-               const double wz  = H1DofToQuad[ijN(qz,dz,NUM_QUAD_1D)];
-               const double wDz = H1DofToQuadD[ijN(qz,dz,NUM_QUAD_1D)];
-               for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+               const double wz  = H1DofToQuad[ijN(qz,dz,Q1D)];
+               const double wDz = H1DofToQuadD[ijN(qz,dz,Q1D)];
+               for (int qy = 0; qy < Q1D; ++qy)
                {
-                  for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+                  for (int qx = 0; qx < Q1D; ++qx)
                   {
-                     vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)] +=
-                        ((Dxy_x[ijN(qx,qy,NUM_QUAD_1D)]*wz *stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,
-                                                                                 NUM_DIM,NUM_QUAD_1D)]) +
-                         (xDy_y[ijN(qx,qy,NUM_QUAD_1D)]*wz *stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,
-                                                                                 NUM_QUAD_1D)]) +
-                         (xy_z[ijN(qx,qy,NUM_QUAD_1D)] *wDz*stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,NUM_DIM,
-                                                                                 NUM_QUAD_1D)]));
+                     vStress[ijkN(qx,qy,qz,Q1D)] +=
+                        ((Dxy_x[ijN(qx,qy,Q1D)]*wz *stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,
+                                                                         NUM_DIM,Q1D)]) +
+                         (xDy_y[ijN(qx,qy,Q1D)]*wz *stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,
+                                                                         Q1D)]) +
+                         (xy_z[ijN(qx,qy,Q1D)] *wDz*stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,NUM_DIM,
+                                                                         Q1D)]));
                   }
                }
             }
@@ -885,23 +878,23 @@ static void rForceMultTranspose3D(const int numElements,
             }
          }
       }
-      for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+      for (int qz = 0; qz < Q1D; ++qz)
       {
          double e_xy[L2_DOFS_1D * L2_DOFS_1D];
          for (int d = 0; d < (L2_DOFS_1D * L2_DOFS_1D); ++d)
          {
             e_xy[d] = 0;
          }
-         for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+         for (int qy = 0; qy < Q1D; ++qy)
          {
             double e_x[L2_DOFS_1D];
             for (int dx = 0; dx < L2_DOFS_1D; ++dx)
             {
                e_x[dx] = 0;
             }
-            for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+            for (int qx = 0; qx < Q1D; ++qx)
             {
-               const double r_v = vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)];
+               const double r_v = vStress[ijkN(qx,qy,qz,Q1D)];
                for (int dx = 0; dx < L2_DOFS_1D; ++dx)
                {
                   e_x[dx] += r_v * L2QuadToDof[ijN(dx,qx,L2_DOFS_1D)];
@@ -931,8 +924,8 @@ static void rForceMultTranspose3D(const int numElements,
    }
 }
 
-template<const int NUM_DOFS_1D,
-         const int NUM_QUAD_1D,
+template<const int D1D,
+         const int Q1D,
          const int USE_SMEM,
          const int BLOCK,
          const int NBLOCK> kernel
@@ -947,11 +940,10 @@ static void rForceMultTranspose3D_v2(const int numElements,
                                      double *gbuf,
                                      int bufSize)
 {
-   const int NUM_DIM = 3;
-   const int L2_DOFS_1D = NUM_DOFS_1D - 1;
-   const int H1_DOFS_1D = NUM_DOFS_1D;
-   const int NUM_QUAD_2D = NUM_QUAD_1D*NUM_QUAD_1D;
-   const int NUM_QUAD_3D = NUM_QUAD_1D*NUM_QUAD_1D*NUM_QUAD_1D;
+   const int L2_DOFS_1D = D1D - 1;
+   const int H1_DOFS_1D = D1D;
+   const int NUM_QUAD_2D = Q1D*Q1D;
+   const int NUM_QUAD_3D = Q1D*Q1D*Q1D;
    int tid = threadIdx.x + threadIdx.y*blockDim.x +
              threadIdx.z*blockDim.x*blockDim.y;
 
@@ -967,30 +959,30 @@ static void rForceMultTranspose3D_v2(const int numElements,
    }
 
    // __shared__ double vStress[NUM_QUAD_3D],
-   //                   s_H1DofToQuad[H1_DOFS_1D][NUM_QUAD_1D],
-   //                   s_H1DofToQuadD[H1_DOFS_1D][NUM_QUAD_1D],
-   //                   s_L2QuadToDof[NUM_QUAD_1D][L2_DOFS_1D],
-   //                   Dx_x[H1_DOFS_1D][H1_DOFS_1D][NUM_QUAD_1D],
-   //                   x_y[H1_DOFS_1D][H1_DOFS_1D][NUM_QUAD_1D],
+   //                   s_H1DofToQuad[H1_DOFS_1D][Q1D],
+   //                   s_H1DofToQuadD[H1_DOFS_1D][Q1D],
+   //                   s_L2QuadToDof[Q1D][L2_DOFS_1D],
+   //                   Dx_x[H1_DOFS_1D][H1_DOFS_1D][Q1D],
+   //                   x_y[H1_DOFS_1D][H1_DOFS_1D][Q1D],
    //                   Dxy_x[H1_DOFS_1D][NUM_QUAD_2D],
    //                   xDy_y[H1_DOFS_1D][NUM_QUAD_2D],
    //                   xy_z[H1_DOFS_1D][NUM_QUAD_2D] ,
-   //                   e_x[NUM_QUAD_1D][NUM_QUAD_1D][L2_DOFS_1D],
-   //                   e_xy[NUM_QUAD_1D][L2_DOFS_1D * L2_DOFS_1D];
+   //                   e_x[Q1D][Q1D][L2_DOFS_1D],
+   //                   e_xy[Q1D][L2_DOFS_1D * L2_DOFS_1D];
    double *vStress,
-          (*s_H1DofToQuad)[NUM_QUAD_1D],
-          (*s_H1DofToQuadD)[NUM_QUAD_1D],
+          (*s_H1DofToQuad)[Q1D],
+          (*s_H1DofToQuadD)[Q1D],
           (*s_L2QuadToDof)[L2_DOFS_1D],
-          (*Dx_x)[H1_DOFS_1D][NUM_QUAD_1D],
-          (*x_y)[H1_DOFS_1D][NUM_QUAD_1D],
+          (*Dx_x)[H1_DOFS_1D][Q1D],
+          (*x_y)[H1_DOFS_1D][Q1D],
           (*Dxy_x)[NUM_QUAD_2D],
           (*xDy_y)[NUM_QUAD_2D],
           (*xy_z)[NUM_QUAD_2D];
    mallocBuf((void**)&vStress, (void**)&buf_ptr, NUM_QUAD_3D*sizeof(double));
    mallocBuf((void**)&Dx_x   , (void**)&buf_ptr,
-             H1_DOFS_1D*H1_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             H1_DOFS_1D*H1_DOFS_1D*Q1D*sizeof(double));
    mallocBuf((void**)&x_y    , (void**)&buf_ptr,
-             H1_DOFS_1D*H1_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             H1_DOFS_1D*H1_DOFS_1D*Q1D*sizeof(double));
    mallocBuf((void**)&Dxy_x  , (void**)&buf_ptr,
              H1_DOFS_1D*NUM_QUAD_2D*sizeof(double));
    mallocBuf((void**)&xDy_y  , (void**)&buf_ptr,
@@ -998,28 +990,28 @@ static void rForceMultTranspose3D_v2(const int numElements,
    mallocBuf((void**)&xy_z   , (void**)&buf_ptr,
              H1_DOFS_1D*NUM_QUAD_2D*sizeof(double));
    mallocBuf((void**)&s_H1DofToQuad , (void**)&buf_ptr,
-             H1_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             H1_DOFS_1D*Q1D*sizeof(double));
    mallocBuf((void**)&s_H1DofToQuadD, (void**)&buf_ptr,
-             H1_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             H1_DOFS_1D*Q1D*sizeof(double));
    mallocBuf((void**)&s_L2QuadToDof , (void**)&buf_ptr,
-             L2_DOFS_1D*NUM_QUAD_1D*sizeof(double));
+             L2_DOFS_1D*Q1D*sizeof(double));
    // (e_xy & e_x) reuses Dx_x
-   double (*e_x)[NUM_QUAD_1D][L2_DOFS_1D] = (double (*)[NUM_QUAD_1D][L2_DOFS_1D])
-                                            Dx_x;
+   double (*e_x)[Q1D][L2_DOFS_1D] = (double (*)[Q1D][L2_DOFS_1D])
+                                    Dx_x;
    double (*e_xy)[L2_DOFS_1D*L2_DOFS_1D]  = (double (*)[L2_DOFS_1D*L2_DOFS_1D])(
-                                               e_x + NUM_QUAD_1D);
+                                               e_x + Q1D);
 
    if (threadIdx.z == 0)
    {
       for (int dx = threadIdx.y; dx < H1_DOFS_1D; dx += blockDim.y)
       {
-         for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+         for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
          {
-            s_H1DofToQuad[dx][qx] = H1DofToQuad[ijN(qx,dx,NUM_QUAD_1D)];
-            s_H1DofToQuadD[dx][qx] = H1DofToQuadD[ijN(qx,dx,NUM_QUAD_1D)];
+            s_H1DofToQuad[dx][qx] = H1DofToQuad[ijN(qx,dx,Q1D)];
+            s_H1DofToQuadD[dx][qx] = H1DofToQuadD[ijN(qx,dx,Q1D)];
          }
       }
-      for (int qx = threadIdx.y; qx < NUM_QUAD_1D; qx += blockDim.y)
+      for (int qx = threadIdx.y; qx < Q1D; qx += blockDim.y)
       {
          for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
          {
@@ -1036,20 +1028,20 @@ static void rForceMultTranspose3D_v2(const int numElements,
          vStress[i] = 0;
       }
       __syncthreads();
-      for (int c = 0; c < NUM_DIM; ++c)
+      for (int c = 0; c < 3; ++c)
       {
          for (int dz = threadIdx.z; dz < H1_DOFS_1D; dz += blockDim.z)
          {
             for (int dy = threadIdx.y; dy < H1_DOFS_1D; dy += blockDim.y)
             {
-               for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+               for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
                {
                   double t1 = 0, t2 = 0;
                   for (int dx = 0; dx < H1_DOFS_1D; ++dx)
                   {
-                     t1 += v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,
+                     t1 += v[_ijklmNM(c,dx,dy,dz,el,D1D,
                                       numElements)] * s_H1DofToQuadD[dx][qx];
-                     t2 += v[_ijklmNM(c,dx,dy,dz,el,NUM_DOFS_1D,
+                     t2 += v[_ijklmNM(c,dx,dy,dz,el,D1D,
                                       numElements)] * s_H1DofToQuad[dx][qx];
                   }
                   Dx_x[dz][dy][qx] = t1;
@@ -1061,9 +1053,9 @@ static void rForceMultTranspose3D_v2(const int numElements,
 
          for (int dz = threadIdx.z; dz < H1_DOFS_1D; dz += blockDim.z)
          {
-            for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+            for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
             {
-               for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+               for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
                {
                   double t1 = 0, t2 = 0, t3 = 0;
                   for (int dy = 0; dy < H1_DOFS_1D; ++dy)
@@ -1072,51 +1064,51 @@ static void rForceMultTranspose3D_v2(const int numElements,
                      t2 += x_y[dz][dy][qx]  * s_H1DofToQuadD[dy][qy];
                      t3 += x_y[dz][dy][qx]  * s_H1DofToQuad[dy][qy];
                   }
-                  Dxy_x[dz][ijN(qx,qy,NUM_QUAD_1D)] = t1;
-                  xDy_y[dz][ijN(qx,qy,NUM_QUAD_1D)] = t2;
-                  xy_z[dz][ijN(qx,qy,NUM_QUAD_1D)] = t3;
+                  Dxy_x[dz][ijN(qx,qy,Q1D)] = t1;
+                  xDy_y[dz][ijN(qx,qy,Q1D)] = t2;
+                  xy_z[dz][ijN(qx,qy,Q1D)] = t3;
                }
             }
          }
          __syncthreads();
 
-         for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+         for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
          {
-            for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+            for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
             {
-               for (int qx = threadIdx.x; qx < NUM_QUAD_1D; qx += blockDim.x)
+               for (int qx = threadIdx.x; qx < Q1D; qx += blockDim.x)
                {
-                  double t = vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)];
+                  double t = vStress[ijkN(qx,qy,qz,Q1D)];
                   for (int dz = 0; dz < H1_DOFS_1D; ++dz)
                   {
                      t +=
-                        ((Dxy_x[dz][ijN(qx,qy,NUM_QUAD_1D)] *
+                        ((Dxy_x[dz][ijN(qx,qy,Q1D)] *
                           s_H1DofToQuad[dz][qz] *
-                          stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)]) +
-                         (xDy_y[dz][ijN(qx,qy,NUM_QUAD_1D)] *
+                          stressJinvT[ijklmnNM(0,c,qx,qy,qz,el,3,Q1D)]) +
+                         (xDy_y[dz][ijN(qx,qy,Q1D)] *
                           s_H1DofToQuad[dz][qz] *
-                          stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)]) +
-                         (xy_z[dz][ijN(qx,qy,NUM_QUAD_1D)] *
+                          stressJinvT[ijklmnNM(1,c,qx,qy,qz,el,3,Q1D)]) +
+                         (xy_z[dz][ijN(qx,qy,Q1D)] *
                           s_H1DofToQuadD[dz][qz] *
-                          stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,NUM_DIM,NUM_QUAD_1D)]));
+                          stressJinvT[ijklmnNM(2,c,qx,qy,qz,el,3,Q1D)]));
                   }
-                  vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)] = t;
+                  vStress[ijkN(qx,qy,qz,Q1D)] = t;
                }
             }
          }
          __syncthreads();
       }
 
-      for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+      for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
       {
-         for (int qy = threadIdx.y; qy < NUM_QUAD_1D; qy += blockDim.y)
+         for (int qy = threadIdx.y; qy < Q1D; qy += blockDim.y)
          {
             for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
             {
                double t = 0;
-               for (int qx = 0; qx < NUM_QUAD_1D; ++qx)
+               for (int qx = 0; qx < Q1D; ++qx)
                {
-                  t += vStress[ijkN(qx,qy,qz,NUM_QUAD_1D)] * s_L2QuadToDof[qx][dx];
+                  t += vStress[ijkN(qx,qy,qz,Q1D)] * s_L2QuadToDof[qx][dx];
                }
                e_x[qz][qy][dx] = t;
             }
@@ -1124,14 +1116,14 @@ static void rForceMultTranspose3D_v2(const int numElements,
       }
       __syncthreads();
 
-      for (int qz = threadIdx.z; qz < NUM_QUAD_1D; qz += blockDim.z)
+      for (int qz = threadIdx.z; qz < Q1D; qz += blockDim.z)
       {
          for (int dy = threadIdx.y; dy < L2_DOFS_1D; dy += blockDim.y)
          {
             for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
             {
                double t = 0;
-               for (int qy = 0; qy < NUM_QUAD_1D; ++qy)
+               for (int qy = 0; qy < Q1D; ++qy)
                {
                   t += e_x[qz][qy][dx] * s_L2QuadToDof[qy][dy];
                }
@@ -1148,7 +1140,7 @@ static void rForceMultTranspose3D_v2(const int numElements,
             for (int dx = threadIdx.x; dx < L2_DOFS_1D; dx += blockDim.x)
             {
                double t = 0;
-               for (int qz = 0; qz < NUM_QUAD_1D; ++qz)
+               for (int qz = 0; qz < Q1D; ++qz)
                {
                   t += s_L2QuadToDof[qz][dz] * e_xy[qz][ijN(dx,dy,L2_DOFS_1D)];
                }
@@ -1171,9 +1163,9 @@ typedef void (*fForceMult)(const int numElements,
                            double* restrict v);
 
 // *****************************************************************************
-void rForceMult(const int NUM_DIM,
-                const int NUM_DOFS_1D,
-                const int NUM_QUAD_1D,
+void rForceMult(const int DIM,
+                const int D1D,
+                const int Q1D,
                 const int L2_DOFS_1D,
                 const int H1_DOFS_1D,
                 const int nzones,
@@ -1184,12 +1176,12 @@ void rForceMult(const int NUM_DIM,
                 const double* restrict e,
                 double* restrict v)
 {
-   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
-   assert(NUM_DOFS_1D==H1_DOFS_1D);
-   assert(L2_DOFS_1D==NUM_DOFS_1D-1);
-   const unsigned int id = ((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
-   assert(LOG2(NUM_DIM)<=4);
-   assert(LOG2(NUM_DOFS_1D-2)<=4);
+   assert(Q1D==2*(D1D-1));
+   assert(D1D==H1_DOFS_1D);
+   assert(L2_DOFS_1D==D1D-1);
+   const unsigned int id = ((DIM)<<4)|(D1D-2);
+   assert(LOG2(DIM)<=4);
+   assert(LOG2(D1D-2)<=4);
    static std::unordered_map<unsigned long long, fForceMult> call =
    {
       // {0x20,&rForceMult2D<2,2,2,1,2>},
@@ -1297,8 +1289,8 @@ typedef void (*fForceMultTranspose)(const int nzones,
 
 // *****************************************************************************
 void rForceMultTranspose(const int NUM_DIM,
-                         const int NUM_DOFS_1D,
-                         const int NUM_QUAD_1D,
+                         const int D1D,
+                         const int Q1D,
                          const int L2_DOFS_1D,
                          const int H1_DOFS_1D,
                          const int nzones,
@@ -1309,11 +1301,11 @@ void rForceMultTranspose(const int NUM_DIM,
                          const double* restrict v,
                          double* restrict e)
 {
-   assert(NUM_DOFS_1D==H1_DOFS_1D);
-   assert(L2_DOFS_1D==NUM_DOFS_1D-1);
-   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
-   assert(NUM_QUAD_1D==2*(NUM_DOFS_1D-1));
-   const unsigned int id = ((NUM_DIM)<<4)|(NUM_DOFS_1D-2);
+   assert(D1D==H1_DOFS_1D);
+   assert(L2_DOFS_1D==D1D-1);
+   assert(Q1D==2*(D1D-1));
+   assert(Q1D==2*(D1D-1));
+   const unsigned int id = ((NUM_DIM)<<4)|(D1D-2);
    static std::unordered_map<unsigned long long, fForceMultTranspose> call =
    {
       // 2D

@@ -178,20 +178,20 @@ void CudaBilinearForm::RecoverFEMSolution(const CudaVector& X,
 // ***************************************************************************
 // * CudaConstrainedOperator
 // ***************************************************************************
-CudaConstrainedOperator::CudaConstrainedOperator(CudaOperator* A_,
-                                                 const Array<int>& constraintList_,
-                                                 bool own_A_) :
-   CudaOperator(A_->Height(), A_->Width())
+CudaConstrainedOperator::CudaConstrainedOperator(CudaOperator* RAP,
+                                                 const Array<int>& constraintList,
+                                                 bool own) :
+   CudaOperator(RAP->Height(), RAP->Width())
 {
-   Setup(A_, constraintList_, own_A_);
+   Setup(RAP, constraintList, own);
 }
 
-void CudaConstrainedOperator::Setup(CudaOperator* A_,
+void CudaConstrainedOperator::Setup(CudaOperator* RAP_,
                                     const Array<int>& constraintList_,
-                                    bool own_A_)
+                                    bool own_)
 {
-   A = A_;
-   own_A = own_A_;
+   RAP = RAP_;
+   own = own_;
    constraintIndices = constraintList_.Size();
    if (constraintIndices)
    {
@@ -205,7 +205,7 @@ void CudaConstrainedOperator::EliminateRHS(const CudaVector& x,
                                            CudaVector& b) const
 {
    w = 0.0;
-   A->Mult(w, z);
+   RAP->Mult(w, z);
    b -= z;
 }
 
@@ -213,11 +213,11 @@ void CudaConstrainedOperator::Mult(const CudaVector& x, CudaVector& y) const
 {
    if (constraintIndices == 0)
    {
-      A->Mult(x, y);
+      RAP->Mult(x, y);
       return;
    }
    z = x;
-   A->Mult(z, y);
+   RAP->Mult(z, y);
 }
 
 } // mfem
