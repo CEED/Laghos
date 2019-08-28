@@ -38,7 +38,8 @@ public:
    CudaCommD(ParFiniteElementSpace&);
    ~CudaCommD();
 
-   template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
+  template <class T> T *d_CopyGroupToBuffer(const T*,T*,int,int) const;
+  template <class T> int d_CopyGroupToBuffer2(const T*,T*,const int*,const int*,int,int) const;
    template <class T>
    const T *d_CopyGroupFromBuffer(const T*, T*,int, int) const;
    template <class T>

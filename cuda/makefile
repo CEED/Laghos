@@ -20,7 +20,7 @@ CUDA_DIR ?= $(dir $(shell which nvcc))../
 MPI_HOME ?= $(dir $(shell which mpicc))../
 MPI_INCFLAGS = -I$(MPI_HOME)/include
 
-NVCC_CXXFLAGS = -Xptxas -v -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
+NVCC_CXXFLAGS = -x=cu -std=c++11 -m64 --restrict -Xcompiler -Wall $(NV_ARCH) 
 NVCC_LIBS = -Wl,-rpath -Wl,$(CUDA_DIR)/lib64 -L$(CUDA_DIR)/lib64 \
             -lcuda -lcudart -lcudadevrt -lnvToolsExt 
 

@@ -25,12 +25,15 @@ private:
    int size = 0;
    int *I = NULL;
    int *J = NULL;
+   int *d_I = NULL;
 public:
    CudaTable(const Table&);
    inline int Size() {return size;}
    int RowSize(int i) const { return I[i+1]-I[i]; }
    const int *GetRow(int i) const { return J+I[i]; }
    int *GetRow(int i) { return J+I[i]; }
+   const int *GetDeviceJ() const { return J; }
+   const int *GetDeviceI() const { return d_I; } 
 };
 
 } // mfem

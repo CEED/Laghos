@@ -20,8 +20,10 @@ CudaTable::CudaTable(const Table &table)
    assert(size > 0);
    const int nnz = table.GetI()[size];
    I = new int[size+1];
+   d_I = (int*) operator new(size+1);
    J = (int*) operator new (nnz);
    rHtoH(I,table.GetI(),sizeof(int)*(size+1));
+   rHtoD(d_I,table.GetI(),sizeof(int)*(size+1));
    if (nnz>0)
    {
       assert(table.GetJ());
