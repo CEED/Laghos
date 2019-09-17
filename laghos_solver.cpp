@@ -364,6 +364,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       {
          // Partial assembly solve for each velocity component
          const int size = H1compFESpace.GetVSize();
+         const Operator *Pconf = H1compFESpace.GetProlongationMatrix();
          OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
          for (int c = 0; c < dim; c++)
          {
@@ -376,7 +377,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             // we must enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
-            H1compFESpace.GetProlongationMatrix()->MultTranspose(rhs_c_gf, B);
+            if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
+            else {B = rhs_c_gf;}
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(B);
@@ -384,7 +386,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
             timer.H1iter += CG_VMass.GetNumIterations();
-            H1compFESpace.GetProlongationMatrix()->Mult(X, dvc_gf);
+            if (Pconf) { Pconf->Mult(X, dvc_gf); }
+            else { dvc_gf = X; }
             // We need to sync the subvector 'dvc_gf' with its base vector
             // because it may have been moved to a different memory space.
             dvc_gf.GetMemory().SyncAlias(dS_dt.GetMemory(), dvc_gf.Size());
