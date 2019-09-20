@@ -38,6 +38,7 @@ void RK2AvgSolver::Init(TimeDependentOperator &_f)
    HydroODESolver::Init(_f);
    const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
    V.SetSize(block_offsets[1], mem_type);
+   V.UseDevice(true);
    dS_dt.Update(block_offsets, mem_type);
    S0.Update(block_offsets, mem_type);
 }

@@ -552,6 +552,7 @@ QUpdate::QUpdate(const int _dim,
                  ParFiniteElementSpace &_H1FESpace,
                  ParFiniteElementSpace &_L2FESpace):
    dim(_dim),
+   nqp(_ir.GetNPoints()),
    nzones(_nzones),
    l2dofs_cnt(_l2dofs_cnt),
    h1dofs_cnt(_h1dofs_cnt),
@@ -570,7 +571,12 @@ QUpdate::QUpdate(const int _dim,
                       ElementDofOrdering::LEXICOGRAPHIC)),
    l2_ElemRestrict(L2FESpace.GetElementRestriction(
                       ElementDofOrdering::LEXICOGRAPHIC)),
-   nqp(ir.GetNPoints())
+   d_l2_e_quads_data(nzones * nqp),
+   h1_vdim(H1FESpace.GetVDim()),
+   d_h1_v_local_in(           h1_vdim * nqp * nzones),
+   d_h1_grad_x_data(h1_vdim * h1_vdim * nqp * nzones),
+   d_h1_grad_v_data(h1_vdim * h1_vdim * nqp * nzones),
+   d_dt_est(nzones * nqp)
 {
    MFEM_ASSERT(material_pcf, "!material_pcf");
 }
@@ -673,11 +679,11 @@ static void Dof2QuadScalar(const Operator *erestrict,
 {
    const int vdim = fes.GetVDim();
    const int nzones = fes.GetNE();
-   const int nqp = ir.GetNPoints();
-   const int out_size = nqp * nzones;
+   //const int nqp = ir.GetNPoints();
+   //const int out_size = nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   d_out.SetSize(out_size);
+   //d_out.SetSize(out_size);
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<int, fVecToQuad2D> call =
@@ -762,11 +768,8 @@ void qGradVector2D(const int NE,
                   u += B[qx][dx] * input;
                   v += G[qx][dx] * input;
                }
-               if (tidz == 0)
-               {
-                  DQ0[dy][qx] = u;
-                  DQ1[dy][qx] = v;
-               }
+               DQ0[dy][qx] = u;
+               DQ1[dy][qx] = v;
             }
          }
          MFEM_SYNC_THREAD;
@@ -803,22 +806,23 @@ static void Dof2QuadGrad(const Operator *erestrict,
                          const DofToQuad *maps,
                          const IntegrationRule& ir,
                          const Vector &d_in,
+                         Vector &d_h1_v_local_in,
                          Vector &d_out)
 {
    MFEM_ASSERT(fes.GetMesh()->Dimension()==2, "dim!=2");
    const int vdim = fes.GetVDim();
    MFEM_ASSERT(vdim==2, "vdim!=2");
-   const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const int numDofs  = fe.GetDof();
+   //const mfem::FiniteElement& fe = *fes.GetFE(0);
+   //const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
-   const int nqp = ir.GetNPoints();
-   const int local_size = vdim * numDofs * nzones;
-   const int out_size = vdim * vdim * nqp * nzones;
+   //const int nqp = ir.GetNPoints();
+   //const int local_size = vdim * numDofs * nzones;
+   //const int out_size = vdim * vdim * nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   Vector v_local_in(local_size);
-   erestrict->Mult(d_in, v_local_in);
-   d_out.SetSize(out_size);
+   //Vector v_local_in(local_size);
+   erestrict->Mult(d_in, d_h1_v_local_in);
+   //d_out.SetSize(out_size);
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<int, fGradVector2D> call =
    {
@@ -833,7 +837,7 @@ static void Dof2QuadGrad(const Operator *erestrict,
    call[id](nzones,
             maps->B,
             maps->G,
-            v_local_in,
+            d_h1_v_local_in,
             d_out);
 }
 
@@ -859,25 +863,25 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    // Energy dof => quads ******************************************************
    ParGridFunction d_e;
    d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   Dof2QuadScalar(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, d_e_quads_data);
+   Dof2QuadScalar(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, d_l2_e_quads_data);
 
    // Coords to Jacobians ******************************************************
    ParGridFunction d_x;
    d_x.MakeRef(&H1FESpace,*S_p, 0);
-   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x, d_grad_x_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x,
+                d_h1_v_local_in, d_h1_grad_x_data);
 
    // Velocity *****************************************************************
    ParGridFunction d_v;
    d_v.MakeRef(&H1FESpace,*S_p, H1_size);
-   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v, d_grad_v_data);
+   Dof2QuadGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v,
+                d_h1_v_local_in, d_h1_grad_v_data);
 
    // **************************************************************************
    const double h1order = (double) H1FESpace.GetOrder(0);
    const double infinity = std::numeric_limits<double>::infinity();
 
    // **************************************************************************
-   const int dt_est_sz = nzones*nqp;
-   Vector d_dt_est(dt_est_sz);
    d_dt_est = quad_data.dt_est;
 
    // **************************************************************************
@@ -896,10 +900,10 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
                       cfl,
                       infinity,
                       ir.GetWeights(),
-                      d_grad_x_data,
+                      d_h1_grad_x_data,
                       quad_data.rho0DetJ0w,
-                      d_e_quads_data,
-                      d_grad_v_data,
+                      d_l2_e_quads_data,
+                      d_h1_grad_v_data,
                       quad_data.Jac0inv,
                       d_dt_est,
                       quad_data.stressJinvT); break;
@@ -914,10 +918,10 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
                       cfl,
                       infinity,
                       ir.GetWeights(),
-                      d_grad_x_data,
+                      d_h1_grad_x_data,
                       quad_data.rho0DetJ0w,
-                      d_e_quads_data,
-                      d_grad_v_data,
+                      d_l2_e_quads_data,
+                      d_h1_grad_v_data,
                       quad_data.Jac0inv,
                       d_dt_est,
                       quad_data.stressJinvT); break;

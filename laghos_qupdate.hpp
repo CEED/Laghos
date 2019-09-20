@@ -20,16 +20,20 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 
-namespace mfem {
+namespace mfem
+{
 
-namespace hydrodynamics {
+namespace hydrodynamics
+{
 
 struct TimingData;
 
 // *****************************************************************************
-class QUpdate{
+class QUpdate
+{
 private:
    const int dim;
+   const int nqp;
    const int nzones;
    const int l2dofs_cnt;
    const int h1dofs_cnt;
@@ -38,18 +42,20 @@ private:
    const double cfl;
    const double gamma;
    TimingData *timer;
-   mfem::Coefficient *material_pcf;
-   const mfem::IntegrationRule &ir;
-   mfem::ParFiniteElementSpace &H1FESpace;
-   mfem::ParFiniteElementSpace &L2FESpace;
-   const mfem::DofToQuad *h1_maps;
-   const mfem::DofToQuad *l2_maps;
+   Coefficient *material_pcf;
+   const IntegrationRule &ir;
+   ParFiniteElementSpace &H1FESpace;
+   ParFiniteElementSpace &L2FESpace;
+   const DofToQuad *h1_maps;
+   const DofToQuad *l2_maps;
    const Operator *h1_ElemRestrict;
    const Operator *l2_ElemRestrict;
-   Vector d_e_quads_data;
-   Vector d_grad_x_data;
-   Vector d_grad_v_data;
-   const int nqp;
+   Vector d_l2_e_quads_data; // scalar L2
+   const int h1_vdim;
+   Vector d_h1_v_local_in;   // vector H1
+   Vector d_h1_grad_x_data;  // grad vector H1
+   Vector d_h1_grad_v_data;  // grad vector H1
+   Vector d_dt_est;
 public:
    // **************************************************************************
    QUpdate(const int dim,
@@ -65,7 +71,7 @@ public:
            const IntegrationRule &integ_rule,
            ParFiniteElementSpace &H1FESpace,
            ParFiniteElementSpace &L2FESpace);
-   
+
    // **************************************************************************
    void UpdateQuadratureData(const Vector &S,
                              bool &quad_data_is_current,

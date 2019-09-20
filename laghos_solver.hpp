@@ -129,6 +129,7 @@ protected:
 
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
+   mutable Array<int> c_tdofs[3];
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],

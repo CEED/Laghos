@@ -1236,7 +1236,6 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
    ess_tdofs(0),
    tensors1D(t1D)
 {
-   distX.UseDevice(true);
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
    pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
    pabf.Assemble();
@@ -1260,7 +1259,7 @@ void OkinaMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
       return;
    }
    ess_tdofs = dofs;
-   ess_tdofs.GetMemory().UseDevice(true);
+   // ess_tdofs.GetMemory().UseDevice(true);
 }
 
 // *****************************************************************************
@@ -1275,20 +1274,14 @@ void OkinaMassPAOperator::EliminateRHS(Vector &b) const
 // *****************************************************************************
 void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   if (distX.Size()!=x.Size())
-   {
-      distX.SetSize(x.Size());
-   }
-   distX = x;
-   if (ess_tdofs_count)
-   {
-      distX.SetSubVector(ess_tdofs, 0.0);
-   }
-   massOperator->Mult(distX, y);
-   if (ess_tdofs_count)
-   {
-      y.SetSubVector(ess_tdofs, 0.0);
-   }
+   //if (distX.Size()!=x.Size()) { distX.SetSize(x.Size()); }
+   //distX = x; // DtoD copy
+   Vector* xptr = const_cast<Vector*>(&x);
+   ParGridFunction X;
+   X.MakeRef(&FESpace, *xptr, 0);
+   if (ess_tdofs_count) { X.SetSubVector(ess_tdofs, 0.0); }
+   massOperator->Mult(X, y);
+   if (ess_tdofs_count) { y.SetSubVector(ess_tdofs, 0.0); }
 }
 
 // *****************************************************************************
