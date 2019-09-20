@@ -1259,7 +1259,6 @@ void OkinaMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
       return;
    }
    ess_tdofs = dofs;
-   // ess_tdofs.GetMemory().UseDevice(true);
 }
 
 // *****************************************************************************
@@ -1274,8 +1273,6 @@ void OkinaMassPAOperator::EliminateRHS(Vector &b) const
 // *****************************************************************************
 void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   //if (distX.Size()!=x.Size()) { distX.SetSize(x.Size()); }
-   //distX = x; // DtoD copy
    Vector* xptr = const_cast<Vector*>(&x);
    ParGridFunction X;
    X.MakeRef(&FESpace, *xptr, 0);

@@ -21,9 +21,6 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 
-#define DBG(...) /*{ printf("\n\033[1;33m"); \
-                   printf(__VA_ARGS__);  \
-                   printf(" \033[m\n");fflush(0); }*/
 namespace mfem
 {
 
@@ -248,7 +245,6 @@ private:
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr massOperator;
-   mutable Vector distX;
    Tensors1D *tensors1D;
 public:
    OkinaMassPAOperator(Coefficient&,

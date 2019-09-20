@@ -395,8 +395,26 @@ inline double smooth_step_01(const double x, const double eps)
 // *****************************************************************************
 // * qupdate
 // *****************************************************************************
+typedef void (*fQUpdate2D)(const int nzones,
+                           const int nqp,
+                           const int nqp1D,
+                           const double gamma,
+                           const bool use_viscosity,
+                           const double h0,
+                           const double h1order,
+                           const double cfl,
+                           const double infinity,
+                           const Array<double> &weights,
+                           const Vector &Jacobians,
+                           const Vector &rho0DetJ0w,
+                           const Vector &e_quads,
+                           const Vector &grad_v_ext,
+                           const DenseTensor &Jac0inv,
+                           Vector &dt_est,
+                           DenseTensor &stressJinvT);
+// *****************************************************************************
 template<int Q1D, int dim=2> static
-void qupdate2D(const int nzones,
+void QUpdate2D(const int nzones,
                const int nqp,
                const int nqp1D,
                const double gamma,
@@ -690,6 +708,7 @@ static void Dof2QuadScalar(const Operator *erestrict,
    {
       {0x124,&vecToQuad2D<1,2,4,8>},
       {0x136,&vecToQuad2D<1,3,6,4>},
+      {0x148,&vecToQuad2D<1,4,8,2>},
    };
    if (!call[id])
    {
@@ -809,25 +828,18 @@ static void Dof2QuadGrad(const Operator *erestrict,
                          Vector &d_h1_v_local_in,
                          Vector &d_out)
 {
+   MFEM_ASSERT(fes.GetVDim()==2, "vdim!=2");
    MFEM_ASSERT(fes.GetMesh()->Dimension()==2, "dim!=2");
-   const int vdim = fes.GetVDim();
-   MFEM_ASSERT(vdim==2, "vdim!=2");
-   //const mfem::FiniteElement& fe = *fes.GetFE(0);
-   //const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
-   //const int nqp = ir.GetNPoints();
-   //const int local_size = vdim * numDofs * nzones;
-   //const int out_size = vdim * vdim * nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   //Vector v_local_in(local_size);
    erestrict->Mult(d_in, d_h1_v_local_in);
-   //d_out.SetSize(out_size);
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<int, fGradVector2D> call =
    {
       {0x34,&qGradVector2D<3,4>},
       {0x46,&qGradVector2D<4,6>},
+      {0x58,&qGradVector2D<5,8>},
    };
    if (!call[id])
    {
@@ -886,47 +898,24 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    MFEM_VERIFY(dim==2, "Only UpdateQuadratureData with dim==2 is supported");
-   // nqp1D: 4, 6
-   switch (nqp1D)
+
+   // **************************************************************************
+   const int id = nqp1D;
+   static std::unordered_map<int, fQUpdate2D> QUpdate =
    {
-      case 4:
-         qupdate2D<4>(nzones,
-                      nqp,
-                      nqp1D,
-                      gamma,
-                      use_viscosity,
-                      quad_data.h0,
-                      h1order,
-                      cfl,
-                      infinity,
-                      ir.GetWeights(),
-                      d_h1_grad_x_data,
-                      quad_data.rho0DetJ0w,
-                      d_l2_e_quads_data,
-                      d_h1_grad_v_data,
-                      quad_data.Jac0inv,
-                      d_dt_est,
-                      quad_data.stressJinvT); break;
-      case 6:
-         qupdate2D<6>(nzones,
-                      nqp,
-                      nqp1D,
-                      gamma,
-                      use_viscosity,
-                      quad_data.h0,
-                      h1order,
-                      cfl,
-                      infinity,
-                      ir.GetWeights(),
-                      d_h1_grad_x_data,
-                      quad_data.rho0DetJ0w,
-                      d_l2_e_quads_data,
-                      d_h1_grad_v_data,
-                      quad_data.Jac0inv,
-                      d_dt_est,
-                      quad_data.stressJinvT); break;
-      default: MFEM_VERIFY(false, "Unknown kernel!");
+      {0x4,&QUpdate2D<4>},
+      {0x6,&QUpdate2D<6>},
+      {0x8,&QUpdate2D<8>},
+   };
+   if (!QUpdate[id])
+   {
+      printf("\n[UpdateQuadratureData] id \033[33m0x%X\033[m ",id);
+      fflush(0);
    }
+   QUpdate[id](nzones, nqp, nqp1D, gamma, use_viscosity, quad_data.h0,
+               h1order, cfl, infinity, ir.GetWeights(), d_h1_grad_x_data,
+               quad_data.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
+               quad_data.Jac0inv, d_dt_est, quad_data.stressJinvT);
 
    // **************************************************************************
    quad_data.dt_est = d_dt_est.Min();

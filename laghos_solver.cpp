@@ -318,7 +318,6 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   DBG("[Mult] UpdateMesh");
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
@@ -326,21 +325,17 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   DBG("[Mult] v");
    Vector* sptr = const_cast<Vector*>(&S);
    ParGridFunction v;
    const int VsizeH1 = H1FESpace.GetVSize();
    v.MakeRef(&H1FESpace, *sptr, VsizeH1);
 
    // Set dx_dt = v (explicit).
-   DBG("[Mult] dx");
    ParGridFunction dx;
    dx.MakeRef(&H1FESpace, dS_dt, 0);
    dx = v;
 
-   DBG("[Mult] SolveVelocity");
    SolveVelocity(S, dS_dt);
-   DBG("[Mult] SolveEnergy");
    SolveEnergy(S, v, dS_dt);
 
    quad_data_is_current = false;
@@ -349,15 +344,11 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
-   DBG("[SolveVelocity] UpdateQuadratureData");
    UpdateQuadratureData(S);
-
-   DBG("[SolveVelocity] AssembleForceMatrix");
    AssembleForceMatrix();
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   DBG("[SolveVelocity] dv");
    ParGridFunction dv;
    dv.MakeRef(&H1FESpace, dS_dt, H1Vsize);
    dv = 0.0;
@@ -395,17 +386,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
          for (int c = 0; c < dim; c++)
          {
-            DBG("[SolveVelocity] OkinaMassPAOperator: %d",c);
             dvc_gf.MakeRef(&H1compFESpace, dS_dt, H1Vsize + c*size);
             rhs_c_gf.MakeRef(&H1compFESpace, rhs, c*size);
             if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
             else { B = rhs_c_gf; }
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
-            DBG("[SolveVelocity] SetEssentialTrueDofs");
             kVMassPA->SetEssentialTrueDofs(c_tdofs[c]);
-            DBG("[SolveVelocity] EliminateRHS");
             kVMassPA->EliminateRHS(B);
-            DBG("[SolveVelocity] Mult");
             timer.sw_cgH1.Start();
             CG_VMass.Mult(B, X);
             timer.sw_cgH1.Stop();
@@ -441,20 +428,16 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
-   DBG("[SolveVelocity] done");
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
-   DBG("[SolveEnergy] UpdateQuadratureData");
    UpdateQuadratureData(S);
-   DBG("[SolveEnergy] AssembleForceMatrix");
    AssembleForceMatrix();
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   DBG("[SolveEnergy] de");
    ParGridFunction de;
    de.MakeRef(&L2FESpace, dS_dt, H1Vsize*2);
    de = 0.0;
@@ -901,9 +884,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 void LagrangianHydroOperator::AssembleForceMatrix() const
 {
    if (forcemat_is_assembled || p_assembly) { return; }
-   DBG("Force = 0.0;");
    Force = 0.0;
-   DBG("Assemble");
    timer.sw_force.Start();
    Force.Assemble();
    timer.sw_force.Stop();

@@ -573,7 +573,7 @@ int main(int argc, char *argv[])
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
-   BlockVector S_old(S); //S_old.UseDevice(true);
+   BlockVector S_old(S);
    long mem, mem_max, mem_sum;
    int checks = 0;
 
