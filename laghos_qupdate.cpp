@@ -575,175 +575,12 @@ QUpdate::QUpdate(const int _dim,
    MFEM_ASSERT(material_pcf, "!material_pcf");
 }
 
-// **************************************************************************
-template<const int VDIM,
-         const int D1D,
-         const int Q1D> static
-void vecToQuad2D(const int NE,
-                 const Array<double> &_B,
-                 const Vector &_x,
-                 Vector &_y)
-{
-   auto B = Reshape(_B.Read(), Q1D,D1D);
-   auto x = Reshape(_x.Read(), D1D,D1D,VDIM,NE);
-   auto y = Reshape(_y.Write(), Q1D,Q1D,VDIM,NE);
-   MFEM_FORALL(e, NE,
-   {
-      double out_xy[VDIM][Q1D][Q1D];
-      for (int v = 0; v < VDIM; ++v)
-      {
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               out_xy[v][qy][qx] = 0.0;
-            }
-         }
-      }
-      for (int dy = 0; dy < D1D; ++dy)
-      {
-         double out_x[VDIM][Q1D];
-         for (int v = 0; v < VDIM; ++v)
-         {
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               out_x[v][qy] = 0.0;
-            }
-         }
-         for (int dx = 0; dx < D1D; ++dx)
-         {
-            for (int v = 0; v < VDIM; ++v)
-            {
-               const double r_gf = x(dx,dy,v,e);
-               for (int qy = 0; qy < Q1D; ++qy)
-               {
-                  out_x[v][qy] += r_gf * B(qy,dx);
-               }
-            }
-         }
-         for (int v = 0; v < VDIM; ++v)
-         {
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               const double d2q = B(qy,dy);
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  out_xy[v][qy][qx] += d2q * out_x[v][qx];
-               }
-            }
-         }
-      }
-      for (int qy = 0; qy < Q1D; ++qy)
-      {
-         for (int qx = 0; qx < Q1D; ++qx)
-         {
-            for (int v = 0; v < VDIM; ++v)
-            {
-               y(qx,qy,v,e) = out_xy[v][qy][qx];
-            }
-         }
-      }
-   });
-}
-
-// **************************************************************************
-template<int VDIM, int D1D, int Q1D, int NBZ=1> static
-void Smem2vecToQuad2D(const int NE,
-                      const Array<double> &b_,
-                      const Vector &x_,
-                      Vector &y_)
-{
-   auto b = Reshape(b_.Read(), Q1D, D1D);
-   auto x = Reshape(x_.Read(), D1D, D1D, VDIM, NE);
-   auto Y = Reshape(y_.Write(), Q1D, Q1D, VDIM, NE);
-
-   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
-   {
-      const int zid = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-
-      MFEM_SHARED double DDz[NBZ][D1D][D1D];
-      double (*DD)[D1D] = (double (*)[D1D])(DDz + zid);
-
-      MFEM_SHARED double out_xyz[NBZ][Q1D][Q1D];
-      double (*out_xy)[Q1D] = (double (*)[Q1D])(out_xyz + zid);
-
-      MFEM_SHARED double out_xz[NBZ][Q1D];
-      double *out_x = (double*)(out_xz + zid);
-
-      if (zid == 0)
-      {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      for (int c = 0; c < VDIM; ++c)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               out_xy[qy][qx] = 0.0;
-            }
-         }
-         MFEM_FOREACH_THREAD(dy,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(dx,x,D1D)
-            {
-               DD[dx][dy] = x(dx,dy,c,e);
-            }
-         }
-         MFEM_SYNC_THREAD;
-         for (int dy = 0; dy < D1D; ++dy)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               out_x[qy] = 0.0;
-            }
-            for (int dx = 0; dx < D1D; ++dx)
-            {
-               const double r_gf = DD[dx][dy];
-               MFEM_FOREACH_THREAD(qy,y,Q1D)
-               {
-                  out_x[qy] += r_gf * B[qy][dx];
-               }
-            }
-            MFEM_SYNC_THREAD;
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               const double d2q = B[qy][dy];
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  out_xy[qy][qx] += d2q * out_x[qx];
-               }
-            }
-            MFEM_SYNC_THREAD;
-         }
-         MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               Y(qx,qy,c,e) = out_xy[qy][qx];
-            }
-         }
-         MFEM_SYNC_THREAD;
-      }
-   });
-}
-
 // *****************************************************************************
-/*template<int VDIM=1, int T_D1D=0, int T_Q1D=0, const int T_NBZ =1> static
-void SmemvecToQuad2D(const int NE,
-                     const Array<double> &b_,
-                     const Vector &x_,
-                     Vector &y_)
+template<int VDIM=1, int T_D1D=0, int T_Q1D=0, const int T_NBZ =1> static
+void vecToQuad2D(const int NE,
+                 const Array<double> &b_,
+                 const Vector &x_,
+                 Vector &y_)
 {
    constexpr int D1D = T_D1D ? T_D1D : 1;
    constexpr int Q1D = T_Q1D ? T_Q1D : 1;
@@ -766,7 +603,7 @@ void SmemvecToQuad2D(const int NE,
       double (*DD)[D1D] = (double (*)[D1D])(DDz + zid);
 
       MFEM_SHARED double DQz[NBZ][D1D*Q1D];
-      double (*DQ)[D1D] = (double (*)[D1D])(DQz + zid);
+      double (*DQ)[Q1D] = (double (*)[Q1D])(DQz + zid);
 
       if (zid == 0)
       {
@@ -818,7 +655,7 @@ void SmemvecToQuad2D(const int NE,
          MFEM_SYNC_THREAD;
       }
    });
-}*/
+}
 
 // *****************************************************************************
 typedef void (*fVecToQuad2D)(const int E,
@@ -845,12 +682,8 @@ static void Dof2QuadScalar(const Operator *erestrict,
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
    static std::unordered_map<int, fVecToQuad2D> call =
    {
-      //{0x124,&vecToQuad2D<1,2,4>},
-      {0x124,&Smem2vecToQuad2D<1,2,4,1>},
-      //{0x134,&vecToQuad2D<1,3,4>},
-      //{0x135,&vecToQuad2D<1,3,5>},
-      //{0x136,&Smem2vecToQuad2D<1,3,6>},
-      //{0x148,&vecToQuad2D<1,4,8>},
+      {0x124,&vecToQuad2D<1,2,4,8>},
+      {0x136,&vecToQuad2D<1,3,6,4>},
    };
    if (!call[id])
    {
@@ -861,193 +694,12 @@ static void Dof2QuadScalar(const Operator *erestrict,
 }
 
 // **************************************************************************
-template <const int D1D,
-          const int Q1D> static
+template<int T_D1D, int T_Q1D, int T_NBZ =1> static
 void qGradVector2D(const int NE,
-                   const Array<double> &_B,
-                   const Array<double> &_G,
-                   const Vector &_x,
-                   Vector &_y)
-{
-   auto B = Reshape(_B.Read(), Q1D,D1D);
-   auto G = Reshape(_G.Read(), Q1D,D1D);
-   auto x = Reshape(_x.Read(), D1D,D1D,2,NE);
-   auto y = Reshape(_y.Write(), Q1D,Q1D,2,2,NE);
-   MFEM_FORALL(e, NE,
-   {
-      double s_gradv[2][2][Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx)
-      {
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            s_gradv[0][0][qx][qy] = 0.0;
-            s_gradv[0][1][qx][qy] = 0.0;
-            s_gradv[1][0][qx][qy] = 0.0;
-            s_gradv[1][1][qx][qy] = 0.0;
-         }
-      }
-      for (int dy = 0; dy < D1D; ++dy)
-      {
-         double vDx[2][Q1D];
-         double vx[2][Q1D];
-         for (int qx = 0; qx < Q1D; ++qx)
-         {
-            for (int c = 0; c < 2; ++c)
-            {
-               vDx[c][qx] = 0.0;
-               vx[c][qx] = 0.0;
-            }
-         }
-         for (int dx = 0; dx < D1D; ++dx)
-         {
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               const double wDx = G(qx,dx);
-               const double wx  = B(qx,dx);
-               for (int c = 0; c < 2; ++c)
-               {
-                  const double input = x(dx,dy,c,e);
-                  vDx[c][qx] += input * wDx;
-                  vx[c][qx] += input * wx;
-               }
-            }
-         }
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            const double vy  = B(qy,dy);
-            const double vDy = G(qy,dy);
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               for (int c = 0; c < 2; ++c)
-               {
-                  s_gradv[c][0][qx][qy] += vy*vDx[c][qx];
-                  s_gradv[c][1][qx][qy] += vDy*vx[c][qx];
-               }
-            }
-         }
-      }
-      for (int qx = 0; qx < Q1D; ++qx)
-      {
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            y(qx,qy,0,0,e) = s_gradv[0][0][qx][qy];
-            y(qx,qy,1,0,e) = s_gradv[1][0][qx][qy];
-            y(qx,qy,0,1,e) = s_gradv[0][1][qx][qy];
-            y(qx,qy,1,1,e) = s_gradv[1][1][qx][qy];
-         }
-      }
-   });
-}
-
-// **************************************************************************
-template <int D1D, int Q1D, int NBZ=1> static
-void Smem2qGradVector2D(const int NE,
-                        const Array<double> &b_,
-                        const Array<double> &g_,
-                        const Vector &x_,
-                        Vector &y_)
-{
-   auto b = Reshape(b_.Read(), Q1D,D1D);
-   auto g = Reshape(g_.Read(), Q1D,D1D);
-   auto x = Reshape(x_.Read(), D1D,D1D,2,NE);
-   auto y = Reshape(y_.Write(), Q1D,Q1D,2,2,NE);
-
-   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
-   {
-      const int zid = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double G[Q1D][D1D];
-
-      MFEM_SHARED double s_gradv[2][2][Q1D][Q1D];
-      MFEM_SHARED double vDx[2][Q1D];
-      MFEM_SHARED double vx[2][Q1D];
-
-      if (zid == 0)
-      {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-               G[q][d] = g(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      MFEM_FOREACH_THREAD(qx,x,Q1D)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            s_gradv[0][0][qx][qy] = 0.0;
-            s_gradv[0][1][qx][qy] = 0.0;
-            s_gradv[1][0][qx][qy] = 0.0;
-            s_gradv[1][1][qx][qy] = 0.0;
-         }
-      }
-      MFEM_SYNC_THREAD;
-      for (int dy = 0; dy < D1D; ++dy)
-      {
-         MFEM_FOREACH_THREAD(qx,x,Q1D)
-         {
-            for (int c = 0; c < 2; ++c)
-            {
-               vDx[c][qx] = 0.0;
-               vx[c][qx] = 0.0;
-            }
-         }
-         MFEM_SYNC_THREAD;
-         for (int dx = 0; dx < D1D; ++dx)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               const double wDx = G[qx][dx];
-               const double wx  = B[qx][dx];
-               for (int c = 0; c < 2; ++c)
-               {
-                  const double input = x(dx,dy,c,e);
-                  vDx[c][qx] += input * wDx;
-                  vx[c][qx] += input * wx;
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            const double vy  = B[qy][dy];
-            const double vDy = G[qy][dy];
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               for (int c = 0; c < 2; ++c)
-               {
-                  s_gradv[c][0][qx][qy] += vy*vDx[c][qx];
-                  s_gradv[c][1][qx][qy] += vDy*vx[c][qx];
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(qx,x,Q1D)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            y(qx,qy,0,0,e) = s_gradv[0][0][qx][qy];
-            y(qx,qy,1,0,e) = s_gradv[1][0][qx][qy];
-            y(qx,qy,0,1,e) = s_gradv[0][1][qx][qy];
-            y(qx,qy,1,1,e) = s_gradv[1][1][qx][qy];
-         }
-      }
-   });
-}
-
-// **************************************************************************
-/*template<int T_D1D, int T_Q1D, int T_NBZ =1> static
-void SmemqGradVector2D(const int NE,
-                       const Array<double> &b_,
-                       const Array<double> &g_,
-                       const Vector &x_,
-                       Vector &y_)
+                   const Array<double> &b_,
+                   const Array<double> &g_,
+                   const Vector &x_,
+                   Vector &y_)
 {
    constexpr int D1D = T_D1D ? T_D1D : 1;
    constexpr int Q1D = T_Q1D ? T_Q1D : 1;
@@ -1072,8 +724,9 @@ void SmemqGradVector2D(const int NE,
       double (*X)[D1D] = (double (*)[D1D])(Xz + tidz);
 
       MFEM_SHARED double GD[2][NBZ][D1D][Q1D];
-      double (*DQ0)[D1D] = (double (*)[D1D])(GD[0] + tidz);
-      double (*DQ1)[D1D] = (double (*)[D1D])(GD[1] + tidz);
+      double (*DQ0)[Q1D] = (double (*)[Q1D])(GD[0] + tidz);
+      double (*DQ1)[Q1D] = (double (*)[Q1D])(GD[1] + tidz);
+
       if (tidz == 0)
       {
          MFEM_FOREACH_THREAD(d,y,D1D)
@@ -1109,8 +762,11 @@ void SmemqGradVector2D(const int NE,
                   u += B[qx][dx] * input;
                   v += G[qx][dx] * input;
                }
-               DQ0[dy][qx] = u;
-               DQ1[dy][qx] = v;
+               if (tidz == 0)
+               {
+                  DQ0[dy][qx] = u;
+                  DQ1[dy][qx] = v;
+               }
             }
          }
          MFEM_SYNC_THREAD;
@@ -1132,7 +788,7 @@ void SmemqGradVector2D(const int NE,
          MFEM_SYNC_THREAD;
       }
    });
-}*/
+}
 
 // *****************************************************************************
 typedef void (*fGradVector2D)(const int E,
@@ -1166,12 +822,8 @@ static void Dof2QuadGrad(const Operator *erestrict,
    const int id = (dofs1D<<4)|(quad1D);
    static std::unordered_map<int, fGradVector2D> call =
    {
-      //{0x34,&qGradVector2D<3,4>},
-      {0x34,&Smem2qGradVector2D<3,4>},
-      //{0x44,&qGradVector2D<4,4>},
-      //{0x45,&qGradVector2D<4,5>},
-      //{0x46,&Smem2qGradVector2D<4,6>},
-      //{0x58,&qGradVector2D<5,8>},
+      {0x34,&qGradVector2D<3,4>},
+      {0x46,&qGradVector2D<4,6>},
    };
    if (!call[id])
    {
