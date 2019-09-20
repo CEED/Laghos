@@ -30,6 +30,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
+   gf.HostRead();
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
    MPI_Comm comm = pmesh.GetComm();
 
@@ -378,7 +379,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             ess_bdr = 0; ess_bdr[c] = 1;
             H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs);
             if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
-            else {B = rhs_c_gf;}
+            else { B = rhs_c_gf; }
             H1compFESpace.GetRestrictionMatrix()->Mult(dvc_gf, X);
             kVMassPA->SetEssentialTrueDofs(c_tdofs);
             kVMassPA->EliminateRHS(B);

@@ -1236,6 +1236,7 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
    ess_tdofs(0),
    tensors1D(t1D)
 {
+   distX.UseDevice(true);
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
    pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
    pabf.Assemble();
@@ -1259,6 +1260,7 @@ void OkinaMassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
       return;
    }
    ess_tdofs = dofs;
+   ess_tdofs.GetMemory().UseDevice(true);
 }
 
 // *****************************************************************************

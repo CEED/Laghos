@@ -395,24 +395,24 @@ inline double smooth_step_01(const double x, const double eps)
 // *****************************************************************************
 // * qupdate
 // *****************************************************************************
-template<const int dim> static
-void qupdate(const int nzones,
-             const int nqp,
-             const int nqp1D,
-             const double gamma,
-             const bool use_viscosity,
-             const double h0,
-             const double h1order,
-             const double cfl,
-             const double infinity,
-             const Array<double> &weights,
-             const Vector &Jacobians,
-             const Vector &rho0DetJ0w,
-             const Vector &e_quads,
-             const Vector &grad_v_ext,
-             const DenseTensor &Jac0inv,
-             Vector &dt_est,
-             DenseTensor &stressJinvT)
+template<int Q1D, int dim=2> static
+void qupdate2D(const int nzones,
+               const int nqp,
+               const int nqp1D,
+               const double gamma,
+               const bool use_viscosity,
+               const double h0,
+               const double h1order,
+               const double cfl,
+               const double infinity,
+               const Array<double> &weights,
+               const Vector &Jacobians,
+               const Vector &rho0DetJ0w,
+               const Vector &e_quads,
+               const Vector &grad_v_ext,
+               const DenseTensor &Jac0inv,
+               Vector &dt_est,
+               DenseTensor &stressJinvT)
 {
    auto d_weights = weights.Read();
    auto d_Jacobians = Jacobians.Read();
@@ -422,10 +422,9 @@ void qupdate(const int nzones,
    auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
    auto d_dt_est = dt_est.ReadWrite();
    auto d_stressJinvT = Write(stressJinvT.GetMemory(),
-                                    stressJinvT.TotalSize());
-   MFEM_FORALL(z, nzones,
+                              stressJinvT.TotalSize());
+   MFEM_FORALL_2D(z, nzones, Q1D, Q1D, 1,
    {
-      double min_detJ = infinity;
       double Jinv[dim*dim];
       double stress[dim*dim];
       double sgrad_v[dim*dim];
@@ -435,100 +434,106 @@ void qupdate(const int nzones,
       double Jpi[dim*dim];
       double ph_dir[dim];
       double stressJiT[dim*dim];
-      // ********************************************************************
-      for (int q = 0; q < nqp; q++)   // this for-loop should be kernel'd too
+      double min_detJ = infinity;
+      // ***********************************************************************
+      MFEM_FOREACH_THREAD(qx,x,Q1D)
       {
-         const int zdx = z * nqp + q;
-         const double weight =  d_weights[q];
-         const double inv_weight = 1. / weight;
-         const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
-         const double J[4] = {_J[0], _J[nqp], _J[2*nqp], _J[3*nqp]};
-         const double detJ = det(dim,J);
-         min_detJ = fmin(min_detJ,detJ);
-         calcInverse2D(dim,J,Jinv);
-         // *****************************************************************
-         const double rho = inv_weight * d_rho0DetJ0w[zdx] / detJ;
-         const double e   = fmax(0.0, d_e_quads[zdx]);
-         const double p  = (gamma - 1.0) * rho * e;
-         const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-         // *****************************************************************
-         for (int k = 0; k < dim*dim; k+=1) { stress[k] = 0.0; }
-         for (int d = 0; d < dim; d++) { stress[d*dim+d] = -p; }
-         // *****************************************************************
-         double visc_coeff = 0.0;
-         if (use_viscosity)
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
-            // Compression-based length scale at the point. The first
-            // eigenvector of the symmetric velocity gradient gives the
-            // direction of maximal compression. This is used to define the
-            // relative change of the initial length scale.
-            const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);//+ zdx*dim*dim;
-            const double dV[4] = {_dV[0], _dV[nqp], _dV[2*nqp], _dV[3*nqp]};
-            mult(dim,dim,dim, dV, Jinv, sgrad_v);
-            symmetrize(dim,sgrad_v);
-            if (dim==1)
+            const int q = qx + qy * Q1D;
+            const int zq = z * nqp + q;
+            const double weight =  d_weights[q];
+            const double inv_weight = 1. / weight;
+            const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
+            const double J[4] = {_J[0], _J[nqp], _J[2*nqp], _J[3*nqp]};
+            const double detJ = det(dim,J);
+            min_detJ = fmin(min_detJ,detJ);
+            calcInverse2D(dim,J,Jinv);
+            // *****************************************************************
+            const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
+            const double e   = fmax(0.0, d_e_quads[zq]);
+            const double p   = (gamma - 1.0) * rho * e;
+            const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
+            // *****************************************************************
+            for (int k = 0; k < dim*dim; k+=1) { stress[k] = 0.0; }
+            for (int d = 0; d < dim; d++) { stress[d*dim+d] = -p; }
+            // *****************************************************************
+            double visc_coeff = 0.0;
+            if (use_viscosity)
             {
-               eig_val_data[0] = sgrad_v[0];
-               eig_vec_data[0] = 1.;
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity gradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.
+               const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);//+ zdx*dim*dim;
+               const double dV[4] = {_dV[0], _dV[nqp], _dV[2*nqp], _dV[3*nqp]};
+               mult(dim,dim,dim, dV, Jinv, sgrad_v);
+               symmetrize(dim,sgrad_v);
+               if (dim==1)
+               {
+                  eig_val_data[0] = sgrad_v[0];
+                  eig_vec_data[0] = 1.;
+               }
+               else
+               {
+                  calcEigenvalues(dim, sgrad_v, eig_val_data, eig_vec_data);
+               }
+               for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
+               // Computes the initial->physical transformation Jacobian.
+               mult(dim,dim,dim, J, d_Jac0inv+zq*dim*dim, Jpi);
+               multV(dim, dim, Jpi, compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
+               // Measure of maximal compression.
+               const double mu = eig_val_data[0];
+               visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               // The following represents a "smooth" version of the statement
+               // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+               // eps must be scaled appropriately if a different unit system is
+               // being used.
+               const double eps = 1e-12;
+               visc_coeff += 0.5 * rho * h * sound_speed *
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+               //if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
+               add(dim, dim, visc_coeff, sgrad_v, stress);
+            }
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const double sv = calcSingularvalue(dim, dim-1, J);
+            const double h_min = sv / h1order;
+            const double inv_h_min = 1. / h_min;
+            const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
+            const double inv_dt = sound_speed * inv_h_min
+                                  + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+            if (min_detJ < 0.0)
+            {
+               // This will force repetition of the step with smaller dt.
+               d_dt_est[zq] = 0.0;
             }
             else
             {
-               calcEigenvalues(dim, sgrad_v, eig_val_data, eig_vec_data);
+               if (inv_dt>0.0)
+               {
+                  const double cfl_inv_dt = cfl / inv_dt;
+                  d_dt_est[zq] = fmin(d_dt_est[zq], cfl_inv_dt);
+               }
             }
-            for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
-            // Computes the initial->physical transformation Jacobian.
-            mult(dim,dim,dim, J, d_Jac0inv+zdx*dim*dim, Jpi);
-            multV(dim, dim, Jpi, compr_dir, ph_dir);
-            // Change of the initial mesh size in the compression direction.
-            const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
-            // Measure of maximal compression.
-            const double mu = eig_val_data[0];
-            visc_coeff = 2.0 * rho * h * h * fabs(mu);
-            // The following represents a "smooth" version of the statement
-            // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-            // eps must be scaled appropriately if a different unit system is
-            // being used.
-            const double eps = 1e-12;
-            visc_coeff += 0.5 * rho * h * sound_speed *
-                          (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-            //if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
-            add(dim, dim, visc_coeff, sgrad_v, stress);
-         }
-         // Time step estimate at the point. Here the more relevant length
-         // scale is related to the actual mesh deformation; we use the min
-         // singular value of the ref->physical Jacobian. In addition, the
-         // time step estimate should be aware of the presence of shocks.
-         const double sv = calcSingularvalue(dim, dim-1, J);
-         const double h_min = sv / h1order;
-         const double inv_h_min = 1. / h_min;
-         const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-         const double inv_dt = sound_speed * inv_h_min
-                               + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
-         if (min_detJ < 0.0)
-         {
-            // This will force repetition of the step with smaller dt.
-            d_dt_est[z] = 0.0;
-         }
-         else
-         {
-            if (inv_dt>0.0)
+            // Quadrature data for partial assembly of the force operator.
+            multABt(dim, dim, dim, stress, Jinv, stressJiT);
+            for (int k=0; k<dim*dim; k+=1) { stressJiT[k] *= weight * detJ; }
+            for (int vd = 0 ; vd < dim; vd++)
             {
-               const double cfl_inv_dt = cfl / inv_dt;
-               d_dt_est[z] = fmin(d_dt_est[z], cfl_inv_dt);
-            }
-         }
-         // Quadrature data for partial assembly of the force operator.
-         multABt(dim, dim, dim, stress, Jinv, stressJiT);
-         for (int k=0; k<dim*dim; k+=1) { stressJiT[k] *= weight * detJ; }
-         for (int vd = 0 ; vd < dim; vd++)
-         {
-            for (int gd = 0; gd < dim; gd++)
-            {
-               const int offset = zdx + nqp*nzones*(gd+vd*dim);
-               d_stressJinvT[offset] = stressJiT[vd+gd*dim];
+               for (int gd = 0; gd < dim; gd++)
+               {
+                  const int offset = zq + nqp*nzones*(gd+vd*dim);
+                  d_stressJinvT[offset] = stressJiT[vd+gd*dim];
+               }
             }
          }
       }
+      MFEM_SYNC_THREAD;
    });
 }
 
@@ -641,6 +646,180 @@ void vecToQuad2D(const int NE,
    });
 }
 
+// **************************************************************************
+template<int VDIM, int D1D, int Q1D, int NBZ=1> static
+void Smem2vecToQuad2D(const int NE,
+                      const Array<double> &b_,
+                      const Vector &x_,
+                      Vector &y_)
+{
+   auto b = Reshape(b_.Read(), Q1D, D1D);
+   auto x = Reshape(x_.Read(), D1D, D1D, VDIM, NE);
+   auto Y = Reshape(y_.Write(), Q1D, Q1D, VDIM, NE);
+
+   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   {
+      const int zid = MFEM_THREAD_ID(z);
+      MFEM_SHARED double B[Q1D][D1D];
+
+      MFEM_SHARED double DDz[NBZ][D1D][D1D];
+      double (*DD)[D1D] = (double (*)[D1D])(DDz + zid);
+
+      MFEM_SHARED double out_xyz[NBZ][Q1D][Q1D];
+      double (*out_xy)[Q1D] = (double (*)[Q1D])(out_xyz + zid);
+
+      MFEM_SHARED double out_xz[NBZ][Q1D];
+      double *out_x = (double*)(out_xz + zid);
+
+      if (zid == 0)
+      {
+         MFEM_FOREACH_THREAD(d,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(q,x,Q1D)
+            {
+               B[q][d] = b(q,d);
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      for (int c = 0; c < VDIM; ++c)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               out_xy[qy][qx] = 0.0;
+            }
+         }
+         MFEM_FOREACH_THREAD(dy,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(dx,x,D1D)
+            {
+               DD[dx][dy] = x(dx,dy,c,e);
+            }
+         }
+         MFEM_SYNC_THREAD;
+         for (int dy = 0; dy < D1D; ++dy)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               out_x[qy] = 0.0;
+            }
+            for (int dx = 0; dx < D1D; ++dx)
+            {
+               const double r_gf = DD[dx][dy];
+               MFEM_FOREACH_THREAD(qy,y,Q1D)
+               {
+                  out_x[qy] += r_gf * B[qy][dx];
+               }
+            }
+            MFEM_SYNC_THREAD;
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               const double d2q = B[qy][dy];
+               for (int qx = 0; qx < Q1D; ++qx)
+               {
+                  out_xy[qy][qx] += d2q * out_x[qx];
+               }
+            }
+            MFEM_SYNC_THREAD;
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               Y(qx,qy,c,e) = out_xy[qy][qx];
+            }
+         }
+         MFEM_SYNC_THREAD;
+      }
+   });
+}
+
+// *****************************************************************************
+/*template<int VDIM=1, int T_D1D=0, int T_Q1D=0, const int T_NBZ =1> static
+void SmemvecToQuad2D(const int NE,
+                     const Array<double> &b_,
+                     const Vector &x_,
+                     Vector &y_)
+{
+   constexpr int D1D = T_D1D ? T_D1D : 1;
+   constexpr int Q1D = T_Q1D ? T_Q1D : 1;
+   constexpr int NBZ = T_NBZ ? T_NBZ : 1;
+
+   auto b = Reshape(b_.Read(), Q1D, D1D);
+   auto x = Reshape(x_.Read(), D1D, D1D, VDIM, NE);
+   auto y = Reshape(y_.Write(), Q1D, Q1D, VDIM, NE);
+
+   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   {
+      constexpr int D1D = T_D1D ? T_D1D : 1;
+      constexpr int Q1D = T_Q1D ? T_Q1D : 1;
+      constexpr int NBZ = T_NBZ ? T_NBZ : 1;
+
+      const int zid = MFEM_THREAD_ID(z);
+      MFEM_SHARED double B[Q1D][D1D];
+
+      MFEM_SHARED double DDz[NBZ][D1D*D1D];
+      double (*DD)[D1D] = (double (*)[D1D])(DDz + zid);
+
+      MFEM_SHARED double DQz[NBZ][D1D*Q1D];
+      double (*DQ)[D1D] = (double (*)[D1D])(DQz + zid);
+
+      if (zid == 0)
+      {
+         MFEM_FOREACH_THREAD(d,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(q,x,Q1D)
+            {
+               B[q][d] = b(q,d);
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      for (int c = 0; c < VDIM; ++c)
+      {
+         MFEM_FOREACH_THREAD(dy,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(dx,x,D1D)
+            {
+               DD[dy][dx] = x(dx,dy,c,e);
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(dy,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double dq = 0.0;
+               for (int dx = 0; dx < D1D; ++dx)
+               {
+                  dq += B[qx][dx] * DD[dy][dx];
+               }
+               DQ[dy][qx] = dq;
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double qq = 0.0;
+               for (int dy = 0; dy < D1D; ++dy)
+               {
+                  qq += DQ[dy][qx] * B[qy][dy];
+               }
+               y(qx,qy,c,e) = qq;
+            }
+         }
+         MFEM_SYNC_THREAD;
+      }
+   });
+}*/
+
 // *****************************************************************************
 typedef void (*fVecToQuad2D)(const int E,
                              const Array<double> &dofToQuad,
@@ -655,26 +834,23 @@ static void Dof2QuadScalar(const Operator *erestrict,
                            const Vector &d_in,
                            Vector &d_out)
 {
-   const int dim = fes.GetMesh()->Dimension();
-   MFEM_ASSERT(dim==2, "dim!=2");
    const int vdim = fes.GetVDim();
-   const mfem::FiniteElement& fe = *fes.GetFE(0);
-   const int numDofs  = fe.GetDof();
    const int nzones = fes.GetNE();
    const int nqp = ir.GetNPoints();
-   const int out_size =  nqp * nzones;
+   const int out_size = nqp * nzones;
    const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
    const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    d_out.SetSize(out_size);
    MFEM_ASSERT(vdim==1, "vdim!=1");
    const int id = (vdim<<8)|(dofs1D<<4)|(quad1D);
-   static std::unordered_map<unsigned int, fVecToQuad2D> call =
+   static std::unordered_map<int, fVecToQuad2D> call =
    {
-      {0x124,&vecToQuad2D<1,2,4>},
-      {0x134,&vecToQuad2D<1,3,4>},
-      {0x135,&vecToQuad2D<1,3,5>},
-      {0x136,&vecToQuad2D<1,3,6>},
-      {0x148,&vecToQuad2D<1,4,8>},
+      //{0x124,&vecToQuad2D<1,2,4>},
+      {0x124,&Smem2vecToQuad2D<1,2,4,1>},
+      //{0x134,&vecToQuad2D<1,3,4>},
+      //{0x135,&vecToQuad2D<1,3,5>},
+      //{0x136,&Smem2vecToQuad2D<1,3,6>},
+      //{0x148,&vecToQuad2D<1,4,8>},
    };
    if (!call[id])
    {
@@ -763,6 +939,201 @@ void qGradVector2D(const int NE,
    });
 }
 
+// **************************************************************************
+template <int D1D, int Q1D, int NBZ=1> static
+void Smem2qGradVector2D(const int NE,
+                        const Array<double> &b_,
+                        const Array<double> &g_,
+                        const Vector &x_,
+                        Vector &y_)
+{
+   auto b = Reshape(b_.Read(), Q1D,D1D);
+   auto g = Reshape(g_.Read(), Q1D,D1D);
+   auto x = Reshape(x_.Read(), D1D,D1D,2,NE);
+   auto y = Reshape(y_.Write(), Q1D,Q1D,2,2,NE);
+
+   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   {
+      const int zid = MFEM_THREAD_ID(z);
+      MFEM_SHARED double B[Q1D][D1D];
+      MFEM_SHARED double G[Q1D][D1D];
+
+      MFEM_SHARED double s_gradv[2][2][Q1D][Q1D];
+      MFEM_SHARED double vDx[2][Q1D];
+      MFEM_SHARED double vx[2][Q1D];
+
+      if (zid == 0)
+      {
+         MFEM_FOREACH_THREAD(d,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(q,x,Q1D)
+            {
+               B[q][d] = b(q,d);
+               G[q][d] = g(q,d);
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      MFEM_FOREACH_THREAD(qx,x,Q1D)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            s_gradv[0][0][qx][qy] = 0.0;
+            s_gradv[0][1][qx][qy] = 0.0;
+            s_gradv[1][0][qx][qy] = 0.0;
+            s_gradv[1][1][qx][qy] = 0.0;
+         }
+      }
+      MFEM_SYNC_THREAD;
+      for (int dy = 0; dy < D1D; ++dy)
+      {
+         MFEM_FOREACH_THREAD(qx,x,Q1D)
+         {
+            for (int c = 0; c < 2; ++c)
+            {
+               vDx[c][qx] = 0.0;
+               vx[c][qx] = 0.0;
+            }
+         }
+         MFEM_SYNC_THREAD;
+         for (int dx = 0; dx < D1D; ++dx)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const double wDx = G[qx][dx];
+               const double wx  = B[qx][dx];
+               for (int c = 0; c < 2; ++c)
+               {
+                  const double input = x(dx,dy,c,e);
+                  vDx[c][qx] += input * wDx;
+                  vx[c][qx] += input * wx;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            const double vy  = B[qy][dy];
+            const double vDy = G[qy][dy];
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               for (int c = 0; c < 2; ++c)
+               {
+                  s_gradv[c][0][qx][qy] += vy*vDx[c][qx];
+                  s_gradv[c][1][qx][qy] += vDy*vx[c][qx];
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qx,x,Q1D)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            y(qx,qy,0,0,e) = s_gradv[0][0][qx][qy];
+            y(qx,qy,1,0,e) = s_gradv[1][0][qx][qy];
+            y(qx,qy,0,1,e) = s_gradv[0][1][qx][qy];
+            y(qx,qy,1,1,e) = s_gradv[1][1][qx][qy];
+         }
+      }
+   });
+}
+
+// **************************************************************************
+/*template<int T_D1D, int T_Q1D, int T_NBZ =1> static
+void SmemqGradVector2D(const int NE,
+                       const Array<double> &b_,
+                       const Array<double> &g_,
+                       const Vector &x_,
+                       Vector &y_)
+{
+   constexpr int D1D = T_D1D ? T_D1D : 1;
+   constexpr int Q1D = T_Q1D ? T_Q1D : 1;
+   constexpr int NBZ = T_NBZ ? T_NBZ : 1;
+
+   auto b = Reshape(b_.Read(), Q1D, D1D);
+   auto g = Reshape(g_.Read(), Q1D, D1D);
+   auto x = Reshape(x_.Read(), D1D, D1D, 2, NE);
+   auto y = Reshape(y_.Write(), Q1D, Q1D, 2, 2, NE);
+
+
+   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   {
+      constexpr int D1D = T_D1D ? T_D1D : 1;
+      constexpr int Q1D = T_Q1D ? T_Q1D : 1;
+      constexpr int NBZ = T_NBZ ? T_NBZ : 1;
+      const int tidz = MFEM_THREAD_ID(z);
+      MFEM_SHARED double B[Q1D][D1D];
+      MFEM_SHARED double G[Q1D][D1D];
+
+      MFEM_SHARED double Xz[NBZ][D1D][D1D];
+      double (*X)[D1D] = (double (*)[D1D])(Xz + tidz);
+
+      MFEM_SHARED double GD[2][NBZ][D1D][Q1D];
+      double (*DQ0)[D1D] = (double (*)[D1D])(GD[0] + tidz);
+      double (*DQ1)[D1D] = (double (*)[D1D])(GD[1] + tidz);
+      if (tidz == 0)
+      {
+         MFEM_FOREACH_THREAD(d,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(q,x,Q1D)
+            {
+               B[q][d] = b(q,d);
+               G[q][d] = g(q,d);
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      for (int c = 0; c < 2; ++c)
+      {
+         MFEM_FOREACH_THREAD(dx,x,D1D)
+         {
+            MFEM_FOREACH_THREAD(dy,y,D1D)
+            {
+               X[dx][dy] = x(dx,dy,c,e);
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(dy,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               double v = 0.0;
+               for (int dx = 0; dx < D1D; ++dx)
+               {
+                  const double input = X[dx][dy];
+                  u += B[qx][dx] * input;
+                  v += G[qx][dx] * input;
+               }
+               DQ0[dy][qx] = u;
+               DQ1[dy][qx] = v;
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               double v = 0.0;
+               for (int dy = 0; dy < D1D; ++dy)
+               {
+                  u += DQ1[dy][qx] * B[qy][dy];
+                  v += DQ0[dy][qx] * G[qy][dy];
+               }
+               y(qx,qy,c,0,e) = u;
+               y(qx,qy,c,1,e) = v;
+            }
+         }
+         MFEM_SYNC_THREAD;
+      }
+   });
+}*/
+
 // *****************************************************************************
 typedef void (*fGradVector2D)(const int E,
                               const Array<double> &dofToQuad,
@@ -778,8 +1149,7 @@ static void Dof2QuadGrad(const Operator *erestrict,
                          const Vector &d_in,
                          Vector &d_out)
 {
-   const int dim = fes.GetMesh()->Dimension();
-   MFEM_ASSERT(dim==2, "dim!=2");
+   MFEM_ASSERT(fes.GetMesh()->Dimension()==2, "dim!=2");
    const int vdim = fes.GetVDim();
    MFEM_ASSERT(vdim==2, "vdim!=2");
    const mfem::FiniteElement& fe = *fes.GetFE(0);
@@ -794,13 +1164,14 @@ static void Dof2QuadGrad(const Operator *erestrict,
    erestrict->Mult(d_in, v_local_in);
    d_out.SetSize(out_size);
    const int id = (dofs1D<<4)|(quad1D);
-   static std::unordered_map<unsigned int, fGradVector2D> call =
+   static std::unordered_map<int, fGradVector2D> call =
    {
-      {0x34,&qGradVector2D<3,4>},
-      {0x44,&qGradVector2D<4,4>},
-      {0x45,&qGradVector2D<4,5>},
-      {0x46,&qGradVector2D<4,6>},
-      {0x58,&qGradVector2D<5,8>},
+      //{0x34,&qGradVector2D<3,4>},
+      {0x34,&Smem2qGradVector2D<3,4>},
+      //{0x44,&qGradVector2D<4,4>},
+      //{0x45,&qGradVector2D<4,5>},
+      //{0x46,&Smem2qGradVector2D<4,6>},
+      //{0x58,&qGradVector2D<5,8>},
    };
    if (!call[id])
    {
@@ -827,7 +1198,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    timer->sw_qdata.Start();
-   Vector* S_p = (Vector*) &S;
+   Vector* S_p = const_cast<Vector*>(&S);
 
    // **************************************************************************
    const int H1_size = H1FESpace.GetVSize();
@@ -853,29 +1224,53 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    const double infinity = std::numeric_limits<double>::infinity();
 
    // **************************************************************************
-   const int dt_est_sz = nzones;
+   const int dt_est_sz = nzones*nqp;
    Vector d_dt_est(dt_est_sz);
    d_dt_est = quad_data.dt_est;
 
    // **************************************************************************
    MFEM_VERIFY(dim==2, "Only UpdateQuadratureData with dim==2 is supported");
-   qupdate<2>(nzones,
-              nqp,
-              nqp1D,
-              gamma,
-              use_viscosity,
-              quad_data.h0,
-              h1order,
-              cfl,
-              infinity,
-              ir.GetWeights(),
-              d_grad_x_data,
-              quad_data.rho0DetJ0w,
-              d_e_quads_data,
-              d_grad_v_data,
-              quad_data.Jac0inv,
-              d_dt_est,
-              quad_data.stressJinvT);
+   // nqp1D: 4, 6
+   switch (nqp1D)
+   {
+      case 4:
+         qupdate2D<4>(nzones,
+                      nqp,
+                      nqp1D,
+                      gamma,
+                      use_viscosity,
+                      quad_data.h0,
+                      h1order,
+                      cfl,
+                      infinity,
+                      ir.GetWeights(),
+                      d_grad_x_data,
+                      quad_data.rho0DetJ0w,
+                      d_e_quads_data,
+                      d_grad_v_data,
+                      quad_data.Jac0inv,
+                      d_dt_est,
+                      quad_data.stressJinvT); break;
+      case 6:
+         qupdate2D<6>(nzones,
+                      nqp,
+                      nqp1D,
+                      gamma,
+                      use_viscosity,
+                      quad_data.h0,
+                      h1order,
+                      cfl,
+                      infinity,
+                      ir.GetWeights(),
+                      d_grad_x_data,
+                      quad_data.rho0DetJ0w,
+                      d_e_quads_data,
+                      d_grad_v_data,
+                      quad_data.Jac0inv,
+                      d_dt_est,
+                      quad_data.stressJinvT); break;
+      default: MFEM_VERIFY(false, "Unknown kernel!");
+   }
 
    // **************************************************************************
    quad_data.dt_est = d_dt_est.Min();

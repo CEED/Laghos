@@ -616,9 +616,9 @@ int main(int argc, char *argv[])
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
       // the sub-vectors to match those of S.
-      //x_gf.SyncMemory(S);
-      //v_gf.SyncMemory(S);
-      //e_gf.SyncMemory(S);
+      x_gf.SyncMemory(S);
+      v_gf.SyncMemory(S);
+      e_gf.SyncMemory(S);
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
