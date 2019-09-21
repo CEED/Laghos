@@ -1333,119 +1333,6 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
 }
 
 // *****************************************************************************
-template<const int DIM,
-         const int D1D,
-         const int Q1D,
-         const int L1D,
-         const int H1D> static
-void kForceMult2D(const int NE,
-                  const Array<double> &_B,
-                  const Array<double> &_Bt,
-                  const Array<double> &_Gt,
-                  const DenseTensor &_sJit,
-                  const Vector &_e,
-                  Vector &_v)
-{
-   auto L2B = Reshape(_B.Read(), Q1D, L1D);
-   auto H1Bt = Reshape(_Bt.Read(), H1D, Q1D);
-   auto H1Gt = Reshape(_Gt.Read(), H1D, Q1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
-                       Q1D,Q1D,NE,2,2);
-   auto energy = Reshape(_e.Read(), L1D, L1D, NE);
-   const double eps1 = numeric_limits<double>::epsilon();
-   const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.Write(), D1D,D1D,2,NE);
-   MFEM_FORALL(e, NE,
-   {
-      double e_xy[Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx)
-      {
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            e_xy[qx][qy] = 0.0;
-         }
-      }
-      for (int dy = 0; dy < L1D; ++dy)
-      {
-         double e_x[Q1D];
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            e_x[qy] = 0.0;
-         }
-         for (int dx = 0; dx < L1D; ++dx)
-         {
-            const double r_e = energy(dx,dy,e);
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               e_x[qx] += L2B(qx,dx) * r_e;
-            }
-         }
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            const double wy = L2B(qy,dy);
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               e_xy[qx][qy] += wy * e_x[qx];
-            }
-         }
-      }
-      for (int c = 0; c < 2; ++c)
-      {
-         for (int dy = 0; dy < H1D; ++dy)
-         {
-            for (int dx = 0; dx < H1D; ++dx)
-            {
-               velocity(dx,dy,c,e) = 0.0;
-            }
-         }
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            double Dxy[H1D];
-            double xy[H1D];
-            for (int dx = 0; dx < H1D; ++dx)
-            {
-               Dxy[dx] = 0.0;
-               xy[dx]  = 0.0;
-            }
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               const double esx = e_xy[qx][qy] * sJit(qx,qy,e,0,c);
-               const double esy = e_xy[qx][qy] * sJit(qx,qy,e,1,c);
-               for (int dx = 0; dx < H1D; ++dx)
-               {
-                  Dxy[dx] += esx * H1Gt(dx,qx);
-                  xy[dx]  += esy * H1Bt(dx,qx);
-               }
-            }
-            for (int dy = 0; dy < H1D; ++dy)
-            {
-               const double wy  = H1Bt(dy,qy);
-               const double wDy = H1Gt(dy,qy);
-               for (int dx = 0; dx < H1D; ++dx)
-               {
-                  velocity(dx,dy,c,e) += wy* Dxy[dx] + wDy*xy[dx];
-               }
-            }
-         }
-      }
-      for (int c = 0; c < 2; ++c)
-      {
-         for (int dy = 0; dy < H1D; ++dy)
-         {
-            for (int dx = 0; dx < H1D; ++dx)
-            {
-               const double v = velocity(dx,dy,c,e);
-               if (fabs(v) < eps2)
-               {
-                  velocity(dx,dy,c,e) = 0.0;
-               }
-            }
-         }
-      }
-   });
-}
-
-// *****************************************************************************
 template<int DIM, int D1D, int Q1D, int L1D, int H1D, int NBZ =1> static
 void kSmemForceMult2D(const int NE,
                       const Array<double> &_B,
@@ -1963,6 +1850,156 @@ void kForceMultTranspose2D(const int NE,
       }
    });
 }
+// *****************************************************************************
+template<int DIM, int D1D, int Q1D, int L1D, int H1D, int NBZ =1> static
+void kSmemForceMultTranspose2D(const int NE,
+                               const Array<double> &_Bt,
+                               const Array<double> &_B,
+                               const Array<double> &_G,
+                               const DenseTensor &_sJit,
+                               const Vector &_v,
+                               Vector &_e)
+{
+   MFEM_VERIFY(D1D==H1D,"");
+   auto b = Reshape(_B.Read(), Q1D,H1D);
+   auto g = Reshape(_G.Read(), Q1D,H1D);
+   auto bt = Reshape(_Bt.Read(), L1D,Q1D);
+   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
+                       Q1D, Q1D, NE, 2, 2);
+   auto velocity = Reshape(_v.Read(), D1D,D1D,2,NE);
+   auto energy = Reshape(_e.Write(), L1D, L1D, NE);
+
+   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   {
+      const int z = MFEM_THREAD_ID(z);
+
+      MFEM_SHARED double Bt[L1D][Q1D];
+      MFEM_SHARED double B[Q1D][H1D];
+      MFEM_SHARED double G[Q1D][H1D];
+
+      MFEM_SHARED double Vz[NBZ][D1D*D1D];
+      double (*V)[D1D] = (double (*)[D1D])(Vz + z);
+
+      MFEM_SHARED double DQz[2][NBZ][D1D*Q1D];
+      double (*DQ0)[Q1D] = (double (*)[Q1D])(DQz[0] + z);
+      double (*DQ1)[Q1D] = (double (*)[Q1D])(DQz[1] + z);
+
+      MFEM_SHARED double QQz[3][NBZ][Q1D*Q1D];
+      double (*QQ)[Q1D] = (double (*)[Q1D])(QQz[0] + z);
+      double (*QQ0)[Q1D] = (double (*)[Q1D])(QQz[1] + z);
+      double (*QQ1)[Q1D] = (double (*)[Q1D])(QQz[2] + z);
+
+      MFEM_SHARED double QLz[NBZ][Q1D*L1D];
+      double (*QL)[L1D] = (double (*)[L1D]) (QLz + z);
+
+      if (z == 0)
+      {
+         MFEM_FOREACH_THREAD(q,x,Q1D)
+         {
+            MFEM_FOREACH_THREAD(h,y,Q1D)
+            {
+               if (h < H1D) { B[q][h] = b(q,h); }
+               if (h < H1D) { G[q][h] = g(q,h); }
+               const int l = h;
+               if (l < L1D) { Bt[l][q] = bt(l,q); }
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qy,y,Q1D)
+      {
+         MFEM_FOREACH_THREAD(qx,x,Q1D)
+         {
+            QQ[qy][qx] = 0.0;
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      for (int c = 0; c < 2; ++c)
+      {
+
+         MFEM_FOREACH_THREAD(dx,x,D1D)
+         {
+            MFEM_FOREACH_THREAD(dy,y,D1D)
+            {
+               V[dx][dy] = velocity(dx,dy,c,e);
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(dy,y,D1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               double v = 0.0;
+               for (int dx = 0; dx < H1D; ++dx)
+               {
+                  const double input = V[dx][dy];
+                  u += B[qx][dx] * input;
+                  v += G[qx][dx] * input;
+               }
+               DQ0[dy][qx] = u;
+               DQ1[dy][qx] = v;
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               double v = 0.0;
+               for (int dy = 0; dy < H1D; ++dy)
+               {
+                  u += DQ1[dy][qx] * B[qy][dy];
+                  v += DQ0[dy][qx] * G[qy][dy];
+               }
+               QQ0[qy][qx] = u;
+               QQ1[qy][qx] = v;
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const double esx = QQ0[qy][qx] * sJit(qx,qy,e,0,c);
+               const double esy = QQ1[qy][qx] * sJit(qx,qy,e,1,c);
+               QQ[qy][qx] += esx + esy;
+            }
+         }
+         MFEM_SYNC_THREAD;
+      } // for each component
+      MFEM_SYNC_THREAD;
+
+      MFEM_FOREACH_THREAD(qy,y,Q1D)
+      {
+         MFEM_FOREACH_THREAD(lx,x,L1D)
+         {
+            double u = 0.0;
+            for (int qx = 0; qx < Q1D; ++qx)
+            {
+               u += QQ[qy][qx] * Bt[lx][qx];
+            }
+            QL[qy][lx] = u;
+         }
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(ly,y,L1D)
+      {
+         MFEM_FOREACH_THREAD(lx,x,L1D)
+         {
+            double u = 0.0;
+            for (int qy = 0; qy < Q1D; ++qy)
+            {
+               u += QL[qy][lx] * Bt[ly][qy];
+            }
+            energy(lx,ly,e) = u;
+         }
+      }
+      MFEM_SYNC_THREAD;
+   });
+}
 
 // *****************************************************************************
 template<const int DIM,
@@ -2142,15 +2179,16 @@ static void kForceMultTranspose(const int DIM,
 {
    MFEM_ASSERT(D1D==H1D,"D1D!=H1D");
    MFEM_ASSERT(L1D==D1D-1, "L1D!=D1D-1");
-   const unsigned int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
-   static std::unordered_map<unsigned long long, fForceMultTranspose> call =
+   const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
+   static std::unordered_map<int, fForceMultTranspose> call =
    {
       // DIM, D1D, Q1D, L1D(=D1D-1), H1D(=D1D)
-      {0x234,&kForceMultTranspose2D<2,3,4,2,3>},
-      {0x244,&kForceMultTranspose2D<2,4,4,3,4>},
-      {0x245,&kForceMultTranspose2D<2,4,5,3,4>},
-      {0x246,&kForceMultTranspose2D<2,4,6,3,4>},
-      {0x258,&kForceMultTranspose2D<2,5,8,4,5>},
+      //{0x234,&kForceMultTranspose2D<2,3,4,2,3>},
+      {0x234,&kSmemForceMultTranspose2D<2,3,4,2,3>},
+      //{0x244,&kForceMultTranspose2D<2,4,4,3,4>},
+      //{0x245,&kForceMultTranspose2D<2,4,5,3,4>},
+      {0x246,&kSmemForceMultTranspose2D<2,4,6,3,4>},
+      {0x258,&kSmemForceMultTranspose2D<2,5,8,4,5>},
       //{0x334,&kForceMultTranspose3D<3,3,4,2,3>},
    };
    if (!call[id])
