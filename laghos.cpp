@@ -464,7 +464,10 @@ int main(int argc, char *argv[])
      const double coeff = LaghosRho0(constant, x);
      v(q,e) =  w[q] * coeff * detJ;
    */
-   ConstantCoefficient rho_coeff(problem==2?-2.0:problem==3?-3.0:1.0);
+   ConstantCoefficient rho_coeff(problem==2?-2.0:
+                                 problem==3?-3.0:
+                                 problem==5?-5.0:
+                                 1.0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -505,6 +508,7 @@ int main(int argc, char *argv[])
       case 2: visc = true; break;
       case 3: visc = true; break;
       case 4: visc = false; break;
+      case 5: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -837,6 +841,14 @@ double rho0(const Vector &x)
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
       case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
       case 4: return 1.0;
+      case 5:
+      {
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; } // 1
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0; } // 2
+         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; } // 3
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0; } // 4
+         MFEM_ABORT("Error in problem 5!");
+      }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -850,6 +862,7 @@ double gamma(const Vector &x)
       case 2: return 1.4;
       case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
       case 4: return 5.0 / 3.0;
+      case 5: return 1.4;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -891,6 +904,15 @@ void v0(const Vector &x, Vector &v)
          }
          else { v = 0.0; }
          break;
+      }
+      case 5:
+      {
+         const double atn = cos(M_PI*(x(0)-0.5))*cos(M_PI*(x(1)-0.5));
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 1
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;} // 2
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 3
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; } // 4
+         MFEM_ABORT("Error in problem 5!");
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
@@ -936,6 +958,15 @@ double e0(const Vector &x)
             return (t1 - t2) / (gamma - 1.0);
          }
          else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+      }
+      case 5:
+      {
+         const double irg = 1.0 / rho0x / (gamma(x) - 1.0);
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; } // 1
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 2
+         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; } // 4
+         MFEM_ABORT("Error in problem 5!");
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }

@@ -62,7 +62,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
               << x << " " << y << " " << w << " " << h << "\n"
-              << "keys maaAcl";
+              << "keys mmaaAcl";
          if ( vec ) { sock << "vvv"; }
          sock << endl;
       }
@@ -188,7 +188,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       {
          ess_bdr = 0; ess_bdr[c] = 1;
          H1compFESpace.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-         //c_tdofs[c].GetMemory().UseDevice(true);
          c_tdofs[c].Read();
       }
       X.UseDevice(true);
