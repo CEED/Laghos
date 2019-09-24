@@ -885,6 +885,11 @@ double rad(double x, double y)
 
 void v0(const Vector &x, Vector &v)
 {
+   //const double atn = cos(M_PI*(x(0)-0.5))*cos(M_PI*(x(1)-0.5));
+   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+   /*const double sc = 10.0;
+   const double atn = tanh(sc*x(0)*(1.0-x(0)))*
+                      tanh(sc*x(1)*(1.0-x(1)));*/
    switch (problem)
    {
       case 0:
@@ -918,7 +923,6 @@ void v0(const Vector &x, Vector &v)
       }
       case 5:
       {
-         const double atn = cos(M_PI*(x(0)-0.5))*cos(M_PI*(x(1)-0.5));
          if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;} // 2
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 3
@@ -927,11 +931,11 @@ void v0(const Vector &x, Vector &v)
       }
       case 6:
       {
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75, v(1)=-0.5; return;} // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75, v(1)=+0.5; return;} // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75, v(1)=+0.5; return;} // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75, v(1)=-0.5; return;} // 4
-         MFEM_ABORT("Error in problem 5!");
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;} // 1
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;} // 2
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;} // 3
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;} // 4
+         MFEM_ABORT("Error in problem 6!");
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
