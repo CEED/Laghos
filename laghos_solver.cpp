@@ -638,14 +638,16 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       const HYPRE_Int GNZones = alldata[2];
       const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
       cout << endl;
-      cout << "| Zones   " << "| H1 dofs " << "| L2 dofs " << "| QP "
-           << "| N dofs   "
+      cout << "| Ranks " << "| Zones   "
+           << "| H1 dofs " << "| L2 dofs "
+           << "| QP "      << "| N dofs   "
            << "| FOM1    " << "| T1    "
            << "| FOM2   " << "| T2   "
            << "| FOM3   " << "| T3   "
            << "| FOM    " << "| TT   |"<< endl;
       cout << setprecision(3);
-      cout << "| " << setw(8) << GNZones
+      cout << "| " << setw(6) << H1FESpace.GetNRanks()
+           << "| " << setw(8) << GNZones
            << "| " << setw(8) << H1GTVSize
            << "| " << setw(8) << L2GTVSize
            << "| " << setw(3) << QPT
