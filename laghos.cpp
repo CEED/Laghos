@@ -68,7 +68,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+static int problem;
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
+   bool gpu_aware_mpi = false;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -185,6 +186,10 @@ int main(int argc, char *argv[])
                   "Enable memory usage.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Enable figure of merit output.");
+   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
+                  "Enable figure of merit output.");
+   args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
+                  "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.Parse();
    if (!args.Good())
    {
@@ -199,6 +204,7 @@ int main(int argc, char *argv[])
    {
       device.Configure(dev_opt);
       if (mpi.Root()) { device.Print(); }
+      device.SetGPUAwareMPI(gpu_aware_mpi);
    }
 
    // Read the serial mesh from the given mesh file on all processors.
@@ -580,7 +586,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
-   long mem, mem_max, mem_sum;
+   long mem=0, mem_max=0, mem_sum=0;
    int checks = 0;
 
    for (int ti = 1; !last_step; ti++)
