@@ -344,6 +344,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
    UpdateQuadratureData(S);
+
    AssembleForceMatrix();
 
    // The monolithic BlockVector stores the unknown fields as follows:

@@ -23,6 +23,11 @@
 
 #ifdef MFEM_USE_MPI
 
+#define dbg(...) {          \
+      printf("\n\033[33m"); \
+      printf(__VA_ARGS__);  \
+      printf("\033[m");     \
+  }
 namespace mfem
 {
 

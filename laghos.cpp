@@ -186,8 +186,6 @@ int main(int argc, char *argv[])
                   "Enable memory usage.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Enable figure of merit output.");
-   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
-                  "Enable figure of merit output.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.Parse();

@@ -77,6 +77,18 @@ public:
                              bool &quad_data_is_current,
                              QuadratureData &quad_data,
                              const Tensors1D *tensors1D);
+
+   // **************************************************************************
+   void UpdateQuadratureData2D(const Vector &S,
+                               bool &quad_data_is_current,
+                               QuadratureData &quad_data,
+                               const Tensors1D *tensors1D);
+
+   // **************************************************************************
+   void UpdateQuadratureData3D(const Vector &S,
+                               bool &quad_data_is_current,
+                               QuadratureData &quad_data,
+                               const Tensors1D *tensors1D);
 };
 
 } // namespace hydrodynamics

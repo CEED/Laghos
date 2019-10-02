@@ -145,8 +145,6 @@ void add(const int height, const int width,
 }
 
 // *****************************************************************************
-// * Eigen
-// *****************************************************************************
 MFEM_HOST_DEVICE  static
 double norml2(const int size, const double *data)
 {
@@ -178,28 +176,6 @@ MFEM_HOST_DEVICE static
 inline double det2D(const double *d)
 {
    return d[0] * d[3] - d[1] * d[2];
-}
-
-// *****************************************************************************
-MFEM_HOST_DEVICE static
-inline double det3D(const double *d)
-{
-   return
-      d[0] * (d[4] * d[8] - d[5] * d[7]) +
-      d[3] * (d[2] * d[7] - d[1] * d[8]) +
-      d[6] * (d[1] * d[5] - d[2] * d[4]);
-}
-
-// *****************************************************************************
-MFEM_HOST_DEVICE static
-double det(const int dim, const double *J)
-{
-   if (dim==2) { return det2D(J); }
-   if (dim==3) { return det3D(J); }
-#ifndef MFEM_USE_CUDA
-   MFEM_ASSERT(false, "dim!=2 && dim!=3");
-#endif
-   return 0.0;
 }
 
 // *****************************************************************************
@@ -273,13 +249,10 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
 
 // *****************************************************************************
 MFEM_HOST_DEVICE static
-void calcEigenvalues(const int n, const double *d,
-                     double *lambda,
-                     double *vec)
+void calcEigenvalues2D(const int n, const double *d,
+                       double *lambda,
+                       double *vec)
 {
-#ifndef MFEM_USE_CUDA
-   MFEM_ASSERT(n==2, "n!=2");
-#endif
    double d0 = d[0];
    double d2 = d[2]; // use the upper triangular entry
    double d3 = d[3];
@@ -329,12 +302,8 @@ inline void getScalingFactor(const double &d_max, double &mult)
 
 // *****************************************************************************
 MFEM_HOST_DEVICE static
-double calcSingularvalue(const int n, const int i, const double *d)
+double calcSingularvalue2D(const int n, const int i, const double *d)
 {
-#ifndef MFEM_USE_CUDA
-   MFEM_ASSERT(n==2, "n!=2");
-#endif
-
    double d0, d1, d2, d3;
    d0 = d[0];
    d1 = d[1];
@@ -464,7 +433,7 @@ void QUpdate2D(const int nzones,
             const double inv_weight = 1. / weight;
             const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
             const double J[4] = {_J[0], _J[nqp], _J[2*nqp], _J[3*nqp]};
-            const double detJ = det(dim,J);
+            const double detJ = det2D(J);
             min_detJ = fmin(min_detJ,detJ);
             calcInverse2D(dim,J,Jinv);
             // *****************************************************************
@@ -483,7 +452,7 @@ void QUpdate2D(const int nzones,
                // eigenvector of the symmetric velocity gradient gives the
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.
-               const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);//+ zdx*dim*dim;
+               const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);
                const double dV[4] = {_dV[0], _dV[nqp], _dV[2*nqp], _dV[3*nqp]};
                mult(dim,dim,dim, dV, Jinv, sgrad_v);
                symmetrize(dim,sgrad_v);
@@ -494,7 +463,7 @@ void QUpdate2D(const int nzones,
                }
                else
                {
-                  calcEigenvalues(dim, sgrad_v, eig_val_data, eig_vec_data);
+                  calcEigenvalues2D(dim, sgrad_v, eig_val_data, eig_vec_data);
                }
                for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
                // Computes the initial->physical transformation Jacobian.
@@ -512,14 +481,13 @@ void QUpdate2D(const int nzones,
                const double eps = 1e-12;
                visc_coeff += 0.5 * rho * h * sound_speed *
                              (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-               //if (mu < 0.0) { visc_coeff += 0.5 * rho * h * sound_speed; }
                add(dim, dim, visc_coeff, sgrad_v, stress);
             }
             // Time step estimate at the point. Here the more relevant length
             // scale is related to the actual mesh deformation; we use the min
             // singular value of the ref->physical Jacobian. In addition, the
             // time step estimate should be aware of the presence of shocks.
-            const double sv = calcSingularvalue(dim, dim-1, J);
+            const double sv = calcSingularvalue2D(dim, dim-1, J);
             const double h_min = sv / h1order;
             const double inv_h_min = 1. / h_min;
             const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
@@ -553,50 +521,6 @@ void QUpdate2D(const int nzones,
       }
       MFEM_SYNC_THREAD;
    });
-}
-
-// *****************************************************************************
-QUpdate::QUpdate(const int _dim,
-                 const int _nzones,
-                 const int _l2dofs_cnt,
-                 const int _h1dofs_cnt,
-                 const bool _use_viscosity,
-                 const bool _p_assembly,
-                 const double _cfl,
-                 const double _gamma,
-                 TimingData *_timer,
-                 Coefficient *_material_pcf,
-                 const IntegrationRule &_ir,
-                 ParFiniteElementSpace &_H1FESpace,
-                 ParFiniteElementSpace &_L2FESpace):
-   dim(_dim),
-   nqp(_ir.GetNPoints()),
-   nzones(_nzones),
-   l2dofs_cnt(_l2dofs_cnt),
-   h1dofs_cnt(_h1dofs_cnt),
-   use_viscosity(_use_viscosity),
-   p_assembly(_p_assembly),
-   cfl(_cfl),
-   gamma(_gamma),
-   timer(_timer),
-   material_pcf(_material_pcf),
-   ir(_ir),
-   H1FESpace(_H1FESpace),
-   L2FESpace(_L2FESpace),
-   h1_maps(&H1FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   h1_ElemRestrict(H1FESpace.GetElementRestriction(
-                      ElementDofOrdering::LEXICOGRAPHIC)),
-   l2_ElemRestrict(L2FESpace.GetElementRestriction(
-                      ElementDofOrdering::LEXICOGRAPHIC)),
-   d_l2_e_quads_data(nzones * nqp),
-   h1_vdim(H1FESpace.GetVDim()),
-   d_h1_v_local_in(           h1_vdim * nqp * nzones),
-   d_h1_grad_x_data(h1_vdim * h1_vdim * nqp * nzones),
-   d_h1_grad_v_data(h1_vdim * h1_vdim * nqp * nzones),
-   d_dt_est(nzones * nqp)
-{
-   MFEM_ASSERT(material_pcf, "!material_pcf");
 }
 
 // *****************************************************************************
@@ -857,9 +781,21 @@ static void Dof2QuadGrad(const Operator *erestrict,
 // * QUpdate UpdateQuadratureData kernel
 // *****************************************************************************
 void QUpdate::UpdateQuadratureData(const Vector &S,
-                                   bool &quad_data_is_current,
-                                   QuadratureData &quad_data,
-                                   const Tensors1D *tensors1D)
+                                   bool &current,
+                                   QuadratureData &QD,
+                                   const Tensors1D *T)
+{
+   if (dim == 2) { return UpdateQuadratureData2D(S, current, QD, T); }
+   if (dim == 3) { return UpdateQuadratureData3D(S, current, QD, T); }
+}
+
+// *****************************************************************************
+// * QUpdate UpdateQuadratureData kernel
+// *****************************************************************************
+void QUpdate::UpdateQuadratureData2D(const Vector &S,
+                                     bool &quad_data_is_current,
+                                     QuadratureData &quad_data,
+                                     const Tensors1D *tensors1D)
 {
    // **************************************************************************
    if (quad_data_is_current) { return; }
@@ -901,27 +837,71 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
 
    // **************************************************************************
    const int id = nqp1D;
-   static std::unordered_map<int, fQUpdate2D> QUpdate =
+   static std::unordered_map<int, fQUpdate2D> qupdate2q =
    {
       {0x4,&QUpdate2D<4>},
       {0x6,&QUpdate2D<6>},
       {0x8,&QUpdate2D<8>},
    };
-   if (!QUpdate[id])
+   if (!qupdate2q[id])
    {
       printf("\n[UpdateQuadratureData] id \033[33m0x%X\033[m ",id);
       fflush(0);
    }
-   QUpdate[id](nzones, nqp, nqp1D, gamma, use_viscosity, quad_data.h0,
-               h1order, cfl, infinity, ir.GetWeights(), d_h1_grad_x_data,
-               quad_data.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
-               quad_data.Jac0inv, d_dt_est, quad_data.stressJinvT);
+   qupdate2q[id](nzones, nqp, nqp1D, gamma, use_viscosity, quad_data.h0,
+                 h1order, cfl, infinity, ir.GetWeights(), d_h1_grad_x_data,
+                 quad_data.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
+                 quad_data.Jac0inv, d_dt_est, quad_data.stressJinvT);
 
    // **************************************************************************
    quad_data.dt_est = d_dt_est.Min();
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
    timer->quad_tstep += nzones;
+}
+
+// *****************************************************************************
+QUpdate::QUpdate(const int _dim,
+                 const int _nzones,
+                 const int _l2dofs_cnt,
+                 const int _h1dofs_cnt,
+                 const bool _use_viscosity,
+                 const bool _p_assembly,
+                 const double _cfl,
+                 const double _gamma,
+                 TimingData *_timer,
+                 Coefficient *_material_pcf,
+                 const IntegrationRule &_ir,
+                 ParFiniteElementSpace &_H1FESpace,
+                 ParFiniteElementSpace &_L2FESpace):
+   dim(_dim),
+   nqp(_ir.GetNPoints()),
+   nzones(_nzones),
+   l2dofs_cnt(_l2dofs_cnt),
+   h1dofs_cnt(_h1dofs_cnt),
+   use_viscosity(_use_viscosity),
+   p_assembly(_p_assembly),
+   cfl(_cfl),
+   gamma(_gamma),
+   timer(_timer),
+   material_pcf(_material_pcf),
+   ir(_ir),
+   H1FESpace(_H1FESpace),
+   L2FESpace(_L2FESpace),
+   h1_maps(&H1FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
+   l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
+   h1_ElemRestrict(H1FESpace.GetElementRestriction(
+                      ElementDofOrdering::LEXICOGRAPHIC)),
+   l2_ElemRestrict(L2FESpace.GetElementRestriction(
+                      ElementDofOrdering::LEXICOGRAPHIC)),
+   d_l2_e_quads_data(nzones * nqp),
+   h1_vdim(H1FESpace.GetVDim()),
+   d_h1_v_local_in(           h1_vdim * nqp * nzones),
+   d_h1_grad_x_data(h1_vdim * h1_vdim * nqp * nzones),
+   d_h1_grad_v_data(h1_vdim * h1_vdim * nqp * nzones),
+   d_dt_est(nzones * nqp)
+{
+   MFEM_ASSERT(material_pcf, "!material_pcf");
 }
 
 } // namespace hydrodynamics

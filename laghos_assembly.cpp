@@ -1697,7 +1697,8 @@ static void kForceMult(const int DIM,
       //{0x245,&kForceMult2D<2,4,5,3,4>},
       {0x246,&kSmemForceMult2D<2,4,6,3,4>},
       {0x258,&kSmemForceMult2D<2,5,8,4,5>},
-      //{0x334,&kForceMult3D<3,3,4,2,3>},
+      // 3D
+      {0x334,&kForceMult3D<3,3,4,2,3>},
    };
    if (!call[id])
    {
@@ -2189,7 +2190,8 @@ static void kForceMultTranspose(const int DIM,
       //{0x245,&kForceMultTranspose2D<2,4,5,3,4>},
       {0x246,&kSmemForceMultTranspose2D<2,4,6,3,4>},
       {0x258,&kSmemForceMultTranspose2D<2,5,8,4,5>},
-      //{0x334,&kForceMultTranspose3D<3,3,4,2,3>},
+      // 3D
+      {0x334,&kForceMultTranspose3D<3,3,4,2,3>},
    };
    if (!call[id])
    {
