@@ -1480,184 +1480,230 @@ void kSmemForceMult2D(const int NE,
                }
             }
          }
+         MFEM_SYNC_THREAD;
       }
    });
 }
 
-
 // *****************************************************************************
-template<const int DIM,
-         const int D1D,
-         const int Q1D,
-         const int L1D,
-         const int H1D> static
-void kForceMult3D(const int NE,
-                  const Array<double> &_B,
-                  const Array<double> &_Bt,
-                  const Array<double> &_Gt,
-                  const DenseTensor &_sJit,
-                  const Vector &_e,
-                  Vector &_v)
+// DIM, D1D, Q1D, L1D(=D1D-1), H1D(=D1D)
+template<int DIM, int D1D, int Q1D, int L1D, int H1D> static
+void kSmemForceMult3D(const int NE,
+                      const Array<double> &_B,
+                      const Array<double> &_Bt,
+                      const Array<double> &_Gt,
+                      const DenseTensor &_sJit,
+                      const Vector &_e,
+                      Vector &_v)
 {
-   auto L2B = Reshape(_B.Read(), Q1D,L1D);
-   auto H1Bt = Reshape(_Bt.Read(), H1D,Q1D);
-   auto H1Gt = Reshape(_Gt.Read(), H1D,Q1D);
+   auto b = Reshape(_B.Read(), Q1D, L1D);
+   auto bt = Reshape(_Bt.Read(), H1D, Q1D);
+   auto gt = Reshape(_Gt.Read(), H1D, Q1D);
    auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
                        Q1D,Q1D,Q1D,NE,3,3);
    auto energy = Reshape(_e.Read(), L1D, L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.Write(), D1D,D1D,D1D,3,NE);
-   MFEM_FORALL(e, NE,
+   auto velocity = Reshape(_v.Write(), D1D, D1D, D1D, 3, NE);
+
+   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
-      double e_xyz[Q1D][Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx)
+      const int z = MFEM_THREAD_ID(z);
+
+      MFEM_SHARED double B[Q1D][L1D];
+      MFEM_SHARED double Bt[H1D][Q1D];
+      MFEM_SHARED double Gt[H1D][Q1D];
+
+      MFEM_SHARED double E[L1D][L1D][L1D];
+
+      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
+
+      double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+0);
+      double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
+      double (*MMQ2)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+2);
+
+      double (*MQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+0);
+      double (*MQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+1);
+      double (*MQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+2);
+
+      MFEM_SHARED double QQQ[Q1D][Q1D][Q1D];
+      double (*QQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+0);
+      double (*QQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+1);
+      double (*QQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+2);
+
+      if (z == 0)
       {
-         for (int qy = 0; qy < Q1D; ++qy)
+         MFEM_FOREACH_THREAD(q,x,Q1D)
          {
-            for (int qz = 0; qz < Q1D; ++qz)
+            MFEM_FOREACH_THREAD(l,y,Q1D)
             {
-               e_xyz[qx][qy][qz] = 0.0;
+               if (l < L1D) { B[q][l] = b(q,l); }
+               if (l < H1D) { Bt[l][q] = bt(l,q); }
+               if (l < H1D) { Gt[l][q] = gt(l,q); }
             }
          }
       }
-      for (int dz = 0; dz < L1D; ++dz)
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(lx,x,L1D)
       {
-         double e_xy[Q1D][Q1D];
-         for (int qx = 0; qx < Q1D; ++qx)
+         MFEM_FOREACH_THREAD(ly,y,L1D)
          {
-            for (int qy = 0; qy < Q1D; ++qy)
+            MFEM_FOREACH_THREAD(lz,z,L1D)
             {
-               e_xy[qx][qy] = 0.0;
-            }
-         }
-         for (int dy = 0; dy < L1D; ++dy)
-         {
-            double e_x[Q1D];
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               e_x[qx] = 0.0;
-            }
-            for (int dx = 0; dx < L1D; ++dx)
-            {
-               const double r_e = energy(dx,dy,dz,e);
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  e_x[qx] += L2B(qx,dx) * r_e;
-               }
-            }
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               const double wy = L2B(qy,dy);
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  e_xy[qx][qy] += wy * e_x[qx];
-               }
-            }
-         }
-         for (int qz = 0; qz < Q1D; ++qz)
-         {
-            const double wz = L2B(qz,dz);
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  e_xyz[qx][qy][qz] += wz * e_xy[qx][qy];
-               }
+               E[lx][ly][lz] = energy(lx,ly,lz,e);
             }
          }
       }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(lz,z,L1D)
+      {
+         MFEM_FOREACH_THREAD(ly,y,L1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               for (int lx = 0; lx < L1D; ++lx)
+               {
+                  u += B[qx][lx] * E[lx][ly][lz];
+               }
+               MMQ0[lz][ly][qx] = u;
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(lz,z,L1D)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               for (int ly = 0; ly < L1D; ++ly)
+               {
+                  u += B[qy][ly] * MMQ0[lz][ly][qx];
+               }
+               MQQ0[lz][qy][qx] = u;
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qz,z,Q1D)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               double u = 0.0;
+               for (int lz = 0; lz < L1D; ++lz)
+               {
+                  u += B[qz][lz] * MQQ0[lz][qy][qx];
+               }
+               QQQ[qz][qy][qx] = u;
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
       for (int c = 0; c < 3; ++c)
       {
-         for (int dz = 0; dz < H1D; ++dz)
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
          {
-            for (int dy = 0; dy < H1D; ++dy)
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
-               for (int dx = 0; dx < H1D; ++dx)
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  velocity(dx,dy,dz,c,e) = 0.0;
+                  const double esx = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
+                  const double esy = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
+                  const double esz = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
+                  QQQ0[qz][qy][qx] = esx;
+                  QQQ1[qz][qy][qx] = esy;
+                  QQQ2[qz][qy][qx] = esz;
                }
             }
          }
-         for (int qz = 0; qz < Q1D; ++qz)
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
          {
-            double Dxy_x[H1D][H1D];
-            double xDy_y[H1D][H1D];
-            double xy_z[H1D][H1D] ;
-            for (int dx = 0; dx < H1D; ++dx)
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
-               for (int dy = 0; dy < H1D; ++dy)
+               MFEM_FOREACH_THREAD(hx,x,H1D)
                {
-                  Dxy_x[dx][dy] = xDy_y[dx][dy] = xy_z[dx][dy] = 0.0;
-               }
-            }
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               double Dx_x[H1D];
-               double x_y[H1D];
-               double x_z[H1D];
-               for (int dx = 0; dx < H1D; ++dx)
-               {
-                  Dx_x[dx] = x_y[dx] = x_z[dx] = 0.0;
-               }
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  const double r_e = e_xyz[qx][qy][qz];
-                  const double esx = r_e * sJit(qx,qy,qz,e,0,c);
-                  const double esy = r_e * sJit(qx,qy,qz,e,1,c);
-                  const double esz = r_e * sJit(qx,qy,qz,e,2,c);
-                  for (int dx = 0; dx < H1D; ++dx)
+                  double u = 0.0;
+                  double v = 0.0;
+                  double w = 0.0;
+                  for (int qx = 0; qx < Q1D; ++qx)
                   {
-                     Dx_x[dx] += esx * H1Gt(dx,qx);
-                     x_y[dx]  += esy * H1Bt(dx,qx);
-                     x_z[dx]  += esz * H1Bt(dx,qx);
+                     u += Gt[hx][qx] * QQQ0[qz][qy][qx];
+                     v += Bt[hx][qx] * QQQ1[qz][qy][qx];
+                     w += Bt[hx][qx] * QQQ2[qz][qy][qx];
                   }
-               }
-               for (int dy = 0; dy < H1D; ++dy)
-               {
-                  const double wy  = H1Bt(dy,qy);
-                  const double wDy = H1Gt(dy,qy);
-                  for (int dx = 0; dx < H1D; ++dx)
-                  {
-                     Dxy_x[dx][dy] += Dx_x[dx] * wy;
-                     xDy_y[dx][dy] += x_y[dx]  * wDy;
-                     xy_z[dx][dy]  += x_z[dx]  * wy;
-                  }
-               }
-            }
-            for (int dz = 0; dz < H1D; ++dz)
-            {
-               const double wz  = H1Bt(dz,qz);
-               const double wDz = H1Gt(dz,qz);
-               for (int dy = 0; dy < H1D; ++dy)
-               {
-                  for (int dx = 0; dx < H1D; ++dx)
-                  {
-                     velocity(dx,dy,dz,c,e) +=
-                        ((Dxy_x[dx][dy] * wz) +
-                         (xDy_y[dx][dy] * wz) +
-                         (xy_z[dx][dy] * wDz));
-                  }
+                  MQQ0[hx][qy][qz] = u;
+                  MQQ1[hx][qy][qz] = v;
+                  MQQ2[hx][qy][qz] = w;
                }
             }
          }
-      }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(hy,y,H1D)
+            {
+               MFEM_FOREACH_THREAD(hx,x,H1D)
+               {
+                  double u = 0.0;
+                  double v = 0.0;
+                  double w = 0.0;
+                  for (int qy = 0; qy < Q1D; ++qy)
+                  {
+                     u += MQQ0[hx][qy][qz] * Bt[hy][qy];
+                     v += MQQ1[hx][qy][qz] * Gt[hy][qy];
+                     w += MQQ2[hx][qy][qz] * Bt[hy][qy];
+                  }
+                  MMQ0[hx][hy][qz] = u;
+                  MMQ1[hx][hy][qz] = v;
+                  MMQ2[hx][hy][qz] = w;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(hz,z,H1D)
+         {
+            MFEM_FOREACH_THREAD(hy,y,H1D)
+            {
+               MFEM_FOREACH_THREAD(hx,x,H1D)
+               {
+                  double u = 0.0;
+                  double v = 0.0;
+                  double w = 0.0;
+                  for (int qz = 0; qz < Q1D; ++qz)
+                  {
+                     u += MMQ0[hx][hy][qz] * Bt[hz][qz];
+                     v += MMQ1[hx][hy][qz] * Bt[hz][qz];
+                     w += MMQ2[hx][hy][qz] * Gt[hz][qz];
+                  }
+                  velocity(hx,hy,hz,c,e) = u + v + w;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+      } // for each component
       for (int c = 0; c < 3; ++c)
       {
-         for (int dz = 0; dz < H1D; ++dz)
+         MFEM_FOREACH_THREAD(hz,z,H1D)
          {
-            for (int dy = 0; dy < H1D; ++dy)
+            MFEM_FOREACH_THREAD(hy,y,H1D)
             {
-               for (int dx = 0; dx < H1D; ++dx)
+               MFEM_FOREACH_THREAD(hx,x,H1D)
                {
-                  const double v = velocity(dx,dy,dz,c,e);
+                  const double v = velocity(hx,hy,hz,c,e);
                   if (fabs(v) < eps2)
                   {
-                     velocity(dx,dy,dz,c,e) = 0.0;
+                     velocity(hx,hy,hz,c,e) = 0.0;
                   }
                }
             }
          }
+         MFEM_SYNC_THREAD;
       }
    });
 }
@@ -1685,26 +1731,25 @@ static void kForceMult(const int DIM,
                        const Vector &e,
                        Vector &v)
 {
-   MFEM_ASSERT(D1D==H1D, "D1D!=H1D");
-   MFEM_ASSERT(L1D==D1D-1,"L1D!=D1D-1");
+   // DIM, D1D, Q1, L1D(=D1D-1), H1D(=D1D)
+   MFEM_VERIFY(D1D==H1D, "D1D!=H1D");
+   MFEM_VERIFY(L1D==D1D-1,"L1D!=D1D-1");
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMult> call =
    {
-      // DIM, D1D, Q1, L1D(=D1D-1), H1D(=D1D)
-      //{0x234,&kForceMult2D<2,3,4,2,3>},
+      // 2D
       {0x234,&kSmemForceMult2D<2,3,4,2,3>},
-      //{0x244,&kForceMult2D<2,4,4,3,4>},
-      //{0x245,&kForceMult2D<2,4,5,3,4>},
       {0x246,&kSmemForceMult2D<2,4,6,3,4>},
       {0x258,&kSmemForceMult2D<2,5,8,4,5>},
       // 3D
-      {0x334,&kForceMult3D<3,3,4,2,3>},
+      {0x334,&kSmemForceMult3D<3,3,4,2,3>},
+      {0x346,&kSmemForceMult3D<3,4,6,3,4>},
+      {0x358,&kSmemForceMult3D<3,5,8,4,5>},
    };
    if (!call[id])
    {
-      printf("\n%s:%d\nUnknown kernel with dim=%d, D1D=%d and Q1D=%d",
-             __FILE__, __LINE__, DIM, D1D, Q1D);
-      mfem_error("kForceMult kernel not instanciated");
+      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
+      MFEM_ABORT("Unknown kernel");
    }
    call[id](NE, B, Bt, Gt, stressJinvT, e, v);
 }
@@ -1736,121 +1781,6 @@ void OkinaForcePAOperator::Mult(const Vector &x, Vector &y) const
    h1restrict->MultTranspose(gVecH1, y);
 }
 
-// *****************************************************************************
-template<const int DIM,
-         const int D1D,
-         const int Q1D,
-         const int L1D,
-         const int H1D> static
-void kForceMultTranspose2D(const int NE,
-                           const Array<double> &_Bt,
-                           const Array<double> &_B,
-                           const Array<double> &_G,
-                           const DenseTensor &_sJit,
-                           const Vector &_v,
-                           Vector &_e)
-{
-   auto L2Bt = Reshape(_Bt.Read(), L1D,Q1D);
-   auto H1B = Reshape(_B.Read(), Q1D,H1D);
-   auto H1G = Reshape(_G.Read(), Q1D,H1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
-                       Q1D, Q1D, NE, 2, 2);
-   auto velocity = Reshape(_v.Read(), D1D,D1D,2,NE);
-   auto energy = Reshape(_e.Write(), L1D, L1D, NE);
-   MFEM_FORALL(e, NE,
-   {
-      double vStress[Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx)
-      {
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            vStress[qx][qy] = 0.0;
-         }
-      }
-      for (int c = 0; c < DIM; ++c)
-      {
-         double v_Dxy[Q1D][Q1D];
-         double v_xDy[Q1D][Q1D];
-         for (int qx = 0; qx < Q1D; ++qx)
-         {
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               v_Dxy[qx][qy] = v_xDy[qx][qy] = 0.0;
-            }
-         }
-         for (int dy = 0; dy < H1D; ++dy)
-         {
-            double v_x[Q1D];
-            double v_Dx[Q1D];
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               v_x[qx] = v_Dx[qx] = 0.0;
-            }
-
-            for (int dx = 0; dx < H1D; ++dx)
-            {
-               const double r_v = velocity(dx,dy,c,e);
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  v_x[qx]  += r_v * H1B(qx,dx);
-                  v_Dx[qx] += r_v * H1G(qx,dx);
-               }
-            }
-            for (int qy = 0; qy < Q1D; ++qy)
-            {
-               const double wy  = H1B(qy,dy);
-               const double wDy = H1G(qy,dy);
-               for (int qx = 0; qx < Q1D; ++qx)
-               {
-                  v_Dxy[qx][qy] += v_Dx[qx] * wy;
-                  v_xDy[qx][qy] += v_x[qx]  * wDy;
-               }
-            }
-         }
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               const double sJitx = sJit(qx,qy,e,0,c);
-               const double sJity = sJit(qx,qy,e,1,c);
-               vStress[qx][qy] +=
-                  v_Dxy[qx][qy] * sJitx + v_xDy[qx][qy] * sJity;
-            }
-         }
-      }
-      for (int dy = 0; dy < L1D; ++dy)
-      {
-         for (int dx = 0; dx < L1D; ++dx)
-         {
-            energy(dx,dy,e) = 0.0;
-         }
-      }
-      for (int qy = 0; qy < Q1D; ++qy)
-      {
-         double e_x[L1D];
-         for (int dx = 0; dx < L1D; ++dx)
-         {
-            e_x[dx] = 0.0;
-         }
-         for (int qx = 0; qx < Q1D; ++qx)
-         {
-            const double r_v = vStress[qx][qy];
-            for (int dx = 0; dx < L1D; ++dx)
-            {
-               e_x[dx] += r_v * L2Bt(dx,qx);
-            }
-         }
-         for (int dy = 0; dy < L1D; ++dy)
-         {
-            const double w = L2Bt(dy,qy);
-            for (int dx = 0; dx < L1D; ++dx)
-            {
-               energy(dx,dy,e) += e_x[dx] * w;
-            }
-         }
-      }
-   });
-}
 // *****************************************************************************
 template<int DIM, int D1D, int Q1D, int L1D, int H1D, int NBZ =1> static
 void kSmemForceMultTranspose2D(const int NE,
@@ -2003,155 +1933,215 @@ void kSmemForceMultTranspose2D(const int NE,
 }
 
 // *****************************************************************************
-template<const int DIM,
-         const int D1D,
-         const int Q1D,
-         const int L1D,
-         const int H1D> static
-void kForceMultTranspose3D(const int NE,
-                           const Array<double> &Bt,
-                           const Array<double> &B,
-                           const Array<double> &G,
-                           const DenseTensor &_sJit,
-                           const Vector &_v,
-                           Vector &_e)
+template<int DIM, int D1D, int Q1D, int L1D, int H1D> static
+void kSmemForceMultTranspose3D(const int NE,
+                               const Array<double> &_Bt,
+                               const Array<double> &_B,
+                               const Array<double> &_G,
+                               const DenseTensor &_sJit,
+                               const Vector &_v,
+                               Vector &_e)
 {
-   auto L2Bt = Reshape(Bt.Read(), L1D,Q1D);
-   auto H1B = Reshape(B.Read(), Q1D,H1D);
-   auto H1G = Reshape(G.Read(), Q1D,H1D);
+   MFEM_VERIFY(D1D==H1D,"");
+   auto b = Reshape(_B.Read(), Q1D,H1D);
+   auto g = Reshape(_G.Read(), Q1D,H1D);
+   auto bt = Reshape(_Bt.Read(), L1D,Q1D);
    auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
-                       Q1D,Q1D,Q1D,NE,3,3);
-   auto velocity = Reshape(_v.Read(), D1D,D1D,D1D,3,NE);
-   auto energy = Reshape(_e.Write(), L1D,L1D,L1D,NE);
-   MFEM_FORALL(e,NE,
+                       Q1D, Q1D, Q1D, NE, 3, 3);
+   auto velocity = Reshape(_v.Read(), D1D, D1D, D1D, 3, NE);
+   auto energy = Reshape(_e.Write(), L1D, L1D, L1D, NE);
+
+   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
-      double vStress[Q1D][Q1D][Q1D];
-      for (int qx = 0; qx < Q1D; ++qx)
+      const int z = MFEM_THREAD_ID(z);
+
+      MFEM_SHARED double Bt[L1D][Q1D];
+      MFEM_SHARED double B[Q1D][H1D];
+      MFEM_SHARED double G[Q1D][H1D];
+
+      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
+      double (*V)[D1D][D1D]    = (double (*)[D1D][D1D]) (sm0+0);
+      double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
+      double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+2);
+
+      double (*MQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+0);
+      double (*MQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+1);
+      double (*MQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+2);
+
+      double (*QQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+0);
+      double (*QQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+1);
+      double (*QQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+2);
+
+      MFEM_SHARED double QQQ[Q1D][Q1D][Q1D];
+
+      if (z == 0)
       {
-         for (int qy = 0; qy < Q1D; ++qy)
+         MFEM_FOREACH_THREAD(q,x,Q1D)
          {
-            for (int qz = 0; qz < Q1D; ++qz)
+            MFEM_FOREACH_THREAD(h,y,Q1D)
             {
-               vStress[qx][qy][qz] = 0.0;
+               if (h < H1D) { B[q][h] = b(q,h); }
+               if (h < H1D) { G[q][h] = g(q,h); }
+               const int l = h;
+               if (l < L1D) { Bt[l][q] = bt(l,q); }
             }
          }
       }
-      for (int c = 0; c < DIM; ++c)
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qz,z,Q1D)
       {
-         for (int dz = 0; dz < H1D; ++dz)
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
-            double Dxy_x[Q1D][Q1D];
-            double xDy_y[Q1D][Q1D];
-            double xy_z[Q1D][Q1D];
-            for (int qx = 0; qx < Q1D; ++qx)
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               for (int qy = 0; qy < Q1D; ++qy)
+               QQQ[qz][qy][qx] = 0.0;
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+
+      for (int c = 0; c < 3; ++c)
+      {
+         MFEM_FOREACH_THREAD(dx,x,D1D)
+         {
+            MFEM_FOREACH_THREAD(dy,y,D1D)
+            {
+               MFEM_FOREACH_THREAD(dz,z,D1D)
                {
-                  Dxy_x[qx][qy] = xDy_y[qx][qy] = xy_z[qx][qy] = 0.0;
+                  V[dx][dy][dz] = velocity(dx,dy,dz,c,e);
                }
             }
-            for (int dy = 0; dy < H1D; ++dy)
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(dz,z,D1D)
+         {
+            MFEM_FOREACH_THREAD(dy,y,D1D)
             {
-               double Dx_x[Q1D];
-               double x_y[Q1D];
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  double u = 0.0;
+                  double v = 0.0;
+                  for (int dx = 0; dx < H1D; ++dx)
+                  {
+                     const double input = V[dx][dy][dz];
+                     u += G[qx][dx] * input;
+                     v += B[qx][dx] * input;
+                  }
+                  MMQ0[dz][dy][qx] = u;
+                  MMQ1[dz][dy][qx] = v;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(dz,z,D1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  double u = 0.0;
+                  double v = 0.0;
+                  double w = 0.0;
+                  for (int dy = 0; dy < H1D; ++dy)
+                  {
+                     u += MMQ0[dz][dy][qx] * B[qy][dy];
+                     v += MMQ1[dz][dy][qx] * G[qy][dy];
+                     w += MMQ1[dz][dy][qx] * B[qy][dy];
+                  }
+                  MQQ0[dz][qy][qx] = u;
+                  MQQ1[dz][qy][qx] = v;
+                  MQQ2[dz][qy][qx] = w;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  double u = 0.0;
+                  double v = 0.0;
+                  double w = 0.0;
+                  for (int dz = 0; dz < H1D; ++dz)
+                  {
+                     u += MQQ0[dz][qy][qx] * B[qz][dz];
+                     v += MQQ1[dz][qy][qx] * B[qz][dz];
+                     w += MQQ2[dz][qy][qx] * G[qz][dz];
+                  }
+                  QQQ0[qz][qy][qx] = u;
+                  QQQ1[qz][qy][qx] = v;
+                  QQQ2[qz][qy][qx] = w;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const double esx = QQQ0[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
+                  const double esy = QQQ1[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
+                  const double esz = QQQ2[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
+                  QQQ[qz][qy][qx] += esx + esy + esz;
+               }
+            }
+         }
+         MFEM_SYNC_THREAD;
+      } // for each component
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qz,z,Q1D)
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(lx,x,L1D)
+            {
+               double u = 0.0;
                for (int qx = 0; qx < Q1D; ++qx)
                {
-                  Dx_x[qx] = x_y[qx] = 0;
+                  u += QQQ[qz][qy][qx] * Bt[lx][qx];
                }
-               for (int dx = 0; dx < H1D; ++dx)
-               {
-                  const double r_v = velocity(dx,dy,dz,c,e);
-                  for (int qx = 0; qx < Q1D; ++qx)
-                  {
-                     Dx_x[qx] += r_v * H1G(qx,dx);
-                     x_y[qx]  += r_v * H1B(qx,dx);
-                  }
-               }
+               MQQ0[qz][qy][lx] = u;
+            }
+         }
+      }
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(qz,z,Q1D)
+      {
+         MFEM_FOREACH_THREAD(ly,y,L1D)
+         {
+            MFEM_FOREACH_THREAD(lx,x,L1D)
+            {
+               double u = 0.0;
                for (int qy = 0; qy < Q1D; ++qy)
                {
-                  const double wy  = H1B(qy,dy);
-                  const double wDy = H1G(qy,dy);
-                  for (int qx = 0; qx < Q1D; ++qx)
-                  {
-                     Dxy_x[qx][qy] += Dx_x[qx] * wy;
-                     xDy_y[qx][qy] += x_y[qx]  * wDy;
-                     xy_z[qx][qy]  += x_y[qx]  * wy;
-                  }
+                  u += MQQ0[qz][qy][lx] * Bt[ly][qy];
                }
-            }
-            for (int qz = 0; qz < Q1D; ++qz)
-            {
-               const double wz  = H1B(qz,dz);
-               const double wDz = H1G(qz,dz);
-               for (int qy = 0; qy < Q1D; ++qy)
-               {
-                  for (int qx = 0; qx < Q1D; ++qx)
-                  {
-                     vStress[qx][qy][qz] +=
-                        ((Dxy_x[qx][qy] * wz * sJit(qx,qy,qz,e,0,c)) +
-                         (xDy_y[qx][qy] * wz * sJit(qx,qy,qz,e,1,c)) +
-                         (xy_z[qx][qy] * wDz * sJit(qx,qy,qz,e,2,c)));
-                  }
-               }
+               MMQ0[qz][ly][lx] = u;
             }
          }
       }
-      for (int dz = 0; dz < L1D; ++dz)
+      MFEM_SYNC_THREAD;
+      MFEM_FOREACH_THREAD(lz,z,L1D)
       {
-         for (int dy = 0; dy < L1D; ++dy)
+         MFEM_FOREACH_THREAD(ly,y,L1D)
          {
-            for (int dx = 0; dx < L1D; ++dx)
+            MFEM_FOREACH_THREAD(lx,x,L1D)
             {
-               energy(dx,dy,dz,e) = 0.0;
+               double u = 0.0;
+               for (int qz = 0; qz < Q1D; ++qz)
+               {
+                  u += MMQ0[qz][ly][lx] * Bt[lz][qz];
+               }
+               energy(lx,ly,lz,e) = u;
             }
          }
       }
-      for (int qz = 0; qz < Q1D; ++qz)
-      {
-         double e_xy[L1D][L1D];
-         for (int dx = 0; dx < L1D; ++dx)
-         {
-            for (int dy = 0; dy < L1D; ++dy)
-            {
-               e_xy[dx][dy] = 0.0;
-            }
-         }
-         for (int qy = 0; qy < Q1D; ++qy)
-         {
-            double e_x[L1D];
-            for (int dx = 0; dx < L1D; ++dx)
-            {
-               e_x[dx] = 0.0;
-            }
-            for (int qx = 0; qx < Q1D; ++qx)
-            {
-               const double r_v = vStress[qx][qy][qz];
-               for (int dx = 0; dx < L1D; ++dx)
-               {
-                  e_x[dx] += r_v * L2Bt(dx,qx);
-               }
-            }
-            for (int dy = 0; dy < L1D; ++dy)
-            {
-               const double w = L2Bt(dy,qy);
-               for (int dx = 0; dx < L1D; ++dx)
-               {
-                  e_xy[dx][dy] += e_x[dx] * w;
-               }
-            }
-         }
-         for (int dz = 0; dz < L1D; ++dz)
-         {
-            const double w = L2Bt(dz,qz);
-            for (int dy = 0; dy < L1D; ++dy)
-            {
-               for (int dx = 0; dx < L1D; ++dx)
-               {
-                  energy(dx,dy,dz,e) += w * e_xy[dx][dy];
-               }
-            }
-         }
-      }
+      MFEM_SYNC_THREAD;
    });
 }
 
@@ -2178,26 +2168,25 @@ static void kForceMultTranspose(const int DIM,
                                 const Vector &v,
                                 Vector &e)
 {
-   MFEM_ASSERT(D1D==H1D,"D1D!=H1D");
-   MFEM_ASSERT(L1D==D1D-1, "L1D!=D1D-1");
+   // DIM, D1D, Q1D, L1D(=D1D-1), H1D(=D1D)
+   MFEM_VERIFY(D1D==H1D,"D1D!=H1D");
+   MFEM_VERIFY(L1D==D1D-1, "L1D!=D1D-1");
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMultTranspose> call =
    {
-      // DIM, D1D, Q1D, L1D(=D1D-1), H1D(=D1D)
-      //{0x234,&kForceMultTranspose2D<2,3,4,2,3>},
+      // 2D
       {0x234,&kSmemForceMultTranspose2D<2,3,4,2,3>},
-      //{0x244,&kForceMultTranspose2D<2,4,4,3,4>},
-      //{0x245,&kForceMultTranspose2D<2,4,5,3,4>},
       {0x246,&kSmemForceMultTranspose2D<2,4,6,3,4>},
       {0x258,&kSmemForceMultTranspose2D<2,5,8,4,5>},
       // 3D
-      {0x334,&kForceMultTranspose3D<3,3,4,2,3>},
+      {0x334,&kSmemForceMultTranspose3D<3,3,4,2,3>},
+      {0x346,&kSmemForceMultTranspose3D<3,4,6,3,4>},
+      {0x358,&kSmemForceMultTranspose3D<3,5,8,4,5>}
    };
    if (!call[id])
    {
-      printf("\n%s:%d\nUnknown kernel with dim=%d, D1D=%d and Q1D=%d",
-             __FILE__, __LINE__, DIM, D1D, Q1D);
-      mfem_error("kForceMultTranspose kernel not instanciated");
+      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
+      MFEM_ABORT("Unknown kernel");
    }
    call[id](nzones,
             L2QuadToDof,

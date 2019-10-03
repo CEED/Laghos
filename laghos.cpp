@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
    bool mem_usage = false;
    bool fom = false;
    bool gpu_aware_mpi = false;
+   int dev = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -188,6 +189,7 @@ int main(int argc, char *argv[])
                   "Enable figure of merit output.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
+   args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.Parse();
    if (!args.Good())
    {
@@ -200,7 +202,7 @@ int main(int argc, char *argv[])
    Device device;
    if (okina)
    {
-      device.Configure(dev_opt);
+      device.Configure(dev_opt, dev);
       if (mpi.Root()) { device.Print(); }
       device.SetGPUAwareMPI(gpu_aware_mpi);
    }

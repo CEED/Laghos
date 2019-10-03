@@ -1883,11 +1883,13 @@ static void D2QInterp(const Operator *erestrict,
       {0x248,&D2QInterp2D<4,8,2>},
       // 3D
       {0x324,&D2QInterp3D<2,4>},
+      {0x336,&D2QInterp3D<3,6>},
+      {0x348,&D2QInterp3D<4,8>},
    };
    if (!call[id])
    {
-      printf("\n[Dof2QuadScalar] id \033[33m0x%X\033[m ",id);
-      fflush(0);
+      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
+      MFEM_ABORT("Unknown kernel");
    }
    call[id](nzones, maps->B, d_in, d_out);
 }
@@ -2135,11 +2137,13 @@ static void D2QGrad(const Operator *erestrict,
       {0x258,&D2QGrad2D<5,8,2>},
       // 3D
       {0x334,&D2QGrad3D<3,4>},
+      {0x346,&D2QGrad3D<4,6>},
+      {0x358,&D2QGrad3D<5,8>},
    };
    if (!call[id])
    {
-      printf("\n[Dof2QuadGrad] id \033[33m0x%X\033[m ",id);
-      fflush(0);
+      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
+      MFEM_ABORT("Unknown kernel");
    }
    call[id](nzones,
             maps->B,
@@ -2200,12 +2204,14 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
       {0x26,&QUpdate2D<6>},
       {0x28,&QUpdate2D<8>},
       // 3D
-      {0x34,&QUpdate3D<4>}
+      {0x34,&QUpdate3D<4>},
+      {0x36,&QUpdate3D<6>},
+      {0x38,&QUpdate3D<8>}
    };
    if (!qupdate[id])
    {
-      printf("\n[UpdateQuadratureData] id \033[33m0x%X\033[m ",id);
-      fflush(0);
+      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
+      MFEM_ABORT("Unknown kernel");
    }
    qupdate[id](nzones, nqp, nqp1D, gamma, use_viscosity, quad_data.h0,
                h1order, cfl, infinity, ir.GetWeights(), d_h1_grad_x_data,

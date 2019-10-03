@@ -216,3 +216,5 @@ $(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(fore
 
 checks check: laghos|$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
 c chk: ;@$(MAKE) -j $(NPROC) check
+
+go one: ;@$(MAKE) -j 8 check ranks=1
