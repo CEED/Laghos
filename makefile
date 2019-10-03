@@ -188,112 +188,25 @@ style:
 	fi
 
 # ******************************************************************************
-checks check: laghos test_cpu_seq test_cpu_mpi_3 test_cpu_mpi_4 \
-		$(if $(MFEM_CXX:nvcc=),,test_gpu_seq test_gpu_mpi)
+#ok: 0 1 3 4
+#ko 3d: 2 5 6
+problems=0 1 3 4 # 2 5 6
+meshs=square01_quad cube01_hex
+cuda=$(if $(MFEM_CXX:nvcc=),,'-o -q -d cuda')
+options='-fa' '-pa' '-o' '-o -q' $(cuda)
+ranks=1 2 3
+ECHO=/bin/echo
+OPTS = -cgt 1.e-14 -rs 0 --checks
+checks check: laghos
+	@for p in $(problems);do\
+		for m in $(meshs);do\
+			for o in $(options);do\
+				for r in $(ranks);do\
+					name=mpi_$$r-p$$p-$$m-$$o;\
+					($(call mfem-test,$<,$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $$r, $$name , $(OPTS) -p $$p -m data/$$m.mesh $$o););\
+				done;\
+			done;\
+		done;\
+	done
+
 chk : ;@$(MAKE) -j $(NPROC) check
-P0=Taylor  Green
-P1=Sedov   blast
-P2=1D Sod  shock
-P3=Triple  point
-P4=Gresho vortex
-RUN_MPI_1 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 1
-RUN_MPI_2 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 2
-RUN_MPI_3 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 3
-OPTS = -rs 0 -m data/square01_quad.mesh --checks
-test_cpu_seq: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -fa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -pa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -o   , $(OPTS) -p 0 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P0) -o -q, $(OPTS) -p 0 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -fa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -pa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -o   , $(OPTS) -p 1 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P1) -o -q, $(OPTS) -p 1 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -fa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -pa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -o   , $(OPTS) -p 2 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P2) -o -q, $(OPTS) -p 2 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -fa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -pa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -o   , $(OPTS) -p 3 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P3) -o -q, $(OPTS) -p 3 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -fa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -pa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -o   , $(OPTS) -p 4 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_1),CPU $(P4) -o -q, $(OPTS) -p 4 -o -q)
-
-test_cpu_mpi_3: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -fa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -pa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -o   , $(OPTS) -p 0 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P0) -o -q, $(OPTS) -p 0 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -fa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -pa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -o   , $(OPTS) -p 1 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P1) -o -q, $(OPTS) -p 1 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -fa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -pa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -o   , $(OPTS) -p 2 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P2) -o -q, $(OPTS) -p 2 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -fa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -pa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -o   , $(OPTS) -p 3 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P3) -o -q, $(OPTS) -p 3 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -fa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -pa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -o   , $(OPTS) -p 4 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_3),CPU $(P4) -o -q, $(OPTS) -p 4 -o -q)
-
-test_cpu_mpi_4: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -fa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -pa  , $(OPTS) -p 0)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -o   , $(OPTS) -p 0 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P0) -o -q, $(OPTS) -p 0 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -fa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -pa  , $(OPTS) -p 1)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -o   , $(OPTS) -p 1 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P1) -o -q, $(OPTS) -p 1 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -fa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -pa  , $(OPTS) -p 2)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -o   , $(OPTS) -p 2 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P2) -o -q, $(OPTS) -p 2 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -fa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -pa  , $(OPTS) -p 3)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -o   , $(OPTS) -p 3 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P3) -o -q, $(OPTS) -p 3 -o -q)
-
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -fa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -pa  , $(OPTS) -p 4)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -o   , $(OPTS) -p 4 -o)
-	@$(call mfem-test,$<,$(RUN_MPI_4),CPU $(P4) -o -q, $(OPTS) -p 4 -o -q)
-
-test_gpu_seq: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P2) -o -q, $(OPTS) -p 2 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P3) -o -q, $(OPTS) -p 3 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_1),GPU $(P4) -o -q, $(OPTS) -p 4 -o -q -d cuda)
-
-test_gpu_mpi: laghos
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P2) -o -q, $(OPTS) -p 2 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P3) -o -q, $(OPTS) -p 3 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_2),GPU $(P4) -o -q, $(OPTS) -p 4 -o -q -d cuda)
-
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P0) -o -q, $(OPTS) -p 0 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P1) -o -q, $(OPTS) -p 1 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P2) -o -q, $(OPTS) -p 2 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P3) -o -q, $(OPTS) -p 3 -o -q -d cuda)
-	@$(call mfem-test,$<,$(RUN_MPI_3),GPU $(P4) -o -q, $(OPTS) -p 4 -o -q -d cuda)

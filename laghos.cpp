@@ -232,75 +232,75 @@ int main(int argc, char *argv[])
    {
       case 11:
       case 111:
-         unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks, 1.0 / dim) + 1e-2));
          for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
          break;
       case 21: // 2D
-         unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2));
          nxyz[0] = 2 * unit; nxyz[1] = unit;
          break;
       case 31: // 2D
-         unit = floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2));
          nxyz[0] = 3 * unit; nxyz[1] = unit;
          break;
       case 32: // 2D
-         unit = floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2);
+         unit = static_cast<int>(floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2));
          nxyz[0] = 3 * unit / 2; nxyz[1] = unit;
          break;
       case 49: // 2D
-         unit = floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2);
+         unit = static_cast<int>(floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2));
          nxyz[0] = 4 * unit / 9; nxyz[1] = unit;
          break;
       case 51: // 2D
-         unit = floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2));
          nxyz[0] = 5 * unit; nxyz[1] = unit;
          break;
       case 211: // 3D.
-         unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2));
          nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 221: // 3D.
-         unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2));
          nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
       case 311: // 3D.
-         unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2));
          nxyz[0] = 3 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 321: // 3D.
-         unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2));
          nxyz[0] = 3 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
       case 322: // 3D.
-         unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2));
          nxyz[0] = 3 * unit / 2; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 432: // 3D.
-         unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2));
          nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
          break;
       case 511: // 3D.
-         unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2));
          nxyz[0] = 5 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 521: // 3D.
-         unit = floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2));
          nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
       case 522: // 3D.
-         unit = floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2));
          nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
          break;
       case 911: // 3D.
-         unit = floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2));
          nxyz[0] = 9 * unit; nxyz[1] = unit; nxyz[2] = unit;
          break;
       case 921: // 3D.
-         unit = floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2));
          nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
          break;
       case 922: // 3D.
-         unit = floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2);
+         unit = static_cast<int>(floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2));
          nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
          break;
       default:
@@ -734,45 +734,87 @@ int main(int argc, char *argv[])
       // Problems checks
       if (check)
       {
+         const double eps = 1.e-13;
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
          const double stm = sqrt(tot_norm);
+         printf("\n\033[33m%.15e\033[m", stm);
          // Default options only checks
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
          MFEM_VERIFY(order_e==1, "check: order_e");
          MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final==0.6, "check: t_final");
+         MFEM_VERIFY(fabs(t_final-0.6)<eps, "check: t_final");
          MFEM_VERIFY(cfl==0.5, "check: cfl");
-         const double eps = 1.e-13;
-         const double p0_05 = 6.54653862453438e+00;
-         const double p0_27 = 7.58857635779292e+00;
-         if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
-         if (problem==0 and ti==27) {checks++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
-         const double p1_05 = 3.50825494522579e+00;
-         const double p1_15 = 2.75644459682321e+00;
-         if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
-         if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
-         const double p2_05 = 1.020745795651244e+01;
-         const double p2_59 = 1.72159020590190e+01;
-         if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
-         if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
-         const double p3_05 = 8.0;
-         const double p3_16 = 8.0;
-         if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
-         if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
-         const double p4_05 = 3.436923188323578e+01;
-         const double p4_52 = 2.682244912720685e+01;
-         if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
-         if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+         const int dim = strcmp(mesh_file,"data/square01_quad.mesh")==0?2:
+                         strcmp(mesh_file,"data/cube01_hex.mesh")==0?3:1;
+         MFEM_VERIFY(dim==2 || dim==3, "check: mesh_file");
+         if (dim==2)
+         {
+            const double p0_05 = 6.54653862453438e+00;
+            const double p0_27 = 7.58857635779292e+00;
+            if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
+            if (problem==0 and ti==27) {checks++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
+            const double p1_05 = 3.50825494522579e+00;
+            const double p1_15 = 2.75644459682321e+00;
+            if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
+            if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
+            const double p2_05 = 1.020745795651244e+01;
+            const double p2_59 = 1.72159020590190e+01;
+            if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
+            if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+            const double p3_05 = 8.0;
+            const double p3_16 = 8.0;
+            if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
+            if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+            const double p4_05 = 3.436923188323578e+01;
+            const double p4_52 = 2.682244912720685e+01;
+            if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
+            if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+            const double p5_05 = 1.030899557252528e+01;
+            const double p5_36 = 1.057362418574309e+01;
+            if (problem==5 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p5_05)<eps,"P5, #05");}
+            if (problem==5 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p5_36)<eps,"P5, #36");}
+            const double p6_05 = 8.039707010835693e+00;
+            const double p6_36 = 8.316970976817373e+00;
+            if (problem==6 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p6_05)<eps,"P6, #05");}
+            if (problem==6 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p6_36)<eps,"P6, #36");}
+         }
+         if (dim==3)
+         {
+            const double eps = 1.e-12;
+            const double p0_05 = 1.198510951452527e+03;
+            const double p0_188 = 1.199384410059154e+03;
+            if (problem==0 and ti==005) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
+            if (problem==0 and ti==188) {checks++; MFEM_VERIFY(fabs(stm-p0_188)<eps,"P0, #188");}
+            const double p1_05 = 1.33916371859257e+01;
+            const double p1_28 = 7.52107367739800e+00;
+            if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
+            if (problem==1 and ti==28) {checks++; MFEM_VERIFY(fabs(stm-p1_28)<eps,"P1, #28");}
+            const double p2_05 = 2.041491591302486e+01;
+            const double p2_59 = 3.443180411803796e+01;
+            if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
+            if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+            const double p3_05 = 1.600000000000000e+01;
+            const double p3_16 = 1.600000000000000e+01;
+            if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
+            if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+            const double p4_05 = 6.873846376647157e+01;
+            const double p4_52 = 5.364489825441373e+01;
+            if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
+            if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+            const double p5_05 = 2.061984481890964e+01;
+            const double p5_36 = 2.114519664792607e+01;
+            if (problem==5 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p5_05)<eps,"P5, #05");}
+            if (problem==5 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p5_36)<eps,"P5, #36");}
+            const double p6_05 = 1.607988713996459e+01;
+            const double p6_36 = 1.662736010353023e+01;
+            if (problem==6 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p6_05)<eps,"P6, #05");}
+            if (problem==6 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p6_36)<eps,"P6, #36");}
+         }
       }
    }
-
-   // FIXME: remove the commented code below
-   // Switch back to the host.
-   // Device::Disable();
-
    // Do the final checks
    MFEM_VERIFY((!check)||(checks==2), "[Laghos] Check error");
 
@@ -850,18 +892,18 @@ double rho0(const Vector &x)
       case 5:
       {
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; } // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0; } // 2
+         //if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0; } // 2
          if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; } // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0; } // 4
-         MFEM_ABORT("Error in problem 5!");
+         //if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0; } // 4
+         return 1.0;
       }
       case 6:
       {
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0; } // 1
+         //if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0; } // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; } // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0; } // 3
+         //if (x(0) <  0.5 && x(1) <  0.5) { return 1.0; } // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; } // 4
-         MFEM_ABORT("Error in problem 6!");
+         return 1.0;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -932,6 +974,7 @@ void v0(const Vector &x, Vector &v)
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; } // 4
          MFEM_ABORT("Error in problem 5!");
+         return;
       }
       case 6:
       {
@@ -940,6 +983,7 @@ void v0(const Vector &x, Vector &v)
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;} // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;} // 4
          MFEM_ABORT("Error in problem 6!");
+         return;
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
@@ -994,6 +1038,7 @@ double e0(const Vector &x)
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; } // 4
          MFEM_ABORT("Error in problem 5!");
+         return 0.0;
       }
       case 6:
       {
@@ -1003,6 +1048,7 @@ double e0(const Vector &x)
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; } // 4
          MFEM_ABORT("Error in problem 5!");
+         return 0.0;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
