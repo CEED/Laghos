@@ -188,25 +188,31 @@ style:
 	fi
 
 # ******************************************************************************
-#ok: 0 1 3 4
-#ko 3d: 2 5 6
-problems=0 1 3 4 # 2 5 6
+problems=0 1 2 3 4 5 6
 meshs=square01_quad cube01_hex
-cuda=$(if $(MFEM_CXX:nvcc=),,'-o -q -d cuda')
-options='-fa' '-pa' '-o' '-o -q' $(cuda)
-ranks=1 2 3
+cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
+options=-fa -pa -o -o-q $(cuda)
+optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
+ranks=1 3
 ECHO=/bin/echo
-OPTS = -cgt 1.e-14 -rs 0 --checks
-checks check: laghos
-	@for p in $(problems);do\
-		for m in $(meshs);do\
-			for o in $(options);do\
-				for r in $(ranks);do\
-					name=mpi_$$r-p$$p-$$m-$$o;\
-					($(call mfem-test,$<,$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $$r, $$name , $(OPTS) -p $$p -m data/$$m.mesh $$o););\
-				done;\
-			done;\
-		done;\
-	done
+OPTS=-cgt 1.e-14 -rs 0 --checks
 
-chk : ;@$(MAKE) -j $(NPROC) check
+# problem:1 mesh:2 option:3 mpi:4
+define mfem_test_template =
+.PHONY: laghos_$(1)_$(2)_$(3)_$(4)
+laghos_$(1)_$(2)_$(3)_$(4): laghos
+	$(eval name=laghos$(4)-p$(1)-$(2)$(word $(3),$(options)))
+	$(eval command=$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./laghos $(OPTS) -p $(1) -m data/$(2).mesh $(shell echo $(word $(3),$(options))|sed -e "s/-/ -/g"|sed -e "s/_/ /g"))
+#	@echo -n $(name)
+#	@echo -n $(command)
+	@$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./$$< $(OPTS) -p $(1) -m data/$(2).mesh $(shell echo $(word $(3),$(options))|sed -e "s/-/ -/g"|sed -e "s/_/ /g") > /dev/null 2>&1 && \
+		$(call COLOR_PRINT,'\033[0;32m',OK,': $(name)\n') || $(call COLOR_PRINT,'\033[1;31m',KO,': $(command)\n');
+endef
+
+# Generate all targets
+$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
+	$(eval $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
+#$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks), $(info $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
+
+checks check: laghos|$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
+c chk: ;@$(MAKE) -j $(NPROC) check

@@ -739,7 +739,7 @@ int main(int argc, char *argv[])
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
          const double stm = sqrt(tot_norm);
-         printf("\n\033[33m%.15e\033[m", stm);
+         //printf("\n\033[33m%.15e\033[m", stm);
          // Default options only checks
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
