@@ -42,7 +42,7 @@ namespace hydrodynamics
 // *****************************************************************************
 // * Dense matrix
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_HOST_DEVICE static inline
 void multABt(const int ah,
              const int aw,
              const int bh,
@@ -73,7 +73,7 @@ void multABt(const int ah,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_HOST_DEVICE static inline
 void mult(const int ah,
           const int aw,
           const int bw,
@@ -96,10 +96,10 @@ void mult(const int ah,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_HOST_DEVICE static inline
 void multV(const int height,
            const int width,
-           double *data,
+           double* __restrict__ data,
            const double* __restrict__ x,
            double* __restrict__ y)
 {
@@ -130,10 +130,9 @@ void multV(const int height,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-void add(const int height, const int width,
-         const double c, const double *A,
-         double *D)
+MFEM_HOST_DEVICE static inline
+void add(const int height, const int width, const double c,
+         const double* __restrict__ A, double* __restrict__ D)
 {
    for (int j = 0; j < width; j++)
    {
@@ -145,8 +144,8 @@ void add(const int height, const int width,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE  static
-double norml2(const int size, const double *data)
+MFEM_HOST_DEVICE static inline
+double norml2(const int size, const double* __restrict__ data)
 {
    if (0 == size) { return 0.0; }
    if (1 == size) { return std::abs(data[0]); }
@@ -172,15 +171,18 @@ double norml2(const int size, const double *data)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline double det2D(const double *d)
+template<int dim> static double det(const double *d);
+
+// *****************************************************************************
+template<> MFEM_HOST_DEVICE inline
+double det<2>(const double* __restrict__ d)
 {
    return d[0] * d[3] - d[1] * d[2];
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline double det3D(const double *d)
+template<> MFEM_HOST_DEVICE inline
+double det<3>(const double* __restrict__ d)
 {
    return d[0] * (d[4] * d[8] - d[5] * d[7]) +
           d[3] * (d[2] * d[7] - d[1] * d[8]) +
@@ -188,10 +190,15 @@ inline double det3D(const double *d)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-void calcInverse2D(const int n, const double *a, double *i)
+template<int n> static void calcInverse(const double *a, double *i);
+
+// *****************************************************************************
+template<> MFEM_HOST_DEVICE inline
+void calcInverse<2>(const double* __restrict__ a,
+                    double* __restrict__ i)
 {
-   const double d = det2D(a);
+   constexpr int n = 2;
+   const double d = det<2>(a);
    const double t = 1.0 / d;
    i[0*n+0] =  a[1*n+1] * t ;
    i[0*n+1] = -a[0*n+1] * t ;
@@ -200,10 +207,12 @@ void calcInverse2D(const int n, const double *a, double *i)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-void calcInverse3D(const int n, const double *a, double *inva)
+template<> MFEM_HOST_DEVICE inline
+void calcInverse<3>(const double* __restrict__ a,
+                    double* __restrict__ inva)
 {
-   const double d = det3D(a);
+   constexpr int n = 3;
+   const double d = det<3>(a);
    const double t = 1.0 / d;
    inva[0*n+0] = (a[1*n+1]*a[2*n+2]-a[1*n+2]*a[2*n+1])*t;
    inva[0*n+1] = (a[0*n+2]*a[2*n+1]-a[0*n+1]*a[2*n+2])*t;
@@ -219,7 +228,7 @@ void calcInverse3D(const int n, const double *a, double *inva)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
+MFEM_HOST_DEVICE static inline
 void symmetrize(const int n, double* __restrict__ d)
 {
    for (int i = 0; i<n; i++)
@@ -233,8 +242,8 @@ void symmetrize(const int n, double* __restrict__ d)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline double cpysign(const double x, const double y)
+MFEM_HOST_DEVICE static inline
+double cpysign(const double x, const double y)
 {
    if ((x < 0 && y > 0) || (x > 0 && y < 0))
    {
@@ -247,9 +256,9 @@ inline double cpysign(const double x, const double y)
 const double Epsilon = numeric_limits<double>::epsilon();
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline void eigensystem2S(const double &d12, double &d1, double &d2,
-                          double &c, double &s)
+MFEM_HOST_DEVICE static inline
+void eigensystem2S(const double &d12, double &d1, double &d2,
+                   double &c, double &s)
 {
    const double sqrt_1_eps = sqrt(1./Epsilon);
    if (d12 == 0.)
@@ -280,10 +289,14 @@ inline void eigensystem2S(const double &d12, double &d1, double &d2,
 // *****************************************************************************
 // * Eigen values 2D
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-void calcEigenvalues2D(const int n, const double *d,
-                       double *lambda,
-                       double *vec)
+template<int dim> static
+void calcEigenvalues(const double *d, double *lambda, double *vec);
+
+// *****************************************************************************
+template<> MFEM_HOST_DEVICE inline
+void calcEigenvalues<2>(const double* __restrict__ d,
+                        double* __restrict__ lambda,
+                        double* __restrict__ vec)
 {
    double d0 = d[0];
    double d2 = d[2]; // use the upper triangular entry
@@ -311,8 +324,8 @@ void calcEigenvalues2D(const int n, const double *d,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline void getScalingFactor(const double &d_max, double &mult)
+MFEM_HOST_DEVICE static inline
+void getScalingFactor(const double &d_max, double &mult)
 {
    int d_exp;
    if (d_max > 0.)
@@ -333,9 +346,13 @@ inline void getScalingFactor(const double &d_max, double &mult)
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-double calcSingularvalue2D(const int n, const int i, const double *d)
+template<int dim> static double calcSingularvalue(const double *d);
+
+// *****************************************************************************
+template<> MFEM_HOST_DEVICE inline
+double calcSingularvalue<2>(const double* __restrict__ d)
 {
+   constexpr int i = 2-1;
    double d0, d1, d2, d3;
    d0 = d[0];
    d1 = d[1];
@@ -384,8 +401,7 @@ double calcSingularvalue2D(const int n, const int i, const double *d)
 // *****************************************************************************
 // * Eigen values 3D
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-inline void Swap(double &a, double &b)
+MFEM_HOST_DEVICE static inline void Swap(double &a, double &b)
 {
    double tmp = a;
    a = b;
@@ -819,7 +835,7 @@ inline int KernelVector3S(const int &mode, const double &d12,
 }
 
 // *****************************************************************************
-MFEM_HOST_DEVICE
+MFEM_HOST_DEVICE static
 inline int Reduce3S(const int &mode,
                     double &d1, double &d2, double &d3,
                     double &d12, double &d13, double &d23,
@@ -944,11 +960,10 @@ inline int Reduce3S(const int &mode,
 }
 
 // *****************************************************************************
-template<int dim>
-MFEM_HOST_DEVICE static
-void calcEigenvalues3D(const int n, const double *d,
-                       double *lambda,
-                       double *vec)
+template<> MFEM_HOST_DEVICE inline
+void calcEigenvalues<3>(const double* __restrict__ d,
+                        double* __restrict__ lambda,
+                        double* __restrict__ vec)
 {
    double d11 = d[0];
    double d12 = d[3]; // use the upper triangular entries
@@ -1170,10 +1185,12 @@ inline void Eigenvalues2S(const double &d12, double &d1, double &d2)
    }
 }
 
+
 // *****************************************************************************
-MFEM_HOST_DEVICE static
-double calcSingularvalue3D(const int n, const int i, const double *d)
+template<> MFEM_HOST_DEVICE inline
+double calcSingularvalue<3>(const double* __restrict__ d)
 {
+   constexpr int i = 3-1;
    double d0, d1, d2, d3, d4, d5, d6, d7, d8;
    d0 = d[0];  d3 = d[3];  d6 = d[6];
    d1 = d[1];  d4 = d[4];  d7 = d[7];
@@ -1418,6 +1435,126 @@ inline double smooth_step_01(const double x, const double eps)
 }
 
 // *****************************************************************************
+template<int dim> MFEM_HOST_DEVICE static inline
+void QBody(const int nzones, const int z,
+           const int nqp, const int q,
+           const double gamma,
+           const bool use_viscosity,
+           const double h0,
+           const double h1order,
+           const double cfl,
+           const double infinity,
+           double* __restrict__ Jinv,
+           double* __restrict__ stress,
+           double* __restrict__ sgrad_v,
+           double* __restrict__ eig_val_data,
+           double* __restrict__ eig_vec_data,
+           double* __restrict__ compr_dir,
+           double* __restrict__ Jpi,
+           double* __restrict__ ph_dir,
+           double* __restrict__ stressJiT,
+           const double* __restrict__ d_weights,
+           const double* __restrict__ d_Jacobians,
+           const double* __restrict__ d_rho0DetJ0w,
+           const double* __restrict__ d_e_quads,
+           const double* __restrict__ d_grad_v_ext,
+           const double* __restrict__ d_Jac0inv,
+           double *d_dt_est,
+           double *d_stressJinvT)
+{
+   constexpr int dim2 = dim*dim;
+   double min_detJ = infinity;
+
+   const int zq = z * nqp + q;
+   const double weight =  d_weights[q];
+   const double inv_weight = 1. / weight;
+   const double *J = d_Jacobians + dim2*(nqp*z + q);
+   const double detJ = det<dim>(J);
+   min_detJ = fmin(min_detJ,detJ);
+   calcInverse<dim>(J,Jinv);
+   // *****************************************************************
+   const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
+   const double e   = fmax(0.0, d_e_quads[zq]);
+   const double p   = (gamma - 1.0) * rho * e;
+   const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
+   // *****************************************************************
+   for (int k = 0; k < dim2; k+=1) { stress[k] = 0.0; }
+   for (int d = 0; d < dim; d++) { stress[d*dim+d] = -p; }
+   // *****************************************************************
+   double visc_coeff = 0.0;
+   if (use_viscosity)
+   {
+      // Compression-based length scale at the point. The first
+      // eigenvector of the symmetric velocity gradient gives the
+      // direction of maximal compression. This is used to define the
+      // relative change of the initial length scale.
+      const double *dV = d_grad_v_ext + dim2*(nqp*z + q);
+      mult(dim,dim,dim, dV, Jinv, sgrad_v);
+      symmetrize(dim,sgrad_v);
+      if (dim==1)
+      {
+         eig_val_data[0] = sgrad_v[0];
+         eig_vec_data[0] = 1.;
+      }
+      else
+      {
+         calcEigenvalues<dim>(sgrad_v, eig_val_data, eig_vec_data);
+      }
+      for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
+      // Computes the initial->physical transformation Jacobian.
+      mult(dim,dim,dim, J, d_Jac0inv+zq*dim*dim, Jpi);
+      multV(dim, dim, Jpi, compr_dir, ph_dir);
+      // Change of the initial mesh size in the compression direction.
+      const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
+      // Measure of maximal compression.
+      const double mu = eig_val_data[0];
+      visc_coeff = 2.0 * rho * h * h * fabs(mu);
+      // The following represents a "smooth" version of the statement
+      // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+      // eps must be scaled appropriately if a different unit system is
+      // being used.
+      const double eps = 1e-12;
+      visc_coeff += 0.5 * rho * h * sound_speed *
+                    (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+      add(dim, dim, visc_coeff, sgrad_v, stress);
+   }
+   // Time step estimate at the point. Here the more relevant length
+   // scale is related to the actual mesh deformation; we use the min
+   // singular value of the ref->physical Jacobian. In addition, the
+   // time step estimate should be aware of the presence of shocks.
+   const double sv = calcSingularvalue<dim>(J);
+   const double h_min = sv / h1order;
+   const double inv_h_min = 1. / h_min;
+   const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
+   const double inv_dt = sound_speed * inv_h_min
+                         + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
+   if (min_detJ < 0.0)
+   {
+      // This will force repetition of the step with smaller dt.
+      d_dt_est[zq] = 0.0;
+   }
+   else
+   {
+      if (inv_dt>0.0)
+      {
+         const double cfl_inv_dt = cfl / inv_dt;
+         d_dt_est[zq] = fmin(d_dt_est[zq], cfl_inv_dt);
+      }
+   }
+   // Quadrature data for partial assembly of the force operator.
+   multABt(dim, dim, dim, stress, Jinv, stressJiT);
+   for (int k=0; k<dim2; k+=1) { stressJiT[k] *= weight * detJ; }
+   for (int vd = 0 ; vd < dim; vd++)
+   {
+      for (int gd = 0; gd < dim; gd++)
+      {
+         const int offset = zq + nqp*nzones*(gd+vd*dim);
+         d_stressJinvT[offset] = stressJiT[vd+gd*dim];
+      }
+   }
+}
+
+// *****************************************************************************
 // * qupdate
 // *****************************************************************************
 typedef void (*fQUpdate)(const int nzones,
@@ -1439,7 +1576,7 @@ typedef void (*fQUpdate)(const int nzones,
                          DenseTensor &stressJinvT);
 
 // *****************************************************************************
-template<int Q1D, int dim=2> static
+template<int Q1D, int dim=2> static inline
 void QUpdate2D(const int nzones,
                const int nqp,
                const int nqp1D,
@@ -1458,6 +1595,7 @@ void QUpdate2D(const int nzones,
                Vector &dt_est,
                DenseTensor &stressJinvT)
 {
+   constexpr int dim2 = dim*dim;
    auto d_weights = weights.Read();
    auto d_Jacobians = Jacobians.Read();
    auto d_rho0DetJ0w = rho0DetJ0w.Read();
@@ -1469,111 +1607,26 @@ void QUpdate2D(const int nzones,
                               stressJinvT.TotalSize());
    MFEM_FORALL_2D(z, nzones, Q1D, Q1D, 1,
    {
-      double Jinv[dim*dim];
-      double stress[dim*dim];
-      double sgrad_v[dim*dim];
+      double Jinv[dim2];
+      double stress[dim2];
+      double sgrad_v[dim2];
       double eig_val_data[3];
       double eig_vec_data[9];
       double compr_dir[dim];
-      double Jpi[dim*dim];
+      double Jpi[dim2];
       double ph_dir[dim];
-      double stressJiT[dim*dim];
-      double min_detJ = infinity;
-      // ***********************************************************************
+      double stressJiT[dim2];
       MFEM_FOREACH_THREAD(qx,x,Q1D)
       {
          MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
-            const int q = qx + qy * Q1D;
-            const int zq = z * nqp + q;
-            const double weight =  d_weights[q];
-            const double inv_weight = 1. / weight;
-            const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
-            const double J[4] = {_J[0], _J[nqp], _J[2*nqp], _J[3*nqp]};
-            const double detJ = det2D(J);
-            min_detJ = fmin(min_detJ,detJ);
-            calcInverse2D(dim,J,Jinv);
-            // *****************************************************************
-            const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
-            const double e   = fmax(0.0, d_e_quads[zq]);
-            const double p   = (gamma - 1.0) * rho * e;
-            const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-            // *****************************************************************
-            for (int k = 0; k < dim*dim; k+=1) { stress[k] = 0.0; }
-            for (int d = 0; d < dim; d++) { stress[d*dim+d] = -p; }
-            // *****************************************************************
-            double visc_coeff = 0.0;
-            if (use_viscosity)
-            {
-               // Compression-based length scale at the point. The first
-               // eigenvector of the symmetric velocity gradient gives the
-               // direction of maximal compression. This is used to define the
-               // relative change of the initial length scale.
-               const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);
-               const double dV[4] = {_dV[0], _dV[nqp], _dV[2*nqp], _dV[3*nqp]};
-               mult(dim,dim,dim, dV, Jinv, sgrad_v);
-               symmetrize(dim,sgrad_v);
-               if (dim==1)
-               {
-                  eig_val_data[0] = sgrad_v[0];
-                  eig_vec_data[0] = 1.;
-               }
-               else
-               {
-                  calcEigenvalues2D(dim, sgrad_v, eig_val_data, eig_vec_data);
-               }
-               for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
-               // Computes the initial->physical transformation Jacobian.
-               mult(dim,dim,dim, J, d_Jac0inv+zq*dim*dim, Jpi);
-               multV(dim, dim, Jpi, compr_dir, ph_dir);
-               // Change of the initial mesh size in the compression direction.
-               const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
-               // Measure of maximal compression.
-               const double mu = eig_val_data[0];
-               visc_coeff = 2.0 * rho * h * h * fabs(mu);
-               // The following represents a "smooth" version of the statement
-               // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-               // eps must be scaled appropriately if a different unit system is
-               // being used.
-               const double eps = 1e-12;
-               visc_coeff += 0.5 * rho * h * sound_speed *
-                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-               add(dim, dim, visc_coeff, sgrad_v, stress);
-            }
-            // Time step estimate at the point. Here the more relevant length
-            // scale is related to the actual mesh deformation; we use the min
-            // singular value of the ref->physical Jacobian. In addition, the
-            // time step estimate should be aware of the presence of shocks.
-            const double sv = calcSingularvalue2D(dim, dim-1, J);
-            const double h_min = sv / h1order;
-            const double inv_h_min = 1. / h_min;
-            const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-            const double inv_dt = sound_speed * inv_h_min
-                                  + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
-            if (min_detJ < 0.0)
-            {
-               // This will force repetition of the step with smaller dt.
-               d_dt_est[zq] = 0.0;
-            }
-            else
-            {
-               if (inv_dt>0.0)
-               {
-                  const double cfl_inv_dt = cfl / inv_dt;
-                  d_dt_est[zq] = fmin(d_dt_est[zq], cfl_inv_dt);
-               }
-            }
-            // Quadrature data for partial assembly of the force operator.
-            multABt(dim, dim, dim, stress, Jinv, stressJiT);
-            for (int k=0; k<dim*dim; k+=1) { stressJiT[k] *= weight * detJ; }
-            for (int vd = 0 ; vd < dim; vd++)
-            {
-               for (int gd = 0; gd < dim; gd++)
-               {
-                  const int offset = zq + nqp*nzones*(gd+vd*dim);
-                  d_stressJinvT[offset] = stressJiT[vd+gd*dim];
-               }
-            }
+            QBody<dim>(nzones, z, nqp, qx + qy * Q1D,
+            gamma, use_viscosity, h0, h1order, cfl, infinity,
+            Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+            compr_dir,Jpi,ph_dir,stressJiT,
+            d_weights, d_Jacobians, d_rho0DetJ0w,
+            d_e_quads, d_grad_v_ext, d_Jac0inv,
+            d_dt_est, d_stressJinvT);
          }
       }
       MFEM_SYNC_THREAD;
@@ -1581,7 +1634,7 @@ void QUpdate2D(const int nzones,
 }
 
 // *****************************************************************************
-template<int Q1D, int dim=3> static
+template<int Q1D, int dim=3> static inline
 void QUpdate3D(const int nzones,
                const int nqp,
                const int nqp1D,
@@ -1600,6 +1653,7 @@ void QUpdate3D(const int nzones,
                Vector &dt_est,
                DenseTensor &stressJinvT)
 {
+   constexpr int dim2 = dim*dim;
    auto d_weights = weights.Read();
    auto d_Jacobians = Jacobians.Read();
    auto d_rho0DetJ0w = rho0DetJ0w.Read();
@@ -1611,123 +1665,28 @@ void QUpdate3D(const int nzones,
                               stressJinvT.TotalSize());
    MFEM_FORALL_3D(z, nzones, Q1D, Q1D, Q1D,
    {
-      double Jinv[dim*dim];
-      double stress[dim*dim];
-      double sgrad_v[dim*dim];
+      double Jinv[dim2];
+      double stress[dim2];
+      double sgrad_v[dim2];
       double eig_val_data[3];
       double eig_vec_data[9];
       double compr_dir[dim];
-      double Jpi[dim*dim];
+      double Jpi[dim2];
       double ph_dir[dim];
-      double stressJiT[dim*dim];
-      double min_detJ = infinity;
-      // ***********************************************************************
+      double stressJiT[dim2];
       MFEM_FOREACH_THREAD(qx,x,Q1D)
       {
          MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
             MFEM_FOREACH_THREAD(qz,z,Q1D)
             {
-               const int q = qx + Q1D * (qy + qz * Q1D);
-               const int zq = z * nqp + q;
-               const double weight =  d_weights[q];
-               const double inv_weight = 1. / weight;
-               const double *_J = d_Jacobians + (q+nqp*dim*dim*z);
-               const double J[dim*dim] =
-               {
-                  _J[0*nqp], _J[1*nqp], _J[2*nqp],
-                  _J[3*nqp], _J[4*nqp], _J[5*nqp],
-                  _J[6*nqp], _J[7*nqp], _J[8*nqp]
-               };
-               const double detJ = det3D(J);
-               min_detJ = fmin(min_detJ,detJ);
-               calcInverse3D(dim,J,Jinv);
-               // *****************************************************************
-               const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
-               const double e   = fmax(0.0, d_e_quads[zq]);
-               const double p   = (gamma - 1.0) * rho * e;
-               const double sound_speed = sqrt(gamma * (gamma-1.0) * e);
-               // *****************************************************************
-               for (int k = 0; k < dim*dim; k+=1) { stress[k] = 0.0; }
-               for (int d = 0; d < dim; d++) { stress[d*dim+d] = -p; }
-               // *****************************************************************
-               double visc_coeff = 0.0;
-               if (use_viscosity)
-               {
-                  // Compression-based length scale at the point. The first
-                  // eigenvector of the symmetric velocity gradient gives the
-                  // direction of maximal compression. This is used to define the
-                  // relative change of the initial length scale.
-                  const double *_dV = d_grad_v_ext + (q+nqp*dim*dim*z);
-                  const double dV[dim*dim] =
-                  {
-                     _dV[0*nqp], _dV[1*nqp], _dV[2*nqp],
-                     _dV[3*nqp], _dV[4*nqp], _dV[5*nqp],
-                     _dV[6*nqp], _dV[7*nqp], _dV[8*nqp]
-                  };
-                  mult(dim,dim,dim, dV, Jinv, sgrad_v);
-                  symmetrize(dim,sgrad_v);
-                  if (dim==1)
-                  {
-                     eig_val_data[0] = sgrad_v[0];
-                     eig_vec_data[0] = 1.;
-                  }
-                  else
-                  {
-                     calcEigenvalues3D<dim>(dim,sgrad_v, eig_val_data, eig_vec_data);
-                  }
-                  for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
-                  // Computes the initial->physical transformation Jacobian.
-                  mult(dim,dim,dim, J, d_Jac0inv+zq*dim*dim, Jpi);
-                  multV(dim, dim, Jpi, compr_dir, ph_dir);
-                  // Change of the initial mesh size in the compression direction.
-                  const double h = h0 * norml2(dim,ph_dir) / norml2(dim,compr_dir);
-                  // Measure of maximal compression.
-                  const double mu = eig_val_data[0];
-                  visc_coeff = 2.0 * rho * h * h * fabs(mu);
-                  // The following represents a "smooth" version of the statement
-                  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-                  // eps must be scaled appropriately if a different unit system is
-                  // being used.
-                  const double eps = 1e-12;
-                  visc_coeff += 0.5 * rho * h * sound_speed *
-                                (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-                  add(dim, dim, visc_coeff, sgrad_v, stress);
-               }
-               // Time step estimate at the point. Here the more relevant length
-               // scale is related to the actual mesh deformation; we use the min
-               // singular value of the ref->physical Jacobian. In addition, the
-               // time step estimate should be aware of the presence of shocks.
-               const double sv = calcSingularvalue3D(dim, dim-1, J);
-               const double h_min = sv / h1order;
-               const double inv_h_min = 1. / h_min;
-               const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-               const double inv_dt = sound_speed * inv_h_min
-                                     + 2.5 * visc_coeff * inv_rho_inv_h_min_sq;
-               if (min_detJ < 0.0)
-               {
-                  // This will force repetition of the step with smaller dt.
-                  d_dt_est[zq] = 0.0;
-               }
-               else
-               {
-                  if (inv_dt>0.0)
-                  {
-                     const double cfl_inv_dt = cfl / inv_dt;
-                     d_dt_est[zq] = fmin(d_dt_est[zq], cfl_inv_dt);
-                  }
-               }
-               // Quadrature data for partial assembly of the force operator.
-               multABt(dim, dim, dim, stress, Jinv, stressJiT);
-               for (int k=0; k<dim*dim; k+=1) { stressJiT[k] *= weight * detJ; }
-               for (int vd = 0 ; vd < dim; vd++)
-               {
-                  for (int gd = 0; gd < dim; gd++)
-                  {
-                     const int offset = zq + nqp*nzones*(gd+vd*dim);
-                     d_stressJinvT[offset] = stressJiT[vd+gd*dim];
-                  }
-               }
+               QBody<dim>(nzones, z, nqp, qx + Q1D * (qy + qz * Q1D),
+               gamma, use_viscosity, h0, h1order, cfl, infinity,
+               Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+               compr_dir,Jpi,ph_dir,stressJiT,
+               d_weights, d_Jacobians, d_rho0DetJ0w,
+               d_e_quads, d_grad_v_ext, d_Jac0inv,
+               d_dt_est, d_stressJinvT);
             }
          }
       }
@@ -1736,7 +1695,7 @@ void QUpdate3D(const int nzones,
 }
 
 // *****************************************************************************
-template<int D1D, int Q1D, int NBZ> static
+template<int D1D, int Q1D, int NBZ> static inline
 void D2QInterp2D(const int NE, const Array<double> &b_,
                  const Vector &x_, Vector &y_)
 {
@@ -1805,7 +1764,7 @@ void D2QInterp2D(const int NE, const Array<double> &b_,
 }
 
 // *****************************************************************************
-template<int D1D, int Q1D> static
+template<int D1D, int Q1D> static inline
 void D2QInterp3D(const int NE, const Array<double> &b_,
                  const Vector &x_, Vector &y_)
 {
@@ -1934,7 +1893,7 @@ static void D2QInterp(const Operator *erestrict,
 }
 
 // **************************************************************************
-template<int D1D, int Q1D, int NBZ> static
+template<int D1D, int Q1D, int NBZ> static inline
 void D2QGrad2D(const int NE,
                const Array<double> &b_,
                const Array<double> &g_,
@@ -1946,7 +1905,7 @@ void D2QGrad2D(const int NE,
    auto b = Reshape(b_.Read(), Q1D, D1D);
    auto g = Reshape(g_.Read(), Q1D, D1D);
    auto x = Reshape(x_.Read(), D1D, D1D, VDIM, NE);
-   auto y = Reshape(y_.Write(), Q1D, Q1D, VDIM, VDIM, NE);
+   auto y = Reshape(y_.Write(), VDIM, VDIM, Q1D, Q1D, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
    {
@@ -2012,8 +1971,8 @@ void D2QGrad2D(const int NE,
                   u += DQ1[dy][qx] * B[qy][dy];
                   v += DQ0[dy][qx] * G[qy][dy];
                }
-               y(qx,qy,c,0,e) = u;
-               y(qx,qy,c,1,e) = v;
+               y(c,0,qx,qy,e) = u;
+               y(c,1,qx,qy,e) = v;
             }
          }
          MFEM_SYNC_THREAD;
@@ -2022,18 +1981,18 @@ void D2QGrad2D(const int NE,
 }
 
 // **************************************************************************
-template<int D1D, int Q1D>
-static void D2QGrad3D(const int NE,
-                      const Array<double> &b_,
-                      const Array<double> &g_,
-                      const Vector &x_,
-                      Vector &y_)
+template<int D1D, int Q1D> static inline
+void D2QGrad3D(const int NE,
+               const Array<double> &b_,
+               const Array<double> &g_,
+               const Vector &x_,
+               Vector &y_)
 {
    constexpr int VDIM = 3;
    auto b = Reshape(b_.Read(), Q1D, D1D);
    auto g = Reshape(g_.Read(), Q1D, D1D);
    auto x = Reshape(x_.Read(), D1D, D1D, D1D, VDIM, NE);
-   auto y = Reshape(y_.Write(), Q1D, Q1D, Q1D, VDIM, VDIM, NE);
+   auto y = Reshape(y_.Write(), VDIM, VDIM, Q1D, Q1D, Q1D, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
@@ -2135,9 +2094,9 @@ static void D2QGrad3D(const int NE,
                      v += DQQ1[dz][qy][qx] * B[qz][dz];
                      w += DQQ2[dz][qy][qx] * G[qz][dz];
                   }
-                  y(qx,qy,qz,c,0,e) = u;
-                  y(qx,qy,qz,c,1,e) = v;
-                  y(qx,qy,qz,c,2,e) = w;
+                  y(c,0,qx,qy,qz,e) = u;
+                  y(c,1,qx,qy,qz,e) = v;
+                  y(c,2,qx,qy,qz,e) = w;
                }
             }
          }
