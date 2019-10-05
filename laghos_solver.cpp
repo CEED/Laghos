@@ -14,6 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
+#include "general/dbg.hpp"
+#include "general/nvvp.hpp"
 #include "laghos_solver.hpp"
 
 #ifdef MFEM_USE_MPI
@@ -74,6 +76,103 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
       MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
    }
    while (connection_failed);
+}
+
+// *****************************************************************************
+void ComputeRho0DetJ0AndVolume(const int dim,
+                               const int NE,
+                               const IntegrationRule &ir,
+                               ParMesh *mesh,
+                               ParFiniteElementSpace &l2_fes,
+                               ParGridFunction &rho0,
+                               QuadratureData &quad_data,
+                               double &loc_area)
+{
+   const int NQ = ir.GetNPoints();
+   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   // Get J & detJ
+   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
+   const GeometricFactors *geom = mesh->GetGeometricFactors(ir, flags);
+   // rho0: E (no R) => Q
+   Vector rho0Q(NQ*NE);
+   rho0Q.UseDevice(true);
+   Vector j, detj;
+   const QuadratureInterpolator *qi = l2_fes.GetQuadratureInterpolator(ir);
+   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
+   // R/W
+   auto W = ir.GetWeights().Read();
+   auto R = Reshape(rho0Q.Read(), NQ, NE);
+   auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
+   auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
+   auto V = Reshape(quad_data.rho0DetJ0w.Write(), NQ, NE);
+   Memory<double> &Jinv_m = quad_data.Jac0inv.GetMemory();
+   auto invJ = Reshape(Jinv_m.Write(Device::GetMemoryClass(),
+                                    quad_data.Jac0inv.TotalSize()),
+                       dim, dim, NQ, NE);
+   Vector area(NE*NQ), one(NE*NQ);
+   auto A = Reshape(area.Write(), NQ, NE);
+   auto O = Reshape(one.Write(), NQ, NE);
+   if (dim==2)
+   {
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               const double J11 = J(q,0,0,e);
+               const double J12 = J(q,1,0,e);
+               const double J21 = J(q,0,1,e);
+               const double J22 = J(q,1,1,e);
+               const double det = detJ(q,e);
+               V(q,e) =  W[q] * R(q,e) * det;
+               const double r_idetJ = 1.0 / det;
+               invJ(0,0,q,e) =  J22 * r_idetJ;
+               invJ(1,0,q,e) = -J12 * r_idetJ;
+               invJ(0,1,q,e) = -J21 * r_idetJ;
+               invJ(1,1,q,e) =  J11 * r_idetJ;
+               A(q,e) = W[q] * det;
+               O(q,e) = 1.0;
+            }
+         }
+      });
+   }
+   else
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
+                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
+                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
+                  const double det = detJ(q,e);
+                  V(q,e) = W[q] * R(q,e) * det;
+                  const double r_idetJ = 1.0 / det;
+                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
+                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
+                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
+                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
+                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
+                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
+                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
+                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
+                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
+                  A(q,e) = W[q] * det;
+                  O(q,e) = 1.0;
+               }
+            }
+         }
+      });
+   }
+   quad_data.rho0DetJ0w.HostRead();
+   loc_area = area * one;
 }
 
 LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
@@ -151,6 +250,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    rhs_c_gf(&H1compFESpace),
    dvc_gf(&H1compFESpace)
 {
+   push();
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
@@ -167,11 +267,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    }
    else
    {
+      push("ForcePA",Silver);
       ForcePA = new OkinaForcePAOperator(quad_data, h1_fes,l2_fes, integ_rule);
+      pop();
+      push("VMassPA",Silver);
       VMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, H1compFESpace,
                                         integ_rule, &tensors1D);
+      pop();
+      push("EMassPA",Silver);
       EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace, integ_rule,
                                         &tensors1D);
+      pop();
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
@@ -199,12 +305,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    GridFunctionCoefficient rho_coeff_gf(&rho0);
 
    // Standard local assembly and inversion for energy mass matrices.
-   // if (!p_assembly)
-   if (true)
+   if (!p_assembly)
    {
-      // Regardless of the value of 'p_assembly', 'Me' is used in the
-      // computation of the internal energy which is used twice: once at the
-      // start and once at the end of the time stepping.
+      // 'Me' is used in the computation of the internal energy
+      // which is used twice: once at the start and once at the end of the run.
       MassIntegrator mi(rho_coeff_gf, &integ_rule);
       for (int i = 0; i < nzones; i++)
       {
@@ -217,39 +321,59 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    }
 
    // Standard assembly for the velocity mass matrix.
-   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &integ_rule);
-   Mv.AddDomainIntegrator(vmi);
-   Mv.Assemble();
-   Mv_spmat_copy = Mv.SpMat();
-
-   // Values of rho0DetJ0 and Jac0inv at all quadrature points.
-   const int nqp = integ_rule.GetNPoints();
-   Vector rho_vals(nqp);
-   for (int i = 0; i < nzones; i++)
+   if (!p_assembly)
    {
-      rho0.GetValues(i, integ_rule, rho_vals);
-      ElementTransformation *T = h1_fes.GetElementTransformation(i);
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = integ_rule.IntPoint(q);
-         T->SetIntPoint(&ip);
-
-         DenseMatrixInverse Jinv(T->Jacobian());
-         Jinv.GetInverseMatrix(quad_data.Jac0inv(i*nqp + q));
-
-         const double rho0DetJ0 = T->Weight() * rho_vals(q);
-         quad_data.rho0DetJ0w(i*nqp + q) = rho0DetJ0 *
-                                           integ_rule.IntPoint(q).weight;
-      }
+      push("Me_inv",LightSkyBlue);
+      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &integ_rule);
+      Mv.AddDomainIntegrator(vmi);
+      Mv.Assemble();
+      Mv_spmat_copy = Mv.SpMat();
+      pop();
    }
 
+   push("rho0DetJ0 / Jac0inv / Volume",MistyRose);
+   // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are of the same type).
    double loc_area = 0.0, glob_area;
    int loc_z_cnt = nzones, glob_z_cnt;
    ParMesh *pm = H1FESpace.GetParMesh();
-   for (int i = 0; i < nzones; i++) { loc_area += pm->GetElementVolume(i); }
+   if (!p_assembly)
+   {
+      const int nqp = integ_rule.GetNPoints();
+      Vector rho_vals(nqp);
+      for (int i = 0; i < nzones; i++)
+      {
+         rho0.GetValues(i, integ_rule, rho_vals);
+         ElementTransformation *T = h1_fes.GetElementTransformation(i);
+         for (int q = 0; q < nqp; q++)
+         {
+            const IntegrationPoint &ip = integ_rule.IntPoint(q);
+            T->SetIntPoint(&ip);
+            DenseMatrixInverse Jinv(T->Jacobian());
+            Jinv.GetInverseMatrix(quad_data.Jac0inv(i*nqp + q));
+            const double rho0DetJ0 = T->Weight() * rho_vals(q);
+            quad_data.rho0DetJ0w(i*nqp + q) = rho0DetJ0 *
+                                              integ_rule.IntPoint(q).weight;
+         }
+      }
+      for (int i = 0; i < nzones; i++) { loc_area += pm->GetElementVolume(i); }
+   }
+   else
+   {
+      ComputeRho0DetJ0AndVolume(dim, nzones, integ_rule,
+                                H1FESpace.GetParMesh(),
+                                l2_fes,
+                                rho0,
+                                quad_data,
+                                loc_area);
+   }
+   pop();
+
+   push("MPI_Allreduce",Orange);
    MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
+   dbg("glob_area=%.15e",glob_area);
    MPI_Allreduce(&loc_z_cnt, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
+   pop();
    switch (pm->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT:
@@ -265,6 +389,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
+   pop();
 
    if (p_assembly)
    {
@@ -283,29 +408,35 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       Force.Finalize(0);
    }
 
-   locCG.SetOperator(locEMassPA);
-   locCG.iterative_mode = false;
-   locCG.SetRelTol(1e-8);
-   locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-   locCG.SetMaxIter(200);
-   locCG.SetPrintLevel(-1);
-
-   if (okina)
+   if (p_assembly)
    {
-      CG_VMass.SetPreconditioner(VMassPA_prec);
-      CG_VMass.SetOperator(*VMassPA);
-      CG_VMass.SetRelTol(cg_rel_tol);
-      CG_VMass.SetAbsTol(0.0);
-      CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(0);
+      if (not okina)
+      {
+         locCG.SetOperator(locEMassPA);
+         locCG.iterative_mode = false;
+         locCG.SetRelTol(1e-8);
+         locCG.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+         locCG.SetMaxIter(200);
+         locCG.SetPrintLevel(-1);
+      }
+      else
+      {
+         CG_VMass.SetPreconditioner(VMassPA_prec);
+         CG_VMass.SetOperator(*VMassPA);
+         CG_VMass.SetRelTol(cg_rel_tol);
+         CG_VMass.SetAbsTol(0.0);
+         CG_VMass.SetMaxIter(cg_max_iter);
+         CG_VMass.SetPrintLevel(0);
 
-      CG_EMass.SetOperator(*EMassPA);
-      CG_EMass.iterative_mode = false;
-      CG_EMass.SetRelTol(1e-8);
-      CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-      CG_EMass.SetMaxIter(200);
-      CG_EMass.SetPrintLevel(-1);
+         CG_EMass.SetOperator(*EMassPA);
+         CG_EMass.iterative_mode = false;
+         CG_EMass.SetRelTol(1e-8);
+         CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
+         CG_EMass.SetMaxIter(200);
+         CG_EMass.SetPrintLevel(-1);
+      }
    }
+   pop();
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
@@ -558,31 +689,37 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e) const
 {
-   Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
-   one = 1.0;
-   Array<int> l2dofs;
-
-   double loc_ie = 0.0;
-   for (int z = 0; z < nzones; z++)
+   double glob_ie = 0.0;
+   // This should be turned into a kernel so that it could be displayed in pa
+   if (!p_assembly)
    {
-      L2FESpace.GetElementDofs(z, l2dofs);
-      e.GetSubVector(l2dofs, loc_e);
-      loc_ie += Me(z).InnerProduct(loc_e, one);
-   }
+      Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
+      one = 1.0;
+      Array<int> l2dofs;
+      double loc_ie = 0.0;
+      for (int z = 0; z < nzones; z++)
+      {
+         L2FESpace.GetElementDofs(z, l2dofs);
+         e.GetSubVector(l2dofs, loc_e);
+         loc_ie += Me(z).InnerProduct(loc_e, one);
+      }
 
-   double glob_ie;
-   MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
-                 H1FESpace.GetParMesh()->GetComm());
+      MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
+                    H1FESpace.GetParMesh()->GetComm());
+   }
    return glob_ie;
 }
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-   double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
-
-   double glob_ke;
-   MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
-                 H1FESpace.GetParMesh()->GetComm());
+   double glob_ke = 0.0;
+   // This should be turned into a kernel so that it could be displayed in pa
+   if (!p_assembly)
+   {
+      double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+      MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
+                    H1FESpace.GetParMesh()->GetComm());
+   }
    return glob_ke;
 }
 

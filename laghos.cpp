@@ -842,8 +842,11 @@ int main(int argc, char *argv[])
    if (mpi.Root())
    {
       cout << endl;
-      cout << "Energy  diff: " << scientific << setprecision(2)
-           << fabs(energy_init - energy_final) << endl;
+      if (!p_assembly)
+      {
+         cout << "Energy  diff: " << scientific << setprecision(2)
+              << fabs(energy_init - energy_final) << endl;
+      }
       if (mem_usage)
       {
          cout << "Maximum memory resident set size: "
