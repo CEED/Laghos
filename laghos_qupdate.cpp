@@ -1557,7 +1557,7 @@ void QBody(const int nzones, const int z,
 // *****************************************************************************
 // * qupdate
 // *****************************************************************************
-typedef void (*fQUpdate)(const int nzones,
+typedef void (*fQKernel)(const int nzones,
                          const int nqp,
                          const int nqp1D,
                          const double gamma,
@@ -1576,24 +1576,24 @@ typedef void (*fQUpdate)(const int nzones,
                          DenseTensor &stressJinvT);
 
 // *****************************************************************************
-template<int Q1D, int dim=2> static inline
-void QUpdate2D(const int nzones,
-               const int nqp,
-               const int nqp1D,
-               const double gamma,
-               const bool use_viscosity,
-               const double h0,
-               const double h1order,
-               const double cfl,
-               const double infinity,
-               const Array<double> &weights,
-               const Vector &Jacobians,
-               const Vector &rho0DetJ0w,
-               const Vector &e_quads,
-               const Vector &grad_v_ext,
-               const DenseTensor &Jac0inv,
-               Vector &dt_est,
-               DenseTensor &stressJinvT)
+template<int dim, int Q1D> static inline
+void QKernel(const int nzones,
+             const int nqp,
+             const int nqp1D,
+             const double gamma,
+             const bool use_viscosity,
+             const double h0,
+             const double h1order,
+             const double cfl,
+             const double infinity,
+             const Array<double> &weights,
+             const Vector &Jacobians,
+             const Vector &rho0DetJ0w,
+             const Vector &e_quads,
+             const Vector &grad_v_ext,
+             const DenseTensor &Jac0inv,
+             Vector &dt_est,
+             DenseTensor &stressJinvT)
 {
    constexpr int dim2 = dim*dim;
    auto d_weights = weights.Read();
@@ -1605,82 +1605,24 @@ void QUpdate2D(const int nzones,
    auto d_dt_est = dt_est.ReadWrite();
    auto d_stressJinvT = Write(stressJinvT.GetMemory(),
                               stressJinvT.TotalSize());
-   MFEM_FORALL_2D(z, nzones, Q1D, Q1D, 1,
+   if (dim==2)
    {
-      double Jinv[dim2];
-      double stress[dim2];
-      double sgrad_v[dim2];
-      double eig_val_data[3];
-      double eig_vec_data[9];
-      double compr_dir[dim];
-      double Jpi[dim2];
-      double ph_dir[dim];
-      double stressJiT[dim2];
-      MFEM_FOREACH_THREAD(qx,x,Q1D)
+      MFEM_FORALL_2D(z, nzones, Q1D, Q1D, 1,
       {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         double Jinv[dim2];
+         double stress[dim2];
+         double sgrad_v[dim2];
+         double eig_val_data[3];
+         double eig_vec_data[9];
+         double compr_dir[dim];
+         double Jpi[dim2];
+         double ph_dir[dim];
+         double stressJiT[dim2];
+         MFEM_FOREACH_THREAD(qx,x,Q1D)
          {
-            QBody<dim>(nzones, z, nqp, qx + qy * Q1D,
-            gamma, use_viscosity, h0, h1order, cfl, infinity,
-            Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
-            compr_dir,Jpi,ph_dir,stressJiT,
-            d_weights, d_Jacobians, d_rho0DetJ0w,
-            d_e_quads, d_grad_v_ext, d_Jac0inv,
-            d_dt_est, d_stressJinvT);
-         }
-      }
-      MFEM_SYNC_THREAD;
-   });
-}
-
-// *****************************************************************************
-template<int Q1D, int dim=3> static inline
-void QUpdate3D(const int nzones,
-               const int nqp,
-               const int nqp1D,
-               const double gamma,
-               const bool use_viscosity,
-               const double h0,
-               const double h1order,
-               const double cfl,
-               const double infinity,
-               const Array<double> &weights,
-               const Vector &Jacobians,
-               const Vector &rho0DetJ0w,
-               const Vector &e_quads,
-               const Vector &grad_v_ext,
-               const DenseTensor &Jac0inv,
-               Vector &dt_est,
-               DenseTensor &stressJinvT)
-{
-   constexpr int dim2 = dim*dim;
-   auto d_weights = weights.Read();
-   auto d_Jacobians = Jacobians.Read();
-   auto d_rho0DetJ0w = rho0DetJ0w.Read();
-   auto d_e_quads = e_quads.Read();
-   auto d_grad_v_ext = grad_v_ext.Read();
-   auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
-   auto d_dt_est = dt_est.ReadWrite();
-   auto d_stressJinvT = Write(stressJinvT.GetMemory(),
-                              stressJinvT.TotalSize());
-   MFEM_FORALL_3D(z, nzones, Q1D, Q1D, Q1D,
-   {
-      double Jinv[dim2];
-      double stress[dim2];
-      double sgrad_v[dim2];
-      double eig_val_data[3];
-      double eig_vec_data[9];
-      double compr_dir[dim];
-      double Jpi[dim2];
-      double ph_dir[dim];
-      double stressJiT[dim2];
-      MFEM_FOREACH_THREAD(qx,x,Q1D)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qz,z,Q1D)
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
-               QBody<dim>(nzones, z, nqp, qx + Q1D * (qy + qz * Q1D),
+               QBody<dim>(nzones, z, nqp, qx + qy * Q1D,
                gamma, use_viscosity, h0, h1order, cfl, infinity,
                Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
                compr_dir,Jpi,ph_dir,stressJiT,
@@ -1689,467 +1631,41 @@ void QUpdate3D(const int nzones,
                d_dt_est, d_stressJinvT);
             }
          }
-      }
-      MFEM_SYNC_THREAD;
-   });
-}
-
-// *****************************************************************************
-template<int D1D, int Q1D, int NBZ> static inline
-void D2QInterp2D(const int NE, const Array<double> &b_,
-                 const Vector &x_, Vector &y_)
-{
-   auto b = Reshape(b_.Read(), Q1D, D1D);
-   auto x = Reshape(x_.Read(), D1D, D1D, NE);
-   auto y = Reshape(y_.Write(), Q1D, Q1D, NE);
-
-   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
-   {
-      const int zid = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-
-      MFEM_SHARED double DDz[NBZ][D1D*D1D];
-      double (*DD)[D1D] = (double (*)[D1D])(DDz + zid);
-
-      MFEM_SHARED double DQz[NBZ][D1D*Q1D];
-      double (*DQ)[Q1D] = (double (*)[Q1D])(DQz + zid);
-
-      if (zid == 0)
-      {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      MFEM_FOREACH_THREAD(dy,y,D1D)
-      {
-         MFEM_FOREACH_THREAD(dx,x,D1D)
-         {
-            DD[dy][dx] = x(dx,dy,e);
-         }
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(dy,y,D1D)
-      {
-         MFEM_FOREACH_THREAD(qx,x,Q1D)
-         {
-            double dq = 0.0;
-            for (int dx = 0; dx < D1D; ++dx)
-            {
-               dq += B[qx][dx] * DD[dy][dx];
-            }
-            DQ[dy][qx] = dq;
-         }
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(qy,y,Q1D)
-      {
-         MFEM_FOREACH_THREAD(qx,x,Q1D)
-         {
-            double qq = 0.0;
-            for (int dy = 0; dy < D1D; ++dy)
-            {
-               qq += DQ[dy][qx] * B[qy][dy];
-            }
-            y(qx,qy,e) = qq;
-         }
-      }
-      MFEM_SYNC_THREAD;
-   });
-}
-
-// *****************************************************************************
-template<int D1D, int Q1D> static inline
-void D2QInterp3D(const int NE, const Array<double> &b_,
-                 const Vector &x_, Vector &y_)
-{
-   auto b = Reshape(b_.Read(), Q1D, D1D);
-   auto x = Reshape(x_.Read(), D1D, D1D, D1D, NE);
-   auto y = Reshape(y_.Write(), Q1D, Q1D, Q1D, NE);
-
-   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-   {
-      const int tidz = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double sm0[Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[Q1D*Q1D*Q1D];
-      double (*X)[D1D][D1D]   = (double (*)[D1D][D1D]) sm0;
-      double (*DDQ)[D1D][Q1D] = (double (*)[D1D][Q1D]) sm1;
-      double (*DQQ)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) sm0;
-
-      if (tidz == 0)
-      {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      MFEM_FOREACH_THREAD(dz,z,D1D)
-      {
-         MFEM_FOREACH_THREAD(dy,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(dx,x,D1D)
-            {
-               X[dz][dy][dx] = x(dx,dy,dz,e);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(dz,z,D1D)
-      {
-         MFEM_FOREACH_THREAD(dy,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               double u = 0.0;
-               for (int dx = 0; dx < D1D; ++dx)
-               {
-                  u += B[qx][dx] * X[dz][dy][dx];
-               }
-               DDQ[dz][dy][qx] = u;
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(dz,z,D1D)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               double u = 0.0;
-               for (int dy = 0; dy < D1D; ++dy)
-               {
-                  u += DDQ[dz][dy][qx] * B[qy][dy];
-               }
-               DQQ[dz][qy][qx] = u;
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-      MFEM_FOREACH_THREAD(qz,z,Q1D)
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               double u = 0.0;
-               for (int dz = 0; dz < D1D; ++dz)
-               {
-                  u += DQQ[dz][qy][qx] * B[qz][dz];
-               }
-               y(qx,qy,qz,e) = u;
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-   });
-}
-
-// *****************************************************************************
-typedef void (*fD2QInterp)(const int NE,
-                           const Array<double> &B,
-                           const Vector &x,
-                           Vector &y);
-
-// ***************************************************************************
-static void D2QInterp(const Operator *erestrict,
-                      const FiniteElementSpace &fes,
-                      const DofToQuad *maps,
-                      const IntegrationRule& ir,
-                      const Vector &d_in,
-                      Vector &d_out)
-{
-   const int dim = fes.GetMesh()->Dimension();
-   const int nzones = fes.GetNE();
-   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
-   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   const int id = (dim<<8)|(dofs1D<<4)|(quad1D);
-   static std::unordered_map<int, fD2QInterp> call =
-   {
-      // 2D
-      {0x224,&D2QInterp2D<2,4,8>},
-      {0x236,&D2QInterp2D<3,6,4>},
-      {0x248,&D2QInterp2D<4,8,2>},
-      // 3D
-      {0x324,&D2QInterp3D<2,4>},
-      {0x336,&D2QInterp3D<3,6>},
-      {0x348,&D2QInterp3D<4,8>},
-   };
-   if (!call[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
+         MFEM_SYNC_THREAD;
+      });
    }
-   call[id](nzones, maps->B, d_in, d_out);
-}
-
-// **************************************************************************
-template<int D1D, int Q1D, int NBZ> static inline
-void D2QGrad2D(const int NE,
-               const Array<double> &b_,
-               const Array<double> &g_,
-               const Vector &x_,
-               Vector &y_)
-{
-   constexpr int VDIM = 2;
-
-   auto b = Reshape(b_.Read(), Q1D, D1D);
-   auto g = Reshape(g_.Read(), Q1D, D1D);
-   auto x = Reshape(x_.Read(), D1D, D1D, VDIM, NE);
-   auto y = Reshape(y_.Write(), VDIM, VDIM, Q1D, Q1D, NE);
-
-   MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
+   if (dim==3)
    {
-      const int tidz = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double G[Q1D][D1D];
-
-      MFEM_SHARED double Xz[NBZ][D1D][D1D];
-      double (*X)[D1D] = (double (*)[D1D])(Xz + tidz);
-
-      MFEM_SHARED double GD[2][NBZ][D1D][Q1D];
-      double (*DQ0)[Q1D] = (double (*)[Q1D])(GD[0] + tidz);
-      double (*DQ1)[Q1D] = (double (*)[Q1D])(GD[1] + tidz);
-
-      if (tidz == 0)
+      MFEM_FORALL_3D(z, nzones, Q1D, Q1D, Q1D,
       {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-               G[q][d] = g(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      for (int c = 0; c < 2; ++c)
-      {
-         MFEM_FOREACH_THREAD(dx,x,D1D)
-         {
-            MFEM_FOREACH_THREAD(dy,y,D1D)
-            {
-               X[dx][dy] = x(dx,dy,c,e);
-            }
-         }
-         MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(dy,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               double u = 0.0;
-               double v = 0.0;
-               for (int dx = 0; dx < D1D; ++dx)
-               {
-                  const double input = X[dx][dy];
-                  u += B[qx][dx] * input;
-                  v += G[qx][dx] * input;
-               }
-               DQ0[dy][qx] = u;
-               DQ1[dy][qx] = v;
-            }
-         }
-         MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               double u = 0.0;
-               double v = 0.0;
-               for (int dy = 0; dy < D1D; ++dy)
-               {
-                  u += DQ1[dy][qx] * B[qy][dy];
-                  v += DQ0[dy][qx] * G[qy][dy];
-               }
-               y(c,0,qx,qy,e) = u;
-               y(c,1,qx,qy,e) = v;
-            }
-         }
-         MFEM_SYNC_THREAD;
-      }
-   });
-}
-
-// **************************************************************************
-template<int D1D, int Q1D> static inline
-void D2QGrad3D(const int NE,
-               const Array<double> &b_,
-               const Array<double> &g_,
-               const Vector &x_,
-               Vector &y_)
-{
-   constexpr int VDIM = 3;
-   auto b = Reshape(b_.Read(), Q1D, D1D);
-   auto g = Reshape(g_.Read(), Q1D, D1D);
-   auto x = Reshape(x_.Read(), D1D, D1D, D1D, VDIM, NE);
-   auto y = Reshape(y_.Write(), VDIM, VDIM, Q1D, Q1D, Q1D, NE);
-
-   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-   {
-      const int tidz = MFEM_THREAD_ID(z);
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double G[Q1D][D1D];
-
-      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
-      double (*X)[D1D][D1D]    = (double (*)[D1D][D1D]) (sm0+2);
-      double (*DDQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+0);
-      double (*DDQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
-      double (*DQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+0);
-      double (*DQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+1);
-      double (*DQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+2);
-
-      if (tidz == 0)
-      {
-         MFEM_FOREACH_THREAD(d,y,D1D)
-         {
-            MFEM_FOREACH_THREAD(q,x,Q1D)
-            {
-               B[q][d] = b(q,d);
-               G[q][d] = g(q,d);
-            }
-         }
-      }
-      MFEM_SYNC_THREAD;
-
-      for (int c = 0; c < VDIM; ++c)
-      {
-         MFEM_FOREACH_THREAD(dx,x,D1D)
-         {
-            MFEM_FOREACH_THREAD(dy,y,D1D)
-            {
-               MFEM_FOREACH_THREAD(dz,z,D1D)
-               {
-
-                  X[dx][dy][dz] = x(dx,dy,dz,c,e);
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-
-         MFEM_FOREACH_THREAD(dz,z,D1D)
-         {
-            MFEM_FOREACH_THREAD(dy,y,D1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  double u = 0.0;
-                  double v = 0.0;
-                  for (int dx = 0; dx < D1D; ++dx)
-                  {
-                     const double coords = X[dx][dy][dz];
-                     u += coords * B[qx][dx];
-                     v += coords * G[qx][dx];
-                  }
-                  DDQ0[dz][dy][qx] = u;
-                  DDQ1[dz][dy][qx] = v;
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(dz,z,D1D)
+         double Jinv[dim2];
+         double stress[dim2];
+         double sgrad_v[dim2];
+         double eig_val_data[3];
+         double eig_vec_data[9];
+         double compr_dir[dim];
+         double Jpi[dim2];
+         double ph_dir[dim];
+         double stressJiT[dim2];
+         MFEM_FOREACH_THREAD(qx,x,Q1D)
          {
             MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               MFEM_FOREACH_THREAD(qz,z,Q1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
-                  for (int dy = 0; dy < D1D; ++dy)
-                  {
-                     u += DDQ1[dz][dy][qx] * B[qy][dy];
-                     v += DDQ0[dz][dy][qx] * G[qy][dy];
-                     w += DDQ0[dz][dy][qx] * B[qy][dy];
-                  }
-                  DQQ0[dz][qy][qx] = u;
-                  DQQ1[dz][qy][qx] = v;
-                  DQQ2[dz][qy][qx] = w;
+                  QBody<dim>(nzones, z, nqp, qx + Q1D * (qy + qz * Q1D),
+                  gamma, use_viscosity, h0, h1order, cfl, infinity,
+                  Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+                  compr_dir,Jpi,ph_dir,stressJiT,
+                  d_weights, d_Jacobians, d_rho0DetJ0w,
+                  d_e_quads, d_grad_v_ext, d_Jac0inv,
+                  d_dt_est, d_stressJinvT);
                }
             }
          }
          MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
-                  for (int dz = 0; dz < D1D; ++dz)
-                  {
-                     u += DQQ0[dz][qy][qx] * B[qz][dz];
-                     v += DQQ1[dz][qy][qx] * B[qz][dz];
-                     w += DQQ2[dz][qy][qx] * G[qz][dz];
-                  }
-                  y(c,0,qx,qy,qz,e) = u;
-                  y(c,1,qx,qy,qz,e) = v;
-                  y(c,2,qx,qy,qz,e) = w;
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-      }
-   });
-}
-
-// *****************************************************************************
-typedef void (*fD2QGrad)(const int NE,
-                         const Array<double> &B,
-                         const Array<double> &G,
-                         const Vector &x,
-                         Vector &y);
-
-// **************************************************************************
-static void D2QGrad(const Operator *erestrict,
-                    const FiniteElementSpace &fes,
-                    const DofToQuad *maps,
-                    const IntegrationRule& ir,
-                    const Vector &d_in,
-                    Vector &d_h1_v_local_in,
-                    Vector &d_out)
-{
-   const int dim = fes.GetMesh()->Dimension();
-   const int nzones = fes.GetNE();
-   const int dofs1D = fes.GetFE(0)->GetOrder() + 1;
-   const int quad1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   erestrict->Mult(d_in, d_h1_v_local_in);
-   const int id = (dim<<8)|(dofs1D<<4)|(quad1D);
-   static std::unordered_map<int, fD2QGrad> call =
-   {
-      // 2D
-      {0x234,&D2QGrad2D<3,4,8>},
-      {0x246,&D2QGrad2D<4,6,4>},
-      {0x258,&D2QGrad2D<5,8,2>},
-      // 3D
-      {0x334,&D2QGrad3D<3,4>},
-      {0x346,&D2QGrad3D<4,6>},
-      {0x358,&D2QGrad3D<5,8>},
-   };
-   if (!call[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
+      });
    }
-   call[id](nzones,
-            maps->B,
-            maps->G,
-            d_h1_v_local_in,
-            d_out);
 }
 
 // *****************************************************************************
@@ -2168,52 +1684,52 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    Vector* S_p = const_cast<Vector*>(&S);
 
    // **************************************************************************
-   const int H1_size = H1FESpace.GetVSize();
+   const int H1_size = H1.GetVSize();
    const int nqp1D = tensors1D->LQshape1D.Width();
-
-   // Energy dof => quads ******************************************************
-   ParGridFunction d_e;
-   d_e.MakeRef(&L2FESpace, *S_p, 2*H1_size);
-   D2QInterp(l2_ElemRestrict, L2FESpace, l2_maps, ir, d_e, d_l2_e_quads_data);
 
    // Coords to Jacobians ******************************************************
    ParGridFunction d_x;
-   d_x.MakeRef(&H1FESpace,*S_p, 0);
-   D2QGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_x,
-           d_h1_v_local_in, d_h1_grad_x_data);
+   d_x.MakeRef(&H1,*S_p, 0);
+   H1ER->Mult(d_x, d_h1_v_local_in);
+   q1->Derivatives(d_h1_v_local_in, d_h1_grad_x_data);
 
    // Velocity *****************************************************************
    ParGridFunction d_v;
-   d_v.MakeRef(&H1FESpace,*S_p, H1_size);
-   D2QGrad(h1_ElemRestrict, H1FESpace, h1_maps, ir, d_v,
-           d_h1_v_local_in, d_h1_grad_v_data);
+   d_v.MakeRef(&H1,*S_p, H1_size);
+   H1ER->Mult(d_v, d_h1_v_local_in);
+   q1->Derivatives(d_h1_v_local_in, d_h1_grad_v_data);
+
+   // Energy dof => quads ******************************************************
+   ParGridFunction d_e;
+   d_e.MakeRef(&L2, *S_p, 2*H1_size);
+   q2->Values(d_e, d_l2_e_quads_data);
 
    // **************************************************************************
-   const double h1order = (double) H1FESpace.GetOrder(0);
+   const double h1order = (double) H1.GetOrder(0);
    const double infinity = std::numeric_limits<double>::infinity();
 
    // **************************************************************************
    d_dt_est = quad_data.dt_est;
 
    // **************************************************************************
-   const int id = (dim<<4)|nqp1D;
-   static std::unordered_map<int, fQUpdate> qupdate =
+   const int id = (dim<<4) | nqp1D;
+   static std::unordered_map<int, fQKernel> qupdate =
    {
       // 2D
-      {0x24,&QUpdate2D<4>},
-      {0x26,&QUpdate2D<6>},
-      {0x28,&QUpdate2D<8>},
+      {0x24,&QKernel<2,4>},
+      {0x26,&QKernel<2,6>},
+      {0x28,&QKernel<2,8>},
       // 3D
-      {0x34,&QUpdate3D<4>},
-      {0x36,&QUpdate3D<6>},
-      {0x38,&QUpdate3D<8>}
+      {0x34,&QKernel<3,4>},
+      {0x36,&QKernel<3,6>},
+      {0x38,&QKernel<3,8>}
    };
    if (!qupdate[id])
    {
       mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
       MFEM_ABORT("Unknown kernel");
    }
-   qupdate[id](nzones, nqp, nqp1D, gamma, use_viscosity, quad_data.h0,
+   qupdate[id](NE, NQ, nqp1D, gamma, use_viscosity, quad_data.h0,
                h1order, cfl, infinity, ir.GetWeights(), d_h1_grad_x_data,
                quad_data.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
                quad_data.Jac0inv, d_dt_est, quad_data.stressJinvT);
@@ -2222,51 +1738,41 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    quad_data.dt_est = d_dt_est.Min();
    quad_data_is_current = true;
    timer->sw_qdata.Stop();
-   timer->quad_tstep += nzones;
+   timer->quad_tstep += NE;
 }
 
 // *****************************************************************************
-QUpdate::QUpdate(const int _dim,
-                 const int _nzones,
-                 const int _l2dofs_cnt,
-                 const int _h1dofs_cnt,
-                 const bool _use_viscosity,
-                 const bool _p_assembly,
-                 const double _cfl,
-                 const double _gamma,
-                 TimingData *_timer,
-                 Coefficient *_material_pcf,
-                 const IntegrationRule &_ir,
-                 ParFiniteElementSpace &_H1FESpace,
-                 ParFiniteElementSpace &_L2FESpace):
-   dim(_dim),
-   nqp(_ir.GetNPoints()),
-   nzones(_nzones),
-   l2dofs_cnt(_l2dofs_cnt),
-   h1dofs_cnt(_h1dofs_cnt),
-   use_viscosity(_use_viscosity),
-   p_assembly(_p_assembly),
-   cfl(_cfl),
-   gamma(_gamma),
-   timer(_timer),
-   material_pcf(_material_pcf),
-   ir(_ir),
-   H1FESpace(_H1FESpace),
-   L2FESpace(_L2FESpace),
-   h1_maps(&H1FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   l2_maps(&L2FESpace.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   h1_ElemRestrict(H1FESpace.GetElementRestriction(
-                      ElementDofOrdering::LEXICOGRAPHIC)),
-   l2_ElemRestrict(L2FESpace.GetElementRestriction(
-                      ElementDofOrdering::LEXICOGRAPHIC)),
-   d_l2_e_quads_data(nzones * nqp),
-   h1_vdim(H1FESpace.GetVDim()),
-   d_h1_v_local_in(           h1_vdim * nqp * nzones),
-   d_h1_grad_x_data(h1_vdim * h1_vdim * nqp * nzones),
-   d_h1_grad_v_data(h1_vdim * h1_vdim * nqp * nzones),
-   d_dt_est(nzones * nqp)
+QUpdate::QUpdate(const int dim_,
+                 const int NE_,
+                 const bool use_viscosity_,
+                 const bool p_assembly_,
+                 const double cfl_,
+                 const double gamma_,
+                 TimingData *timer_,
+                 const IntegrationRule &ir_,
+                 ParFiniteElementSpace &H1_,
+                 ParFiniteElementSpace &L2_):
+   dim(dim_),
+   NQ(ir_.GetNPoints()),
+   NE(NE_),
+   use_viscosity(use_viscosity_),
+   p_assembly(p_assembly_),
+   cfl(cfl_),
+   gamma(gamma_),
+   timer(timer_),
+   ir(ir_),
+   H1(H1_),
+   L2(L2_),
+   H1ER(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+   d_l2_e_quads_data(NE * NQ),
+   vdim(H1.GetVDim()),
+   d_h1_v_local_in(        vdim * NQ * NE),
+   d_h1_grad_x_data(vdim * vdim * NQ * NE),
+   d_h1_grad_v_data(vdim * vdim * NQ * NE),
+   d_dt_est(NE * NQ),
+   q1(H1.GetQuadratureInterpolator(ir)),
+   q2(L2.GetQuadratureInterpolator(ir))
 {
-   MFEM_ASSERT(material_pcf, "!material_pcf");
 }
 
 } // namespace hydrodynamics

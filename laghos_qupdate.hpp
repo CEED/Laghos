@@ -28,67 +28,45 @@ namespace hydrodynamics
 
 struct TimingData;
 
-// *****************************************************************************
 class QUpdate
 {
 private:
    const int dim;
-   const int nqp;
-   const int nzones;
-   const int l2dofs_cnt;
-   const int h1dofs_cnt;
+   const int NQ;
+   const int NE;
    const bool use_viscosity;
    const bool p_assembly;
    const double cfl;
    const double gamma;
    TimingData *timer;
-   Coefficient *material_pcf;
    const IntegrationRule &ir;
-   ParFiniteElementSpace &H1FESpace;
-   ParFiniteElementSpace &L2FESpace;
-   const DofToQuad *h1_maps;
-   const DofToQuad *l2_maps;
-   const Operator *h1_ElemRestrict;
-   const Operator *l2_ElemRestrict;
+   ParFiniteElementSpace &H1;
+   ParFiniteElementSpace &L2;
+   const Operator *H1ER;
    Vector d_l2_e_quads_data; // scalar L2
-   const int h1_vdim;
+   const int vdim;
    Vector d_h1_v_local_in;   // vector H1
    Vector d_h1_grad_x_data;  // grad vector H1
    Vector d_h1_grad_v_data;  // grad vector H1
    Vector d_dt_est;
+   const QuadratureInterpolator *q1,*q2;
+
 public:
-   // **************************************************************************
    QUpdate(const int dim,
-           const int nzones,
-           const int l2dofs_cnt,
-           const int h1dofs_cnt,
+           const int NE,
            const bool use_viscosity,
            const bool p_assembly,
            const double cfl,
            const double gamma,
            TimingData *timer,
-           Coefficient *material_pcf,
-           const IntegrationRule &integ_rule,
-           ParFiniteElementSpace &H1FESpace,
-           ParFiniteElementSpace &L2FESpace);
+           const IntegrationRule &ir,
+           ParFiniteElementSpace &H1,
+           ParFiniteElementSpace &L2);
 
-   // **************************************************************************
    void UpdateQuadratureData(const Vector &S,
                              bool &quad_data_is_current,
                              QuadratureData &quad_data,
                              const Tensors1D *tensors1D);
-
-   // **************************************************************************
-   void UpdateQuadratureData2D(const Vector &S,
-                               bool &quad_data_is_current,
-                               QuadratureData &quad_data,
-                               const Tensors1D *tensors1D);
-
-   // **************************************************************************
-   void UpdateQuadratureData3D(const Vector &S,
-                               bool &quad_data_is_current,
-                               QuadratureData &quad_data,
-                               const Tensors1D *tensors1D);
 };
 
 } // namespace hydrodynamics
