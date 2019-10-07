@@ -188,7 +188,7 @@ style:
 	fi
 
 # ******************************************************************************
-problems=6 #0 1 2 3 #4 5 6
+problems=0 1 2 3 4 5 6
 meshs=square01_quad cube01_hex
 cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
 options=-fa -pa -o -o-q $(cuda)

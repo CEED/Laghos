@@ -275,8 +275,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
                                         integ_rule, &tensors1D);
       pop();
       push("EMassPA",Silver);
-      EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace, integ_rule,
-                                        &tensors1D);
+      EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace,
+                                        integ_rule, &tensors1D);
       pop();
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
