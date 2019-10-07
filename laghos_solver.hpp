@@ -19,7 +19,6 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
-#include "laghos_qupdate.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -54,6 +53,44 @@ struct TimingData
 
    TimingData(const HYPRE_Int l2d) :
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
+};
+
+class QUpdate
+{
+private:
+   const int dim, NQ, NE;
+   const bool use_viscosity;
+   const double cfl, gamma;
+   TimingData *timer;
+   const IntegrationRule &ir;
+   ParFiniteElementSpace &H1, &L2;
+   const Operator *H1ER;
+   const int vdim;
+   Vector d_dt_est;
+   Vector d_l2_e_quads_data;
+   Vector d_h1_v_local_in, d_h1_grad_x_data, d_h1_grad_v_data;
+   const QuadratureInterpolator *q1,*q2;
+public:
+   QUpdate(const int d, const int ne, const bool uv,
+           const double c, const double g, TimingData *t,
+           const IntegrationRule &i,
+           ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
+      dim(d), NQ(i.GetNPoints()), NE(ne), use_viscosity(uv), cfl(c), gamma(g),
+      timer(t), ir(i), H1(h1), L2(l2),
+      H1ER(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+      vdim(H1.GetVDim()),
+      d_dt_est(NE*NQ),
+      d_l2_e_quads_data(NE*NQ),
+      d_h1_v_local_in(NQ*NE*vdim),
+      d_h1_grad_x_data(NQ*NE*vdim*vdim),
+      d_h1_grad_v_data(NQ*NE*vdim*vdim),
+      q1(H1.GetQuadratureInterpolator(ir)),
+      q2(L2.GetQuadratureInterpolator(ir)) { }
+
+   void UpdateQuadratureData(const Vector &S,
+                             bool &quad_data_is_current,
+                             QuadratureData &quad_data,
+                             const Tensors1D *tensors1D);
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
