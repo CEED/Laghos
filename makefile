@@ -15,7 +15,7 @@
 # testbed platforms, in support of the nation's exascale computing imperative.
 
 # number of proc to use for compilation stage **********************************
-NPROC = $(shell echo $(shell getconf _NPROCESSORS_ONLN)*2|bc -l)
+NPROC = $(shell getconf _NPROCESSORS_ONLN)
 
 define LAGHOS_HELP_MSG
 
@@ -188,12 +188,12 @@ style:
 	fi
 
 # ******************************************************************************
-problems=0 1 2 3 4 5 6
-meshs=square01_quad cube01_hex
+problems=1 # 0 1 2 3 4 5 6
+meshs=square01_quad # square01_quad cube01_hex
 cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
-options=-o-q -fa -pa -o $(cuda)
+options=-o-q # -fa -pa -o -o-q -o-q $(cuda)
 optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
-ranks=1 3
+ranks=1 # 1 2 3
 ECHO=/bin/echo
 SED=/usr/bin/sed -e
 OPTS=-cgt 1.e-14 -rs 0 --checks
@@ -217,6 +217,10 @@ $(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(fore
 #$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks), $(info $(call _test_template,$(p),$(m),$(o),$(r)))))))
 
 checks check: laghos|$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
-c chk: ;@$(MAKE) -j $(NPROC) check
+c chk: ;@$(MAKE) -j $(NPROC) check meshs="square01_quad cube01_hex" problems="0 1 2 3 4 5 6" ranks="1 3" options="-fa -pa -o -o-q $(cuda)"
 
-go one: ;@$(MAKE) -j 8 check ranks=1
+1: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=1
+2: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=2
+3: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=3
+
+go: ;@$(MAKE) -j 8 check
