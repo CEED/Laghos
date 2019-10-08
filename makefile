@@ -191,7 +191,7 @@ style:
 problems=0 1 2 3 4 5 6
 meshs=square01_quad cube01_hex
 cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
-options=-fa -pa -o -o-q $(cuda)
+options=-o-q -fa -pa -o $(cuda)
 optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
 ranks=1 3
 ECHO=/bin/echo

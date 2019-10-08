@@ -17,7 +17,7 @@
 #include "general/dbg.hpp"
 #include "general/nvvp.hpp"
 #include "laghos_solver.hpp"
-#include "linalg/eigen.hpp"
+#include "linalg/blas.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
@@ -1055,9 +1055,9 @@ void QBody(const int nzones, const int z,
    const double weight =  d_weights[q];
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians + dim2*(nqp*z + q);
-   const double detJ = mfem::det<dim>(J);
+   const double detJ = mfem::blas::Det<dim>(J);
    min_detJ = std::fmin(min_detJ,detJ);
-   mfem::calcInverse<dim>(J,Jinv);
+   blas::CalcInverse<dim>(J,Jinv);
    // *****************************************************************
    const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
    const double e   = std::fmax(0.0, d_e_quads[zq]);
@@ -1075,7 +1075,7 @@ void QBody(const int nzones, const int z,
       // direction of maximal compression. This is used to define the
       // relative change of the initial length scale.
       const double *dV = d_grad_v_ext + dim2*(nqp*z + q);
-      mfem::mult(dim, dim, dim, dV, Jinv, sgrad_v);
+      blas::Mult(dim, dim, dim, dV, Jinv, sgrad_v);
       DenseMatrix::symmetrize(dim,sgrad_v);
       if (dim==1)
       {
@@ -1084,12 +1084,12 @@ void QBody(const int nzones, const int z,
       }
       else
       {
-         mfem::calcEigenvalues<dim>(sgrad_v, eig_val_data, eig_vec_data);
+         blas::CalcEigenvalues<dim>(sgrad_v, eig_val_data, eig_vec_data);
       }
       for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
       // Computes the initial->physical transformation Jacobian.
-      mfem::mult(dim,dim,dim, J, d_Jac0inv+zq*dim*dim, Jpi);
-      mfem::multV(dim, dim, Jpi, compr_dir, ph_dir);
+      blas::Mult(dim, dim, dim, J, d_Jac0inv+zq*dim*dim, Jpi);
+      blas::MultV(dim, dim, Jpi, compr_dir, ph_dir);
       // Change of the initial mesh size in the compression direction.
       const double ph_dir_nl2 = Vector::norml2(dim,ph_dir);
       const double compr_dir_nl2 = Vector::norml2(dim, compr_dir);
@@ -1105,13 +1105,13 @@ void QBody(const int nzones, const int z,
       visc_coeff += 0.5 * rho * h * sound_speed *
                     (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
       //add(dim, dim, visc_coeff, sgrad_v, stress);
-      mfem::add(dim, dim, visc_coeff, stress, sgrad_v, stress);
+      blas::Add(dim, dim, visc_coeff, stress, sgrad_v, stress);
    }
    // Time step estimate at the point. Here the more relevant length
    // scale is related to the actual mesh deformation; we use the min
    // singular value of the ref->physical Jacobian. In addition, the
    // time step estimate should be aware of the presence of shocks.
-   const double sv = mfem::calcSingularvalue<dim>(J);
+   const double sv = blas::CalcSingularvalue<dim>(J);
    const double h_min = sv / h1order;
    const double inv_h_min = 1. / h_min;
    const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
