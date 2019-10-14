@@ -25,7 +25,7 @@ install:
    - cd ..
 
    # hypre (cached 2.10.0b build)
-   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
+   - #if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
         wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
         rm -rf hypre-2.10.0b;
         tar xvzf hypre-2.10.0b.tar.gz;
@@ -33,9 +33,9 @@ install:
         ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
         make -j3;
         cd ../..;
-     else
-         echo "Reusing cached hypre-2.10.0b/";
-     fi;
+     #else
+     #    echo "Reusing cached hypre-2.10.0b/";
+     #fi;
 
    # METIS (cached 4.0 build)
    - if [ ! -e metis-4.0/libmetis.a ]; then
@@ -111,8 +111,8 @@ script:
 
 cache:
    directories:
-     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
-     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
+   #  - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
+   #  - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
    # - $TRAVIS_BUILD_DIR/../mfem
 
