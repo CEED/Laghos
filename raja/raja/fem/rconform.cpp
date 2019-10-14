@@ -63,14 +63,21 @@ RajaConformingProlongationOperator::~RajaConformingProlongationOperator()
 }
 
 // ***************************************************************************
-// * CUDA Error Status Check
+// * CUDA/HIP Error Status Check
 // ***************************************************************************
-void cuLastCheck()
+void LastCheck()
 {
+#if defined(RAJA_ENABLE_CUDA)
    cudaError_t cudaStatus = cudaGetLastError();
    if (cudaStatus != cudaSuccess)
-      exit(fprintf(stderr, "\n\t\033[31;1m[cuLastCheck] failed: %s\033[m\n",
+      exit(fprintf(stderr, "\n\t\033[31;1m[cudaLastCheck] failed: %s\033[m\n",
                    cudaGetErrorString(cudaStatus)));
+#elif defined(RAJA_ENABLE_HIP)
+   hipError_t hipStatus = hipGetLastError();
+   if (hipStatus != hipSuccess)
+      exit(fprintf(stderr, "\n\t\033[31;1m[hipLastCheck] failed: %s\033[m\n",
+                   hipGetErrorString(hipStatus)));
+#endif
 }
 
 // ***************************************************************************
@@ -118,8 +125,13 @@ void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
       if (m>maxXThDim)
       {
          const int kTpB=64;
+#if defined(RAJA_ENABLE_CUDA)
          k_Mult<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
-         cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+         hipLaunchKernelGGL((k_Mult), dim3((m+kTpB-1)/kTpB), dim3(kTpB), 0, 0,
+                              d_ydata,d_xdata,d_external_ldofs.ptr(),m);
+#endif
+         LastCheck();
       }
       else
       {
@@ -128,11 +140,21 @@ void RajaConformingProlongationOperator::d_Mult(const RajaVector &x,
          for (int of7=0; of7<m/maxXThDim; of7+=1)
          {
             const int base = of7*maxXThDim;
+#if defined(RAJA_ENABLE_CUDA)
             k_Mult2<<<kMaxTh,maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
-            cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+            hipLaunchKernelGGL((k_Mult2),dim3(kMaxTh),dim3(maxXThDim), 0, 0,
+                                 d_ydata,d_xdata,d_external_ldofs.ptr(),m,base);
+#endif
+            LastCheck();
          }
+#if defined(RAJA_ENABLE_CUDA)
          k_Mult2<<<kMaxTh,m%maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
-         cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+         hipLaunchKernelGGL((k_Mult2),dim3(kMaxTh),dim3(m%maxXThDim), 0, 0,
+                              d_ydata,d_xdata,d_external_ldofs.ptr(),m,0);
+#endif
+         LastCheck();
       }
       j = external_ldofs[m-1]+1;
    }
@@ -182,27 +204,43 @@ void RajaConformingProlongationOperator::d_MultTranspose(const RajaVector &x,
    double *d_ydata = y.GetData();
    int j = 0;
    const int m = external_ldofs.Size();
+
    if (m>0)
    {
       const int maxXThDim = rconfig::Get().MaxXThreadsDim();
       if (m>maxXThDim)
       {
          const int kTpB=64;
+#if defined(RAJA_ENABLE_CUDA)
          k_MultTranspose<<<(m+kTpB-1)/kTpB,kTpB>>>(d_ydata,d_xdata,d_external_ldofs,m);
-         cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+         hipLaunchKernelGGL((k_MultTranspose), dim3((m+kTpB-1)/kTpB),dim3(kTpB), 0, 0,
+                              d_ydata,d_xdata,d_external_ldofs.ptr(),m);
+#endif
+         LastCheck();
       }
       else
       {
-         const int TpB = rconfig::Get().MaxXThreadsDim();
+         // const int TpB = rconfig::Get().MaxXThreadsDim();
          assert(kMaxTh<rconfig::Get().MaxXGridSize());
          for (int of7=0; of7<m/maxXThDim; of7+=1)
          {
             const int base = of7*maxXThDim;
+#if defined(RAJA_ENABLE_CUDA)
             k_MultTranspose2<<<kMaxTh,maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,base);
-            cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+            hipLaunchKernelGGL((k_MultTranspose2), dim3(kMaxTh),dim3(maxXThDim), 0, 0,
+                                 d_ydata,d_xdata,d_external_ldofs.ptr(),m,base);
+#endif
+            LastCheck();
          }
+#if defined(RAJA_ENABLE_CUDA)
          k_MultTranspose2<<<kMaxTh,m%maxXThDim>>>(d_ydata,d_xdata,d_external_ldofs,m,0);
-         cuLastCheck();
+#elif defined(RAJA_ENABLE_HIP)
+         hipLaunchKernelGGL((k_MultTranspose2), dim3(kMaxTh),dim3(m%maxXThDim), 0, 0,
+                              d_ydata,d_xdata,d_external_ldofs.ptr(),m,0);
+#endif
+         LastCheck();
       }
       j = external_ldofs[m-1]+1;
    }

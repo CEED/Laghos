@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    bool cuda = false;
+   bool hip = false;
    bool uvm = false;
    bool aware = false;
    bool hcpo = false; // do Host Conforming Prolongation Operation
@@ -142,11 +143,13 @@ int main(int argc, char *argv[])
    // RAJA Options *************************************************************
    args.AddOption(&cuda, "-cuda", "--cuda", "-no-cuda", "--no-cuda",
                   "Enable or disable CUDA kernels if you are using RAJA.");
+   args.AddOption(&hip, "-hip", "--hip", "-no-hip", "--no-hip",
+                  "Enable or disable HIP kernels if you are using RAJA.");
    // CUDA Options *************************************************************
    args.AddOption(&uvm, "-uvm", "--uvm", "-no-uvm", "--no-uvm",
                   "[32mEnable or disable Unified Memory.[m");
    args.AddOption(&aware, "-aware", "--aware", "-no-aware", "--no-aware",
-                  "[32mEnable or disable MPI CUDA Aware (GPUDirect).[m");
+                  "[32mEnable or disable MPI GPU Aware (GPUDirect).[m");
    args.AddOption(&hcpo, "-hcpo", "--hcpo", "-not-hcpo", "--no-hcpo",
                   "[32mEnable or disable Host Conforming Prolongation Operations,\n"
                   "\twhich transfers ALL the data to the host before communications.[m");
@@ -163,7 +166,7 @@ int main(int argc, char *argv[])
    // CUDA set device & options
    // **************************************************************************
    rconfig::Get().Setup(mpi.WorldRank(),mpi.WorldSize(),
-                        cuda,uvm,aware,hcpo,sync);
+                        cuda,hip,uvm,aware,hcpo,sync);
 
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
@@ -226,7 +229,10 @@ int main(int argc, char *argv[])
    int global_pmesh_NE;
    const int pmesh_NE=pmesh->GetNE();
    MPI_Allreduce(&pmesh_NE,&global_pmesh_NE,1,MPI_INT,MPI_MIN,pmesh->GetComm());
-   if (global_pmesh_NE==0) { return printf("[Laghos] ERROR: pmesh->GetNE()==0!"); }
+   if (global_pmesh_NE==0) {
+      printf("[Laghos] ERROR: pmesh->GetNE()==0!");
+      return 1;
+   }
    else { printf("\033[32m[laghos] pmesh->GetNE()=%d\033[m\n",global_pmesh_NE); }
    assert(pmesh->GetNE()>0);
 #endif

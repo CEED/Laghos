@@ -16,12 +16,12 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-#define CUDA_BLOCKSIZE 256
+#define BLOCKSIZE 256
 
 // *****************************************************************************
-__global__ void cuKernelMin(const size_t N, double *gdsr, const double *x)
+__global__ void KernelMin(const size_t N, double *gdsr, const double *x)
 {
-   __shared__ double s_min[CUDA_BLOCKSIZE];
+   __shared__ double s_min[BLOCKSIZE];
    const size_t n = blockDim.x*blockIdx.x + threadIdx.x;
    if (n>=N) { return; }
    const size_t bid = blockIdx.x;
@@ -45,19 +45,29 @@ __global__ void cuKernelMin(const size_t N, double *gdsr, const double *x)
 }
 
 // *****************************************************************************
-double cuVectorMin(const size_t N, const double *x)
+double gpuVectorMin(const size_t N, const double *x)
 {
-   const size_t tpb = CUDA_BLOCKSIZE;
-   const size_t blockSize = CUDA_BLOCKSIZE;
+   const size_t tpb = BLOCKSIZE;
+   const size_t blockSize = BLOCKSIZE;
    const size_t gridSize = (N+blockSize-1)/blockSize;
    const size_t min_sz = (N%tpb)==0? (N/tpb) : (1+N/tpb);
    const size_t bytes = min_sz*sizeof(double);
    static double *h_min = NULL;
    if (!h_min) { h_min = (double*)calloc(min_sz,sizeof(double)); }
+
+#if defined(RAJA_ENABLE_CUDA)
    static CUdeviceptr gdsr = (CUdeviceptr) NULL;
    if (!gdsr) { cuMemAlloc(&gdsr,bytes); }
-   cuKernelMin<<<gridSize,blockSize>>>(N, (double*)gdsr, x);
+   KernelMin<<<gridSize,blockSize>>>(N, (double*)gdsr, x);
    cuMemcpy((CUdeviceptr)h_min,(CUdeviceptr)gdsr,bytes);
+#elif defined(RAJA_ENABLE_HIP)
+   static void* gdsr = (void*) NULL;
+   if (!gdsr) { hipMalloc(&gdsr,bytes); }
+   hipLaunchKernelGGL((KernelMin),dim3(gridSize),dim3(blockSize), 0, 0,
+                           N, (double*)gdsr, x);
+   hipMemcpy((void*)h_min,(void*)gdsr,bytes, hipMemcpyDeviceToHost);
+#endif
+
    double min = HUGE_VAL;
    for (size_t i=0; i<min_sz; i+=1) { min = fmin(min,h_min[i]); }
    return min;
@@ -67,9 +77,9 @@ double cuVectorMin(const size_t N, const double *x)
 double vector_min(const int N,
                   const double* __restrict vec)
 {
-   if (mfem::rconfig::Get().Cuda())
+   if (mfem::rconfig::Get().Cuda() || mfem::rconfig::Get().Hip())
    {
-      return cuVectorMin(N,vec);
+      return gpuVectorMin(N,vec);
    }
    ReduceDecl(Min,red,vec[0]);
    ReduceForall(i,N,red.min(vec[i]););

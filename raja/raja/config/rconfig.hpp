@@ -35,11 +35,17 @@ private:
    int maxXGridSize=0;
    int maxXThreadsDim=0;
    // **************************************************************************
+#if defined(RAJA_ENABLE_CUDA)
    CUdevice cuDevice;
    CUcontext cuContext;
    CUstream *hStream;
+#elif defined(RAJA_ENABLE_HIP)
+   hipDevice_t hipDevice;
+   hipStream_t *hStream;
+#endif
    // *************************************************************************
    bool cuda=false;
+   bool hip=false;
    bool dcg=false;
    bool uvm=false;
    // *************************************************************************
@@ -61,7 +67,7 @@ public:
    }
    // *************************************************************************
    void Setup(const int, const int,
-              const bool cuda, const bool uvm, const bool aware,
+              const bool cuda, const bool hip, const bool uvm, const bool aware,
               const bool hcpo, const bool sync);
    // *************************************************************************
    bool IAmAlone();
@@ -77,13 +83,18 @@ public:
    // *************************************************************************
    inline bool Uvm() { return uvm; }
    inline bool Cuda() { return cuda; }
+   inline bool Hip() { return hip; }
    inline bool Hcpo() { return hcpo; }
    inline bool Sync() { return sync; }
    inline bool Nvvp(bool toggle=false) { return toggle?nvvp=!nvvp:nvvp; }
    inline int MaxXGridSize() { return maxXGridSize; }
    inline int MaxXThreadsDim() { return maxXThreadsDim; }
    // *************************************************************************
+#if defined(RAJA_ENABLE_CUDA)
    inline CUstream *Stream() { return hStream; }
+#elif defined(RAJA_ENABLE_HIP)
+   inline hipStream_t *Stream() { return hStream; }
+#endif
 };
 
 } // namespace mfem
