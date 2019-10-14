@@ -104,6 +104,8 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    const char *basename = "results/Laghos";
    int partition_type = 111;
+   double blast_energy = 0.25;
+   double blast_position[] = {0.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -390,7 +392,8 @@ int main(int argc, char *argv[])
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(0, 0, 0.25);
+      DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                               blast_position[2], blast_energy);
       l2_e.ProjectCoefficient(e_coeff);
    }
    else

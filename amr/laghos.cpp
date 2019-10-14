@@ -68,7 +68,8 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
 void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace *pspace,
                    int bdr_attr_max, Array<int> &ess_tdofs);
 
-int FindElementWithVertex(const Mesh* mesh, const Vertex &vert);
+void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                            const double size, Array<int> &elements);
 
 void GetPerElementMinMax(const GridFunction &gf,
                          Vector &elem_min, Vector &elem_max,
@@ -107,6 +108,9 @@ int main(int argc, char *argv[])
    double ref_threshold = 2e-4;
    double deref_threshold = 0.75;
    const int nc_limit = 1;
+   const double blast_energy = 0.25;
+   const double blast_position[] = {0.0, 0.0, 0.0};
+   const double blast_amr_size = 1e-10;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -198,7 +202,9 @@ int main(int argc, char *argv[])
       mesh->EnsureNCMesh();
       for (int lev = 0; lev < rs_levels; lev++)
       {
-         mesh->RefineAtVertex(Vertex(0, 0, 0));
+         mesh->RefineAtVertex(Vertex(blast_position[0], blast_position[1],
+                                     blast_position[2]),
+                              blast_amr_size);
       }
    }
 
@@ -409,7 +415,8 @@ int main(int argc, char *argv[])
       if (problem == 1)
       {
          // For the Sedov test, we use a delta function at the origin.
-         DeltaCoefficient e_coeff(0, 0, 0.25);
+         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                                  blast_position[2], blast_energy);
          l2_e.ProjectCoefficient(e_coeff);
       }
       else
@@ -664,9 +671,17 @@ int main(int argc, char *argv[])
             MPI_Allreduce(&loc_threshold, &threshold, 1, MPI_DOUBLE, MPI_MAX,
                           pmesh->GetComm());
 
-            // make sure the blast corner is never derefined
-            int index = FindElementWithVertex(pmesh, Vertex(0, 0, 0));
-            if (index >= 0) { rho_max(index) = 1e10; }
+            // make sure the blast point is never derefined
+            Array<int> elements;
+			FindElementsWithVertex(pmesh, Vertex(blast_position[0],
+                                                 blast_position[1],
+                                                 blast_position[2]),
+                                   blast_amr_size, elements);
+			for (int i = 0; i < elements.Size(); i++)
+            {
+               int index = elements[i];
+			   if (index >= 0) { rho_max(index) = 1e10; }
+            }
 
             // also, only derefine where the mesh is in motion, i.e. after the shock
             for (int i = 0; i < pmesh->GetNE(); i++)
@@ -780,11 +795,10 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    S_tmp.Update(true_offset);
 }
 
-
-int FindElementWithVertex(const Mesh* mesh, const Vertex &vert)
+void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                            const double size, Array<int> &elements)
 {
    Array<int> v;
-   const double eps = 1e-10;
 
    for (int i = 0; i < mesh->GetNE(); i++)
    {
@@ -797,10 +811,9 @@ int FindElementWithVertex(const Mesh* mesh, const Vertex &vert)
             double d = vert(l) - mesh->GetVertex(v[j])[l];
             dist += d*d;
          }
-         if (dist <= eps*eps) { return i; }
+         if (dist <= size*size) { elements.Append(i); break; }
       }
    }
-   return -1;
 }
 
 void Pow(Vector &vec, double p)
