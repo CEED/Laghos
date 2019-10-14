@@ -74,28 +74,28 @@ script:
    - make -j
    - touch RESULTS.dat
 
-   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa | tee RUN.dat
+   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
    - |
@@ -110,7 +110,7 @@ script:
      step = 0776, dt = 0.000045, |e| = 409.8243172608
      EOF
 
-   - diff RESULTS.dat BASELINE.dat
+   - diff --report-identical-files RESULTS.dat BASELINE.dat
 
 
 cache:
@@ -118,5 +118,4 @@ cache:
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
-   # - $TRAVIS_BUILD_DIR/../mfem
 
