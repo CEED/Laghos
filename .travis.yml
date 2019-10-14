@@ -38,10 +38,12 @@ install:
          ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
          make -j3;
          cd ../..;
+         ln -s hypre-2.10.0b hypre;
      else
          echo "Reusing cached hypre-2.10.0b/";
      fi;
-     ln -s hypre-2.10.0b hypre;
+
+     - ls -la
 
      # METIS
      - if [ $MPI == "YES" ]; then
