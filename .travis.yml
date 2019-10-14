@@ -6,6 +6,8 @@ matrix:
   include:
     - os: linux
       compiler: gcc
+      env: DEBUG=NO
+           MPI=YES
       addons:
         apt:
           packages:
@@ -21,29 +23,30 @@ matrix:
           mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
 
 install:
-     - mpic++ -v;
-     
-     # Save Laghos top directory
+     - mpic++ -v
+
      - export LAGHOS_DIR=$PWD
 
      # Back out of the mfem directory to install the libraries
      - cd ..
 
-     # hypre (cached 2.10.0b build)
-     - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
-         wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
-         rm -rf hypre-2.10.0b;
-         tar xvzf hypre-2.10.0b.tar.gz;
-         cd hypre-2.10.0b/src;
-         ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
-         make -j3;
-         cd ../..;
-         ln -s hypre-2.10.0b hypre;
+     # HYPRE
+     - if [ $MPI == "YES" ]; then
+        if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
+           wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
+           rm -rf hypre-2.10.0b;
+           tar xvzf hypre-2.10.0b.tar.gz;
+           cd hypre-2.10.0b/src;
+           ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
+           make -j3;
+           cd ../..;
+        else
+            echo "Reusing cached hypre-2.10.0b/";
+        fi;
+        ln -s hypre-2.10.0b hypre;
      else
-         echo "Reusing cached hypre-2.10.0b/";
-     fi;
-
-     - ls -la
+         echo "Serial build, not using hypre";
+     fi
 
      # METIS
      - if [ $MPI == "YES" ]; then
@@ -68,7 +71,7 @@ install:
        make -j4;
        cd ..;
    else
-       echo "Reusing cached mfem@laghos-1.0";
+       echo "Reusing cached mfem";
    fi;
    
    # Back to Laghos
@@ -76,7 +79,7 @@ install:
 
    
 script:
-   - make -j3
+   - make -j4
 
    - touch RESULTS.dat
 
