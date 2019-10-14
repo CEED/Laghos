@@ -7,6 +7,7 @@
 
         High-order Lagrangian Hydrodynamics Miniapp
 
+[![Build Status](https://travis-ci.org/CEED/Laghos.svg?branch=master)](https://travis-ci.org/CEED/Laghos)
 
 ## Purpose
 
