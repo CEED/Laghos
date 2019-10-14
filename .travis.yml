@@ -21,7 +21,6 @@ matrix:
 install:
   - mpic++ -v
   - export LAGHOS_DIR=$PWD
-  - cd ..
   # HYPRE
   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
       wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
