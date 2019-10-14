@@ -16,11 +16,14 @@ matrix:
           - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
           - $TRAVIS_BUILD_DIR/../metis-4.0
       before_cache:
-        - cd $TRAVIS_BUILD_DIR/../metis-4.0; mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
+        - cd $TRAVIS_BUILD_DIR/../metis-4.0;
+          mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
 
 install:
   - mpic++ -v
   - export LAGHOS_DIR=$PWD
+  # Back out of the directory to install the libraries
+  - cd ..
   # HYPRE
   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
       wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
