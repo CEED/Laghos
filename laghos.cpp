@@ -101,6 +101,7 @@ int main(int argc, char *argv[])
    double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
+   double ftz_tol = 0.0;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
@@ -119,6 +120,8 @@ int main(int argc, char *argv[])
    bool fom = false;
    bool gpu_aware_mpi = false;
    int dev = 0;
+   double blast_energy = 0.25;
+   double blast_position[] = {0.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -145,6 +148,8 @@ int main(int argc, char *argv[])
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
+   args.AddOption(&ftz_tol, "-ftz", "--ftz-tol",
+                  "Absolute flush-to-zero tolerance.");
    args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
                   "Maximum number of CG iterations (velocity linear solve).");
    args.AddOption(&max_tsteps, "-ms", "--max-steps",
@@ -483,7 +488,8 @@ int main(int argc, char *argv[])
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(0, 0, 0.25);
+      DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                               blast_position[2], blast_energy);
       l2_e.ProjectCoefficient(e_coeff);
    }
    else
@@ -523,7 +529,7 @@ int main(int argc, char *argv[])
 
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                visc, p_assembly, cg_tol, cg_max_iter,
+                                visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                 order_q, qupdate, gamma(S), okina,
                                 H1FEC.GetBasisType());
 

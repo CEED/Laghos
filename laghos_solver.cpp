@@ -63,10 +63,13 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
       if (myid == 0 && newly_opened)
       {
+         const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
+                            ? "mAcRjlPPPPPPPP" : "mmaaAcl";
+
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
               << x << " " << y << " " << w << " " << h << "\n"
-              << "keys mmaaAcl";
+              << "keys " << keys;
          if ( vec ) { sock << "vvv"; }
          sock << endl;
       }
@@ -190,6 +193,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
                                                  const bool pa,
                                                  const double cgt,
                                                  const int cgiter,
+                                                 double ftz,
                                                  const int order_q,
                                                  const bool qupt,
                                                  const double gm,
@@ -215,7 +219,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    source_type(source_type_), cfl(cfl_),
    use_viscosity(visc), p_assembly(pa),
    okina(ok),
-   cg_rel_tol(cgt), cg_max_iter(cgiter),
+   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    material_pcf(material_),
    Mv(&h1_fes), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -487,7 +491,21 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    if (p_assembly)
    {
       timer.sw_force.Start();
+<<<<<<< HEAD
       ForcePA->Mult(one, rhs);
+=======
+      ForcePA.Mult(one, rhs);
+      if (ftz_tol>0.0)
+      {
+         for (int i = 0; i < VsizeH1; i++)
+         {
+            if (fabs(rhs[i]) < ftz_tol)
+            {
+               rhs[i] = 0.0;
+            }
+         }
+      }
+>>>>>>> master
       timer.sw_force.Stop();
       rhs.Neg();
 

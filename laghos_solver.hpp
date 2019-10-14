@@ -121,6 +121,7 @@ protected:
    const bool use_viscosity, p_assembly, okina;
    const double cg_rel_tol;
    const int cg_max_iter;
+   const double ftz_tol;
    Coefficient *material_pcf;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
@@ -190,11 +191,10 @@ public:
                            const Array<int> &essential_tdofs, ParGridFunction &rho0,
                            const int source_type_, const double cfl_,
                            Coefficient *material_, const bool visc, const bool pa,
-                           const double cgt, const int cgiter,
+                           const double cgt, const int cgiter, double ftz_tol,
                            const int order_q, const bool qupdate,
                            const double gamma, const bool okina,
                            int h1_basis_type);
-
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
