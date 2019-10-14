@@ -491,13 +491,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    if (p_assembly)
    {
       timer.sw_force.Start();
-<<<<<<< HEAD
       ForcePA->Mult(one, rhs);
-=======
-      ForcePA.Mult(one, rhs);
       if (ftz_tol>0.0)
       {
-         for (int i = 0; i < VsizeH1; i++)
+         for (int i = 0; i < H1Vsize; i++)
          {
             if (fabs(rhs[i]) < ftz_tol)
             {
@@ -505,7 +502,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
             }
          }
       }
->>>>>>> master
       timer.sw_force.Stop();
       rhs.Neg();
 
