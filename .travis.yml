@@ -5,8 +5,6 @@ language: cpp
 matrix:
   include:
     - compiler: gcc
-      env: DEBUG=NO
-           MPI=YES
       addons:
         apt:
           packages:
@@ -23,10 +21,7 @@ matrix:
 install:
   - mpic++ -v
   - export LAGHOS_DIR=$PWD
-
-  # Back out of the mfem directory to install the libraries
   - cd ..
-
   # HYPRE
   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
       wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
@@ -36,11 +31,10 @@ install:
       ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
       make -j3;
       cd ../..;
-      ln -s hypre-2.10.0b hypre;  
     else
       echo "Reusing cached hypre-2.10.0b/";
     fi;
-
+  - ln -s hypre-2.10.0b hypre
   # METIS
   - if [ ! -e metis-4.0/libmetis.a ]; then
       wget http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz;
@@ -51,8 +45,7 @@ install:
     else
       echo "Reusing cached metis-4.0/";
     fi; 
-
-  # MFEM (master branch)
+  # MFEM
   - if [ ! -e mfem/libmfem.a ]; then
       rm -rf mfem;
       git clone --depth 1 https://github.com/mfem/mfem.git;
@@ -64,13 +57,11 @@ install:
     else
       echo "Reusing cached mfem";
     fi;
-
   # Back to Laghos
   - cd $LAGHOS_DIR
   
 script:
   - make -j3
-  
   - touch RESULTS.dat
 
   - mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa | tee RUN.dat
