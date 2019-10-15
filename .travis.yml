@@ -1,3 +1,5 @@
+os: linux
+
 language: cpp
 
 matrix:
@@ -9,8 +11,8 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - gcc-6
-            - g++-6
+            - gcc-7
+            - g++-7
             - libopenmpi-dev
             - openmpi-bin
       before_cache:
@@ -19,80 +21,81 @@ matrix:
 
 install:
    # Save Laghos top directory
-   - export CURR_DIR=$PWD
+  - export LAGHOS_DIR=$PWD
 
-   # Back out of the mfem directory to install the libraries
-   - cd ..
+  # Back out of the directory to install the libraries
+  - cd ..
 
-   # hypre (cached 2.10.0b build)
-   - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
-        wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
-        rm -rf hypre-2.10.0b;
-        tar xvzf hypre-2.10.0b.tar.gz;
-        cd hypre-2.10.0b/src;
-        ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
-        make -j3;
-        cd ../..;
-     else
-         echo "Reusing cached hypre-2.10.0b/";
-     fi;
+  # HYPRE (cached 2.10.0b build)
+  - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
+      wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
+      rm -rf hypre-2.10.0b;
+      tar xvzf hypre-2.10.0b.tar.gz;
+      cd hypre-2.10.0b/src;
+      ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
+      make -j3;
+      cd ../..;
+    else
+      echo "Reusing cached hypre-2.10.0b/";
+    fi;
+  - ln -s hypre-2.10.0b hypre
 
-   # METIS (cached 4.0 build)
-   - if [ ! -e metis-4.0/libmetis.a ]; then
-        wget http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz;
-        tar xvzf metis-4.0.3.tar.gz;
-        make -j3 -C metis-4.0.3/Lib CC="$CC" OPTFLAGS="-O2";
-        rm -rf metis-4.0;
-        mv metis-4.0.3 metis-4.0;
-     else
-        echo "Reusing cached metis-4.0/";
-     fi;
+  # METIS (cached 4.0 build)
+  - if [ ! -e metis-4.0/libmetis.a ]; then
+      wget http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz;
+      tar xvzf metis-4.0.3.tar.gz;
+      make -j3 -C metis-4.0.3/Lib CC="$CC" OPTFLAGS="-O2";
+      rm -rf metis-4.0;
+      mv metis-4.0.3 metis-4.0;
+    else
+      echo "Reusing cached metis-4.0/";
+    fi;
 
-   # MFEM (master branch)
-   - if [ ! -e mfem/libmfem.a ]; then
-        rm -rf mfem;
-        git clone --depth 1 https://github.com/mfem/mfem.git;
-        cd mfem;
-        make -j3 parallel;
+  # MFEM (master branch)
+  - if [ ! -e mfem/libmfem.a ]; then
+      rm -rf mfem;
+      git clone --depth 1 https://github.com/mfem/mfem.git;
+      cd mfem;
+      make -j3 parallel;
+      make info;
         cd ..;
      else
-        echo "Reusing cached mfem@laghos-1.0";
+        echo "Reusing cached mfem";
      fi;
 
    # Back to Laghos
-   - cd $CURR_DIR
-   
+  - cd $LAGHOS_DIR
+
 branches:
   only:
   - master
 
 script:
-   - make
-
+   - make -j
    - touch RESULTS.dat
 
-   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa | tee RUN.dat
+   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
-   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa | tee RUN.dat
+   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
    - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
 
    - |
@@ -107,12 +110,12 @@ script:
      step = 0776, dt = 0.000045, |e| = 409.8243172608
      EOF
 
-   - diff RESULTS.dat BASELINE.dat
+   - diff --report-identical-files RESULTS.dat BASELINE.dat
+
 
 cache:
    directories:
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
      - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
-   # - $TRAVIS_BUILD_DIR/../mfem
 

@@ -16,13 +16,13 @@
 #include "../raja.hpp"
 
 // *****************************************************************************
-#define CUDA_BLOCKSIZE 256
+#define BLOCKSIZE 256
 
 // *****************************************************************************
-__global__ void cuKernelDot(const size_t N, double *gdsr,
+__global__ void KernelDot(const size_t N, double *gdsr,
                             const double *x, const double *y)
 {
-   __shared__ double s_dot[CUDA_BLOCKSIZE];
+   __shared__ double s_dot[BLOCKSIZE];
    const size_t n = blockDim.x*blockIdx.x + threadIdx.x;
    if (n>=N) { return; }
    const size_t bid = blockIdx.x;
@@ -46,19 +46,29 @@ __global__ void cuKernelDot(const size_t N, double *gdsr,
 }
 
 // *****************************************************************************
-double cuVectorDot(const size_t N, const double *x, const double *y)
+double gpuVectorDot(const size_t N, const double *x, const double *y)
 {
-   const size_t tpb = CUDA_BLOCKSIZE;
-   const size_t blockSize = CUDA_BLOCKSIZE;
+   const size_t tpb = BLOCKSIZE;
+   const size_t blockSize = BLOCKSIZE;
    const size_t gridSize = (N+blockSize-1)/blockSize;
    const size_t dot_sz = (N%tpb)==0? (N/tpb) : (1+N/tpb);
    const size_t bytes = dot_sz*sizeof(double);
    static double *h_dot = NULL;
    if (!h_dot) { h_dot = (double*)calloc(dot_sz,sizeof(double)); }
+
+#if defined(RAJA_ENABLE_CUDA)
    static CUdeviceptr gdsr = (CUdeviceptr) NULL;
    if (!gdsr) { cuMemAlloc(&gdsr,bytes); }
-   cuKernelDot<<<gridSize,blockSize>>>(N, (double*)gdsr, x, y);
+   KernelDot<<<gridSize,blockSize>>>(N, (double*)gdsr, x, y);
    cuMemcpy((CUdeviceptr)h_dot,(CUdeviceptr)gdsr,bytes);
+#elif defined(RAJA_ENABLE_HIP)
+   static void* gdsr = (void*) NULL;
+   if (!gdsr) { hipMalloc(&gdsr,bytes); }
+   hipLaunchKernelGGL((KernelDot),dim3(gridSize),dim3(blockSize), 0, 0,
+                           N, (double*)gdsr, x, y);
+   hipMemcpy((void*)h_dot,(void*)gdsr,bytes, hipMemcpyDeviceToHost);
+#endif
+
    double dot = 0.0;
    for (size_t i=0; i<dot_sz; i+=1) { dot += h_dot[i]; }
    return dot;
@@ -69,9 +79,9 @@ double vector_dot(const int N,
                   const double* __restrict x,
                   const double* __restrict y)
 {
-   if (mfem::rconfig::Get().Cuda())
+   if (mfem::rconfig::Get().Cuda() || mfem::rconfig::Get().Hip())
    {
-      return cuVectorDot(N,x,y);
+      return gpuVectorDot(N,x,y);
    }
    ReduceDecl(Sum,dot,0.0);
    ReduceForall(i,N,dot += x[i]*y[i];);

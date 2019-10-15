@@ -49,7 +49,11 @@ T *d_CopyGroupToBuffer_k(const T *d_ldata,T *d_buf,
 {
    const int ndofs = d_dofs.RowSize(group);
    const int *dofs = d_dofs.GetRow(group);
+#if defined(RAJA_ENABLE_CUDA)
    k_CopyGroupToBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
+#elif defined(RAJA_ENABLE_HIP)
+   hipLaunchKernelGGL((k_CopyGroupToBuffer), dim3(ndofs), dim3(1), 0, 0, d_buf,d_ldata,dofs);
+#endif
    return d_buf + ndofs;
 }
 
@@ -93,7 +97,12 @@ const T *RajaCommD::d_CopyGroupFromBuffer(const T *d_buf, T *d_ldata,
    assert(layout==0);
    const int ndofs = d_group_ldof.RowSize(group);
    const int *dofs = d_group_ldof.GetRow(group);
+#if defined(RAJA_ENABLE_CUDA)
    k_CopyGroupFromBuffer<<<ndofs,1>>>(d_buf,d_ldata,dofs);
+#elif defined(RAJA_ENABLE_HIP)
+   hipLaunchKernelGGL((k_CopyGroupFromBuffer), dim3(ndofs), dim3(1), 0, 0,
+                                              d_buf,d_ldata,dofs);
+#endif
    return d_buf + ndofs;
 }
 
@@ -127,7 +136,13 @@ const T *RajaCommD::d_ReduceGroupFromBuffer(const T *d_buf, T *d_ldata,
    assert(opd.nb == 1);
    // this is the operation to perform: opd.ldata[opd.ldofs[i]] += opd.buf[i];
    // mfem/general/communication.cpp, line 1008
+#if defined(RAJA_ENABLE_CUDA)
    kAtomicAdd<<<opd.nldofs,1>>>(opd.ldata,opd.ldofs,opd.buf);
+#elif defined(RAJA_ENABLE_HIP)
+   hipLaunchKernelGGL((kAtomicAdd), dim3(opd.nldofs), dim3(1), 0, 0,
+                      opd.ldata,opd.ldofs,opd.buf);
+#endif
+
    return d_buf + opd.nldofs;
 }
 
@@ -142,7 +157,7 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
    if (group_buf_size == 0) { return; }
 
    assert(layout==2);
-   const int rnk = rconfig::Get().Rank();
+   // const int rnk = rconfig::Get().Rank();
    int request_counter = 0;
    group_buf.SetSize(group_buf_size*sizeof(T));
    T *buf = (T *)group_buf.GetData();
@@ -174,7 +189,11 @@ void RajaCommD::d_BcastBegin(T *d_ldata, int layout)
          // make sure the device has finished
          if (rconfig::Get().Aware())
          {
+#if defined(RAJA_ENABLE_CUDA)
             cudaStreamSynchronize(0);//*rconfig::Get().Stream());
+#elif defined(RAJA_ENABLE_HIP)
+            hipStreamSynchronize(0);//*rconfig::Get().Stream());
+#endif
          }
 
          if (rconfig::Get().Aware())
@@ -241,7 +260,7 @@ template <class T>
 void RajaCommD::d_BcastEnd(T *d_ldata, int layout)
 {
    if (comm_lock == 0) { return; }
-   const int rnk = rconfig::Get().Rank();
+   // const int rnk = rconfig::Get().Rank();
    // The above also handles the case (group_buf_size == 0).
    assert(comm_lock == 1);
    // copy the received data from the buffer to d_ldata, as it arrives
@@ -285,7 +304,7 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
 {
    MFEM_VERIFY(comm_lock == 0, "object is already in use");
    if (group_buf_size == 0) { return; }
-   const int rnk = rconfig::Get().Rank();
+   // const int rnk = rconfig::Get().Rank();
 
    int request_counter = 0;
    group_buf.SetSize(group_buf_size*sizeof(T));
@@ -316,7 +335,11 @@ void RajaCommD::d_ReduceBegin(const T *d_ldata)
          // make sure the device has finished
          if (rconfig::Get().Aware())
          {
+#if defined(RAJA_ENABLE_CUDA)
             cudaStreamSynchronize(0);//*rconfig::Get().Stream());
+#elif defined(RAJA_ENABLE_HIP)
+            hipStreamSynchronize(0);//*rconfig::Get().Stream());
+#endif
          }
          if (rconfig::Get().Aware())
             MPI_Isend(d_buf_start,
@@ -384,7 +407,7 @@ void RajaCommD::d_ReduceEnd(T *d_ldata, int layout,
                             void (*Op)(OpData<T>))
 {
    if (comm_lock == 0) { return; }
-   const int rnk = rconfig::Get().Rank();
+   // const int rnk = rconfig::Get().Rank();
    // The above also handles the case (group_buf_size == 0).
    assert(comm_lock == 2);
 
