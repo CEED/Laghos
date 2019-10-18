@@ -1273,9 +1273,8 @@ void OkinaMassPAOperator::EliminateRHS(Vector &b) const
 // *****************************************************************************
 void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   Vector* xptr = const_cast<Vector*>(&x);
    ParGridFunction X;
-   X.MakeRef(&FESpace, *xptr, 0);
+   X.NewMemoryAndSize(x.GetMemory(),x.Size(),false);
    if (ess_tdofs_count) { X.SetSubVector(ess_tdofs, 0.0); }
    massOperator->Mult(X, y);
    if (ess_tdofs_count) { y.SetSubVector(ess_tdofs, 0.0); }
