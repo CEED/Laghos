@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 111;
+   int partition_type = 0;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
 
