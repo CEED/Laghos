@@ -189,6 +189,9 @@ int main(int argc, char *argv[])
    int *nxyz = new int[dim];
    switch (partition_type)
    {
+      case 0:
+         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
+         break;
       case 11:
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
