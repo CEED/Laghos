@@ -14,8 +14,6 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "general/dbg.hpp"
-#include "general/nvvp.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/blas.hpp"
 #include <unordered_map>
@@ -254,7 +252,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    rhs_c_gf(&H1compFESpace),
    dvc_gf(&H1compFESpace)
 {
-   push();
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
@@ -271,17 +268,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    }
    else
    {
-      push("ForcePA",Silver);
       ForcePA = new OkinaForcePAOperator(quad_data, h1_fes,l2_fes, integ_rule);
-      pop();
-      push("VMassPA",Silver);
       VMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, H1compFESpace,
                                         integ_rule, &tensors1D);
-      pop();
-      push("EMassPA",Silver);
       EMassPA = new OkinaMassPAOperator(rho_coeff, quad_data, L2FESpace,
                                         integ_rule, &tensors1D);
-      pop();
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
@@ -327,15 +318,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
    // Standard assembly for the velocity mass matrix.
    if (!p_assembly)
    {
-      push("Me_inv",LightSkyBlue);
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &integ_rule);
       Mv.AddDomainIntegrator(vmi);
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
-      pop();
    }
 
-   push("rho0DetJ0 / Jac0inv / Volume",MistyRose);
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are of the same type).
    double loc_area = 0.0, glob_area;
@@ -371,13 +359,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
                                 quad_data,
                                 loc_area);
    }
-   pop();
 
-   push("MPI_Allreduce",Orange);
    MPI_Allreduce(&loc_area, &glob_area, 1, MPI_DOUBLE, MPI_SUM, pm->GetComm());
-   dbg("glob_area=%.15e",glob_area);
    MPI_Allreduce(&loc_z_cnt, &glob_z_cnt, 1, MPI_INT, MPI_SUM, pm->GetComm());
-   pop();
+
    switch (pm->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT:
@@ -393,7 +378,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
       default: MFEM_ABORT("Unknown zone type!");
    }
    quad_data.h0 /= (double) H1FESpace.GetOrder(0);
-   pop();
 
    if (p_assembly)
    {
@@ -440,7 +424,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho_coeff,
          CG_EMass.SetPrintLevel(-1);
       }
    }
-   pop();
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()

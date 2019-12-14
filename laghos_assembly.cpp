@@ -1274,7 +1274,7 @@ void OkinaMassPAOperator::EliminateRHS(Vector &b) const
 void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    ParGridFunction X;
-   X.NewMemoryAndSize(x.GetMemory(),x.Size(),false);
+   X.NewMemoryAndSize(x.GetMemory(), x.Size(), false);
    if (ess_tdofs_count) { X.SetSubVector(ess_tdofs, 0.0); }
    massOperator->Mult(X, y);
    if (ess_tdofs_count) { y.SetSubVector(ess_tdofs, 0.0); }
@@ -1326,7 +1326,7 @@ OkinaForcePAOperator::OkinaForcePAOperator(const QuadratureData &qd,
    MFEM_ASSERT(l2D2Q,"l2D2Q");
    MFEM_ASSERT(h1D2Q,"h1D2Q");
    MFEM_ASSERT(h1f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
-   MFEM_ASSERT(!l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
+   MFEM_ASSERT(l2f.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC),"");
    gVecL2.SetSize(l2sz);
    gVecH1.SetSize(h1sz);
 }

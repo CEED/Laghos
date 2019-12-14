@@ -461,29 +461,11 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_fct_coeff(rho0);
-   /* Put in bilininteg_mass.cpp:
-     static inline MFEM_HOST_DEVICE
-     double LaghosRho0(const double problem, const double *x)
-     {
-     if (problem == -2.0) return (x[0] < 0.5) ? 1.0 : 0.1;
-     if (problem == -3.0) return (x[0] > 1.0 && x[1] > 1.5) ? 0.125 : 1.0;
-     return 1.0;
-     }
-     // and in MassIntegrator::AssemblePA:
-     const double x[2] = { X(q,0,e), X(q,1,e)};
-     const double coeff = LaghosRho0(constant, x);
-     v(q,e) =  w[q] * coeff * detJ;
-   */
-   ConstantCoefficient rho_coeff(problem==2?-2.0:
-                                 problem==3?-3.0:
-                                 problem==5?-5.0:
-                                 problem==6?-6.0:
-                                 1.0);
+   FunctionCoefficient rho_coeff(rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
-   l2_rho.ProjectCoefficient(rho_fct_coeff);
+   l2_rho.ProjectCoefficient(rho_coeff);
    rho.ProjectGridFunction(l2_rho);
    if (problem == 1)
    {
@@ -527,6 +509,8 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   // gamma uses X in problem 3
+   if (problem==3) { S.HostRead(); }
    LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
@@ -634,9 +618,9 @@ int main(int argc, char *argv[])
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
       // the sub-vectors to match those of S.
-      x_gf.SyncMemory(S);
-      v_gf.SyncMemory(S);
-      e_gf.SyncMemory(S);
+      x_gf.SyncAliasMemory(S);
+      v_gf.SyncAliasMemory(S);
+      e_gf.SyncAliasMemory(S);
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
