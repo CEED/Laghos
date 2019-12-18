@@ -58,6 +58,7 @@
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
+#include "laghos_rom.hpp"
 #include <fstream>
 
 using namespace std;
@@ -106,7 +107,8 @@ int main(int argc, char *argv[])
    int partition_type = 0;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
-
+   bool rom_offline = false;
+   
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
@@ -160,6 +162,8 @@ int main(int argc, char *argv[])
                   "of zones in each direction, e.g., the number of zones in direction x\n\t"
                   "must be divisible by the number of MPI tasks in direction x.\n\t"
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
+   args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
+                  "Enable or disable ROM offline computations and output.");
    args.Parse();
    if (!args.Good())
    {
@@ -362,7 +366,7 @@ int main(int argc, char *argv[])
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset);
-
+   
    // Define GridFunction objects for the position, velocity and specific
    // internal energy.  There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
@@ -494,6 +498,13 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+
+   ROM_Sampler *sampler = NULL;
+   if (rom_offline)
+     {
+       sampler = new ROM_Sampler(Vsize_h1, Vsize_l2, t_final, dt, S);
+     }
+   
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -512,6 +523,11 @@ int main(int argc, char *argv[])
       ode_solver->Step(S, t, dt);
       steps++;
 
+      if (rom_offline)
+	{
+	  sampler->SampleSolution(t, dt, S);
+	}
+      
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
       if (dt_est < dt)

@@ -94,7 +94,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I../libROM
 LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -105,10 +105,10 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp
 
 # Targets
 
@@ -122,7 +122,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS)
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -lhdf5
 
 all: laghos
 
