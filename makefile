@@ -187,25 +187,23 @@ style:
 	   echo "No source files were changed.";\
 	fi
 
-# ******************************************************************************
-problems=1 # 0 1 2 3 4 5 6
-meshs=square01_quad # square01_quad cube01_hex
-cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
-options=-o-q # -fa -pa -o -o-q -o-q $(cuda)
-optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
+# MFEM check template **********************************************************
+ECHO=echo
+SED=sed -e
 ranks=1 # 1 2 3
-ECHO=/bin/echo
-SED=/usr/bin/sed -e
+problems=1 # 0 1 2 3 4 5 6
+meshs=square01_quad # cube01_hex
+cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
+cuda_debug=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda,debug)
+options=-pa -o-q $(cuda) # -fa -pa -o -o-q $(cuda) -o-q-d_debug
+optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
 OPTS=-cgt 1.e-14 -rs 0 --checks
 
-# problem:1 mesh:2 option:3 mpi:4
 define mfem_test_template
 .PHONY: laghos_$(1)_$(2)_$(3)_$(4)
 laghos_$(1)_$(2)_$(3)_$(4): laghos
 	$(eval name=laghos$(4)-p$(1)-$(2)$(word $(3),$(options)))
 	$(eval command=$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./laghos $(OPTS) -p $(1) -m data/$(2).mesh $$(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g"))
-#	@echo name: $(name)
-#	@echo command: $(command)
 	@$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./$$< $(OPTS) -p $(1) -m data/$(2).mesh $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g") > /dev/null 2>&1 && \
 		$(call COLOR_PRINT,'\033[0;32m',OK,': $(name)\n') || $(call COLOR_PRINT,'\033[1;31m',KO,': $(command)\n');
 endef
@@ -214,10 +212,11 @@ endef
 $(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
 	$(eval $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
 
-#$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks), $(info $(call _test_template,$(p),$(m),$(o),$(r)))))))
+#$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
+#   $(info $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
 
 checks check: laghos|$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
-c chk: ;@$(MAKE) -j $(NPROC) check meshs="square01_quad cube01_hex" problems="0 1 2 3 4 5 6" ranks="1 3" options="-fa -pa -o -o-q $(cuda)"
+c chk: ;@$(MAKE) -j $(NPROC) check meshs="square01_quad cube01_hex" problems="0 1 2 3 4 5 6" ranks="1 3" options="-fa -pa -o -o-q $(cuda)" #-o-q-d_debug $(cuda_debug)
 
 1: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=1
 2: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=2
