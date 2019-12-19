@@ -199,7 +199,7 @@ options=-pa -o-q $(cuda) # -fa -pa -o -o-q $(cuda) -o-q-d_debug
 optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
 OPTS=-cgt 1.e-14 -rs 0 --checks
 
-define mfem_test_template
+define laghos_check_template
 .PHONY: laghos_$(1)_$(2)_$(3)_$(4)
 laghos_$(1)_$(2)_$(3)_$(4): laghos
 	$(eval name=laghos$(4)-p$(1)-$(2)$(word $(3),$(options)))
@@ -210,10 +210,10 @@ endef
 
 # Generate all targets
 $(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
-	$(eval $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
+	$(eval $(call laghos_check_template,$(p),$(m),$(o),$(r)))))))
 
 #$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
-#   $(info $(call mfem_test_template,$(p),$(m),$(o),$(r)))))))
+#   $(info $(call laghos_check_template,$(p),$(m),$(o),$(r)))))))
 
 checks check: laghos|$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
 c chk: ;@$(MAKE) -j $(NPROC) check meshs="square01_quad cube01_hex" problems="0 1 2 3 4 5 6" ranks="1 3" options="-fa -pa -o -o-q $(cuda)" #-o-q-d_debug $(cuda_debug)
@@ -222,4 +222,3 @@ c chk: ;@$(MAKE) -j $(NPROC) check meshs="square01_quad cube01_hex" problems="0 
 2: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=2
 3: ;@$(MAKE) -j 8 check problems="0 1 2 3 4 5 6" ranks=3
 
-go: ;@$(MAKE) -j 8 check
