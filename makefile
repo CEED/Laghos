@@ -196,7 +196,8 @@ meshs=square01_quad # cube01_hex
 cuda=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda)
 cuda_debug=$(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda,debug)
 options=-pa -o-q $(cuda) # -fa -pa -o -o-q $(cuda) -o-q-d_debug
-optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
+#optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
+optioni=1 2 3
 OPTS=-cgt 1.e-14 -rs 0 --checks
 
 define laghos_check_template
