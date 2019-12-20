@@ -502,7 +502,7 @@ int main(int argc, char *argv[])
    ROM_Sampler *sampler = NULL;
    if (rom_offline)
      {
-       sampler = new ROM_Sampler(Vsize_h1, Vsize_l2, t_final, dt, S);
+       sampler = new ROM_Sampler(myid, Vsize_h1, Vsize_l2, t_final, dt, S, true);
      }
    
    for (int ti = 1; !last_step; ti++)
@@ -634,6 +634,11 @@ int main(int argc, char *argv[])
       }
    }
 
+   if (rom_offline)
+     {
+       sampler->Finalize(t, dt, S);
+     }
+   
    switch (ode_solver_type)
    {
       case 2: steps *= 2; break;
