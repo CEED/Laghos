@@ -523,10 +523,7 @@ int main(int argc, char *argv[])
       ode_solver->Step(S, t, dt);
       steps++;
 
-      if (rom_offline)
-	{
-	  sampler->SampleSolution(t, dt, S);
-	}
+      const double last_dt = dt;
       
       // Adaptive time step control.
       const double dt_est = oper.GetTimeStepEstimate(S);
@@ -545,6 +542,11 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      if (rom_offline)
+	{
+	  sampler->SampleSolution(t, last_dt, S);
+	}
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
