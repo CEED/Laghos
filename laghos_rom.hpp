@@ -5,9 +5,16 @@
 
 #include "StaticSVDBasisGenerator.h"
 #include "IncrementalSVDBasisGenerator.h"
+#include "BasisReader.h"
 
 //using namespace CAROM;
 using namespace mfem;
+
+namespace ROMBasisName {
+  const char* const X = "basisX";
+  const char* const V = "basisV";
+  const char* const E = "basisE";
+};
 
 class ROM_Sampler
 {  
@@ -26,11 +33,11 @@ public:
     if (staticSVD)
       {
 	generator_X = new CAROM::StaticSVDBasisGenerator(H1size, max_model_dim,
-							 "basisX");
+							 ROMBasisName::X);
 	generator_V = new CAROM::StaticSVDBasisGenerator(H1size, max_model_dim,
-							 "basisV");
+							 ROMBasisName::V);
 	generator_E = new CAROM::StaticSVDBasisGenerator(L2size, max_model_dim,
-							 "basisE");
+							 ROMBasisName::E);
       }
     else
       {
@@ -43,7 +50,7 @@ public:
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisX");
+							      ROMBasisName::X);
 	generator_V = new CAROM::IncrementalSVDBasisGenerator(H1size,
 							      model_linearity_tol,
 							      false,
@@ -53,7 +60,7 @@ public:
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisV");
+							      ROMBasisName::V);
 	generator_E = new CAROM::IncrementalSVDBasisGenerator(L2size,
 							      model_linearity_tol,
 							      false,
@@ -63,7 +70,7 @@ public:
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisE");
+							      ROMBasisName::E);
       }
 
     SetStateVariables(S_init);
@@ -113,6 +120,30 @@ private:
 	dEdt[i] = (S[(2*H1size) + i] - E[i]) / dt;
       }
   }
+};
+
+class ROM_Basis
+{
+public:
+  ROM_Basis(MPI_Comm comm_, const int H1size_, const int L2size_,
+	    const int dimX, const int dimV, const int dimE,
+	    const bool staticSVD_ = false);
+
+  void ReadSolutionBases();
+
+private:
+  const bool staticSVD;
+  int rdimx, rdimv, rdime;
+  MPI_Comm comm;
+
+  int nprocs, rank, rowOffsetH1, rowOffsetL2;
+
+  const int H1size;
+  const int L2size;
+
+  CAROM::Matrix* basisX = 0;
+  CAROM::Matrix* basisV = 0;
+  CAROM::Matrix* basisE = 0;
 };
 
 #endif // MFEM_LAGHOS_ROM

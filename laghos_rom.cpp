@@ -85,3 +85,75 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
       BasisGeneratorFinalSummary(generator_E);
     }
 }
+
+CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
+{
+  CAROM::Matrix* S = new CAROM::Matrix(numRows, std::min(N, A->numColumns()), A->distributed());
+  for (int i=0; i<S->numRows(); ++i)
+    {
+      for (int j=0; j<S->numColumns(); ++j)
+	(*S)(i,j) = (*A)(rowOS + i, j);
+    }
+
+  return S;
+}
+
+CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim)
+{
+  CAROM::BasisReader reader(filename);
+  const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
+  
+  if (dim == -1)
+    dim = basis->numColumns();
+
+  // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
+  // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
+  CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, rowOS, vectorSize);
+
+  MFEM_VERIFY(basisCopy->numRows() == vectorSize, "");
+
+  if (rank == 0)
+    cout << "Read basis " << filename << " of dimension " << basisCopy->numColumns() << endl;
+  
+  delete basis;
+  return basisCopy;
+}
+
+ROM_Basis::ROM_Basis(MPI_Comm comm_, const int H1size_, const int L2size_,
+		     const int dimX, const int dimV, const int dimE,
+		     const bool staticSVD_)
+  : comm(comm_), H1size(H1size_), L2size(L2size_),
+    rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_)
+{
+  MPI_Comm_size(comm, &nprocs);
+  MPI_Comm_rank(comm, &rank);
+
+  Array<int> osH1(nprocs+1);
+  Array<int> osL2(nprocs+1);
+  MPI_Allgather(&H1size, 1, MPI_INT, osH1.GetData(), 1, MPI_INT, comm);
+  MPI_Allgather(&L2size, 1, MPI_INT, osL2.GetData(), 1, MPI_INT, comm);
+
+  for (int i=nprocs-1; i>=0; --i)
+    {
+      osH1[i+1] = osH1[i];
+      osL2[i+1] = osL2[i];
+    }
+
+  osH1[0] = 0;
+  osL2[0] = 0;
+
+  osH1.PartialSum();
+  osL2.PartialSum();
+
+  rowOffsetH1 = osH1[rank];
+  rowOffsetL2 = osL2[rank];
+
+  ReadSolutionBases();
+}
+
+void ROM_Basis::ReadSolutionBases()
+{
+  basisX = ReadBasisROM(rank, ROMBasisName::X, H1size, (staticSVD ? rowOffsetH1 : 0), rdimx);
+  basisV = ReadBasisROM(rank, ROMBasisName::V, H1size, (staticSVD ? rowOffsetH1 : 0), rdimv);
+  basisE = ReadBasisROM(rank, ROMBasisName::E, L2size, (staticSVD ? rowOffsetL2 : 0), rdime);
+}

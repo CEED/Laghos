@@ -108,6 +108,11 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
    bool rom_offline = false;
+   bool rom_online = false;
+   bool rom_staticSVD = true;
+   int rom_dimx = -1;
+   int rom_dimv = -1;
+   int rom_dime = -1;
    
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -164,6 +169,12 @@ int main(int argc, char *argv[])
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                   "Enable or disable ROM offline computations and output.");
+   args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
+                  "Enable or disable ROM online computations and output.");
+   args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
+   args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
+   args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
+
    args.Parse();
    if (!args.Good())
    {
@@ -502,7 +513,13 @@ int main(int argc, char *argv[])
    ROM_Sampler *sampler = NULL;
    if (rom_offline)
      {
-       sampler = new ROM_Sampler(myid, Vsize_h1, Vsize_l2, t_final, dt, S, true);
+       sampler = new ROM_Sampler(myid, Vsize_h1, Vsize_l2, t_final, dt, S, rom_staticSVD);
+     }
+   
+   ROM_Basis *basis = NULL;
+   if (rom_online)
+     {
+       basis = new ROM_Basis(MPI_COMM_WORLD, Vsize_h1, Vsize_l2, rom_dimx, rom_dimv, rom_dime, rom_staticSVD);
      }
    
    for (int ti = 1; !last_step; ti++)
