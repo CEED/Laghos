@@ -74,6 +74,52 @@ double e0(const Vector &);
 double gamma(const Vector &);
 void display_banner(ostream & os);
 
+void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+  Vector tv(gf->ParFESpace()->GetTrueVSize());
+  gf->GetTrueDofs(tv);
+
+  char tmp[100];
+  sprintf(tmp, ".%06d", rank);
+
+  std::string fullname = name + tmp;
+  
+  std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+  ofs.precision(16);
+
+  for (int i=0; i<tv.Size(); ++i)
+    ofs << tv[i] << std::endl;
+	  
+  ofs.close();
+}
+
+
+void PrintDiffParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+  Vector tv(gf->ParFESpace()->GetTrueVSize());
+
+  char tmp[100];
+  sprintf(tmp, ".%06d", rank);
+
+  std::string fullname = name + tmp;
+  
+  std::ifstream ifs(fullname.c_str());
+
+  for (int i=0; i<tv.Size(); ++i)
+    {
+      double d;
+      ifs >> d;
+      tv[i] = d;
+    }
+  
+  ifs.close();
+
+  ParGridFunction rgf(gf->ParFESpace());
+  rgf.SetFromTrueDofs(tv);
+
+  PrintL2NormsOfParGridFunctions(rank, name, &rgf, gf, true);
+}
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -109,12 +155,15 @@ int main(int argc, char *argv[])
    double blast_position[] = {0.0, 0.0, 0.0};
    bool rom_offline = false;
    bool rom_online = false;
-   bool rom_staticSVD = false;
+   bool rom_staticSVD = true;
    int rom_dimx = -1;
    int rom_dimv = -1;
    int rom_dime = -1;
    double dtc = 0.0;
    int visitDiffCycle = -1;
+   bool writeSol = false;
+   bool solDiff = false;
+   bool rom_hyperreduce = false;
    
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -178,6 +227,10 @@ int main(int argc, char *argv[])
    args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
    args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
    args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
+   args.AddOption(&solDiff, "-soldiff", "--soldiff", "-no-soldiff", "--no-soldiff",
+                  "Enable or disable solution difference norm computation.");
+   args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
+                  "Enable or disable ROM hyperreduction.");   
 
    args.Parse();
    if (!args.Good())
@@ -534,13 +587,13 @@ int main(int argc, char *argv[])
    if (rom_online)
      {
        if (dtc > 0.0) dt = dtc;
-       basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD);
+       basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce);
        romS.SetSize(rom_dimx + rom_dimv + rom_dime);
        basis->ProjectFOMtoROM(S, romS);
 
        cout << myid << ": initial romS norm " << romS.Norml2() << endl;
        
-       romOper = new ROM_Operator(&oper, basis);
+       romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, cg_tol, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
 
        ode_solver->Init(*romOper);
      }
@@ -687,6 +740,20 @@ int main(int argc, char *argv[])
      {
        sampler->Finalize(t, dt, S);
        delete sampler;
+     }
+   
+   if (rom_offline && writeSol)
+     {
+       PrintParGridFunction(myid, "Sol_Position", &x_gf);
+       PrintParGridFunction(myid, "Sol_Velocity", &v_gf);
+       PrintParGridFunction(myid, "Sol_Energy", &e_gf);
+     }
+
+   if (solDiff)
+     {
+       PrintDiffParGridFunction(myid, "Sol_Position", &x_gf);
+       PrintDiffParGridFunction(myid, "Sol_Velocity", &v_gf);
+       PrintDiffParGridFunction(myid, "Sol_Energy", &e_gf);
      }
 
    if (visitDiffCycle >= 0)

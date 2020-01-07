@@ -1,5 +1,9 @@
 #include "laghos_rom.hpp"
 
+#include "DEIM.h"
+#include "SampleMesh.hpp"
+
+
 using namespace std;
 
 void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
@@ -127,22 +131,24 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
 		     int & dimX, int & dimV, int & dimE,
-		     const bool staticSVD_)
+		     const bool staticSVD_, const bool hyperreduce_)
   : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
     H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
     gfH1(H1FESpace), gfL2(L2FESpace), 
-    rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_)
+    rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_), hyperreduce(hyperreduce_)
 {
   MPI_Comm_size(comm, &nprocs);
   MPI_Comm_rank(comm, &rank);
 
   Array<int> osH1(nprocs+1);
+  Array<int> nH1(nprocs);
   Array<int> osL2(nprocs+1);
   MPI_Allgather(&tH1size, 1, MPI_INT, osH1.GetData(), 1, MPI_INT, comm);
   MPI_Allgather(&tL2size, 1, MPI_INT, osL2.GetData(), 1, MPI_INT, comm);
 
   for (int i=nprocs-1; i>=0; --i)
     {
+      nH1[i] = osH1[i];
       osH1[i+1] = osH1[i];
       osL2[i+1] = osL2[i];
     }
@@ -171,6 +177,173 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
   dimX = rdimx;
   dimV = rdimv;
   dimE = rdime;
+
+  if (hyperreduce)
+    {
+      SetupHyperreduction(H1FESpace, L2FESpace, nH1);
+    }
+}
+
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1)
+{
+  ParMesh *pmesh = H1FESpace->GetParMesh();
+  
+  int numSamplesX = rdimx;
+  vector<int> sample_dofs_X(numSamplesX);
+  vector<int> num_sample_dofs_per_procX(nprocs);
+  CAROM::Matrix BsinvX(numSamplesX, rdimx, false);
+
+  int numSamplesV = rdimv;
+  vector<int> sample_dofs_V(numSamplesV);
+  vector<int> num_sample_dofs_per_procV(nprocs);
+  CAROM::Matrix BsinvV(numSamplesV, rdimv, false);
+
+  int numSamplesE = rdime;
+  vector<int> sample_dofs_E(numSamplesE);
+  vector<int> num_sample_dofs_per_procE(nprocs);
+  CAROM::Matrix BsinvE(numSamplesE, rdime, false);
+      
+  // Perform DEIM or GNAT to find sample DOF's.
+  CAROM::GNAT(basisX,
+	      rdimx,
+	      sample_dofs_X.data(),
+	      num_sample_dofs_per_procX.data(),
+	      BsinvX,
+	      rank,
+	      nprocs,
+	      numSamplesX);
+
+  CAROM::GNAT(basisV,
+	      rdimv,
+	      sample_dofs_V.data(),
+	      num_sample_dofs_per_procV.data(),
+	      BsinvV,
+	      rank,
+	      nprocs,
+	      numSamplesV);
+
+  CAROM::GNAT(basisE,
+	      rdime,
+	      sample_dofs_E.data(),
+	      num_sample_dofs_per_procE.data(),
+	      BsinvE,
+	      rank,
+	      nprocs,
+	      numSamplesE);
+
+  // We assume that the same H1 fespace is used for X and V, and a different L2 fespace is used for E.
+  // We merge all sample DOF's for X, V, and E into one set for each process.
+  // The pair of spaces (H1, L2) is used here.
+
+  vector<int> sample_dofs_merged;
+  vector<int> num_sample_dofs_per_proc_merged(nprocs);
+  int os_merged = 0;
+  for (int p=0; p<nprocs; ++p)
+    {
+      std::set<int> sample_dofs_H1, sample_dofs_L2;
+      {
+	int os = 0;
+	for (int q=0; q<p; ++q)
+	  {
+	    os += num_sample_dofs_per_procX[q];
+	  }
+	    
+	for (int j=0; j<num_sample_dofs_per_procX[p]; ++j)
+	  {
+	    sample_dofs_H1.insert(sample_dofs_X[os + j]);
+	  }
+
+	os = 0;
+	for (int q=0; q<p; ++q)
+	  {
+	    os += num_sample_dofs_per_procV[q];
+	  }
+	    
+	for (int j=0; j<num_sample_dofs_per_procV[p]; ++j)
+	  {
+	    sample_dofs_H1.insert(sample_dofs_V[os + j]);
+	  }
+	    
+	os = 0;
+	for (int q=0; q<p; ++q)
+	  {
+	    os += num_sample_dofs_per_procE[q];
+	  }
+	    
+	for (int j=0; j<num_sample_dofs_per_procE[p]; ++j)
+	  {
+	    sample_dofs_L2.insert(sample_dofs_E[os + j]);
+	  }
+      }
+
+      num_sample_dofs_per_proc_merged[p] = sample_dofs_H1.size() + sample_dofs_L2.size();
+
+      for (std::set<int>::const_iterator it = sample_dofs_H1.begin(); it != sample_dofs_H1.end(); ++it)
+	{
+	  sample_dofs_merged.push_back((*it));
+	}
+
+      for (std::set<int>::const_iterator it = sample_dofs_L2.begin(); it != sample_dofs_L2.end(); ++it)
+	{
+	  sample_dofs_merged.push_back(nH1[p] + (*it));  // offset by nH1[p] for the mixed spaces (H1, L2)
+	}
+
+      // For each of the num_sample_dofs_per_procX[p] samples, set s2sp_X[] to be its index in sample_dofs_merged.
+      {
+	int os = 0;
+	for (int q=0; q<p; ++q)
+	  os += num_sample_dofs_per_procX[q];
+
+	s2sp_X.resize(numSamplesX);
+	    
+	for (int j=0; j<num_sample_dofs_per_procX[p]; ++j)
+	  {
+	    const int sample = sample_dofs_X[os + j];
+		      
+	    // Note: this has quadratic complexity and could be improved with a std::map<int, int>, but it should not be a bottleneck.
+	    int k = -1;
+	    int cnt = 0;
+	    for (std::set<int>::const_iterator it = sample_dofs_H1.begin(); it != sample_dofs_H1.end(); ++it, ++cnt)
+	      {
+		if (*it == sample)
+		  {
+		    MFEM_VERIFY(k == -1, "");
+		    k = cnt;
+		  }
+	      }
+
+	    MFEM_VERIFY(k >= 0, "");
+	    s2sp_X[os + j] = os_merged + k;
+	  }
+      }
+
+      os_merged += num_sample_dofs_per_proc_merged[p];
+    }
+      
+  // Define a superfluous finite element space, merely to get global vertex indices for the sample mesh construction.
+  const int dim = pmesh->Dimension();
+  H1_FECollection h1_coll(1, dim);  // Must be first order, to get a bijection between vertices and DOF's.
+  ParFiniteElementSpace H1_space(pmesh, &h1_coll);  // This constructor effectively sets vertex (DOF) global indices.
+
+  ParFiniteElementSpace *sp_H1_space, *sp_L2_space;
+
+  MPI_Comm rom_com;
+  int color = (rank != 0);
+  const int status = MPI_Comm_split(MPI_COMM_WORLD, color, rank, &rom_com);
+  MFEM_VERIFY(status == MPI_SUCCESS,
+	      "Construction of hyperreduction comm failed");
+
+  vector<int> sprows;
+  vector<int> all_sprows;
+
+  vector<int> s2sp;   // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+), for both F and E
+
+  // Construct sample mesh
+
+  // This creates rom_sample_pmesh, sp_F_space, and sp_E_space only on rank 0.
+  CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
+		   *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
+		   num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
 }
 
 void ROM_Basis::ReadSolutionBases()
@@ -278,11 +451,88 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     f[(2*H1size) + i] = gfL2[i];
 }
 
+ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
+			   FunctionCoefficient& rho_coeff, FunctionCoefficient& mat_coeff,
+			   const int order_e, const int source, const bool visc, const double cfl,
+			   const double cg_tol, const double ftz_tol, const bool hyperreduce_,
+			   H1_FECollection *H1fec, FiniteElementCollection *L2fec)
+  : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
+    fx(lhoper->Height()), fy(lhoper->Height()), hyperreduce(hyperreduce_)
+{
+  MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
+
+  if (hyperreduce)
+    {
+      spmesh = b->GetSampleMesh();
+
+      // The following code is copied from laghos.cpp to define a LagrangianHydroOperator on spmesh.
+      
+      L2FESpaceSP = new ParFiniteElementSpace(spmesh, L2fec);
+      H1FESpaceSP = new ParFiniteElementSpace(spmesh, H1fec, spmesh->Dimension());
+      
+      Vsize_l2sp = L2FESpaceSP->GetVSize();
+      Vsize_h1sp = H1FESpaceSP->GetVSize();
+
+      Array<int> ossp(4);
+      ossp[0] = 0;
+      ossp[1] = ossp[0] + Vsize_h1sp;
+      ossp[2] = ossp[1] + Vsize_h1sp;
+      ossp[3] = ossp[2] + Vsize_l2sp;
+      BlockVector S(ossp);
+
+      // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
+      // that the boundaries are straight.
+      Array<int> ess_tdofs;
+      {
+	Array<int> ess_bdr(spmesh->bdr_attributes.Max()), tdofs1d;
+	for (int d = 0; d < spmesh->Dimension(); d++)
+	  {
+	    // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
+	    // enforce v_x/y/z = 0 for the velocity components.
+	    ess_bdr = 0; ess_bdr[d] = 1;
+	    H1FESpaceSP->GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
+	    ess_tdofs.Append(tdofs1d);
+	  }
+      }
+
+      ParGridFunction rho(L2FESpaceSP);
+      L2_FECollection l2_fec(order_e, spmesh->Dimension());
+      ParFiniteElementSpace l2_fes(spmesh, &l2_fec);
+      ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+      l2_rho.ProjectCoefficient(rho_coeff);
+      rho.ProjectGridFunction(l2_rho);
+
+      // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+      // gamma values are projected on a function that stays constant on the moving
+      // mesh.
+      L2_FECollection mat_fec(0, spmesh->Dimension());
+      ParFiniteElementSpace mat_fes(spmesh, &mat_fec);
+      ParGridFunction mat_gf(&mat_fes);
+      mat_gf.ProjectCoefficient(mat_coeff);
+      GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
+
+      const bool p_assembly = false;
+      const int cg_max_iter = 300;
+
+      operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
+							  ess_tdofs, rho, source, cfl, mat_gf_coeff,
+							  visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+							  H1fec->GetBasisType());
+    }
+}
+
 void ROM_Operator::Mult(const Vector &x, Vector &y) const
 {
-  basis->LiftROMtoFOM(x, fx);
-  operFOM->Mult(fx, fy);
-  basis->ProjectFOMtoROM(fy, y);
+  if (hyperreduce)
+    {
+      MFEM_VERIFY(false, "Hyperreduction not implemented yet in ROM_Operator::Mult");
+    }
+  else
+    {
+      basis->LiftROMtoFOM(x, fx);
+      operFOM->Mult(fx, fy);
+      basis->ProjectFOMtoROM(fy, y);
+    }
 }
 
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,

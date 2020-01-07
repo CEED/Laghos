@@ -12,6 +12,7 @@
 //using namespace CAROM;
 using namespace mfem;
 
+
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
 				    const bool scalar);
 
@@ -158,7 +159,7 @@ class ROM_Basis
 public:
   ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
 	    int & dimX, int & dimV, int & dimE,
-	    const bool staticSVD_ = false);
+	    const bool staticSVD_ = false, const bool hyperreduce_ = false);
 
   ~ROM_Basis()
   {
@@ -177,9 +178,12 @@ public:
   void ProjectFOMtoROM(Vector const& f, Vector & r);
   void LiftROMtoFOM(Vector const& r, Vector & f);
   int TotalSize() { return rdimx + rdimv + rdime; }
+
+  ParMesh *GetSampleMesh() { return sample_pmesh; }
   
 private:
   const bool staticSVD;
+  const bool hyperreduce;
   int rdimx, rdimv, rdime;
   MPI_Comm comm;
 
@@ -203,25 +207,37 @@ private:
   CAROM::Vector *rX = 0;
   CAROM::Vector *rV = 0;
   CAROM::Vector *rE = 0;
+
+  // For hyperreduction
+  std::vector<int> s2sp_X;
+  ParMesh* sample_pmesh = 0;
+  std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
+
+  void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1);
 };
 
 class ROM_Operator : public TimeDependentOperator
 {
 public:
-  ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b)
-    : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
-      fx(lhoper->Height()), fy(lhoper->Height())
-  {
-    MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
-  }
+  ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, FunctionCoefficient& rho_coeff,
+	       FunctionCoefficient& mat_coeff, const int order_e, const int source,
+	       const bool visc, const double cfl, const double cg_tol,
+	       const double ftz_tol, const bool hyperreduce_ = false,
+	       H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
 
   virtual void Mult(const Vector &x, Vector &y) const;
 
 private:
-  hydrodynamics::LagrangianHydroOperator *operFOM;
+  hydrodynamics::LagrangianHydroOperator *operFOM, *operSP;
   ROM_Basis *basis;
 
   mutable Vector fx, fy;
+
+  const bool hyperreduce;
+
+  int Vsize_l2sp, Vsize_h1sp;
+  ParFiniteElementSpace *L2FESpaceSP, *H1FESpaceSP;
+  ParMesh *spmesh = 0;
 };
 
 #endif // MFEM_LAGHOS_ROM
