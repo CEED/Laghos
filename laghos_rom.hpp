@@ -5,17 +5,33 @@
 
 #include "StaticSVDBasisGenerator.h"
 #include "IncrementalSVDBasisGenerator.h"
+#include "BasisReader.h"
+
+#include "laghos_solver.hpp"
 
 //using namespace CAROM;
 using namespace mfem;
 
+
+void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+				    const bool scalar);
+
+namespace ROMBasisName {
+  const char* const X = "basisX";
+  const char* const V = "basisV";
+  const char* const E = "basisE";
+};
+
 class ROM_Sampler
 {  
 public:
-  ROM_Sampler(const int rank_, const int H1size_, const int L2size_, const double t_final,
-	      const double initial_dt, Vector const& S_init, const bool staticSVD = false)
-    : rank(rank_), H1size(H1size_), L2size(L2size_), X(H1size_), dXdt(H1size_),
-      V(H1size_), dVdt(H1size_), E(L2size_), dEdt(L2size_)
+  ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
+	      const double t_final, const double initial_dt, Vector const& S_init,
+	      const bool staticSVD = false)
+    : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
+      H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
+      X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
+      gfH1(H1FESpace), gfL2(L2FESpace)
   {
     // TODO: read the following parameters from input?
     double model_linearity_tol = 1.e-7;
@@ -25,45 +41,45 @@ public:
 
     if (staticSVD)
       {
-	generator_X = new CAROM::StaticSVDBasisGenerator(H1size, max_model_dim,
-							 "basisX");
-	generator_V = new CAROM::StaticSVDBasisGenerator(H1size, max_model_dim,
-							 "basisV");
-	generator_E = new CAROM::StaticSVDBasisGenerator(L2size, max_model_dim,
-							 "basisE");
+	generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+							 ROMBasisName::X);
+	generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+							 ROMBasisName::V);
+	generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
+							 ROMBasisName::E);
       }
     else
       {
-	generator_X = new CAROM::IncrementalSVDBasisGenerator(H1size,
+	generator_X = new CAROM::IncrementalSVDBasisGenerator(tH1size,
 							      model_linearity_tol,
 							      false,
 							      true,
-							      H1size,
+							      tH1size,
 							      initial_dt,
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisX");
-	generator_V = new CAROM::IncrementalSVDBasisGenerator(H1size,
+							      ROMBasisName::X);
+	generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
 							      model_linearity_tol,
 							      false,
 							      true,
-							      H1size,
+							      tH1size,
 							      initial_dt,
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisV");
-	generator_E = new CAROM::IncrementalSVDBasisGenerator(L2size,
+							      ROMBasisName::V);
+	generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
 							      model_linearity_tol,
 							      false,
 							      true,
-							      L2size,
+							      tL2size,
 							      initial_dt,
 							      max_model_dim,
 							      model_sampling_tol,
 							      t_final,
-							      "basisE");
+							      ROMBasisName::E);
       }
 
     SetStateVariables(S_init);
@@ -71,8 +87,12 @@ public:
     dXdt = 0.0;
     dVdt = 0.0;
     dEdt = 0.0;
-  }
 
+    X0 = 0.0;
+    V0 = 0.0;
+    E0 = 0.0;
+  }
+  
   void SampleSolution(const double t, const double dt, Vector const& S);
 
   void Finalize(const double t, const double dt, Vector const& S);
@@ -80,39 +100,144 @@ public:
 private:
   const int H1size;
   const int L2size;
+  const int tH1size;
+  const int tL2size;
+
   const int rank;
   
   CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
 
-  Vector X, dXdt, V, dVdt, E, dEdt;
+  Vector X, X0, dXdt, V, V0, dVdt, E, E0, dEdt;
+
+  ParGridFunction gfH1, gfL2;
 
   void SetStateVariables(Vector const& S)
   {
+    X0 = X;
+    V0 = V;
+    E0 = E;
+    
     for (int i=0; i<H1size; ++i)
       {
-	X[i] = S[i];
-	V[i] = S[H1size + i];
+	gfH1[i] = S[i];
       }
+
+    gfH1.GetTrueDofs(X);
+
+    for (int i=0; i<H1size; ++i)
+      {
+	gfH1[i] = S[H1size + i];
+      }
+
+    gfH1.GetTrueDofs(V);
     
     for (int i=0; i<L2size; ++i)
       {
-	E[i] = S[(2*H1size) + i];
+	gfL2[i] = S[(2*H1size) + i];
       }
+
+    gfL2.GetTrueDofs(E);
   }
   
-  void SetStateVariableRates(const double dt, Vector const& S)
+  void SetStateVariableRates(const double dt)
   {
-    for (int i=0; i<H1size; ++i)
+    for (int i=0; i<tH1size; ++i)
       {
-	dXdt[i] = (S[i] - X[i]) / dt;
-	dVdt[i] = (S[H1size + i] - V[i]) / dt;
+	dXdt[i] = (X[i] - X0[i]) / dt;
+	dVdt[i] = (V[i] - V0[i]) / dt;
       }
     
-    for (int i=0; i<L2size; ++i)
+    for (int i=0; i<tL2size; ++i)
       {
-	dEdt[i] = (S[(2*H1size) + i] - E[i]) / dt;
+	dEdt[i] = (E[i] - E0[i]) / dt;
       }
   }
+};
+
+class ROM_Basis
+{
+public:
+  ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
+	    int & dimX, int & dimV, int & dimE,
+	    const bool staticSVD_ = false, const bool hyperreduce_ = false);
+
+  ~ROM_Basis()
+  {
+    delete rX;
+    delete rV;
+    delete rE;
+    delete basisX;
+    delete basisV;
+    delete basisE;
+    delete fH1;
+    delete fL2;
+  }
+  
+  void ReadSolutionBases();
+
+  void ProjectFOMtoROM(Vector const& f, Vector & r);
+  void LiftROMtoFOM(Vector const& r, Vector & f);
+  int TotalSize() { return rdimx + rdimv + rdime; }
+
+  ParMesh *GetSampleMesh() { return sample_pmesh; }
+  
+private:
+  const bool staticSVD;
+  const bool hyperreduce;
+  int rdimx, rdimv, rdime;
+  MPI_Comm comm;
+
+  int nprocs, rank, rowOffsetH1, rowOffsetL2;
+
+  const int H1size;
+  const int L2size;
+  const int tH1size;
+  const int tL2size;
+
+  CAROM::Matrix* basisX = 0;
+  CAROM::Matrix* basisV = 0;
+  CAROM::Matrix* basisE = 0;
+
+  CAROM::Vector *fH1, *fL2;
+
+  Vector mfH1, mfL2;
+  
+  ParGridFunction gfH1, gfL2;
+  
+  CAROM::Vector *rX = 0;
+  CAROM::Vector *rV = 0;
+  CAROM::Vector *rE = 0;
+
+  // For hyperreduction
+  std::vector<int> s2sp_X;
+  ParMesh* sample_pmesh = 0;
+  std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
+
+  void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1);
+};
+
+class ROM_Operator : public TimeDependentOperator
+{
+public:
+  ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, FunctionCoefficient& rho_coeff,
+	       FunctionCoefficient& mat_coeff, const int order_e, const int source,
+	       const bool visc, const double cfl, const double cg_tol,
+	       const double ftz_tol, const bool hyperreduce_ = false,
+	       H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
+
+  virtual void Mult(const Vector &x, Vector &y) const;
+
+private:
+  hydrodynamics::LagrangianHydroOperator *operFOM, *operSP;
+  ROM_Basis *basis;
+
+  mutable Vector fx, fy;
+
+  const bool hyperreduce;
+
+  int Vsize_l2sp, Vsize_h1sp;
+  ParFiniteElementSpace *L2FESpaceSP, *H1FESpaceSP;
+  ParMesh *spmesh = 0;
 };
 
 #endif // MFEM_LAGHOS_ROM

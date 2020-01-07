@@ -74,6 +74,52 @@ double e0(const Vector &);
 double gamma(const Vector &);
 void display_banner(ostream & os);
 
+void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+  Vector tv(gf->ParFESpace()->GetTrueVSize());
+  gf->GetTrueDofs(tv);
+
+  char tmp[100];
+  sprintf(tmp, ".%06d", rank);
+
+  std::string fullname = name + tmp;
+  
+  std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+  ofs.precision(16);
+
+  for (int i=0; i<tv.Size(); ++i)
+    ofs << tv[i] << std::endl;
+	  
+  ofs.close();
+}
+
+
+void PrintDiffParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+  Vector tv(gf->ParFESpace()->GetTrueVSize());
+
+  char tmp[100];
+  sprintf(tmp, ".%06d", rank);
+
+  std::string fullname = name + tmp;
+  
+  std::ifstream ifs(fullname.c_str());
+
+  for (int i=0; i<tv.Size(); ++i)
+    {
+      double d;
+      ifs >> d;
+      tv[i] = d;
+    }
+  
+  ifs.close();
+
+  ParGridFunction rgf(gf->ParFESpace());
+  rgf.SetFromTrueDofs(tv);
+
+  PrintL2NormsOfParGridFunctions(rank, name, &rgf, gf, true);
+}
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -108,6 +154,16 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
    bool rom_offline = false;
+   bool rom_online = false;
+   bool rom_staticSVD = true;
+   int rom_dimx = -1;
+   int rom_dimv = -1;
+   int rom_dime = -1;
+   double dtc = 0.0;
+   int visitDiffCycle = -1;
+   bool writeSol = false;
+   bool solDiff = false;
+   bool rom_hyperreduce = false;
    
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -164,6 +220,18 @@ int main(int argc, char *argv[])
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                   "Enable or disable ROM offline computations and output.");
+   args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
+                  "Enable or disable ROM online computations and output.");
+   args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
+   args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
+   args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
+   args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
+   args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
+   args.AddOption(&solDiff, "-soldiff", "--soldiff", "-no-soldiff", "--no-soldiff",
+                  "Enable or disable solution difference norm computation.");
+   args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
+                  "Enable or disable ROM hyperreduction.");   
+
    args.Parse();
    if (!args.Good())
    {
@@ -355,6 +423,9 @@ int main(int argc, char *argv[])
    int Vsize_l2 = L2FESpace.GetVSize();
    int Vsize_h1 = H1FESpace.GetVSize();
 
+   int tVsize_l2 = L2FESpace.GetTrueVSize();
+   int tVsize_h1 = H1FESpace.GetTrueVSize();
+
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
    // - 1 -> velocity
@@ -481,6 +552,9 @@ int main(int argc, char *argv[])
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
+      if (rom_offline)
+	visit_dc.RegisterField("Position",  &x_gf);
+      
       visit_dc.RegisterField("Density",  &rho_gf);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
@@ -491,8 +565,8 @@ int main(int argc, char *argv[])
 
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
-   // defines the Mult() method that used by the time integrators.
-   ode_solver->Init(oper);
+   // defines the Mult() method that is used by the time integrators.
+   if (!rom_online) ode_solver->Init(oper);
    oper.ResetTimeStepEstimate();
    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
@@ -502,7 +576,26 @@ int main(int argc, char *argv[])
    ROM_Sampler *sampler = NULL;
    if (rom_offline)
      {
-       sampler = new ROM_Sampler(myid, Vsize_h1, Vsize_l2, t_final, dt, S, true);
+       if (dtc > 0.0) dt = dtc;
+       sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD);
+     }
+   
+   ROM_Basis *basis = NULL;
+   Vector romS;
+   ROM_Operator *romOper = NULL;
+
+   if (rom_online)
+     {
+       if (dtc > 0.0) dt = dtc;
+       basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce);
+       romS.SetSize(rom_dimx + rom_dimv + rom_dime);
+       basis->ProjectFOMtoROM(S, romS);
+
+       cout << myid << ": initial romS norm " << romS.Norml2() << endl;
+       
+       romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, cg_tol, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+
+       ode_solver->Init(*romOper);
      }
    
    for (int ti = 1; !last_step; ti++)
@@ -520,7 +613,14 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
-      ode_solver->Step(S, t, dt);
+      if (rom_online)
+	{
+	  ode_solver->Step(romS, t, dt);
+	  basis->LiftROMtoFOM(romS, S);
+	}
+      else
+	ode_solver->Step(S, t, dt);
+      
       steps++;
 
       const double last_dt = dt;
@@ -541,7 +641,7 @@ int main(int argc, char *argv[])
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
-      else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+      else if (dtc == 0.0 && dt_est > 1.25 * dt) { dt *= 1.02; }
 
       if (rom_offline)
 	{
@@ -639,8 +739,44 @@ int main(int argc, char *argv[])
    if (rom_offline)
      {
        sampler->Finalize(t, dt, S);
+       delete sampler;
      }
    
+   if (rom_offline && writeSol)
+     {
+       PrintParGridFunction(myid, "Sol_Position", &x_gf);
+       PrintParGridFunction(myid, "Sol_Velocity", &v_gf);
+       PrintParGridFunction(myid, "Sol_Energy", &e_gf);
+     }
+
+   if (solDiff)
+     {
+       PrintDiffParGridFunction(myid, "Sol_Position", &x_gf);
+       PrintDiffParGridFunction(myid, "Sol_Velocity", &v_gf);
+       PrintDiffParGridFunction(myid, "Sol_Energy", &e_gf);
+     }
+
+   if (visitDiffCycle >= 0)
+     {
+       VisItDataCollection dc(MPI_COMM_WORLD, "results/Laghos", pmesh);
+       dc.Load(visitDiffCycle);
+       cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
+
+       ParGridFunction *dcfx = dc.GetParField("Position");
+       ParGridFunction *dcfv = dc.GetParField("Velocity");
+       ParGridFunction *dcfe = dc.GetParField("Specific Internal Energy");
+      
+       PrintL2NormsOfParGridFunctions(myid, "Position", dcfx, &x_gf, true);
+       PrintL2NormsOfParGridFunctions(myid, "Velocity", dcfv, &v_gf, true);
+       PrintL2NormsOfParGridFunctions(myid, "Energy", dcfe, &e_gf, true);
+     }
+
+   if (rom_online)
+     {
+       delete basis;
+       delete romOper;
+     }
+
    switch (ode_solver_type)
    {
       case 2: steps *= 2; break;
