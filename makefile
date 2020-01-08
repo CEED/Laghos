@@ -110,6 +110,10 @@ OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp
 
+SCALAPACKLIB = 
+
+include user.mk
+
 # Targets
 
 .PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
@@ -122,7 +126,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -lhdf5
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -lhdf5 $(SCALAPACKLIB) -lscalapack
 
 all: laghos
 
