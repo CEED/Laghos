@@ -171,6 +171,18 @@ public:
     delete basisE;
     delete fH1;
     delete fL2;
+    delete spX;
+    delete spV;
+    delete spE;
+    delete sX;
+    delete sV;
+    delete sE;
+    delete BXsp;
+    delete BVsp;
+    delete BEsp;
+    delete BsinvX;
+    delete BsinvV;
+    delete BsinvE;
   }
   
   void ReadSolutionBases();
@@ -180,12 +192,21 @@ public:
   int TotalSize() { return rdimx + rdimv + rdime; }
 
   ParMesh *GetSampleMesh() { return sample_pmesh; }
+
+  int SolutionSize() const;
+  int SolutionSizeSP() const;
+
+  void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
+  void RestrictFromSampleMesh(const Vector &xsp, Vector &x) const;
+
+  int GetRank() const { return rank; }
+
+  MPI_Comm comm;
   
 private:
   const bool staticSVD;
   const bool hyperreduce;
   int rdimx, rdimv, rdime;
-  MPI_Comm comm;
 
   int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
@@ -209,10 +230,35 @@ private:
   CAROM::Vector *rE = 0;
 
   // For hyperreduction
-  std::vector<int> s2sp_X;
+  std::vector<int> s2sp_X, s2sp_V, s2sp_E;
   ParMesh* sample_pmesh = 0;
   std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
+  std::vector<int> s2sp_H1;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
+  std::vector<int> s2sp_L2;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
 
+  CAROM::Matrix *BXsp = NULL;
+  CAROM::Matrix *BVsp = NULL;
+  CAROM::Matrix *BEsp = NULL;
+
+  int size_H1_sp = 0;
+  int size_L2_sp = 0;
+
+  CAROM::Vector *spX = NULL;
+  CAROM::Vector *spV = NULL;
+  CAROM::Vector *spE = NULL;
+  
+  CAROM::Vector *sX = NULL;
+  CAROM::Vector *sV = NULL;
+  CAROM::Vector *sE = NULL;
+  
+  CAROM::Matrix *BsinvX = NULL;
+  CAROM::Matrix *BsinvV = NULL;
+  CAROM::Matrix *BsinvE = NULL;
+
+  int numSamplesX = 0;
+  int numSamplesV = 0;
+  int numSamplesE = 0;
+  
   void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1);
 };
 
@@ -227,8 +273,21 @@ public:
 
   virtual void Mult(const Vector &x, Vector &y) const;
 
+  ~ROM_Operator()
+  {
+    delete mat_gf_coeff;
+    delete mat_gf;
+    delete L2FESpaceSP;
+    delete H1FESpaceSP;
+    delete mat_fes;
+    delete mat_fec;
+    delete spmesh;
+  }
+  
 private:
-  hydrodynamics::LagrangianHydroOperator *operFOM, *operSP;
+  hydrodynamics::LagrangianHydroOperator *operFOM = NULL;
+  hydrodynamics::LagrangianHydroOperator *operSP = NULL;
+  
   ROM_Basis *basis;
 
   mutable Vector fx, fy;
@@ -236,8 +295,16 @@ private:
   const bool hyperreduce;
 
   int Vsize_l2sp, Vsize_h1sp;
-  ParFiniteElementSpace *L2FESpaceSP, *H1FESpaceSP;
+  ParFiniteElementSpace *L2FESpaceSP = 0;
+  ParFiniteElementSpace *H1FESpaceSP = 0;
   ParMesh *spmesh = 0;
+
+  ParFiniteElementSpace *mat_fes = 0;
+  ParGridFunction *mat_gf = 0;
+  GridFunctionCoefficient *mat_gf_coeff = 0;
+  L2_FECollection *mat_fec = 0;
+  
+  const int rank;
 };
 
 #endif // MFEM_LAGHOS_ROM
