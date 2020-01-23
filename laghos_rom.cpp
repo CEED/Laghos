@@ -187,18 +187,27 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
 void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1)
 {
   ParMesh *pmesh = H1FESpace->GetParMesh();
-  
+
+  const int fomH1size = H1FESpace->GlobalTrueVSize();
+  const int fomL2size = L2FESpace->GlobalTrueVSize();
+
   numSamplesX = rdimx;
+  //numSamplesX = fomH1size;  // maximum number of samples possible
+  //numSamplesX = 35;
   vector<int> sample_dofs_X(numSamplesX);
   vector<int> num_sample_dofs_per_procX(nprocs);
   BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
 
   numSamplesV = rdimv;
+  //numSamplesV = fomH1size;  // maximum number of samples possible
+  //numSamplesV = 35;
   vector<int> sample_dofs_V(numSamplesV);
   vector<int> num_sample_dofs_per_procV(nprocs);
   BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
 
   numSamplesE = rdime;
+  //numSamplesE = fomL2size;  // maximum number of samples possible
+  //numSamplesE = 35;
   vector<int> sample_dofs_E(numSamplesE);
   vector<int> num_sample_dofs_per_procE(nprocs);
   BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
@@ -371,7 +380,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 	      }
 
 	    MFEM_VERIFY(k >= 0, "");
-	    s2sp_E[os + j] = os_merged + k;
+	    s2sp_E[os + j] = os_merged + sample_dofs_H1.size() + k;
 	  }
       }
 
@@ -383,7 +392,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   H1_FECollection h1_coll(1, dim);  // Must be first order, to get a bijection between vertices and DOF's.
   ParFiniteElementSpace H1_space(pmesh, &h1_coll);  // This constructor effectively sets vertex (DOF) global indices.
 
-  ParFiniteElementSpace *sp_H1_space, *sp_L2_space;
+  ParFiniteElementSpace *sp_H1_space = NULL;
+  ParFiniteElementSpace *sp_L2_space = NULL;
 
   MPI_Comm rom_com;
   int color = (rank != 0);
@@ -429,6 +439,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
       MFEM_VERIFY(s2sp.size() == offset, "");
 
+      size_H1_sp = sp_H1_space->GetTrueVSize();
+      size_L2_sp = sp_L2_space->GetTrueVSize();
+
       // Define the map s2sp_X from X samples to sample mesh X dofs.
       {
 	int os_p = 0;
@@ -438,7 +451,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 	      {
 		MFEM_VERIFY(sample_dofs_merged[s2sp_X[os_p + j]] < nH1[p], "");
 		const int spId = s2sp[s2sp_X[os_p + j]];
-		s2sp_X[os_p + j] = spId - NH1sp;
+		s2sp_X[os_p + j] = spId;
 	      }
 
 	    os_p += num_sample_dofs_per_procX[p];
@@ -447,9 +460,42 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 	MFEM_VERIFY(os_p == numSamplesX, "");
       }
 
-      size_H1_sp = sp_H1_space->GetTrueVSize();
-      size_L2_sp = sp_L2_space->GetTrueVSize();
-  
+      // Define the map s2sp_V from V samples to sample mesh V dofs.
+      {
+	int os_p = 0;
+	for (int p=0; p<nprocs; ++p)
+	  {
+	    for (int j=0; j<num_sample_dofs_per_procV[p]; ++j)
+	      {
+		MFEM_VERIFY(sample_dofs_merged[s2sp_V[os_p + j]] < nH1[p], "");
+		const int spId = s2sp[s2sp_V[os_p + j]];
+		s2sp_V[os_p + j] = spId;
+	      }
+
+	    os_p += num_sample_dofs_per_procV[p];
+	  }
+	      
+	MFEM_VERIFY(os_p == numSamplesV, "");
+      }
+
+      // Define the map s2sp_E from E samples to sample mesh E dofs.
+      {
+	int os_p = 0;
+	for (int p=0; p<nprocs; ++p)
+	  {
+	    for (int j=0; j<num_sample_dofs_per_procE[p]; ++j)
+	      {
+		MFEM_VERIFY(sample_dofs_merged[s2sp_E[os_p + j]] >= nH1[p], "");
+		const int spId = s2sp[s2sp_E[os_p + j]];
+		s2sp_E[os_p + j] = spId - NH1sp;
+	      }
+
+	    os_p += num_sample_dofs_per_procE[p];
+	  }
+	      
+	MFEM_VERIFY(os_p == numSamplesE, "");
+      }
+
       BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
       BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
       BEsp = new CAROM::Matrix(size_L2_sp, rdime, false);
@@ -627,7 +673,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
 
   // Select entries out of usp on the sample mesh.
 
-  // Note that s2sp_X maps from X samples to sample mesh X dofs.
+  // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
 
   for (int i=0; i<numSamplesX; ++i)
     (*sX)(i) = usp[s2sp_X[i]];
