@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 111;
+   int partition_type = 0;
    bool okina = false;
    bool qupdate = false;
    const char *dev_opt = "cpu";
@@ -237,6 +237,9 @@ int main(int argc, char *argv[])
    int *nxyz = new int[dim];
    switch (partition_type)
    {
+      case 0:
+         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
+         break;
       case 11:
       case 111:
          unit = static_cast<int>(floor(pow(num_tasks, 1.0 / dim) + 1e-2));
