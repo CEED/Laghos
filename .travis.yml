@@ -72,6 +72,10 @@ branches:
 
 script:
    - make -j
+
+   - make check
+   - make 1 2 3
+
    - touch RESULTS.dat
 
    - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
