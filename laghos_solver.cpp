@@ -1073,7 +1073,7 @@ void QBody(const int nzones, const int z,
       // relative change of the initial length scale.
       const double *dV = d_grad_v_ext + dim2*(nqp*z + q);
       blas::Mult(dim, dim, dim, dV, Jinv, sgrad_v);
-      DenseMatrix::symmetrize(dim,sgrad_v);
+      blas::Symmetrize(dim,sgrad_v);
       if (dim==1)
       {
          eig_val_data[0] = sgrad_v[0];
@@ -1088,8 +1088,8 @@ void QBody(const int nzones, const int z,
       blas::Mult(dim, dim, dim, J, d_Jac0inv+zq*dim*dim, Jpi);
       blas::MultV(dim, dim, Jpi, compr_dir, ph_dir);
       // Change of the initial mesh size in the compression direction.
-      const double ph_dir_nl2 = Vector::norml2(dim,ph_dir);
-      const double compr_dir_nl2 = Vector::norml2(dim, compr_dir);
+      const double ph_dir_nl2 = blas::Norml2(dim,ph_dir);
+      const double compr_dir_nl2 = blas::Norml2(dim, compr_dir);
       const double h = h0 * ph_dir_nl2 / compr_dir_nl2;
       // Measure of maximal compression.
       const double mu = eig_val_data[0];
@@ -1128,7 +1128,7 @@ void QBody(const int nzones, const int z,
       }
    }
    // Quadrature data for partial assembly of the force operator.
-   mfem::multABt(dim, dim, dim, stress, Jinv, stressJiT);
+   blas::MultABt(dim, dim, dim, stress, Jinv, stressJiT);
    for (int k=0; k<dim2; k+=1) { stressJiT[k] *= weight * detJ; }
    for (int vd = 0 ; vd < dim; vd++)
    {
@@ -1188,12 +1188,12 @@ void QKernel(const int nzones,
             MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
                QBody<dim>(nzones, z, nqp, qx + qy * Q1D,
-               gamma, use_viscosity, h0, h1order, cfl, infinity,
-               Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
-               compr_dir,Jpi,ph_dir,stressJiT,
-               d_weights, d_Jacobians, d_rho0DetJ0w,
-               d_e_quads, d_grad_v_ext, d_Jac0inv,
-               d_dt_est, d_stressJinvT);
+                          gamma, use_viscosity, h0, h1order, cfl, infinity,
+                          Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+                          compr_dir,Jpi,ph_dir,stressJiT,
+                          d_weights, d_Jacobians, d_rho0DetJ0w,
+                          d_e_quads, d_grad_v_ext, d_Jac0inv,
+                          d_dt_est, d_stressJinvT);
             }
          }
          MFEM_SYNC_THREAD;
@@ -1219,12 +1219,12 @@ void QKernel(const int nzones,
                MFEM_FOREACH_THREAD(qz,z,Q1D)
                {
                   QBody<dim>(nzones, z, nqp, qx + Q1D * (qy + qz * Q1D),
-                  gamma, use_viscosity, h0, h1order, cfl, infinity,
-                  Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
-                  compr_dir,Jpi,ph_dir,stressJiT,
-                  d_weights, d_Jacobians, d_rho0DetJ0w,
-                  d_e_quads, d_grad_v_ext, d_Jac0inv,
-                  d_dt_est, d_stressJinvT);
+                             gamma, use_viscosity, h0, h1order, cfl, infinity,
+                             Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+                             compr_dir,Jpi,ph_dir,stressJiT,
+                             d_weights, d_Jacobians, d_rho0DetJ0w,
+                             d_e_quads, d_grad_v_ext, d_Jac0inv,
+                             d_dt_est, d_stressJinvT);
                }
             }
          }
