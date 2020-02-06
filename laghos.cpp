@@ -231,7 +231,6 @@ int main(int argc, char *argv[])
                   "Enable or disable solution difference norm computation.");
    args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
                   "Enable or disable ROM hyperreduction.");   
-
    args.Parse();
    if (!args.Good())
    {
@@ -579,7 +578,7 @@ int main(int argc, char *argv[])
        if (dtc > 0.0) dt = dtc;
        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD);
      }
-   
+
    ROM_Basis *basis = NULL;
    Vector romS;
    ROM_Operator *romOper = NULL;
@@ -597,7 +596,7 @@ int main(int argc, char *argv[])
 
        ode_solver->Init(*romOper);
      }
-   
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -605,18 +604,25 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
+      
       if (steps == max_tsteps) { last_step = true; }
 
       S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
 
+      
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       if (rom_online)
 	{
+	  if (myid == 0)
+	    cout << "ROM online at t " << t << ", dt " << dt << endl;
+	  
 	  ode_solver->Step(romS, t, dt);
 	  basis->LiftROMtoFOM(romS, S);
+
+	  romOper->UpdateSampleMeshNodes(romS);
 	}
       else
 	ode_solver->Step(S, t, dt);

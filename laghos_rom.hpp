@@ -273,6 +273,8 @@ public:
 
   virtual void Mult(const Vector &x, Vector &y) const;
 
+  void UpdateSampleMeshNodes(Vector const& romSol);
+  
   ~ROM_Operator()
   {
     delete mat_gf_coeff;
@@ -287,6 +289,8 @@ public:
 private:
   hydrodynamics::LagrangianHydroOperator *operFOM = NULL;
   hydrodynamics::LagrangianHydroOperator *operSP = NULL;
+
+  Array<int> ess_tdofs;
   
   ROM_Basis *basis;
 
@@ -303,6 +307,8 @@ private:
   ParGridFunction *mat_gf = 0;
   GridFunctionCoefficient *mat_gf_coeff = 0;
   L2_FECollection *mat_fec = 0;
+
+  ParGridFunction *xsp_gf = 0;
   
   const int rank;
 };

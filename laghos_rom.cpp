@@ -11,8 +11,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
   SetStateVariables(S);
   SetStateVariableRates(dt);
   
-  const int tmp = generator_X->getNumBasisTimeIntervals();
-  
   const bool sampleX = generator_X->isNextSample(t);
 
   if (sampleX)
@@ -69,7 +67,7 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
 void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
 {
   SetStateVariables(S);
-  
+
   generator_X->takeSample(X.GetData(), t, dt);
   generator_X->endSamples();
 
@@ -191,23 +189,28 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   const int fomH1size = H1FESpace->GlobalTrueVSize();
   const int fomL2size = L2FESpace->GlobalTrueVSize();
 
+  const int nsamp = 35;
+  
   numSamplesX = rdimx;
   //numSamplesX = fomH1size;  // maximum number of samples possible
-  //numSamplesX = 35;
+  numSamplesX = 35;
+  numSamplesX = nsamp;
   vector<int> sample_dofs_X(numSamplesX);
   vector<int> num_sample_dofs_per_procX(nprocs);
   BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
 
   numSamplesV = rdimv;
   //numSamplesV = fomH1size;  // maximum number of samples possible
-  //numSamplesV = 35;
+  numSamplesV = 35;
+  numSamplesV = nsamp;
   vector<int> sample_dofs_V(numSamplesV);
   vector<int> num_sample_dofs_per_procV(nprocs);
   BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
 
   numSamplesE = rdime;
   //numSamplesE = fomL2size;  // maximum number of samples possible
-  //numSamplesE = 35;
+  numSamplesE = 35;
+  numSamplesE = nsamp;
   vector<int> sample_dofs_E(numSamplesE);
   vector<int> num_sample_dofs_per_procE(nprocs);
   BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
@@ -415,6 +418,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   if (rank == 0)
     {
       sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
+      sample_pmesh->EnsureNodes();
     }
   
   // Set s2sp_H1 and s2sp_L2 from s2sp
@@ -710,8 +714,10 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
 
   if (hyperreduce && rank == 0)
     {
-      fx.SetSize(basis->SolutionSizeSP());
-      fy.SetSize(basis->SolutionSizeSP());
+      const int spsize = basis->SolutionSizeSP();
+
+      fx.SetSize(spsize);
+      fy.SetSize(spsize);
       
       spmesh = b->GetSampleMesh();
 
@@ -719,10 +725,15 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
       
       L2FESpaceSP = new ParFiniteElementSpace(spmesh, L2fec);
       H1FESpaceSP = new ParFiniteElementSpace(spmesh, H1fec, spmesh->Dimension());
+
+      xsp_gf = new ParGridFunction(H1FESpaceSP);
+      spmesh->SetNodalGridFunction(xsp_gf);
       
       Vsize_l2sp = L2FESpaceSP->GetVSize();
       Vsize_h1sp = H1FESpaceSP->GetVSize();
 
+      MFEM_VERIFY(((2*Vsize_h1sp) + Vsize_l2sp) == spsize, "");
+      
       Array<int> ossp(4);
       ossp[0] = 0;
       ossp[1] = ossp[0] + Vsize_h1sp;
@@ -730,15 +741,15 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
       ossp[3] = ossp[2] + Vsize_l2sp;
       BlockVector S(ossp);
 
-      // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
-      // that the boundaries are straight.
-      Array<int> ess_tdofs;
       // On the sample mesh, we impose no essential DOF's. The reason is that it does not
       // make sense to set boundary conditions on the sample mesh boundary, which may lie
       // in the interior of the domain. Also, the boundary conditions on the domain
       // boundary are enforced due to the fact that BVsp is defined as a submatrix of
       // basisV, which has boundary conditions applied in the full-order discretization. 
+
       /*
+      // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
+      // that the boundaries are straight.
       {
 	Array<int> ess_bdr(spmesh->bdr_attributes.Max()), tdofs1d;
 	for (int d = 0; d < spmesh->Dimension(); d++)
@@ -783,6 +794,22 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
     }
 }
 
+void ROM_Operator::UpdateSampleMeshNodes(Vector const& romSol)
+{
+  if (!hyperreduce || rank != 0)
+    return;
+
+  // Lift romSol to the sample mesh space to get X.
+  basis->LiftToSampleMesh(romSol, fx);
+
+  MFEM_VERIFY(xsp_gf->Size() == Vsize_h1sp, "");  // Since the sample mesh is serial (only on rank 0).
+
+  for (int i=0; i<Vsize_h1sp; ++i)
+    (*xsp_gf)[i] = fx[i];
+
+  spmesh->NewNodes(*xsp_gf, false);
+}
+
 void ROM_Operator::Mult(const Vector &x, Vector &y) const
 {
   MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
@@ -793,6 +820,14 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
       if (rank == 0)
 	{
 	  basis->LiftToSampleMesh(x, fx);
+
+	  { // update mesh
+	    for (int i=0; i<Vsize_h1sp; ++i)
+	      (*xsp_gf)[i] = fx[i];
+
+	    spmesh->NewNodes(*xsp_gf, false);
+	  }
+	  
 	  operSP->Mult(fx, fy);
 	  basis->RestrictFromSampleMesh(fy, y);
 	}
