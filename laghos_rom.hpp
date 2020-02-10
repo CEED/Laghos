@@ -195,6 +195,7 @@ public:
 
   int SolutionSize() const;
   int SolutionSizeSP() const;
+  int SolutionSizeFOM() const;
 
   void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
   void RestrictFromSampleMesh(const Vector &xsp, Vector &x) const;
@@ -285,7 +286,7 @@ public:
     delete mat_fec;
     delete spmesh;
   }
-  
+
 private:
   hydrodynamics::LagrangianHydroOperator *operFOM = NULL;
   hydrodynamics::LagrangianHydroOperator *operSP = NULL;

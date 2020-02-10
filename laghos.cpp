@@ -373,6 +373,7 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
+   cout << myid << ": pmesh->bdr_attributes.Max() " << pmesh->bdr_attributes.Max() << endl;
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
@@ -611,7 +612,6 @@ int main(int argc, char *argv[])
       t_old = t;
       oper.ResetTimeStepEstimate();
 
-      
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
       if (rom_online)
@@ -623,9 +623,16 @@ int main(int argc, char *argv[])
 	  basis->LiftROMtoFOM(romS, S);
 
 	  romOper->UpdateSampleMeshNodes(romS);
+
+	  oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
 	}
       else
-	ode_solver->Step(S, t, dt);
+	{
+	  if (myid == 0)
+	    cout << "FOM simulation at t " << t << ", dt " << dt << endl;
+
+	  ode_solver->Step(S, t, dt);
+	}
       
       steps++;
 

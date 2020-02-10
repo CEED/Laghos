@@ -182,6 +182,137 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     }
 }
 
+// cp = a x b
+void CrossProduct3D(Vector const& a, Vector const& b, Vector& cp)
+{
+  cp[0] = (a[1]*b[2]) - (a[2]*b[1]);
+  cp[1] = (a[2]*b[0]) - (a[0]*b[2]);
+  cp[2] = (a[0]*b[1]) - (a[1]*b[0]);
+}
+
+// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries.
+void SetBdryAttrForVelocity(ParMesh *pmesh)
+{
+  for (int b=0; b<pmesh->GetNBE(); ++b)
+    {
+      Element *belem = pmesh->GetBdrElement(b);
+      Array<int> vert;
+      belem->GetVertices(vert);
+      MFEM_VERIFY(vert.Size() > 2, "");
+
+      Vector normal(3);
+
+      Vector t1(3);
+      Vector t2(3);
+
+      for (int i=0; i<3; ++i)
+	{
+	  t1[i] = pmesh->GetVertex(vert[0])[i] - pmesh->GetVertex(vert[1])[i];
+	  t2[i] = pmesh->GetVertex(vert[2])[i] - pmesh->GetVertex(vert[1])[i];
+	}
+
+      CrossProduct3D(t1, t2, normal);
+
+      const double s = normal.Norml2();
+      MFEM_VERIFY(s > 1.0e-8, "");
+  
+      normal /= s;
+
+      int attr = -1;
+      
+      { // Verify that the normal is in the direction of a Cartesian axis.
+	const double tol = 1.0e-8;
+	const double al1 = fabs(normal[0]) + fabs(normal[1]) + fabs(normal[2]);
+	MFEM_VERIFY(fabs(al1 - 1.0) < tol, "");
+	bool axisFound = false;
+
+	if (fabs(1.0 - fabs(normal[0])) < tol)
+	  attr = 1;
+	else if (fabs(1.0 - fabs(normal[1])) < tol)
+	  attr = 2;
+	else if (fabs(1.0 - fabs(normal[2])) < tol)
+	  attr = 3;
+      }
+      
+      MFEM_VERIFY(attr > 0, "");
+      
+      belem->SetAttribute(attr);
+    }
+
+  pmesh->SetAttributes();
+}
+
+// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on unit cube.
+void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
+{
+  for (int b=0; b<pmesh->GetNBE(); ++b)
+    {
+      Element *belem = pmesh->GetBdrElement(b);
+      Array<int> vert;
+      belem->GetVertices(vert);
+      MFEM_VERIFY(vert.Size() > 2, "");
+
+      Vector normal(3);
+
+      Vector t1(3);
+      Vector t2(3);
+
+      for (int i=0; i<3; ++i)
+	{
+	  t1[i] = pmesh->GetVertex(vert[0])[i] - pmesh->GetVertex(vert[1])[i];
+	  t2[i] = pmesh->GetVertex(vert[2])[i] - pmesh->GetVertex(vert[1])[i];
+	}
+
+      CrossProduct3D(t1, t2, normal);
+
+      const double s = normal.Norml2();
+      MFEM_VERIFY(s > 1.0e-8, "");
+  
+      normal /= s;
+
+      int attr = -1;
+
+      const double tol = 1.0e-8;
+      
+      { // Verify that the normal is in the direction of a Cartesian axis.
+	const double al1 = fabs(normal[0]) + fabs(normal[1]) + fabs(normal[2]);
+	MFEM_VERIFY(fabs(al1 - 1.0) < tol, "");
+	bool axisFound = false;
+
+	if (fabs(1.0 - fabs(normal[0])) < tol)
+	  attr = 1;
+	else if (fabs(1.0 - fabs(normal[1])) < tol)
+	  attr = 2;
+	else if (fabs(1.0 - fabs(normal[2])) < tol)
+	  attr = 3;
+      }
+      
+      MFEM_VERIFY(attr > 0, "");
+
+      bool onBoundary = true;
+      {
+	const double xd0 = pmesh->GetVertex(vert[0])[attr-1];
+
+	for (int j=0; j<vert.Size(); ++j)
+	  {
+	    const double xd = pmesh->GetVertex(vert[j])[attr-1];
+	    if (fabs(xd) > tol && fabs(1.0 - xd) > tol)  // specific to unit cube
+	      onBoundary = false;
+
+	    if (j > 0 && fabs(xd - xd0) > tol)
+	      onBoundary = false;
+	  }
+      }
+
+      if (onBoundary)
+	belem->SetAttribute(attr);
+      else
+	belem->SetAttribute(10);
+    }
+
+  pmesh->SetAttributes();
+}
+
 void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1)
 {
   ParMesh *pmesh = H1FESpace->GetParMesh();
@@ -192,24 +323,24 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   const int nsamp = 35;
   
   numSamplesX = rdimx;
-  //numSamplesX = fomH1size;  // maximum number of samples possible
-  numSamplesX = 35;
+  numSamplesX = fomH1size;  // maximum number of samples possible
+  //numSamplesX = 35;
   numSamplesX = nsamp;
   vector<int> sample_dofs_X(numSamplesX);
   vector<int> num_sample_dofs_per_procX(nprocs);
   BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
 
   numSamplesV = rdimv;
-  //numSamplesV = fomH1size;  // maximum number of samples possible
-  numSamplesV = 35;
+  numSamplesV = fomH1size;  // maximum number of samples possible
+  //numSamplesV = 35;
   numSamplesV = nsamp;
   vector<int> sample_dofs_V(numSamplesV);
   vector<int> num_sample_dofs_per_procV(nprocs);
   BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
 
   numSamplesE = rdime;
-  //numSamplesE = fomL2size;  // maximum number of samples possible
-  numSamplesE = 35;
+  numSamplesE = fomL2size;  // maximum number of samples possible
+  //numSamplesE = 35;
   numSamplesE = nsamp;
   vector<int> sample_dofs_E(numSamplesE);
   vector<int> num_sample_dofs_per_procE(nprocs);
@@ -418,6 +549,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   if (rank == 0)
     {
       sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
+      //SetBdryAttrForVelocity(sample_pmesh);
+      SetBdryAttrForVelocity_UnitCube(sample_pmesh);
       sample_pmesh->EnsureNodes();
     }
   
@@ -530,6 +663,11 @@ int ROM_Basis::SolutionSize() const
 int ROM_Basis::SolutionSizeSP() const
 {
   return (2*size_H1_sp) + size_L2_sp;
+}
+
+int ROM_Basis::SolutionSizeFOM() const
+{
+  return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
 void ROM_Basis::ReadSolutionBases()
@@ -747,7 +885,8 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
       // boundary are enforced due to the fact that BVsp is defined as a submatrix of
       // basisV, which has boundary conditions applied in the full-order discretization. 
 
-      /*
+      //cout << "Sample mesh bdr att max " << spmesh->bdr_attributes.Max() << endl;
+
       // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
       // that the boundaries are straight.
       {
@@ -761,7 +900,6 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
 	    ess_tdofs.Append(tdofs1d);
 	  }
       }
-      */
       
       ParGridFunction rho(L2FESpaceSP);
       L2_FECollection l2_fec(order_e, spmesh->Dimension());
@@ -821,6 +959,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 	{
 	  basis->LiftToSampleMesh(x, fx);
 
+	  // TODO: is this necessary? Does the call to UpdateMesh in operSP->Mult accomplish this anyway?
 	  { // update mesh
 	    for (int i=0; i<Vsize_h1sp; ++i)
 	      (*xsp_gf)[i] = fx[i];
