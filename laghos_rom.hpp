@@ -275,6 +275,7 @@ public:
   virtual void Mult(const Vector &x, Vector &y) const;
 
   void UpdateSampleMeshNodes(Vector const& romSol);
+  double GetTimeStepEstimateSP() const { return dt_est_SP; }
   
   ~ROM_Operator()
   {
@@ -312,6 +313,8 @@ private:
   ParGridFunction *xsp_gf = 0;
   
   const int rank;
+
+  mutable double dt_est_SP = 0.0;
 };
 
 #endif // MFEM_LAGHOS_ROM

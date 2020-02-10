@@ -620,7 +620,8 @@ int main(int argc, char *argv[])
 	    cout << "ROM online at t " << t << ", dt " << dt << endl;
 	  
 	  ode_solver->Step(romS, t, dt);
-	  basis->LiftROMtoFOM(romS, S);
+	  if (!rom_hyperreduce)
+	    basis->LiftROMtoFOM(romS, S);
 
 	  romOper->UpdateSampleMeshNodes(romS);
 
@@ -639,7 +640,9 @@ int main(int argc, char *argv[])
       const double last_dt = dt;
       
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(S);
+      const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+      //const double dt_est = oper.GetTimeStepEstimate(S);
+      //cout << myid << ": dt_est " << dt_est << endl;
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -748,6 +751,9 @@ int main(int argc, char *argv[])
          }
       }
    }
+
+   if (rom_hyperreduce)
+     basis->LiftROMtoFOM(romS, S);
 
    if (rom_offline)
      {

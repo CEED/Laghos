@@ -969,9 +969,14 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 	  
 	  operSP->Mult(fx, fy);
 	  basis->RestrictFromSampleMesh(fy, y);
+
+	  operSP->ResetTimeStepEstimate();
+	  dt_est_SP = operSP->GetTimeStepEstimate(fx);
+	  operSP->ResetQuadratureData();
 	}
 
       MPI_Bcast(y.GetData(), y.Size(), MPI_DOUBLE, 0, basis->comm);
+      MPI_Bcast(&dt_est_SP, 1, MPI_DOUBLE, 0, basis->comm);
     }
   else
     {
