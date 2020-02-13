@@ -112,7 +112,7 @@ HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos
 
 MKLROOT = /usr/tce/packages/mkl/mkl-2019.0/mkl
 SCALAPACKLIB = -Wl,-rpath=${MKLROOT}/lib/intel64 -L/usr/tce/packages/mkl/mkl-2019.0/mkl/lib/intel64
-SCALAPACK_FLAGS = -Wl,-rpath=${MKLROOT}/lib/intel64 -L${MKLROOT}/lib/intel64 -lmkl_scalapack_ilp64 -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -lmkl_blacs_intelmpi_ilp64 -liomp5 -lpthread -lm -ldl -lmpifort -lifport -lifcoremt -lpthread
+SCALAPACK_FLAGS = -Wl,-rpath=${MKLROOT}/lib/intel64 -L${MKLROOT}/lib/intel64 -lmkl_scalapack_lp64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_blacs_intelmpi_lp64 -liomp5 -lpthread -lm -ldl -lmpifort -lifport -lifcoremt -lpthread
 
 #SCALAPACK_FLAGS= -lmkl_intel_thread /usr/tce/packages/intel/intel-19.0.4/lib/intel64/libiomp5.so -lpthread -lm -ldl -lmkl_scalapack_lp64 -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -ldl -lm -lmkl_intel_thread -liomp5 -lpthread
 
@@ -129,7 +129,7 @@ SCALAPACK_FLAGS = -Wl,-rpath=${MKLROOT}/lib/intel64 -L${MKLROOT}/lib/intel64 -lm
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE) # NOTE(oxberry1@llnl.gov): added -lmkl to link line
-	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -lhdf5 $(SCALAPACK_FLAGS)
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -L/usr/tce/packages/hdf5/hdf5-serial-1.8.18-intel-19.0.4 -Wl,-rpath,/usr/tce/packages/hdf5/hdf5-serial-1.8.18-intel-19.0.4 -lhdf5 $(SCALAPACK_FLAGS)
 #	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -L../libROM/build -lROM -lhdf5 $(SCALAPACKLIB) -l -lmkl_scalapack_lp64
 
 all: laghos
