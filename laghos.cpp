@@ -103,9 +103,7 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 0;
-   double blast_energy = 0.25;
-   double blast_position[] = {0.0, 0.0, 0.0};
+   int partition_type = 111;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -189,9 +187,6 @@ int main(int argc, char *argv[])
    int *nxyz = new int[dim];
    switch (partition_type)
    {
-      case 0:
-         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         break;
       case 11:
       case 111:
          unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
@@ -317,26 +312,6 @@ int main(int argc, char *argv[])
       }
    }
 
-   // Define the explicit ODE solver used for time integration.
-   ODESolver *ode_solver = NULL;
-   switch (ode_solver_type)
-   {
-      case 1: ode_solver = new ForwardEulerSolver; break;
-      case 2: ode_solver = new RK2Solver(0.5); break;
-      case 3: ode_solver = new RK3SSPSolver; break;
-      case 4: ode_solver = new RK4Solver; break;
-      case 6: ode_solver = new RK6Solver; break;
-      case 7: ode_solver = new RK2AvgSolver; break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
-   }
-
    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
 
@@ -395,8 +370,7 @@ int main(int argc, char *argv[])
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                               blast_position[2], blast_energy);
+      DeltaCoefficient e_coeff(0, 0, 0.25);
       l2_e.ProjectCoefficient(e_coeff);
    }
    else
@@ -434,6 +408,46 @@ int main(int argc, char *argv[])
                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                 H1FEC.GetBasisType());
+   oper.SetTime(0.0);
+
+   // Define the explicit ODE solver used for time integration.
+   ODESolver *ode_solver = NULL;
+   CVODESolver *cvode = NULL;
+   ARKStepSolver *arkode = NULL;
+   switch (ode_solver_type)
+   {
+      case 1: ode_solver = new ForwardEulerSolver; break;
+      case 2: ode_solver = new RK2Solver(0.5); break;
+      case 3: ode_solver = new RK3SSPSolver; break;
+      case 4: ode_solver = new RK4Solver; break;
+      case 6: ode_solver = new RK6Solver; break;
+      case 7: ode_solver = new RK2AvgSolver; break;
+      case 8:
+         cvode = new CVODESolver(MPI_COMM_WORLD, CV_ADAMS);
+         cvode->Init(oper);
+         cvode->SetSStolerances(1e-2, 1e-2);
+         cvode->UseSundialsLinearSolver();
+         //cvode->SetStepMode(CV_ONE_STEP);
+         ode_solver = cvode;
+         break;
+      case 9:
+         arkode = new ARKStepSolver(MPI_COMM_WORLD, ARKStepSolver::EXPLICIT);
+         arkode->Init(oper);
+         arkode->SetSStolerances(1e-4, 1e-4);
+         //arkode->SetERKTableNum(FEHLBERG_13_7_8);
+         arkode->SetERKTableNum(DEFAULT_ERK_4);
+         //arkode->SetStepMode(ARK_ONE_STEP);
+         ode_solver = arkode;
+         break;
+      default:
+         if (myid == 0)
+         {
+            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+         }
+         delete pmesh;
+         MPI_Finalize();
+         return 3;
+   }
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -494,6 +508,36 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+
+
+   ode_solver->Step(S, t, t_final);
+   if (cvode) { cvode->PrintInfo(); }
+   if (arkode) { arkode->PrintInfo(); }
+
+   if (visualization)
+   {
+      oper.ComputeDensity(rho_gf);
+      int Wx = 0, Wy = 0; // window position
+      int Ww = 350, Wh = 350; // window size
+      int offx = Ww+10; // window offsets
+
+      if (problem != 0 && problem != 4)
+      {
+         VisualizeField(vis_rho, vishost, visport, rho_gf,
+                        "Density", Wx, Wy, Ww, Wh);
+      }
+
+      Wx += offx;
+      VisualizeField(vis_v, vishost, visport,
+                     v_gf, "Velocity", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      VisualizeField(vis_e, vishost, visport, e_gf,
+                     "Specific Internal Energy", Wx, Wy, Ww,Wh);
+      Wx += offx;
+   }
+
+
+/*
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -503,13 +547,18 @@ int main(int argc, char *argv[])
       }
       if (steps == max_tsteps) { last_step = true; }
 
+      if (cvode) { cvode->SetMaxStep(dt); }
+      if (arkode) { arkode->SetMaxStep(dt); }
+
       S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
+      double dt_copy = dt;
       ode_solver->Step(S, t, dt);
+      dt = dt_copy;
       steps++;
 
       // Adaptive time step control.
@@ -524,7 +573,7 @@ int main(int argc, char *argv[])
          t = t_old;
          S = S_old;
          oper.ResetQuadratureData();
-         if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
+         if (mpi.Root()) { cout << "Repeating step " << ti << " " << dt << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
@@ -617,6 +666,8 @@ int main(int argc, char *argv[])
          }
       }
    }
+   */
+
 
    switch (ode_solver_type)
    {
@@ -627,6 +678,7 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
    oper.PrintTimingData(mpi.Root(), steps);
+   std::cout << steps << std::endl;
 
    const double energy_final = oper.InternalEnergy(e_gf) +
                                oper.KineticEnergy(v_gf);
