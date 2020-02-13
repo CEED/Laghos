@@ -231,7 +231,6 @@ int main(int argc, char *argv[])
                   "Enable or disable solution difference norm computation.");
    args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
                   "Enable or disable ROM hyperreduction.");   
-
    args.Parse();
    if (!args.Good())
    {
@@ -374,6 +373,7 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
+   cout << myid << ": pmesh->bdr_attributes.Max() " << pmesh->bdr_attributes.Max() << endl;
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs;
@@ -579,7 +579,7 @@ int main(int argc, char *argv[])
        if (dtc > 0.0) dt = dtc;
        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD);
      }
-   
+
    ROM_Basis *basis = NULL;
    Vector romS;
    ROM_Operator *romOper = NULL;
@@ -597,7 +597,7 @@ int main(int argc, char *argv[])
 
        ode_solver->Init(*romOper);
      }
-   
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -605,6 +605,7 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
+      
       if (steps == max_tsteps) { last_step = true; }
 
       S_old = S;
@@ -615,18 +616,33 @@ int main(int argc, char *argv[])
       // to advance.
       if (rom_online)
 	{
+	  if (myid == 0)
+	    cout << "ROM online at t " << t << ", dt " << dt << endl;
+	  
 	  ode_solver->Step(romS, t, dt);
-	  basis->LiftROMtoFOM(romS, S);
+	  if (!rom_hyperreduce)
+	    basis->LiftROMtoFOM(romS, S);
+
+	  romOper->UpdateSampleMeshNodes(romS);
+
+	  oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
 	}
       else
-	ode_solver->Step(S, t, dt);
+	{
+	  if (myid == 0)
+	    cout << "FOM simulation at t " << t << ", dt " << dt << endl;
+
+	  ode_solver->Step(S, t, dt);
+	}
       
       steps++;
 
       const double last_dt = dt;
       
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(S);
+      const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+      //const double dt_est = oper.GetTimeStepEstimate(S);
+      //cout << myid << ": dt_est " << dt_est << endl;
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -735,6 +751,9 @@ int main(int argc, char *argv[])
          }
       }
    }
+
+   if (rom_hyperreduce)
+     basis->LiftROMtoFOM(romS, S);
 
    if (rom_offline)
      {
