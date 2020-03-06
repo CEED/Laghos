@@ -15,7 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-#include "linalg/blas.hpp"
+#include "linalg/kernels.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
@@ -1052,9 +1052,9 @@ void QBody(const int nzones, const int z,
    const double weight =  d_weights[q];
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians + dim2*(nqp*z + q);
-   const double detJ = mfem::blas::Det<dim>(J);
+   const double detJ = kernels::Det<dim>(J);
    min_detJ = std::fmin(min_detJ,detJ);
-   blas::CalcInverse<dim>(J,Jinv);
+   kernels::CalcInverse<dim>(J,Jinv);
    // *****************************************************************
    const double rho = inv_weight * d_rho0DetJ0w[zq] / detJ;
    const double e   = std::fmax(0.0, d_e_quads[zq]);
@@ -1072,8 +1072,8 @@ void QBody(const int nzones, const int z,
       // direction of maximal compression. This is used to define the
       // relative change of the initial length scale.
       const double *dV = d_grad_v_ext + dim2*(nqp*z + q);
-      blas::Mult(dim, dim, dim, dV, Jinv, sgrad_v);
-      blas::Symmetrize(dim,sgrad_v);
+      kernels::Mult(dim, dim, dim, dV, Jinv, sgrad_v);
+      kernels::Symmetrize(dim,sgrad_v);
       if (dim==1)
       {
          eig_val_data[0] = sgrad_v[0];
@@ -1081,15 +1081,15 @@ void QBody(const int nzones, const int z,
       }
       else
       {
-         blas::CalcEigenvalues<dim>(sgrad_v, eig_val_data, eig_vec_data);
+         kernels::CalcEigenvalues<dim>(sgrad_v, eig_val_data, eig_vec_data);
       }
       for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
       // Computes the initial->physical transformation Jacobian.
-      blas::Mult(dim, dim, dim, J, d_Jac0inv+zq*dim*dim, Jpi);
-      blas::MultV(dim, dim, Jpi, compr_dir, ph_dir);
+      kernels::Mult(dim, dim, dim, J, d_Jac0inv+zq*dim*dim, Jpi);
+      kernels::MultV(dim, dim, Jpi, compr_dir, ph_dir);
       // Change of the initial mesh size in the compression direction.
-      const double ph_dir_nl2 = blas::Norml2(dim,ph_dir);
-      const double compr_dir_nl2 = blas::Norml2(dim, compr_dir);
+      const double ph_dir_nl2 = kernels::Norml2(dim,ph_dir);
+      const double compr_dir_nl2 = kernels::Norml2(dim, compr_dir);
       const double h = h0 * ph_dir_nl2 / compr_dir_nl2;
       // Measure of maximal compression.
       const double mu = eig_val_data[0];
@@ -1102,13 +1102,13 @@ void QBody(const int nzones, const int z,
       visc_coeff += 0.5 * rho * h * sound_speed *
                     (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
       //add(dim, dim, visc_coeff, sgrad_v, stress);
-      blas::Add(dim, dim, visc_coeff, stress, sgrad_v, stress);
+      kernels::Add(dim, dim, visc_coeff, stress, sgrad_v, stress);
    }
    // Time step estimate at the point. Here the more relevant length
    // scale is related to the actual mesh deformation; we use the min
    // singular value of the ref->physical Jacobian. In addition, the
    // time step estimate should be aware of the presence of shocks.
-   const double sv = blas::CalcSingularvalue<dim>(J);
+   const double sv = kernels::CalcSingularvalue<dim>(J);
    const double h_min = sv / h1order;
    const double inv_h_min = 1. / h_min;
    const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
@@ -1128,7 +1128,7 @@ void QBody(const int nzones, const int z,
       }
    }
    // Quadrature data for partial assembly of the force operator.
-   blas::MultABt(dim, dim, dim, stress, Jinv, stressJiT);
+   kernels::MultABt(dim, dim, dim, stress, Jinv, stressJiT);
    for (int k=0; k<dim2; k+=1) { stressJiT[k] *= weight * detJ; }
    for (int vd = 0 ; vd < dim; vd++)
    {
@@ -1188,12 +1188,12 @@ void QKernel(const int nzones,
             MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
                QBody<dim>(nzones, z, nqp, qx + qy * Q1D,
-                          gamma, use_viscosity, h0, h1order, cfl, infinity,
-                          Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
-                          compr_dir,Jpi,ph_dir,stressJiT,
-                          d_weights, d_Jacobians, d_rho0DetJ0w,
-                          d_e_quads, d_grad_v_ext, d_Jac0inv,
-                          d_dt_est, d_stressJinvT);
+               gamma, use_viscosity, h0, h1order, cfl, infinity,
+               Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+               compr_dir,Jpi,ph_dir,stressJiT,
+               d_weights, d_Jacobians, d_rho0DetJ0w,
+               d_e_quads, d_grad_v_ext, d_Jac0inv,
+               d_dt_est, d_stressJinvT);
             }
          }
          MFEM_SYNC_THREAD;
@@ -1219,12 +1219,12 @@ void QKernel(const int nzones,
                MFEM_FOREACH_THREAD(qz,z,Q1D)
                {
                   QBody<dim>(nzones, z, nqp, qx + Q1D * (qy + qz * Q1D),
-                             gamma, use_viscosity, h0, h1order, cfl, infinity,
-                             Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
-                             compr_dir,Jpi,ph_dir,stressJiT,
-                             d_weights, d_Jacobians, d_rho0DetJ0w,
-                             d_e_quads, d_grad_v_ext, d_Jac0inv,
-                             d_dt_est, d_stressJinvT);
+                  gamma, use_viscosity, h0, h1order, cfl, infinity,
+                  Jinv,stress,sgrad_v,eig_val_data,eig_vec_data,
+                  compr_dir,Jpi,ph_dir,stressJiT,
+                  d_weights, d_Jacobians, d_rho0DetJ0w,
+                  d_e_quads, d_grad_v_ext, d_Jac0inv,
+                  d_dt_est, d_stressJinvT);
                }
             }
          }
