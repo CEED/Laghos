@@ -19,9 +19,22 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 	{
 	  cout << "X taking sample at t " << t << endl;
 	}
-      
-      generator_X->takeSample(X.GetData(), t, dt);
-      generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
+
+      if (offsetXinit)
+	{
+	  for (int i=0; i<tH1size; ++i)
+	    {
+	      Xdiff[i] = X[i] - (*initX)(i);
+	    }
+	  
+	  generator_X->takeSample(Xdiff.GetData(), t, dt);
+	  generator_X->computeNextSampleTime(Xdiff.GetData(), dXdt.GetData(), t);
+	}
+      else
+	{
+	  generator_X->takeSample(X.GetData(), t, dt);
+	  generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
+	}
     }
 
   const bool sampleV = generator_V->isNextSample(t);
@@ -68,7 +81,18 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
 {
   SetStateVariables(S);
 
-  generator_X->takeSample(X.GetData(), t, dt);
+  if (offsetXinit)
+    {
+      for (int i=0; i<tH1size; ++i)
+	{
+	  Xdiff[i] = X[i] - (*initX)(i);
+	}
+	  
+      generator_X->takeSample(Xdiff.GetData(), t, dt);
+    }
+  else
+    generator_X->takeSample(X.GetData(), t, dt);
+  
   generator_X->endSamples();
 
   generator_V->takeSample(V.GetData(), t, dt);
@@ -129,11 +153,11 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
 		     int & dimX, int & dimV, int & dimE,
-		     const bool staticSVD_, const bool hyperreduce_)
+		     const bool staticSVD_, const bool hyperreduce_, const bool useXoffset)
   : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
     H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
     gfH1(H1FESpace), gfL2(L2FESpace), 
-    rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_), hyperreduce(hyperreduce_)
+    rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetXinit(useXoffset)
 {
   MPI_Comm_size(comm, &nprocs);
   MPI_Comm_rank(comm, &rank);
@@ -321,11 +345,13 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   const int fomL2size = L2FESpace->GlobalTrueVSize();
 
   const int nsamp = 35;
-  
+  const int overSample = 100;
+
   numSamplesX = rdimx;
   numSamplesX = fomH1size;  // maximum number of samples possible
   //numSamplesX = 35;
   numSamplesX = nsamp;
+  numSamplesX = rdimx + overSample;
   vector<int> sample_dofs_X(numSamplesX);
   vector<int> num_sample_dofs_per_procX(nprocs);
   BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
@@ -334,6 +360,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   numSamplesV = fomH1size;  // maximum number of samples possible
   //numSamplesV = 35;
   numSamplesV = nsamp;
+  numSamplesV = rdimv + overSample;
   vector<int> sample_dofs_V(numSamplesV);
   vector<int> num_sample_dofs_per_procV(nprocs);
   BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
@@ -342,6 +369,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   numSamplesE = fomL2size;  // maximum number of samples possible
   //numSamplesE = 35;
   numSamplesE = nsamp;
+  numSamplesE = rdime + overSample;
   vector<int> sample_dofs_E(numSamplesE);
   vector<int> num_sample_dofs_per_procE(nprocs);
   BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
@@ -650,9 +678,50 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
   // TODO: this redundantly gathers BEsp again, but only once per simulation.
   GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+
+  if (offsetXinit)
+    {
+      initX = new CAROM::Vector(tH1size, true);
+      initX->read("initX");
+
+      CAROM::Matrix FOMX0(tH1size, 1, true);
+
+      for (int i=0; i<tH1size; ++i)
+	{
+	  FOMX0(i,0) = (*initX)(i);
+	}
+      
+      CAROM::Matrix FOMzero(tH1size, 1, true);
+      FOMzero = 0.0;
+
+      CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 1, false);
+      CAROM::Matrix spzero(rank == 0 ? size_H1_sp : 1, 1, false);
+      
+      GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, st2sp, sprows, all_sprows, spX0mat, spzero);
+
+      if (rank == 0)
+	{
+	  initXsp = new CAROM::Vector(size_H1_sp, false);
+	  for (int i=0; i<size_H1_sp; ++i)
+	    {
+	      (*initXsp)(i) = spX0mat(i,0);
+	    }
+	}
+    }
   
   delete sp_H1_space;
   delete sp_L2_space;
+}
+
+void ROM_Basis::ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs)
+{
+  if (rank != 0 || !offsetXinit)
+    return;
+
+  for (int i=0; i<ess_tdofs.Size(); ++i)
+    {
+      (*initXsp)(ess_tdofs[i]) = 0.0;
+    }
 }
 
 int ROM_Basis::SolutionSize() const
@@ -747,7 +816,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
   basisX->mult(*rX, *fH1);
 
   for (int i=0; i<tH1size; ++i)
-    mfH1[i] = (*fH1)(i);
+    mfH1[i] = offsetXinit ? (*initX)(i) + (*fH1)(i) : (*fH1)(i);
 
   gfH1.SetFromTrueDofs(mfH1);
   
@@ -797,13 +866,13 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
 
       for (int i=0; i<size_H1_sp; ++i)
 	{
-	  usp[i] = (*spX)(i);
+	  usp[i] = offsetXinit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
 	  usp[size_H1_sp + i] = (*spV)(i);
 	}
 
       for (int i=0; i<size_L2_sp; ++i)
 	{
-	  usp[(2*size_H1_sp) + i] = (*spE)(i);
+	  usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
 	}
     }
 }
@@ -900,6 +969,8 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
 	    ess_tdofs.Append(tdofs1d);
 	  }
       }
+
+      basis->ApplyEssentialBCtoInitXsp(ess_tdofs);
       
       ParGridFunction rho(L2FESpaceSP);
       L2_FECollection l2_fec(order_e, spmesh->Dimension());
