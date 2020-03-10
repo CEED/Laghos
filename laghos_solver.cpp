@@ -14,6 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
+#include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
 #include <unordered_map>
@@ -1086,7 +1087,7 @@ void QBody(const int nzones, const int z,
       for (int k=0; k<dim; k+=1) { compr_dir[k]=eig_vec_data[k]; }
       // Computes the initial->physical transformation Jacobian.
       kernels::Mult(dim, dim, dim, J, d_Jac0inv+zq*dim*dim, Jpi);
-      kernels::MultV(dim, dim, Jpi, compr_dir, ph_dir);
+      kernels::Mult(dim, dim, Jpi, compr_dir, ph_dir);
       // Change of the initial mesh size in the compression direction.
       const double ph_dir_nl2 = kernels::Norml2(dim,ph_dir);
       const double compr_dir_nl2 = kernels::Norml2(dim, compr_dir);
@@ -1108,7 +1109,7 @@ void QBody(const int nzones, const int z,
    // scale is related to the actual mesh deformation; we use the min
    // singular value of the ref->physical Jacobian. In addition, the
    // time step estimate should be aware of the presence of shocks.
-   const double sv = kernels::CalcSingularvalue<dim>(J);
+   const double sv = kernels::CalcSingularvalue<dim>(J,dim-1);
    const double h_min = sv / h1order;
    const double inv_h_min = 1. / h_min;
    const double inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
@@ -1248,11 +1249,13 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    ParGridFunction d_x, d_v, d_e;
    d_x.MakeRef(&H1,*S_p, 0);
    H1ER->Mult(d_x, d_h1_v_local_in);
+   q1->SetOutputLayout(QVectorLayout::byVDIM);
    q1->Derivatives(d_h1_v_local_in, d_h1_grad_x_data);
    d_v.MakeRef(&H1,*S_p, H1_size);
    H1ER->Mult(d_v, d_h1_v_local_in);
    q1->Derivatives(d_h1_v_local_in, d_h1_grad_v_data);
    d_e.MakeRef(&L2, *S_p, 2*H1_size);
+   q2->SetOutputLayout(QVectorLayout::byVDIM);
    q2->Values(d_e, d_l2_e_quads_data);
    d_dt_est = quad_data.dt_est;
    const int id = (dim<<4) | nqp1D;
