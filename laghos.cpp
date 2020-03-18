@@ -76,8 +76,8 @@ double e0(const Vector &);
 double gamma(const Vector &);
 void display_banner(ostream & os);
 
-
 static long GetMaxRssMB();
+static bool rerr(const double, const double, const double);
 
 int main(int argc, char *argv[])
 {
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
    }
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
-   const int num_tasks = mpi.WorldSize(); int unit;
+   const int num_tasks = mpi.WorldSize(); int unit = 1;
    int *nxyz = new int[dim];
    switch (partition_type)
    {
@@ -322,10 +322,10 @@ int main(int argc, char *argv[])
          MPI_Finalize();
          return 3;
    }
-   int nproduct = 1;
-   for (int d = 0; d < dim; d++) { nproduct *= nxyz[d]; }
+   int product = 1;
+   for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
    const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
-   if (nproduct == num_tasks || cartesian_partitioning)
+   if (product == num_tasks || cartesian_partitioning)
    {
       if (cartesian_partitioning)
       {
@@ -413,18 +413,19 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   const HYPRE_Int H1GTVSize = H1FESpace.GlobalTrueVSize();
-   const HYPRE_Int L2GTVSize = L2FESpace.GlobalTrueVSize();
-   const int H1Vsize = H1FESpace.GetVSize();
-   const int L2Vsize = L2FESpace.GetVSize();
+   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
+   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+
    if (mpi.Root())
    {
-      cout << "Number of local/global kinematic (position, velocity) dofs: "
-           << H1Vsize << "/" << H1GTVSize << endl;
-      cout << "Number of local/global specific internal energy dofs: "
-           << L2Vsize << "/" << L2GTVSize << endl;
+      cout << "Number of kinematic (position, velocity) dofs: "
+           << glob_size_h1 << endl;
+      cout << "Number of specific internal energy dofs: "
+           << glob_size_l2 << endl;
    }
 
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
    // - 1 -> velocity
@@ -432,9 +433,9 @@ int main(int argc, char *argv[])
 
    Array<int> true_offset(4);
    true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + H1Vsize;
-   true_offset[2] = true_offset[1] + H1Vsize;
-   true_offset[3] = true_offset[2] + L2Vsize;
+   true_offset[1] = true_offset[0] + Vsize_h1;
+   true_offset[2] = true_offset[1] + Vsize_h1;
+   true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset, Device::GetMemoryType());
 
    // Define GridFunction objects for the position, velocity and specific
@@ -733,8 +734,8 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
-         const double stm = sqrt(tot_norm);
-         //printf("\n\033[33m%.15e\033[m", stm);
+         const double nrm = sqrt(tot_norm);
+         //printf("\n\033[1;32m%.15e\033[m", nrm);
          // Default options only checks
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
@@ -749,64 +750,63 @@ int main(int argc, char *argv[])
          {
             const double p0_05 = 6.54653862453438e+00;
             const double p0_27 = 7.58857635779292e+00;
-            if (problem==0 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
-            if (problem==0 and ti==27) {checks++; MFEM_VERIFY(fabs(stm-p0_27)<eps,"P0, #27");}
+            if (problem==0 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
+            if (problem==0 && ti==27) {checks++; MFEM_VERIFY(rerr(nrm,p0_27,eps),"P0, #27");}
             const double p1_05 = 3.50825494522579e+00;
             const double p1_15 = 2.75644459682321e+00;
-            if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
-            if (problem==1 and ti==15) {checks++; MFEM_VERIFY(fabs(stm-p1_15)<eps,"P1, #15");}
+            if (problem==1 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
+            if (problem==1 && ti==15) {checks++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
             const double p2_05 = 1.020745795651244e+01;
             const double p2_59 = 1.72159020590190e+01;
-            if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
-            if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+            if (problem==2 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
+            if (problem==2 && ti==59) {checks++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
             const double p3_05 = 8.0;
             const double p3_16 = 8.0;
-            if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
-            if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+            if (problem==3 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
+            if (problem==3 && ti==16) {checks++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
             const double p4_05 = 3.436923188323578e+01;
             const double p4_52 = 2.682244912720685e+01;
-            if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
-            if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+            if (problem==4 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
+            if (problem==4 && ti==52) {checks++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
             const double p5_05 = 1.030899557252528e+01;
             const double p5_36 = 1.057362418574309e+01;
-            if (problem==5 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p5_05)<eps,"P5, #05");}
-            if (problem==5 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p5_36)<eps,"P5, #36");}
+            if (problem==5 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
+            if (problem==5 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
             const double p6_05 = 8.039707010835693e+00;
             const double p6_36 = 8.316970976817373e+00;
-            if (problem==6 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p6_05)<eps,"P6, #05");}
-            if (problem==6 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p6_36)<eps,"P6, #36");}
+            if (problem==6 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
+            if (problem==6 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
          }
          if (dim==3)
          {
-            const double eps = 1.e-12;
-            const double p0_05 = 1.198510951452527e+03;
+            const double  p0_05 = 1.198510951452527e+03;
             const double p0_188 = 1.199384410059154e+03;
-            if (problem==0 and ti==005) {checks++; MFEM_VERIFY(fabs(stm-p0_05)<eps,"P0, #05");}
-            if (problem==0 and ti==188) {checks++; MFEM_VERIFY(fabs(stm-p0_188)<eps,"P0, #188");}
+            if (problem==0 && ti==005) {checks++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
+            if (problem==0 && ti==188) {checks++; MFEM_VERIFY(rerr(nrm,p0_188,eps),"P0, #188");}
             const double p1_05 = 1.33916371859257e+01;
             const double p1_28 = 7.52107367739800e+00;
-            if (problem==1 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p1_05)<eps,"P1, #05");}
-            if (problem==1 and ti==28) {checks++; MFEM_VERIFY(fabs(stm-p1_28)<eps,"P1, #28");}
+            if (problem==1 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
+            if (problem==1 && ti==28) {checks++; MFEM_VERIFY(rerr(nrm,p1_28,eps),"P1, #28");}
             const double p2_05 = 2.041491591302486e+01;
             const double p2_59 = 3.443180411803796e+01;
-            if (problem==2 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p2_05)<eps,"P2, #05");}
-            if (problem==2 and ti==59) {checks++; MFEM_VERIFY(fabs(stm-p2_59)<eps,"P2, #59");}
+            if (problem==2 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
+            if (problem==2 && ti==59) {checks++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
             const double p3_05 = 1.600000000000000e+01;
             const double p3_16 = 1.600000000000000e+01;
-            if (problem==3 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p3_05)<eps,"P3, #05");}
-            if (problem==3 and ti==16) {checks++; MFEM_VERIFY(fabs(stm-p3_16)<eps,"P3, #16");}
+            if (problem==3 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
+            if (problem==3 && ti==16) {checks++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
             const double p4_05 = 6.873846376647157e+01;
             const double p4_52 = 5.364489825441373e+01;
-            if (problem==4 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p4_05)<eps,"P4, #05");}
-            if (problem==4 and ti==52) {checks++; MFEM_VERIFY(fabs(stm-p4_52)<eps,"P4, #52");}
+            if (problem==4 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
+            if (problem==4 && ti==52) {checks++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
             const double p5_05 = 2.061984481890964e+01;
             const double p5_36 = 2.114519664792607e+01;
-            if (problem==5 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p5_05)<eps,"P5, #05");}
-            if (problem==5 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p5_36)<eps,"P5, #36");}
+            if (problem==5 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
+            if (problem==5 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
             const double p6_05 = 1.607988713996459e+01;
             const double p6_36 = 1.662736010353023e+01;
-            if (problem==6 and ti==05) {checks++; MFEM_VERIFY(fabs(stm-p6_05)<eps,"P6, #05");}
-            if (problem==6 and ti==36) {checks++; MFEM_VERIFY(fabs(stm-p6_36)<eps,"P6, #36");}
+            if (problem==6 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
+            if (problem==6 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
          }
       }
    }
@@ -825,6 +825,7 @@ int main(int argc, char *argv[])
 
    const double energy_final = oper.InternalEnergy(e_gf) +
                                oper.KineticEnergy(v_gf);
+
    if (mem_usage)
    {
       mem = GetMaxRssMB();
@@ -890,16 +891,12 @@ double rho0(const Vector &x)
       case 5:
       {
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; } // 1
-         //if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0; } // 2
          if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; } // 3
-         //if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0; } // 4
          return 1.0;
       }
       case 6:
       {
-         //if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0; } // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; } // 2
-         //if (x(0) <  0.5 && x(1) <  0.5) { return 1.0; } // 3
          if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; } // 4
          return 1.0;
       }
@@ -929,11 +926,7 @@ double rad(double x, double y)
 
 void v0(const Vector &x, Vector &v)
 {
-   //const double atn = cos(M_PI*(x(0)-0.5))*cos(M_PI*(x(1)-0.5));
    const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
-   /*const double sc = 10.0;
-   const double atn = tanh(sc*x(0)*(1.0-x(0)))*
-                      tanh(sc*x(1)*(1.0-x(1)));*/
    switch (problem)
    {
       case 0:
@@ -951,6 +944,7 @@ void v0(const Vector &x, Vector &v)
       case 3: v = 0.0; break;
       case 4:
       {
+         v = 0.0;
          const double r = rad(x(0), x(1));
          if (r < 0.2)
          {
@@ -962,11 +956,12 @@ void v0(const Vector &x, Vector &v)
             v(0) =  2.0 * x(1) / r - 5.0 * x(1);
             v(1) = -2.0 * x(0) / r + 5.0 * x(0);
          }
-         else { v = 0.0; }
+         else { }
          break;
       }
       case 5:
       {
+         v = 0.0;
          if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;} // 2
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 3
@@ -976,6 +971,7 @@ void v0(const Vector &x, Vector &v)
       }
       case 6:
       {
+         v = 0.0;
          if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;} // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;} // 2
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;} // 3
@@ -989,7 +985,6 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
-   const double rho0x = rho0(x);
    switch (problem)
    {
       case 0:
@@ -1008,10 +1003,10 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0x / (gamma(x) - 1.0)
-                        : 0.1 / rho0x / (gamma(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0x / (gamma(x) - 1.0)
-                        : 1.0 / rho0x / (gamma(x) - 1.0);
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
+                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
+                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
@@ -1030,7 +1025,7 @@ double e0(const Vector &x)
       }
       case 5:
       {
-         const double irg = 1.0 / rho0x / (gamma(x) - 1.0);
+         const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; } // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 2
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
@@ -1040,7 +1035,7 @@ double e0(const Vector &x)
       }
       case 6:
       {
-         const double irg = 1.0 / rho0x / (gamma(x) - 1.0);
+         const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 1
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 2
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
@@ -1073,4 +1068,12 @@ static long GetMaxRssMB()
    const long unit = 1024*1024; // mega
 #endif
    return usage.ru_maxrss/unit; // mega bytes
+}
+
+static bool rerr(const double a, const double v, const double eps)
+{
+   MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
+   const double err_a = fabs((a-v)/a);
+   const double err_v = fabs((a-v)/v);
+   return fmax(err_a, err_v) < eps;
 }

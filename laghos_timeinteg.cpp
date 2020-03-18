@@ -47,9 +47,10 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   Vector &dv_dt = dS_dt.GetBlock(1);
+   S0.Vector::operator=(S);
    Vector &v0 = S0.GetBlock(1);
    Vector &dx_dt = dS_dt.GetBlock(0);
+   Vector &dv_dt = dS_dt.GetBlock(1);
 
    // In each sub-step:
    // - Update the global state Vector S.
