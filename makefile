@@ -14,15 +14,17 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-# number of proc to use for compilation stage **********************************
-NPROC = $(shell getconf _NPROCESSORS_ONLN)
-
 define LAGHOS_HELP_MSG
 
 Laghos makefile targets:
 
-   make
+	make
+   make setup
+	make setup MFEM_BUILD=pcuda
    make status/info
+	make test
+	make tests
+	make checks
    make install
    make clean
    make distclean
@@ -30,6 +32,10 @@ Laghos makefile targets:
 
 Examples:
 
+make setup
+	Build Laghos third party libraries: HYPRE, METIS and MFEM
+	(By default MFEM will be compiled in parallel mode, but MFEM_BUILD=pcuda
+	 will allow a parallel CUDA build.)
 make -j 4
    Build Laghos using the current configuration options from MFEM.
    (Laghos requires the MFEM finite element library, and uses its compiler and
@@ -49,6 +55,9 @@ make style
 
 endef
 
+NPROC = $(shell getconf _NPROCESSORS_ONLN)
+GOALS = help clean distclean style setup mfem metis hypre
+
 # Default installation location
 PREFIX ?= ./bin
 INSTALL = /usr/bin/install
@@ -67,7 +76,7 @@ MFEM_DIR2 := $(realpath $(MFEM_DIR))
 # and linking from MFEM's config.mk. (Skip this if the target does not require
 # building.)
 MFEM_LIB_FILE = mfem_is_not_built
-ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
+ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
 endif
 
@@ -75,7 +84,7 @@ CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
+CCC = $(strip $(CXX) $(LAGHOS_FLAGS))
 
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
@@ -86,15 +95,17 @@ OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test tests style\
-	clean-build clean-exec
+.PHONY: 	all clean distclean install \
+			status info opt debug test tests style \
+			clean-build clean-exec clean-tests \
+			mfem hypre metis
 
 .SUFFIXES: .cpp .o
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
+laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
@@ -102,15 +113,17 @@ all:;@$(MAKE) -j $(NPROC) laghos
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 
+# Quick test with specific execution options
 MFEM_TESTS = laghos
-include $(TEST_MK)
-# Testing: Specific execution options
 RUN_MPI_4 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
 test: laghos
 	@$(call mfem-test,$<, $(RUN_MPI_4), Laghos miniapp,\
 	-p 0 -m data/square01_quad.mesh -rs 3 -tf 0.1)
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
+ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
+include $(TEST_MK)
+endif
 
 # Generate an error message if the MFEM library is not built and exit
 $(CONFIG_MK) $(MFEM_LIB_FILE):
@@ -176,14 +189,13 @@ $(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(fore
 #$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
 #   $(info $(call laghos_checks_template,$(p),$(m),$(o),$(r)))))))
 checks: laghos
-checks: |$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), \
-			laghos_$(p)_$(m)_$(o)_$(r)))))
+checks: |$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
 
 1:;@$(MAKE) -j $(NPROC) checks ranks=1
 2:;@$(MAKE) -j 8 checks ranks=2
 3:;@$(MAKE) -j 4 checks ranks=3
-123:1 2 3
 
+# Laghos run tests
 tests:
 	cat << EOF > RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
@@ -229,3 +241,40 @@ tests:
 	$(shell echo 'step = 0528, dt = 0.000180, |e| = 5.6505348812e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
 	diff --report-identical-files RESULTS.dat BASELINE.dat
+
+# Setup: HYPRE, METIS & MFEM
+
+HYPRE_URL = https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods
+HYPRE_VER = 2.10.0b
+HYPRE_DIR = hypre
+hypre:
+	@(if [[ ! -e ../$(HYPRE_DIR) ]]; then cd ..; \
+		wget -nc $(HYPRE_URL)/download/hypre-$(HYPRE_VER).tar.gz &&\
+		tar xzvf hypre-$(HYPRE_VER).tar.gz &&\
+		ln -s hypre-$(HYPRE_VER) $(HYPRE_DIR) &&\
+		cd $(HYPRE_DIR)/src &&\
+		./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++ &&\
+		make -j $(NPROC);	else echo "Using existing ../$(HYPRE_DIR)"; fi)
+
+METIS_URL = http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis
+METIS_VER = 4.0.3
+METIS_DIR = metis-4.0
+metis:
+	@(if [[ ! -e ../$(METIS_DIR) ]]; then cd ..; \
+		wget -nc $(METIS_URL)/OLD/metis-$(METIS_VER).tar.gz &&\
+		tar zxvf metis-$(METIS_VER).tar.gz &&\
+		ln -s metis-$(METIS_VER) $(METIS_DIR) &&\
+		cd $(METIS_DIR) &&\
+		make -j $(NPROC) OPTFLAGS="-O2";\
+		else echo "Using existing ../$(METIS_DIR)"; fi)
+
+MFEM_GIT = https://github.com/mfem/mfem.git
+MFEM_BUILD ?= parallel
+#MFEM_BUILD ?= pcuda -j CUDA_ARCH=sm_70
+mfem: hypre metis
+	@(if [[ ! -e ../mfem ]]; then cd ..; \
+		git clone --single-branch --branch master --depth 1 $(MFEM_GIT) &&\
+		cd mfem &&\
+		make $(MFEM_BUILD) -j $(NPROC); else echo "Using existing ../mfem"; fi)
+
+setup: mfem
