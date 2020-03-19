@@ -54,7 +54,7 @@ install:
   # MFEM (master branch)
   - if [ ! -e mfem/libmfem.a ]; then
       rm -rf mfem;
-      git clone --single-branch --branch laghos --depth 1 https://github.com/mfem/mfem.git;
+      git clone --single-branch --branch master --depth 1 https://github.com/mfem/mfem.git;
       cd mfem;
       make -j3 parallel;
       make info;
