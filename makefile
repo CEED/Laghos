@@ -57,10 +57,6 @@ INSTALL = /usr/bin/install
 MFEM_DIR ?= ../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
-# Use the MFEM install directory
-# MFEM_DIR = ../mfem/mfem
-# CONFIG_MK = $(MFEM_DIR)/config.mk
-# TEST_MK = $(MFEM_DIR)/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
@@ -78,64 +74,30 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
-
-# MFEM config does not define C compiler
-CC     = gcc
-CFLAGS = -O3
-
-# Optional link flags
-LDFLAGS =
-
-OPTIM_OPTS = -O3
-DEBUG_OPTS = -g -Wall
-LAGHOS_DEBUG = $(MFEM_DEBUG)
-ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
-   ifeq ($(LAGHOS_DEBUG),YES)
-      CXXFLAGS = $(DEBUG_OPTS)
-   else
-      CXXFLAGS = $(OPTIM_OPTS)
-   endif
-endif
-
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
-
-ifeq ($(LAGHOS_DEBUG),YES)
-   LAGHOS_FLAGS += -DLAGHOS_DEBUG
-endif
-
-LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
-Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp\
- laghos_timeinteg.cpp
-OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
-OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp
+LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
+LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
+
+SOURCE_FILES = $(sort $(wildcard *.cpp))
+HEADER_FILES = $(sort $(wildcard *.hpp))
+OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
 # Targets
 
 .PHONY: all clean distclean install status info opt debug test tests style\
 	clean-build clean-exec
 
-.SUFFIXES: .c .cpp .o
+.SUFFIXES: .cpp .o
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
-.c.o:
-	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos:	$(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
-
-opt:
-	$(MAKE) "LAGHOS_DEBUG=NO"
-
-debug:
-	$(MAKE) "LAGHOS_DEBUG=YES"
 
 $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
@@ -162,7 +124,6 @@ clean-exec:
 	rm -rf ./results
 clean-tests:
 	rm -rf BASELINE.dat RUN.dat RESULTS.dat
-
 distclean: clean
 	rm -rf bin/
 
@@ -183,7 +144,6 @@ status info:
 
 ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)
-
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
