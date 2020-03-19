@@ -756,7 +756,7 @@ int main(int argc, char *argv[])
             const double p1_15 = 2.75644459682321e+00;
             if (problem==1 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
             if (problem==1 && ti==15) {checks++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
-            const double p2_05 = 1.020745795651244e+01;
+            const double p2_05 = 1.02074579565124e+01;
             const double p2_59 = 1.72159020590190e+01;
             if (problem==2 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
             if (problem==2 && ti==59) {checks++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
