@@ -749,6 +749,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       const double FOM3 = 1e-6 * alldata[1] * integ_rule.GetNPoints() / rt_max[3];
       const double FOM = (FOM1 * rt_max[0] + FOM2 * rt_max[2] + FOM3 *rt_max[3]) /
                          rt_max[4];
+      const double FOM0 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / rt_max[4];
       cout << endl;
       cout << "CG (H1) total time: " << rt_max[0] << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
@@ -780,7 +781,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << "| FOM1    " << "| T1    "
            << "| FOM2   " << "| T2   "
            << "| FOM3   " << "| T3   "
-           << "| FOM    " << "| TT   |"<< endl;
+           << "| FOM    " << "| TT   "
+           << "| FOM0   " << "|" << endl;
       cout << setprecision(3);
       cout << "| " << setw(6) << H1FESpace.GetNRanks()
            << "| " << setw(8) << GNZones
@@ -796,6 +798,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << "| " << setw(5) << rt_max[3]
            << "| " << setw(7) << FOM
            << "| " << setw(5) << rt_max[4]
+           << "| " << setw(7) << FOM0
            << "| " << endl;
    }
 }
