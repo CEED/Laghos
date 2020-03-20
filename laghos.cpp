@@ -90,7 +90,8 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    problem = 1;
-   const char *mesh_file = "data/cube01_hex.mesh";
+   int dim = 3;
+   const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
    Array<int> cxyz;
@@ -114,7 +115,7 @@ int main(int argc, char *argv[])
    int partition_type = 0;
    bool okina = false;
    bool qupdate = false;
-   const char *dev_opt = "cpu";
+   const char *device = "cpu";
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
@@ -124,8 +125,8 @@ int main(int argc, char *argv[])
    double blast_position[] = {0.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
-   args.AddOption(&mesh_file, "-m", "--mesh",
-                  "Mesh file to use.");
+   args.AddOption(&dim, "-d", "--dim", "Dimension of the problem.");
+   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -184,7 +185,7 @@ int main(int argc, char *argv[])
                   "Activate OKINA kernels.");
    args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
                   "Enable or disable QUpdate function.");
-   args.AddOption(&dev_opt, "-d", "--device",
+   args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
@@ -204,18 +205,54 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // Configure the device from the command line options
-   Device device;
+   Device backend;
    if (okina)
    {
-      device.Configure(dev_opt, dev);
-      if (mpi.Root()) { device.Print(); }
-      device.SetGPUAwareMPI(gpu_aware_mpi);
+      backend.Configure(device, dev);
+      if (mpi.Root()) { backend.Print(); }
+      backend.SetGPUAwareMPI(gpu_aware_mpi);
    }
 
    // Read the serial mesh from the given mesh file on all processors.
+   Mesh *mesh;
+   if (strncmp(mesh_file, "default", 7) != 0)
+   {
+      mesh = new Mesh(mesh_file, true, true);
+   }
+   else
+   {
+      if (dim == 1)
+      {
+         mesh = new Mesh(2);
+         mesh->GetBdrElement(0)->SetAttribute(1);
+         mesh->GetBdrElement(1)->SetAttribute(1);
+      }
+      if (dim == 2)
+      {
+         mesh = new Mesh(2, 2, Element::QUADRILATERAL, true);
+         const int NBE = mesh->GetNBE();
+         for (int b = 0; b < NBE; b++)
+         {
+            Element *bel = mesh->GetBdrElement(b);
+            const int attr = (b < NBE/2) ? 2 : 1;
+            bel->SetAttribute(attr);
+         }
+      }
+      if (dim == 3)
+      {
+         mesh = new Mesh(2, 2, 2, Element::HEXAHEDRON, true);
+         const int NBE = mesh->GetNBE();
+         for (int b = 0; b < NBE; b++)
+         {
+            Element *bel = mesh->GetBdrElement(b);
+            const int attr = (b < NBE/3) ? 3 : (b < 2*NBE/3) ? 1 : 2;
+            bel->SetAttribute(attr);
+         }
+      }
+   }
+   dim = mesh->Dimension();
+
    // Refine the mesh in serial to increase the resolution.
-   Mesh *mesh = new Mesh(mesh_file, 1, 1);
-   const int dim = mesh->Dimension();
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
 
    if (p_assembly && dim == 1)
@@ -743,9 +780,8 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
          MFEM_VERIFY(fabs(t_final-0.6)<eps, "check: t_final");
          MFEM_VERIFY(cfl==0.5, "check: cfl");
-         const int dim = strcmp(mesh_file,"data/square01_quad.mesh")==0?2:
-                         strcmp(mesh_file,"data/cube01_hex.mesh")==0?3:1;
-         MFEM_VERIFY(dim==2 || dim==3, "check: mesh_file");
+         MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
+         MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
          if (dim==2)
          {
             const double p0_05 = 6.54653862453438e+00;

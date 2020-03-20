@@ -149,10 +149,10 @@ help:
 	@true
 
 status info:
-	$(info MFEM_DIR    = $(MFEM_DIR))
+	$(info MFEM_DIR     = $(MFEM_DIR))
 	$(info LAGHOS_FLAGS = $(LAGHOS_FLAGS))
 	$(info LAGHOS_LIBS  = $(value LAGHOS_LIBS))
-	$(info PREFIX      = $(PREFIX))
+	$(info PREFIX       = $(PREFIX))
 	@true
 
 ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
@@ -165,9 +165,9 @@ style:
 # Laghos checks template - Default arguments
 ECHO=echo
 SED=sed -e
-ranks=1 #2 3
+ranks=1
+dims=2 3
 problems=0 1 2 3 4 5 6
-meshs=square01_quad cube01_hex
 OPTS=-cgt 1.e-14 -rs 0 --checks
 optioni=1 2 3 $(if $(MFEM_CXX:nvcc=),,4)
 options=-fa -pa -o-q $(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda) #-o-q-d_debug
@@ -177,19 +177,19 @@ options=-fa -pa -o-q $(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda) #-o-q-d_debug
 define laghos_checks_template
 .PHONY: laghos_$(1)_$(2)_$(3)_$(4)
 laghos_$(1)_$(2)_$(3)_$(4): laghos
-	$(eval name=laghos$(4)-p$(1)-$(2)$(word $(3),$(options)))
-	$(eval command=$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./laghos $(OPTS) -p $(1) -m data/$(2).mesh $ $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g"))
-	@$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./$$< $(OPTS) -p $(1) -m data/$(2).mesh $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g") > /dev/null 2>&1 && \
+	$(eval name=laghos-x$(4)-p$(1)-$(2)D$(word $(3),$(options)))
+	$(eval command=$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./laghos $(OPTS) -p $(1) -d $(2) $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g"))
+	@$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./$$< $(OPTS) -p $(1) -d $(2) $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g") > /dev/null 2>&1 && \
 		$(call COLOR_PRINT,'\033[0;32m',OK,': $(name)\n') || $(call COLOR_PRINT,'\033[1;31m',KO,': $(command)\n');
 endef
 # Generate all Laghos checks template targets
-$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
-	$(eval $(call laghos_checks_template,$(p),$(m),$(o),$(r)))))))
+$(foreach p, $(problems), $(foreach d, $(dims), $(foreach o, $(optioni), $(foreach r, $(ranks),\
+	$(eval $(call laghos_checks_template,$(p),$(d),$(o),$(r)))))))
 # Output info on all Laghos checks template targets
-#$(foreach p, $(problems), $(foreach m, $(meshs), $(foreach o, $(optioni), $(foreach r, $(ranks),\
-#   $(info $(call laghos_checks_template,$(p),$(m),$(o),$(r)))))))
+#$(foreach p, $(problems), $(foreach d, $(dims), $(foreach o, $(optioni), $(foreach r, $(ranks),\
+#   $(info $(call laghos_checks_template,$(p),$(d),$(o),$(r)))))))
 checks: laghos
-checks: |$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(m)_$(o)_$(r)))))
+checks: |$(foreach p,$(problems), $(foreach d,$(dims), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(d)_$(o)_$(r)))))
 
 1:;@$(MAKE) -j $(NPROC) checks ranks=1
 2:;@$(MAKE) -j 8 checks ranks=2
@@ -199,23 +199,23 @@ checks: |$(foreach p,$(problems), $(foreach m,$(meshs), $(foreach o,$(optioni), 
 tests:
 	cat << EOF > RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
+	./laghos -p 0 -d 2 -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 20 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
+	./laghos -p 0 -d 3 -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 20 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
+	./laghos -p 1 -d 2 -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 17 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
+	./laghos -p 1 -d 3 -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 17 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
+	./laghos -p 2 -d 1 -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
