@@ -245,7 +245,7 @@ tests:
 # Setup: HYPRE, METIS & MFEM
 
 HYPRE_URL = https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods
-HYPRE_VER = 2.10.0b
+HYPRE_VER = 2.11.2
 HYPRE_DIR = hypre
 hypre:
 	@(if [[ ! -e ../$(HYPRE_DIR) ]]; then cd ..; \
