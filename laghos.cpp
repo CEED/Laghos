@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
    double blast_position[] = {0.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
-   args.AddOption(&dim, "-d", "--dim", "Dimension of the problem.");
+   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
