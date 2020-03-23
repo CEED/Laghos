@@ -60,7 +60,7 @@ class QUpdate
 private:
    const int dim, NQ, NE;
    const bool use_viscosity;
-   const double cfl, gamma;
+   const double cfl;
    TimingData *timer;
    const IntegrationRule &ir;
    ParFiniteElementSpace &H1, &L2;
@@ -70,13 +70,15 @@ private:
    Vector d_l2_e_quads_data;
    Vector d_h1_v_local_in, d_h1_grad_x_data, d_h1_grad_v_data;
    const QuadratureInterpolator *q1,*q2;
+   const ParGridFunction &gamma_gf;
 public:
-   QUpdate(const int d, const int ne, const bool uv,
-           const double c, const double g, TimingData *t,
-           const IntegrationRule &i,
+   QUpdate(const int d, const int ne, const bool visc,
+           const double cfl, TimingData *t,
+           const ParGridFunction &gamma_gf,
+           const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d), NQ(i.GetNPoints()), NE(ne), use_viscosity(uv), cfl(c), gamma(g),
-      timer(t), ir(i), H1(h1), L2(l2),
+      dim(d), NQ(ir.GetNPoints()), NE(ne), use_viscosity(visc), cfl(cfl),
+      timer(t), ir(ir), H1(h1), L2(l2),
       H1ER(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
       vdim(H1.GetVDim()),
       d_dt_est(NE*NQ),
@@ -85,7 +87,8 @@ public:
       d_h1_grad_x_data(NQ*NE*vdim*vdim),
       d_h1_grad_v_data(NQ*NE*vdim*vdim),
       q1(H1.GetQuadratureInterpolator(ir)),
-      q2(L2.GetQuadratureInterpolator(ir)) { }
+      q2(L2.GetQuadratureInterpolator(ir)),
+      gamma_gf(gamma_gf) { }
 
    void UpdateQuadratureData(const Vector &S,
                              bool &quad_data_is_current,
@@ -118,11 +121,12 @@ protected:
 
    const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
-   const bool use_viscosity, p_assembly, okina;
+   const bool use_viscosity, p_assembly;
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
    Coefficient *material_pcf;
+   const ParGridFunction &gamma_gf;
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -131,7 +135,7 @@ protected:
    DenseTensor Me, Me_inv;
 
    // Integration rule for all assemblies.
-   const IntegrationRule &integ_rule;
+   const IntegrationRule &ir;
 
    // Data associated with each quadrature point in the mesh. These values are
    // recomputed at each time step.
@@ -161,8 +165,6 @@ protected:
 
    mutable TimingData timer;
 
-   const bool qupdate;
-   const double gamma;
    mutable QUpdate Q;
 
    mutable Vector X, B, one, rhs, e_rhs;
@@ -184,17 +186,18 @@ protected:
    void AssembleForceMatrix() const;
 
 public:
-   LagrangianHydroOperator(Coefficient &q,
+   LagrangianHydroOperator(Coefficient &rho0_coeff,
                            const int size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
-                           const Array<int> &essential_tdofs, ParGridFunction &rho0,
-                           const int source_type_, const double cfl_,
-                           Coefficient *material_, const bool visc, const bool pa,
+                           const Array<int> &ess_tdofs,
+                           ParGridFunction &rho0_gf,
+                           const int source, const double cfl,
+                           Coefficient *mat_gf_coeff,
+                           ParGridFunction &gamma_gf,
+                           const bool visc, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, const bool qupdate,
-                           const double gamma, const bool okina,
-                           int h1_basis_type);
+                           const int order_q, const int h1_basis_type);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.

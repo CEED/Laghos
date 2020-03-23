@@ -70,20 +70,20 @@ using namespace mfem::hydrodynamics;
 // Choice for the problem setup.
 static int problem;
 
-double rho0(const Vector &);
-void v0(const Vector &, Vector &);
 double e0(const Vector &);
+double rho0(const Vector &);
 double gamma(const Vector &);
-void display_banner(ostream & os);
+void v0(const Vector &, Vector &);
 
+static void display_banner(ostream & os);
 static long GetMaxRssMB();
-static bool rerr(const double, const double, const double);
+static void Checks(const int dim, const int ti, const double norm, int &checks);
 
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
-   int myid = mpi.WorldRank();
+   const int myid = mpi.WorldRank();
 
    // Print the banner.
    if (mpi.Root()) { display_banner(cout); }
@@ -113,8 +113,6 @@ int main(int argc, char *argv[])
    bool gfprint = false;
    const char *basename = "results/Laghos";
    int partition_type = 0;
-   bool okina = false;
-   bool qupdate = false;
    const char *device = "cpu";
    bool check = false;
    bool mem_usage = false;
@@ -181,10 +179,6 @@ int main(int argc, char *argv[])
                   "of zones in each direction, e.g., the number of zones in direction x\n\t"
                   "must be divisible by the number of MPI tasks in direction x.\n\t"
                   "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
-   args.AddOption(&okina, "-o", "--okina", "-no-o", "--no-okina",
-                  "Activate OKINA kernels.");
-   args.AddOption(&qupdate, "-q", "--qupdate", "-no-q", "--no-qupdate",
-                  "Enable or disable QUpdate function.");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
@@ -206,14 +200,12 @@ int main(int argc, char *argv[])
 
    // Configure the device from the command line options
    Device backend;
-   if (okina)
-   {
-      backend.Configure(device, dev);
-      if (mpi.Root()) { backend.Print(); }
-      backend.SetGPUAwareMPI(gpu_aware_mpi);
-   }
+   backend.Configure(device, dev);
+   if (mpi.Root()) { backend.Print(); }
+   backend.SetGPUAwareMPI(gpu_aware_mpi);
 
-   // Read the serial mesh from the given mesh file on all processors.
+   // On all processors, use the default builtin 1D/2D/3D mesh or
+   // read the serial one given in the command line.
    Mesh *mesh;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
@@ -252,9 +244,7 @@ int main(int argc, char *argv[])
    }
    dim = mesh->Dimension();
 
-   // Refine the mesh in serial to increase the resolution.
-   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
-
+   // 1D vs partial assembly sanity check.
    if (p_assembly && dim == 1)
    {
       p_assembly = false;
@@ -263,11 +253,15 @@ int main(int argc, char *argv[])
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
+
+   // Refine the mesh in serial to increase the resolution.
+   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
    const int mesh_NE = mesh->GetNE();
    if (mpi.Root())
    {
       cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
    }
+
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = NULL;
    const int num_tasks = mpi.WorldSize(); int unit = 1;
@@ -374,7 +368,8 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(!cartesian_partitioning || num_tasks == cproduct,
                      "Expected cartesian partitioning product to match number of ranks.");
       }
-      int *partitioning = cartesian_partitioning ? mesh->CartesianPartitioning(cxyz):
+      int *partitioning = cartesian_partitioning ?
+                          mesh->CartesianPartitioning(cxyz):
                           mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
       delete [] partitioning;
@@ -400,12 +395,11 @@ int main(int argc, char *argv[])
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
-   int nzones = pmesh->GetNE(), nzones_min, nzones_max;
-   MPI_Reduce(&nzones, &nzones_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
-   MPI_Reduce(&nzones, &nzones_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
+   int NE = pmesh->GetNE(), ne_min, ne_max;
+   MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
+   MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
    if (myid == 0)
-   { cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl; }
-
+   { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -501,13 +495,13 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
-   ParGridFunction rho(&L2FESpace);
-   FunctionCoefficient rho_coeff(rho0);
+   ParGridFunction rho0_gf(&L2FESpace);
+   FunctionCoefficient rho0_coeff(rho0);
    L2_FECollection l2_fec(order_e, pmesh->Dimension());
    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-   ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
-   l2_rho.ProjectCoefficient(rho_coeff);
-   rho.ProjectGridFunction(l2_rho);
+   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
+   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
+   rho0_gf.ProjectGridFunction(l2_rho0_gf);
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -552,11 +546,12 @@ int main(int argc, char *argv[])
 
    // gamma uses X in problem 3
    if (problem==3) { S.HostRead(); }
-   LagrangianHydroOperator oper(rho_coeff, S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho, source, cfl, mat_gf_coeff,
+   LagrangianHydroOperator oper(rho0_coeff,
+                                S.Size(), H1FESpace, L2FESpace,
+                                ess_tdofs, rho0_gf, source, cfl,
+                                mat_gf_coeff, mat_gf,
                                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                                order_q, qupdate, gamma(S), okina,
-                                H1FEC.GetBasisType());
+                                order_q, H1FEC.GetBasisType());
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -573,21 +568,17 @@ int main(int argc, char *argv[])
       // Make sure all MPI ranks have sent their 'v' solution before initiating
       // another set of GLVis connections (one from each rank):
       MPI_Barrier(pmesh->GetComm());
-
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
-
       int Wx = 0, Wy = 0; // window position
       const int Ww = 350, Wh = 350; // window size
       int offx = Ww+10; // window offsets
-
       if (problem != 0 && problem != 4)
       {
          VisualizeField(vis_rho, vishost, visport, rho_gf,
                         "Density", Wx, Wy, Ww, Wh);
       }
-
       Wx += offx;
       VisualizeField(vis_v, vishost, visport, v_gf,
                      "Velocity", Wx, Wy, Ww, Wh);
@@ -617,7 +608,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
-   long mem=0, mem_max=0, mem_sum=0;
+   long mem=0, mmax=0, msum=0;
    int checks = 0;
 
    for (int ti = 1; !last_step; ti++)
@@ -628,7 +619,6 @@ int main(int argc, char *argv[])
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
-
       S_old = S;
       t_old = t;
       oper.ResetTimeStepEstimate();
@@ -676,8 +666,8 @@ int main(int argc, char *argv[])
          if (mem_usage)
          {
             mem = GetMaxRssMB();
-            MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-            MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+            MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+            MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
          if (mpi.Root())
          {
@@ -690,9 +680,7 @@ int main(int argc, char *argv[])
                  << sqrt_tot_norm;
             if (mem_usage)
             {
-               cout << ", mem: "
-                    << mem_max << "/"
-                    << mem_sum << " MB";
+               cout << ", mem: " << mmax << "/" << msum << " MB";
             }
             cout << endl;
          }
@@ -713,7 +701,6 @@ int main(int argc, char *argv[])
                VisualizeField(vis_rho, vishost, visport, rho_gf,
                               "Density", Wx, Wy, Ww, Wh);
             }
-
             Wx += offx;
             VisualizeField(vis_v, vishost, visport,
                            v_gf, "Velocity", Wx, Wy, Ww, Wh);
@@ -767,83 +754,19 @@ int main(int argc, char *argv[])
       // Problems checks
       if (check)
       {
-         const double eps = 1.e-13;
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
-         const double nrm = sqrt(tot_norm);
-         //printf("\n\033[1;32m%.15e\033[m", nrm);
-         // Default options only checks
+         const double e_norm = sqrt(tot_norm);
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
          MFEM_VERIFY(order_e==1, "check: order_e");
          MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(fabs(t_final-0.6)<eps, "check: t_final");
+         MFEM_VERIFY(t_final == 0.6, "check: t_final");
          MFEM_VERIFY(cfl==0.5, "check: cfl");
          MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
          MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         if (dim==2)
-         {
-            const double p0_05 = 6.54653862453438e+00;
-            const double p0_27 = 7.58857635779292e+00;
-            if (problem==0 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-            if (problem==0 && ti==27) {checks++; MFEM_VERIFY(rerr(nrm,p0_27,eps),"P0, #27");}
-            const double p1_05 = 3.50825494522579e+00;
-            const double p1_15 = 2.75644459682321e+00;
-            if (problem==1 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-            if (problem==1 && ti==15) {checks++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
-            const double p2_05 = 1.02074579565124e+01;
-            const double p2_59 = 1.72159020590190e+01;
-            if (problem==2 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-            if (problem==2 && ti==59) {checks++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-            const double p3_05 = 8.0;
-            const double p3_16 = 8.0;
-            if (problem==3 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-            if (problem==3 && ti==16) {checks++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-            const double p4_05 = 3.436923188323578e+01;
-            const double p4_52 = 2.682244912720685e+01;
-            if (problem==4 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-            if (problem==4 && ti==52) {checks++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
-            const double p5_05 = 1.030899557252528e+01;
-            const double p5_36 = 1.057362418574309e+01;
-            if (problem==5 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-            if (problem==5 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-            const double p6_05 = 8.039707010835693e+00;
-            const double p6_36 = 8.316970976817373e+00;
-            if (problem==6 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-            if (problem==6 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-         }
-         if (dim==3)
-         {
-            const double  p0_05 = 1.198510951452527e+03;
-            const double p0_188 = 1.199384410059154e+03;
-            if (problem==0 && ti==005) {checks++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-            if (problem==0 && ti==188) {checks++; MFEM_VERIFY(rerr(nrm,p0_188,eps),"P0, #188");}
-            const double p1_05 = 1.33916371859257e+01;
-            const double p1_28 = 7.52107367739800e+00;
-            if (problem==1 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-            if (problem==1 && ti==28) {checks++; MFEM_VERIFY(rerr(nrm,p1_28,eps),"P1, #28");}
-            const double p2_05 = 2.041491591302486e+01;
-            const double p2_59 = 3.443180411803796e+01;
-            if (problem==2 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-            if (problem==2 && ti==59) {checks++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-            const double p3_05 = 1.600000000000000e+01;
-            const double p3_16 = 1.600000000000000e+01;
-            if (problem==3 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-            if (problem==3 && ti==16) {checks++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-            const double p4_05 = 6.873846376647157e+01;
-            const double p4_52 = 5.364489825441373e+01;
-            if (problem==4 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-            if (problem==4 && ti==52) {checks++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
-            const double p5_05 = 2.061984481890964e+01;
-            const double p5_36 = 2.114519664792607e+01;
-            if (problem==5 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-            if (problem==5 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-            const double p6_05 = 1.607988713996459e+01;
-            const double p6_36 = 1.662736010353023e+01;
-            if (problem==6 && ti==05) {checks++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-            if (problem==6 && ti==36) {checks++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-         }
+         Checks(dim, ti, e_norm, checks);
       }
    }
    // Do the final checks
@@ -865,8 +788,8 @@ int main(int argc, char *argv[])
    if (mem_usage)
    {
       mem = GetMaxRssMB();
-      MPI_Reduce(&mem, &mem_max, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-      MPI_Reduce(&mem, &mem_sum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+      MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+      MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
    }
 
    if (mpi.Root())
@@ -880,9 +803,7 @@ int main(int argc, char *argv[])
       if (mem_usage)
       {
          cout << "Maximum memory resident set size: "
-              << mem_max << "/"
-              << mem_sum << " MB"
-              << endl;
+              << mmax << "/" << msum << " MB" << endl;
       }
    }
 
@@ -1083,7 +1004,7 @@ double e0(const Vector &x)
    }
 }
 
-void display_banner(ostream & os)
+static void display_banner(ostream & os)
 {
    os << endl
       << "       __                __                 " << endl
@@ -1112,4 +1033,73 @@ static bool rerr(const double a, const double v, const double eps)
    const double err_a = fabs((a-v)/a);
    const double err_v = fabs((a-v)/v);
    return fmax(err_a, err_v) < eps;
+}
+
+static void Checks(const int dim, const int ti, const double nrm, int &chk)
+{
+   const int pb = problem;
+   const double eps = 1.e-13;
+   // Default options only checks
+   if (dim==2)
+   {
+      const double p0_05 = 6.54653862453438e+00;
+      const double p0_27 = 7.58857635779292e+00;
+      if (pb==0 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
+      if (pb==0 && ti==27) {chk++; MFEM_VERIFY(rerr(nrm,p0_27,eps),"P0, #27");}
+      const double p1_05 = 3.50825494522579e+00;
+      const double p1_15 = 2.75644459682321e+00;
+      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
+      if (pb==1 && ti==15) {chk++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
+      const double p2_05 = 1.02074579565124e+01;
+      const double p2_59 = 1.72159020590190e+01;
+      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
+      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
+      const double p3_05 = 8.0;
+      const double p3_16 = 8.0;
+      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
+      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
+      const double p4_05 = 3.436923188323578e+01;
+      const double p4_52 = 2.682244912720685e+01;
+      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
+      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      const double p5_05 = 1.030899557252528e+01;
+      const double p5_36 = 1.057362418574309e+01;
+      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
+      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
+      const double p6_05 = 8.039707010835693e+00;
+      const double p6_36 = 8.316970976817373e+00;
+      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
+      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+   }
+   if (dim==3)
+   {
+      const double  p0_05 = 1.198510951452527e+03;
+      const double p0_188 = 1.199384410059154e+03;
+      if (pb==0 && ti==005) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
+      if (pb==0 && ti==188) {chk++; MFEM_VERIFY(rerr(nrm,p0_188,eps),"P0, #188");}
+      const double p1_05 = 1.33916371859257e+01;
+      const double p1_28 = 7.52107367739800e+00;
+      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
+      if (pb==1 && ti==28) {chk++; MFEM_VERIFY(rerr(nrm,p1_28,eps),"P1, #28");}
+      const double p2_05 = 2.041491591302486e+01;
+      const double p2_59 = 3.443180411803796e+01;
+      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
+      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
+      const double p3_05 = 1.600000000000000e+01;
+      const double p3_16 = 1.600000000000000e+01;
+      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
+      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
+      const double p4_05 = 6.873846376647157e+01;
+      const double p4_52 = 5.364489825441373e+01;
+      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
+      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      const double p5_05 = 2.061984481890964e+01;
+      const double p5_36 = 2.114519664792607e+01;
+      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
+      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
+      const double p6_05 = 1.607988713996459e+01;
+      const double p6_36 = 1.662736010353023e+01;
+      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
+      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+   }
 }

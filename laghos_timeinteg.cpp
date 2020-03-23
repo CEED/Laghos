@@ -62,6 +62,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // S is S0.
    hydro_oper->UpdateMesh(S);
    hydro_oper->SolveVelocity(S, dS_dt);
+   dS_dt = 1.0;
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
    hydro_oper->SolveEnergy(S, V, dS_dt);

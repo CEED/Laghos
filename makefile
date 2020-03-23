@@ -169,8 +169,8 @@ ranks=1
 dims=2 3
 problems=0 1 2 3 4 5 6
 OPTS=-cgt 1.e-14 -rs 0 --checks
-optioni=1 2 3 $(if $(MFEM_CXX:nvcc=),,4)
-options=-fa -pa -o-q $(if $(MFEM_CXX:nvcc=),,-o-q-d_cuda) #-o-q-d_debug
+optioni=1 2 $(if $(MFEM_CXX:nvcc=),,3)
+options=-fa -pa $(if $(MFEM_CXX:nvcc=),,-d_cuda) #-d_debug
 #optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
 
 # Laghos checks template - Targets
@@ -237,9 +237,9 @@ tests:
 	$(shell echo 'step = 1154, dt = 0.001655, |e| = 4.6303396053e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0560, dt = 0.002449, |e| = 1.3408616722e+02' >> BASELINE.dat)
 	$(shell echo 'step = 0413, dt = 0.000470, |e| = 3.2012077410e+01' >> BASELINE.dat)
-	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547023381e+01' >> BASELINE.dat)
+	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0528, dt = 0.000180, |e| = 5.6505348812e+01' >> BASELINE.dat)
-	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
+	$(shell echo 'step = 0776, dt = 0.000177, |e| = 4.0982439122e+02' >> BASELINE.dat)
 	diff --report-identical-files RESULTS.dat BASELINE.dat
 
 # Setup: HYPRE, METIS & MFEM

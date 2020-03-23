@@ -238,7 +238,7 @@ class OkinaMassPAOperator : public AbcMassPAOperator
 {
 private:
    const MPI_Comm comm;
-   const int dim, nzones;
+   const int dim, NE;
    const QuadratureData &quad_data;
    FiniteElementSpace &FESpace;
    ParBilinearForm pabf;
@@ -251,7 +251,7 @@ public:
                        const QuadratureData&,
                        ParFiniteElementSpace&,
                        const IntegrationRule&,
-                       Tensors1D *t1D);
+                       Tensors1D*);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector &diag) const;
    virtual void ComputeDiagonal3D(Vector&) const;
@@ -269,7 +269,6 @@ class DiagonalSolver : public Solver
 private:
    Vector diag;
    FiniteElementSpace &FESpace;
-
 public:
    DiagonalSolver(FiniteElementSpace &fes)
       : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
@@ -277,10 +276,8 @@ public:
    void SetDiagonal(Vector &d)
    {
       const Operator *P = FESpace.GetProlongationMatrix();
-
       // Happens when this is called by the serial version of Laghos.
       if (P == NULL) { diag = d; return; }
-
       diag.SetSize(P->Width());
       P->MultTranspose(d, diag);
    }
@@ -293,7 +290,7 @@ public:
       auto d_y = y.Write();
       MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
    }
-   virtual void SetOperator(const Operator &op) { }
+   virtual void SetOperator(const Operator&) { }
 };
 
 // Performs partial assembly for the energy mass matrix on a single zone.

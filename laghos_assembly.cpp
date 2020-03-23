@@ -813,7 +813,7 @@ void ForcePAOperator::MultTransposeHex(const Vector &vecH1, Vector &vecL2) const
 
 static void ComputeDiagonal2D(const int height,
                               const int nzones,
-                              const bool okina,
+                              const bool p_assembly,
                               const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
@@ -859,7 +859,7 @@ static void ComputeDiagonal2D(const int height,
       }
    }
 
-   if (okina) { return; }
+   if (p_assembly) { return; }
 
    for (int i = 0; i < height / 2; i++)
    {
@@ -876,7 +876,7 @@ void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 
 static void ComputeDiagonal3D(const int height,
                               const int nzones,
-                              const bool okina,
+                              const bool p_assembly,
                               const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
@@ -943,7 +943,7 @@ static void ComputeDiagonal3D(const int height,
       }
    }
 
-   if (okina) { return; }
+   if (p_assembly) { return; }
 
    for (int i = 0; i < height / 3; i++)
    {
@@ -1228,7 +1228,7 @@ OkinaMassPAOperator::OkinaMassPAOperator(Coefficient &Q,
    AbcMassPAOperator(pfes.GetTrueVSize()),
    comm(pfes.GetParMesh()->GetComm()),
    dim(pfes.GetMesh()->Dimension()),
-   nzones(pfes.GetMesh()->GetNE()),
+   NE(pfes.GetMesh()->GetNE()),
    quad_data(qd),
    FESpace(pfes),
    pabf(&pfes),
@@ -1283,14 +1283,14 @@ void OkinaMassPAOperator::Mult(const Vector &x, Vector &y) const
 // *****************************************************************************
 void OkinaMassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   return hydrodynamics::ComputeDiagonal2D(FESpace.GetVSize(), nzones, true,
+   return hydrodynamics::ComputeDiagonal2D(FESpace.GetVSize(), NE, true,
                                            quad_data, FESpace, tensors1D,
                                            diag);
 }
 
 void OkinaMassPAOperator::ComputeDiagonal3D(Vector &diag) const
 {
-   return hydrodynamics::ComputeDiagonal3D(FESpace.GetVSize(), nzones, true,
+   return hydrodynamics::ComputeDiagonal3D(FESpace.GetVSize(), NE, true,
                                            quad_data, FESpace, tensors1D,
                                            diag);
 }
