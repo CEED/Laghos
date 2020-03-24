@@ -140,7 +140,7 @@ class MassPAOperator : public Operator
 {
 private:
    const MPI_Comm comm;
-   const int dim, NE;
+   const int dim, NE, vsize;
    const QuadratureData &qdata;
    FiniteElementSpace &pfes;
    ParBilinearForm pabf;
@@ -149,13 +149,10 @@ private:
    OperatorPtr mass;
    Tensors1D *T1D;
 public:
-   MassPAOperator(Coefficient&,
-                  const QuadratureData&,
-                  ParFiniteElementSpace&,
-                  const IntegrationRule&,
-                  Tensors1D*);
+   MassPAOperator(Coefficient&, const QuadratureData&,
+                  ParFiniteElementSpace&, const IntegrationRule&, Tensors1D*);
    virtual void Mult(const Vector&, Vector&) const;
-   virtual void ComputeDiagonal2D(Vector &diag) const;
+   virtual void ComputeDiagonal2D(Vector&) const;
    virtual void ComputeDiagonal3D(Vector&) const;
    virtual const Operator *GetProlongation() const
    { return pfes.GetProlongationMatrix(); }

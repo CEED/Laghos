@@ -60,6 +60,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "../../dbg.hpp"
 
 using std::cout;
 using std::endl;
@@ -604,6 +605,7 @@ int main(int argc, char *argv[])
    ode_solver->Init(hydro);
    hydro.ResetTimeStepEstimate();
    double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
+   dbg("\033[33mdt:%.15e", dt);
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
@@ -615,6 +617,7 @@ int main(int argc, char *argv[])
       if (t + dt >= t_final)
       {
          dt = t_final - t;
+         dbg("\033[33mdt:%.15e", dt);
          last_step = true;
       }
       if (steps == max_tsteps) { last_step = true; }
@@ -624,11 +627,17 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
+      dbg("\033[33mS:%.15e", S*S);
+      dbg("\033[33mt:%.15e, dt:%.15e", S*S, t, dt);
       ode_solver->Step(S, t, dt);
+      dbg("\033[33mdt:%.15e", dt);
+      dbg("\033[7mS:%.15e", S*S);
       steps++;
 
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);
+      dbg("\033[33mdt:%.15e", dt);
+      dbg("\033[33mdt_est:%.15e, dt:%.15e", dt_est, dt);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the

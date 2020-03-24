@@ -239,10 +239,10 @@ tests:
 	$(shell echo 'step = 0413, dt = 0.000470, |e| = 3.2012077410e+01' >> BASELINE.dat)
 	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0528, dt = 0.000180, |e| = 5.6505348812e+01' >> BASELINE.dat)
-	$(shell echo 'step = 0776, dt = 0.000177, |e| = 4.0982439122e+02' >> BASELINE.dat)
+	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
 	diff --report-identical-files RESULTS.dat BASELINE.dat
 
-# Setup: HYPRE, METIS & MFEM
+# Setup: download & install third party libraries: HYPRE, METIS & MFEM
 
 HYPRE_URL = https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods
 HYPRE_VER = 2.11.2

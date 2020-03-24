@@ -91,7 +91,6 @@ public:
       gamma_gf(gamma_gf) { }
 
    void UpdateQuadratureData(const Vector &S,
-                             bool &qdata_is_current,
                              QuadratureData &qdata,
                              const Tensors1D *tensors1D);
 };
@@ -146,7 +145,6 @@ protected:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    MassPAOperator *VMassPA, *EMassPA;
    mutable DiagonalSolver VMassPA_prec;
-   //mutable LocalMassPAOperator locEMassPA;
    // Linear solver for energy.
    CGSolver CG_VMass, CG_EMass;
    mutable TimingData timer;

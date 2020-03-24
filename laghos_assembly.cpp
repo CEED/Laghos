@@ -325,8 +325,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    }
 }
 
-static void ComputeDiagonal2D(const int height,
-                              const int nzones,
+static void ComputeDiagonal2D(const int height, const int NE,
                               const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
@@ -351,7 +350,7 @@ static void ComputeDiagonal2D(const int height,
          HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
       }
    }
-   for (int z = 0; z < nzones; z++)
+   for (int z = 0; z < NE; z++)
    {
       DenseMatrix QQ(quad_data.rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
       // HQ_i1_k2 = HQs_i1_k1^2 QQ_k1_k2    -- contract in x direction.
@@ -367,8 +366,7 @@ static void ComputeDiagonal2D(const int height,
    }
 }
 
-static void ComputeDiagonal3D(const int height,
-                              const int nzones,
+static void ComputeDiagonal3D(const int height, const int NE,
                               const QuadratureData &quad_data,
                               const FiniteElementSpace &FESpace,
                               const Tensors1D *tensors1D,
@@ -396,7 +394,7 @@ static void ComputeDiagonal3D(const int height,
          HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
       }
    }
-   for (int z = 0; z < nzones; z++)
+   for (int z = 0; z < NE; z++)
    {
       DenseMatrix QQ_Q(quad_data.rho0DetJ0w.GetData() + z*nqp,
                        nqp1D * nqp1D, nqp1D);
@@ -439,6 +437,7 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
    comm(pfes.GetParMesh()->GetComm()),
    dim(pfes.GetMesh()->Dimension()),
    NE(pfes.GetMesh()->GetNE()),
+   vsize(pfes.GetVSize()),
    qdata(qdata),
    pfes(pfes),
    pabf(&pfes),
@@ -455,7 +454,7 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size()==0)
+   if (ess_tdofs.Size() == 0)
    {
       int global_ess_tdofs_count;
       MPI_Allreduce(&ess_tdofs_count,&global_ess_tdofs_count,
@@ -483,15 +482,12 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 
 void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   return hydrodynamics::ComputeDiagonal2D(pfes.GetVSize(), NE,
-                                           qdata, pfes, T1D,
-                                           diag);
+   hydrodynamics::ComputeDiagonal2D(vsize, NE, qdata, pfes, T1D, diag);
 }
 
 void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
 {
-   return hydrodynamics::ComputeDiagonal3D(pfes.GetVSize(), NE,
-                                           qdata, pfes, T1D, diag);
+   hydrodynamics::ComputeDiagonal3D(vsize, NE, qdata, pfes, T1D, diag);
 }
 
 ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
@@ -517,37 +513,36 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    H1D2Q(&H1.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    X(L2sz), Y(H1sz) { }
 
-template<int DIM, int D1D, int Q1D, int L1D, int H1D, int NBZ =1> static
+template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
 void kSmemForceMult2D(const int NE,
-                      const Array<double> &_B,
-                      const Array<double> &_Bt,
-                      const Array<double> &_Gt,
-                      const DenseTensor &_sJit,
-                      const Vector &_e,
-                      Vector &_v)
+                      const Array<double> &B_,
+                      const Array<double> &Bt_,
+                      const Array<double> &Gt_,
+                      const DenseTensor &sJit_,
+                      const Vector &x, Vector &y)
 {
-   auto b = Reshape(_B.Read(), Q1D, L1D);
-   auto bt = Reshape(_Bt.Read(), H1D, Q1D);
-   auto gt = Reshape(_Gt.Read(), H1D, Q1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
-                       Q1D,Q1D,NE,2,2);
-   auto energy = Reshape(_e.Read(), L1D, L1D, NE);
+   auto b = Reshape(B_.Read(), Q1D, L1D);
+   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
+   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+   auto energy = Reshape(x.Read(), L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.Write(), D1D,D1D,2,NE);
+   auto velocity = Reshape(y.Write(), D1D, D1D, DIM, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
    {
       const int z = MFEM_THREAD_ID(z);
 
       MFEM_SHARED double B[Q1D][L1D];
-      MFEM_SHARED double Bt[H1D][Q1D];
-      MFEM_SHARED double Gt[H1D][Q1D];
+      MFEM_SHARED double Bt[D1D][Q1D];
+      MFEM_SHARED double Gt[D1D][Q1D];
 
       MFEM_SHARED double Ez[NBZ][L1D][L1D];
       double (*E)[L1D] = (double (*)[L1D])(Ez + z);
 
-      MFEM_SHARED double LQz[2][NBZ][H1D][Q1D];
+      MFEM_SHARED double LQz[2][NBZ][D1D][Q1D];
       double (*LQ0)[Q1D] = (double (*)[Q1D])(LQz[0] + z);
       double (*LQ1)[Q1D] = (double (*)[Q1D])(LQz[1] + z);
 
@@ -563,8 +558,8 @@ void kSmemForceMult2D(const int NE,
             MFEM_FOREACH_THREAD(l,y,Q1D)
             {
                if (l < L1D) { B[q][l] = b(q,l); }
-               if (l < H1D) { Bt[l][q] = bt(l,q); }
-               if (l < H1D) { Gt[l][q] = gt(l,q); }
+               if (l < D1D) { Bt[l][q] = bt(l,q); }
+               if (l < D1D) { Gt[l][q] = gt(l,q); }
             }
          }
       }
@@ -606,7 +601,7 @@ void kSmemForceMult2D(const int NE,
       }
       MFEM_SYNC_THREAD;
 
-      for (int c = 0; c < 2; ++c)
+      for (int c = 0; c < DIM; ++c)
       {
          MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
@@ -621,7 +616,7 @@ void kSmemForceMult2D(const int NE,
          MFEM_SYNC_THREAD;
          MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
-            MFEM_FOREACH_THREAD(dx,x,H1D)
+            MFEM_FOREACH_THREAD(dx,x,D1D)
             {
                double u = 0.0;
                double v = 0.0;
@@ -635,9 +630,9 @@ void kSmemForceMult2D(const int NE,
             }
          }
          MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(dy,y,H1D)
+         MFEM_FOREACH_THREAD(dy,y,D1D)
          {
-            MFEM_FOREACH_THREAD(dx,x,H1D)
+            MFEM_FOREACH_THREAD(dx,x,D1D)
             {
                double u = 0.0;
                double v = 0.0;
@@ -651,11 +646,11 @@ void kSmemForceMult2D(const int NE,
          }
          MFEM_SYNC_THREAD;
       }
-      for (int c = 0; c < 2; ++c)
+      for (int c = 0; c < DIM; ++c)
       {
-         MFEM_FOREACH_THREAD(dy,y,H1D)
+         MFEM_FOREACH_THREAD(dy,y,D1D)
          {
-            MFEM_FOREACH_THREAD(dx,x,H1D)
+            MFEM_FOREACH_THREAD(dx,x,D1D)
             {
                const double v = velocity(dx,dy,c,e);
                if (fabs(v) < eps2)
@@ -669,32 +664,31 @@ void kSmemForceMult2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D, int H1D> static
+template<int DIM, int D1D, int Q1D, int L1D> static
 void kSmemForceMult3D(const int NE,
-                      const Array<double> &_B,
-                      const Array<double> &_Bt,
-                      const Array<double> &_Gt,
-                      const DenseTensor &_sJit,
-                      const Vector &_e,
-                      Vector &_v)
+                      const Array<double> &B_,
+                      const Array<double> &Bt_,
+                      const Array<double> &Gt_,
+                      const DenseTensor &sJit_,
+                      const Vector &x, Vector &y)
 {
-   auto b = Reshape(_B.Read(), Q1D, L1D);
-   auto bt = Reshape(_Bt.Read(), H1D, Q1D);
-   auto gt = Reshape(_Gt.Read(), H1D, Q1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
-                       Q1D,Q1D,Q1D,NE,3,3);
-   auto energy = Reshape(_e.Read(), L1D, L1D, L1D, NE);
+   auto b = Reshape(B_.Read(), Q1D, L1D);
+   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
+   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+   auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
    const double eps1 = numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(_v.Write(), D1D, D1D, D1D, 3, NE);
+   auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
       const int z = MFEM_THREAD_ID(z);
 
       MFEM_SHARED double B[Q1D][L1D];
-      MFEM_SHARED double Bt[H1D][Q1D];
-      MFEM_SHARED double Gt[H1D][Q1D];
+      MFEM_SHARED double Bt[D1D][Q1D];
+      MFEM_SHARED double Gt[D1D][Q1D];
 
       MFEM_SHARED double E[L1D][L1D][L1D];
 
@@ -721,8 +715,8 @@ void kSmemForceMult3D(const int NE,
             MFEM_FOREACH_THREAD(l,y,Q1D)
             {
                if (l < L1D) { B[q][l] = b(q,l); }
-               if (l < H1D) { Bt[l][q] = bt(l,q); }
-               if (l < H1D) { Gt[l][q] = gt(l,q); }
+               if (l < D1D) { Bt[l][q] = bt(l,q); }
+               if (l < D1D) { Gt[l][q] = gt(l,q); }
             }
          }
       }
@@ -808,7 +802,7 @@ void kSmemForceMult3D(const int NE,
          {
             MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
-               MFEM_FOREACH_THREAD(hx,x,H1D)
+               MFEM_FOREACH_THREAD(hx,x,D1D)
                {
                   double u = 0.0;
                   double v = 0.0;
@@ -828,9 +822,9 @@ void kSmemForceMult3D(const int NE,
          MFEM_SYNC_THREAD;
          MFEM_FOREACH_THREAD(qz,z,Q1D)
          {
-            MFEM_FOREACH_THREAD(hy,y,H1D)
+            MFEM_FOREACH_THREAD(hy,y,D1D)
             {
-               MFEM_FOREACH_THREAD(hx,x,H1D)
+               MFEM_FOREACH_THREAD(hx,x,D1D)
                {
                   double u = 0.0;
                   double v = 0.0;
@@ -848,11 +842,11 @@ void kSmemForceMult3D(const int NE,
             }
          }
          MFEM_SYNC_THREAD;
-         MFEM_FOREACH_THREAD(hz,z,H1D)
+         MFEM_FOREACH_THREAD(hz,z,D1D)
          {
-            MFEM_FOREACH_THREAD(hy,y,H1D)
+            MFEM_FOREACH_THREAD(hy,y,D1D)
             {
-               MFEM_FOREACH_THREAD(hx,x,H1D)
+               MFEM_FOREACH_THREAD(hx,x,D1D)
                {
                   double u = 0.0;
                   double v = 0.0;
@@ -871,11 +865,11 @@ void kSmemForceMult3D(const int NE,
       }
       for (int c = 0; c < 3; ++c)
       {
-         MFEM_FOREACH_THREAD(hz,z,H1D)
+         MFEM_FOREACH_THREAD(hz,z,D1D)
          {
-            MFEM_FOREACH_THREAD(hy,y,H1D)
+            MFEM_FOREACH_THREAD(hy,y,D1D)
             {
-               MFEM_FOREACH_THREAD(hx,x,H1D)
+               MFEM_FOREACH_THREAD(hx,x,D1D)
                {
                   const double v = velocity(hx,hy,hz,c,e);
                   if (fabs(v) < eps2)
@@ -895,7 +889,7 @@ typedef void (*fForceMult)(const int E,
                            const Array<double> &Bt,
                            const Array<double> &Gt,
                            const DenseTensor &stressJinvT,
-                           const Vector&, Vector&);
+                           const Vector &X, Vector &Y);
 
 static void kForceMult(const int DIM, const int D1D, const int Q1D,
                        const int L1D, const int H1D, const int NE,
@@ -912,13 +906,13 @@ static void kForceMult(const int DIM, const int D1D, const int Q1D,
    static std::unordered_map<int, fForceMult> call =
    {
       // 2D
-      {0x234,&kSmemForceMult2D<2,3,4,2,3>},
-      {0x246,&kSmemForceMult2D<2,4,6,3,4>},
-      {0x258,&kSmemForceMult2D<2,5,8,4,5>},
+      {0x234,&kSmemForceMult2D<2,3,4,2>},
+      {0x246,&kSmemForceMult2D<2,4,6,3>},
+      {0x258,&kSmemForceMult2D<2,5,8,4>},
       // 3D
-      {0x334,&kSmemForceMult3D<3,3,4,2,3>},
-      {0x346,&kSmemForceMult3D<3,4,6,3,4>},
-      {0x358,&kSmemForceMult3D<3,5,8,4,5>},
+      {0x334,&kSmemForceMult3D<3,3,4,2>},
+      {0x346,&kSmemForceMult3D<3,4,6,3>},
+      {0x358,&kSmemForceMult3D<3,5,8,4>},
    };
    if (!call[id])
    {
@@ -938,36 +932,34 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
    H1R->MultTranspose(Y, y);
 }
 
-template<int DIM, int D1D, int Q1D, int L1D, int H1D, int NBZ =1> static
+template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
 void kSmemForceMultTranspose2D(const int NE,
-                               const Array<double> &_Bt,
-                               const Array<double> &_B,
-                               const Array<double> &_G,
-                               const DenseTensor &_sJit,
-                               const Vector &_v,
-                               Vector &_e)
+                               const Array<double> &Bt_,
+                               const Array<double> &B_,
+                               const Array<double> &G_,
+                               const DenseTensor &sJit_,
+                               const Vector &x, Vector &y)
 {
-   MFEM_ASSERT(D1D==H1D,"");
-   auto b = Reshape(_B.Read(), Q1D,H1D);
-   auto g = Reshape(_G.Read(), Q1D,H1D);
-   auto bt = Reshape(_Bt.Read(), L1D,Q1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*NE*2*2),
-                       Q1D, Q1D, NE, 2, 2);
-   auto velocity = Reshape(_v.Read(), D1D,D1D,2,NE);
-   auto energy = Reshape(_e.Write(), L1D, L1D, NE);
+   auto b = Reshape(B_.Read(), Q1D, D1D);
+   auto g = Reshape(G_.Read(), Q1D, D1D);
+   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+   auto velocity = Reshape(x.Read(), D1D, D1D, DIM, NE);
+   auto energy = Reshape(y.Write(), L1D, L1D, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
    {
       const int z = MFEM_THREAD_ID(z);
 
       MFEM_SHARED double Bt[L1D][Q1D];
-      MFEM_SHARED double B[Q1D][H1D];
-      MFEM_SHARED double G[Q1D][H1D];
+      MFEM_SHARED double B[Q1D][D1D];
+      MFEM_SHARED double G[Q1D][D1D];
 
       MFEM_SHARED double Vz[NBZ][D1D*D1D];
       double (*V)[D1D] = (double (*)[D1D])(Vz + z);
 
-      MFEM_SHARED double DQz[2][NBZ][D1D*Q1D];
+      MFEM_SHARED double DQz[DIM][NBZ][D1D*Q1D];
       double (*DQ0)[Q1D] = (double (*)[Q1D])(DQz[0] + z);
       double (*DQ1)[Q1D] = (double (*)[Q1D])(DQz[1] + z);
 
@@ -985,8 +977,8 @@ void kSmemForceMultTranspose2D(const int NE,
          {
             MFEM_FOREACH_THREAD(h,y,Q1D)
             {
-               if (h < H1D) { B[q][h] = b(q,h); }
-               if (h < H1D) { G[q][h] = g(q,h); }
+               if (h < D1D) { B[q][h] = b(q,h); }
+               if (h < D1D) { G[q][h] = g(q,h); }
                const int l = h;
                if (l < L1D) { Bt[l][q] = bt(l,q); }
             }
@@ -1002,7 +994,7 @@ void kSmemForceMultTranspose2D(const int NE,
       }
       MFEM_SYNC_THREAD;
 
-      for (int c = 0; c < 2; ++c)
+      for (int c = 0; c < DIM; ++c)
       {
 
          MFEM_FOREACH_THREAD(dx,x,D1D)
@@ -1019,7 +1011,7 @@ void kSmemForceMultTranspose2D(const int NE,
             {
                double u = 0.0;
                double v = 0.0;
-               for (int dx = 0; dx < H1D; ++dx)
+               for (int dx = 0; dx < D1D; ++dx)
                {
                   const double input = V[dx][dy];
                   u += B[qx][dx] * input;
@@ -1036,7 +1028,7 @@ void kSmemForceMultTranspose2D(const int NE,
             {
                double u = 0.0;
                double v = 0.0;
-               for (int dy = 0; dy < H1D; ++dy)
+               for (int dy = 0; dy < D1D; ++dy)
                {
                   u += DQ1[dy][qx] * B[qy][dy];
                   v += DQ0[dy][qx] * G[qy][dy];
@@ -1088,31 +1080,30 @@ void kSmemForceMultTranspose2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D, int H1D> static
+template<int DIM, int D1D, int Q1D, int L1D> static
 void kSmemForceMultTranspose3D(const int NE,
-                               const Array<double> &_Bt,
-                               const Array<double> &_B,
-                               const Array<double> &_G,
-                               const DenseTensor &_sJit,
-                               const Vector &_v,
-                               Vector &_e)
+                               const Array<double> &Bt_,
+                               const Array<double> &B_,
+                               const Array<double> &G_,
+                               const DenseTensor &sJit_,
+                               const Vector &v_,
+                               Vector &e_)
 {
-   MFEM_VERIFY(D1D==H1D,"");
-   auto b = Reshape(_B.Read(), Q1D,H1D);
-   auto g = Reshape(_G.Read(), Q1D,H1D);
-   auto bt = Reshape(_Bt.Read(), L1D,Q1D);
-   auto sJit = Reshape(Read(_sJit.GetMemory(), Q1D*Q1D*Q1D*NE*3*3),
-                       Q1D, Q1D, Q1D, NE, 3, 3);
-   auto velocity = Reshape(_v.Read(), D1D, D1D, D1D, 3, NE);
-   auto energy = Reshape(_e.Write(), L1D, L1D, L1D, NE);
+   auto b = Reshape(B_.Read(), Q1D, D1D);
+   auto g = Reshape(G_.Read(), Q1D, D1D);
+   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+   auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
+   auto energy = Reshape(e_.Write(), L1D, L1D, L1D, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
       const int z = MFEM_THREAD_ID(z);
 
       MFEM_SHARED double Bt[L1D][Q1D];
-      MFEM_SHARED double B[Q1D][H1D];
-      MFEM_SHARED double G[Q1D][H1D];
+      MFEM_SHARED double B[Q1D][D1D];
+      MFEM_SHARED double G[Q1D][D1D];
 
       MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
       MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
@@ -1136,8 +1127,8 @@ void kSmemForceMultTranspose3D(const int NE,
          {
             MFEM_FOREACH_THREAD(h,y,Q1D)
             {
-               if (h < H1D) { B[q][h] = b(q,h); }
-               if (h < H1D) { G[q][h] = g(q,h); }
+               if (h < D1D) { B[q][h] = b(q,h); }
+               if (h < D1D) { G[q][h] = g(q,h); }
                const int l = h;
                if (l < L1D) { Bt[l][q] = bt(l,q); }
             }
@@ -1156,7 +1147,7 @@ void kSmemForceMultTranspose3D(const int NE,
       }
       MFEM_SYNC_THREAD;
 
-      for (int c = 0; c < 3; ++c)
+      for (int c = 0; c < DIM; ++c)
       {
          MFEM_FOREACH_THREAD(dx,x,D1D)
          {
@@ -1177,7 +1168,7 @@ void kSmemForceMultTranspose3D(const int NE,
                {
                   double u = 0.0;
                   double v = 0.0;
-                  for (int dx = 0; dx < H1D; ++dx)
+                  for (int dx = 0; dx < D1D; ++dx)
                   {
                      const double input = V[dx][dy][dz];
                      u += G[qx][dx] * input;
@@ -1198,7 +1189,7 @@ void kSmemForceMultTranspose3D(const int NE,
                   double u = 0.0;
                   double v = 0.0;
                   double w = 0.0;
-                  for (int dy = 0; dy < H1D; ++dy)
+                  for (int dy = 0; dy < D1D; ++dy)
                   {
                      u += MMQ0[dz][dy][qx] * B[qy][dy];
                      v += MMQ1[dz][dy][qx] * G[qy][dy];
@@ -1220,7 +1211,7 @@ void kSmemForceMultTranspose3D(const int NE,
                   double u = 0.0;
                   double v = 0.0;
                   double w = 0.0;
-                  for (int dz = 0; dz < H1D; ++dz)
+                  for (int dz = 0; dz < D1D; ++dz)
                   {
                      u += MQQ0[dz][qy][qx] * B[qz][dz];
                      v += MQQ1[dz][qy][qx] * B[qz][dz];
@@ -1305,7 +1296,7 @@ typedef void (*fForceMultTranspose)(const int NE,
                                     const Array<double> &B,
                                     const Array<double> &G,
                                     const DenseTensor &sJit,
-                                    const Vector&, Vector&);
+                                    const Vector &X, Vector &Y);
 
 static void kForceMultTranspose(const int DIM, const int D1D, const int Q1D,
                                 const int L1D, const int NE,
@@ -1321,12 +1312,12 @@ static void kForceMultTranspose(const int DIM, const int D1D, const int Q1D,
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMultTranspose> call =
    {
-      {0x234,&kSmemForceMultTranspose2D<2,3,4,2,3>},
-      {0x246,&kSmemForceMultTranspose2D<2,4,6,3,4>},
-      {0x258,&kSmemForceMultTranspose2D<2,5,8,4,5>},
-      {0x334,&kSmemForceMultTranspose3D<3,3,4,2,3>},
-      {0x346,&kSmemForceMultTranspose3D<3,4,6,3,4>},
-      {0x358,&kSmemForceMultTranspose3D<3,5,8,4,5>}
+      {0x234,&kSmemForceMultTranspose2D<2,3,4,2>},
+      {0x246,&kSmemForceMultTranspose2D<2,4,6,3>},
+      {0x258,&kSmemForceMultTranspose2D<2,5,8,4>},
+      {0x334,&kSmemForceMultTranspose3D<3,3,4,2>},
+      {0x346,&kSmemForceMultTranspose3D<3,4,6,3>},
+      {0x358,&kSmemForceMultTranspose3D<3,5,8,4>}
    };
    if (!call[id])
    {
