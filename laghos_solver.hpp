@@ -128,8 +128,8 @@ protected:
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
-   // Data associated with each quadrature point in the mesh. These values are
-   // recomputed at each time step.
+   // Data associated with each quadrature point in the mesh.
+   // These values are recomputed at each time step.
    mutable QuadratureData qdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Structures used to perform partial assembly.

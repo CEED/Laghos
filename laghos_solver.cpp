@@ -82,10 +82,8 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-static void Rho0DetJ0Vol(const int dim,
-                         const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *mesh,
+static void Rho0DetJ0Vol(const int dim, const int NE,
+                         const IntegrationRule &ir, ParMesh *mesh,
                          ParFiniteElementSpace &l2_fes,
                          const ParGridFunction &rho0,
                          QuadratureData &qdata,
@@ -399,29 +397,18 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 {
    UpdateQuadratureData(S);
    AssembleForceMatrix();
-
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
    dv.MakeRef(&H1, dS_dt, H1Vsize);
    dv = 0.0;
-
    if (p_assembly)
    {
       timer.sw_force.Start();
       ForcePA->Mult(one, rhs);
-      if (ftz_tol>0.0)
-      {
-         for (int i = 0; i < H1Vsize; i++)
-         {
-            if (fabs(rhs[i]) < ftz_tol)
-            {
-               rhs[i] = 0.0;
-            }
-         }
-      }
       timer.sw_force.Stop();
       rhs.Neg();
+
       // Partial assembly solve for each velocity component
       const int size = H1c.GetVSize();
       const Operator *Pconf = H1c.GetProlongationMatrix();
@@ -493,6 +480,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
    }
+
    Array<int> l2dofs;
    if (p_assembly)
    {
@@ -708,7 +696,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata, &T1D); }
 
-   // This code is for the 1D/FA mode only
+   // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
    const int nqp = ir.GetNPoints();
    ParGridFunction x, v, e;

@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
    backend.SetGPUAwareMPI(gpu_aware_mpi);
 
    // On all processors, use the default builtin 1D/2D/3D mesh or
-   // read the serial one given in the command line.
+   // read the serial one given on the command line.
    Mesh *mesh;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
    }
 
    // Parallel partitioning of the mesh.
-   ParMesh *pmesh = NULL;
+   ParMesh *pmesh = nullptr;
    const int num_tasks = mpi.WorldSize(); int unit = 1;
    int *nxyz = new int[dim];
    switch (partition_type)
@@ -408,15 +408,15 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
-   // that the boundaries are straight.
+   // Boundary conditions: all tests use v.n = 0 on the boundary,
+   // and we assume that the boundaries are straight.
    Array<int> ess_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
       for (int d = 0; d < pmesh->Dimension(); d++)
       {
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
-         // enforce v_x/y/z = 0 for the velocity components.
+         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+         // i.e., we must enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
          H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
          ess_tdofs.Append(tdofs1d);
@@ -445,7 +445,6 @@ int main(int argc, char *argv[])
 
    const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-
    if (mpi.Root())
    {
       cout << "Number of kinematic (position, velocity) dofs: "
@@ -454,13 +453,12 @@ int main(int argc, char *argv[])
            << glob_size_l2 << endl;
    }
 
-   const int Vsize_l2 = L2FESpace.GetVSize();
-   const int Vsize_h1 = H1FESpace.GetVSize();
    // The monolithic BlockVector stores unknown fields as:
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
@@ -469,7 +467,7 @@ int main(int argc, char *argv[])
    BlockVector S(true_offset, Device::GetMemoryType());
 
    // Define GridFunction objects for the position, velocity and specific
-   // internal energy.  There is no function for the density, as we can always
+   // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
    ParGridFunction x_gf, v_gf, e_gf;
@@ -479,13 +477,13 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
-   // sync the data location of x_gf with its base, S
+   // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   // sync the data location of v_gf with its base, S
+   // Sync the data location of v_gf with its base, S
    v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
@@ -514,12 +512,12 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   // sync the data location of e_gf with its base, S
+   // Sync the data location of e_gf with its base, S
    e_gf.SyncAliasMemory(S);
 
-   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
-   // gamma values are projected on a function that stays constant on the moving
-   // mesh.
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh.
+   // The gamma values are projected on a function that stays constant
+   // on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
@@ -531,8 +529,7 @@ int main(int argc, char *argv[])
    int source = 0; bool visc = true;
    switch (problem)
    {
-      case 0: if (pmesh->Dimension() == 2) { source = 1; }
-         visc = false; break;
+      case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; break;
@@ -544,7 +541,7 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    // gamma uses X in problem 3
-   if (problem==3) { S.HostRead(); }
+   if (problem == 3) { S.HostRead(); }
    hydrodynamics::LagrangianHydroOperator hydro(rho0_coeff, S.Size(),
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs, rho0_gf, source, cfl,
@@ -659,9 +656,8 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double loc_norm = e_gf * e_gf, tot_norm;
-         MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                       pmesh->GetComm());
+         double lnorm = e_gf * e_gf, norm;
+         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
          if (mem_usage)
          {
             mem = GetMaxRssMB();
@@ -670,13 +666,13 @@ int main(int argc, char *argv[])
          }
          if (mpi.Root())
          {
-            const double sqrt_tot_norm = sqrt(tot_norm);
+            const double sqrt_norm = sqrt(norm);
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
                  << ",\tt = " << std::setw(5) << std::setprecision(4) << t
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10)
-                 << sqrt_tot_norm;
+                 << sqrt_norm;
             if (mem_usage)
             {
                cout << ", mem: " << mmax << "/" << msum << " MB";
@@ -694,7 +690,6 @@ int main(int argc, char *argv[])
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
             int offx = Ww+10; // window offsets
-
             if (problem != 0 && problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -754,10 +749,9 @@ int main(int argc, char *argv[])
       // Problems checks
       if (check)
       {
-         double loc_norm = e_gf * e_gf, tot_norm;
-         MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                       pmesh->GetComm());
-         const double e_norm = sqrt(tot_norm);
+         double lnorm = e_gf * e_gf, norm;
+         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+         const double e_norm = sqrt(norm);
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
          MFEM_VERIFY(order_e==1, "check: order_e");
@@ -846,14 +840,14 @@ double rho0(const Vector &x)
       case 4: return 1.0;
       case 5:
       {
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; } // 1
-         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; } // 3
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; }
          return 1.0;
       }
       case 6:
       {
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; } // 2
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; } // 4
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
          return 1.0;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
@@ -875,10 +869,7 @@ double gamma(const Vector &x)
    }
 }
 
-double rad(double x, double y)
-{
-   return sqrt(x*x + y*y);
-}
+static double rad(double x, double y) { return sqrt(x*x + y*y); }
 
 void v0(const Vector &x, Vector &v)
 {
@@ -918,20 +909,20 @@ void v0(const Vector &x, Vector &v)
       case 5:
       {
          v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;} // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;} // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; } // 4
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
          MFEM_ABORT("Error in problem 5!");
          return;
       }
       case 6:
       {
          v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;} // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;} // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;} // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;} // 4
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
          MFEM_ABORT("Error in problem 6!");
          return;
       }
@@ -982,20 +973,20 @@ double e0(const Vector &x)
       case 5:
       {
          const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; } // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; } // 4
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
          MFEM_ABORT("Error in problem 5!");
          return 0.0;
       }
       case 6:
       {
          const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 1
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; } // 2
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; } // 3
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; } // 4
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
          MFEM_ABORT("Error in problem 5!");
          return 0.0;
       }
@@ -1003,7 +994,7 @@ double e0(const Vector &x)
    }
 }
 
-static void display_banner(std::ostream & os)
+static void display_banner(std::ostream &os)
 {
    os << endl
       << "       __                __                 " << endl
@@ -1038,15 +1029,6 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;
-   /*const double solutions[2][7][2] =
-   {
-      {
-         {6.54653862453438e+00, 7.58857635779292e+00},
-         {3.50825494522579e+00, 2.75644459682321e+00},
-         {1.02074579565124e+01, 1.72159020590190e+01},
-         {8.0, 8.0},
-      }
-   };*/
    if (dim==2)
    {
       const double p0_05 = 6.54653862453438e+00;

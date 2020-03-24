@@ -300,12 +300,12 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    X(L2sz), Y(H1sz) { }
 
 template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
-void kSmemForceMult2D(const int NE,
-                      const Array<double> &B_,
-                      const Array<double> &Bt_,
-                      const Array<double> &Gt_,
-                      const DenseTensor &sJit_,
-                      const Vector &x, Vector &y)
+void ForceMult2D(const int NE,
+                 const Array<double> &B_,
+                 const Array<double> &Bt_,
+                 const Array<double> &Gt_,
+                 const DenseTensor &sJit_,
+                 const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, L1D);
    auto bt = Reshape(Bt_.Read(), D1D, Q1D);
@@ -451,12 +451,12 @@ void kSmemForceMult2D(const int NE,
 }
 
 template<int DIM, int D1D, int Q1D, int L1D> static
-void kSmemForceMult3D(const int NE,
-                      const Array<double> &B_,
-                      const Array<double> &Bt_,
-                      const Array<double> &Gt_,
-                      const DenseTensor &sJit_,
-                      const Vector &x, Vector &y)
+void ForceMult3D(const int NE,
+                 const Array<double> &B_,
+                 const Array<double> &Bt_,
+                 const Array<double> &Gt_,
+                 const DenseTensor &sJit_,
+                 const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, L1D);
    auto bt = Reshape(Bt_.Read(), D1D, Q1D);
@@ -677,14 +677,14 @@ typedef void (*fForceMult)(const int E,
                            const DenseTensor &stressJinvT,
                            const Vector &X, Vector &Y);
 
-static void kForceMult(const int DIM, const int D1D, const int Q1D,
-                       const int L1D, const int H1D, const int NE,
-                       const Array<double> &B,
-                       const Array<double> &Bt,
-                       const Array<double> &Gt,
-                       const DenseTensor &stressJinvT,
-                       const Vector &e,
-                       Vector &v)
+static void ForceMult(const int DIM, const int D1D, const int Q1D,
+                      const int L1D, const int H1D, const int NE,
+                      const Array<double> &B,
+                      const Array<double> &Bt,
+                      const Array<double> &Gt,
+                      const DenseTensor &stressJinvT,
+                      const Vector &e,
+                      Vector &v)
 {
    MFEM_VERIFY(D1D==H1D, "D1D!=H1D");
    MFEM_VERIFY(L1D==D1D-1,"L1D!=D1D-1");
@@ -692,13 +692,13 @@ static void kForceMult(const int DIM, const int D1D, const int Q1D,
    static std::unordered_map<int, fForceMult> call =
    {
       // 2D
-      {0x234,&kSmemForceMult2D<2,3,4,2>},
-      {0x246,&kSmemForceMult2D<2,4,6,3>},
-      {0x258,&kSmemForceMult2D<2,5,8,4>},
+      {0x234,&ForceMult2D<2,3,4,2>},
+      {0x246,&ForceMult2D<2,4,6,3>},
+      {0x258,&ForceMult2D<2,5,8,4>},
       // 3D
-      {0x334,&kSmemForceMult3D<3,3,4,2>},
-      {0x346,&kSmemForceMult3D<3,4,6,3>},
-      {0x358,&kSmemForceMult3D<3,5,8,4>},
+      {0x334,&ForceMult3D<3,3,4,2>},
+      {0x346,&ForceMult3D<3,4,6,3>},
+      {0x358,&ForceMult3D<3,5,8,4>},
    };
    if (!call[id])
    {
@@ -712,19 +712,19 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
 {
    if (L2R) { L2R->Mult(x, X); }
    else { X = x; }
-   kForceMult(dim, D1D, Q1D, L1D, D1D, NE,
-              L2D2Q->B, H1D2Q->Bt, H1D2Q->Gt,
-              qdata.stressJinvT, X, Y);
+   ForceMult(dim, D1D, Q1D, L1D, D1D, NE,
+             L2D2Q->B, H1D2Q->Bt, H1D2Q->Gt,
+             qdata.stressJinvT, X, Y);
    H1R->MultTranspose(Y, y);
 }
 
 template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
-void kSmemForceMultTranspose2D(const int NE,
-                               const Array<double> &Bt_,
-                               const Array<double> &B_,
-                               const Array<double> &G_,
-                               const DenseTensor &sJit_,
-                               const Vector &x, Vector &y)
+void ForceMultTranspose2D(const int NE,
+                          const Array<double> &Bt_,
+                          const Array<double> &B_,
+                          const Array<double> &G_,
+                          const DenseTensor &sJit_,
+                          const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, D1D);
    auto g = Reshape(G_.Read(), Q1D, D1D);
@@ -867,13 +867,13 @@ void kSmemForceMultTranspose2D(const int NE,
 }
 
 template<int DIM, int D1D, int Q1D, int L1D> static
-void kSmemForceMultTranspose3D(const int NE,
-                               const Array<double> &Bt_,
-                               const Array<double> &B_,
-                               const Array<double> &G_,
-                               const DenseTensor &sJit_,
-                               const Vector &v_,
-                               Vector &e_)
+void ForceMultTranspose3D(const int NE,
+                          const Array<double> &Bt_,
+                          const Array<double> &B_,
+                          const Array<double> &G_,
+                          const DenseTensor &sJit_,
+                          const Vector &v_,
+                          Vector &e_)
 {
    auto b = Reshape(B_.Read(), Q1D, D1D);
    auto g = Reshape(G_.Read(), Q1D, D1D);
@@ -1084,26 +1084,26 @@ typedef void (*fForceMultTranspose)(const int NE,
                                     const DenseTensor &sJit,
                                     const Vector &X, Vector &Y);
 
-static void kForceMultTranspose(const int DIM, const int D1D, const int Q1D,
-                                const int L1D, const int NE,
-                                const Array<double> &L2Bt,
-                                const Array<double> &H1B,
-                                const Array<double> &H1G,
-                                const DenseTensor &stressJinvT,
-                                const Vector &v,
-                                Vector &e)
+static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
+                               const int L1D, const int NE,
+                               const Array<double> &L2Bt,
+                               const Array<double> &H1B,
+                               const Array<double> &H1G,
+                               const DenseTensor &stressJinvT,
+                               const Vector &v,
+                               Vector &e)
 {
    // DIM, D1D, Q1D, L1D(=D1D-1)
    MFEM_VERIFY(L1D==D1D-1, "L1D!=D1D-1");
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMultTranspose> call =
    {
-      {0x234,&kSmemForceMultTranspose2D<2,3,4,2>},
-      {0x246,&kSmemForceMultTranspose2D<2,4,6,3>},
-      {0x258,&kSmemForceMultTranspose2D<2,5,8,4>},
-      {0x334,&kSmemForceMultTranspose3D<3,3,4,2>},
-      {0x346,&kSmemForceMultTranspose3D<3,4,6,3>},
-      {0x358,&kSmemForceMultTranspose3D<3,5,8,4>}
+      {0x234,&ForceMultTranspose2D<2,3,4,2>},
+      {0x246,&ForceMultTranspose2D<2,4,6,3>},
+      {0x258,&ForceMultTranspose2D<2,5,8,4>},
+      {0x334,&ForceMultTranspose3D<3,3,4,2>},
+      {0x346,&ForceMultTranspose3D<3,4,6,3>},
+      {0x358,&ForceMultTranspose3D<3,5,8,4>}
    };
    if (!call[id])
    {
@@ -1116,9 +1116,9 @@ static void kForceMultTranspose(const int DIM, const int D1D, const int Q1D,
 void ForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
 {
    H1R->Mult(x, Y);
-   kForceMultTranspose(dim, D1D, Q1D, L1D, NE,
-                       L2D2Q->Bt, H1D2Q->B, H1D2Q->G,
-                       qdata.stressJinvT, Y, X);
+   ForceMultTranspose(dim, D1D, Q1D, L1D, NE,
+                      L2D2Q->Bt, H1D2Q->B, H1D2Q->G,
+                      qdata.stressJinvT, Y, X);
    if (L2R) { L2R->MultTranspose(X, y); }
    else { y = X; }
 }

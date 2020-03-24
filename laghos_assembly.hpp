@@ -93,7 +93,7 @@ class ForceIntegrator : public BilinearFormIntegrator
 private:
    const QuadratureData &quad_data;
 public:
-   ForceIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
+   ForceIntegrator(QuadratureData &qdata) : quad_data(qdata) { }
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
                                        ElementTransformation &Trans,
