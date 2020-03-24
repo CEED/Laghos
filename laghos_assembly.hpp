@@ -30,37 +30,35 @@ namespace hydrodynamics
 // Container for all data needed at quadrature points.
 struct QuadratureData
 {
-   // TODO: use QuadratureFunctions?
-
-   // Reference to physical Jacobian for the initial mesh. These are computed
-   // only at time zero and stored here.
+   // Reference to physical Jacobian for the initial mesh.
+   // These are computed only at time zero and stored here.
    DenseTensor Jac0inv;
 
-   // Quadrature data used for full/partial assembly of the force operator. At
-   // each quadrature point, it combines the stress, inverse Jacobian,
-   // determinant of the Jacobian and the integration weight. It must be
-   // recomputed in every time step.
+   // Quadrature data used for full/partial assembly of the force operator.
+   // At each quadrature point, it combines the stress, inverse Jacobian,
+   // determinant of the Jacobian and the integration weight.
+   // It must be recomputed in every time step.
    DenseTensor stressJinvT;
 
-   // Quadrature data used for full/partial assembly of the mass matrices. At
-   // time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+   // Quadrature data used for full/partial assembly of the mass matrices.
+   // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
    Vector rho0DetJ0w;
 
-   // Initial length scale. This represents a notion of local mesh size. We
-   // assume that all initial zones have similar size.
+   // Initial length scale. This represents a notion of local mesh size.
+   // We assume that all initial zones have similar size.
    double h0;
 
    // Estimate of the minimum time step over all quadrature points. This is
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
-   QuadratureData(int dim, int nzones, int quads_per_zone)
-      : Jac0inv(dim, dim, nzones * quads_per_zone),
-        stressJinvT(nzones * quads_per_zone, dim, dim),
-        rho0DetJ0w(nzones * quads_per_zone) { }
+   QuadratureData(int dim, int NE, int quads_per_el)
+      : Jac0inv(dim, dim, NE * quads_per_el),
+        stressJinvT(NE * quads_per_el, dim, dim),
+        rho0DetJ0w(NE * quads_per_el) { }
 };
 
 // Stores values of the one-dimensional shape functions and gradients at all 1D
@@ -69,7 +67,6 @@ struct Tensors1D
 {
    // H1 shape functions and gradients, L2 shape functions.
    DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-
    Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
 };
 
@@ -78,11 +75,9 @@ class FastEvaluator
    const int dim;
    FiniteElementSpace &H1FESpace;
    Tensors1D *tensors1D;
-
 public:
    FastEvaluator(FiniteElementSpace &h1fes, Tensors1D *t1D)
       : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes), tensors1D(t1D) { }
-
    void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
    // The input vec is an H1 function with dim components, over a zone.
    // The output is J_ij = d(vec_i) / d(x_j) with ij = 1 .. dim.
@@ -100,7 +95,6 @@ private:
 
 public:
    DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
-
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);
@@ -112,153 +106,61 @@ class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
    const QuadratureData &quad_data;
-
 public:
    ForceIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
-
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
                                        ElementTransformation &Trans,
                                        DenseMatrix &elmat);
 };
 
-// *****************************************************************************
-// Abstract base class for the Force PA Operators
-// *****************************************************************************
-class AbcForcePAOperator : public Operator
-{
-public:
-   AbcForcePAOperator(): Operator() {}
-   virtual void Mult(const Vector&, Vector&) const =0;
-   virtual void MultTranspose(const Vector&, Vector&) const =0;
-};
-
-// Performs partial assembly, which corresponds to (and replaces) the use of the
-// LagrangianHydroOperator::Force global matrix.
-class ForcePAOperator : public AbcForcePAOperator
+// Performs partial assembly for the force operator.
+class ForcePAOperator : public Operator
 {
 private:
-   const int dim, nzones;
-   const QuadratureData &quad_data;
-   FiniteElementSpace &H1FESpace, &L2FESpace;
-   Tensors1D *tensors1D;
-
-   // Force matrix action on quadrilateral elements in 2D.
-   void MultQuad(const Vector &vecL2, Vector &vecH1) const;
-   // Force matrix action on hexahedral elements in 3D.
-   void MultHex(const Vector &vecL2, Vector &vecH1) const;
-
-   // Transpose force matrix action on quadrilateral elements in 2D.
-   void MultTransposeQuad(const Vector &vecH1, Vector &vecL2) const;
-   // Transpose force matrix action on hexahedral elements in 3D.
-   void MultTransposeHex(const Vector &vecH1, Vector &vecL2) const;
-
+   const int dim, NE;
+   const QuadratureData &qdata;
+   const ParFiniteElementSpace &H1, &L2;
+   const Operator *H1R, *L2R;
+   const IntegrationRule &ir, &ir1D;
+   const int D1D, Q1D, L1D, H1sz, L2sz;
+   const DofToQuad *L2D2Q, *H1D2Q;
+   mutable Vector X, Y;
 public:
-   ForcePAOperator(const QuadratureData &quad_data_,
-                   FiniteElementSpace &h1fes, FiniteElementSpace &l2fes,
-                   Tensors1D *t1D)
-      : AbcForcePAOperator(),
-        dim(h1fes.GetMesh()->Dimension()), nzones(h1fes.GetMesh()->GetNE()),
-        quad_data(quad_data_), H1FESpace(h1fes), L2FESpace(l2fes),
-        tensors1D(t1D) { }
-
-   virtual void Mult(const Vector &vecL2, Vector &vecH1) const;
-   virtual void MultTranspose(const Vector &vecH1, Vector &vecL2) const;
-
-   ~ForcePAOperator() { }
-};
-
-// Okina PA force operator
-class OkinaForcePAOperator : public AbcForcePAOperator
-{
-private:
-   const int dim, nzones;
-   const QuadratureData &quad_data;
-   const ParFiniteElementSpace &h1fes, &l2fes;
-   const Operator *h1restrict, *l2restrict;
-   const IntegrationRule &integ_rule, &ir1D;
-   const int D1D, Q1D;
-   const int L1D, H1D;
-   const int h1sz, l2sz;
-   const DofToQuad *l2D2Q, *h1D2Q;
-   mutable Vector gVecL2, gVecH1;
-public:
-   OkinaForcePAOperator(const QuadratureData&,
-                        ParFiniteElementSpace&,
-                        ParFiniteElementSpace&,
-                        const IntegrationRule&);
+   ForcePAOperator(const QuadratureData&,
+                   ParFiniteElementSpace&,
+                   ParFiniteElementSpace&,
+                   const IntegrationRule&);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void MultTranspose(const Vector&, Vector&) const;
 };
 
-// *****************************************************************************
-// Abstract base class for the Mass PA Operators
-// *****************************************************************************
-class AbcMassPAOperator : public Operator
-{
-public:
-   AbcMassPAOperator(const int size):Operator(size) {}
-   virtual void Mult(const Vector&, Vector&) const =0;
-   virtual void ComputeDiagonal2D(Vector&) const =0;
-   virtual void ComputeDiagonal3D(Vector&) const =0;
-   virtual const Operator *GetProlongation() const =0;
-   virtual const Operator *GetRestriction() const =0;
-};
-
 // Performs partial assembly for the velocity mass matrix.
-class MassPAOperator : public AbcMassPAOperator
-{
-private:
-   const int dim, nzones;
-   const QuadratureData &quad_data;
-   const FiniteElementSpace &FESpace;
-   Tensors1D *tensors1D;
-   // Mass matrix action on quadrilateral elements in 2D.
-   void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on hexahedral elements in 3D.
-   void MultHex(const Vector &x, Vector &y) const;
-public:
-   MassPAOperator(QuadratureData &qd,
-                  FiniteElementSpace &fes, Tensors1D *t1D)
-      : AbcMassPAOperator(fes.GetVSize()),
-        dim(fes.GetMesh()->Dimension()), nzones(fes.GetMesh()->GetNE()),
-        quad_data(qd), FESpace(fes), tensors1D(t1D) { }
-   // Mass matrix action.
-   virtual void Mult(const Vector &x, Vector &y) const;
-   void ComputeDiagonal2D(Vector &diag) const;
-   void ComputeDiagonal3D(Vector &diag) const;
-   virtual const Operator *GetProlongation() const
-   { return FESpace.GetProlongationMatrix(); }
-   virtual const Operator *GetRestriction() const
-   { return FESpace.GetRestrictionMatrix(); }
-};
-
-// Okina PA mass operator
-class OkinaMassPAOperator : public AbcMassPAOperator
+class MassPAOperator : public Operator
 {
 private:
    const MPI_Comm comm;
    const int dim, NE;
-   const QuadratureData &quad_data;
-   FiniteElementSpace &FESpace;
+   const QuadratureData &qdata;
+   FiniteElementSpace &pfes;
    ParBilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
-   OperatorPtr massOperator;
-   Tensors1D *tensors1D;
+   OperatorPtr mass;
+   Tensors1D *T1D;
 public:
-   OkinaMassPAOperator(Coefficient&,
-                       const QuadratureData&,
-                       ParFiniteElementSpace&,
-                       const IntegrationRule&,
-                       Tensors1D*);
+   MassPAOperator(Coefficient&,
+                  const QuadratureData&,
+                  ParFiniteElementSpace&,
+                  const IntegrationRule&,
+                  Tensors1D*);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector &diag) const;
    virtual void ComputeDiagonal3D(Vector&) const;
    virtual const Operator *GetProlongation() const
-   { return FESpace.GetProlongationMatrix(); }
+   { return pfes.GetProlongationMatrix(); }
    virtual const Operator *GetRestriction() const
-   { return FESpace.GetRestrictionMatrix(); }
+   { return pfes.GetRestrictionMatrix(); }
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
 };
@@ -291,33 +193,6 @@ public:
       MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
    }
    virtual void SetOperator(const Operator&) { }
-};
-
-// Performs partial assembly for the energy mass matrix on a single zone.
-// Used to perform local CG solves, thus avoiding unnecessary communication.
-class LocalMassPAOperator : public Operator
-{
-private:
-   const int dim;
-   int zone_id;
-   const QuadratureData &quad_data;
-   Tensors1D *tensors1D;
-   // Mass matrix action on a quadrilateral element in 2D.
-   void MultQuad(const Vector &x, Vector &y) const;
-   // Mass matrix action on a hexahedral element in 3D.
-   void MultHex(const Vector &x, Vector &y) const;
-
-public:
-   LocalMassPAOperator(const QuadratureData &quad_data_,
-                       FiniteElementSpace &fes,
-                       Tensors1D *t1D)
-      : Operator(fes.GetFE(0)->GetDof()),
-        dim(fes.GetMesh()->Dimension()), zone_id(0),
-        quad_data(quad_data_), tensors1D(t1D) { }
-
-   void SetZoneId(int zid) { zone_id = zid; }
-
-   virtual void Mult(const Vector &x, Vector &y) const;
 };
 
 } // namespace hydrodynamics

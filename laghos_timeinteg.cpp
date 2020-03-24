@@ -25,68 +25,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-void HydroODESolver::Init(TimeDependentOperator &_f)
-{
-   ODESolver::Init(_f);
-
-   hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
-   MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
-}
-
-void RK2AvgSolver::Init(TimeDependentOperator &_f)
-{
-   HydroODESolver::Init(_f);
-   const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
-   V.SetSize(block_offsets[1], mem_type);
-   V.UseDevice(true);
-   dS_dt.Update(block_offsets, mem_type);
-   S0.Update(block_offsets, mem_type);
-}
-
-void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
-{
-   // The monolithic BlockVector stores the unknown fields as follows:
-   // (Position, Velocity, Specific Internal Energy).
-   S0.Vector::operator=(S);
-   Vector &v0 = S0.GetBlock(1);
-   Vector &dx_dt = dS_dt.GetBlock(0);
-   Vector &dv_dt = dS_dt.GetBlock(1);
-
-   // In each sub-step:
-   // - Update the global state Vector S.
-   // - Compute dv_dt using S.
-   // - Update V using dv_dt.
-   // - Compute de_dt and dx_dt using S and V.
-
-   // -- 1.
-   // S is S0.
-   hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
-   dS_dt = 1.0;
-   // V = v0 + 0.5 * dt * dv_dt;
-   add(v0, 0.5 * dt, dv_dt, V);
-   hydro_oper->SolveEnergy(S, V, dS_dt);
-   dx_dt = V;
-
-   // -- 2.
-   // S = S0 + 0.5 * dt * dS_dt;
-   add(S0, 0.5 * dt, dS_dt, S);
-   hydro_oper->ResetQuadratureData();
-   hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
-   // V = v0 + 0.5 * dt * dv_dt;
-   add(v0, 0.5 * dt, dv_dt, V);
-   hydro_oper->SolveEnergy(S, V, dS_dt);
-   dx_dt = V;
-
-   // -- 3.
-   // S = S0 + dt * dS_dt.
-   add(S0, dt, dS_dt, S);
-   hydro_oper->ResetQuadratureData();
-
-   t += dt;
-}
-
 } // namespace hydrodynamics
 
 } // namespace mfem
