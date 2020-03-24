@@ -226,7 +226,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
    T1D(H1.GetFE(0)->GetOrder(), L2.GetFE(0)->GetOrder(),
        int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim))),
        h1_basis_type == BasisType::Positive),
-   evaluator(H1, &T1D),
    Force(&L2, &H1),
    VMassPA_prec(H1c),
    CG_VMass(H1.GetParMesh()->GetComm()),
@@ -704,12 +703,12 @@ MFEM_HOST_DEVICE inline double smooth_step_01(double x, double eps)
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (qdata_is_current) { return; }
-
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
    if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata, &T1D); }
 
+   // This code is for the 1D/FA mode only
    timer.sw_qdata.Start();
    const int nqp = ir.GetNPoints();
    ParGridFunction x, v, e;
@@ -768,10 +767,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          }
          ++z_id;
       }
-
       // Batched computation of material properties.
       ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
-
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
       {

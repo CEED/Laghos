@@ -134,7 +134,6 @@ protected:
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Structures used to perform partial assembly.
    Tensors1D T1D;
-   FastEvaluator evaluator;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
