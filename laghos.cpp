@@ -59,24 +59,23 @@
 #include <fstream>
 #include <sys/time.h>
 #include <sys/resource.h>
-
 #include "laghos_solver.hpp"
-#include "laghos_timeinteg.hpp"
 
-using namespace std;
+using std::cout;
+using std::endl;
 using namespace mfem;
-using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 static int problem;
 
+// Forward declarations.
 double e0(const Vector &);
 double rho0(const Vector &);
 double gamma(const Vector &);
 void v0(const Vector &, Vector &);
 
-static void display_banner(ostream & os);
 static long GetMaxRssMB();
+static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
 int main(int argc, char *argv[])
@@ -546,22 +545,22 @@ int main(int argc, char *argv[])
 
    // gamma uses X in problem 3
    if (problem==3) { S.HostRead(); }
-   LagrangianHydroOperator oper(rho0_coeff,
-                                S.Size(), H1FESpace, L2FESpace,
-                                ess_tdofs, rho0_gf, source, cfl,
-                                mat_gf_coeff, mat_gf,
-                                visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                                order_q, H1FEC.GetBasisType());
+   hydrodynamics::LagrangianHydroOperator hydro(rho0_coeff, S.Size(),
+                                                H1FESpace, L2FESpace,
+                                                ess_tdofs, rho0_gf, source, cfl,
+                                                mat_gf_coeff, mat_gf, visc,
+                                                p_assembly,
+                                                cg_tol, cg_max_iter, ftz_tol,
+                                                order_q, H1FEC.GetBasisType());
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
    ParGridFunction rho_gf;
-   if (visualization || visit) { oper.ComputeDensity(rho_gf); }
-
-   const double energy_init = oper.InternalEnergy(e_gf) +
-                              oper.KineticEnergy(v_gf);
+   if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
+   const double energy_init = hydro.InternalEnergy(e_gf) +
+                              hydro.KineticEnergy(v_gf);
 
    if (visualization)
    {
@@ -576,15 +575,15 @@ int main(int argc, char *argv[])
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
-         VisualizeField(vis_rho, vishost, visport, rho_gf,
-                        "Density", Wx, Wy, Ww, Wh);
+         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+                                       "Density", Wx, Wy, Ww, Wh);
       }
       Wx += offx;
-      VisualizeField(vis_v, vishost, visport, v_gf,
-                     "Velocity", Wx, Wy, Ww, Wh);
+      hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
+                                    "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
-      VisualizeField(vis_e, vishost, visport, e_gf,
-                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                    "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
    // Save data for VisIt visualization.
@@ -602,9 +601,9 @@ int main(int argc, char *argv[])
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   ode_solver->Init(oper);
-   oper.ResetTimeStepEstimate();
-   double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
+   ode_solver->Init(hydro);
+   hydro.ResetTimeStepEstimate();
+   double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
@@ -621,7 +620,7 @@ int main(int argc, char *argv[])
       if (steps == max_tsteps) { last_step = true; }
       S_old = S;
       t_old = t;
-      oper.ResetTimeStepEstimate();
+      hydro.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
@@ -629,17 +628,17 @@ int main(int argc, char *argv[])
       steps++;
 
       // Adaptive time step control.
-      const double dt_est = oper.GetTimeStepEstimate(S);
+      const double dt_est = hydro.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
-         if (dt < numeric_limits<double>::epsilon())
+         if (dt < std::numeric_limits<double>::epsilon())
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
-         oper.ResetQuadratureData();
+         hydro.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
@@ -672,11 +671,11 @@ int main(int argc, char *argv[])
          if (mpi.Root())
          {
             const double sqrt_tot_norm = sqrt(tot_norm);
-            cout << fixed;
-            cout << "step " << setw(5) << ti
-                 << ",\tt = " << setw(5) << setprecision(4) << t
-                 << ",\tdt = " << setw(5) << setprecision(6) << dt
-                 << ",\t|e| = " << setprecision(10)
+            cout << std::fixed;
+            cout << "step " << std::setw(5) << ti
+                 << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+                 << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+                 << ",\t|e| = " << std::setprecision(10)
                  << sqrt_tot_norm;
             if (mem_usage)
             {
@@ -689,7 +688,7 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
-         if (visualization || visit || gfprint) { oper.ComputeDensity(rho_gf); }
+         if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -698,15 +697,16 @@ int main(int argc, char *argv[])
 
             if (problem != 0 && problem != 4)
             {
-               VisualizeField(vis_rho, vishost, visport, rho_gf,
-                              "Density", Wx, Wy, Ww, Wh);
+               hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+                                             "Density", Wx, Wy, Ww, Wh);
             }
             Wx += offx;
-            VisualizeField(vis_v, vishost, visport,
-                           v_gf, "Velocity", Wx, Wy, Ww, Wh);
+            hydrodynamics::VisualizeField(vis_v, vishost, visport,
+                                          v_gf, "Velocity", Wx, Wy, Ww, Wh);
             Wx += offx;
-            VisualizeField(vis_e, vishost, visport, e_gf,
-                           "Specific Internal Energy", Wx, Wy, Ww,Wh);
+            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                          "Specific Internal Energy",
+                                          Wx, Wy, Ww,Wh);
             Wx += offx;
          }
 
@@ -719,32 +719,32 @@ int main(int argc, char *argv[])
 
          if (gfprint)
          {
-            ostringstream mesh_name, rho_name, v_name, e_name;
+            std::ostringstream mesh_name, rho_name, v_name, e_name;
             mesh_name << basename << "_" << ti
-                      << "_mesh." << setfill('0') << setw(6) << myid;
+                      << "_mesh." << std::setfill('0') << std::setw(6) << myid;
             rho_name  << basename << "_" << ti
-                      << "_rho." << setfill('0') << setw(6) << myid;
+                      << "_rho." << std::setfill('0') << std::setw(6) << myid;
             v_name << basename << "_" << ti
-                   << "_v." << setfill('0') << setw(6) << myid;
+                   << "_v." << std::setfill('0') << std::setw(6) << myid;
             e_name << basename << "_" << ti
-                   << "_e." << setfill('0') << setw(6) << myid;
+                   << "_e." << std::setfill('0') << std::setw(6) << myid;
 
-            ofstream mesh_ofs(mesh_name.str().c_str());
+            std::ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
             pmesh->Print(mesh_ofs);
             mesh_ofs.close();
 
-            ofstream rho_ofs(rho_name.str().c_str());
+            std::ofstream rho_ofs(rho_name.str().c_str());
             rho_ofs.precision(8);
             rho_gf.Save(rho_ofs);
             rho_ofs.close();
 
-            ofstream v_ofs(v_name.str().c_str());
+            std::ofstream v_ofs(v_name.str().c_str());
             v_ofs.precision(8);
             v_gf.Save(v_ofs);
             v_ofs.close();
 
-            ofstream e_ofs(e_name.str().c_str());
+            std::ofstream e_ofs(e_name.str().c_str());
             e_ofs.precision(8);
             e_gf.Save(e_ofs);
             e_ofs.close();
@@ -769,8 +769,7 @@ int main(int argc, char *argv[])
          Checks(dim, ti, e_norm, checks);
       }
    }
-   // Do the final checks
-   MFEM_VERIFY((!check)||(checks==2), "[Laghos] Check error");
+   MFEM_VERIFY(!check || checks == 2, "Check error!");
 
    switch (ode_solver_type)
    {
@@ -780,10 +779,8 @@ int main(int argc, char *argv[])
       case 6: steps *= 6; break;
       case 7: steps *= 2;
    }
-   oper.PrintTimingData(mpi.Root(), steps, fom);
 
-   const double energy_final = oper.InternalEnergy(e_gf) +
-                               oper.KineticEnergy(v_gf);
+   hydro.PrintTimingData(mpi.Root(), steps, fom);
 
    if (mem_usage)
    {
@@ -792,12 +789,14 @@ int main(int argc, char *argv[])
       MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
    }
 
+   const double energy_final = hydro.InternalEnergy(e_gf) +
+                               hydro.KineticEnergy(v_gf);
    if (mpi.Root())
    {
       cout << endl;
       if (!p_assembly)
       {
-         cout << "Energy  diff: " << scientific << setprecision(2)
+         cout << "Energy  diff: " << std::scientific << std::setprecision(2)
               << fabs(energy_init - energy_final) << endl;
       }
       if (mem_usage)
@@ -1004,7 +1003,7 @@ double e0(const Vector &x)
    }
 }
 
-static void display_banner(ostream & os)
+static void display_banner(std::ostream & os)
 {
    os << endl
       << "       __                __                 " << endl
@@ -1039,7 +1038,15 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;
-   // Default options only checks
+   /*const double solutions[2][7][2] =
+   {
+      {
+         {6.54653862453438e+00, 7.58857635779292e+00},
+         {3.50825494522579e+00, 2.75644459682321e+00},
+         {1.02074579565124e+01, 1.72159020590190e+01},
+         {8.0, 8.0},
+      }
+   };*/
    if (dim==2)
    {
       const double p0_05 = 6.54653862453438e+00;

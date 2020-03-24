@@ -1180,10 +1180,12 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    forcemat_is_assembled = true;
 }
 
+} // namespace hydrodynamics
+
 void HydroODESolver::Init(TimeDependentOperator &tdop)
 {
    ODESolver::Init(tdop);
-   hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
+   hydro_oper = dynamic_cast<hydrodynamics::LagrangianHydroOperator *>(f);
    MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
 }
 
@@ -1240,8 +1242,6 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 
    t += dt;
 }
-
-} // namespace hydrodynamics
 
 } // namespace mfem
 

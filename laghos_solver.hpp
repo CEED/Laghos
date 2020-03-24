@@ -211,10 +211,25 @@ public:
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
 };
 
+// TaylorCoefficient used in the 2D Taylor-Green problem.
+class TaylorCoefficient : public Coefficient
+{
+   virtual double Eval(ElementTransformation &T,
+                       const IntegrationPoint &ip)
+   {
+      Vector x(2);
+      T.Transform(ip, x);
+      return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
+                                  cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+   }
+};
+
+} // namespace hydrodynamics
+
 class HydroODESolver : public ODESolver
 {
 protected:
-   LagrangianHydroOperator *hydro_oper;
+   hydrodynamics::LagrangianHydroOperator *hydro_oper;
 public:
    HydroODESolver() : hydro_oper(NULL) { }
    virtual void Init(TimeDependentOperator&);
@@ -232,21 +247,6 @@ public:
    virtual void Init(TimeDependentOperator &_f);
    virtual void Step(Vector &S, double &t, double &dt);
 };
-
-// TaylorCoefficient used in the 2D Taylor-Green problem.
-class TaylorCoefficient : public Coefficient
-{
-   virtual double Eval(ElementTransformation &T,
-                       const IntegrationPoint &ip)
-   {
-      Vector x(2);
-      T.Transform(ip, x);
-      return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                                  cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
-   }
-};
-
-} // namespace hydrodynamics
 
 } // namespace mfem
 
