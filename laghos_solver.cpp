@@ -14,7 +14,6 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "../../dbg.hpp"
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
@@ -391,20 +390,16 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
-   dbg("S:%.15e",S*S);
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
-   dbg("S:%.15e",S*S);
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
-   dbg("S:%.15e",S*S);
    UpdateQuadratureData(S);
    AssembleForceMatrix();
-   dbg("S:%.15e",S*S);
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
@@ -428,11 +423,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       }
       timer.sw_force.Stop();
       rhs.Neg();
-      dbg("\033[35mrhs:%.15e", rhs*rhs);
       // Partial assembly solve for each velocity component
       const int size = H1c.GetVSize();
       const Operator *Pconf = H1c.GetProlongationMatrix();
-      //OkinaMassPAOperator *kVMassPA = static_cast<OkinaMassPAOperator*>(VMassPA);
       for (int c = 0; c < dim; c++)
       {
          dvc_gf.MakeRef(&H1c, dS_dt, H1Vsize + c*size);
@@ -459,7 +452,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       Force.Mult(one, rhs);
       timer.sw_force.Stop();
       rhs.Neg();
-      dbg("\033[35mrhs:%.15e", rhs*rhs);
 
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -478,14 +470,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
-   dbg("dS_dt:%.15e",dS_dt*dS_dt);
-   dbg("S:%.15e",S*S);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
-   dbg("S:%.15e",S*S);
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -496,7 +485,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    de = 0.0;
 
    // Solve for energy, assemble the energy source if such exists.
-   LinearForm *e_source = NULL;
+   LinearForm *e_source = nullptr;
    if (source_type == 1) // 2D Taylor-Green.
    {
       e_source = new LinearForm(&L2);
@@ -540,7 +529,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       }
    }
    delete e_source;
-   dbg("S:%.15e",S*S);
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
@@ -554,12 +542,9 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
    UpdateMesh(S);
    UpdateQuadratureData(S);
-   dbg("S:%.15e",S*S);
-   dbg("dt_est:%.15e",qdata.dt_est);
    double glob_dt_est;
    MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
                  H1.GetParMesh()->GetComm());
-   dbg("glob_dt_est:%.16e",glob_dt_est);
    return glob_dt_est;
 }
 
@@ -979,9 +964,8 @@ void QUpdateBody(const int NE, const int e,
    {
       if (idt > 0.0)
       {
-         const double cfl_inv_dt = cfl*(1.0 / idt);
+         const double cfl_inv_dt = cfl / idt;
          d_dt_est[eq] = std::fmin(d_dt_est[eq], cfl_inv_dt);
-         //dbg("%.16e", d_dt_est[eq]);
       }
    }
    // Quadrature data for partial assembly of the force operator.
@@ -1024,7 +1008,7 @@ void QKernel(const int NE, const int NQ,
    auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
    auto d_dt_est = dt_est.ReadWrite();
    auto d_stressJinvT = Write(stressJinvT.GetMemory(), stressJinvT.TotalSize());
-   if (DIM==2)
+   if (DIM == 2)
    {
       MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
       {
@@ -1053,7 +1037,7 @@ void QKernel(const int NE, const int NQ,
          MFEM_SYNC_THREAD;
       });
    }
-   if (DIM==3)
+   if (DIM == 3)
    {
       MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
       {
@@ -1091,7 +1075,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
                                    QuadratureData &qdata,
                                    const Tensors1D *T1D)
 {
-   dbg("");
    timer->sw_qdata.Start();
    Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
@@ -1102,18 +1085,14 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    d_x.MakeRef(&H1,*S_p, 0);
    H1R->Mult(d_x, d_h1_v_local_in);
    q1->SetOutputLayout(QVectorLayout::byVDIM);
-   dbg("Derivatives");
    q1->Derivatives(d_h1_v_local_in, d_h1_grad_x_data);
    d_v.MakeRef(&H1,*S_p, H1_size);
    H1R->Mult(d_v, d_h1_v_local_in);
-   dbg("Derivatives");
    q1->Derivatives(d_h1_v_local_in, d_h1_grad_v_data);
    d_e.MakeRef(&L2, *S_p, 2*H1_size);
    q2->SetOutputLayout(QVectorLayout::byVDIM);
-   dbg("Values");
    q2->Values(d_e, d_l2_e_quads_data);
    d_dt_est = qdata.dt_est;
-   dbg("d_dt_est:%.15e", qdata.dt_est);
    const int id = (dim<<4) | nqp1D;
    typedef void (*fQKernel)(const int NE, const int NQ,
                             const bool use_viscosity,
@@ -1139,16 +1118,9 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
                gamma_gf, ir.GetWeights(), d_h1_grad_x_data,
                qdata.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
                qdata.Jac0inv, d_dt_est, qdata.stressJinvT);
-   dbg("\033[37mdt_est:%.15e", qdata.dt_est);
    qdata.dt_est = d_dt_est.Min();
-   dbg("\033[37mmin, dt_est:%.15e", qdata.dt_est);
-   //qdata_is_current = true;
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
-   dbg("qdata.stressJinvT(0): %.15e",qdata.stressJinvT(0)*qdata.stressJinvT(0));
-   dbg("qdata.stressJinvT(1): %.15e",qdata.stressJinvT(1)*qdata.stressJinvT(1));
-   dbg("qdata.stressJinvT(2): %.15e",qdata.stressJinvT(2)*qdata.stressJinvT(2));
-   //qdata.stressJinvT(0).Print();
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const
@@ -1183,17 +1155,12 @@ void RK2AvgSolver::Init(TimeDependentOperator &tdop)
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
-   dbg("\033[34mS:%.15e",S*S);
-   dbg("\033[34mt:%.15e, dt:%.15e",t, dt);
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    S0.Vector::operator=(S);
    Vector &v0 = S0.GetBlock(1);
    Vector &dx_dt = dS_dt.GetBlock(0);
    Vector &dv_dt = dS_dt.GetBlock(1);
-   dbg("\033[34mv0:%.15e",v0*v0);
-   dbg("\033[34mdx_dt:%.15e",dx_dt*dx_dt);
-   dbg("\033[34mdv_dt:%.15e",dv_dt*dv_dt);
 
    // In each sub-step:
    // - Update the global state Vector S.
@@ -1207,39 +1174,25 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    hydro_oper->SolveVelocity(S, dS_dt);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
-   dbg("\033[34mV1:%.15e",V*V);
    hydro_oper->SolveEnergy(S, V, dS_dt);
    dx_dt = V;
-   dbg("\033[34mS1:%.15e",S*S);
-   dbg("\033[34mV1:%.15e",V*V);
-   dbg("\033[34mdS_dt1:%.15e",dS_dt*dS_dt);
 
    // -- 2.
    // S = S0 + 0.5 * dt * dS_dt;
    add(S0, 0.5 * dt, dS_dt, S);
-   dbg("\033[34mS2.1:%.15e",S*S);
    hydro_oper->ResetQuadratureData();
-   dbg("\033[34mUpdateMesh");
    hydro_oper->UpdateMesh(S);
-   dbg("\033[34mS2.1:%.15e",S*S);
    hydro_oper->SolveVelocity(S, dS_dt);
-   dbg("\033[34mdS_dt2:%.15e",dS_dt*dS_dt);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
-   dbg("\033[34mV2:%.15e",V*V);
    hydro_oper->SolveEnergy(S, V, dS_dt);
-   dbg("\033[34mdS_dt2:%.15e",dS_dt*dS_dt);
    dx_dt = V;
-   dbg("\033[34mS2:%.15e",S*S);
 
    // -- 3.
    // S = S0 + dt * dS_dt.
    add(S0, dt, dS_dt, S);
-   dbg("\033[34mS3:%.15e",S*S);
-
    hydro_oper->ResetQuadratureData();
    t += dt;
-   dbg("t:%.15e",t);
 }
 
 } // namespace mfem
