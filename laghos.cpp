@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
             cout << "step " << std::setw(5) << ti
                  << ",\tt = " << std::setw(5) << std::setprecision(4) << t
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-                 << ",\t|e| = " << std::setprecision(10)
+                 << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
             if (mem_usage)
             {

@@ -16,6 +16,11 @@ Version 3.0, released on Mar 30, 2020
 
 - Added 'tests' and 'checks' makefile targets to launch non-regression tests.
 
+- Added one default dimension option that generates internally these meshes:
+    - 1D (-dim 1): data/segment01.mesh
+    - 2D (-dim 2): data/square01_quad.mesh
+    - 3D (-dim 3): data/cube01_hex.mesh
+
 
 Version 2.0, released on Nov 19, 2018
 =====================================
