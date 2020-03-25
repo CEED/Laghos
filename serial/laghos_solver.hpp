@@ -18,7 +18,7 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "../laghos_assembly.hpp"
+#include "laghos_assembly.hpp"
 
 namespace mfem
 {
@@ -40,13 +40,57 @@ struct TimingData
    // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
-   // These accumulate the total processed dofs or quad points:
-   // #(CG iterations) for the H1 CG solve.
-   // #dofs  * #(CG iterations) for the L2 CG solve.
-   // #quads * #(RK sub steps) for the quadrature data computations.
-   int H1cg_iter, L2dof_iter, quad_tstep;
+   // Store the number of dofs of the the coresponding local CG
+   const HYPRE_Int L2dof;
 
-   TimingData() : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
+   // These accumulate the total processed dofs or quad points:
+   // #(CG iterations) for the L2 CG solve.
+   // #quads * #(RK sub steps) for the quadrature data computations.
+   HYPRE_Int H1iter, L2iter;
+   HYPRE_Int quad_tstep;
+
+   TimingData(const HYPRE_Int l2d) :
+      L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
+};
+
+class QUpdate
+{
+private:
+   const int dim, NQ, NE;
+   const bool use_viscosity;
+   const double cfl;
+   TimingData *timer;
+   const IntegrationRule &ir;
+   FiniteElementSpace &H1, &L2;
+   const Operator *H1R;
+   const int vdim;
+   Vector d_dt_est;
+   Vector d_l2_e_quads_data;
+   Vector d_h1_v_local_in, d_h1_grad_x_data, d_h1_grad_v_data;
+   const QuadratureInterpolator *q1,*q2;
+   const GridFunction &gamma_gf;
+public:
+   QUpdate(const int d, const int ne, const bool visc,
+           const double cfl, TimingData *t,
+           const GridFunction &gamma_gf,
+           const IntegrationRule &ir,
+           FiniteElementSpace &h1, FiniteElementSpace &l2):
+      dim(d), NQ(ir.GetNPoints()), NE(ne), use_viscosity(visc), cfl(cfl),
+      timer(t), ir(ir), H1(h1), L2(l2),
+      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+      vdim(H1.GetVDim()),
+      d_dt_est(NE*NQ),
+      d_l2_e_quads_data(NE*NQ),
+      d_h1_v_local_in(NQ*NE*vdim),
+      d_h1_grad_x_data(NQ*NE*vdim*vdim),
+      d_h1_grad_v_data(NQ*NE*vdim*vdim),
+      q1(H1.GetQuadratureInterpolator(ir)),
+      q2(L2.GetQuadratureInterpolator(ir)),
+      gamma_gf(gamma_gf) { }
+
+   void UpdateQuadratureData(const Vector &S,
+                             QuadratureData &qdata,
+                             const Tensors1D *tensors1D);
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -54,60 +98,59 @@ struct TimingData
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
-   FiniteElementSpace &H1FESpace, &L2FESpace;
-
+   FiniteElementSpace &H1, &L2;
+   mutable FiniteElementSpace H1c;
+   // FE spaces local and global sizes
+   const int H1Vsize;
+   const int H1TVSize;
+   const int L2Vsize;
+   const int L2TVSize;
+   Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable GridFunction x_gf;
-
-   Array<int> &ess_tdofs;
-
-   const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
+   const Array<int> &ess_tdofs;
+   const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, p_assembly;
    const double cg_rel_tol;
    const int cg_max_iter;
+   const double ftz_tol;
    Coefficient *material_pcf;
-
+   const GridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable BilinearForm Mv;
    SparseMatrix Mv_spmat_copy;
    DenseTensor Me, Me_inv;
-
    // Integration rule for all assemblies.
-   const IntegrationRule &integ_rule;
-
-   // Data associated with each quadrature point in the mesh. These values are
-   // recomputed at each time step.
-   mutable QuadratureData quad_data;
-   mutable bool quad_data_is_current, forcemat_is_assembled;
-
+   const IntegrationRule &ir;
+   // Data associated with each quadrature point in the mesh.
+   // These values are recomputed at each time step.
+   mutable QuadratureData qdata;
+   mutable bool qdata_is_current, forcemat_is_assembled;
    // Structures used to perform partial assembly.
-   Tensors1D tensors1D;
-   FastEvaluator evaluator;
-
+   Tensors1D T1D;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
-
    // Same as above, but done through partial assembly.
-   ForcePAOperator ForcePA;
-
+   ForcePAOperator *ForcePA;
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
-   mutable MassPAOperator VMassPA;
+   MassPAOperator *VMassPA, *EMassPA;
    mutable DiagonalSolver VMassPA_prec;
-   mutable LocalMassPAOperator locEMassPA;
-
    // Linear solver for energy.
-   CGSolver locCG;
-
+   CGSolver CG_VMass, CG_EMass;
    mutable TimingData timer;
+   mutable QUpdate qupdate;
+   mutable Vector X, B, one, rhs, e_rhs;
+   mutable GridFunction rhs_c_gf, dvc_gf;
+   mutable Array<int> c_tdofs[3];
 
-   void ComputeMaterialProperties(int nvalues, const double gamma[],
-                                  const double rho[], const double e[],
-                                  double p[], double cs[]) const
+   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
+                                          const double rho[], const double e[],
+                                          double p[], double cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
@@ -120,37 +163,48 @@ protected:
    void AssembleForceMatrix() const;
 
 public:
-   LagrangianHydroOperator(int size, FiniteElementSpace &h1_fes,
+   LagrangianHydroOperator(Coefficient &rho0_coeff,
+                           const int size,
+                           FiniteElementSpace &h1_fes,
                            FiniteElementSpace &l2_fes,
-                           Array<int> &essential_tdofs, GridFunction &rho0,
-                           int source_type_, double cfl_,
-                           Coefficient *material_, bool visc, bool pa,
-                           double cgt, int cgiter, int h1_basis_type);
+                           const Array<int> &ess_tdofs,
+                           GridFunction &rho0_gf,
+                           const int source, const double cfl,
+                           Coefficient *mat_gf_coeff,
+                           GridFunction &gamma_gf,
+                           const bool visc, const bool pa,
+                           const double cgt, const int cgiter, double ftz_tol,
+                           const int order_q, const int h1_basis_type);
+   ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
+
+   virtual MemoryClass GetMemoryClass() const
+   { return Device::GetMemoryClass(); }
 
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
 
-   // Calls UpdateQuadratureData to compute the new quad_data.dt_estimate.
+   // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
-   void ResetQuadratureData() const { quad_data_is_current = false; }
+   void ResetQuadratureData() const { qdata_is_current = false; }
 
-   // The density values, which are stored only at some quadrature points, are
-   // projected as a ParGridFunction.
-   void ComputeDensity(GridFunction &rho);
-
+   // The density values, which are stored only at some quadrature points,
+   // are projected as a GridFunction.
+   void ComputeDensity(GridFunction &rho) const;
    double InternalEnergy(const GridFunction &e) const;
    double KineticEnergy(const GridFunction &v) const;
 
-   void PrintTimingData(int steps) const;
+   int GetH1VSize() const { return H1.GetVSize(); }
+   const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
-   int GetH1VSize() const { return H1FESpace.GetVSize(); }
+   void PrintTimingData(int steps, const bool fom) const;
 };
 
+// TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
    virtual double Eval(ElementTransformation &T,
@@ -164,6 +218,28 @@ class TaylorCoefficient : public Coefficient
 };
 
 } // namespace hydrodynamics
+
+class HydroODESolver : public ODESolver
+{
+protected:
+   hydrodynamics::LagrangianHydroOperator *hydro_oper;
+public:
+   HydroODESolver() : hydro_oper(NULL) { }
+   virtual void Init(TimeDependentOperator&);
+   virtual void Step(Vector&, double&, double&)
+   { MFEM_ABORT("Time stepping is undefined."); }
+};
+
+class RK2AvgSolver : public HydroODESolver
+{
+protected:
+   Vector V;
+   BlockVector dS_dt, S0;
+public:
+   RK2AvgSolver() { }
+   virtual void Init(TimeDependentOperator &_f);
+   virtual void Step(Vector &S, double &t, double &dt);
+};
 
 } // namespace mfem
 

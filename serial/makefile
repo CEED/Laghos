@@ -105,12 +105,10 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_timeinteg.cpp \
-               ../laghos_assembly.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_timeinteg.hpp \
-               ../laghos_assembly.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp
 
 # Targets
 
