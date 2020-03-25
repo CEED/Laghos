@@ -67,7 +67,7 @@ struct Tensors1D
 {
    // H1 shape functions and gradients, L2 shape functions.
    DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-   Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
+   Tensors1D(int H1order, int L2order, int Q1D, bool bernstein_v);
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
@@ -86,8 +86,7 @@ public:
                                        Vector &elvect);
 };
 
-// Assembles element contributions to the global force matrix. This class is
-// used for the full assembly case; it's not used with partial assembly.
+// Performs full assembly for the force operator.
 class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
@@ -128,7 +127,7 @@ private:
    const MPI_Comm comm;
    const int dim, NE, vsize;
    const QuadratureData &qdata;
-   FiniteElementSpace &pfes;
+   FiniteElementSpace &fes;
    ParBilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
@@ -140,10 +139,6 @@ public:
    virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector&) const;
    virtual void ComputeDiagonal3D(Vector&) const;
-   virtual const Operator *GetProlongation() const
-   { return pfes.GetProlongationMatrix(); }
-   virtual const Operator *GetRestriction() const
-   { return pfes.GetRestrictionMatrix(); }
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
 };
@@ -153,16 +148,16 @@ class DiagonalSolver : public Solver
 {
 private:
    Vector diag;
-   FiniteElementSpace &FESpace;
+   FiniteElementSpace &fes;
+
 public:
    DiagonalSolver(FiniteElementSpace &fes)
-      : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
+      : Solver(fes.GetVSize()), diag(), fes(fes) { }
 
    void SetDiagonal(Vector &d)
    {
-      const Operator *P = FESpace.GetProlongationMatrix();
-      // Happens when this is called by the serial version of Laghos.
-      if (P == NULL) { diag = d; return; }
+      const Operator *P = fes.GetProlongationMatrix();
+      MFEM_VERIFY(P, "No prolongation matrix!");
       diag.SetSize(P->Width());
       P->MultTranspose(d, diag);
    }
@@ -175,6 +170,7 @@ public:
       auto d_y = y.Write();
       MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
    }
+
    virtual void SetOperator(const Operator&) { }
 };
 
