@@ -203,13 +203,13 @@ tests:
 	./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
-	./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
+	./laghos -p 3 -m ../data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 17 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
-	./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
+	./laghos -p 3 -m ../data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 17 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
-	./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 \
+	./laghos -p 4 -m ../data/square_gresho.mesh -rs 3 -ok 3 \
 	         -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 20 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
