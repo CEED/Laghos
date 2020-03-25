@@ -18,13 +18,13 @@ define LAGHOS_HELP_MSG
 
 Laghos makefile targets:
 
-	make
+   make
    make setup
-	make setup MFEM_BUILD=pcuda
+   make setup MFEM_BUILD=pcuda
    make status/info
-	make test
-	make tests
-	make checks
+   make test
+   make tests
+   make checks
    make install
    make clean
    make distclean
@@ -33,9 +33,9 @@ Laghos makefile targets:
 Examples:
 
 make setup
-	Build Laghos third party libraries: HYPRE, METIS and MFEM
-	(By default MFEM will be compiled in parallel mode, but MFEM_BUILD=pcuda
-	 will allow a parallel CUDA build.)
+   Build Laghos third party libraries: HYPRE, METIS and MFEM
+   (By default MFEM will be compiled in parallel mode, but MFEM_BUILD=pcuda
+    will allow a parallel CUDA build.)
 make -j 4
    Build Laghos using the current configuration options from MFEM.
    (Laghos requires the MFEM finite element library, and uses its compiler and
@@ -95,10 +95,8 @@ OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
 # Targets
 
-.PHONY: 	all clean distclean install \
-			status info opt debug test tests style \
-			clean-build clean-exec clean-tests \
-			mfem hypre metis
+.PHONY: all clean distclean install status info opt debug test tests style \
+	clean-build clean-exec clean-tests fem hypre metis
 
 .SUFFIXES: .cpp .o
 .cpp.o:
@@ -180,7 +178,7 @@ laghos_$(1)_$(2)_$(3)_$(4): laghos
 	$(eval name=laghos-x$(4)-p$(1)-$(2)D$(word $(3),$(options)))
 	$(eval command=$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./laghos $(OPTS) -p $(1) -dim $(2) $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g"))
 	@$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(4) ./$$< $(OPTS) -p $(1) -dim $(2) $(shell echo $(word $(3),$(options))|$(SED) "s/-/ -/g"|$(SED) "s/_/ /g") > /dev/null 2>&1 && \
-		$(call COLOR_PRINT,'\033[0;32m',OK,': $(name)\n') || $(call COLOR_PRINT,'\033[1;31m',KO,': $(command)\n');
+	$(call COLOR_PRINT,'\033[0;32m',OK,': $(name)\n') || $(call COLOR_PRINT,'\033[1;31m',KO,': $(command)\n');
 endef
 # Generate all Laghos checks template targets
 $(foreach p, $(problems), $(foreach d, $(dims), $(foreach o, $(optioni), $(foreach r, $(ranks),\

@@ -42,7 +42,7 @@ struct TimingData
    // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
-   // Store the number of dofs of the the coresponding local CG
+   // Store the number of dofs of the corresponding local CG
    const HYPRE_Int L2dof;
 
    // These accumulate the total processed dofs or quad points:
