@@ -96,7 +96,7 @@ OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 # Targets
 
 .PHONY: all clean distclean install status info opt debug test tests style \
-	clean-build clean-exec clean-tests fem hypre metis
+	clean-build clean-exec clean-tests setup mfem hypre metis
 
 .SUFFIXES: .cpp .o
 .cpp.o:

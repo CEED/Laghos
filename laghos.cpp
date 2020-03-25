@@ -39,6 +39,8 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 //    p = 4  --> Gresho vortex (smooth problem).
+//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
+//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //

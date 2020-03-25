@@ -315,12 +315,7 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **CUDA** version in the [cuda/](./cuda/README.md) directory. This version supports GPU acceleration.
-- **RAJA** version in the [raja/](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
-- **OCCA** version in the [occa/](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
 - **AMR** version in the [amr/](./amr/README.md) directory. This version supports dynamic adaptive mesh refinement.
-- **MFEM/engines**-based version in the
-  [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branch.
 
 ## Contact
 

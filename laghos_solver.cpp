@@ -281,13 +281,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
       MassIntegrator mi(rho_coeff_gf, &ir);
-      for (int i = 0; i < NE; i++)
+      for (int e = 0; e < NE; e++)
       {
-         DenseMatrixInverse inv(&Me(i));
-         mi.AssembleElementMatrix(*L2.GetFE(i),
-                                  *L2.GetElementTransformation(i), Me(i));
+         DenseMatrixInverse inv(&Me(e));
+         const FiniteElement &fe = *L2.GetFE(e);
+         ElementTransformation &Tr = *L2.GetElementTransformation(e);
+         mi.AssembleElementMatrix(fe, Tr, Me(e));
          inv.Factor();
-         inv.GetInverseMatrix(Me_inv(i));
+         inv.GetInverseMatrix(Me_inv(e));
       }
       // Standard assembly for the velocity mass matrix.
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &ir);
@@ -298,21 +299,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
       // Initial local mesh size (assumes all mesh elements are the same).
       const int nqp = ir.GetNPoints();
       Vector rho_vals(nqp);
-      for (int i = 0; i < NE; i++)
+      for (int e = 0; e < NE; e++)
       {
-         rho0_gf.GetValues(i, ir, rho_vals);
-         ElementTransformation *T = H1.GetElementTransformation(i);
+         rho0_gf.GetValues(e, ir, rho_vals);
+         ElementTransformation &Tr = *H1.GetElementTransformation(e);
          for (int q = 0; q < nqp; q++)
          {
             const IntegrationPoint &ip = ir.IntPoint(q);
-            T->SetIntPoint(&ip);
-            DenseMatrixInverse Jinv(T->Jacobian());
-            Jinv.GetInverseMatrix(qdata.Jac0inv(i*nqp + q));
-            const double rho0DetJ0 = T->Weight() * rho_vals(q);
-            qdata.rho0DetJ0w(i*nqp + q) = rho0DetJ0 * ir.IntPoint(q).weight;
+            Tr.SetIntPoint(&ip);
+            DenseMatrixInverse Jinv(Tr.Jacobian());
+            Jinv.GetInverseMatrix(qdata.Jac0inv(e*nqp + q));
+            const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
+            qdata.rho0DetJ0w(e*nqp + q) = rho0DetJ0 * ir.IntPoint(q).weight;
          }
       }
-      for (int i = 0; i < NE; i++) { vol += pmesh->GetElementVolume(i); }
+      for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
    }
 
    double Volume;
@@ -530,8 +531,8 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
    UpdateMesh(S);
    UpdateQuadratureData(S);
    double glob_dt_est;
-   MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN,
-                 H1.GetParMesh()->GetComm());
+   const MPI_Comm comm = H1.GetParMesh()->GetComm();
+   MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN, comm);
    return glob_dt_est;
 }
 
@@ -691,6 +692,7 @@ MFEM_HOST_DEVICE inline double smooth_step_01(double x, double eps)
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (qdata_is_current) { return; }
+
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
@@ -1063,22 +1065,22 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
    timer->sw_qdata.Start();
    Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
-   const int nqp1D = T1D->LQshape1D.Width();
+   const int Q1D = T1D->LQshape1D.Width();
    const double h1order = (double) H1.GetOrder(0);
    const double infinity = std::numeric_limits<double>::infinity();
-   ParGridFunction d_x, d_v, d_e;
-   d_x.MakeRef(&H1,*S_p, 0);
-   H1R->Mult(d_x, d_h1_v_local_in);
+   ParGridFunction x, v, e;
+   x.MakeRef(&H1,*S_p, 0);
+   H1R->Mult(x, e_vec);
    q1->SetOutputLayout(QVectorLayout::byVDIM);
-   q1->Derivatives(d_h1_v_local_in, d_h1_grad_x_data);
-   d_v.MakeRef(&H1,*S_p, H1_size);
-   H1R->Mult(d_v, d_h1_v_local_in);
-   q1->Derivatives(d_h1_v_local_in, d_h1_grad_v_data);
-   d_e.MakeRef(&L2, *S_p, 2*H1_size);
+   q1->Derivatives(e_vec, q_dx);
+   v.MakeRef(&H1,*S_p, H1_size);
+   H1R->Mult(v, e_vec);
+   q1->Derivatives(e_vec, q_dv);
+   e.MakeRef(&L2, *S_p, 2*H1_size);
    q2->SetOutputLayout(QVectorLayout::byVDIM);
-   q2->Values(d_e, d_l2_e_quads_data);
-   d_dt_est = qdata.dt_est;
-   const int id = (dim<<4) | nqp1D;
+   q2->Values(e, q_e);
+   q_dt_est = qdata.dt_est;
+   const int id = (dim << 4) | Q1D;
    typedef void (*fQKernel)(const int NE, const int NQ,
                             const bool use_viscosity,
                             const double h0, const double h1order,
@@ -1100,10 +1102,10 @@ void QUpdate::UpdateQuadratureData(const Vector &S,
       MFEM_ABORT("Unknown kernel");
    }
    qupdate[id](NE, NQ, use_viscosity, qdata.h0, h1order, cfl, infinity,
-               gamma_gf, ir.GetWeights(), d_h1_grad_x_data,
-               qdata.rho0DetJ0w, d_l2_e_quads_data, d_h1_grad_v_data,
-               qdata.Jac0inv, d_dt_est, qdata.stressJinvT);
-   qdata.dt_est = d_dt_est.Min();
+               gamma_gf, ir.GetWeights(), q_dx,
+               qdata.rho0DetJ0w, q_e, q_dv,
+               qdata.Jac0inv, q_dt_est, qdata.stressJinvT);
+   qdata.dt_est = q_dt_est.Min();
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
 }

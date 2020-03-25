@@ -6,6 +6,15 @@
                        /____/
 
         High-order Lagrangian Hydrodynamics Miniapp
+Version 3.0, released on Mar 30, 2020
+=====================================
+
+- Replaced all CUDA, RAJA, OCCA sub-directories with MFEM GPU kernels.
+
+- Added 'setup' makefile target to download and build TPLs: HYPRE (2.11.2),
+  Metis (4.0.3) & MFEM (master branch).
+
+- Added 'tests' and 'checks' makefile targets to launch non-regression tests.
 
 
 Version 2.0, released on Nov 19, 2018

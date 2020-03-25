@@ -66,9 +66,7 @@ private:
    ParFiniteElementSpace &H1, &L2;
    const Operator *H1R;
    const int vdim;
-   Vector d_dt_est;
-   Vector d_l2_e_quads_data;
-   Vector d_h1_v_local_in, d_h1_grad_x_data, d_h1_grad_v_data;
+   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
    const QuadratureInterpolator *q1,*q2;
    const ParGridFunction &gamma_gf;
 public:
@@ -81,11 +79,11 @@ public:
       timer(t), ir(ir), H1(h1), L2(l2),
       H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
       vdim(H1.GetVDim()),
-      d_dt_est(NE*NQ),
-      d_l2_e_quads_data(NE*NQ),
-      d_h1_v_local_in(NQ*NE*vdim),
-      d_h1_grad_x_data(NQ*NE*vdim*vdim),
-      d_h1_grad_v_data(NQ*NE*vdim*vdim),
+      q_dt_est(NE*NQ),
+      q_e(NE*NQ),
+      e_vec(NQ*NE*vdim),
+      q_dx(NQ*NE*vdim*vdim),
+      q_dv(NQ*NE*vdim*vdim),
       q1(H1.GetQuadratureInterpolator(ir)),
       q2(L2.GetQuadratureInterpolator(ir)),
       gamma_gf(gamma_gf) { }

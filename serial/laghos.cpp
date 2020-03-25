@@ -39,22 +39,10 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 //    p = 4  --> Gresho vortex (smooth problem).
+//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
+//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
 //
 // Sample runs: see README.md, section 'Verification of Results'.
-//
-// Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
-// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
-// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
-// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
-// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
-// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
-// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
-// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
-// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
-// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include <fstream>
 #include <sys/time.h>
@@ -105,7 +93,6 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 0;
    const char *device = "cpu";
    bool check = false;
    bool mem_usage = false;
@@ -158,15 +145,6 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   args.AddOption(&partition_type, "-pt", "--partition",
-                  "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
-                  "Here x,y,z are relative task ratios in each direction.\n\t"
-                  "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
-                  "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
-                  "NOTE: the serially refined mesh must have the appropriate number\n\t"
-                  "of zones in each direction, e.g., the number of zones in direction x\n\t"
-                  "must be divisible by the number of MPI tasks in direction x.\n\t"
-                  "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
@@ -305,7 +283,7 @@ int main(int argc, char *argv[])
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
+   GridFunction x_gf, v_gf, e_gf;
    x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
@@ -389,7 +367,7 @@ int main(int argc, char *argv[])
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
+   GridFunction rho_gf;
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
