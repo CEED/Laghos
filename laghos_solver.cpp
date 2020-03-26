@@ -661,11 +661,12 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       cout << "| Ranks " << "| Zones   "
            << "| H1 dofs " << "| L2 dofs "
            << "| QP "      << "| N dofs   "
-           << "| FOM1    " << "| T1    "
+           << "| FOM0   "
+           << "| FOM1   " << "| T1   "
            << "| FOM2   " << "| T2   "
            << "| FOM3   " << "| T3   "
            << "| FOM    " << "| TT   "
-           << "| FOM0   " << "|" << endl;
+           << "|" << endl;
       cout << setprecision(3);
       cout << "| " << setw(6) << H1.GetNRanks()
            << "| " << setw(8) << GNZones
@@ -673,15 +674,15 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << "| " << setw(8) << L2GTVSize
            << "| " << setw(3) << QPT
            << "| " << setw(9) << ndofs
-           << "| " << setw(8) << FOM1
-           << "| " << setw(6) << T[0]
+           << "| " << setw(7) << FOM0
+           << "| " << setw(7) << FOM1
+           << "| " << setw(5) << T[0]
            << "| " << setw(7) << FOM2
            << "| " << setw(5) << T[2]
            << "| " << setw(7) << FOM3
            << "| " << setw(5) << T[3]
            << "| " << setw(7) << FOM
            << "| " << setw(5) << T[4]
-           << "| " << setw(7) << FOM0
            << "| " << endl;
    }
 }

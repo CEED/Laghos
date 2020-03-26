@@ -26,7 +26,7 @@ namespace mfem
 namespace hydrodynamics
 {
 
-/// Visualize the given parallel grid function, using a GLVis server on the
+/// Visualize the given grid function, using a GLVis server on the
 /// specified host and port. Set the visualization window title, and optionally,
 /// its geometry.
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
@@ -98,6 +98,7 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    FiniteElementSpace &H1, &L2;
    mutable FiniteElementSpace H1c;
+   Mesh *mesh;
    // FE spaces local and global sizes
    const int H1Vsize;
    const int H1TVSize;
@@ -113,7 +114,7 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   Coefficient *material_pcf;
+   Coefficient &gamma_coeff;
    const GridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -161,14 +162,15 @@ protected:
    void AssembleForceMatrix() const;
 
 public:
-   LagrangianHydroOperator(Coefficient &rho0_coeff,
-                           const int size,
+   LagrangianHydroOperator(const int size,
                            FiniteElementSpace &h1_fes,
                            FiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
+                           Coefficient &rho0_coeff,
                            GridFunction &rho0_gf,
-                           const int source, const double cfl,
-                           Coefficient *mat_gf_coeff,
+                           const int source,
+                           const double cfl,
+                           Coefficient &mat_gf_coeff,
                            GridFunction &gamma_gf,
                            const bool visc, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,

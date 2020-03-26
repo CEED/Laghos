@@ -17,18 +17,14 @@
 #include "laghos_assembly.hpp"
 #include <unordered_map>
 
-using namespace std;
-
 namespace mfem
 {
 
 namespace hydrodynamics
 {
 
-Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v)
-   : HQshape1D(H1order + 1, nqp1D),
-     HQgrad1D(H1order + 1, nqp1D),
-     LQshape1D(L2order + 1, nqp1D)
+Tensors1D::Tensors1D(int ok, int ot, int Q1D, bool bernstein_v)
+   : HQshape1D(ok + 1, Q1D), HQgrad1D(ok + 1, Q1D), LQshape1D(ot + 1, Q1D)
 {
    // In this miniapp we assume:
    // - Gauss-Legendre quadrature points.
@@ -36,24 +32,20 @@ Tensors1D::Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v)
    // - Bernstein discontinuous thermodynamic basis.
    const int Q1D_GLobatto = Quadrature1D::GaussLobatto;
    const int Q1D_GLegendre = Quadrature1D::GaussLegendre;
-   const double *quad1D_pos = poly1d.GetPoints(nqp1D - 1, Q1D_GLegendre);
-   const Poly_1D::Basis &basisH1 = poly1d.GetBasis(H1order, Q1D_GLobatto);
+   const double *quad1D_pos = poly1d.GetPoints(Q1D - 1, Q1D_GLegendre);
+   const Poly_1D::Basis &basisH1 = poly1d.GetBasis(ok, Q1D_GLobatto);
    Vector col, grad_col;
-   for (int q = 0; q < nqp1D; q++)
+   for (int q = 0; q < Q1D; q++)
    {
       HQshape1D.GetColumnReference(q, col);
       HQgrad1D.GetColumnReference(q, grad_col);
-      if (bernstein_v)
-      {
-         poly1d.CalcBernstein(H1order, quad1D_pos[q],
-                              col.GetData(), grad_col.GetData());
-      }
+      if (bernstein_v) { poly1d.CalcBernstein(ok, quad1D_pos[q], col, grad_col); }
       else { basisH1.Eval(quad1D_pos[q], col, grad_col); }
    }
-   for (int q = 0; q < nqp1D; q++)
+   for (int q = 0; q < Q1D; q++)
    {
       LQshape1D.GetColumnReference(q, col);
-      poly1d.CalcBernstein(L2order, quad1D_pos[q], col);
+      poly1d.CalcBernstein(ot, quad1D_pos[q], col);
    }
 }
 
@@ -61,25 +53,25 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
 {
-   const int ip_cnt = IntRule->GetNPoints();
+   const int nqp = IntRule->GetNPoints();
    Vector shape(fe.GetDof());
    elvect.SetSize(fe.GetDof());
    elvect = 0.0;
-   for (int q = 0; q < ip_cnt; q++)
+   for (int q = 0; q < nqp; q++)
    {
       fe.CalcShape(IntRule->IntPoint(q), shape);
       // Note that rhoDetJ = rho0DetJ0.
-      shape *= quad_data.rho0DetJ0w(Tr.ElementNo*ip_cnt + q);
+      shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
       elvect += shape;
    }
 }
 
 void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
                                              const FiniteElement &test_fe,
-                                             ElementTransformation &Trans,
+                                             ElementTransformation &Tr,
                                              DenseMatrix &elmat)
 {
-   const int e = Trans.ElementNo;
+   const int e = Tr.ElementNo;
    const int nqp = IntRule->GetNPoints();
    const int dim = trial_fe.GetDim();
    const int h1dofs_cnt = test_fe.GetDof();
@@ -101,7 +93,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               const double stressJinvT = quad_data.stressJinvT(vd)(eq, gd);
+               const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
                loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
             }
          }
@@ -112,15 +104,15 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
 }
 
 static void ComputeDiagonal2D(const int height, const int NE,
-                              const QuadratureData &quad_data,
-                              const FiniteElementSpace &FESpace,
-                              const Tensors1D *tensors1D,
+                              const QuadratureData &qdata,
+                              const FiniteElementSpace &fes,
+                              const Tensors1D &T1D,
                               Vector &diag)
 {
    const TensorBasisElement *fe_H1 =
-      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
+      dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = tensors1D->HQshape1D;
+   const DenseMatrix &HQs = T1D.HQshape1D;
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width(), nqp = nqp1D * nqp1D;
    Vector dz(ndof1D * ndof1D);
    DenseMatrix HQ(ndof1D, nqp1D), D(dz.GetData(), ndof1D, ndof1D);
@@ -138,13 +130,13 @@ static void ComputeDiagonal2D(const int height, const int NE,
    }
    for (int z = 0; z < NE; z++)
    {
-      DenseMatrix QQ(quad_data.rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
+      DenseMatrix QQ(qdata.rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
       // HQ_i1_k2 = HQs_i1_k1^2 QQ_k1_k2    -- contract in x direction.
       // Y_i1_i2  = HQ_i1_k2    HQs_i2_k2^2 -- contract in y direction.
       mfem::Mult(HQs_sq, QQ, HQ);
       MultABt(HQ, HQs_sq, D);
       // Transfer from the tensor structure numbering to mfem's H1 numbering.
-      FESpace.GetElementDofs(z, dofs);
+      fes.GetElementDofs(z, dofs);
       for (int j = 0; j < dz.Size(); j++)
       {
          diag[dofs[dof_map[j]]] += dz[j];
@@ -153,15 +145,15 @@ static void ComputeDiagonal2D(const int height, const int NE,
 }
 
 static void ComputeDiagonal3D(const int height, const int NE,
-                              const QuadratureData &quad_data,
-                              const FiniteElementSpace &FESpace,
-                              const Tensors1D *tensors1D,
+                              const QuadratureData &qdata,
+                              const FiniteElementSpace &fes,
+                              const Tensors1D &T1D,
                               Vector &diag)
 {
    const TensorBasisElement *fe_H1 =
-      dynamic_cast<const TensorBasisElement *>(FESpace.GetFE(0));
+      dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = tensors1D->HQshape1D;
+   const DenseMatrix &HQs = T1D.HQshape1D;
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width(),
              nqp = nqp1D * nqp1D * nqp1D;
    DenseMatrix HH_Q(ndof1D * ndof1D, nqp1D), Q_HQ(nqp1D, ndof1D*nqp1D);
@@ -182,8 +174,7 @@ static void ComputeDiagonal3D(const int height, const int NE,
    }
    for (int z = 0; z < NE; z++)
    {
-      DenseMatrix QQ_Q(quad_data.rho0DetJ0w.GetData() + z*nqp,
-                       nqp1D * nqp1D, nqp1D);
+      DenseMatrix QQ_Q(qdata.rho0DetJ0w.GetData() + z*nqp, nqp1D*nqp1D, nqp1D);
       // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2^2  -- contract in y direction.
       // The first step does some reordering (it's not product of matrices).
       // HHQ_i1_i2_k3 = HQs_i1_k1^2  QHQ_k1_i2_k3 -- contract in x direction.
@@ -206,7 +197,7 @@ static void ComputeDiagonal3D(const int height, const int NE,
       mfem::Mult(HQs_sq, Q_HQ, H_HQ);
       MultABt(HH_Q, HQs_sq, D);
       // Transfer from the tensor structure numbering to mfem's H1 numbering.
-      FESpace.GetElementDofs(z, dofs);
+      fes.GetElementDofs(z, dofs);
       for (int j = 0; j < dz.Size(); j++)
       {
          diag[dofs[dof_map[j]]] += dz[j];
@@ -214,24 +205,25 @@ static void ComputeDiagonal3D(const int height, const int NE,
    }
 }
 
-MassPAOperator::MassPAOperator(Coefficient &Q,
-                               const QuadratureData &qdata,
-                               FiniteElementSpace &pfes,
+MassPAOperator::MassPAOperator(const QuadratureData &qdata,
+                               FiniteElementSpace &fes,
                                const IntegrationRule &ir,
-                               Tensors1D *T1D) :
-   Operator(pfes.GetTrueVSize()),
-   dim(pfes.GetMesh()->Dimension()),
-   NE(pfes.GetMesh()->GetNE()),
-   vsize(pfes.GetVSize()),
+                               Tensors1D &T1D,
+                               Coefficient &Q) :
+   Operator(fes.GetTrueVSize()),
+   dim(fes.GetMesh()->Dimension()),
+   NE(fes.GetMesh()->GetNE()),
+   vsize(fes.GetVSize()),
    qdata(qdata),
-   pfes(pfes),
-   pabf(&pfes),
+   fes(fes),
+   pabf(&fes),
    ess_tdofs_count(0),
    ess_tdofs(0),
    T1D(T1D)
 {
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
-   pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
+   MassIntegrator *mi = new mfem::MassIntegrator(Q, &ir);
+   pabf.AddDomainIntegrator(mi);
    pabf.Assemble();
    pabf.FormSystemMatrix(mfem::Array<int>(), mass);
 }
@@ -239,7 +231,7 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size() == 0)
+   if (ess_tdofs.Size() == 0) //|| ess_tdofs.Size() != ess_tdofs_count)
    {
       ess_tdofs.SetSize(ess_tdofs_count);
    }
@@ -263,12 +255,12 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 
 void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
 {
-   hydrodynamics::ComputeDiagonal2D(vsize, NE, qdata, pfes, T1D, diag);
+   hydrodynamics::ComputeDiagonal2D(vsize, NE, qdata, fes, T1D, diag);
 }
 
 void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
 {
-   hydrodynamics::ComputeDiagonal3D(vsize, NE, qdata, pfes, T1D, diag);
+   hydrodynamics::ComputeDiagonal3D(vsize, NE, qdata, fes, T1D, diag);
 }
 
 ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
@@ -308,7 +300,7 @@ void ForceMult2D(const int NE,
    const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
    auto energy = Reshape(x.Read(), L1D, L1D, NE);
-   const double eps1 = numeric_limits<double>::epsilon();
+   const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
    auto velocity = Reshape(y.Write(), D1D, D1D, DIM, NE);
 
@@ -459,7 +451,7 @@ void ForceMult3D(const int NE,
    const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
    auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
-   const double eps1 = numeric_limits<double>::epsilon();
+   const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
    auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
