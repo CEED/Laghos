@@ -139,7 +139,7 @@ public:
    virtual void Mult(const Vector&, Vector&) const;
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
-   const ParBilinearForm &GetBF() { return pabf; }
+   const ParBilinearForm &GetBF() const { return pabf; }
 };
 
 } // namespace hydrodynamics
