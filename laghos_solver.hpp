@@ -117,7 +117,7 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   Coefficient *material_pcf;
+   Coefficient &gamma_coeff;
    const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -165,14 +165,15 @@ protected:
    void AssembleForceMatrix() const;
 
 public:
-   LagrangianHydroOperator(Coefficient &rho0_coeff,
-                           const int size,
+   LagrangianHydroOperator(const int size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
+                           Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
-                           const int source, const double cfl,
-                           Coefficient *mat_gf_coeff,
+                           const int source,
+                           const double cfl,
+                           Coefficient &mat_gf_coeff,
                            ParGridFunction &gamma_gf,
                            const bool visc, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,

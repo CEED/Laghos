@@ -172,15 +172,15 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
-                                                 const int size,
+LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
+                                                 Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
                                                  const int source,
                                                  const double cfl,
-                                                 Coefficient *gamma_coeff,
+                                                 Coefficient &gamma_coeff,
                                                  ParGridFunction &gamma_gf,
                                                  const bool visc,
                                                  const bool p_assembly,
@@ -208,7 +208,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
    use_viscosity(visc),
    p_assembly(p_assembly),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
-   material_pcf(gamma_coeff),
+   gamma_coeff(gamma_coeff),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
@@ -747,8 +747,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr_b[z](q).Det();
             min_detJ = std::fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
-            if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
-            else { gamma_b[idx] = material_pcf->Eval(*T, ip); }
+            gamma_b[idx] = gamma_coeff.Eval(*T, ip);
             rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = std::fmax(0.0, e_vals(q));
          }

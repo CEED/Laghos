@@ -525,7 +525,6 @@ int main(int argc, char *argv[])
    ParGridFunction mat_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma);
    mat_gf.ProjectCoefficient(mat_coeff);
-   GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true;
@@ -534,7 +533,7 @@ int main(int argc, char *argv[])
       case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
-      case 3: visc = true; break;
+      case 3: visc = true; S.HostRead(); break;
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
@@ -542,13 +541,13 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   // gamma uses X in problem 3
-   if (problem == 3) { S.HostRead(); }
-   hydrodynamics::LagrangianHydroOperator hydro(rho0_coeff, S.Size(),
+   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
-                                                ess_tdofs, rho0_gf, source, cfl,
-                                                mat_gf_coeff, mat_gf, visc,
-                                                p_assembly,
+                                                ess_tdofs,
+                                                rho0_coeff, rho0_gf,
+                                                source, cfl,
+                                                mat_coeff, mat_gf,
+                                                visc, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, H1FEC.GetBasisType());
 
@@ -827,7 +826,6 @@ int main(int argc, char *argv[])
    // Free the used memory.
    delete ode_solver;
    delete pmesh;
-   delete mat_gf_coeff;
 
    return 0;
 }

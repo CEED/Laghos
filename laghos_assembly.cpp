@@ -23,10 +23,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
-Tensors1D::Tensors1D(int H1order, int L2order, int Q1D, bool bernstein_v)
-   : HQshape1D(H1order + 1, Q1D),
-     HQgrad1D(H1order + 1, Q1D),
-     LQshape1D(L2order + 1, Q1D)
+Tensors1D::Tensors1D(int ok, int ot, int Q1D, bool bernstein_v)
+   : HQshape1D(ok + 1, Q1D), HQgrad1D(ok + 1, Q1D), LQshape1D(ot + 1, Q1D)
 {
    // In this miniapp we assume:
    // - Gauss-Legendre quadrature points.
@@ -35,23 +33,19 @@ Tensors1D::Tensors1D(int H1order, int L2order, int Q1D, bool bernstein_v)
    const int Q1D_GLobatto = Quadrature1D::GaussLobatto;
    const int Q1D_GLegendre = Quadrature1D::GaussLegendre;
    const double *quad1D_pos = poly1d.GetPoints(Q1D - 1, Q1D_GLegendre);
-   const Poly_1D::Basis &basisH1 = poly1d.GetBasis(H1order, Q1D_GLobatto);
+   const Poly_1D::Basis &basisH1 = poly1d.GetBasis(ok, Q1D_GLobatto);
    Vector col, grad_col;
    for (int q = 0; q < Q1D; q++)
    {
       HQshape1D.GetColumnReference(q, col);
       HQgrad1D.GetColumnReference(q, grad_col);
-      if (bernstein_v)
-      {
-         poly1d.CalcBernstein(H1order, quad1D_pos[q],
-                              col.GetData(), grad_col.GetData());
-      }
+      if (bernstein_v) { poly1d.CalcBernstein(ok, quad1D_pos[q], col, grad_col); }
       else { basisH1.Eval(quad1D_pos[q], col, grad_col); }
    }
    for (int q = 0; q < Q1D; q++)
    {
       LQshape1D.GetColumnReference(q, col);
-      poly1d.CalcBernstein(L2order, quad1D_pos[q], col);
+      poly1d.CalcBernstein(ot, quad1D_pos[q], col);
    }
 }
 
