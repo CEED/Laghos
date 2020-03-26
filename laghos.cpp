@@ -675,6 +675,7 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
+            cout << std::fixed;
             if (mem_usage)
             {
                cout << ", mem: " << mmax << "/" << msum << " MB";

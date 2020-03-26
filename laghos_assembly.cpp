@@ -67,7 +67,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    {
       fe.CalcShape(IntRule->IntPoint(q), shape);
       // Note that rhoDetJ = rho0DetJ0.
-      shape *= quad_data.rho0DetJ0w(Tr.ElementNo*nqp + q);
+      shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
       elvect += shape;
    }
 }
@@ -99,7 +99,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               const double stressJinvT = quad_data.stressJinvT(vd)(eq, gd);
+               const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
                loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
             }
          }
@@ -229,7 +229,8 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
    T1D(T1D)
 {
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
-   pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q,&ir));
+   MassIntegrator *mi = new mfem::MassIntegrator(Q, &ir);
+   pabf.AddDomainIntegrator(mi);
    pabf.Assemble();
    pabf.FormSystemMatrix(mfem::Array<int>(), mass);
 }
@@ -237,7 +238,7 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size() == 0)
+   if (ess_tdofs.Size() == 0 )//|| ess_tdofs.Size() != ess_tdofs_count)
    {
       int ess_tdofs_sz;
       MPI_Allreduce(&ess_tdofs_count,&ess_tdofs_sz, 1, MPI_INT, MPI_SUM, comm);
@@ -257,9 +258,9 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    ParGridFunction X;
    X.NewMemoryAndSize(x.GetMemory(), x.Size(), false);
-   if (ess_tdofs_count) { X.SetSubVector(ess_tdofs, 0.0); }
+   if (ess_tdofs_count > 0) { X.SetSubVector(ess_tdofs, 0.0); }
    mass->Mult(X, y);
-   if (ess_tdofs_count) { y.SetSubVector(ess_tdofs, 0.0); }
+   if (ess_tdofs_count > 0) { y.SetSubVector(ess_tdofs, 0.0); }
 }
 
 void MassPAOperator::ComputeDiagonal2D(Vector &diag) const

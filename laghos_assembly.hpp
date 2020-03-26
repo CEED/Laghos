@@ -77,10 +77,10 @@ class DensityIntegrator : public LinearFormIntegrator
 {
    using LinearFormIntegrator::AssembleRHSElementVect;
 private:
-   const QuadratureData &quad_data;
+   const QuadratureData &qdata;
 
 public:
-   DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
+   DensityIntegrator(QuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);
@@ -90,12 +90,12 @@ public:
 class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
-   const QuadratureData &quad_data;
+   const QuadratureData &qdata;
 public:
-   ForceIntegrator(QuadratureData &qdata) : quad_data(qdata) { }
+   ForceIntegrator(QuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
-                                       ElementTransformation &Trans,
+                                       ElementTransformation &Tr,
                                        DenseMatrix &elmat);
 };
 

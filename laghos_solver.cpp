@@ -21,8 +21,6 @@
 
 #ifdef MFEM_USE_MPI
 
-using namespace std;
-
 namespace mfem
 {
 
@@ -70,7 +68,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
               << x << " " << y << " " << w << " " << h << "\n"
               << "keys " << keys;
          if ( vec ) { sock << "vvv"; }
-         sock << endl;
+         sock << std::endl;
       }
 
       if (myid == 0)
@@ -84,7 +82,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
 static void Rho0DetJ0Vol(const int dim, const int NE,
                          const IntegrationRule &ir, ParMesh *mesh,
-                         ParFiniteElementSpace &l2_fes,
+                         ParFiniteElementSpace &fes,
                          const ParGridFunction &rho0,
                          QuadratureData &qdata,
                          double &volume)
@@ -96,7 +94,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    Vector rho0Q(NQ*NE);
    rho0Q.UseDevice(true);
    Vector j, detj;
-   const QuadratureInterpolator *qi = l2_fes.GetQuadratureInterpolator(ir);
+   const QuadratureInterpolator *qi = fes.GetQuadratureInterpolator(ir);
    qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
    auto W = ir.GetWeights().Read();
    auto R = Reshape(rho0Q.Read(), NQ, NE);
@@ -110,7 +108,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    Vector vol(NE*NQ), one(NE*NQ);
    auto A = Reshape(vol.Write(), NQ, NE);
    auto O = Reshape(one.Write(), NQ, NE);
-   MFEM_ASSERT(dim==2 || dim==3,"");
+   MFEM_ASSERT(dim==2 || dim==3, "");
    if (dim==2)
    {
       MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
@@ -276,11 +274,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
    }
    else
    {
-      GridFunctionCoefficient rho_coeff_gf(&rho0_gf);
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
-      MassIntegrator mi(rho_coeff_gf, &ir);
+      MassIntegrator mi(rho0_coeff, &ir);
       for (int e = 0; e < NE; e++)
       {
          DenseMatrixInverse inv(&Me(e));
@@ -291,7 +288,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
          inv.GetInverseMatrix(Me_inv(e));
       }
       // Standard assembly for the velocity mass matrix.
-      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_coeff_gf, &ir);
+      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi);
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
@@ -342,13 +339,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(Coefficient &rho0_coeff,
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
       CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(0);
+      CG_VMass.SetPrintLevel(-1);
 
       CG_EMass.SetOperator(*EMassPA);
       CG_EMass.iterative_mode = false;
-      CG_EMass.SetRelTol(1e-8);
-      CG_EMass.SetAbsTol(1e-8 * numeric_limits<double>::epsilon());
-      CG_EMass.SetMaxIter(200);
+      CG_EMass.SetRelTol(cg_rel_tol);
+      CG_EMass.SetAbsTol(0.0);
+      CG_EMass.SetMaxIter(cg_max_iter);
       CG_EMass.SetPrintLevel(-1);
    }
    else
@@ -538,7 +535,7 @@ double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
-   qdata.dt_est = numeric_limits<double>::infinity();
+   qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
@@ -736,7 +733,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          nzones_batch = NE - z_id;
          nqp_batch    = nqp * nzones_batch;
       }
-      double min_detJ = numeric_limits<double>::infinity();
+      double min_detJ = std::numeric_limits<double>::infinity();
       for (int z = 0; z < nzones_batch; z++)
       {
          ElementTransformation *T = H1.GetElementTransformation(z_id);
@@ -748,12 +745,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             T->SetIntPoint(&ip);
             Jpr_b[z](q) = T->Jacobian();
             const double detJ = Jpr_b[z](q).Det();
-            min_detJ = min(min_detJ, detJ);
+            min_detJ = std::fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
             if (material_pcf == NULL) { gamma_b[idx] = 5./3.; } // Ideal gas.
             else { gamma_b[idx] = material_pcf->Eval(*T, ip); }
             rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-            e_b[idx]   = fmax(0.0, e_vals(q));
+            e_b[idx] = std::fmax(0.0, e_vals(q));
          }
          ++z_id;
       }
@@ -823,7 +820,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             {
                if (inv_dt>0.0)
                {
-                  qdata.dt_est = min(qdata.dt_est, cfl*(1.0/inv_dt));
+                  qdata.dt_est = std::fmin(qdata.dt_est, cfl*(1.0/inv_dt));
                }
             }
             // Quadrature data for partial assembly of the force operator.

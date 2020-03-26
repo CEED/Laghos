@@ -268,7 +268,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  7. |  528 | 0.000180 | 5.6505348812e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
 
-Similar CUDA runs can be launched with these runs:
+Similar CUDA runs can be launched with these commands:
 
 1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
 2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`
