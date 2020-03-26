@@ -141,6 +141,7 @@ public:
    virtual void ComputeDiagonal3D(Vector&) const;
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
+   const ParBilinearForm &GetBF() { return pabf; }
 };
 
 // Scales by the inverse diagonal of the MassPAOperator.

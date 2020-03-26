@@ -225,6 +225,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        h1_basis_type == BasisType::Positive),
    Force(&L2, &H1),
    VMassPA_prec(H1c),
+   ForcePA(NULL), VMassPA(NULL), EMassPA(NULL), VMassPA_Jprec(NULL),
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
@@ -333,10 +334,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (p_assembly)
    {
       // Setup the preconditioner of the velocity mass operator.
-      Vector d;
-      (dim == 2) ? VMassPA->ComputeDiagonal2D(d):VMassPA->ComputeDiagonal3D(d);
-      VMassPA_prec.SetDiagonal(d);
-      CG_VMass.SetPreconditioner(VMassPA_prec);
+      // BC are handled by the VMassPA, so ess_tdofs here can be empty.
+      Array<int> ess_tdofs;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      CG_VMass.SetPreconditioner(*VMassPA_Jprec);
+
+      //Vector d;
+      //(dim == 2) ? VMassPA->ComputeDiagonal2D(d):VMassPA->ComputeDiagonal3D(d);
+      //VMassPA_prec.SetDiagonal(d);
+      //CG_VMass.SetPreconditioner(*VMassPA_prec);
+
       CG_VMass.SetOperator(*VMassPA);
       CG_VMass.SetRelTol(cg_rel_tol);
       CG_VMass.SetAbsTol(0.0);
