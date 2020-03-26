@@ -136,34 +136,9 @@ public:
    MassPAOperator(const QuadratureData&, FiniteElementSpace&,
                   const IntegrationRule&, Tensors1D&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
-   virtual void ComputeDiagonal2D(Vector&) const;
-   virtual void ComputeDiagonal3D(Vector&) const;
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
-};
-
-// Scales by the inverse diagonal of the MassPAOperator.
-class DiagonalSolver : public Solver
-{
-private:
-   Vector diag;
-
-public:
-   DiagonalSolver(FiniteElementSpace &fes)
-      : Solver(fes.GetVSize()), diag() { }
-
-   void SetDiagonal(Vector &d) { diag = d; }
-
-   virtual void Mult(const Vector &x, Vector &y) const
-   {
-      const int N = x.Size();
-      auto d_diag = diag.Read();
-      auto d_x = x.Read();
-      auto d_y = y.Write();
-      MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
-   }
-
-   virtual void SetOperator(const Operator&) { }
+   const BilinearForm &GetBF() { return pabf; }
 };
 
 } // namespace hydrodynamics

@@ -224,8 +224,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim))),
        h1_basis_type == BasisType::Positive),
    Force(&L2, &H1),
-   VMassPA_prec(H1c),
-   ForcePA(NULL), VMassPA(NULL), EMassPA(NULL), VMassPA_Jprec(NULL),
+   ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
+   VMassPA_Jprec(nullptr),
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
@@ -338,11 +338,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       Array<int> ess_tdofs;
       VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
       CG_VMass.SetPreconditioner(*VMassPA_Jprec);
-
-      //Vector d;
-      //(dim == 2) ? VMassPA->ComputeDiagonal2D(d):VMassPA->ComputeDiagonal3D(d);
-      //VMassPA_prec.SetDiagonal(d);
-      //CG_VMass.SetPreconditioner(*VMassPA_prec);
 
       CG_VMass.SetOperator(*VMassPA);
       CG_VMass.SetRelTol(cg_rel_tol);

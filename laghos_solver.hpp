@@ -142,7 +142,6 @@ protected:
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
    MassPAOperator *VMassPA, *EMassPA;
-   mutable DiagonalSolver VMassPA_prec;
    OperatorJacobiSmoother *VMassPA_Jprec;
    // Linear solver for energy.
    CGSolver CG_VMass, CG_EMass;

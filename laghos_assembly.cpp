@@ -103,108 +103,6 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    }
 }
 
-static void ComputeDiagonal2D(const int height, const int NE,
-                              const QuadratureData &qdata,
-                              const FiniteElementSpace &fes,
-                              const Tensors1D &T1D,
-                              Vector &diag)
-{
-   const TensorBasisElement *fe_H1 =
-      dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
-   const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = T1D.HQshape1D;
-   const int ndof1D = HQs.Height(), nqp1D = HQs.Width(), nqp = nqp1D * nqp1D;
-   Vector dz(ndof1D * ndof1D);
-   DenseMatrix HQ(ndof1D, nqp1D), D(dz.GetData(), ndof1D, ndof1D);
-   Array<int> dofs;
-   diag.SetSize(height);
-   diag = 0.0;
-   // Squares of the shape functions at all quadrature points.
-   DenseMatrix HQs_sq(ndof1D, nqp1D);
-   for (int i = 0; i < ndof1D; i++)
-   {
-      for (int k = 0; k < nqp1D; k++)
-      {
-         HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
-      }
-   }
-   for (int z = 0; z < NE; z++)
-   {
-      DenseMatrix QQ(qdata.rho0DetJ0w.GetData() + z*nqp, nqp1D, nqp1D);
-      // HQ_i1_k2 = HQs_i1_k1^2 QQ_k1_k2    -- contract in x direction.
-      // Y_i1_i2  = HQ_i1_k2    HQs_i2_k2^2 -- contract in y direction.
-      mfem::Mult(HQs_sq, QQ, HQ);
-      MultABt(HQ, HQs_sq, D);
-      // Transfer from the tensor structure numbering to mfem's H1 numbering.
-      fes.GetElementDofs(z, dofs);
-      for (int j = 0; j < dz.Size(); j++)
-      {
-         diag[dofs[dof_map[j]]] += dz[j];
-      }
-   }
-}
-
-static void ComputeDiagonal3D(const int height, const int NE,
-                              const QuadratureData &qdata,
-                              const FiniteElementSpace &fes,
-                              const Tensors1D &T1D,
-                              Vector &diag)
-{
-   const TensorBasisElement *fe_H1 =
-      dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
-   const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = T1D.HQshape1D;
-   const int ndof1D = HQs.Height(), nqp1D = HQs.Width(),
-             nqp = nqp1D * nqp1D * nqp1D;
-   DenseMatrix HH_Q(ndof1D * ndof1D, nqp1D), Q_HQ(nqp1D, ndof1D*nqp1D);
-   DenseMatrix H_HQ(HH_Q.GetData(), ndof1D, ndof1D*nqp1D);
-   Vector dz(ndof1D * ndof1D * ndof1D);
-   DenseMatrix D(dz.GetData(), ndof1D*ndof1D, ndof1D);
-   Array<int> dofs;
-   diag.SetSize(height);
-   diag = 0.0;
-   // Squares of the shape functions at all quadrature points.
-   DenseMatrix HQs_sq(ndof1D, nqp1D);
-   for (int i = 0; i < ndof1D; i++)
-   {
-      for (int k = 0; k < nqp1D; k++)
-      {
-         HQs_sq(i, k) = HQs(i, k) * HQs(i, k);
-      }
-   }
-   for (int z = 0; z < NE; z++)
-   {
-      DenseMatrix QQ_Q(qdata.rho0DetJ0w.GetData() + z*nqp, nqp1D*nqp1D, nqp1D);
-      // QHQ_k1_i2_k3 = QQQ_k1_k2_k3 HQs_i2_k2^2  -- contract in y direction.
-      // The first step does some reordering (it's not product of matrices).
-      // HHQ_i1_i2_k3 = HQs_i1_k1^2  QHQ_k1_i2_k3 -- contract in x direction.
-      // D_i1_i2_i3   = HHQ_i1_i2_k3 HQs_i3_k3^2  -- contract in z direction.
-      for (int k1 = 0; k1 < nqp1D; k1++)
-      {
-         for (int i2 = 0; i2 < ndof1D; i2++)
-         {
-            for (int k3 = 0; k3 < nqp1D; k3++)
-            {
-               Q_HQ(k1, i2 + ndof1D*k3) = 0.0;
-               for (int k2 = 0; k2 < nqp1D; k2++)
-               {
-                  Q_HQ(k1, i2 + ndof1D*k3) +=
-                     QQ_Q(k1 + nqp1D*k2, k3) * HQs_sq(i2, k2);
-               }
-            }
-         }
-      }
-      mfem::Mult(HQs_sq, Q_HQ, H_HQ);
-      MultABt(HH_Q, HQs_sq, D);
-      // Transfer from the tensor structure numbering to mfem's H1 numbering.
-      fes.GetElementDofs(z, dofs);
-      for (int j = 0; j < dz.Size(); j++)
-      {
-         diag[dofs[dof_map[j]]] += dz[j];
-      }
-   }
-}
-
 MassPAOperator::MassPAOperator(const QuadratureData &qdata,
                                ParFiniteElementSpace &pfes,
                                const IntegrationRule &ir,
@@ -232,7 +130,7 @@ MassPAOperator::MassPAOperator(const QuadratureData &qdata,
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size() == 0) //|| ess_tdofs.Size() != ess_tdofs_count)
+   if (ess_tdofs.Size() == 0)
    {
       int ess_tdofs_sz;
       MPI_Allreduce(&ess_tdofs_count,&ess_tdofs_sz, 1, MPI_INT, MPI_SUM, comm);
@@ -250,21 +148,8 @@ void MassPAOperator::EliminateRHS(Vector &b) const
 
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
-   ParGridFunction X;
-   X.NewMemoryAndSize(x.GetMemory(), x.Size(), false);
-   if (ess_tdofs_count > 0) { X.SetSubVector(ess_tdofs, 0.0); }
-   mass->Mult(X, y);
+   mass->Mult(x, y);
    if (ess_tdofs_count > 0) { y.SetSubVector(ess_tdofs, 0.0); }
-}
-
-void MassPAOperator::ComputeDiagonal2D(Vector &diag) const
-{
-   hydrodynamics::ComputeDiagonal2D(vsize, NE, qdata, fes, T1D, diag);
-}
-
-void MassPAOperator::ComputeDiagonal3D(Vector &diag) const
-{
-   hydrodynamics::ComputeDiagonal3D(vsize, NE, qdata, fes, T1D, diag);
 }
 
 ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
