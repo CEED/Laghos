@@ -95,7 +95,7 @@ Other computational motives in Laghos include the following:
 - The file `laghos.cpp` contains the main driver with the time integration loop
   starting around line 488.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 424 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 544 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -120,7 +120,7 @@ Other computational motives in Laghos include the following:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
+- *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
    https://computation.llnl.gov/casc/hypre/software.html
 
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
@@ -133,13 +133,13 @@ To build the miniapp, first download *hypre* and METIS from the links above
 and put everything on the same level as the `Laghos` directory:
 ```sh
 ~> ls
-Laghos/  hypre-2.10.0b.tar.gz  metis-4.0.tar.gz
+Laghos/  hypre-2.11.2.tar.gz  metis-4.0.3.tar.gz
 ```
 
 Build *hypre*:
 ```sh
-~> tar -zxvf hypre-2.10.0b.tar.gz
-~> cd hypre-2.10.0b/src/
+~> tar -zxvf hypre-2.11.2.tar.gz
+~> cd hypre-2.11.2/src/
 ~/hypre-2.10.0b/src> ./configure --disable-fortran
 ~/hypre-2.10.0b/src> make -j
 ~/hypre-2.10.0b/src> cd ../..
@@ -162,14 +162,12 @@ Clone and build the parallel version of MFEM:
 ```sh
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
-~/mfem> git checkout laghos-v2.0
+~/mfem> git checkout master
 ~/mfem> make parallel -j
 ~/mfem> cd ..
 ```
-The above uses the `laghos-v2.0` tag of MFEM, which is guaranteed to work with
-Laghos v2.0. Alternatively, one can use the latest versions of the MFEM and
-Laghos `master` branches (provided there are no conflicts). See the [MFEM
-building page](http://mfem.org/building/) for additional details.
+The above uses the `master` branch of MFEM.
+See the [MFEM building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
 ```sh
@@ -185,7 +183,7 @@ to the GLVis socket.
 Build Laghos
 ```sh
 ~> cd Laghos/
-~/Laghos> make
+~/Laghos> make -j
 ```
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
@@ -326,7 +324,8 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **AMR** version in the [amr/](./amr/README.md) directory. This version supports dynamic adaptive mesh refinement.
+- **AMR** version in the [amr/](./amr/README.md) directory.
+  This version supports dynamic adaptive mesh refinement.
 
 ## Contact
 

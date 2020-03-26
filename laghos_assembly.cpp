@@ -121,8 +121,7 @@ MassPAOperator::MassPAOperator(const QuadratureData &qdata,
    T1D(T1D)
 {
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
-   MassIntegrator *mi = new mfem::MassIntegrator(Q, &ir);
-   pabf.AddDomainIntegrator(mi);
+   pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q, &ir));
    pabf.Assemble();
    pabf.FormSystemMatrix(mfem::Array<int>(), mass);
 }
