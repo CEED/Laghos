@@ -67,7 +67,7 @@ struct Tensors1D
 {
    // H1 shape functions and gradients, L2 shape functions.
    DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-   Tensors1D(int H1order, int L2order, int nqp1D, bool bernstein_v);
+   Tensors1D(int H1order, int L2order, int Q1D, bool bernstein_v);
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
@@ -77,26 +77,25 @@ class DensityIntegrator : public LinearFormIntegrator
 {
    using LinearFormIntegrator::AssembleRHSElementVect;
 private:
-   const QuadratureData &quad_data;
+   const QuadratureData &qdata;
 
 public:
-   DensityIntegrator(QuadratureData &quad_data_) : quad_data(quad_data_) { }
+   DensityIntegrator(QuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);
 };
 
-// Assembles element contributions to the global force matrix. This class is
-// used for the full assembly case; it's not used with partial assembly.
+// Performs full assembly for the force operator.
 class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
-   const QuadratureData &quad_data;
+   const QuadratureData &qdata;
 public:
-   ForceIntegrator(QuadratureData &qdata) : quad_data(qdata) { }
+   ForceIntegrator(QuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
-                                       ElementTransformation &Trans,
+                                       ElementTransformation &Tr,
                                        DenseMatrix &elmat);
 };
 
@@ -127,22 +126,18 @@ class MassPAOperator : public Operator
 private:
    const int dim, NE, vsize;
    const QuadratureData &qdata;
-   FiniteElementSpace &pfes;
+   FiniteElementSpace &fes;
    BilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr mass;
-   Tensors1D *T1D;
+   Tensors1D &T1D;
 public:
-   MassPAOperator(Coefficient&, const QuadratureData&,
-                  FiniteElementSpace&, const IntegrationRule&, Tensors1D*);
+   MassPAOperator(const QuadratureData&, FiniteElementSpace&,
+                  const IntegrationRule&, Tensors1D&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector&) const;
    virtual void ComputeDiagonal3D(Vector&) const;
-   virtual const Operator *GetProlongation() const
-   { return pfes.GetProlongationMatrix(); }
-   virtual const Operator *GetRestriction() const
-   { return pfes.GetRestrictionMatrix(); }
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
 };
@@ -152,19 +147,12 @@ class DiagonalSolver : public Solver
 {
 private:
    Vector diag;
-   FiniteElementSpace &FESpace;
+
 public:
    DiagonalSolver(FiniteElementSpace &fes)
-      : Solver(fes.GetVSize()), diag(), FESpace(fes) { }
+      : Solver(fes.GetVSize()), diag() { }
 
-   void SetDiagonal(Vector &d)
-   {
-      const Operator *P = FESpace.GetProlongationMatrix();
-      // Happens when this is called by the serial version of Laghos.
-      if (P == NULL) { diag = d; return; }
-      diag.SetSize(P->Width());
-      P->MultTranspose(d, diag);
-   }
+   void SetDiagonal(Vector &d) { diag = d; }
 
    virtual void Mult(const Vector &x, Vector &y) const
    {
@@ -174,6 +162,7 @@ public:
       auto d_y = y.Write();
       MFEM_FORALL(i, N, d_y[i] = d_x[i] / d_diag[i];);
    }
+
    virtual void SetOperator(const Operator&) { }
 };
 
