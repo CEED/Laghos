@@ -132,10 +132,10 @@ private:
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr mass;
-   Tensors1D *T1D;
+   Tensors1D &T1D;
 public:
-   MassPAOperator(Coefficient&, const QuadratureData&,
-                  ParFiniteElementSpace&, const IntegrationRule&, Tensors1D*);
+   MassPAOperator(const QuadratureData&, ParFiniteElementSpace&,
+                  const IntegrationRule&, Tensors1D&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void ComputeDiagonal2D(Vector&) const;
    virtual void ComputeDiagonal3D(Vector&) const;

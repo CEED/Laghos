@@ -81,8 +81,9 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 }
 
 static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir, ParMesh *mesh,
-                         ParFiniteElementSpace &fes,
+                         const IntegrationRule &ir,
+                         ParMesh *pmesh,
+                         ParFiniteElementSpace &L2,
                          const ParGridFunction &rho0,
                          QuadratureData &qdata,
                          double &volume)
@@ -90,11 +91,11 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    const int NQ = ir.GetNPoints();
    const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
    const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
-   const GeometricFactors *geom = mesh->GetGeometricFactors(ir, flags);
+   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
    Vector rho0Q(NQ*NE);
    rho0Q.UseDevice(true);
    Vector j, detj;
-   const QuadratureInterpolator *qi = fes.GetQuadratureInterpolator(ir);
+   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
    qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
    auto W = ir.GetWeights().Read();
    auto R = Reshape(rho0Q.Read(), NQ, NE);
@@ -187,10 +188,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int order_q,
+                                                 const int oq,
                                                  const int h1_basis_type) :
-   TimeDependentOperator(size), H1(h1), L2(l2),
-   H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   TimeDependentOperator(size),
+   H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),
    H1TVSize(H1.TrueVSize()),
    H1GTVSize(H1.GlobalTrueVSize()),
@@ -200,8 +202,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets(4),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
-   dim(H1.GetMesh()->Dimension()),
-   NE(H1.GetMesh()->GetNE()),
+   dim(pmesh->Dimension()),
+   NE(pmesh->GetNE()),
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
    h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
@@ -213,9 +215,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
-   ir(IntRules.Get(H1.GetMesh()->GetElementBaseGeometry(0),
-                   (order_q > 0) ? order_q :
-                   3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
+                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
    forcemat_is_assembled(false),
@@ -242,14 +243,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[3] = block_offsets[2] + L2Vsize;
    one.UseDevice(true);
    one = 1.0;
-   double vol = 0.0;
-   ParMesh *pmesh = H1.GetParMesh();
 
    if (p_assembly)
    {
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      VMassPA = new MassPAOperator(rho0_coeff, qdata, H1c, ir, &T1D);
-      EMassPA = new MassPAOperator(rho0_coeff, qdata,  L2, ir, &T1D);
+      VMassPA = new MassPAOperator(qdata, H1c, ir, T1D, rho0_coeff);
+      EMassPA = new MassPAOperator(qdata,  L2, ir, T1D, rho0_coeff);
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
@@ -270,7 +269,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       B.UseDevice(true);
       rhs.UseDevice(true);
       e_rhs.UseDevice(true);
-      Rho0DetJ0Vol(dim, NE, ir, H1.GetParMesh(), L2, rho0_gf, qdata, vol);
    }
    else
    {
@@ -292,29 +290,33 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       Mv.AddDomainIntegrator(vmi);
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
-      // Values of rho0DetJ0 and Jac0inv at all quadrature points.
-      // Initial local mesh size (assumes all mesh elements are the same).
-      const int nqp = ir.GetNPoints();
-      Vector rho_vals(nqp);
+   }
+
+   // Values of rho0DetJ0 and Jac0inv at all quadrature points.
+   // Initial local mesh size (assumes all mesh elements are the same).
+   int Ne, ne = NE;
+   double Volume, vol = 0.0;
+   if (dim > 1) { Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol); }
+   else
+   {
+      const int NQ = ir.GetNPoints();
+      Vector rho_vals(NQ);
       for (int e = 0; e < NE; e++)
       {
          rho0_gf.GetValues(e, ir, rho_vals);
          ElementTransformation &Tr = *H1.GetElementTransformation(e);
-         for (int q = 0; q < nqp; q++)
+         for (int q = 0; q < NQ; q++)
          {
             const IntegrationPoint &ip = ir.IntPoint(q);
             Tr.SetIntPoint(&ip);
             DenseMatrixInverse Jinv(Tr.Jacobian());
-            Jinv.GetInverseMatrix(qdata.Jac0inv(e*nqp + q));
+            Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
             const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-            qdata.rho0DetJ0w(e*nqp + q) = rho0DetJ0 * ir.IntPoint(q).weight;
+            qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
          }
       }
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
    }
-
-   double Volume;
-   int ne = NE, Ne;
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))

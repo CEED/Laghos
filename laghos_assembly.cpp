@@ -106,13 +106,13 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
 static void ComputeDiagonal2D(const int height, const int NE,
                               const QuadratureData &qdata,
                               const FiniteElementSpace &fes,
-                              const Tensors1D *T1D,
+                              const Tensors1D &T1D,
                               Vector &diag)
 {
    const TensorBasisElement *fe_H1 =
       dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = T1D->HQshape1D;
+   const DenseMatrix &HQs = T1D.HQshape1D;
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width(), nqp = nqp1D * nqp1D;
    Vector dz(ndof1D * ndof1D);
    DenseMatrix HQ(ndof1D, nqp1D), D(dz.GetData(), ndof1D, ndof1D);
@@ -147,13 +147,13 @@ static void ComputeDiagonal2D(const int height, const int NE,
 static void ComputeDiagonal3D(const int height, const int NE,
                               const QuadratureData &qdata,
                               const FiniteElementSpace &fes,
-                              const Tensors1D *T1D,
+                              const Tensors1D &T1D,
                               Vector &diag)
 {
    const TensorBasisElement *fe_H1 =
       dynamic_cast<const TensorBasisElement *>(fes.GetFE(0));
    const Array<int> &dof_map = fe_H1->GetDofMap();
-   const DenseMatrix &HQs = T1D->HQshape1D;
+   const DenseMatrix &HQs = T1D.HQshape1D;
    const int ndof1D = HQs.Height(), nqp1D = HQs.Width(),
              nqp = nqp1D * nqp1D * nqp1D;
    DenseMatrix HH_Q(ndof1D * ndof1D, nqp1D), Q_HQ(nqp1D, ndof1D*nqp1D);
@@ -205,11 +205,11 @@ static void ComputeDiagonal3D(const int height, const int NE,
    }
 }
 
-MassPAOperator::MassPAOperator(Coefficient &Q,
-                               const QuadratureData &qdata,
+MassPAOperator::MassPAOperator(const QuadratureData &qdata,
                                ParFiniteElementSpace &pfes,
                                const IntegrationRule &ir,
-                               Tensors1D *T1D) :
+                               Tensors1D &T1D,
+                               Coefficient &Q) :
    Operator(pfes.GetTrueVSize()),
    comm(pfes.GetParMesh()->GetComm()),
    dim(pfes.GetMesh()->Dimension()),
@@ -232,7 +232,7 @@ MassPAOperator::MassPAOperator(Coefficient &Q,
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
-   if (ess_tdofs.Size() == 0 )//|| ess_tdofs.Size() != ess_tdofs_count)
+   if (ess_tdofs.Size() == 0) //|| ess_tdofs.Size() != ess_tdofs_count)
    {
       int ess_tdofs_sz;
       MPI_Allreduce(&ess_tdofs_count,&ess_tdofs_sz, 1, MPI_INT, MPI_SUM, comm);

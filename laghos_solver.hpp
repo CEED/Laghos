@@ -100,6 +100,7 @@ class LagrangianHydroOperator : public TimeDependentOperator
 protected:
    ParFiniteElementSpace &H1, &L2;
    mutable ParFiniteElementSpace H1c;
+   ParMesh *pmesh;
    // FE spaces local and global sizes
    const int H1Vsize;
    const int H1TVSize;
