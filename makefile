@@ -62,15 +62,13 @@ GOALS = help clean distclean style setup mfem metis hypre
 PREFIX ?= ./bin
 INSTALL = /usr/bin/install
 
-# Use the MFEM build directory
+# Use the MFEM source, build, or install directory
 MFEM_DIR ?= ../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
-TEST_MK = $(MFEM_DIR)/config/test.mk
-
-# Use two relative paths to MFEM: first one for compilation in '.' and second
-# one for compilation in 'lib'.
-MFEM_DIR1 := $(MFEM_DIR)
-MFEM_DIR2 := $(realpath $(MFEM_DIR))
+ifeq ($(wildcard $(CONFIG_MK)),)
+   CONFIG_MK = $(MFEM_DIR)/share/mfem/config.mk
+endif
+TEST_MK = $(MFEM_TEST_MK)
 
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
@@ -78,13 +76,21 @@ MFEM_DIR2 := $(realpath $(MFEM_DIR))
 MFEM_LIB_FILE = mfem_is_not_built
 ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
+   ifneq ($(realpath $(MFEM_DIR)),$(MFEM_SOURCE_DIR))
+      ifneq ($(realpath $(MFEM_DIR)),$(MFEM_INSTALL_DIR))
+         MFEM_BUILD_DIR := $(MFEM_DIR)
+         override MFEM_DIR := $(MFEM_SOURCE_DIR)
+      endif
+   endif
 endif
 
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
-CCC = $(strip $(CXX) $(LAGHOS_FLAGS))
+# Extra include dir, needed for now to include headers like "general/forall.hpp"
+EXTRA_INC_DIR = $(or $(wildcard $(MFEM_DIR)/include/mfem),$(MFEM_DIR))
+CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
@@ -102,13 +108,11 @@ OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
 
-laghos: override MFEM_DIR = $(MFEM_DIR1)
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
 
-$(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 
 # Quick test with specific execution options
@@ -153,7 +157,7 @@ status info:
 	$(info PREFIX       = $(PREFIX))
 	@true
 
-ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
+ASTYLE = astyle --options=$(MFEM_DIR)/config/mfem.astylerc
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
@@ -167,8 +171,9 @@ ranks=1
 dims=2 3
 problems=0 1 2 3 4 5 6
 OPTS=-cgt 1.e-14 -rs 0 --checks
-optioni=1 2 $(if $(MFEM_CXX:nvcc=),,3)
-options=-fa -pa $(if $(MFEM_CXX:nvcc=),,-d_cuda) #-d_debug
+USE_CUDA := $(MFEM_USE_CUDA:NO=)
+optioni=1 2$(if $(USE_CUDA), 3)
+options=-fa -pa $(if $(USE_CUDA),-d_cuda) #-d_debug
 #optioni = $(shell for i in {1..$(words $(options))}; do echo $$i; done)
 
 # Laghos checks template - Targets
