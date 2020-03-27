@@ -65,7 +65,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
 static void Rho0DetJ0Vol(const int dim, const int NE,
                          const IntegrationRule &ir, Mesh *mesh,
-                         FiniteElementSpace &l2_fes,
+                         FiniteElementSpace &L2,
                          const GridFunction &rho0,
                          QuadratureData &qdata,
                          double &volume)
@@ -77,7 +77,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    Vector rho0Q(NQ*NE);
    rho0Q.UseDevice(true);
    Vector j, detj;
-   const QuadratureInterpolator *qi = l2_fes.GetQuadratureInterpolator(ir);
+   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
    qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
    auto W = ir.GetWeights().Read();
    auto R = Reshape(rho0Q.Read(), NQ, NE);
@@ -91,7 +91,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    Vector vol(NE*NQ), one(NE*NQ);
    auto A = Reshape(vol.Write(), NQ, NE);
    auto O = Reshape(one.Write(), NQ, NE);
-   MFEM_ASSERT(dim==2 || dim==3,"");
+   MFEM_ASSERT(dim==2 || dim==3, "");
    if (dim==2)
    {
       MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
@@ -161,17 +161,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
                                                  GridFunction &rho0_gf,
-                                                 const int source,
-                                                 const double cfl,
                                                  Coefficient &gamma_coeff,
                                                  GridFunction &gamma_gf,
+                                                 const int source,
+                                                 const double cfl,
                                                  const bool visc,
                                                  const bool p_assembly,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq,
-                                                 const int h1_basis_type) :
+                                                 const int oq) :
    TimeDependentOperator(size), H1(h1), L2(l2),
    H1c(H1.GetMesh(), H1.FEColl(), 1),
    mesh(H1.GetMesh()),
@@ -197,19 +196,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(mesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   T1D(H1.GetFE(0)->GetOrder(), L2.GetFE(0)->GetOrder(),
-       int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim))),
-       h1_basis_type == BasisType::Positive),
    Force(&L2, &H1),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
    VMassPA_Jprec(nullptr),
    CG_VMass(),
    CG_EMass(),
    timer(p_assembly ? L2TVSize : 1),
-   qupdate(dim, NE, visc, cfl, &timer, gamma_gf, ir, H1, L2),
+   qupdate(dim, NE, Q1D, visc, cfl, &timer, gamma_gf, ir, H1, L2),
    X(H1c.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
@@ -228,8 +225,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (p_assembly)
    {
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      VMassPA = new MassPAOperator(qdata, H1c, ir, T1D, rho0_coeff);
-      EMassPA = new MassPAOperator(qdata,  L2, ir, T1D, rho0_coeff);
+      VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
+      EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
@@ -666,7 +663,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
-   if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata, &T1D); }
+   if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata); }
 
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
@@ -1027,14 +1024,11 @@ void QKernel(const int NE, const int NQ,
    }
 }
 
-void QUpdate::UpdateQuadratureData(const Vector &S,
-                                   QuadratureData &qdata,
-                                   const Tensors1D *T1D)
+void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
    timer->sw_qdata.Start();
    Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
-   const int Q1D = T1D->LQshape1D.Width();
    const double h1order = (double) H1.GetOrder(0);
    const double infinity = std::numeric_limits<double>::infinity();
    GridFunction x, v, e;

@@ -353,14 +353,13 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-                                                H1FESpace, L2FESpace,
-                                                ess_tdofs,
+                                                H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                source, cfl,
                                                 mat_coeff, mat_gf,
+                                                source, cfl,
                                                 visc, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, H1FEC.GetBasisType());
+                                                order_q);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

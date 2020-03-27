@@ -61,15 +61,6 @@ struct QuadratureData
         rho0DetJ0w(NE * quads_per_el) { }
 };
 
-// Stores values of the one-dimensional shape functions and gradients at all 1D
-// quadrature points. All sizes are (dofs1D_cnt x quads1D_cnt).
-struct Tensors1D
-{
-   // H1 shape functions and gradients, L2 shape functions.
-   DenseMatrix HQshape1D, HQgrad1D, LQshape1D;
-   Tensors1D(int H1order, int L2order, int Q1D, bool bernstein_v);
-};
-
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.
@@ -107,7 +98,7 @@ private:
    const QuadratureData &qdata;
    const FiniteElementSpace &H1, &L2;
    const Operator *H1R, *L2R;
-   const IntegrationRule &ir, &ir1D;
+   const IntegrationRule &ir1D;
    const int D1D, Q1D, L1D, H1sz, L2sz;
    const DofToQuad *L2D2Q, *H1D2Q;
    mutable Vector X, Y;
@@ -125,16 +116,12 @@ class MassPAOperator : public Operator
 {
 private:
    const int dim, NE, vsize;
-   const QuadratureData &qdata;
-   FiniteElementSpace &fes;
    BilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr mass;
-   Tensors1D &T1D;
 public:
-   MassPAOperator(const QuadratureData&, FiniteElementSpace&,
-                  const IntegrationRule&, Tensors1D&, Coefficient&);
+   MassPAOperator(FiniteElementSpace&, const IntegrationRule&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;

@@ -56,27 +56,27 @@ struct TimingData
 class QUpdate
 {
 private:
-   const int dim, NQ, NE;
+   const int dim, vdim, NQ, NE, Q1D;
    const bool use_viscosity;
    const double cfl;
    TimingData *timer;
    const IntegrationRule &ir;
    FiniteElementSpace &H1, &L2;
    const Operator *H1R;
-   const int vdim;
    Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
    const QuadratureInterpolator *q1,*q2;
    const GridFunction &gamma_gf;
 public:
-   QUpdate(const int d, const int ne, const bool visc,
+   QUpdate(const int d, const int ne, const int q1d, const bool visc,
            const double cfl, TimingData *t,
            const GridFunction &gamma_gf,
            const IntegrationRule &ir,
            FiniteElementSpace &h1, FiniteElementSpace &l2):
-      dim(d), NQ(ir.GetNPoints()), NE(ne), use_viscosity(visc), cfl(cfl),
+      dim(d), vdim(h1.GetVDim()),
+      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
+      use_viscosity(visc), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
       H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-      vdim(H1.GetVDim()),
       q_dt_est(NE*NQ),
       q_e(NE*NQ),
       e_vec(NQ*NE*vdim),
@@ -86,9 +86,7 @@ public:
       q2(L2.GetQuadratureInterpolator(ir)),
       gamma_gf(gamma_gf) { }
 
-   void UpdateQuadratureData(const Vector &S,
-                             QuadratureData &qdata,
-                             const Tensors1D *tensors1D);
+   void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -125,10 +123,9 @@ protected:
    const IntegrationRule &ir;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
+   const int Q1D;
    mutable QuadratureData qdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
-   // Structures used to perform partial assembly.
-   Tensors1D T1D;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
@@ -168,13 +165,13 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
                            GridFunction &rho0_gf,
-                           const int source,
-                           const double cfl,
                            Coefficient &mat_gf_coeff,
                            GridFunction &gamma_gf,
+                           const int source,
+                           const double cfl,
                            const bool visc, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, const int h1_basis_type);
+                           const int order_q);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
