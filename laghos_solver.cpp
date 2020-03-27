@@ -750,11 +750,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             T->SetIntPoint(&ip);
             Jpr_b[z](q) = T->Jacobian();
             const double detJ = Jpr_b[z](q).Det();
-            min_detJ = std::fmin(min_detJ, detJ);
+            min_detJ = fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
             gamma_b[idx] = gamma_coeff.Eval(*T, ip);
             rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-            e_b[idx] = std::fmax(0.0, e_vals(q));
+            e_b[idx] = fmax(0.0, e_vals(q));
          }
          ++z_id;
       }
@@ -824,7 +824,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             {
                if (inv_dt>0.0)
                {
-                  qdata.dt_est = std::fmin(qdata.dt_est, cfl*(1.0/inv_dt));
+                  qdata.dt_est = fmin(qdata.dt_est, cfl*(1.0/inv_dt));
                }
             }
             // Quadrature data for partial assembly of the force operator.
@@ -888,12 +888,12 @@ void QUpdateBody(const int NE, const int e,
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians + DIM2*(NQ*e + q);
    const double detJ = kernels::Det<DIM>(J);
-   min_detJ = std::fmin(min_detJ, detJ);
+   min_detJ = fmin(min_detJ, detJ);
    kernels::CalcInverse<DIM>(J, Jinv);
    const double R = inv_weight * d_rho0DetJ0w[eq] / detJ;
-   const double E = std::fmax(0.0, d_e_quads[eq]);
+   const double E = fmax(0.0, d_e_quads[eq]);
    const double P = (gamma - 1.0) * R * E;
-   const double S = std::sqrt(gamma * (gamma - 1.0) * E);
+   const double S = sqrt(gamma * (gamma - 1.0) * E);
    for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
    for (int d = 0; d < DIM; d++) { stress[d*DIM+d] = -P; }
    double visc_coeff = 0.0;
@@ -925,7 +925,7 @@ void QUpdateBody(const int NE, const int e,
       const double H = h0 * ph_dir_nl2 / compr_dir_nl2;
       // Measure of maximal compression.
       const double mu = eig_val_data[0];
-      visc_coeff = 2.0 * R * H * H * std::fabs(mu);
+      visc_coeff = 2.0 * R * H * H * fabs(mu);
       // The following represents a "smooth" version of the statement
       // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
       // eps must be scaled appropriately if a different unit system is
@@ -953,7 +953,7 @@ void QUpdateBody(const int NE, const int e,
       if (idt > 0.0)
       {
          const double cfl_inv_dt = cfl / idt;
-         d_dt_est[eq] = std::fmin(d_dt_est[eq], cfl_inv_dt);
+         d_dt_est[eq] = fmin(d_dt_est[eq], cfl_inv_dt);
       }
    }
    // Quadrature data for partial assembly of the force operator.
