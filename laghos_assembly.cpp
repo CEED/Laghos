@@ -23,32 +23,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-Tensors1D::Tensors1D(int ok, int ot, int Q1D, bool bernstein_v)
-   : HQshape1D(ok + 1, Q1D), HQgrad1D(ok + 1, Q1D), LQshape1D(ot + 1, Q1D)
-{
-   // In this miniapp we assume:
-   // - Gauss-Legendre quadrature points.
-   // - Gauss-Lobatto OR Bernstein continuous kinematic basis.
-   // - Bernstein discontinuous thermodynamic basis.
-   const int Q1D_GLobatto = Quadrature1D::GaussLobatto;
-   const int Q1D_GLegendre = Quadrature1D::GaussLegendre;
-   const double *quad1D_pos = poly1d.GetPoints(Q1D - 1, Q1D_GLegendre);
-   const Poly_1D::Basis &basisH1 = poly1d.GetBasis(ok, Q1D_GLobatto);
-   Vector col, grad_col;
-   for (int q = 0; q < Q1D; q++)
-   {
-      HQshape1D.GetColumnReference(q, col);
-      HQgrad1D.GetColumnReference(q, grad_col);
-      if (bernstein_v) { poly1d.CalcBernstein(ok, quad1D_pos[q], col, grad_col); }
-      else { basisH1.Eval(quad1D_pos[q], col, grad_col); }
-   }
-   for (int q = 0; q < Q1D; q++)
-   {
-      LQshape1D.GetColumnReference(q, col);
-      poly1d.CalcBernstein(ot, quad1D_pos[q], col);
-   }
-}
-
 void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
@@ -103,22 +77,17 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    }
 }
 
-MassPAOperator::MassPAOperator(const QuadratureData &qdata,
-                               ParFiniteElementSpace &pfes,
+MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
                                const IntegrationRule &ir,
-                               Tensors1D &T1D,
                                Coefficient &Q) :
    Operator(pfes.GetTrueVSize()),
    comm(pfes.GetParMesh()->GetComm()),
    dim(pfes.GetMesh()->Dimension()),
    NE(pfes.GetMesh()->GetNE()),
    vsize(pfes.GetVSize()),
-   qdata(qdata),
-   fes(pfes),
    pabf(&pfes),
    ess_tdofs_count(0),
-   ess_tdofs(0),
-   T1D(T1D)
+   ess_tdofs(0)
 {
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
    pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q, &ir));
@@ -163,7 +132,6 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    L2(l2),
    H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
    L2R(L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-   ir(ir),
    ir1D(IntRules.Get(Geometry::SEGMENT, ir.GetOrder())),
    D1D(H1.GetFE(0)->GetOrder()+1),
    Q1D(ir1D.GetNPoints()),
