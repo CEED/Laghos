@@ -49,14 +49,10 @@ To build the miniapp, first clone and build MFEM:
 ```sh
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
-~/mfem> git checkout laghos-v2.0
 ~/mfem> make serial -j
 ~/mfem> cd ..
 ```
-The above uses the `laghos-v2.0` tag of MFEM, which is guaranteed to work with
-Laghos v2.0. Alternatively, one can use the latest versions of the MFEM and
-Laghos `master` branches (provided there are no conflicts). See the [MFEM
-building page](http://mfem.org/building/) for additional details.
+See the [MFEM building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
 ```sh
@@ -108,7 +104,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  7. |  528 | 0.000180 | 5.6505348812e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
 
-Similar CUDA runs can be launched with these commands:
+Similar GPU runs using the MFEM CUDA device can be run as follows:
 
 1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
 2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`

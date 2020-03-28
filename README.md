@@ -146,9 +146,9 @@ Build *hypre*:
 ```sh
 ~> tar -zxvf hypre-2.11.2.tar.gz
 ~> cd hypre-2.11.2/src/
-~/hypre-2.10.0b/src> ./configure --disable-fortran
-~/hypre-2.10.0b/src> make -j
-~/hypre-2.10.0b/src> cd ../..
+~/hypre-2.11.2/src> ./configure --disable-fortran
+~/hypre-2.11.2/src> make -j
+~/hypre-2.11.2/src> cd ../..
 ```
 For large runs (problem size above 2 billion unknowns), add the
 `--enable-bigint` option to the above `configure` line.
@@ -306,8 +306,7 @@ overall computation.)
 Laghos also reports the total rate for these major kernels, which is a proposed
 **Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
 allocation, the FOM should be reported for different problem sizes and finite
-element orders, as illustrated in the sample scripts in the [timing](./timing)
-directory.
+element orders.
 
 A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
 machine at LLNL is:
