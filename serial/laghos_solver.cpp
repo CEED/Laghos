@@ -344,6 +344,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    {
       delete EMassPA;
       delete VMassPA;
+      delete VMassPA_Jprec;
       delete ForcePA;
    }
 }
