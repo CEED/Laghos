@@ -63,6 +63,12 @@ necessary operations. As the local action is defined by utilizing the tensor
 structure of the finite element spaces, the amount of data storage, memory
 transfers, and FLOPs are lower (especially for higher orders).
 
+The Laghos implementation includes support for hardware devices, such
+as GPUs, and programming models, such as CUDA, OCCA, RAJA and OpenMP,
+based on [MFEM](http://mfem.org), version 4.1 or later. These device
+backends are selectable at runtime, see the `-d/--device` command-line
+option.
+
 Other computational motives in Laghos include the following:
 
 - Support for unstructured meshes, in 2D and 3D, with quadrilateral and
@@ -93,7 +99,7 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 488.
+  starting around line 609.
 - In each time step, the ODE system of interest is constructed and solved by
   the class `LagrangianHydroOperator`, defined around line 544 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
@@ -188,6 +194,9 @@ Build Laghos
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
 
+See also the `make setup` target that can be used to automated the
+download and building of hypre, METIS and MFEM.
+
 ## Running
 
 #### Sedov blast
@@ -266,7 +275,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  7. |  528 | 0.000180 | 5.6505348812e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
 
-Similar CUDA runs can be launched with these commands:
+Similar GPU runs using the MFEM CUDA *device* can be run as follows:
 
 1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
 2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`

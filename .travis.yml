@@ -82,4 +82,3 @@ cache:
      - $TRAVIS_BUILD_DIR/../hypre-2.11.2/src/hypre/lib
      - $TRAVIS_BUILD_DIR/../hypre-2.11.2/src/hypre/include
      - $TRAVIS_BUILD_DIR/../metis-4.0
-

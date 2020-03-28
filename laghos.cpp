@@ -205,8 +205,8 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
 
-   // On all processors, use the default builtin 1D/2D/3D mesh or
-   // read the serial one given on the command line.
+   // On all processors, use the default builtin 1D/2D/3D mesh or read the
+   // serial one given on the command line.
    Mesh *mesh;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
@@ -410,8 +410,8 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   // Boundary conditions: all tests use v.n = 0 on the boundary,
-   // and we assume that the boundaries are straight.
+   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
+   // that the boundaries are straight.
    Array<int> ess_tdofs;
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -489,7 +489,7 @@ int main(int argc, char *argv[])
    v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
-   // a non-positive basis to get the correct values at the dofs.  Then we do an
+   // a non-positive basis to get the correct values at the dofs. Then we do an
    // L2 projection to the positive basis in which we actually compute. The goal
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
@@ -517,9 +517,8 @@ int main(int argc, char *argv[])
    // Sync the data location of e_gf with its base, S
    e_gf.SyncAliasMemory(S);
 
-   // Piecewise constant ideal gas coefficient over the Lagrangian mesh.
-   // The gamma values are projected on a function that stays constant
-   // on the moving mesh.
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+   // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);

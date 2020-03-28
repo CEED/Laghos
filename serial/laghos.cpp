@@ -167,8 +167,8 @@ int main(int argc, char *argv[])
    backend.Configure(device, dev);
    backend.Print();
 
-   // On all processors, use the default builtin 1D/2D/3D mesh or
-   // read the serial one given on the command line.
+   // On all processors, use the default builtin 1D/2D/3D mesh or read the
+   // serial one given on the command line.
    Mesh *mesh;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
@@ -230,8 +230,8 @@ int main(int argc, char *argv[])
    FiniteElementSpace L2FESpace(mesh, &L2FEC);
    FiniteElementSpace H1FESpace(mesh, &H1FEC, mesh->Dimension());
 
-   // Boundary conditions: all tests use v.n = 0 on the boundary,
-   // and we assume that the boundaries are straight.
+   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
+   // that the boundaries are straight.
    Array<int> ess_tdofs;
    {
       Array<int> ess_bdr(mesh->bdr_attributes.Max()), tdofs1d;
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
    v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
-   // a non-positive basis to get the correct values at the dofs.  Then we do an
+   // a non-positive basis to get the correct values at the dofs. Then we do an
    // L2 projection to the positive basis in which we actually compute. The goal
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
@@ -329,8 +329,7 @@ int main(int argc, char *argv[])
    e_gf.SyncAliasMemory(S);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh.
-   // The gamma values are projected on a function that stays constant
-   // on the moving mesh.
+   // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, mesh->Dimension());
    FiniteElementSpace mat_fes(mesh, &mat_fec);
    GridFunction mat_gf(&mat_fes);
