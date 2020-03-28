@@ -77,15 +77,14 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    }
 }
 
-MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
+MassPAOperator::MassPAOperator(FiniteElementSpace &fes,
                                const IntegrationRule &ir,
                                Coefficient &Q) :
-   Operator(pfes.GetTrueVSize()),
-   comm(pfes.GetParMesh()->GetComm()),
-   dim(pfes.GetMesh()->Dimension()),
-   NE(pfes.GetMesh()->GetNE()),
-   vsize(pfes.GetVSize()),
-   pabf(&pfes),
+   Operator(fes.GetTrueVSize()),
+   dim(fes.GetMesh()->Dimension()),
+   NE(fes.GetMesh()->GetNE()),
+   vsize(fes.GetVSize()),
+   pabf(&fes),
    ess_tdofs_count(0),
    ess_tdofs(0)
 {
@@ -100,10 +99,7 @@ void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
    ess_tdofs_count = dofs.Size();
    if (ess_tdofs.Size() == 0)
    {
-      int ess_tdofs_sz;
-      MPI_Allreduce(&ess_tdofs_count,&ess_tdofs_sz, 1, MPI_INT, MPI_SUM, comm);
-      MFEM_ASSERT(ess_tdofs_sz > 0, "ess_tdofs_sz should be positive!");
-      ess_tdofs.SetSize(ess_tdofs_sz);
+      ess_tdofs.SetSize(ess_tdofs_count);
    }
    if (ess_tdofs_count == 0) { return; }
    ess_tdofs = dofs;
@@ -121,8 +117,8 @@ void MassPAOperator::Mult(const Vector &x, Vector &y) const
 }
 
 ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
-                                 ParFiniteElementSpace &h1,
-                                 ParFiniteElementSpace &l2,
+                                 FiniteElementSpace &h1,
+                                 FiniteElementSpace &l2,
                                  const IntegrationRule &ir) :
    Operator(),
    dim(h1.GetMesh()->Dimension()),

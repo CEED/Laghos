@@ -8,6 +8,30 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
+Version 3.0, released on Mar 27, 2020
+=====================================
+
+- Replaced the Laghos-2.0 custom implementations in the cuda/, raja/, occa/ and
+  hip/ directories with direct general device support in the main Laghos sources
+  based on MFEM-4.1
+
+- With the above change different device backends can be selected at runtime,
+  including cuda, raja, occa, hip, omp and more. See the -d command-line option.
+
+- Added 'setup' makefile target to download and build the Laghos dependencies:
+  HYPRE (2.11.2), METIS (4.0.3) and MFEM (master branch).
+
+- Added 'tests' and 'checks' makefile targets to launch non-regression tests.
+
+- Added default dimension options that generate internally the mesh:
+  * 1D (-dim 1): data/segment01.mesh
+  * 2D (-dim 2): data/square01_quad.mesh
+  * 3D (-dim 3): data/cube01_hex.mesh
+
+- The timing/ directory was deprecated. Use the scripts in the CEED benchmarks
+  instead, https://github.com/CEED/benchmarks.
+
+
 Version 2.0, released on Nov 19, 2018
 =====================================
 
