@@ -27,18 +27,20 @@ class ROM_Sampler
 public:
   ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
 	      const double t_final, const double initial_dt, Vector const& S_init,
-	      const bool staticSVD = false)
+	      const bool staticSVD = false, const bool useXoffset = false)
     : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
-      gfH1(H1FESpace), gfL2(L2FESpace)
+      gfH1(H1FESpace), gfL2(L2FESpace), offsetXinit(useXoffset)
   {
     // TODO: read the following parameters from input?
     double model_linearity_tol = 1.e-7;
     double model_sampling_tol = 1.e-7;
 
-    int max_model_dim = int(t_final/initial_dt + 0.5);
+    int max_model_dim = int(t_final/initial_dt + 0.5) + 100;
 
+    std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
+    
     if (staticSVD)
       {
 	generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
@@ -91,6 +93,18 @@ public:
     X0 = 0.0;
     V0 = 0.0;
     E0 = 0.0;
+
+    if (offsetXinit)
+      {
+	initX = new CAROM::Vector(tH1size, true);
+	Xdiff.SetSize(tH1size);
+	for (int i=0; i<tH1size; ++i)
+	  {
+	    (*initX)(i) = X[i];
+	  }
+
+	initX->write("initX");
+      }
   }
   
   void SampleSolution(const double t, const double dt, Vector const& S);
@@ -107,8 +121,11 @@ private:
   
   CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
 
-  Vector X, X0, dXdt, V, V0, dVdt, E, E0, dEdt;
+  Vector X, X0, Xdiff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
+  const bool offsetXinit;
+  CAROM::Vector *initX = 0;
+  
   ParGridFunction gfH1, gfL2;
 
   void SetStateVariables(Vector const& S)
@@ -159,7 +176,7 @@ class ROM_Basis
 public:
   ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, 
 	    int & dimX, int & dimV, int & dimE,
-	    const bool staticSVD_ = false, const bool hyperreduce_ = false);
+	    const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useXoffset = false);
 
   ~ROM_Basis()
   {
@@ -202,11 +219,14 @@ public:
 
   int GetRank() const { return rank; }
 
+  void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
+  
   MPI_Comm comm;
   
 private:
   const bool staticSVD;
   const bool hyperreduce;
+  const bool offsetXinit;
   int rdimx, rdimv, rdime;
 
   int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -255,6 +275,9 @@ private:
   CAROM::Matrix *BsinvX = NULL;
   CAROM::Matrix *BsinvV = NULL;
   CAROM::Matrix *BsinvE = NULL;
+
+  CAROM::Vector *initX = 0;
+  CAROM::Vector *initXsp = 0;
 
   int numSamplesX = 0;
   int numSamplesV = 0;

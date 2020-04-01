@@ -156,6 +156,7 @@ int main(int argc, char *argv[])
    bool rom_offline = false;
    bool rom_online = false;
    bool rom_staticSVD = true;
+   bool rom_offsetX0 = false;
    int rom_dimx = -1;
    int rom_dimv = -1;
    int rom_dime = -1;
@@ -239,6 +240,9 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
+   StopWatch totalTimer;
+   totalTimer.Start();
+   
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -577,7 +581,7 @@ int main(int argc, char *argv[])
    if (rom_offline)
      {
        if (dtc > 0.0) dt = dtc;
-       sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD);
+       sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0);
      }
 
    ROM_Basis *basis = NULL;
@@ -587,7 +591,7 @@ int main(int argc, char *argv[])
    if (rom_online)
      {
        if (dtc > 0.0) dt = dtc;
-       basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce);
+       basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
        romS.SetSize(rom_dimx + rom_dimv + rom_dime);
        basis->ProjectFOMtoROM(S, romS);
 
@@ -674,6 +678,10 @@ int main(int argc, char *argv[])
          double loc_norm = e_gf * e_gf, tot_norm;
          MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                        pmesh->GetComm());
+
+	 if (rom_hyperreduce)
+	   tot_norm = 0.0;  // e_gf is not updated in hyperreduction case
+	 
          if (mpi.Root())
          {
             cout << fixed;
@@ -836,6 +844,10 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
+   totalTimer.Stop();
+   if (mpi.Root())
+     cout << "Total time: " << totalTimer.RealTime() << endl;
+   
    // Free the used memory.
    delete ode_solver;
    delete pmesh;
