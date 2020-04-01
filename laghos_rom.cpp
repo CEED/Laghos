@@ -320,7 +320,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
   const int fomH1size = H1FESpace->GlobalTrueVSize();
   const int fomL2size = L2FESpace->GlobalTrueVSize();
 
-  const int nsamp = 35;
+  const int nsamp = 100;
   
   numSamplesX = rdimx;
   numSamplesX = fomH1size;  // maximum number of samples possible
