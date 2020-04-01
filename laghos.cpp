@@ -240,6 +240,9 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
 
+   StopWatch totalTimer;
+   totalTimer.Start();
+   
    // Read the serial mesh from the given mesh file on all processors.
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
@@ -841,6 +844,10 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
+   totalTimer.Stop();
+   if (mpi.Root())
+     cout << "Total time: " << totalTimer.RealTime() << endl;
+   
    // Free the used memory.
    delete ode_solver;
    delete pmesh;

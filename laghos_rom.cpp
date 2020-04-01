@@ -71,10 +71,28 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
 
   const CAROM::Matrix* sing_vals = bg->getSingularValues();
             
+  MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
+  
   cout << "Singular Values:" << endl;
+
+  double sum = 0.0;
   for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
     cout << (*sing_vals)(sv, sv) << endl;
+    sum += (*sing_vals)(sv, sv);
   }
+
+  double partialSum = 0.0;
+  int cutoff = 0;
+  for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
+    partialSum += (*sing_vals)(sv, sv);
+    if (partialSum / sum > 0.9999)
+      {
+	cutoff = sv;
+	break;
+      }
+  }
+
+  cout << "Take first " << cutoff+1 << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
 void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
@@ -580,6 +598,17 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
       //SetBdryAttrForVelocity(sample_pmesh);
       SetBdryAttrForVelocity_UnitCube(sample_pmesh);
       sample_pmesh->EnsureNodes();
+
+      const bool printSampleMesh = true;
+      if (printSampleMesh)
+	{
+	  ostringstream mesh_name;
+	  mesh_name << "smesh." << setfill('0') << setw(6) << rank;
+
+	  ofstream mesh_ofs(mesh_name.str().c_str());
+	  mesh_ofs.precision(8);
+	  sample_pmesh->Print(mesh_ofs);
+	}
     }
   
   // Set s2sp_H1 and s2sp_L2 from s2sp
@@ -681,6 +710,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
   if (offsetXinit)
     {
+      MFEM_VERIFY(false, "TODO: E needs an offset as well");
+      
       initX = new CAROM::Vector(tH1size, true);
       initX->read("initX");
 
@@ -872,7 +903,8 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
 
       for (int i=0; i<size_L2_sp; ++i)
 	{
-	  usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
+	  //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
+	  usp[(2*size_H1_sp) + i] = (*spE)(i);
 	}
     }
 }
@@ -970,7 +1002,7 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
 	  }
       }
 
-      basis->ApplyEssentialBCtoInitXsp(ess_tdofs);
+      //basis->ApplyEssentialBCtoInitXsp(ess_tdofs);  // TODO: this should be only for v?
       
       ParGridFunction rho(L2FESpaceSP);
       L2_FECollection l2_fec(order_e, spmesh->Dimension());
