@@ -27,56 +27,56 @@ namespace hydrodynamics
 
 void HydroODESolver::Init(TimeDependentOperator &_f)
 {
-   ODESolver::Init(_f);
+    ODESolver::Init(_f);
 
-   hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
-   MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
+    hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
+    MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
 }
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
-   const int Vsize = hydro_oper->GetH1VSize();
-   Vector V(Vsize), dS_dt(S.Size()), S0(S);
+    const int Vsize = hydro_oper->GetH1VSize();
+    Vector V(Vsize), dS_dt(S.Size()), S0(S);
 
-   // The monolithic BlockVector stores the unknown fields as follows:
-   // (Position, Velocity, Specific Internal Energy).
-   Vector dv_dt, v0, dx_dt;
-   v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
-   dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
-   dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+    // The monolithic BlockVector stores the unknown fields as follows:
+    // (Position, Velocity, Specific Internal Energy).
+    Vector dv_dt, v0, dx_dt;
+    v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
+    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
 
-   // In each sub-step:
-   // - Update the global state Vector S.
-   // - Compute dv_dt using S.
-   // - Update V using dv_dt.
-   // - Compute de_dt and dx_dt using S and V.
+    // In each sub-step:
+    // - Update the global state Vector S.
+    // - Compute dv_dt using S.
+    // - Update V using dv_dt.
+    // - Compute de_dt and dx_dt using S and V.
 
-   // -- 1.
-   // S is S0.
-   hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
-   // V = v0 + 0.5 * dt * dv_dt;
-   add(v0, 0.5 * dt, dv_dt, V);
-   hydro_oper->SolveEnergy(S, V, dS_dt);
-   dx_dt = V;
+    // -- 1.
+    // S is S0.
+    hydro_oper->UpdateMesh(S);
+    hydro_oper->SolveVelocity(S, dS_dt);
+    // V = v0 + 0.5 * dt * dv_dt;
+    add(v0, 0.5 * dt, dv_dt, V);
+    hydro_oper->SolveEnergy(S, V, dS_dt);
+    dx_dt = V;
 
-   // -- 2.
-   // S = S0 + 0.5 * dt * dS_dt;
-   add(S0, 0.5 * dt, dS_dt, S);
-   hydro_oper->ResetQuadratureData();
-   hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
-   // V = v0 + 0.5 * dt * dv_dt;
-   add(v0, 0.5 * dt, dv_dt, V);
-   hydro_oper->SolveEnergy(S, V, dS_dt);
-   dx_dt = V;
+    // -- 2.
+    // S = S0 + 0.5 * dt * dS_dt;
+    add(S0, 0.5 * dt, dS_dt, S);
+    hydro_oper->ResetQuadratureData();
+    hydro_oper->UpdateMesh(S);
+    hydro_oper->SolveVelocity(S, dS_dt);
+    // V = v0 + 0.5 * dt * dv_dt;
+    add(v0, 0.5 * dt, dv_dt, V);
+    hydro_oper->SolveEnergy(S, V, dS_dt);
+    dx_dt = V;
 
-   // -- 3.
-   // S = S0 + dt * dS_dt.
-   add(S0, dt, dS_dt, S);
-   hydro_oper->ResetQuadratureData();
+    // -- 3.
+    // S = S0 + dt * dS_dt.
+    add(S0, dt, dS_dt, S);
+    hydro_oper->ResetQuadratureData();
 
-   t += dt;
+    t += dt;
 }
 
 } // namespace hydrodynamics

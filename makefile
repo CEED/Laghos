@@ -175,7 +175,7 @@ status info:
 	$(info PREFIX      = $(PREFIX))
 	@true
 
-ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
+#ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)
 
 style:
