@@ -220,7 +220,12 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
 
     if (hyperreduce)
     {
+        if(rank == 0) cout << "start preprocessing hyper-reduction\n";
+        StopWatch preprocessHyperreductionTymer;
+        preprocessHyperreductionTymer.Start();
         SetupHyperreduction(H1FESpace, L2FESpace, nH1);
+        preprocessHyperreductionTymer.Stop();
+        if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
 }
 

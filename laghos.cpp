@@ -694,29 +694,29 @@ int main(int argc, char *argv[])
 
     StopWatch restoreTimer, timeLoopTimer;
     if (rom_restore)
-    {   
+    {
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
-        // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size   
-        restoreTimer.Start();      
+        // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
+        restoreTimer.Start();
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
         for (int ti = 1; !last_step; ti++)
-        { 
+        {
             if (myid == 0)
                 cout << "Restoring " << ti << "-th solution" << endl;
             // romS = readCurrentReduceSol(ti);
-            // read ROM solution from a file. 
+            // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
             std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
-                for (int k=0; k<romSsize; ++k) 
+                for (int k=0; k<romSsize; ++k)
                 {
-                    infile_romS >> romS(k);  
+                    infile_romS >> romS(k);
                 }
             }
             else
@@ -736,7 +736,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         restoreTimer.Stop();
-    } 
+    }
     else
     {
         // usual time loop when rom_restore phase is false.
@@ -766,7 +766,7 @@ int main(int argc, char *argv[])
 
                 ode_solver->Step(romS, t, dt);
 
-                // save ROM solution to a file. 
+                // save ROM solution to a file.
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
