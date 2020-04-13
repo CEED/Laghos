@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
     double blast_position[] = {0.0, 0.0, 0.0};
     bool rom_offline = false;
     bool rom_online = false;
+    bool rom_restore = false;
     bool rom_staticSVD = true;
     bool rom_offsetX0 = false;
     int rom_dimx = -1;
@@ -226,6 +227,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
                    "Enable or disable ROM online computations and output.");
+    args.AddOption(&rom_restore, "-restore", "--restore", "-no-restore", "--no-restore",
+                   "Enable or disable ROM restoration phase where ROM solution is lifted to FOM size.");
     args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
     args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
     args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
@@ -640,7 +643,7 @@ int main(int argc, char *argv[])
     VisItDataCollection visit_dc(basename, pmesh);
     if (visit)
     {
-        if (rom_offline)
+        if (rom_offline || rom_restore)
             visit_dc.RegisterField("Position",  &x_gf);
 
         visit_dc.RegisterField("Density",  &rho_gf);
@@ -689,180 +692,237 @@ int main(int argc, char *argv[])
         onlinePreprocessTimer.Stop();
     }
 
-
-    StopWatch timeLoopTimer;
-    timeLoopTimer.Start();
-    for (int ti = 1; !last_step; ti++)
-    {
-        if (t + dt >= t_final)
-        {
-            dt = t_final - t;
-            last_step = true;
-        }
-
-        if (steps == max_tsteps) {
-            last_step = true;
-        }
-
-        S_old = S;
-        t_old = t;
-        oper.ResetTimeStepEstimate();
-
-        // S is the vector of dofs, t is the current time, and dt is the time step
-        // to advance.
-        if (rom_online)
-        {
+    StopWatch restoreTimer, timeLoopTimer;
+    if (rom_restore)
+    {   
+        // -restore phase
+        // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
+        // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size   
+        restoreTimer.Start();      
+        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+        int romSsize = rom_dimx + rom_dimv + rom_dime;
+        romS.SetSize(romSsize);
+        for (int ti = 1; !last_step; ti++)
+        { 
             if (myid == 0)
-                cout << "ROM online at t " << t << ", dt " << dt << endl;
-
-            ode_solver->Step(romS, t, dt);
-            // if (!rom_hyperreduce)
-            basis->LiftROMtoFOM(romS, S);
-
-            romOper->UpdateSampleMeshNodes(romS);
-
-            oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
-        }
-        else
-        {
-            if (myid == 0)
-                cout << "FOM simulation at t " << t << ", dt " << dt << endl;
-
-            ode_solver->Step(S, t, dt);
-        }
-
-        steps++;
-
-        const double last_dt = dt;
-
-        // Adaptive time step control.
-        const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
-        //const double dt_est = oper.GetTimeStepEstimate(S);
-        //cout << myid << ": dt_est " << dt_est << endl;
-        if (dt_est < dt)
-        {
-            // Repeat (solve again) with a decreased time step - decrease of the
-            // time estimate suggests appearance of oscillations.
-            dt *= 0.85;
-            if (dt < numeric_limits<double>::epsilon())
+                cout << "Restoring " << ti << "-th solution" << endl;
+            // romS = readCurrentReduceSol(ti);
+            // read ROM solution from a file. 
+            // TODO: it needs to be read from the format of HDF5 format
+            // TODO: how about parallel version? introduce rank in filename
+            std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+            std::ifstream infile_romS(filename.c_str());
+            if (infile_romS.good())
             {
-                MFEM_ABORT("The time step crashed!");
-            }
-            t = t_old;
-            S = S_old;
-            oper.ResetQuadratureData();
-            if (mpi.Root()) {
-                cout << "Repeating step " << ti << endl;
-            }
-            if (steps < max_tsteps) {
-                last_step = false;
-            }
-            ti--;
-            continue;
-        }
-        else if (dtc == 0.0 && dt_est > 1.25 * dt) {
-            dt *= 1.02;
-        }
-
-        if (rom_offline)
-        {
-            sampler->SampleSolution(t, last_dt, S);
-        }
-
-        // Make sure that the mesh corresponds to the new solution state. This is
-        // needed, because some time integrators use different S-type vectors
-        // and the oper object might have redirected the mesh positions to those.
-        pmesh->NewNodes(x_gf, false);
-
-        if (last_step || (ti % vis_steps) == 0)
-        {
-            double loc_norm = e_gf * e_gf, tot_norm;
-            MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                          pmesh->GetComm());
-
-            if (rom_hyperreduce)
-                tot_norm = 0.0;  // e_gf is not updated in hyperreduction case
-
-            if (mpi.Root())
-            {
-                cout << fixed;
-                cout << "step " << setw(5) << ti
-                     << ",\tt = " << setw(5) << setprecision(4) << t
-                     << ",\tdt = " << setw(5) << setprecision(6) << dt
-                     << ",\t|e| = " << setprecision(10)
-                     << sqrt(tot_norm) << endl;
-            }
-
-            // Make sure all ranks have sent their 'v' solution before initiating
-            // another set of GLVis connections (one from each rank):
-            MPI_Barrier(pmesh->GetComm());
-
-            if (visualization || visit || gfprint) {
-                oper.ComputeDensity(rho_gf);
-            }
-            if (visualization)
-            {
-                int Wx = 0, Wy = 0; // window position
-                int Ww = 350, Wh = 350; // window size
-                int offx = Ww+10; // window offsets
-
-                if (problem != 0 && problem != 4)
+                for (int k=0; k<romSsize; ++k) 
                 {
-                    VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                   "Density", Wx, Wy, Ww, Wh);
+                    infile_romS >> romS(k);  
                 }
-
-                Wx += offx;
-                VisualizeField(vis_v, vishost, visport,
-                               v_gf, "Velocity", Wx, Wy, Ww, Wh);
-                Wx += offx;
-                VisualizeField(vis_e, vishost, visport, e_gf,
-                               "Specific Internal Energy", Wx, Wy, Ww,Wh);
-                Wx += offx;
             }
+            else
+            {
+                // get out of the loop when no more file is found
+                break;
+            }
+            infile_romS.close();
+            basis->LiftROMtoFOM(romS, S);
 
             if (visit)
             {
+                oper.ComputeDensity(rho_gf);
                 visit_dc.SetCycle(ti);
                 visit_dc.SetTime(t);
                 visit_dc.Save();
             }
-
-            if (gfprint)
+        } // time loop in "restore" phase
+        restoreTimer.Stop();
+    } 
+    else
+    {
+        // usual time loop when rom_restore phase is false.
+        timeLoopTimer.Start();
+        for (int ti = 1; !last_step; ti++)
+        {
+            if (t + dt >= t_final)
             {
-                ostringstream mesh_name, rho_name, v_name, e_name;
-                mesh_name << basename << "_" << ti
-                          << "_mesh." << setfill('0') << setw(6) << myid;
-                rho_name  << basename << "_" << ti
-                          << "_rho." << setfill('0') << setw(6) << myid;
-                v_name << basename << "_" << ti
-                       << "_v." << setfill('0') << setw(6) << myid;
-                e_name << basename << "_" << ti
-                       << "_e." << setfill('0') << setw(6) << myid;
-
-                ofstream mesh_ofs(mesh_name.str().c_str());
-                mesh_ofs.precision(8);
-                pmesh->Print(mesh_ofs);
-                mesh_ofs.close();
-
-                ofstream rho_ofs(rho_name.str().c_str());
-                rho_ofs.precision(8);
-                rho_gf.Save(rho_ofs);
-                rho_ofs.close();
-
-                ofstream v_ofs(v_name.str().c_str());
-                v_ofs.precision(8);
-                v_gf.Save(v_ofs);
-                v_ofs.close();
-
-                ofstream e_ofs(e_name.str().c_str());
-                e_ofs.precision(8);
-                e_gf.Save(e_ofs);
-                e_ofs.close();
+                dt = t_final - t;
+                last_step = true;
             }
-        }
+
+            if (steps == max_tsteps) {
+                last_step = true;
+            }
+
+            S_old = S;
+            t_old = t;
+            oper.ResetTimeStepEstimate();
+
+            // S is the vector of dofs, t is the current time, and dt is the time step
+            // to advance.
+            if (rom_online)
+            {
+                if (myid == 0)
+                    cout << "ROM online at t " << t << ", dt " << dt << endl;
+
+                ode_solver->Step(romS, t, dt);
+
+                // save ROM solution to a file. 
+                // TODO: it needs to be save in the format of HDF5 format
+                // TODO: how about parallel version? introduce rank in filename
+                // TODO: think about how to reuse "gfprint" option
+                std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+                std::ofstream outfile_romS(filename.c_str());
+                romS.Print(outfile_romS, 16);
+                outfile_romS.close();
+
+                if (!rom_hyperreduce)
+                    basis->LiftROMtoFOM(romS, S);
+
+                romOper->UpdateSampleMeshNodes(romS);
+
+                oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
+            }
+            else
+            {
+                if (myid == 0)
+                    cout << "FOM simulation at t " << t << ", dt " << dt << endl;
+
+                ode_solver->Step(S, t, dt);
+            }
+
+            steps++;
+
+            const double last_dt = dt;
+
+            // Adaptive time step control.
+            const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+            //const double dt_est = oper.GetTimeStepEstimate(S);
+            //cout << myid << ": dt_est " << dt_est << endl;
+            if (dt_est < dt)
+            {
+                // Repeat (solve again) with a decreased time step - decrease of the
+                // time estimate suggests appearance of oscillations.
+                dt *= 0.85;
+                if (dt < numeric_limits<double>::epsilon())
+                {
+                    MFEM_ABORT("The time step crashed!");
+                }
+                t = t_old;
+                S = S_old;
+                oper.ResetQuadratureData();
+                if (mpi.Root()) {
+                    cout << "Repeating step " << ti << endl;
+                }
+                if (steps < max_tsteps) {
+                    last_step = false;
+                }
+                ti--;
+                continue;
+            }
+            else if (dtc == 0.0 && dt_est > 1.25 * dt) {
+                dt *= 1.02;
+            }
+
+            if (rom_offline)
+            {
+                sampler->SampleSolution(t, last_dt, S);
+            }
+
+            // Make sure that the mesh corresponds to the new solution state. This is
+            // needed, because some time integrators use different S-type vectors
+            // and the oper object might have redirected the mesh positions to those.
+            pmesh->NewNodes(x_gf, false);
+
+            if (last_step || (ti % vis_steps) == 0)
+            {
+                double loc_norm = e_gf * e_gf, tot_norm;
+                MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
+                              pmesh->GetComm());
+
+                if (rom_hyperreduce)
+                    tot_norm = 0.0;  // e_gf is not updated in hyperreduction case
+
+                if (mpi.Root())
+                {
+                    cout << fixed;
+                    cout << "step " << setw(5) << ti
+                         << ",\tt = " << setw(5) << setprecision(4) << t
+                         << ",\tdt = " << setw(5) << setprecision(6) << dt
+                         << ",\t|e| = " << setprecision(10)
+                         << sqrt(tot_norm) << endl;
+                }
+
+                // Make sure all ranks have sent their 'v' solution before initiating
+                // another set of GLVis connections (one from each rank):
+                MPI_Barrier(pmesh->GetComm());
+
+                if (visualization || visit || gfprint) {
+                    oper.ComputeDensity(rho_gf);
+                }
+                if (visualization)
+                {
+                    int Wx = 0, Wy = 0; // window position
+                    int Ww = 350, Wh = 350; // window size
+                    int offx = Ww+10; // window offsets
+
+                    if (problem != 0 && problem != 4)
+                    {
+                        VisualizeField(vis_rho, vishost, visport, rho_gf,
+                                       "Density", Wx, Wy, Ww, Wh);
+                    }
+
+                    Wx += offx;
+                    VisualizeField(vis_v, vishost, visport,
+                                   v_gf, "Velocity", Wx, Wy, Ww, Wh);
+                    Wx += offx;
+                    VisualizeField(vis_e, vishost, visport, e_gf,
+                                   "Specific Internal Energy", Wx, Wy, Ww,Wh);
+                    Wx += offx;
+                }
+
+                if (visit)
+                {
+                    visit_dc.SetCycle(ti);
+                    visit_dc.SetTime(t);
+                    visit_dc.Save();
+                }
+
+                if (gfprint)
+                {
+                    ostringstream mesh_name, rho_name, v_name, e_name;
+                    mesh_name << basename << "_" << ti
+                              << "_mesh." << setfill('0') << setw(6) << myid;
+                    rho_name  << basename << "_" << ti
+                              << "_rho." << setfill('0') << setw(6) << myid;
+                    v_name << basename << "_" << ti
+                           << "_v." << setfill('0') << setw(6) << myid;
+                    e_name << basename << "_" << ti
+                           << "_e." << setfill('0') << setw(6) << myid;
+
+                    ofstream mesh_ofs(mesh_name.str().c_str());
+                    mesh_ofs.precision(8);
+                    pmesh->Print(mesh_ofs);
+                    mesh_ofs.close();
+
+                    ofstream rho_ofs(rho_name.str().c_str());
+                    rho_ofs.precision(8);
+                    rho_gf.Save(rho_ofs);
+                    rho_ofs.close();
+
+                    ofstream v_ofs(v_name.str().c_str());
+                    v_ofs.precision(8);
+                    v_gf.Save(v_ofs);
+                    v_ofs.close();
+
+                    ofstream e_ofs(e_name.str().c_str());
+                    e_ofs.precision(8);
+                    e_gf.Save(e_ofs);
+                    e_ofs.close();
+                }
+            }
+        } // usual time loop
+        timeLoopTimer.Stop();
     }
-    timeLoopTimer.Stop();
 
 
     if (rom_hyperreduce)
@@ -974,6 +1034,7 @@ int main(int argc, char *argv[])
     totalTimer.Stop();
     if (mpi.Root()) {
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
+        if(rom_restore) cout << "Elapsed time for restore phase: " << restoreTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
     }
