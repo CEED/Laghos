@@ -712,9 +712,16 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
+#ifdef FULL_DOF_STENCIL
+    const int NR = H1FESpace->GetVSize();
+    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BXsp, *BEsp);
+    // TODO: this redundantly gathers BEsp again, but only once per simulation.
+    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+#else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+#endif
 
     if (offsetXinit)
     {
@@ -736,7 +743,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 1, false);
         CAROM::Matrix spzero(rank == 0 ? size_H1_sp : 1, 1, false);
 
+#ifdef FULL_DOF_STENCIL
+        GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, spX0mat, spzero);
+#else
         GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, st2sp, sprows, all_sprows, spX0mat, spzero);
+#endif
 
         if (rank == 0)
         {
