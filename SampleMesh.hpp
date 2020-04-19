@@ -8,6 +8,8 @@
 using namespace mfem;
 using namespace std;
 
+//#define FULL_DOF_STENCIL
+
 void FindStencilElements(const vector<int>& sample_dofs_gid,
                          set<int>& elements,
                          ParFiniteElementSpace& fespace)
@@ -144,12 +146,103 @@ void InsertElementDofs(ParFiniteElementSpace& fespace, const int elId,
   fespace.GetElementVDofs(elId, dofs);
   for (int i = 0; i < dofs.Size(); ++i) {
     const int dof_i = dofs[i] >= 0 ? dofs[i] : -1 - dofs[i];
-    
+#ifdef FULL_DOF_STENCIL
+    element_dofs.insert(offset + dof_i);
+#else
     int ltdof = fespace.GetLocalTDofNumber(dof_i);
     if (ltdof != -1) {
       element_dofs.insert(offset + ltdof);
     }
+#endif
   }
+}
+
+// dofs are full dofs
+void AugmentDofListWithOwnedDofs(vector<int>& mixedDofs, ParFiniteElementSpace& fespace1, ParFiniteElementSpace& fespace2)
+{
+  const int N1 = fespace1.GetVSize();
+
+  vector<ParFiniteElementSpace*> fespace(2);
+  fespace[0] = &fespace1;
+  fespace[1] = &fespace2;
+  
+  /*
+  int ndofs1 = 0;
+  int ndofs2 = 0;
+  */
+  
+  vector<vector<int> > dofs(2);
+  set<int> mixedDofSet;  
+  for (auto i : mixedDofs)
+    {
+      mixedDofSet.insert(i);
+      
+      if (i < N1)
+	{
+	  //ndofs1++;
+	  dofs[0].push_back(i);
+	}
+      else
+	{
+	  //ndofs2++;
+	  dofs[1].push_back(i - N1);
+	}
+    }
+
+  int nprocs = -1;
+  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+  
+  vector<int> cts(nprocs);
+  vector<int> offsets(nprocs);
+  
+  for (int s=0; s<2; ++s)  // loop over fespaces
+    {
+      const int ndofs = dofs[s].size();
+      MPI_Allgather(&ndofs, 1, MPI_INT, cts.data(), 1, MPI_INT, MPI_COMM_WORLD);
+
+      offsets[0] = 0;
+      for (int i = 1; i < nprocs; ++i)
+	offsets[i] = offsets[i-1] + cts[i-1];
+
+      vector<int> gdofs(ndofs);
+      for (int i = 0; i<ndofs; ++i)
+	{
+	  gdofs[i] = fespace[s]->GetGlobalTDofNumber(dofs[s][i]);
+	}
+
+      vector<int> gdofsGathered(offsets[nprocs-1] + cts[nprocs-1]);
+      
+      MPI_Allgatherv(gdofs.data(), ndofs, MPI_INT,
+		     gdofsGathered.data(), cts.data(), offsets.data(), MPI_INT, MPI_COMM_WORLD);
+
+      set<int> allgdofs;
+
+      for (auto i : gdofsGathered)
+	allgdofs.insert(i);
+
+      const int os = (s == 0) ? 0 : N1;
+      
+      for (int i=0; i<fespace[s]->GetVSize(); ++i)
+	{
+	  int ltdof = fespace[s]->GetLocalTDofNumber(i);
+	  if (ltdof != -1)
+	    {
+	      const int g = fespace[s]->GetGlobalTDofNumber(i);
+	      set<int>::iterator it = allgdofs.find(g);
+	      if (it != allgdofs.end())
+		{
+		  // Dof i should be included in mixedDofs. First check whether it is already included.
+		  const int j = os + i;
+		  set<int>::iterator it = mixedDofSet.find(j);
+		  if (it == mixedDofSet.end())
+		    {
+		      mixedDofs.push_back(j);
+		      mixedDofSet.insert(j);
+		    }
+		}
+	    }
+	}
+    }
 }
 
 void BuildSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
@@ -178,7 +271,11 @@ void BuildSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
       offsets[i] = offsets[i-1] + cts[i-1];
   }
 
+#ifdef FULL_DOF_STENCIL
+  const int N1 = fespace1.GetVSize();
+#else
   const int N1 = fespace1.TrueVSize();
+#endif
   const int d = pmesh.Dimension();
   
   // Each processor generates for each of its stencil elements a list of global
@@ -226,6 +323,10 @@ void BuildSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
   }
   
   stencil_dofs.assign(element_dofs.begin(), element_dofs.end());
+  
+#ifdef FULL_DOF_STENCIL
+  AugmentDofListWithOwnedDofs(stencil_dofs, fespace1, fespace2);
+#endif
 
   MFEM_VERIFY(coords_idx == d*numElVert*local_num_elems, "");
   MFEM_VERIFY(conn_idx == numElVert*local_num_elems, "");
@@ -331,7 +432,7 @@ void BuildSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
 }
 
 void GetLocalDofsToLocalElementMap(ParFiniteElementSpace& fespace, const vector<int>& dofs, const vector<int>& localNumDofs, const set<int>& elems,
-				   vector<int>& dofToElem, vector<int>& dofToElemDof)
+				   vector<int>& dofToElem, vector<int>& dofToElemDof, const bool useTDof)
 {
   int myid;
   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
@@ -357,16 +458,23 @@ void GetLocalDofsToLocalElementMap(ParFiniteElementSpace& fespace, const vector<
 	    {
 	      const int eldof_j = eldofs[j] >= 0 ? eldofs[j] : -1 - eldofs[j];
 	      int ltdof = fespace.GetLocalTDofNumber(eldof_j);
+#ifdef FULL_DOF_STENCIL
+	      const int dof_j = useTDof ? ltdof : eldof_j;
+	      if (dof_j == dofs[myoffset + i])  // dofs contains true DOF's.
+#else
 	      if (ltdof == dofs[myoffset + i])  // dofs contains true DOF's.
+#endif
 		{
 		  dofToElem[i] = elId;  // Possibly overwrite another element index, which is fine since we just want any element index.
 		  dofToElemDof[i] = j;
 		}
 	    }
 	}
-
+      
+#ifndef FULL_DOF_STENCIL
       const int dte = dofToElem[i];
       MFEM_VERIFY(dofToElem[i] >= 0, "");
+#endif
     }
 }
 
@@ -416,10 +524,12 @@ void Set_s2sp(const int myid, const int num_procs, const int spN1, const int glo
 	}
     }
   
+#ifndef FULL_DOF_STENCIL
   for (int i=0; i<mySampleToElement.size(); ++i)
     {
       MFEM_VERIFY(mySampleToElement[i] >= 0, "");
     }
+#endif
 
   int* cts = new int [num_procs];
   int* offsets = new int [num_procs];
@@ -460,6 +570,10 @@ void Set_s2sp(const int myid, const int num_procs, const int spN1, const int glo
 	      //const int sdi = soffset + sample_dofs_sub_to_sample_dofs[s][os[s] + i];
 	      const int sdi = sample_dofs_sub_to_sample_dofs[s][os[s] + i];
 	      const int procElementIndex = sampleToElement[2*sdi];
+#ifdef FULL_DOF_STENCIL
+	      if (procElementIndex == -1)
+		continue;
+#endif
 	      const int procElementDofIndex = sampleToElement[(2*sdi)+1];
 	      map<int, int>::const_iterator it = elemLocalIndicesInverse[p].find(procElementIndex);
 
@@ -481,10 +595,12 @@ void Set_s2sp(const int myid, const int num_procs, const int spN1, const int glo
       soffset += local_num_sample_dofs[p];
     }
   
+#ifndef FULL_DOF_STENCIL
   for (int i=0; i<s2sp.size(); ++i)
     {
       MFEM_VERIFY(s2sp[i] >= 0, "");
     }
+#endif
 }
 
 void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
@@ -522,9 +638,9 @@ void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
 
   // Find all local elements that should be included, based on fespace1 and fespace2.
   GetLocalSampleMeshElements(pmesh, fespace1, sample_dofs1, local_num_sample_dofs_sub[0], elems);
-  GetLocalDofsToLocalElementMap(fespace1, sample_dofs1, local_num_sample_dofs_sub[0], elems, localSampleDofsToElem_sub[0], localSampleDofsToElemDof_sub[0]);
+  GetLocalDofsToLocalElementMap(fespace1, sample_dofs1, local_num_sample_dofs_sub[0], elems, localSampleDofsToElem_sub[0], localSampleDofsToElemDof_sub[0], true);
   GetLocalSampleMeshElements(pmesh, fespace2, sample_dofs2, local_num_sample_dofs_sub[1], elems2);
-  GetLocalDofsToLocalElementMap(fespace2, sample_dofs2, local_num_sample_dofs_sub[1], elems2, localSampleDofsToElem_sub[1], localSampleDofsToElemDof_sub[1]);
+  GetLocalDofsToLocalElementMap(fespace2, sample_dofs2, local_num_sample_dofs_sub[1], elems2, localSampleDofsToElem_sub[1], localSampleDofsToElemDof_sub[1], true);
 
   // Merge the elements found for the two fespaces.
   elems.insert(elems2.begin(), elems2.end());
@@ -581,19 +697,29 @@ void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
   vector<vector<int> > local_num_stencil_dofs_sub(2);
   vector<vector<int> > localStencilDofsToElem_sub(2);
   vector<vector<int> > localStencilDofsToElemDof_sub(2);
-  
+
+#ifdef FULL_DOF_STENCIL
+  const int N1full = fespace1.GetVSize();
+  SplitDofsIntoBlocks(N1full, all_stencil_dofs, local_num_stencil_dofs,
+		      stencil_dofs1, stencil_dofs_sub_to_stencil_dofs[0], local_num_stencil_dofs_sub[0],
+		      stencil_dofs2, stencil_dofs_sub_to_stencil_dofs[1], local_num_stencil_dofs_sub[1]);
+#else
   SplitDofsIntoBlocks(N1, all_stencil_dofs, local_num_stencil_dofs,
 		      stencil_dofs1, stencil_dofs_sub_to_stencil_dofs[0], local_num_stencil_dofs_sub[0],
 		      stencil_dofs2, stencil_dofs_sub_to_stencil_dofs[1], local_num_stencil_dofs_sub[1]);
+#endif
 
-  GetLocalDofsToLocalElementMap(fespace1, stencil_dofs1, local_num_stencil_dofs_sub[0], elems, localStencilDofsToElem_sub[0], localStencilDofsToElemDof_sub[0]);
-  GetLocalDofsToLocalElementMap(fespace2, stencil_dofs2, local_num_stencil_dofs_sub[1], elems, localStencilDofsToElem_sub[1], localStencilDofsToElemDof_sub[1]);
+  GetLocalDofsToLocalElementMap(fespace1, stencil_dofs1, local_num_stencil_dofs_sub[0], elems, localStencilDofsToElem_sub[0], localStencilDofsToElemDof_sub[0], false);
+  GetLocalDofsToLocalElementMap(fespace2, stencil_dofs2, local_num_stencil_dofs_sub[1], elems, localStencilDofsToElem_sub[1], localStencilDofsToElemDof_sub[1], false);
 
   Set_s2sp(myid, num_procs, spN1, all_stencil_dofs.size(), local_num_stencil_dofs, local_num_stencil_dofs_sub, localStencilDofsToElem_sub,
 	   localStencilDofsToElemDof_sub, stencil_dofs_sub_to_stencil_dofs, elemLocalIndicesInverse, spfespace, st2sp);
 }
 
 void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& BW, const int rrdim, const int rwdim,
+#ifdef FULL_DOF_STENCIL
+				 const int NR, ParFiniteElementSpace& fespaceR, ParFiniteElementSpace& fespaceW,
+#endif
 				 const vector<int>& st2sp, const vector<int>& sprows,
 				 const vector<int>& all_sprows, CAROM::Matrix& BRsp, CAROM::Matrix& BWsp)
 {
@@ -606,12 +732,60 @@ void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& B
   
   //const int rrdim = BR.numColumns();
   //const int rwdim = BW.numColumns();
-  
-  const int NR = BR.numRows();
+
   const int num_sprows = static_cast<int>(sprows.size());
+  
+#ifdef FULL_DOF_STENCIL
+  int num_sprows_true = 0;
+  for (auto i : sprows)
+    {
+      if ((i < NR && fespaceR.GetLocalTDofNumber(i) >= 0) || (i >= NR && fespaceW.GetLocalTDofNumber(i - NR) >= 0))
+	{
+	  num_sprows_true++;
+	}
+      /*
+      const int ltdof = fespace.GetLocalTDofNumber(i);
+      if (ltdof >= 0)
+      num_sprows_true++;
+      */
+
+      if (i < 0)
+	cout << "BUG" << endl;
+    }
+
+  std::vector<int> sprows_true(num_sprows_true);
+  {
+    int tcnt = 0;
+    for (int j=0; j<sprows.size(); ++j)
+      {
+	const int i = sprows[j];
+	if ((i < NR && fespaceR.GetLocalTDofNumber(i) >= 0) || (i >= NR && fespaceW.GetLocalTDofNumber(i - NR) >= 0))
+	  {
+	    sprows_true[tcnt] = j;
+	    tcnt++;
+	  }
+      }
+
+    MFEM_VERIFY(tcnt == num_sprows_true, "");
+  }
+#else
+  const int NR = BR.numRows();
+#endif
+  
   int* cts = new int [num_procs];
   int* allNR = new int [num_procs];
+#ifdef FULL_DOF_STENCIL
+  MPI_Allgather(&num_sprows_true, 1, MPI_INT, cts, 1, MPI_INT, MPI_COMM_WORLD);
+  int* allNSP = new int [num_procs];
+  MPI_Allgather(&num_sprows, 1, MPI_INT, allNSP, 1, MPI_INT, MPI_COMM_WORLD);
+  int* offsetSP = new int [num_procs];
+  offsetSP[0] = 0;
+  for (int i = 1; i < num_procs; ++i) {
+    offsetSP[i] = offsetSP[i-1] + allNSP[i-1];
+  }
+#else
   MPI_Allgather(&num_sprows, 1, MPI_INT, cts, 1, MPI_INT, MPI_COMM_WORLD);
+#endif
   MPI_Allgather(&NR, 1, MPI_INT, allNR, 1, MPI_INT, MPI_COMM_WORLD);
   int* offsets = new int [num_procs];
   offsets[0] = 0;
@@ -619,7 +793,16 @@ void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& B
     offsets[i] = offsets[i-1] + cts[i-1];
   }
 
+#ifdef FULL_DOF_STENCIL
+  const int total_num_sprows_true = offsets[num_procs-1] + cts[num_procs-1];
+  std::vector<int> all_sprows_true(total_num_sprows_true);
+
+  MPI_Allgatherv(sprows_true.data(), num_sprows_true,
+		 MPI_INT, all_sprows_true.data(), cts,
+		 offsets, MPI_INT, MPI_COMM_WORLD);
+#else
   MFEM_VERIFY(offsets[num_procs-1] + cts[num_procs-1] == all_sprows.size(), "");
+#endif
   
   if (myid == 0) {
     const int NRsp = BRsp.numRows();
@@ -628,36 +811,90 @@ void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& B
       int row = sprows[i];
       if (row < NR)
 	{
+#ifdef FULL_DOF_STENCIL
+	  const int ltdof = fespaceR.GetLocalTDofNumber(row);
+	  if (ltdof >= 0 && st2sp[i] >= 0)
+	    {
+	      MFEM_VERIFY(st2sp[i] < NRsp, "");
+	      
+	      for (int j = 0; j < rrdim; ++j)
+		BRsp(st2sp[i], j) = BR(ltdof, j);
+	    }
+#else
 	  for (int j = 0; j < rrdim; ++j)
 	    BRsp(st2sp[i], j) = BR(row, j);
+#endif
 	}
       else
 	{
+#ifdef FULL_DOF_STENCIL
+	  const int ltdof = fespaceW.GetLocalTDofNumber(row - NR);
+	  if (ltdof >= 0 && st2sp[i] >= 0)
+	    {
+	      MFEM_VERIFY(st2sp[i] - NRsp >= 0 && st2sp[i] - NRsp < BWsp.numRows(), "");
+
+	      for (int j = 0; j < rwdim; ++j)
+		BWsp(st2sp[i] - NRsp, j) = BW(ltdof, j);
+	    }
+#else
 	  for (int j = 0; j < rwdim; ++j)
 	    BWsp(st2sp[i] - NRsp, j) = BW(row - NR, j);
+#endif
 	}
     }
+
+#ifdef FULL_DOF_STENCIL
+    int Bsp_row = num_sprows_true;
+#else
     int Bsp_row = num_sprows;
+#endif
     MPI_Status status;
     for (int i = 1; i < num_procs; ++i) {
       for (int j = 0; j < cts[i]; ++j) {
+#ifdef FULL_DOF_STENCIL
+	const int sti = offsetSP[i] + all_sprows_true[Bsp_row];
+	if (all_sprows[sti] < allNR[i])
+	  MPI_Recv(&BRsp(st2sp[sti], 0), rrdim, MPI_DOUBLE,
+		   i, offsets[i]+j, MPI_COMM_WORLD, &status);  // Note that this may redundantly overwrite some rows corresponding to shared DOF's.
+	else
+	  MPI_Recv(&BWsp(st2sp[sti] - NRsp, 0), rwdim, MPI_DOUBLE,
+		   i, offsets[i]+j, MPI_COMM_WORLD, &status);  // Note that this may redundantly overwrite some rows corresponding to shared DOF's.
+#else
 	if (all_sprows[Bsp_row] < allNR[i])
 	  MPI_Recv(&BRsp(st2sp[Bsp_row], 0), rrdim, MPI_DOUBLE,
 		   i, offsets[i]+j, MPI_COMM_WORLD, &status);  // Note that this may redundantly overwrite some rows corresponding to shared DOF's.
 	else
 	  MPI_Recv(&BWsp(st2sp[Bsp_row] - NRsp, 0), rwdim, MPI_DOUBLE,
 		   i, offsets[i]+j, MPI_COMM_WORLD, &status);  // Note that this may redundantly overwrite some rows corresponding to shared DOF's.
+#endif
 	++Bsp_row;
       }
     }
 
+#ifdef FULL_DOF_STENCIL
+    MFEM_VERIFY(Bsp_row == all_sprows_true.size(), "");
+#else
     MFEM_VERIFY(Bsp_row == all_sprows.size(), "");
+#endif
   }
   else {
     double* v = new double [std::max(rrdim,rwdim)];
+#ifdef FULL_DOF_STENCIL
+    for (int i = 0; i < num_sprows_true; i++) {
+      int row = -1;
+      if (sprows[sprows_true[i]] < NR)
+	row = fespaceR.GetLocalTDofNumber(sprows[sprows_true[i]]);
+      else
+	row = fespaceW.GetLocalTDofNumber(sprows[sprows_true[i]] - NR);
+
+      MFEM_VERIFY(row >= 0, "");
+
+      if (sprows[sprows_true[i]] < NR)
+#else
     for (int i = 0; i < num_sprows; i++) {
       int row = sprows[i];
       if (row < NR)
+#endif
 	{
 	  for (int j = 0; j < rrdim; ++j)
 	    v[j] = BR(row, j);
@@ -676,6 +913,11 @@ void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& B
   delete [] cts;
   delete [] offsets;
   delete [] allNR;
+#ifdef FULL_DOF_STENCIL
+  delete [] allNSP;
+  delete [] offsetSP;
+#endif
+
 }
 
 
