@@ -30,11 +30,11 @@ class ROM_Sampler
 public:
     ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                 const double t_final, const double initial_dt, Vector const& S_init,
-                const bool staticSVD = false, const bool useXoffset = false)
+                const bool staticSVD = false, const bool useXoffset = false, double energyFraction_=0.9999)
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
-          gfH1(H1FESpace), gfL2(L2FESpace), offsetXinit(useXoffset)
+          gfH1(H1FESpace), gfL2(L2FESpace), offsetXinit(useXoffset), energyFraction(energyFraction_)
     {
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
@@ -121,7 +121,8 @@ private:
     const int tL2size;
 
     const int rank;
-
+  double energyFraction;
+  
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
 
     Vector X, X0, Xdiff, dXdt, V, V0, dVdt, E, E0, dEdt;

@@ -64,7 +64,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     }
 }
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
+void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     cout << "ROM dimension = " << rom_dim << endl;
@@ -85,7 +85,7 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
     int cutoff = 0;
     for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
         partialSum += (*sing_vals)(sv, sv);
-        if (partialSum / sum > 0.999999999)
+        if (partialSum / sum > energyFraction)
         {
             cutoff = sv;
             break;
@@ -122,13 +122,13 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
     if (rank == 0)
     {
         cout << "X basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_X);
+        BasisGeneratorFinalSummary(generator_X, energyFraction);
 
         cout << "V basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_V);
+        BasisGeneratorFinalSummary(generator_V, energyFraction);
 
         cout << "E basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_E);
+        BasisGeneratorFinalSummary(generator_E, energyFraction);
     }
 
     delete generator_X;
