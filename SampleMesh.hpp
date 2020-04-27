@@ -8,7 +8,7 @@
 using namespace mfem;
 using namespace std;
 
-//#define FULL_DOF_STENCIL
+#define FULL_DOF_STENCIL
 
 void FindStencilElements(const vector<int>& sample_dofs_gid,
                          set<int>& elements,
@@ -528,10 +528,12 @@ void Set_s2sp(const int myid, const int num_procs, const int spN1, const int glo
         offsets[i] = offsets[i-1] + cts[i-1];
     }
 
+    // TODO: replace Allgatherv with just a gather to root?
+    
     vector<int> sampleToElement(2*global_num_sample_dofs);
     MPI_Allgatherv(&mySampleToElement[0], 2*local_num_sample_dofs[myid], MPI_INT,
                    &sampleToElement[0], cts, offsets, MPI_INT, MPI_COMM_WORLD);
-
+        
     delete [] cts;
     delete [] offsets;
 
@@ -581,13 +583,177 @@ void Set_s2sp(const int myid, const int num_procs, const int spN1, const int glo
         soffset += local_num_sample_dofs[p];
     }
 
-#ifndef FULL_DOF_STENCIL
+#ifdef FULL_DOF_STENCIL
+    
+#else
     for (int i=0; i<s2sp.size(); ++i)
     {
         MFEM_VERIFY(s2sp[i] >= 0, "");
     }
 #endif
 }
+
+#ifdef FULL_DOF_STENCIL
+void Finish_s2sp_augmented(const int rank, const int nprocs, ParFiniteElementSpace& fespace1, ParFiniteElementSpace& fespace2, vector<int>& dofs1, vector<int>& dofs2,
+			   vector<vector<int> >& dofs_sub_to_sdofs, vector<vector<int> >& local_num_dofs_sub, const bool dofsTrue, vector<int> & s2sp_)
+{
+  vector<int> s2sp;
+  {
+    int n = rank == 0 ? s2sp_.size() : 0;
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    s2sp.resize(n);
+    if (rank == 0)
+      s2sp = s2sp_;
+    
+    MPI_Bcast(s2sp.data(), n, MPI_INT, 0, MPI_COMM_WORLD);
+  }
+
+  for (int s=0; s<2; ++s)  // loop over spaces
+    {
+      ParFiniteElementSpace *fespace = s == 0 ? &fespace1 : &fespace2;
+      vector<int> *dofs = s == 0 ? &dofs1 : &dofs2;
+
+      int os = 0;
+      for (int p=0; p<rank; ++p)
+	os += local_num_dofs_sub[s][p];
+
+      {
+	int sum = 0;
+	for (int p=0; p<nprocs; ++p)
+	  sum += local_num_dofs_sub[s][p];
+	MFEM_VERIFY(dofs_sub_to_sdofs[s].size() == sum && dofs->size() == sum, "");
+      }
+	  
+      const int ndof = local_num_dofs_sub[s][rank];
+      MFEM_VERIFY(os + ndof <= dofs->size(), "");
+
+      vector<int> gid(2*ndof);
+
+      if (dofsTrue)
+	{
+	  vector<int> fdofs;
+	  
+	  map<int, int> tdofIndex;
+	  for (int i=0; i<ndof; ++i)
+	    {
+	      tdofIndex[(*dofs)[os + i]] = i;
+	    }
+
+	  fdofs.assign(ndof, -1);
+	  for (int i=0; i<fespace->GetVSize(); ++i)
+	    {
+	      const int ltdof = fespace->GetLocalTDofNumber(i);
+	      map<int, int>::const_iterator it = tdofIndex.find(ltdof);
+	      if (it != tdofIndex.end())
+		{
+		  MFEM_VERIFY(it->first == ltdof && fdofs[it->second] == -1, "");
+		  fdofs[it->second] = i;
+		}
+	    }
+
+	  bool fdofsSet = true;
+	  for (int i=0; i<ndof; ++i)
+	    {
+	      if (fdofs[i] < 0)
+		fdofsSet = false;
+	    }
+
+	  MFEM_VERIFY(fdofsSet, "");
+	  for (int i=0; i<ndof; ++i)
+	    {
+	      gid[2*i] = fespace->GetGlobalTDofNumber(fdofs[i]);
+	    }
+	}
+      else
+	{
+	  for (int i=0; i<ndof; ++i)
+	    {
+	      gid[2*i] = fespace->GetGlobalTDofNumber((*dofs)[os + i]);
+	    }
+	}
+
+      for (int i=0; i<ndof; ++i)
+	{
+	  gid[(2*i) + 1] = s2sp[dofs_sub_to_sdofs[s][os + i]];
+	}
+      
+      vector<int> counts(nprocs);
+      vector<int> offsets(nprocs);
+
+      offsets[0] = 0;
+      for (int i=0; i<nprocs; ++i)
+	{
+	  counts[i] = 2 * local_num_dofs_sub[s][i];
+	  if (i > 0)
+	    offsets[i] = offsets[i-1] + counts[i-1];
+	}
+
+      vector<int> allgid(offsets[nprocs-1] + counts[nprocs-1]);
+      
+      MPI_Gatherv(gid.data(), 2*ndof, MPI_INT, allgid.data(), counts.data(), offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
+      if (rank == 0)
+	{
+	  map<int, int> gi2sp;
+	  // Set gi2sp
+	  for (int p=0; p<nprocs; ++p)
+	    {
+	      for (int i=0; i<local_num_dofs_sub[s][p]; ++i)
+		{
+		  const int g = allgid[offsets[p] + (2*i)];
+		  const int sp = allgid[offsets[p] + (2*i) + 1];
+
+		  map<int, int>::const_iterator it = gi2sp.find(g);
+		  if (it == gi2sp.end())
+		    gi2sp[g] = sp;
+		  else
+		    {
+		      MFEM_VERIFY(it->first == g, "");
+		      if (it->second == -1)
+			gi2sp[g] = sp;
+		      else
+			{
+			  MFEM_VERIFY(it->second == sp, "");
+			}
+		    }
+		  
+		  //gid[(2*i) + 1] = s2sp[dofs_sub_to_sdofs[s][os + i]];
+		}
+	    }
+
+	  os = 0;
+	  for (int p=0; p<nprocs; ++p)
+	    {
+	      for (int i=0; i<local_num_dofs_sub[s][p]; ++i)
+		{
+		  const int g = allgid[offsets[p] + (2*i)];
+		  //const int sp = allgid[offsets[p] + (2*i) + 1];  ?? //why isn't this used? because it already set gi2sp, which is now used.
+
+		  map<int, int>::const_iterator it = gi2sp.find(g);
+		  MFEM_VERIFY(it != gi2sp.end() && it->first == g, "");
+
+		  if (s2sp[dofs_sub_to_sdofs[s][os + i]] != -1)
+		    {
+		      MFEM_VERIFY(s2sp[dofs_sub_to_sdofs[s][os + i]] == it->second, "");
+		    }
+		  
+		  s2sp[dofs_sub_to_sdofs[s][os + i]] = it->second;
+		}
+
+	      os += local_num_dofs_sub[s][p];
+	    }
+
+	  for (int i=0; i<s2sp_.size(); ++i)
+	    {
+	      if (s2sp_[i] == -1)
+		s2sp_[i] = s2sp[i];
+
+	      MFEM_VERIFY(s2sp_[i] >= 0 && s2sp_[i] == s2sp[i], "");
+	    }
+	}
+    }
+}
+#endif
 
 void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
                       ParFiniteElementSpace& fespace1, ParFiniteElementSpace& fespace2,
@@ -654,6 +820,10 @@ void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
     Set_s2sp(myid, num_procs, spN1, sample_dofs.size(), local_num_sample_dofs, local_num_sample_dofs_sub, localSampleDofsToElem_sub,
              localSampleDofsToElemDof_sub, sample_dofs_sub_to_sample_dofs, elemLocalIndicesInverse, spfespace, s2sp);
 
+#ifdef FULL_DOF_STENCIL
+    Finish_s2sp_augmented(myid, num_procs, fespace1, fespace2, sample_dofs1, sample_dofs2, sample_dofs_sub_to_sample_dofs, local_num_sample_dofs_sub, true, s2sp);
+#endif
+    
     // Prepare for setting st2sp
 
     const int numStencil = stencil_dofs.size();
@@ -700,6 +870,10 @@ void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
 
     Set_s2sp(myid, num_procs, spN1, all_stencil_dofs.size(), local_num_stencil_dofs, local_num_stencil_dofs_sub, localStencilDofsToElem_sub,
              localStencilDofsToElemDof_sub, stencil_dofs_sub_to_stencil_dofs, elemLocalIndicesInverse, spfespace, st2sp);
+
+#ifdef FULL_DOF_STENCIL
+    Finish_s2sp_augmented(myid, num_procs, fespace1, fespace2, stencil_dofs1, stencil_dofs2, stencil_dofs_sub_to_stencil_dofs, local_num_stencil_dofs_sub, false, st2sp);
+#endif
 }
 
 void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& BW, const int rrdim, const int rwdim,
@@ -881,7 +1055,14 @@ void GatherDistributedMatrixRows(const CAROM::Matrix& BR, const CAROM::Matrix& B
             else
             {
                 for (int j = 0; j < rwdim; ++j)
+		  {
+#ifdef FULL_DOF_STENCIL
+                    v[j] = BW(row, j);
+#else
                     v[j] = BW(row - NR, j);
+#endif
+		  }
+		
                 MPI_Send(v, rwdim, MPI_DOUBLE, 0, offsets[myid]+i, MPI_COMM_WORLD);
             }
         }
