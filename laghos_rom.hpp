@@ -121,8 +121,8 @@ private:
     const int tL2size;
 
     const int rank;
-  double energyFraction;
-  
+    double energyFraction;
+
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
 
     Vector X, X0, Xdiff, dXdt, V, V0, dVdt, E, E0, dEdt;
