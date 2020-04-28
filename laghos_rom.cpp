@@ -64,7 +64,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     }
 }
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
+void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     cout << "ROM dimension = " << rom_dim << endl;
@@ -85,7 +85,7 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg)
     int cutoff = 0;
     for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
         partialSum += (*sing_vals)(sv, sv);
-        if (partialSum / sum > 0.999999999)
+        if (partialSum / sum > energyFraction)
         {
             cutoff = sv;
             break;
@@ -122,13 +122,13 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
     if (rank == 0)
     {
         cout << "X basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_X);
+        BasisGeneratorFinalSummary(generator_X, energyFraction);
 
         cout << "V basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_V);
+        BasisGeneratorFinalSummary(generator_V, energyFraction);
 
         cout << "E basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_E);
+        BasisGeneratorFinalSummary(generator_E, energyFraction);
     }
 
     delete generator_X;
@@ -291,9 +291,42 @@ void SetBdryAttrForVelocity(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on unit cube.
-void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
+// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on a 3D ParMesh
+// with boundaries aligned with Cartesian axes.
+void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
 {
+    // First set minimum and maximum coordinates, locally then globally.
+    MFEM_VERIFY(pmesh->GetNV() > 0, "");
+
+    double xmin[3], xmax[3];
+    for (int i=0; i<3; ++i)
+    {
+        xmin[i] = pmesh->GetVertex(0)[i];
+        xmax[i] = xmin[i];
+    }
+
+    for (int v=1; v<pmesh->GetNV(); ++v)
+    {
+        for (int i=0; i<3; ++i)
+        {
+            xmin[i] = std::min(pmesh->GetVertex(v)[i], xmin[i]);
+            xmax[i] = std::max(pmesh->GetVertex(v)[i], xmax[i]);
+        }
+    }
+
+    {   // Globally reduce
+        double local[3];
+        for (int i=0; i<3; ++i)
+            local[i] = xmin[i];
+
+        MPI_Allreduce(local, xmin, 3, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+
+        for (int i=0; i<3; ++i)
+            local[i] = xmax[i];
+
+        MPI_Allreduce(local, xmax, 3, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+    }
+
     for (int b=0; b<pmesh->GetNBE(); ++b)
     {
         Element *belem = pmesh->GetBdrElement(b);
@@ -336,7 +369,7 @@ void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
                 attr = 3;
         }
 
-        MFEM_VERIFY(attr > 0, "");
+        MFEM_VERIFY(attr > 0 && attr < 4, "");
 
         bool onBoundary = true;
         {
@@ -345,7 +378,7 @@ void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
             for (int j=0; j<vert.Size(); ++j)
             {
                 const double xd = pmesh->GetVertex(vert[j])[attr-1];
-                if (fabs(xd) > tol && fabs(1.0 - xd) > tol)  // specific to unit cube
+                if (fabs(xd - xmin[attr-1]) > tol && fabs(xmax[attr-1] - xd) > tol)  // specific to Cartesian-aligned domains
                     onBoundary = false;
 
                 if (j > 0 && fabs(xd - xd0) > tol)
@@ -597,7 +630,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     {
         sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
         //SetBdryAttrForVelocity(sample_pmesh);
-        SetBdryAttrForVelocity_UnitCube(sample_pmesh);
+        SetBdryAttrForVelocity_Cartesian3D(sample_pmesh);
         sample_pmesh->EnsureNodes();
 
         const bool printSampleMesh = true;
@@ -705,9 +738,16 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
+#ifdef FULL_DOF_STENCIL
+    const int NR = H1FESpace->GetVSize();
+    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BXsp, *BEsp);
+    // TODO: this redundantly gathers BEsp again, but only once per simulation.
+    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+#else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+#endif
 
     if (offsetXinit)
     {
@@ -729,7 +769,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 1, false);
         CAROM::Matrix spzero(rank == 0 ? size_H1_sp : 1, 1, false);
 
+#ifdef FULL_DOF_STENCIL
+        GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, spX0mat, spzero);
+#else
         GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, st2sp, sprows, all_sprows, spX0mat, spzero);
+#endif
 
         if (rank == 0)
         {

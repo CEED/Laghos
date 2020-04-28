@@ -160,6 +160,7 @@ int main(int argc, char *argv[])
     bool rom_restore = false;
     bool rom_staticSVD = true;
     bool rom_offsetX0 = false;
+    double rom_energyFraction = 0.9999;
     int rom_dimx = -1;
     int rom_dimv = -1;
     int rom_dime = -1;
@@ -238,6 +239,8 @@ int main(int argc, char *argv[])
     args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
+                   "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -676,9 +679,8 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction);
         sampler->SampleSolution(0, 0, S);
-
     }
 
     ROM_Basis *basis = NULL;
