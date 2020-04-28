@@ -289,9 +289,42 @@ void SetBdryAttrForVelocity(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on unit cube.
-void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
+// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on a 3D ParMesh
+// with boundaries aligned with Cartesian axes.
+void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
 {
+    // First set minimum and maximum coordinates, locally then globally.
+    MFEM_VERIFY(pmesh->GetNV() > 0, "");
+
+    double xmin[3], xmax[3];
+    for (int i=0; i<3; ++i)
+    {
+        xmin[i] = pmesh->GetVertex(0)[i];
+        xmax[i] = xmin[i];
+    }
+
+    for (int v=1; v<pmesh->GetNV(); ++v)
+    {
+        for (int i=0; i<3; ++i)
+        {
+            xmin[i] = std::min(pmesh->GetVertex(v)[i], xmin[i]);
+            xmax[i] = std::max(pmesh->GetVertex(v)[i], xmax[i]);
+        }
+    }
+
+    {   // Globally reduce
+        double local[3];
+        for (int i=0; i<3; ++i)
+            local[i] = xmin[i];
+
+        MPI_Allreduce(local, xmin, 3, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+
+        for (int i=0; i<3; ++i)
+            local[i] = xmax[i];
+
+        MPI_Allreduce(local, xmax, 3, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+    }
+
     for (int b=0; b<pmesh->GetNBE(); ++b)
     {
         Element *belem = pmesh->GetBdrElement(b);
@@ -334,7 +367,7 @@ void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
                 attr = 3;
         }
 
-        MFEM_VERIFY(attr > 0, "");
+        MFEM_VERIFY(attr > 0 && attr < 4, "");
 
         bool onBoundary = true;
         {
@@ -343,7 +376,7 @@ void SetBdryAttrForVelocity_UnitCube(ParMesh *pmesh)
             for (int j=0; j<vert.Size(); ++j)
             {
                 const double xd = pmesh->GetVertex(vert[j])[attr-1];
-                if (fabs(xd) > tol && fabs(1.0 - xd) > tol)  // specific to unit cube
+                if (fabs(xd - xmin[attr-1]) > tol && fabs(xmax[attr-1] - xd) > tol)  // specific to Cartesian-aligned domains
                     onBoundary = false;
 
                 if (j > 0 && fabs(xd - xd0) > tol)
@@ -604,7 +637,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     {
         sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
         //SetBdryAttrForVelocity(sample_pmesh);
-        SetBdryAttrForVelocity_UnitCube(sample_pmesh);
+        SetBdryAttrForVelocity_Cartesian3D(sample_pmesh);
         sample_pmesh->EnsureNodes();
 
         const bool printSampleMesh = true;
