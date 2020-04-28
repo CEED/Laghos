@@ -175,8 +175,8 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
-      rdimx(dimX), rdimv(dimV), rdime(dimE), 
-      numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame), 
+      rdimx(dimX), rdimv(dimV), rdime(dimE),
+      numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
       staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetXinit(useXoffset)
 {
     MPI_Comm_size(comm, &nprocs);
@@ -419,7 +419,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
     BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
-    if(rank == 0) 
+    if(rank == 0)
     {
         cout << "number of samples for position: " << numSamplesX << "\n";
         cout << "number of samples for velocity: " << numSamplesV << "\n";

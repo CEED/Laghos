@@ -692,7 +692,7 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, 
+        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               numSampX, numSampV, numSampE,
                               rom_staticSVD, rom_hyperreduce, rom_offsetX0);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
