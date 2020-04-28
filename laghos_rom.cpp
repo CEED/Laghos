@@ -170,12 +170,14 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 }
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-                     int & dimX, int & dimV, int & dimE,
+                     int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
                      const bool staticSVD_, const bool hyperreduce_, const bool useXoffset)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
-      rdimx(dimX), rdimv(dimV), rdime(dimE), staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetXinit(useXoffset)
+      rdimx(dimX), rdimv(dimV), rdime(dimE), 
+      numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame), 
+      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetXinit(useXoffset)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -370,35 +372,26 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     const int nsamp = 35;
     const int overSample = 100;
 
-    numSamplesX = rdimx;
-    numSamplesX = fomH1size;  // maximum number of samples possible
-    //numSamplesX = 35;
-    numSamplesX = nsamp;
-    numSamplesX = rdimx + overSample;
-    numSamplesX = rdimx*2;
+    numSamplesX = std::min(fomH1size, numSamplesX);
     vector<int> sample_dofs_X(numSamplesX);
     vector<int> num_sample_dofs_per_procX(nprocs);
     BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
 
-    numSamplesV = rdimv;
-    numSamplesV = fomH1size;  // maximum number of samples possible
-    //numSamplesV = 35;
-    numSamplesV = nsamp;
-    numSamplesV = rdimv + overSample;
-    numSamplesV = rdimv*2;
+    numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
     BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
 
-    numSamplesE = rdime;
-    numSamplesE = fomL2size;  // maximum number of samples possible
-    //numSamplesE = 35;
-    numSamplesE = nsamp;
-    numSamplesE = rdime + overSample;
-    numSamplesE = rdime*2;
+    numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
     BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
+    if(rank == 0) 
+    {
+        cout << "number of samples for position: " << numSamplesX << "\n";
+        cout << "number of samples for velocity: " << numSamplesV << "\n";
+        cout << "number of samples for energy  : " << numSamplesE << "\n";
+    }
 
     // Perform DEIM or GNAT to find sample DOF's.
     CAROM::GNAT(basisX,

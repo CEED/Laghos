@@ -163,6 +163,9 @@ int main(int argc, char *argv[])
     int rom_dimx = -1;
     int rom_dimv = -1;
     int rom_dime = -1;
+    int numSampX = 0;
+    int numSampV = 0;
+    int numSampE = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
     bool writeSol = false;
@@ -232,8 +235,13 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
     args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
     args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
+    args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
+    args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
+    args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
+    args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
+                   "Enable or disable write solution.");
     args.AddOption(&solDiff, "-soldiff", "--soldiff", "-no-soldiff", "--no-soldiff",
                    "Enable or disable solution difference norm computation.");
     args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
@@ -669,6 +677,8 @@ int main(int argc, char *argv[])
     {
         if (dtc > 0.0) dt = dtc;
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0);
+        sampler->SampleSolution(0, 0, S);
+
     }
 
     ROM_Basis *basis = NULL;
@@ -680,7 +690,9 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, 
+                              numSampX, numSampV, numSampE,
+                              rom_staticSVD, rom_hyperreduce, rom_offsetX0);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -702,10 +714,9 @@ int main(int argc, char *argv[])
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
-        for (int ti = 1; !last_step; ti++)
+        int ti;
+        for (ti = 1; !last_step; ti++)
         {
-            if (myid == 0)
-                cout << "Restoring " << ti << "-th solution" << endl;
             // romS = readCurrentReduceSol(ti);
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
@@ -714,27 +725,54 @@ int main(int argc, char *argv[])
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
-                for (int k=0; k<romSsize; ++k)
+                if ( (ti % vis_steps) == 0 )
                 {
-                    infile_romS >> romS(k);
+                    if (myid == 0)
+                        cout << "Restoring " << ti << "-th solution" << endl;
+                    for (int k=0; k<romSsize; ++k)
+                    {
+                        infile_romS >> romS(k);
+                    }
+
+                    infile_romS.close();
+                    basis->LiftROMtoFOM(romS, S);
+
+                    if (visit)
+                    {
+                        oper.ComputeDensity(rho_gf);
+                        visit_dc.SetCycle(ti);
+                        visit_dc.SetTime(t);
+                        visit_dc.Save();
+                    }
                 }
             }
             else
             {
                 // get out of the loop when no more file is found
+                last_step = true;
                 break;
             }
-            infile_romS.close();
-            basis->LiftROMtoFOM(romS, S);
-
-            if (visit)
-            {
-                oper.ComputeDensity(rho_gf);
-                visit_dc.SetCycle(ti);
-                visit_dc.SetTime(t);
-                visit_dc.Save();
-            }
         } // time loop in "restore" phase
+        ti--;
+        std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+        std::ifstream infile_romS(filename.c_str());
+        if (myid == 0)
+            cout << "Restoring " << ti << "-th solution" << endl;
+        for (int k=0; k<romSsize; ++k)
+        {
+            infile_romS >> romS(k);
+        }
+
+        infile_romS.close();
+        basis->LiftROMtoFOM(romS, S);
+
+        if (visit)
+        {
+            oper.ComputeDensity(rho_gf);
+            visit_dc.SetCycle(ti);
+            visit_dc.SetTime(t);
+            visit_dc.Save();
+        }
         restoreTimer.Stop();
     }
     else
@@ -943,6 +981,7 @@ int main(int argc, char *argv[])
 
     if (solDiff)
     {
+        cout << "solDiff mode " << endl;
         PrintDiffParGridFunction(normtype, myid, "Sol_Position", &x_gf);
         PrintDiffParGridFunction(normtype, myid, "Sol_Velocity", &v_gf);
         PrintDiffParGridFunction(normtype, myid, "Sol_Energy", &e_gf);

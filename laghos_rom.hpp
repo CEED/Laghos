@@ -178,7 +178,7 @@ class ROM_Basis
 {
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-              int & dimX, int & dimV, int & dimE,
+              int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useXoffset = false);
 
     ~ROM_Basis()
