@@ -291,15 +291,17 @@ void SetBdryAttrForVelocity(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on a 3D ParMesh
+// Set attributes 1/2/3 corresponding to fixed-x/y/z boundaries on a 2D or 3D ParMesh
 // with boundaries aligned with Cartesian axes.
-void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
+void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
 {
-    // First set minimum and maximum coordinates, locally then globally.
-    MFEM_VERIFY(pmesh->GetNV() > 0, "");
+    const int dim = pmesh->Dimension();
 
-    double xmin[3], xmax[3];
-    for (int i=0; i<3; ++i)
+    // First set minimum and maximum coordinates, locally then globally.
+    MFEM_VERIFY(pmesh->GetNV() > 0 && (dim == 2 || dim == 3), "");
+
+    double xmin[dim], xmax[dim];
+    for (int i=0; i<dim; ++i)
     {
         xmin[i] = pmesh->GetVertex(0)[i];
         xmax[i] = xmin[i];
@@ -307,7 +309,7 @@ void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
 
     for (int v=1; v<pmesh->GetNV(); ++v)
     {
-        for (int i=0; i<3; ++i)
+        for (int i=0; i<dim; ++i)
         {
             xmin[i] = std::min(pmesh->GetVertex(v)[i], xmin[i]);
             xmax[i] = std::max(pmesh->GetVertex(v)[i], xmax[i]);
@@ -315,16 +317,16 @@ void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
     }
 
     {   // Globally reduce
-        double local[3];
-        for (int i=0; i<3; ++i)
+        double local[dim];
+        for (int i=0; i<dim; ++i)
             local[i] = xmin[i];
 
-        MPI_Allreduce(local, xmin, 3, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+        MPI_Allreduce(local, xmin, dim, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
 
-        for (int i=0; i<3; ++i)
+        for (int i=0; i<dim; ++i)
             local[i] = xmax[i];
 
-        MPI_Allreduce(local, xmax, 3, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+        MPI_Allreduce(local, xmax, dim, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
     }
 
     for (int b=0; b<pmesh->GetNBE(); ++b)
@@ -332,32 +334,42 @@ void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
         Element *belem = pmesh->GetBdrElement(b);
         Array<int> vert;
         belem->GetVertices(vert);
-        MFEM_VERIFY(vert.Size() > 2, "");
+        MFEM_VERIFY(vert.Size() > 1, "");
 
-        Vector normal(3);
+        Vector normal(dim);
 
-        Vector t1(3);
-        Vector t2(3);
-
-        for (int i=0; i<3; ++i)
+        if (dim == 3)
         {
-            t1[i] = pmesh->GetVertex(vert[0])[i] - pmesh->GetVertex(vert[1])[i];
-            t2[i] = pmesh->GetVertex(vert[2])[i] - pmesh->GetVertex(vert[1])[i];
+            Vector t1(dim);
+            Vector t2(dim);
+
+            for (int i=0; i<dim; ++i)
+            {
+                t1[i] = pmesh->GetVertex(vert[0])[i] - pmesh->GetVertex(vert[1])[i];
+                t2[i] = pmesh->GetVertex(vert[2])[i] - pmesh->GetVertex(vert[1])[i];
+            }
+
+            CrossProduct3D(t1, t2, normal);
+        }
+        else
+        {
+            normal[0] = -(pmesh->GetVertex(vert[0])[1] - pmesh->GetVertex(vert[1])[1]);  // -tangent_y
+            normal[1] = (pmesh->GetVertex(vert[0])[0] - pmesh->GetVertex(vert[1])[0]);  // tangent_x
         }
 
-        CrossProduct3D(t1, t2, normal);
+        {
+            const double s = normal.Norml2();
+            MFEM_VERIFY(s > 1.0e-8, "");
 
-        const double s = normal.Norml2();
-        MFEM_VERIFY(s > 1.0e-8, "");
-
-        normal /= s;
+            normal /= s;
+        }
 
         int attr = -1;
 
         const double tol = 1.0e-8;
 
         {   // Verify that the normal is in the direction of a Cartesian axis.
-            const double al1 = fabs(normal[0]) + fabs(normal[1]) + fabs(normal[2]);
+            const double al1 = fabs(normal[0]) + fabs(normal[1]) + (dim == 3 ? fabs(normal[2]) : 0);
             MFEM_VERIFY(fabs(al1 - 1.0) < tol, "");
             bool axisFound = false;
 
@@ -365,11 +377,11 @@ void SetBdryAttrForVelocity_Cartesian3D(ParMesh *pmesh)
                 attr = 1;
             else if (fabs(1.0 - fabs(normal[1])) < tol)
                 attr = 2;
-            else if (fabs(1.0 - fabs(normal[2])) < tol)
+            else if (dim == 3 && fabs(1.0 - fabs(normal[2])) < tol)
                 attr = 3;
         }
 
-        MFEM_VERIFY(attr > 0 && attr < 4, "");
+        MFEM_VERIFY(attr > 0 && attr < dim+1, "");
 
         bool onBoundary = true;
         {
@@ -630,7 +642,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     {
         sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
         //SetBdryAttrForVelocity(sample_pmesh);
-        SetBdryAttrForVelocity_Cartesian3D(sample_pmesh);
+        SetBdryAttrForVelocity_Cartesian(sample_pmesh);
         sample_pmesh->EnsureNodes();
 
         const bool printSampleMesh = true;
