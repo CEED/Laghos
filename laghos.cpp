@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
     }
 
     ROM_Basis *basis = NULL;
-    Vector romS;
+    Vector romS, romS_old;
     ROM_Operator *romOper = NULL;
 
     StopWatch onlinePreprocessTimer;
@@ -804,6 +804,7 @@ int main(int argc, char *argv[])
                 if (myid == 0)
                     cout << "ROM online at t " << t << ", dt " << dt << endl;
 
+		romS_old = romS;
                 ode_solver->Step(romS, t, dt);
 
                 // save ROM solution to a file.
@@ -849,6 +850,8 @@ int main(int argc, char *argv[])
                 }
                 t = t_old;
                 S = S_old;
+		if (rom_online)
+		  romS = romS_old;
                 oper.ResetQuadratureData();
                 if (mpi.Root()) {
                     cout << "Repeating step " << ti << endl;
