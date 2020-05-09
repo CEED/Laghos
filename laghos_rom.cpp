@@ -1001,8 +1001,9 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
                            FunctionCoefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source, const bool visc, const double cfl,
-                           const double cg_tol, const double ftz_tol, const bool hyperreduce_,
-                           H1_FECollection *H1fec, FiniteElementCollection *L2fec)
+                           const bool p_assembly, const double cg_tol, const int cg_max_iter,
+                           const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
+                           FiniteElementCollection *L2fec)
     : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
       rank(b->GetRank()), hyperreduce(hyperreduce_)
 {
@@ -1077,9 +1078,6 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
         mat_gf = new ParGridFunction(mat_fes);
         mat_gf->ProjectCoefficient(mat_coeff);
         mat_gf_coeff = new GridFunctionCoefficient(mat_gf);
-
-        const bool p_assembly = false;
-        const int cg_max_iter = 300;
 
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,

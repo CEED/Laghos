@@ -301,8 +301,8 @@ class ROM_Operator : public TimeDependentOperator
 public:
     ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, FunctionCoefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
-                 const bool visc, const double cfl, const double cg_tol,
-                 const double ftz_tol, const bool hyperreduce_ = false,
+                 const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
+                 const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
                  H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
 
     virtual void Mult(const Vector &x, Vector &y) const;

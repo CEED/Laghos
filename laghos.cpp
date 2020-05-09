@@ -700,7 +700,7 @@ int main(int argc, char *argv[])
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
-        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, cg_tol, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -1006,7 +1006,6 @@ int main(int argc, char *argv[])
         PrintNormsOfParGridFunctions(normtype, myid, "Velocity", dcfv, &v_gf, true);
         PrintNormsOfParGridFunctions(normtype, myid, "Energy", dcfe, &e_gf, true);
     }
-
 
     if (rom_online)
     {
