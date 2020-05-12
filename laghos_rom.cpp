@@ -171,7 +171,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                      int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
-                     const bool staticSVD_, const bool hyperreduce_, const bool useXoffset)
+                     const bool staticSVD_, const bool hyperreduce_, const bool useXoffset, const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
@@ -210,7 +210,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     mfH1.SetSize(tH1size);
     mfL2.SetSize(tL2size);
 
-    ReadSolutionBases();
+    ReadSolutionBases(window);
 
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);
@@ -827,7 +827,7 @@ int ROM_Basis::SolutionSizeFOM() const
     return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
-void ROM_Basis::ReadSolutionBases()
+void ROM_Basis::ReadSolutionBases(const int window)
 {
     /*
     basisX = ReadBasisROM(rank, ROMBasisName::X, H1size, (staticSVD ? rowOffsetH1 : 0), rdimx);
@@ -835,9 +835,9 @@ void ROM_Basis::ReadSolutionBases()
     basisE = ReadBasisROM(rank, ROMBasisName::E, L2size, (staticSVD ? rowOffsetL2 : 0), rdime);
     */
 
-    basisX = ReadBasisROM(rank, ROMBasisName::X, tH1size, 0, rdimx);
-    basisV = ReadBasisROM(rank, ROMBasisName::V, tH1size, 0, rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E, tL2size, 0, rdime);
+    basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+    basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+    basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
 }
 
 // f is a full vector, not a true vector

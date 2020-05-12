@@ -167,6 +167,8 @@ int main(int argc, char *argv[])
     int numSampX = 0;
     int numSampV = 0;
     int numSampE = 0;
+    double twep0 = 0.0;  // ROM time window endpoint
+    int numWindows = 1;
     double dtc = 0.0;
     int visitDiffCycle = -1;
     bool writeSol = false;
@@ -241,6 +243,8 @@ int main(int argc, char *argv[])
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
     args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
+    args.AddOption(&twep0, "-twep", "--twep0", "Time window 0 endpoint.");
+    args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -260,6 +264,15 @@ int main(int argc, char *argv[])
     }
     if (mpi.Root()) {
         args.PrintOptions(cout);
+    }
+
+    MFEM_VERIFY(numWindows == 1 || numWindows == 2, "");
+
+    if (numWindows == 1)
+        twep0 = t_final;
+    else
+    {
+        MFEM_VERIFY(twep0 > 0.0 && twep0 < t_final, "");
     }
 
     StopWatch totalTimer;
@@ -675,11 +688,12 @@ int main(int argc, char *argv[])
     int steps = 0;
     BlockVector S_old(S);
 
+    int rom_window = 0;
     ROM_Sampler *sampler = NULL;
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, twep0, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
         sampler->SampleSolution(0, 0, S);
     }
 
@@ -869,6 +883,16 @@ int main(int argc, char *argv[])
             if (rom_offline)
             {
                 sampler->SampleSolution(t, last_dt, S);
+
+                if (t >= twep0 && rom_window < numWindows-1)
+                {
+                    sampler->Finalize(t, last_dt, S);
+                    delete sampler;
+
+                    rom_window++;
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
+                    sampler->SampleSolution(t, dt, S);
+                }
             }
 
             // Make sure that the mesh corresponds to the new solution state. This is

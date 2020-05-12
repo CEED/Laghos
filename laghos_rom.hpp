@@ -30,7 +30,8 @@ class ROM_Sampler
 public:
     ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                 const double t_final, const double initial_dt, Vector const& S_init,
-                const bool staticSVD = false, const bool useXoffset = false, double energyFraction_=0.9999)
+                const bool staticSVD = false, const bool useXoffset = false, double energyFraction_=0.9999,
+                const int window=0)
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
@@ -47,11 +48,11 @@ public:
         if (staticSVD)
         {
             generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::X);
+                    ROMBasisName::X + std::to_string(window));
             generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::V);
+                    ROMBasisName::V + std::to_string(window));
             generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                    ROMBasisName::E);
+                    ROMBasisName::E + std::to_string(window));
         }
         else
         {
@@ -64,7 +65,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::X);
+                    ROMBasisName::X + std::to_string(window));
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
                     false,
@@ -74,7 +75,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::V);
+                    ROMBasisName::V + std::to_string(window));
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
                     false,
@@ -84,7 +85,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::E);
+                    ROMBasisName::E + std::to_string(window));
         }
 
         SetStateVariables(S_init);
@@ -180,7 +181,8 @@ class ROM_Basis
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
               int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
-              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useXoffset = false);
+              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useXoffset = false,
+              const int window=0);
 
     ~ROM_Basis()
     {
@@ -206,7 +208,7 @@ public:
         delete BsinvE;
     }
 
-    void ReadSolutionBases();
+    void ReadSolutionBases(const int window);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r);
     void LiftROMtoFOM(Vector const& r, Vector & f);
