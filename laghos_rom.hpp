@@ -311,6 +311,10 @@ public:
 
     void UpdateSampleMeshNodes(Vector const& romSol);
     double GetTimeStepEstimateSP() const {
+        if (!hyperreduce) return 0.0;
+
+        operSP->ResetTimeStepEstimate();
+        dt_est_SP = operSP->GetTimeStepEstimate(fx);
         return dt_est_SP;
     }
 

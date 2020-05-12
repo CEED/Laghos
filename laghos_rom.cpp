@@ -1129,8 +1129,6 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             operSP->Mult(fx, fy);
             basis->RestrictFromSampleMesh(fy, y);
 
-            operSP->ResetTimeStepEstimate();
-            dt_est_SP = operSP->GetTimeStepEstimate(fx);
             operSP->ResetQuadratureData();
         }
 
