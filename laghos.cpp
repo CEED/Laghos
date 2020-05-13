@@ -895,6 +895,33 @@ int main(int argc, char *argv[])
                 }
             }
 
+            if (rom_online)
+            {
+                if (t >= twep0 && rom_window < numWindows-1)
+                {
+                    rom_window++;
+
+                    if (myid == 0)
+                        cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
+
+                    if (rom_hyperreduce)
+                        basis->LiftROMtoFOM(romS, S);
+
+                    delete basis;
+                    basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+                                          numSampX, numSampV, numSampE,
+                                          rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                    romS.SetSize(rom_dimx + rom_dimv + rom_dime);
+
+                    basis->ProjectFOMtoROM(S, romS);
+
+                    delete romOper;
+                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+
+                    ode_solver->Init(*romOper);
+                }
+            }
+
             // Make sure that the mesh corresponds to the new solution state. This is
             // needed, because some time integrators use different S-type vectors
             // and the oper object might have redirected the mesh positions to those.
@@ -990,7 +1017,6 @@ int main(int argc, char *argv[])
         } // usual time loop
         timeLoopTimer.Stop();
     }
-
 
     if (rom_hyperreduce)
         basis->LiftROMtoFOM(romS, S);

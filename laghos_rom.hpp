@@ -313,8 +313,14 @@ public:
     double GetTimeStepEstimateSP() const {
         if (!hyperreduce) return 0.0;
 
-        operSP->ResetTimeStepEstimate();
-        dt_est_SP = operSP->GetTimeStepEstimate(fx);
+        if (rank == 0)
+        {
+            operSP->ResetTimeStepEstimate();
+            dt_est_SP = operSP->GetTimeStepEstimate(fx);
+        }
+
+        MPI_Bcast(&dt_est_SP, 1, MPI_DOUBLE, 0, basis->comm);
+
         return dt_est_SP;
     }
 
