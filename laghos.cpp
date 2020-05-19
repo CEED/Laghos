@@ -59,6 +59,7 @@
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
 #include "laghos_rom.hpp"
+#include "laghos_csv.hpp"
 #include <fstream>
 
 using namespace std;
@@ -152,6 +153,8 @@ int main(int argc, char *argv[])
     bool visit = false;
     bool gfprint = false;
     const char *basename = "results/Laghos";
+    const char *twfile = "tw.csv";
+    const char *twpfile = "twp.csv";
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
@@ -167,14 +170,15 @@ int main(int argc, char *argv[])
     int numSampX = 0;
     int numSampV = 0;
     int numSampE = 0;
-    double twep0 = 0.0;  // ROM time window endpoint
-    int numWindows = 1;
+    int numWindows = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
     bool writeSol = false;
     bool solDiff = false;
     bool rom_hyperreduce = false;
     const char *normtype_char = "l2";
+    Array<double> twep;
+    Array2D<int> twparam;
 
     OptionsParser args(argc, argv);
     args.AddOption(&mesh_file, "-m", "--mesh",
@@ -220,6 +224,10 @@ int main(int argc, char *argv[])
                    "Enable or disable result output (files in mfem format).");
     args.AddOption(&basename, "-k", "--outputfilename",
                    "Name of the visit dump files");
+    args.AddOption(&twfile, "-tw", "--timewindowfilename",
+                   "Name of the CSV file defining offline time windows");
+    args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
+                   "Name of the CSV file defining online time window parameters");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
                    "Here x,y,z are relative task ratios in each direction.\n\t"
@@ -243,7 +251,6 @@ int main(int argc, char *argv[])
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
     args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
-    args.AddOption(&twep0, "-twep", "--twep0", "Time window 0 endpoint.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
@@ -266,13 +273,24 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
-    MFEM_VERIFY(numWindows == 1 || numWindows == 2, "");
-
-    if (numWindows == 1)
-        twep0 = t_final;
+    const bool usingWindows = (numWindows > 0);
+    if (numWindows == 0)  // not using windows
+    {
+        numWindows = 1;  // one window for the entire simulation
+    }
     else
     {
-        MFEM_VERIFY(twep0 > 0.0 && twep0 < t_final, "");
+        MFEM_VERIFY(numWindows > 0, "");
+        if (rom_online)
+        {
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam);
+            MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+        }
+        else if (rom_offline)
+        {
+            const int err = ReadTimeWindows(numWindows, twfile, twep);
+            MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
+        }
     }
 
     StopWatch totalTimer;
@@ -693,7 +711,7 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, twep0, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
         sampler->SampleSolution(0, 0, S);
     }
 
@@ -706,6 +724,15 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
+        if (usingWindows)
+        {
+            rom_dimx = twparam(0,0);
+            rom_dimv = twparam(0,1);
+            rom_dime = twparam(0,2);
+            numSampX = twparam(0,3);
+            numSampV = twparam(0,4);
+            numSampE = twparam(0,5);
+        }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               numSampX, numSampV, numSampE,
                               rom_staticSVD, rom_hyperreduce, rom_offsetX0);
@@ -884,7 +911,7 @@ int main(int argc, char *argv[])
             {
                 sampler->SampleSolution(t, last_dt, S);
 
-                if (t >= twep0 && rom_window < numWindows-1)
+                if (t >= twep[rom_window] && rom_window < numWindows-1)
                 {
                     sampler->Finalize(t, last_dt, S);
                     delete sampler;
@@ -897,7 +924,7 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                if (t >= twep0 && rom_window < numWindows-1)
+                if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
                     rom_window++;
 
@@ -906,6 +933,13 @@ int main(int argc, char *argv[])
 
                     if (rom_hyperreduce)
                         basis->LiftROMtoFOM(romS, S);
+
+                    rom_dimx = twparam(rom_window,0);
+                    rom_dimv = twparam(rom_window,1);
+                    rom_dime = twparam(rom_window,2);
+                    numSampX = twparam(rom_window,3);
+                    numSampV = twparam(rom_window,4);
+                    numSampE = twparam(rom_window,5);
 
                     delete basis;
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
