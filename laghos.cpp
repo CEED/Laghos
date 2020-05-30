@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
-    bool rom_staticSVD = true;
+    bool rom_staticSVD = false;
     bool rom_offsetX0 = false;
     double rom_energyFraction = 0.9999;
     int rom_dimx = -1;
@@ -260,6 +260,8 @@ int main(int argc, char *argv[])
                    "Enable or disable solution difference norm computation.");
     args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
                    "Enable or disable ROM hyperreduction.");
+    args.AddOption(&rom_staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
+                   "Enable or disable ROM static SVD.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.Parse();
     if (!args.Good())
@@ -283,12 +285,12 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(numWindows > 0, "");
         if (rom_online)
         {
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam);
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline)
         {
-            const int err = ReadTimeWindows(numWindows, twfile, twep);
+            const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
         }
     }
@@ -696,6 +698,8 @@ int main(int argc, char *argv[])
         visit_dc.Save();
     }
 
+    cout << myid << ": pmesh number of elements " << pmesh->GetNE() << endl;
+
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that
     // defines the Mult() method that is used by the time integrators.
@@ -911,7 +915,7 @@ int main(int argc, char *argv[])
             {
                 sampler->SampleSolution(t, last_dt, S);
 
-                if (t >= twep[rom_window] && rom_window < numWindows-1)
+                if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
                     sampler->Finalize(t, last_dt, S);
                     delete sampler;
