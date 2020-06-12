@@ -983,9 +983,9 @@ int main(int argc, char *argv[])
                          << ",\t|e| = " << setprecision(10)
                          << sqrt(tot_norm) << endl;
                     if (last_step) {
-                      std::ofstream outfile("run/num_steps");
-                      outfile << ti;
-                      outfile.close();
+                        std::ofstream outfile("run/num_steps");
+                        outfile << ti;
+                        outfile.close();
                     }
                 }
 
