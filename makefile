@@ -185,4 +185,4 @@ style:
 	fi
 
 $(shell mkdir -p run)
-$(shell mkdir -p ROMSol)
+$(shell mkdir -p run/ROMSol)
