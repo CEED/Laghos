@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     int vis_steps = 5;
     bool visit = false;
     bool gfprint = false;
-    const char *basename = "results/Laghos";
+    const char *basename = "run/results/Laghos";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
     int partition_type = 0;
@@ -856,7 +856,7 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+                std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 romS.Print(outfile_romS, 16);
                 outfile_romS.close();
@@ -982,6 +982,11 @@ int main(int argc, char *argv[])
                          << ",\tdt = " << setw(5) << setprecision(6) << dt
                          << ",\t|e| = " << setprecision(10)
                          << sqrt(tot_norm) << endl;
+                    if (last_step) {
+                      std::ofstream outfile("run/num_steps");
+                      outfile << ti;
+                      outfile.close();
+                    }
                 }
 
                 // Make sure all ranks have sent their 'v' solution before initiating
@@ -1067,22 +1072,22 @@ int main(int argc, char *argv[])
 
     if (rom_offline && writeSol)
     {
-        PrintParGridFunction(myid, "Sol_Position", &x_gf);
-        PrintParGridFunction(myid, "Sol_Velocity", &v_gf);
-        PrintParGridFunction(myid, "Sol_Energy", &e_gf);
+        PrintParGridFunction(myid, "run/Sol_Position", &x_gf);
+        PrintParGridFunction(myid, "run/Sol_Velocity", &v_gf);
+        PrintParGridFunction(myid, "run/Sol_Energy", &e_gf);
     }
 
     if (solDiff)
     {
         cout << "solDiff mode " << endl;
-        PrintDiffParGridFunction(normtype, myid, "Sol_Position", &x_gf);
-        PrintDiffParGridFunction(normtype, myid, "Sol_Velocity", &v_gf);
-        PrintDiffParGridFunction(normtype, myid, "Sol_Energy", &e_gf);
+        PrintDiffParGridFunction(normtype, myid, "run/Sol_Position", &x_gf);
+        PrintDiffParGridFunction(normtype, myid, "run/Sol_Velocity", &v_gf);
+        PrintDiffParGridFunction(normtype, myid, "run/Sol_Energy", &e_gf);
     }
 
     if (visitDiffCycle >= 0)
     {
-        VisItDataCollection dc(MPI_COMM_WORLD, "results/Laghos", pmesh);
+        VisItDataCollection dc(MPI_COMM_WORLD, "run/results/Laghos", pmesh);
         dc.Load(visitDiffCycle);
         cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
@@ -1129,15 +1134,15 @@ int main(int argc, char *argv[])
              << fabs(energy_init - energy_final) << endl;
     }
 
-    std::ofstream outfile_e("e_gf");
+    std::ofstream outfile_e("run/e_gf");
     e_gf.Print(outfile_e, 16);
     outfile_e.close();
 
-    std::ofstream outfile_v("v_gf");
+    std::ofstream outfile_v("run/v_gf");
     v_gf.Print(outfile_v, 16);
     outfile_v.close();
 
-    std::ofstream outfile_x("x_gf");
+    std::ofstream outfile_x("run/x_gf");
     x_gf.Print(outfile_x, 16);
     outfile_x.close();
 

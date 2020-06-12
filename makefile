@@ -51,7 +51,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../mfem
+MFEM_DIR = $(CURDIR)/../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -94,7 +94,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I../libROM
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(CURDIR)/../libROM
 LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -110,7 +110,7 @@ OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_csv.hpp
 
-include user.mk
+include $(CURDIR)/user.mk
 
 # Targets
 
@@ -123,7 +123,7 @@ include user.mk
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-include user2.mk
+include $(CURDIR)/user2.mk
 
 all: laghos
 
@@ -149,6 +149,7 @@ test: laghos
 # Generate an error message if the MFEM library is not built and exit
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
+
 
 clean: clean-build clean-exec
 
@@ -182,3 +183,6 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+$(shell mkdir -p run)
+$(shell mkdir -p ROMSol)

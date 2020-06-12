@@ -123,12 +123,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
     {
         cout << "X basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_X, energyFraction);
+        PrintSingularValues(rank, "X", generator_X, energyFraction);
 
         cout << "V basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_V, energyFraction);
+        PrintSingularValues(rank, "V", generator_V, energyFraction);
 
         cout << "E basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_E, energyFraction);
+        PrintSingularValues(rank, "E", generator_E, energyFraction);
     }
 
     delete generator_X;
@@ -649,7 +652,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         if (printSampleMesh)
         {
             ostringstream mesh_name;
-            mesh_name << "smesh." << setfill('0') << setw(6) << rank;
+            mesh_name << "run/smesh." << setfill('0') << setw(6) << rank;
 
             ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
@@ -1142,6 +1145,25 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     }
 }
 
+void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg, const double energyFraction)
+{
+    const CAROM::Matrix* sing_vals = bg->getSingularValues();
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = "run/sVal" + name + tmp;
+
+    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+    ofs.precision(16);
+
+    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
+        ofs << (*sing_vals)(sv, sv) << endl;
+    }
+
+    ofs.close();
+}
+
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                   const bool scalar)
 {
@@ -1253,10 +1275,31 @@ void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::
         break;
     }
 
-    cout << rank << ": " << name << " FOM norm " << sqrt(fomglob2) << endl;
-    cout << rank << ": " << name << " ROM norm " << sqrt(romglob2) << endl;
-    cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
-    cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
+    double FOMnorm = sqrt(fomglob2);
+    double ROMnorm = sqrt(romglob2);
+    double DIFFnorm = sqrt(diffglob2);
+    double relDIFFnorm = sqrt(diffglob2)/sqrt(fomglob2);
+
+    cout << rank << ": " << name << " FOM norm " << FOMnorm << endl;
+    cout << rank << ": " << name << " ROM norm " << ROMnorm << endl;
+    cout << rank << ": " << name << " DIFF norm " << DIFFnorm << endl;
+    cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = name + "_norms" + tmp;
+
+    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+    ofs.precision(16);
+
+    ofs << FOMnorm << endl;
+    ofs << ROMnorm << endl;
+    ofs << DIFFnorm << endl;
+    ofs << relDIFFnorm << endl;
+
+    ofs.close();
+
 }
 
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
