@@ -1293,10 +1293,10 @@ void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
 
-    ofs << FOMnorm << endl;
-    ofs << ROMnorm << endl;
-    ofs << DIFFnorm << endl;
-    ofs << relDIFFnorm << endl;
+    ofs << "FOM norm " << FOMnorm << endl;
+    ofs << "ROM norm " << ROMnorm << endl;
+    ofs << "DIFF norm " << DIFFnorm << endl;
+    ofs << "Rel. DIFF norm " << relDIFFnorm << endl;
 
     ofs.close();
 
