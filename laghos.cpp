@@ -751,19 +751,14 @@ int main(int argc, char *argv[])
         onlinePreprocessTimer.Stop();
     }
 
-    StopWatch restoreTimer, timeLoopTimer;
+    StopWatch restoreTimer, timeLoopTimer, samplerTimer;
     if (rom_restore)
     {
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
         std::ifstream infile_tw_steps("run/tw_steps");
-        int nb_step;
-        nb_step = 1000000;
-        cout << "nb_step: " << nb_step << "\n";
-        cout << "rom_dimx: " << rom_dimx << "\n";
-        cout << "rom_dimv: " << rom_dimv << "\n";
-        cout << "rom_dime: " << rom_dime << "\n";
+        int nb_step(0);
         restoreTimer.Start();
         rom_dimx = twparam(rom_window,0);
         rom_dimv = twparam(rom_window,1);
@@ -945,6 +940,8 @@ int main(int argc, char *argv[])
 
             if (rom_offline)
             {
+                timeLoopTimer.Stop();
+                samplerTimer.Start();
                 sampler->SampleSolution(t, last_dt, S);
 
                 if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
@@ -956,6 +953,8 @@ int main(int argc, char *argv[])
                     sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
                     sampler->SampleSolution(t, dt, S);
                 }
+                samplerTimer.Stop();
+                timeLoopTimer.Start();
             }
 
             if (rom_online)
@@ -979,11 +978,13 @@ int main(int argc, char *argv[])
                     numSampE = twparam(rom_window,5);
 
                     delete basis;
+                    timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           numSampX, numSampV, numSampE,
                                           rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
-
+                    timeLoopTimer.Start();
+                    
                     basis->ProjectFOMtoROM(S, romS);
 
                     delete romOper;
@@ -1100,8 +1101,10 @@ int main(int argc, char *argv[])
 
     if (rom_offline)
     {
+        samplerTimer.Start();
         sampler->Finalize(t, dt, S);
         delete sampler;
+        samplerTimer.Stop();
     }
 
     if (rom_offline && writeSol)
@@ -1205,6 +1208,7 @@ int main(int argc, char *argv[])
     if (mpi.Root()) {
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
         if(rom_restore) cout << "Elapsed time for restore phase: " << restoreTimer.RealTime() << " sec\n";
+        if(rom_offline) cout << "Elapsed time for sampling in the offline phase: " << samplerTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
     }
