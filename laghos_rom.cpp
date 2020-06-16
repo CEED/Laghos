@@ -35,6 +35,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             generator_X->takeSample(X.GetData(), t, dt);
             generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
         }
+
+        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleV = generator_V->isNextSample(t);
@@ -48,6 +52,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         generator_V->takeSample(V.GetData(), t, dt);
         generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+
+        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -61,6 +69,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         generator_E->takeSample(E.GetData(), t, dt);
         generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
+
+        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
     }
 }
 
@@ -1140,6 +1152,83 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
         operFOM->Mult(fx, fy);
         basis->ProjectFOMtoROM(fy, y);
     }
+}
+
+void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
+{
+    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
+
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
+
+    if (!hyperreduce || rank == 0)
+    {
+        if (hyperreduce)
+        {
+            basis->LiftToSampleMesh(S, fx);
+            // TODO: is this necessary? Does the call to UpdateMesh accomplish this anyway?
+            {   // update mesh
+                for (int i=0; i<Vsize_h1sp; ++i)
+                    (*xsp_gf)[i] = fx[i];
+
+                spmesh->NewNodes(*xsp_gf, false);
+            }
+        }
+        else
+            basis->LiftROMtoFOM(S, fx);
+
+        const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
+        Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
+
+        // The monolithic BlockVector stores the unknown fields as follows:
+        // (Position, Velocity, Specific Internal Energy).
+        Vector dv_dt, v0, dx_dt;
+        v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+        dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
+        dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+        // In each sub-step:
+        // - Update the global state Vector S.
+        // - Compute dv_dt using S.
+        // - Update V using dv_dt.
+        // - Compute de_dt and dx_dt using S and V.
+
+        // -- 1.
+        // S is S0.
+        hydro_oper->UpdateMesh(fx);
+        hydro_oper->SolveVelocity(fx, dS_dt);
+        // V = v0 + 0.5 * dt * dv_dt;
+        add(v0, 0.5 * dt, dv_dt, V);
+        hydro_oper->SolveEnergy(fx, V, dS_dt);
+        dx_dt = V;
+
+        // -- 2.
+        // S = S0 + 0.5 * dt * dS_dt;
+        add(S0, 0.5 * dt, dS_dt, fx);
+        hydro_oper->ResetQuadratureData();
+        hydro_oper->UpdateMesh(fx);
+        hydro_oper->SolveVelocity(fx, dS_dt);
+        // V = v0 + 0.5 * dt * dv_dt;
+        add(v0, 0.5 * dt, dv_dt, V);
+        hydro_oper->SolveEnergy(fx, V, dS_dt);
+        dx_dt = V;
+
+        // -- 3.
+        // S = S0 + dt * dS_dt.
+        add(S0, dt, dS_dt, fx);
+        hydro_oper->ResetQuadratureData();
+
+        if (hyperreduce)
+            basis->RestrictFromSampleMesh(fx, S);
+        else
+            basis->ProjectFOMtoROM(fx, S);
+    }
+
+    if (hyperreduce)
+    {
+        MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
+    }
+
+    t += dt;
 }
 
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,

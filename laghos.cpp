@@ -514,7 +514,7 @@ int main(int argc, char *argv[])
         ode_solver = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver;
+        ode_solver = new RK2AvgSolver(rom_online, &H1FESpace, &L2FESpace);
         break;
     default:
         if (myid == 0)
@@ -882,6 +882,7 @@ int main(int argc, char *argv[])
 
             // Adaptive time step control.
             const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+
             //const double dt_est = oper.GetTimeStepEstimate(S);
             //cout << myid << ": dt_est " << dt_est << endl;
             if (dt_est < dt)
@@ -1057,7 +1058,9 @@ int main(int argc, char *argv[])
     }
 
     if (rom_hyperreduce)
+    {
         basis->LiftROMtoFOM(romS, S);
+    }
 
     if (rom_offline)
     {

@@ -224,6 +224,14 @@ public:
     int SolutionSizeSP() const;
     int SolutionSizeFOM() const;
 
+    int SolutionSizeH1SP() const {
+        return size_H1_sp;
+    }
+
+    int SolutionSizeH1FOM() const {
+        return tH1size;
+    }
+
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x) const;
 
@@ -323,6 +331,8 @@ public:
 
         return dt_est_SP;
     }
+
+    void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
     ~ROM_Operator()
     {

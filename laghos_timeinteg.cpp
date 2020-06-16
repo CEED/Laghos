@@ -16,6 +16,7 @@
 
 #include "laghos_timeinteg.hpp"
 #include "laghos_solver.hpp"
+#include "laghos_rom.hpp"
 
 using namespace std;
 
@@ -29,12 +30,26 @@ void HydroODESolver::Init(TimeDependentOperator &_f)
 {
     ODESolver::Init(_f);
 
-    hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
-    MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
+    if (rom)
+    {
+        rom_oper = dynamic_cast<ROM_Operator *>(f);
+        MFEM_VERIFY(rom_oper, "HydroSolvers expect ROM_Operator.");
+    }
+    else
+    {
+        hydro_oper = dynamic_cast<LagrangianHydroOperator *>(f);
+        MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
+    }
 }
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
+    if (rom)
+    {
+        rom_oper->StepRK2Avg(S, t, dt);
+        return;
+    }
+
     const int Vsize = hydro_oper->GetH1VSize();
     Vector V(Vsize), dS_dt(S.Size()), S0(S);
 
