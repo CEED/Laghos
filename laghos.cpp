@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
     else
     {
         MFEM_VERIFY(numWindows > 0, "");
-        if (rom_online)
+        if (rom_online || rom_restore)
         {
             const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
@@ -757,10 +757,24 @@ int main(int argc, char *argv[])
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
+        std::ifstream infile_tw_steps("run/tw_steps");
+        int nb_step;
+        nb_step = 1000000;
+        cout << "nb_step: " << nb_step << "\n";
+        cout << "rom_dimx: " << rom_dimx << "\n";
+        cout << "rom_dimv: " << rom_dimv << "\n";
+        cout << "rom_dime: " << rom_dime << "\n";
         restoreTimer.Start();
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+        rom_dimx = twparam(rom_window,0);
+        rom_dimv = twparam(rom_window,1);
+        rom_dime = twparam(rom_window,2);
+        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
+        if (infile_tw_steps.good())
+        {
+            infile_tw_steps >> nb_step;
+        }   
         int ti;
         for (ti = 1; !last_step; ti++)
         {
@@ -768,7 +782,23 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+            if (ti == nb_step) {
+                if (infile_tw_steps.good())
+                {
+                    infile_tw_steps >> nb_step;
+                }   
+                rom_window++;
+                rom_dimx = twparam(rom_window,0);
+                rom_dimv = twparam(rom_window,1);
+                rom_dime = twparam(rom_window,2);
+                delete basis;
+                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+                                      numSampX, numSampV, numSampE,
+                                      rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                romSsize = rom_dimx + rom_dimv + rom_dime;
+                romS.SetSize(romSsize);
+            }
+            std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -821,10 +851,12 @@ int main(int argc, char *argv[])
             visit_dc.Save();
         }
         restoreTimer.Stop();
+        infile_tw_steps.close();
     }
     else
     {
         // usual time loop when rom_restore phase is false.
+        std::ofstream outfile_tw_steps("run/tw_steps");
         timeLoopTimer.Start();
         for (int ti = 1; !last_step; ti++)
         {
@@ -931,6 +963,7 @@ int main(int argc, char *argv[])
                 if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
                     rom_window++;
+                    outfile_tw_steps << ti << "\n";
 
                     if (myid == 0)
                         cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
@@ -1059,6 +1092,7 @@ int main(int argc, char *argv[])
             }
         } // usual time loop
         timeLoopTimer.Stop();
+        outfile_tw_steps.close();
     }
 
     if (rom_hyperreduce)
