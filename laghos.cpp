@@ -710,13 +710,16 @@ int main(int argc, char *argv[])
     int steps = 0;
     BlockVector S_old(S);
 
+    StopWatch samplerTimer;
     int rom_window = 0;
     ROM_Sampler *sampler = NULL;
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
+        samplerTimer.Start();
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
         sampler->SampleSolution(0, 0, S);
+        samplerTimer.Stop();
     }
 
     ROM_Basis *basis = NULL;
@@ -751,7 +754,7 @@ int main(int argc, char *argv[])
         onlinePreprocessTimer.Stop();
     }
 
-    StopWatch restoreTimer, timeLoopTimer, samplerTimer;
+    StopWatch restoreTimer, timeLoopTimer;
     if (rom_restore)
     {
         // -restore phase
