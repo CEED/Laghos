@@ -22,6 +22,7 @@ Laghos makefile targets:
    make status/info
    make install
    make clean
+   make clean-exec
    make distclean
    make style
 
@@ -37,6 +38,8 @@ make install PREFIX=<dir>
    Install the Laghos executable in <dir>.
 make clean
    Clean the Laghos executable, library and object files.
+make clean-exec
+   Clean previous Laghos simulation data files.
 make distclean
    In addition to "make clean", remove the local installation directory and some
    run-time generated files.
@@ -51,7 +54,7 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = ../mfem
+MFEM_DIR = $(CURDIR)/../mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 # Use the MFEM install directory
@@ -94,7 +97,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I../libROM
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(CURDIR)/../libROM
 LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -110,7 +113,7 @@ OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_csv.hpp
 
-include user.mk
+include $(CURDIR)/user.mk
 
 # Targets
 
@@ -123,7 +126,7 @@ include user.mk
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: override MFEM_DIR = $(MFEM_DIR1)
-include user2.mk
+include $(CURDIR)/user2.mk
 
 all: laghos
 
@@ -150,12 +153,14 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
+
 clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM
+	rm -rf laghos *.o *~ *.dSYM run
 clean-exec:
-	rm -rf ./results
+	rm -rf run/ROMsol/*
+	(cd run && (ls | grep -v ROMsol | xargs rm -rf))
 
 distclean: clean
 	rm -rf bin/
@@ -182,3 +187,6 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+$(shell mkdir -p run)
+$(shell mkdir -p run/ROMsol)
