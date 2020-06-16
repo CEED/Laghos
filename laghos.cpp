@@ -769,7 +769,7 @@ int main(int argc, char *argv[])
         if (infile_tw_steps.good())
         {
             infile_tw_steps >> nb_step;
-        }   
+        }
         int ti;
         for (ti = 1; !last_step; ti++)
         {
@@ -781,7 +781,7 @@ int main(int argc, char *argv[])
                 if (infile_tw_steps.good())
                 {
                     infile_tw_steps >> nb_step;
-                }   
+                }
                 rom_window++;
                 rom_dimx = twparam(rom_window,0);
                 rom_dimv = twparam(rom_window,1);
@@ -984,7 +984,7 @@ int main(int argc, char *argv[])
                                           rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
-                    
+
                     basis->ProjectFOMtoROM(S, romS);
 
                     delete romOper;
