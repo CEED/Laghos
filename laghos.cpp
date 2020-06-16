@@ -831,7 +831,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = std::string("ROMsol/romS_")+std::to_string(ti);
+        std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;

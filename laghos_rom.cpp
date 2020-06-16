@@ -123,15 +123,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
     {
         cout << "X basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_X, energyFraction);
-        PrintSingularValues(rank, "X", generator_X, energyFraction);
+        PrintSingularValues(rank, "X", generator_X);
 
         cout << "V basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_V, energyFraction);
-        PrintSingularValues(rank, "V", generator_V, energyFraction);
+        PrintSingularValues(rank, "V", generator_V);
 
         cout << "E basis summary output" << endl;
         BasisGeneratorFinalSummary(generator_E, energyFraction);
-        PrintSingularValues(rank, "E", generator_E, energyFraction);
+        PrintSingularValues(rank, "E", generator_E);
     }
 
     delete generator_X;
@@ -1145,7 +1145,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     }
 }
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg, const double energyFraction)
+void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg)
 {
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 

@@ -22,6 +22,7 @@ Laghos makefile targets:
    make status/info
    make install
    make clean
+   make clean-exec
    make distclean
    make style
 
@@ -37,6 +38,8 @@ make install PREFIX=<dir>
    Install the Laghos executable in <dir>.
 make clean
    Clean the Laghos executable, library and object files.
+make clean-exec
+   Clean previous Laghos simulation data files.
 make distclean
    In addition to "make clean", remove the local installation directory and some
    run-time generated files.
@@ -154,9 +157,10 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean: clean-build clean-exec
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM
+	rm -rf laghos *.o *~ *.dSYM run
 clean-exec:
-	rm -rf ./results
+	rm -rf run/ROMsol/*
+	(cd run && (ls | grep -v ROMsol | xargs rm -rf))
 
 distclean: clean
 	rm -rf bin/
