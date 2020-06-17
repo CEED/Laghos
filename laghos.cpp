@@ -763,10 +763,14 @@ int main(int argc, char *argv[])
         std::ifstream infile_tw_steps("run/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
-        rom_dimx = twparam(rom_window,0);
-        rom_dimv = twparam(rom_window,1);
-        rom_dime = twparam(rom_window,2);
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+        if (rom_window != 0) {
+            rom_dimx = twparam(rom_window,0);
+            rom_dimv = twparam(rom_window,1);
+            rom_dime = twparam(rom_window,2);
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+        } else {
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+        }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
         if (infile_tw_steps.good())
@@ -780,22 +784,6 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            if (ti == nb_step) {
-                if (infile_tw_steps.good())
-                {
-                    infile_tw_steps >> nb_step;
-                }
-                rom_window++;
-                rom_dimx = twparam(rom_window,0);
-                rom_dimv = twparam(rom_window,1);
-                rom_dime = twparam(rom_window,2);
-                delete basis;
-                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                      numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
-                romSsize = rom_dimx + rom_dimv + rom_dime;
-                romS.SetSize(romSsize);
-            }
             std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
@@ -826,6 +814,22 @@ int main(int argc, char *argv[])
                 // get out of the loop when no more file is found
                 last_step = true;
                 break;
+            }
+            if (ti == nb_step) {
+                if (infile_tw_steps.good())
+                {
+                    infile_tw_steps >> nb_step;
+                }
+                rom_window++;
+                rom_dimx = twparam(rom_window,0);
+                rom_dimv = twparam(rom_window,1);
+                rom_dime = twparam(rom_window,2);
+                delete basis;
+                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+                                      numSampX, numSampV, numSampE,
+                                      rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                romSsize = rom_dimx + rom_dimv + rom_dime;
+                romS.SetSize(romSsize);
             }
         } // time loop in "restore" phase
         ti--;
