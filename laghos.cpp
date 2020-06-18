@@ -765,13 +765,17 @@ int main(int argc, char *argv[])
         std::ifstream infile_tw_steps("run/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
-        if (rom_window != 0) {
+        if (usingWindows) {
             rom_dimx = twparam(rom_window,0);
             rom_dimv = twparam(rom_window,1);
             rom_dime = twparam(rom_window,2);
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, 
+                                      numSampX, numSampV, numSampE,
+                                    rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
         } else {
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime, 
+                                      numSampX, numSampV, numSampE,
+                                    rom_staticSVD, rom_hyperreduce, rom_offsetX0);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
