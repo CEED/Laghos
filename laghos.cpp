@@ -176,6 +176,7 @@ int main(int argc, char *argv[])
     bool writeSol = false;
     bool solDiff = false;
     bool rom_hyperreduce = false;
+    int rom_sample_dim = 0;
     const char *normtype_char = "l2";
     Array<double> twep;
     Array2D<int> twparam;
@@ -263,6 +264,7 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
+    args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.Parse();
     if (!args.Good())
     {
@@ -514,7 +516,7 @@ int main(int argc, char *argv[])
         ode_solver = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver;
+        ode_solver = new RK2AvgSolver(rom_online, &H1FESpace, &L2FESpace);
         break;
     default:
         if (myid == 0)
@@ -717,7 +719,7 @@ int main(int argc, char *argv[])
     {
         if (dtc > 0.0) dt = dtc;
         samplerTimer.Start();
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -912,6 +914,7 @@ int main(int argc, char *argv[])
 
             // Adaptive time step control.
             const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+
             //const double dt_est = oper.GetTimeStepEstimate(S);
             //cout << myid << ": dt_est " << dt_est << endl;
             if (dt_est < dt)
@@ -953,7 +956,7 @@ int main(int argc, char *argv[])
                     delete sampler;
 
                     rom_window++;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window);
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
                     sampler->SampleSolution(t, dt, S);
                 }
                 samplerTimer.Stop();
@@ -1100,7 +1103,9 @@ int main(int argc, char *argv[])
     }
 
     if (rom_hyperreduce)
+    {
         basis->LiftROMtoFOM(romS, S);
+    }
 
     if (rom_offline)
     {

@@ -19,6 +19,8 @@
 
 #include "mfem.hpp"
 
+class ROM_Operator;
+
 namespace mfem
 {
 
@@ -30,10 +32,12 @@ class LagrangianHydroOperator;
 class HydroODESolver : public ODESolver
 {
 protected:
+    const bool rom;
     LagrangianHydroOperator *hydro_oper;
+    ROM_Operator *rom_oper;
 
 public:
-    HydroODESolver() : hydro_oper(NULL) { }
+    HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline) { }
 
     virtual void Init(TimeDependentOperator &_f);
 
@@ -45,8 +49,12 @@ public:
 
 class RK2AvgSolver : public HydroODESolver
 {
+private:
+    ParFiniteElementSpace *H1FESpace, *L2FESpace;
+
 public:
-    RK2AvgSolver() { }
+    RK2AvgSolver(const bool romOnline=false, ParFiniteElementSpace *H1FESpace_=NULL, ParFiniteElementSpace *L2FESpace_=NULL) : HydroODESolver(romOnline),
+        H1FESpace(H1FESpace_), L2FESpace(L2FESpace_) { }
 
     virtual void Step(Vector &S, double &t, double &dt);
 };
