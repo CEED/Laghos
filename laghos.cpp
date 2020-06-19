@@ -715,10 +715,16 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer;
     int rom_window = 0;
     ROM_Sampler *sampler = NULL;
+    std::ofstream outfile_twp;
+    Array<int> cutoff(3);
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
+
         samplerTimer.Start();
+        if (usingWindows) {
+            outfile_twp.open("twpTemp.csv");
+        }
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
@@ -960,7 +966,10 @@ int main(int argc, char *argv[])
 
                 if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
-                    sampler->Finalize(t, last_dt, S);
+                    sampler->Finalize(t, last_dt, S, cutoff);
+                    outfile_twp << twep[rom_window] << ", ";
+                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
+                    outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
                     delete sampler;
 
                     rom_window++;
@@ -1118,10 +1127,15 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         samplerTimer.Start();
-        sampler->Finalize(t, dt, S);
+        sampler->Finalize(t, dt, S, cutoff);
+        outfile_twp << twep[rom_window] << ", ";
+        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
+        outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
         delete sampler;
         samplerTimer.Stop();
+        if(usingWindows) outfile_twp.close();
     }
+
 
     if (rom_offline && writeSol)
     {

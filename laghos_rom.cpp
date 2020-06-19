@@ -76,7 +76,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     }
 }
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction)
+void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     cout << "ROM dimension = " << rom_dim << endl;
@@ -94,20 +94,19 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     }
 
     double partialSum = 0.0;
-    int cutoff = 0;
     for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
         partialSum += (*sing_vals)(sv, sv);
         if (partialSum / sum > energyFraction)
         {
-            cutoff = sv;
+            cutoff = sv+1;
             break;
         }
     }
 
-    cout << "Take first " << cutoff+1 << " of " << sing_vals->numColumns() << " basis vectors" << endl;
+    cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
-void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
+void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
 {
     SetStateVariables(S);
 
@@ -134,15 +133,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S)
     if (rank == 0)
     {
         cout << "X basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_X, energyFraction);
+        BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
         PrintSingularValues(rank, "X", generator_X);
 
         cout << "V basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_V, energyFraction);
+        BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
         PrintSingularValues(rank, "V", generator_V);
 
         cout << "E basis summary output" << endl;
-        BasisGeneratorFinalSummary(generator_E, energyFraction);
+        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, "E", generator_E);
     }
 
