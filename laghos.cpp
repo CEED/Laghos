@@ -967,9 +967,11 @@ int main(int argc, char *argv[])
                 if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
                     sampler->Finalize(t, last_dt, S, cutoff);
-                    outfile_twp << twep[rom_window] << ", ";
-                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
-                    outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+                    if (myid == 0) {
+                        outfile_twp << twep[rom_window] << ", ";
+                        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
+                        outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+                    }
                     delete sampler;
 
                     rom_window++;
@@ -1128,9 +1130,11 @@ int main(int argc, char *argv[])
     {
         samplerTimer.Start();
         sampler->Finalize(t, dt, S, cutoff);
-        outfile_twp << twep[rom_window] << ", ";
-        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
-        outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+        if (myid == 0) {
+            outfile_twp << twep[rom_window] << ", ";
+            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
+            outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+        }
         delete sampler;
         samplerTimer.Stop();
         if(usingWindows) outfile_twp.close();
