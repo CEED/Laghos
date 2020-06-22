@@ -1130,7 +1130,7 @@ int main(int argc, char *argv[])
     {
         samplerTimer.Start();
         sampler->Finalize(t, dt, S, cutoff);
-        if (myid == 0) {
+        if (myid == 0 && usingWindows) {
             outfile_twp << twep[rom_window] << ", ";
             outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
             outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
