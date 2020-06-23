@@ -116,7 +116,7 @@ public:
 
     void SampleSolution(const double t, const double dt, Vector const& S);
 
-    void Finalize(const double t, const double dt, Vector const& S);
+    void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff);
 
 private:
     const int H1size;

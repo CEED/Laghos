@@ -170,6 +170,9 @@ int main(int argc, char *argv[])
     int numSampX = 0;
     int numSampV = 0;
     int numSampE = 0;
+    double sFactorX = 2.0;
+    double sFactorV = 20.0;
+    double sFactorE = 2.0;
     int numWindows = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
@@ -250,6 +253,9 @@ int main(int argc, char *argv[])
     args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
+    args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
+    args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
     args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
@@ -287,7 +293,8 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(numWindows > 0, "");
         if (rom_online || rom_restore)
         {
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, myid == 0);
+            double sFactor[]  = {sFactorX, sFactorV, sFactorE};
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline)
@@ -715,10 +722,16 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer;
     int rom_window = 0;
     ROM_Sampler *sampler = NULL;
+    std::ofstream outfile_twp;
+    Array<int> cutoff(3);
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
+
         samplerTimer.Start();
+        if (usingWindows) {
+            outfile_twp.open("twpTemp.csv");
+        }
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
@@ -960,7 +973,11 @@ int main(int argc, char *argv[])
 
                 if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
                 {
-                    sampler->Finalize(t, last_dt, S);
+                    sampler->Finalize(t, last_dt, S, cutoff);
+                    if (myid == 0) {
+                        outfile_twp << twep[rom_window] << ", ";
+                        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                    }
                     delete sampler;
 
                     rom_window++;
@@ -1118,10 +1135,16 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         samplerTimer.Start();
-        sampler->Finalize(t, dt, S);
+        sampler->Finalize(t, dt, S, cutoff);
+        if (myid == 0 && usingWindows) {
+            outfile_twp << twep[rom_window] << ", ";
+            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+        }
         delete sampler;
         samplerTimer.Stop();
+        if(usingWindows) outfile_twp.close();
     }
+
 
     if (rom_offline && writeSol)
     {
