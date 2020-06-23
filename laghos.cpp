@@ -287,7 +287,8 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(numWindows > 0, "");
         if (rom_online || rom_restore)
         {
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, myid == 0);
+            double sFactor[]  = {2.0, 20.0, 2.0};
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline)
@@ -969,8 +970,7 @@ int main(int argc, char *argv[])
                     sampler->Finalize(t, last_dt, S, cutoff);
                     if (myid == 0) {
                         outfile_twp << twep[rom_window] << ", ";
-                        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
-                        outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+                        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                     }
                     delete sampler;
 
@@ -1132,8 +1132,7 @@ int main(int argc, char *argv[])
         sampler->Finalize(t, dt, S, cutoff);
         if (myid == 0 && usingWindows) {
             outfile_twp << twep[rom_window] << ", ";
-            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", ";
-            outfile_twp << 2*cutoff[0] << ", " << 20*cutoff[1] << ", " << 2*cutoff[2] << "\n";
+            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
         delete sampler;
         samplerTimer.Stop();
