@@ -170,6 +170,9 @@ int main(int argc, char *argv[])
     int numSampX = 0;
     int numSampV = 0;
     int numSampE = 0;
+    double sFactorX = 2.0;
+    double sFactorV = 20.0;
+    double sFactorE = 2.0;
     int numWindows = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
@@ -250,6 +253,9 @@ int main(int argc, char *argv[])
     args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
+    args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
+    args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
     args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
@@ -287,7 +293,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(numWindows > 0, "");
         if (rom_online || rom_restore)
         {
-            double sFactor[]  = {2.0, 20.0, 2.0};
+            double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
