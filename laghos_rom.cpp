@@ -79,17 +79,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
-    cout << "ROM dimension = " << rom_dim << endl;
-
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
     MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
 
-    cout << "Singular Values:" << endl;
-
     double sum = 0.0;
     for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        cout << (*sing_vals)(sv, sv) << endl;
         sum += (*sing_vals)(sv, sv);
     }
 
@@ -132,15 +127,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0)
     {
-        cout << "X basis summary output" << endl;
+        cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
         PrintSingularValues(rank, "X", generator_X);
 
-        cout << "V basis summary output" << endl;
+        cout << "V basis summary output: ";
         BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
         PrintSingularValues(rank, "V", generator_V);
 
-        cout << "E basis summary output" << endl;
+        cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, "E", generator_E);
     }
