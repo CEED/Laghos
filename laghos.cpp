@@ -911,7 +911,7 @@ int main(int argc, char *argv[])
                 // TODO: think about how to reuse "gfprint" option
                 std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
-                romS.Print(outfile_romS, 16);
+                romS.Print(outfile_romS, 1);
                 outfile_romS.close();
 
                 if (!rom_hyperreduce)
@@ -1211,15 +1211,15 @@ int main(int argc, char *argv[])
     }
 
     std::ofstream outfile_e("run/e_gf");
-    e_gf.Print(outfile_e, 16);
+    e_gf.Print(outfile_e, 1);
     outfile_e.close();
 
     std::ofstream outfile_v("run/v_gf");
-    v_gf.Print(outfile_v, 16);
+    v_gf.Print(outfile_v, 1);
     outfile_v.close();
 
     std::ofstream outfile_x("run/x_gf");
-    x_gf.Print(outfile_x, 16);
+    x_gf.Print(outfile_x, 1);
     outfile_x.close();
 
     // Print the error.
