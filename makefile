@@ -157,7 +157,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
 
-clean: clean-build
+clean: clean-regtest clean-build
 
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM run
