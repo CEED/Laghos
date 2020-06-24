@@ -23,6 +23,7 @@ Laghos makefile targets:
    make install
    make clean
    make clean-exec
+   make clean-regtest
    make distclean
    make style
 
@@ -40,6 +41,8 @@ make clean
    Clean the Laghos executable, library and object files.
 make clean-exec
    Clean previous Laghos simulation data files.
+make clean-regtest
+   Clean the regression test output.
 make distclean
    In addition to "make clean", remove the local installation directory and some
    run-time generated files.
@@ -117,7 +120,7 @@ include $(CURDIR)/user.mk
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec
+.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -125,8 +128,8 @@ include $(CURDIR)/user.mk
 .c.o:
 	cd $(<D); $(Ccc) -c $(<F)
 
-laghos: override MFEM_DIR = $(MFEM_DIR1)
-include $(CURDIR)/user2.mk
+laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
+				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(CURDIR)/../libROM/build -L$(CURDIR)/../libROM/build -lROM $(SCALAPACK_FLAGS)
 
 all: laghos
 
@@ -154,13 +157,18 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
 
-clean: clean-build clean-exec
+clean: clean-build
 
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM run
+
 clean-exec:
+	rm -f twpTemp.csv
 	rm -rf run/ROMsol/*
 	(cd run && (ls | grep -v ROMsol | xargs rm -rf))
+
+clean-regtest: clean-exec
+	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
 
 distclean: clean
 	rm -rf bin/
