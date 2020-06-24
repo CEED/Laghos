@@ -13,7 +13,7 @@ This document explains how to compile Laghos/libROM together for several differe
    * brew install hdf5
 2. Choose a base directory, call it \<PATH\>.
 3. From \<PATH\>, clone the rom-dev branch of Laghos.
-4. From \<PATH]>, download and build HYPRE and Metis following the instructions from the README.md of the master branch of Laghos.
+4. From \<PATH\>, download and build HYPRE and Metis following the instructions from the README.md of the master branch of Laghos.
 5. From \<PATH\>, download MFEM and run the following commands from \<PATH\>/mfem/config:
    * cp defaults.mk user.mk
    * Alter HYPRE_DIR to user.mk to point to your HYPRE folder. Mine looks like the following:
