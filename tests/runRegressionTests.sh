@@ -93,14 +93,17 @@ setupLogFile=${RESULTS_DIR}/setup.log
 touch $setupLogFile >> $setupLogFile 2>&1
 
 # Compile the C++ comparators
+echo $"Compiling the file and basis comparators" >> $setupLogFile 2>&1
 g++ -std=c++11 -o $DIR/fileComparator $DIR/fileComparator.cpp >> $setupLogFile 2>&1
 g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
 -I$DIR/../../libROM -L$DIR/../../libROM/build -lROM -Wl,-rpath,$DIR/../../libROM/build >> $setupLogFile 2>&1
 
 # Clone and compile rom-dev branch of Laghos
+echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
 git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
 # Copy user.mk
+echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
 cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
 # Save directory of the baseline Laghos executable
@@ -116,12 +119,13 @@ fi
 BASE_DIR=$DIR/..
 
 # Build the baseline Laghos executable
+echo $"Building the baseline branch" >> $setupLogFile 2>&1
 make --directory=$BASELINE_LAGHOS_DIR CURDIR="$BASE_DIR" >> $setupLogFile 2>&1
 
 # Check if make built correctly
 if [ $? -ne 0 ]
 then
-	echo "Make of master branch failed" | tee -a $setupLogFile
+	echo "The baseline branch failed to build" | tee -a $setupLogFile
   exit 1
 fi
 
