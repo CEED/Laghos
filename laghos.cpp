@@ -174,6 +174,7 @@ int main(int argc, char *argv[])
     double sFactorV = 20.0;
     double sFactorE = 2.0;
     int numWindows = 0;
+    int windowNumSamples = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
     bool writeSol = false;
@@ -259,6 +260,7 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
+    args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -283,26 +285,30 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
-    const bool usingWindows = (numWindows > 0);
-    if (numWindows == 0)  // not using windows
+    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
+    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinstep and -nwin cannot both be set");
+
+    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
+    if (usingWindows)
     {
-        numWindows = 1;  // one window for the entire simulation
-    }
-    else
-    {
-        MFEM_VERIFY(numWindows > 0, "");
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
-        else if (rom_offline)
+        else if (rom_offline && windowNumSamples == 0)
         {
             const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
         }
     }
+    else  // not using windows
+    {
+        numWindows = 1;  // one window for the entire simulation
+    }
+
+    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples+1;
 
     StopWatch totalTimer;
     totalTimer.Start();
@@ -476,7 +482,6 @@ int main(int argc, char *argv[])
     {
         cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl;
     }
-
 
     // Define the parallel finite element spaces. We use:
     // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -732,7 +737,8 @@ int main(int argc, char *argv[])
         if (usingWindows) {
             outfile_twp.open("twpTemp.csv");
         }
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, usingWindows ? twep[0] : t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
+        const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -971,17 +977,31 @@ int main(int argc, char *argv[])
                 samplerTimer.Start();
                 sampler->SampleSolution(t, last_dt, S);
 
-                if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
+                bool endWindow = false;
+                if (usingWindows)
+                {
+                    if (numWindows > 0)
+                    {
+                        endWindow = (t >= twep[rom_window] && rom_window < numWindows-1);
+                    }
+                    else
+                    {
+                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
+                    }
+                }
+
+                if (endWindow)
                 {
                     sampler->Finalize(t, last_dt, S, cutoff);
                     if (myid == 0) {
-                        outfile_twp << twep[rom_window] << ", ";
+                        outfile_twp << t << ", ";
                         outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                     }
                     delete sampler;
 
                     rom_window++;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, t_final, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
+                    const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
                     sampler->SampleSolution(t, dt, S);
                 }
                 samplerTimer.Stop();
@@ -1137,14 +1157,13 @@ int main(int argc, char *argv[])
         samplerTimer.Start();
         sampler->Finalize(t, dt, S, cutoff);
         if (myid == 0 && usingWindows) {
-            outfile_twp << twep[rom_window] << ", ";
+            outfile_twp << t << ", ";
             outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
         delete sampler;
         samplerTimer.Stop();
         if(usingWindows) outfile_twp.close();
     }
-
 
     if (rom_offline && writeSol)
     {

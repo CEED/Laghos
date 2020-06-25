@@ -118,6 +118,11 @@ public:
 
     void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff);
 
+    int MaxNumSamples()
+    {
+        return std::max(std::max(generator_X->getNumSamples(), generator_V->getNumSamples()), generator_E->getNumSamples());
+    }
+
 private:
     const int H1size;
     const int L2size;
