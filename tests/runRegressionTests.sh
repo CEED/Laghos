@@ -3,7 +3,8 @@
 ###############################################################################
 
 # Get options
-while getopts ":i:e:n:" o; do
+while getopts ":i:e:n:" o;
+do
 	case "${o}" in
 		i)
 			i=${OPTARG}
