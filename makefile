@@ -115,6 +115,7 @@ SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_csv.hpp
+TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
 
 include $(CURDIR)/user.mk
 
@@ -189,7 +190,7 @@ status info:
 	@true
 
 #ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
-FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES)
+FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES) $(TEST_FILES)
 
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
