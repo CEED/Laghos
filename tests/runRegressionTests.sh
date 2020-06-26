@@ -135,6 +135,9 @@ fi
 
 # Test number counter
 testNum=0
+testNumFail=0
+testNumPass=0
+
 
 # Test type
 testtypes=(offline online romhr restore)
@@ -166,16 +169,22 @@ do
         do
 					testNum=$((testNum+1))
 
+					# Test failed boolean variable
+					testFailed=false
+
 					# Create simulation results log file
 					simulationLogFile="${RESULTS_DIR}/${scriptName}-${testtype}-${normtype}.log"
 					touch $simulationLogFile
 
-					print_pass() {
+					set_pass() {
+						testNumPass=$((testNumPass+1))
 						echo -e "\\r\033[0K$testNum. ${scriptName}-${testtype}-${normtype}: PASS"
 						echo "${scriptName}-${testtype}-${normtype}: PASS" >> $simulationLogFile
 					}
 
-					print_fail() {
+					set_fail() {
+						testFailed=true
+						testNumFail=$((testNumFail+1))
 						echo -e "\\r\033[0K$testNum. ${scriptName}-${testtype}-${normtype}: FAIL"
 						echo "${scriptName}-${testtype}-${normtype}: FAIL" >> $simulationLogFile
 					}
@@ -186,13 +195,14 @@ do
   			  echo $"Running baseline simulation for comparison" >> $simulationLogFile 2>&1
   				(cd $BASELINE_LAGHOS_DIR && . "$script") >> $simulationLogFile 2>&1
 
+					# Check if simulation failed
 					if [ "$?" -ne 0 ]
 					then
 						echo "Something went wrong running the baseline simulation with the
             test script: $scriptName" >> $simulationLogFile 2>&1
-            print_fail
+            set_fail
 
-            # Skip to next test script
+            # Skip to next test
 						continue 1
 					fi
 
@@ -200,11 +210,12 @@ do
   				echo $"Running new simulation for regression testing" >> $simulationLogFile 2>&1
   				(cd $BASE_DIR && . "$script") >> $simulationLogFile 2>&1
 
+					# Check if simulation failed
           if [ "$?" -ne 0 ]
 					then
 						echo "Something went wrong running the new user branch simulation with the
              test script: $scriptName" >> $simulationLogFile 2>&1
-            print_fail
+            set_fail
 
             # Skip to next test
 						continue 1
@@ -212,9 +223,6 @@ do
 
           # Find number of steps simulation took in rom-dev to compare final timestep later
           num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
-
-					#Test failed boolean variable
-					testFailed=false
 
   				# After simulations complete, compare results
   				for testFile in $BASELINE_LAGHOS_DIR/run/*
@@ -248,10 +256,9 @@ do
             check_fail() {
     					if [ "${PIPESTATUS[0]}" -ne 0 ]
     					then
-    						print_fail
+    						set_fail
 
                 # Skip to next test
-								testfailed=true
 								break 1
     					fi
             }
@@ -260,10 +267,9 @@ do
             check_exists() {
               if [[ ! -f "$basetestfile" ]]; then
                 echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
-                print_fail
+                set_fail
 
                 # Skip to next test
-								testfailed=true
 								break 1
               fi
             }
@@ -299,12 +305,12 @@ do
   				done
 
           # Passed
-					if [ "$testfailed" == true ] ; then
-						continue 1
+					if [ "$testFailed" == false ]; then
+						set_pass
 					fi
-          print_pass
         done
 			done
 		fi
 	done
 done
+echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"
