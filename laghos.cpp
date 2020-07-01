@@ -893,6 +893,9 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
+            if (rom_online && usingWindows && (t + dt >= twep[rom_window]))
+                dt = twep[rom_window] - t;
+
             if (steps == max_tsteps) {
                 last_step = true;
             }
