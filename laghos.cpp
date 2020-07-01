@@ -175,6 +175,7 @@ int main(int argc, char *argv[])
     double sFactorE = 2.0;
     int numWindows = 0;
     int windowNumSamples = 0;
+    int windowOverlapSamples = 0;
     double dtc = 0.0;
     int visitDiffCycle = -1;
     bool writeSol = false;
@@ -261,6 +262,7 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
+    args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -308,7 +310,8 @@ int main(int argc, char *argv[])
         numWindows = 1;  // one window for the entire simulation
     }
 
-    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples+1;
+    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 1;
+    MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     StopWatch totalTimer;
     totalTimer.Start();
@@ -727,6 +730,7 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer;
     int rom_window = 0;
     ROM_Sampler *sampler = NULL;
+    ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
     Array<int> cutoff(3);
     if (rom_offline)
@@ -885,6 +889,7 @@ int main(int argc, char *argv[])
         // usual time loop when rom_restore phase is false.
         std::ofstream outfile_tw_steps("run/tw_steps");
         timeLoopTimer.Start();
+        double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
             if (t + dt >= t_final)
@@ -993,14 +998,41 @@ int main(int argc, char *argv[])
                     }
                 }
 
+                if (samplerLast)
+                {
+                    samplerLast->SampleSolution(t, last_dt, S);
+                    if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
+                        tOverlapMidpoint = t;
+
+                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples)
+                    {
+                        samplerLast->Finalize(t, last_dt, S, cutoff);
+                        MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
+                        if (myid == 0) {
+                            outfile_twp << tOverlapMidpoint << ", ";
+                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                        }
+                        delete samplerLast;
+                        samplerLast = NULL;
+                        tOverlapMidpoint = 0.0;
+                    }
+                }
+
                 if (endWindow)
                 {
-                    sampler->Finalize(t, last_dt, S, cutoff);
-                    if (myid == 0) {
-                        outfile_twp << t << ", ";
-                        outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                    if (numWindows == 0 && windowOverlapSamples > 0)
+                    {
+                        samplerLast = sampler;
                     }
-                    delete sampler;
+                    else
+                    {
+                        sampler->Finalize(t, last_dt, S, cutoff);
+                        if (myid == 0) {
+                            outfile_twp << t << ", ";
+                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                        }
+                        delete sampler;
+                    }
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
@@ -1158,12 +1190,17 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         samplerTimer.Start();
-        sampler->Finalize(t, dt, S, cutoff);
+        if (samplerLast)
+            samplerLast->Finalize(t, dt, S, cutoff);
+        else
+            sampler->Finalize(t, dt, S, cutoff);
+
         if (myid == 0 && usingWindows) {
             outfile_twp << t << ", ";
             outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
         delete sampler;
+        delete samplerLast;
         samplerTimer.Stop();
         if(usingWindows) outfile_twp.close();
     }
