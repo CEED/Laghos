@@ -719,7 +719,8 @@ int main(int argc, char *argv[])
     // defines the Mult() method that is used by the time integrators.
     if (!rom_online) ode_solver->Init(oper);
     oper.ResetTimeStepEstimate();
-    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old;
+    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old, dt_old;
+    bool use_dt_old = false;
     bool last_step = false;
     int steps = 0;
     BlockVector S_old(S);
@@ -891,6 +892,19 @@ int main(int argc, char *argv[])
             {
                 dt = t_final - t;
                 last_step = true;
+            }
+
+            if ( use_dt_old ) 
+            {
+                dt = dt_old;
+                use_dt_old = false;
+            }
+
+            if (rom_online && usingWindows && (t + dt >= twep[rom_window]))
+            {
+                dt_old = dt;
+                use_dt_old = true;
+                dt = twep[rom_window] - t;
             }
 
             if (steps == max_tsteps) {

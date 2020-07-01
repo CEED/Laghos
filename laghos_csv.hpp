@@ -47,7 +47,7 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
             return 2;  // incorrect number of parameters
         }
 
-        twep[count] = stof(row[0]);
+        twep[count] = stod(row[0]);
 
         if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << endl;
         count++;
@@ -110,7 +110,7 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
             return 2;  // incorrect number of parameters
         }
 
-        twep[count] = stof(row[0]);
+        twep[count] = stod(row[0]);
         for (int i=0; i<nparamRead-1; ++i)
             twparam(count,i) = stoi(row[i+1]);
 
