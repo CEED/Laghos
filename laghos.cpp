@@ -181,6 +181,7 @@ int main(int argc, char *argv[])
     bool writeSol = false;
     bool solDiff = false;
     bool rom_hyperreduce = false;
+    bool match_end_time = false;
     int rom_sample_dim = 0;
     const char *normtype_char = "l2";
     Array<double> twep;
@@ -224,6 +225,8 @@ int main(int argc, char *argv[])
                    "Enable or disable GLVis visualization.");
     args.AddOption(&vis_steps, "-vs", "--visualization-steps",
                    "Visualize every n-th timestep.");
+    args.AddOption(&match_end_time, "-met", "--match-end-time", "-no-met", "--no-match-end-time",
+                   "Match the end time of each window.");
     args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                    "Enable or disable VisIt visualization.");
     args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
@@ -905,7 +908,7 @@ int main(int argc, char *argv[])
                 use_dt_old = false;
             }
 
-            if (rom_online && usingWindows && (t + dt >= twep[rom_window]))
+            if (rom_online && usingWindows && (t + dt >= twep[rom_window]) & match_end_time)
             {
                 dt_old = dt;
                 use_dt_old = true;
