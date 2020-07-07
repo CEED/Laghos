@@ -20,7 +20,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             cout << "X taking sample at t " << t << endl;
         }
 
-        if (offsetXinit)
+        if (offsetInit)
         {
             for (int i=0; i<tH1size; ++i)
             {
@@ -50,12 +50,25 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             cout << "V taking sample at t " << t << endl;
         }
 
-        generator_V->takeSample(V.GetData(), t, dt);
-        generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] = V[i] - (*initV)(i);
+            }
+
+            generator_V->takeSample(Xdiff.GetData(), t, dt);
+            generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+        }
+        else
+        {
+            generator_V->takeSample(V.GetData(), t, dt);
+            generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+        }
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
         // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
+        MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -67,12 +80,25 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             cout << "E taking sample at t " << t << endl;
         }
 
-        generator_E->takeSample(E.GetData(), t, dt);
-        generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
+        if (offsetInit)
+        {
+            for (int i=0; i<tL2size; ++i)
+            {
+                Ediff[i] = E[i] - (*initE)(i);
+            }
+
+            generator_E->takeSample(Ediff.GetData(), t, dt);
+            generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
+        }
+        else
+        {
+            generator_E->takeSample(E.GetData(), t, dt);
+            generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
+        }
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
         // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
+        MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 }
 
@@ -105,7 +131,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 {
     SetStateVariables(S);
 
-    if (offsetXinit)
+    if (offsetInit)
     {
         for (int i=0; i<tH1size; ++i)
         {
@@ -119,10 +145,32 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     generator_X->endSamples();
 
-    generator_V->takeSample(V.GetData(), t, dt);
+    if (offsetInit)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            Xdiff[i] = V[i] - (*initV)(i);
+        }
+
+        generator_V->takeSample(Xdiff.GetData(), t, dt);
+    }
+    else
+        generator_V->takeSample(V.GetData(), t, dt);
+
     generator_V->endSamples();
 
-    generator_E->takeSample(E.GetData(), t, dt);
+    if (offsetInit)
+    {
+        for (int i=0; i<tL2size; ++i)
+        {
+            Ediff[i] = E[i] - (*initE)(i);
+        }
+
+        generator_E->takeSample(Ediff.GetData(), t, dt);
+    }
+    else
+        generator_E->takeSample(E.GetData(), t, dt);
+
     generator_E->endSamples();
 
     if (rank == 0)
@@ -186,7 +234,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
       gfH1(H1FESpace), gfL2(L2FESpace),
       rdimx(dimX), rdimv(dimV), rdime(dimE),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetXinit(useXoffset)
+      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useXoffset)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -767,38 +815,54 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
 #endif
 
-    if (offsetXinit)
+    if (offsetInit)
     {
-        //MFEM_VERIFY(false, "TODO: E needs an offset as well");
-
         initX = new CAROM::Vector(tH1size, true);
         initX->read("run/ROMoffset/initX" + std::to_string(window));
 
-        CAROM::Matrix FOMX0(tH1size, 1, true);
+        initV = new CAROM::Vector(tH1size, true);
+        initV->read("run/ROMoffset/initV" + std::to_string(window));
+
+        initE = new CAROM::Vector(tL2size, true);
+        initE->read("run/ROMoffset/initE" + std::to_string(window));
+
+        CAROM::Matrix FOMX0(tH1size, 2, true);
 
         for (int i=0; i<tH1size; ++i)
         {
             FOMX0(i,0) = (*initX)(i);
+            FOMX0(i,1) = (*initV)(i);
         }
 
-        CAROM::Matrix FOMzero(tH1size, 1, true);
-        FOMzero = 0.0;
+        CAROM::Matrix FOME0(tL2size, 1, true);
 
-        CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 1, false);
-        CAROM::Matrix spzero(rank == 0 ? size_H1_sp : 1, 1, false);
+        for (int i=0; i<tL2size; ++i)
+        {
+            FOME0(i,0) = (*initE)(i);
+        }
+
+        CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
+        CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
 #ifdef FULL_DOF_STENCIL
-        GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, spX0mat, spzero);
+        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #else
-        GatherDistributedMatrixRows(FOMX0, FOMzero, 1, 1, st2sp, sprows, all_sprows, spX0mat, spzero);
+        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #endif
 
         if (rank == 0)
         {
             initXsp = new CAROM::Vector(size_H1_sp, false);
+            initVsp = new CAROM::Vector(size_H1_sp, false);
+            initEsp = new CAROM::Vector(size_L2_sp, false);
             for (int i=0; i<size_H1_sp; ++i)
             {
                 (*initXsp)(i) = spX0mat(i,0);
+                (*initVsp)(i) = spX0mat(i,1);
+            }
+            for (int i=0; i<size_L2_sp; ++i)
+            {
+                (*initEsp)(i) = spE0mat(i,0);
             }
         }
     }
@@ -809,7 +873,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
 void ROM_Basis::ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs)
 {
-    if (rank != 0 || !offsetXinit)
+    if (rank != 0 || !offsetInit)
         return;
 
     for (int i=0; i<ess_tdofs.Size(); ++i)
@@ -858,7 +922,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = offsetXinit ? mfH1[i] - (*initX)(i) : mfH1[i];
+        (*fH1)(i) = offsetInit ? mfH1[i] - (*initX)(i) : mfH1[i];
 
     basisX->transposeMult(*fH1, *rX);
 
@@ -868,7 +932,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = mfH1[i];
+        (*fH1)(i) = offsetInit ? mfH1[i] - (*initV)(i) : mfH1[i];
 
     basisV->transposeMult(*fH1, *rV);
 
@@ -878,7 +942,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfL2.GetTrueDofs(mfL2);
 
     for (int i=0; i<tL2size; ++i)
-        (*fL2)(i) = mfL2[i];
+        (*fL2)(i) = offsetInit ? mfL2[i] - (*initE)(i) : mfL2[i];
 
     basisE->transposeMult(*fL2, *rE);
 
@@ -910,7 +974,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     basisX->mult(*rX, *fH1);
 
     for (int i=0; i<tH1size; ++i)
-        mfH1[i] = offsetXinit ? (*initX)(i) + (*fH1)(i) : (*fH1)(i);
+        mfH1[i] = offsetInit ? (*initX)(i) + (*fH1)(i) : (*fH1)(i);
 
     gfH1.SetFromTrueDofs(mfH1);
 
@@ -920,7 +984,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     basisV->mult(*rV, *fH1);
 
     for (int i=0; i<tH1size; ++i)
-        mfH1[i] = (*fH1)(i);
+        mfH1[i] = offsetInit ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
 
     gfH1.SetFromTrueDofs(mfH1);
 
@@ -930,7 +994,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     basisE->mult(*rE, *fL2);
 
     for (int i=0; i<tL2size; ++i)
-        mfL2[i] = (*fL2)(i);
+        mfL2[i] = offsetInit ? (*initE)(i) + (*fL2)(i) : (*fL2)(i);
 
     gfL2.SetFromTrueDofs(mfL2);
 
@@ -960,14 +1024,14 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
 
         for (int i=0; i<size_H1_sp; ++i)
         {
-            usp[i] = offsetXinit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
-            usp[size_H1_sp + i] = (*spV)(i);
+            usp[i] = offsetInit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
+            usp[size_H1_sp + i] = offsetInit ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
         }
 
         for (int i=0; i<size_L2_sp; ++i)
         {
             //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
-            usp[(2*size_H1_sp) + i] = (*spE)(i);
+            usp[(2*size_H1_sp) + i] = offsetInit ? (*initEsp)(i) + (*spE)(i) : (*spE)(i);
         }
     }
 }
@@ -983,14 +1047,14 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
 
     for (int i=0; i<numSamplesX; ++i)
     {
-        (*sX)(i) = offsetXinit ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
+        (*sX)(i) = offsetInit ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
     }
 
     for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = usp[size_H1_sp + s2sp_V[i]];
+        (*sV)(i) = offsetInit ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
 
     for (int i=0; i<numSamplesE; ++i)
-        (*sE)(i) = usp[(2*size_H1_sp) + s2sp_E[i]];
+        (*sE)(i) = offsetInit ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
     BsinvX->transposeMult(*sX, *rX);
     BsinvV->transposeMult(*sV, *rV);
