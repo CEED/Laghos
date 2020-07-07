@@ -110,7 +110,7 @@ public:
                 (*initX)(i) = X[i];
             }
 
-            initX->write("initX");
+            initX->write("run/ROMoffset/initX" + std::to_string(window));
         }
     }
 
@@ -311,7 +311,7 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
 
 class ROM_Operator : public TimeDependentOperator

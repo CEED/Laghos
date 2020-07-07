@@ -38,7 +38,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
         // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
+        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleV = generator_V->isNextSample(t);
@@ -55,7 +55,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
         // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
+        MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -72,7 +72,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
         // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
+        MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() == 1, "Only 1 basis time interval allowed");
     }
 }
 
@@ -234,7 +234,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
-        SetupHyperreduction(H1FESpace, L2FESpace, nH1);
+        SetupHyperreduction(H1FESpace, L2FESpace, nH1, window);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -416,15 +416,12 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1)
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
 
     const int fomH1size = H1FESpace->GlobalTrueVSize();
     const int fomL2size = L2FESpace->GlobalTrueVSize();
-
-    const int nsamp = 35;
-    const int overSample = 100;
 
     numSamplesX = std::min(fomH1size, numSamplesX);
     vector<int> sample_dofs_X(numSamplesX);
@@ -772,10 +769,10 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     if (offsetXinit)
     {
-        MFEM_VERIFY(false, "TODO: E needs an offset as well");
+        //MFEM_VERIFY(false, "TODO: E needs an offset as well");
 
         initX = new CAROM::Vector(tH1size, true);
-        initX->read("initX");
+        initX->read("run/ROMoffset/initX" + std::to_string(window));
 
         CAROM::Matrix FOMX0(tH1size, 1, true);
 
@@ -861,7 +858,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = mfH1[i];
+        (*fH1)(i) = offsetXinit ? mfH1[i] - (*initX)(i) : mfH1[i];
 
     basisX->transposeMult(*fH1, *rX);
 
@@ -985,7 +982,9 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
     // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
 
     for (int i=0; i<numSamplesX; ++i)
-        (*sX)(i) = usp[s2sp_X[i]];
+    {
+        (*sX)(i) = offsetXinit ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
+    }
 
     for (int i=0; i<numSamplesV; ++i)
         (*sV)(i) = usp[size_H1_sp + s2sp_V[i]];
