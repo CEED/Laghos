@@ -757,6 +757,13 @@ int main(int argc, char *argv[])
     Vector romS, romS_old;
     ROM_Operator *romOper = NULL;
 
+    if (!usingWindows)
+    {
+        if (numSampX == 0) numSampX = sFactorX * rom_dimx;
+        if (numSampV == 0) numSampV = sFactorV * rom_dimv;
+        if (numSampE == 0) numSampE = sFactorE * rom_dime;
+    }
+
     StopWatch onlinePreprocessTimer;
     if (rom_online)
     {

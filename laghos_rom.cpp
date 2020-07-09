@@ -277,6 +277,18 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     dimV = rdimv;
     dimE = rdime;
 
+    if (offsetInit)
+    {
+        initX = new CAROM::Vector(tH1size, true);
+        initX->read("run/ROMoffset/initX" + std::to_string(window));
+
+        initV = new CAROM::Vector(tH1size, true);
+        initV->read("run/ROMoffset/initV" + std::to_string(window));
+
+        initE = new CAROM::Vector(tL2size, true);
+        initE->read("run/ROMoffset/initE" + std::to_string(window));
+    }
+
     if (hyperreduce)
     {
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
@@ -817,15 +829,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     if (offsetInit)
     {
-        initX = new CAROM::Vector(tH1size, true);
-        initX->read("run/ROMoffset/initX" + std::to_string(window));
-
-        initV = new CAROM::Vector(tH1size, true);
-        initV->read("run/ROMoffset/initV" + std::to_string(window));
-
-        initE = new CAROM::Vector(tL2size, true);
-        initE->read("run/ROMoffset/initE" + std::to_string(window));
-
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
         for (int i=0; i<tH1size; ++i)
