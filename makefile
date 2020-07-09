@@ -57,13 +57,10 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-MFEM_DIR = $(CURDIR)/../mfem
+LIBS_DIR ?= ..
+MFEM_DIR = $(LIBS_DIR)/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
-# Use the MFEM install directory
-# MFEM_DIR = ../mfem/mfem
-# CONFIG_MK = $(MFEM_DIR)/config.mk
-# TEST_MK = $(MFEM_DIR)/test.mk
 
 # Use two relative paths to MFEM: first one for compilation in '.' and second
 # one for compilation in 'lib'.
@@ -100,7 +97,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(CURDIR)/../libROM
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(LIBS_DIR)/libROM
 LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -130,7 +127,7 @@ include $(CURDIR)/user.mk
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(CURDIR)/../libROM/build -L$(CURDIR)/../libROM/build -lROM $(SCALAPACK_FLAGS)
+				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
 all: laghos
 
