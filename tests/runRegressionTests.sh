@@ -92,11 +92,24 @@ fi
 setupLogFile=${RESULTS_DIR}/setup.log
 touch $setupLogFile >> $setupLogFile 2>&1
 
+# Save directory of the new Laghos executable
+BASE_DIR=$DIR/..
+
+# Save directory of the baseline Laghos executable
+BASELINE_LAGHOS_DIR=$DIR/Laghos
+
+# Get LIBS_DIR to run make depending on whether Gitlab is running
+if [ -z "$CI_BUILDS_DIR" ]; then
+	LIBS_DIR="$BASE_DIR/.."
+else
+	LIBS_DIR="$CI_BUILDS_DIR/$CI_PROJECT_NAME/env"
+fi
+
 # Compile the C++ comparators
 echo $"Compiling the file and basis comparators" >> $setupLogFile 2>&1
 g++ -std=c++11 -o $DIR/fileComparator $DIR/fileComparator.cpp >> $setupLogFile 2>&1
 g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
--I$DIR/../../libROM -L$DIR/../../libROM/build -lROM -Wl,-rpath,$DIR/../../libROM/build >> $setupLogFile 2>&1
+-I$LIBS_DIR/libROM -L$LIBS_DIR/libROM/build -lROM -Wl,-rpath,$LIBS_DIR/libROM/build >> $setupLogFile 2>&1
 
 # Clone and compile rom-dev branch of Laghos
 echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
@@ -106,21 +119,15 @@ git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile
 echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
 cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
-# Save directory of the baseline Laghos executable
-BASELINE_LAGHOS_DIR=$DIR/Laghos
-
 # Check that rom-dev branch of Laghos is present
 if [ ! -d $BASE_LAGHOS_DIR ]; then
 	echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
 	exit 1
 fi
 
-# Save directory of the new Laghos executable
-BASE_DIR=$DIR/..
-
 # Build the baseline Laghos executable
 echo $"Building the baseline branch" >> $setupLogFile 2>&1
-make --directory=$BASELINE_LAGHOS_DIR CURDIR="$BASE_DIR" >> $setupLogFile 2>&1
+make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 # Check if make built correctly
 if [ $? -ne 0 ]
@@ -137,7 +144,6 @@ fi
 testNum=0
 testNumFail=0
 testNumPass=0
-
 
 # Test type
 testtypes=(offline online romhr restore)
@@ -161,8 +167,8 @@ do
 			do
 
         # Clear run directories
-        make --directory=$BASE_DIR CURDIR="$BASE_DIR" clean-exec >/dev/null 2>&1
-        make --directory=$BASELINE_LAGHOS_DIR CURDIR="$BASE_DIR" clean-exec >/dev/null 2>&1
+        make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+        make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
 
         # Run every test type
         for testtype in "${testtypes[@]}"
@@ -287,10 +293,9 @@ do
   						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
               basetestfile="$BASE_DIR/run/$fileName"
               check_exists
-
-  						testFile=$(echo "$testFile" | cut -f 1 -d '.')
-  						fileName=$(echo "$fileName" | cut -f 1 -d '.')
-  						$($DIR/./basisComparator "$testFile" "$BASE_DIR/run/$fileName" "1.0e-2" >> $simulationLogFile 2>&1)
+							testFile="${testFile%.*}"
+							basetestfile="${basetestfile%.*}"
+  						$($DIR/./basisComparator "$testFile" "$basetestfile" "1.0e-2" >> $simulationLogFile 2>&1)
               check_fail
 
   					# Compare solutions, singular values, and number of time steps
@@ -299,7 +304,7 @@ do
   						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
               basetestfile="$BASE_DIR/run/$fileName"
               check_exists
-  						$($DIR/./fileComparator "$testFile" "$BASE_DIR/run/$fileName" "1.0e-7" >> $simulationLogFile 2>&1)
+  						$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
               check_fail
   					fi
   				done
@@ -314,3 +319,6 @@ do
 	done
 done
 echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"
+if [ $testNumFail -ne 0 ]; then
+	exit 1
+fi
