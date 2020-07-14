@@ -163,6 +163,7 @@ clean-build:
 clean-exec:
 	rm -f twpTemp.csv
 	rm -rf run/ROMsol/*
+	rm -rf run/ROMoffset/*
 	(cd run && (ls | grep -v ROMsol | xargs rm -rf))
 
 clean-regtest: clean-exec
@@ -196,3 +197,4 @@ style:
 
 $(shell mkdir -p run)
 $(shell mkdir -p run/ROMsol)
+$(shell mkdir -p run/ROMoffset)

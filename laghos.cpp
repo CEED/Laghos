@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     bool rom_online = false;
     bool rom_restore = false;
     bool rom_staticSVD = false;
-    bool rom_offsetX0 = false;
+    bool rom_offset = false;
     double rom_energyFraction = 0.9999;
     int rom_dimx = -1;
     int rom_dimv = -1;
@@ -276,6 +276,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM hyperreduction.");
     args.AddOption(&rom_staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
+    args.AddOption(&rom_offset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
+                   "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.Parse();
@@ -746,7 +748,7 @@ int main(int argc, char *argv[])
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -754,6 +756,13 @@ int main(int argc, char *argv[])
     ROM_Basis *basis = NULL;
     Vector romS, romS_old;
     ROM_Operator *romOper = NULL;
+
+    if (!usingWindows)
+    {
+        if (numSampX == 0) numSampX = sFactorX * rom_dimx;
+        if (numSampV == 0) numSampV = sFactorV * rom_dimv;
+        if (numSampE == 0) numSampE = sFactorE * rom_dime;
+    }
 
     StopWatch onlinePreprocessTimer;
     if (rom_online)
@@ -771,7 +780,7 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+                              rom_staticSVD, rom_hyperreduce, rom_offset);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -798,11 +807,11 @@ int main(int argc, char *argv[])
             rom_dime = twparam(rom_window,2);
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offsetX0);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -860,7 +869,7 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -902,7 +911,7 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
-            if ( use_dt_old ) 
+            if ( use_dt_old )
             {
                 dt = dt_old;
                 use_dt_old = false;
@@ -1050,7 +1059,7 @@ int main(int argc, char *argv[])
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offsetX0, rom_energyFraction, rom_window, rom_sample_dim);
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
                     sampler->SampleSolution(t, dt, S);
                 }
                 samplerTimer.Stop();
@@ -1081,7 +1090,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offsetX0, rom_window);
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 

@@ -32,12 +32,12 @@ class ROM_Sampler
 public:
     ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                 const double t_final, const double initial_dt, Vector const& S_init,
-                const bool staticSVD = false, const bool useXoffset = false, double energyFraction_=0.9999,
+                const bool staticSVD = false, const bool useOffset = false, double energyFraction_=0.9999,
                 const int window=0, const int max_dim=0)
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
-          gfH1(H1FESpace), gfL2(L2FESpace), offsetXinit(useXoffset), energyFraction(energyFraction_)
+          gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_)
     {
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
@@ -101,16 +101,30 @@ public:
         V0 = 0.0;
         E0 = 0.0;
 
-        if (offsetXinit)
+        if (offsetInit)
         {
             initX = new CAROM::Vector(tH1size, true);
+            initV = new CAROM::Vector(tH1size, true);
+            initE = new CAROM::Vector(tL2size, true);
             Xdiff.SetSize(tH1size);
+            Ediff.SetSize(tL2size);
+
             for (int i=0; i<tH1size; ++i)
             {
                 (*initX)(i) = X[i];
             }
+            initX->write("run/ROMoffset/initX" + std::to_string(window));
 
-            initX->write("initX");
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initV)(i) = V[i];
+            }
+            initV->write("run/ROMoffset/initV" + std::to_string(window));
+            for (int i=0; i<tL2size; ++i)
+            {
+                (*initE)(i) = E[i];
+            }
+            initE->write("run/ROMoffset/initE" + std::to_string(window));
         }
     }
 
@@ -134,10 +148,12 @@ private:
 
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
 
-    Vector X, X0, Xdiff, dXdt, V, V0, dVdt, E, E0, dEdt;
+    Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
-    const bool offsetXinit;
+    const bool offsetInit;
     CAROM::Vector *initX = 0;
+    CAROM::Vector *initV = 0;
+    CAROM::Vector *initE = 0;
 
     ParGridFunction gfH1, gfL2;
 
@@ -254,7 +270,7 @@ public:
 private:
     const bool staticSVD;
     const bool hyperreduce;
-    const bool offsetXinit;
+    const bool offsetInit;
     int rdimx, rdimv, rdime;
 
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -305,13 +321,17 @@ private:
     CAROM::Matrix *BsinvE = NULL;
 
     CAROM::Vector *initX = 0;
+    CAROM::Vector *initV = 0;
+    CAROM::Vector *initE = 0;
     CAROM::Vector *initXsp = 0;
+    CAROM::Vector *initVsp = 0;
+    CAROM::Vector *initEsp = 0;
 
     int numSamplesX = 0;
     int numSamplesV = 0;
     int numSamplesE = 0;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
 
 class ROM_Operator : public TimeDependentOperator
