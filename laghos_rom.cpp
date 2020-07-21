@@ -914,10 +914,12 @@ void ROM_Basis::ReadSolutionBases(const int window)
 }
 
 // f is a full vector, not a true vector
-void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
+void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDerivative)
 {
     MFEM_VERIFY(r.Size() == rdimx + rdimv + rdime, "");
     MFEM_VERIFY(f.Size() == (2*H1size) + L2size, "");
+
+    const bool useOffset = offsetInit && (!timeDerivative);
 
     for (int i=0; i<H1size; ++i)
         gfH1[i] = f[i];
@@ -925,7 +927,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = offsetInit ? mfH1[i] - (*initX)(i) : mfH1[i];
+        (*fH1)(i) = useOffset ? mfH1[i] - (*initX)(i) : mfH1[i];
 
     basisX->transposeMult(*fH1, *rX);
 
@@ -935,7 +937,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = offsetInit ? mfH1[i] - (*initV)(i) : mfH1[i];
+        (*fH1)(i) = useOffset ? mfH1[i] - (*initV)(i) : mfH1[i];
 
     basisV->transposeMult(*fH1, *rV);
 
@@ -945,7 +947,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r)
     gfL2.GetTrueDofs(mfL2);
 
     for (int i=0; i<tL2size; ++i)
-        (*fL2)(i) = offsetInit ? mfL2[i] - (*initE)(i) : mfL2[i];
+        (*fL2)(i) = useOffset ? mfL2[i] - (*initE)(i) : mfL2[i];
 
     basisE->transposeMult(*fL2, *rE);
 
@@ -1039,10 +1041,12 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
     }
 }
 
-void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
+void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool timeDerivative) const
 {
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
+
+    const bool useOffset = offsetInit && (!timeDerivative);
 
     // Select entries out of usp on the sample mesh.
 
@@ -1050,14 +1054,14 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u) const
 
     for (int i=0; i<numSamplesX; ++i)
     {
-        (*sX)(i) = offsetInit ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
+        (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
     }
 
     for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = offsetInit ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
+        (*sV)(i) = useOffset ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
 
     for (int i=0; i<numSamplesE; ++i)
-        (*sE)(i) = offsetInit ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
+        (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
     BsinvX->transposeMult(*sX, *rX);
     BsinvV->transposeMult(*sV, *rV);
@@ -1202,7 +1206,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             }
 
             operSP->Mult(fx, fy);
-            basis->RestrictFromSampleMesh(fy, y);
+            basis->RestrictFromSampleMesh(fy, y, true);
 
             operSP->ResetQuadratureData();
         }
@@ -1213,7 +1217,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     {
         basis->LiftROMtoFOM(x, fx);
         operFOM->Mult(fx, fy);
-        basis->ProjectFOMtoROM(fy, y);
+        basis->ProjectFOMtoROM(fy, y, true);
     }
 }
 

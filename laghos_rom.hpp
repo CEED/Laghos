@@ -234,7 +234,8 @@ public:
 
     void ReadSolutionBases(const int window);
 
-    void ProjectFOMtoROM(Vector const& f, Vector & r);
+    void ProjectFOMtoROM(Vector const& f, Vector & r,
+                         const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
     int TotalSize() {
         return rdimx + rdimv + rdime;
@@ -257,7 +258,8 @@ public:
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
-    void RestrictFromSampleMesh(const Vector &xsp, Vector &x) const;
+    void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
+                                const bool timeDerivative=false) const;
 
     int GetRank() const {
         return rank;
