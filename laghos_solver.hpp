@@ -122,6 +122,8 @@ protected:
     void UpdateQuadratureData(const Vector &S) const;
     void AssembleForceMatrix() const;
 
+    const bool noMvSolve;
+
 public:
     LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
                             ParFiniteElementSpace &l2_fes,
@@ -129,7 +131,7 @@ public:
                             int source_type_, double cfl_,
                             Coefficient *material_, bool visc, bool pa,
                             double cgt, int cgiter, double ftz_tol,
-                            int h1_basis_type);
+                            int h1_basis_type, bool noMvSolve_=false);
 
     // Solve for dx_dt, dv_dt and de_dt.
     virtual void Mult(const Vector &S, Vector &dS_dt) const;
@@ -157,6 +159,9 @@ public:
     int GetH1VSize() const {
         return H1FESpace.GetVSize();
     }
+
+    void MultMv(const Vector &u, Vector &v);
+    void MultMe(const Vector &u, Vector &v);
 };
 
 class TaylorCoefficient : public Coefficient

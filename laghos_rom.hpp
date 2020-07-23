@@ -259,13 +259,24 @@ public:
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
-                                const bool timeDerivative=false) const;
+                                const bool timeDerivative=false,
+                                const bool rhs_without_mass_matrix=false,
+                                const DenseMatrix *invMvROM=NULL) const;
+
+    void RestrictFromSampleMesh_V(const Vector &xsp, Vector &x,
+                                  const bool timeDerivative=false) const;
 
     int GetRank() const {
         return rank;
     }
 
+    int GetDimV() const {
+        return rdimv;
+    }
+
     void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
+
+    void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
 
     MPI_Comm comm;
 
@@ -343,7 +354,8 @@ public:
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
-                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
+                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
+                 const bool reduceMv = false);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -402,6 +414,11 @@ private:
     const int rank;
 
     mutable double dt_est_SP = 0.0;
+
+    bool useReducedMv;
+    DenseMatrix invMvROM;
+
+    void ComputeReducedMv();
 };
 
 #endif // MFEM_LAGHOS_ROM

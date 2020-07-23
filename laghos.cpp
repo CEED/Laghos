@@ -182,6 +182,7 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool rom_hyperreduce = false;
     bool match_end_time = false;
+    bool rom_reduceMv = false;
     int rom_sample_dim = 0;
     const char *normtype_char = "l2";
     Array<double> twep;
@@ -280,6 +281,9 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
+    args.AddOption(&rom_reduceMv, "-rommv", "--rommassv", "-no-rommv", "--no-rommassv",
+                   "Enable or disable reduction of V mass matrix.");
+
     args.Parse();
     if (!args.Good())
     {
@@ -786,7 +790,8 @@ int main(int argc, char *argv[])
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
-        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMv);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -1097,7 +1102,8 @@ int main(int argc, char *argv[])
                     basis->ProjectFOMtoROM(S, romS);
 
                     delete romOper;
-                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMv);
 
                     ode_solver->Init(*romOper);
                 }

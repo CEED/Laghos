@@ -90,7 +90,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         bool visc, bool pa,
         double cgt, int cgiter,
         double ftz,
-        int h1_basis_type)
+        int h1_basis_type,
+        bool noMvSolve_)
     : TimeDependentOperator(size),
       H1FESpace(h1_fes), L2FESpace(l2_fes),
       ess_tdofs(essential_tdofs),
@@ -101,6 +102,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       source_type(source_type_), cfl(cfl_),
       use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
+      noMvSolve(noMvSolve_),
       material_pcf(material_),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -273,6 +275,12 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         timer.sw_force.Stop();
         rhs.Neg();
 
+        if (noMvSolve)
+        {
+            dv = rhs;
+            return;
+        }
+
         Operator *cVMassPA;
         VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
@@ -295,6 +303,12 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         Force.Mult(one, rhs);
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (noMvSolve)
+        {
+            dv = rhs;
+            return;
+        }
 
         HypreParMatrix A;
         Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -383,6 +397,28 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         }
     }
     delete e_source;
+}
+
+void LagrangianHydroOperator::MultMv(const Vector &u, Vector &v)
+{
+    if (p_assembly)
+    {
+        Operator *cVMassPA;
+        VMassPA.FormSystemOperator(ess_tdofs, cVMassPA);
+        cVMassPA->Mult(u, v);
+        delete cVMassPA;
+    }
+    else
+    {
+        HypreParMatrix A;
+        Mv.FormSystemMatrix(ess_tdofs, A);
+        A.Mult(u, v);
+    }
+}
+
+void LagrangianHydroOperator::MultMe(const Vector &u, Vector &v)
+{
+
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const

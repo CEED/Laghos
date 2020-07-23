@@ -1041,7 +1041,8 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
     }
 }
 
-void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool timeDerivative) const
+void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool timeDerivative,
+                                       const bool rhs_without_mass_matrix, const DenseMatrix *invMvROM) const
 {
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
@@ -1053,9 +1054,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
 
     for (int i=0; i<numSamplesX; ++i)
-    {
         (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
-    }
 
     for (int i=0; i<numSamplesV; ++i)
         (*sV)(i) = useOffset ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
@@ -1070,11 +1069,44 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     for (int i=0; i<rdimx; ++i)
         u[i] = (*rX)(i);
 
-    for (int i=0; i<rdimv; ++i)
-        u[rdimx + i] = (*rV)(i);
+    if (rhs_without_mass_matrix && timeDerivative)
+    {
+        Vector rhs(rdimv);
+        Vector invMrhs(rdimv);
+        for (int i=0; i<rdimv; ++i)
+            rhs[i] = (*rV)(i);
+
+        invMvROM->Mult(rhs, invMrhs);
+        for (int i=0; i<rdimv; ++i)
+            u[rdimx + i] = invMrhs[i];
+    }
+    else
+    {
+        for (int i=0; i<rdimv; ++i)
+            u[rdimx + i] = (*rV)(i);
+    }
 
     for (int i=0; i<rdime; ++i)
         u[rdimx + rdimv + i] = (*rE)(i);
+}
+
+void ROM_Basis::RestrictFromSampleMesh_V(const Vector &usp, Vector &u, const bool timeDerivative) const
+{
+    MFEM_VERIFY(u.Size() == rdimv, "");
+    MFEM_VERIFY(usp.Size() == size_H1_sp, "");
+
+    const bool useOffset = offsetInit && (!timeDerivative);
+
+    // Select entries out of usp on the sample mesh.
+    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
+
+    for (int i=0; i<numSamplesV; ++i)
+        (*sV)(i) = useOffset ? usp[s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[s2sp_V[i]];
+
+    BsinvV->transposeMult(*sV, *rV);
+
+    for (int i=0; i<rdimv; ++i)
+        u[i] = (*rV)(i);
 }
 
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
@@ -1082,9 +1114,9 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
-                           FiniteElementCollection *L2fec)
+                           FiniteElementCollection *L2fec, const bool reduceMv)
     : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
-      rank(b->GetRank()), hyperreduce(hyperreduce_)
+      rank(b->GetRank()), hyperreduce(hyperreduce_), useReducedMv(reduceMv)
 {
     MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
 
@@ -1161,12 +1193,61 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType());
+                H1fec->GetBasisType(), useReducedMv);
     }
     else if (!hyperreduce)
     {
         fx.SetSize(lhoper->Height());
         fy.SetSize(lhoper->Height());
+    }
+
+    if (useReducedMv)
+        ComputeReducedMv();
+}
+
+void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
+{
+    if (sp)  // Sample mesh version
+    {
+        MFEM_VERIFY(v.Size() == size_H1_sp, "");
+
+        for (int i=0; i<size_H1_sp; ++i)
+            v[i] = offsetInit ? (*initVsp)(i) + (*BVsp)(i,id) : (*BVsp)(i,id);
+    }
+    else  // FOM version
+    {
+        MFEM_VERIFY(v.Size() == tH1size, "");
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::ComputeReducedMv()
+{
+    const int nv = basis->GetDimV();
+
+    if (hyperreduce && rank == 0)
+    {
+        invMvROM.SetSize(nv);
+        const int size_H1_sp = basis->SolutionSizeH1SP();
+
+        Vector vj_sp(size_H1_sp);
+        Vector Mvj_sp(size_H1_sp);
+        Vector Mvj(nv);
+        for (int j=0; j<nv; ++j)
+        {
+            basis->GetBasisVectorV(hyperreduce, j, vj_sp);
+            operSP->MultMv(vj_sp, Mvj_sp);
+            basis->RestrictFromSampleMesh_V(Mvj_sp, Mvj, false);
+
+            for (int i=0; i<nv; ++i)
+                invMvROM(i,j) = Mvj[i];
+        }
+
+        invMvROM.Invert();
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
     }
 }
 
@@ -1206,7 +1287,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             }
 
             operSP->Mult(fx, fy);
-            basis->RestrictFromSampleMesh(fy, y, true);
+            basis->RestrictFromSampleMesh(fy, y, true, useReducedMv, &invMvROM);
 
             operSP->ResetQuadratureData();
         }
@@ -1283,6 +1364,8 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S = S0 + dt * dS_dt.
         add(S0, dt, dS_dt, fx);
         hydro_oper->ResetQuadratureData();
+
+        MFEM_VERIFY(!useReducedMv, "TODO");
 
         if (hyperreduce)
             basis->RestrictFromSampleMesh(fx, S);
