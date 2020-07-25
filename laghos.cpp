@@ -182,7 +182,8 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool rom_hyperreduce = false;
     bool match_end_time = false;
-    bool rom_reduceMv = false;
+    bool rom_reduceMass = false;
+    bool rom_sample_RHS = false;
     int rom_sample_dim = 0;
     const char *normtype_char = "l2";
     Array<double> twep;
@@ -281,8 +282,12 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
-    args.AddOption(&rom_reduceMv, "-rommv", "--rommassv", "-no-rommv", "--no-rommassv",
-                   "Enable or disable reduction of V mass matrix.");
+    args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
+                   "Enable or disable reduction of V and E mass matrices.");
+    args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
+                   "Enable or disable reduction of V and E mass matrices.");
+    args.AddOption(&rom_sample_RHS, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
+                   "Sample RHS");
 
     args.Parse();
     if (!args.Good())
@@ -752,7 +757,7 @@ int main(int argc, char *argv[])
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim, rom_sample_RHS, &oper);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -784,14 +789,14 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset);
+                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMv);
+                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -812,11 +817,11 @@ int main(int argc, char *argv[])
             rom_dime = twparam(rom_window,2);
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -874,7 +879,7 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -942,7 +947,7 @@ int main(int argc, char *argv[])
             if (rom_online)
             {
                 if (myid == 0)
-                    cout << "ROM online at t " << t << ", dt " << dt << endl;
+                    cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
 
                 romS_old = romS;
                 ode_solver->Step(romS, t, dt);
@@ -1064,7 +1069,7 @@ int main(int argc, char *argv[])
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim, rom_sample_RHS, &oper);
                     sampler->SampleSolution(t, dt, S);
                 }
                 samplerTimer.Stop();
@@ -1095,7 +1100,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 
@@ -1103,7 +1108,7 @@ int main(int argc, char *argv[])
 
                     delete romOper;
                     romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMv);
+                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass);
 
                     ode_solver->Init(*romOper);
                 }

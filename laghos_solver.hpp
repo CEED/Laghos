@@ -123,6 +123,7 @@ protected:
     void AssembleForceMatrix() const;
 
     const bool noMvSolve;
+    const bool noMeSolve;
 
 public:
     LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
@@ -131,7 +132,8 @@ public:
                             int source_type_, double cfl_,
                             Coefficient *material_, bool visc, bool pa,
                             double cgt, int cgiter, double ftz_tol,
-                            int h1_basis_type, bool noMvSolve_=false);
+                            int h1_basis_type, bool noMvSolve_=false,
+                            bool noMeSolve_=false);
 
     // Solve for dx_dt, dv_dt and de_dt.
     virtual void Mult(const Vector &S, Vector &dS_dt) const;
