@@ -199,6 +199,7 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sampleF;
+    const bool sampleFdirectly = true;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
@@ -249,7 +250,7 @@ class ROM_Basis
 {
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-              int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
+              int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
               const bool RHSbasis_ = false, const int window=0);
 
@@ -337,6 +338,14 @@ public:
     void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
     void GetBasisVectorE(const bool sp, const int id, Vector &v) const;
 
+    CAROM::Matrix *GetBVsp() { 
+        return BVsp;
+    }
+
+    CAROM::Matrix *GetBEsp() {
+        return BEsp;
+    }
+
     MPI_Comm comm;
 
 private:
@@ -344,8 +353,7 @@ private:
     const bool hyperreduce;
     const bool offsetInit;
     const bool RHSbasis;
-    int rdimx, rdimv, rdime;
-
+    int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
     const int H1size;
@@ -484,6 +492,11 @@ private:
 
     void ComputeReducedMv();
     void ComputeReducedMe();
+
+    void InnerProductReducedMv(const int id1, const int id2, double& ip); 
+    void InnerProductReducedMe(const int id1, const int id2, double& ip);
+    void InducedGramSchmidtMv();
+    void InducedGramSchmidtMe();
 };
 
 #endif // MFEM_LAGHOS_ROM
