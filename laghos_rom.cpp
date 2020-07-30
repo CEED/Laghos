@@ -13,6 +13,13 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     const bool sampleX = generator_X->isNextSample(t);
 
+    Vector dSdt;
+    if (sampleFdirectly)
+    {
+        dSdt.SetSize(S.Size());
+        lhoper->Mult(S, dSdt);
+    }
+
     if (sampleX)
     {
         if (rank == 0)
@@ -62,9 +69,21 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             if (sampleF)
             {
-                Vector Mv(Xdiff.Size());
-                lhoper->MultMv(Xdiff, Mv);
-                generator_Fv->takeSample(Mv.GetData(), t, dt);
+                if (sampleFdirectly)
+                {
+                    MFEM_VERIFY(gfH1.Size() == H1size, "");
+                    for (int i=0; i<H1size; ++i)
+                        gfH1[i] = dSdt[H1size + i];  // Fv
+
+                    gfH1.GetTrueDofs(Xdiff);
+                    generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+                }
+                else
+                {
+                    Vector Mv(Xdiff.Size());
+                    lhoper->MultMv(Xdiff, Mv);
+                    generator_Fv->takeSample(Mv.GetData(), t, dt);
+                }
             }
         }
         else
@@ -100,9 +119,21 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             if (sampleF)
             {
-                Vector Me(Ediff.Size());
-                lhoper->MultMe(Ediff, Me);
-                generator_Fe->takeSample(Me.GetData(), t, dt);
+                if (sampleFdirectly)
+                {
+                    MFEM_VERIFY(gfL2.Size() == L2size, "");
+                    for (int i=0; i<L2size; ++i)
+                        gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+                    gfL2.GetTrueDofs(Ediff);
+                    generator_Fe->takeSample(Ediff.GetData(), t, dt);
+                }
+                else
+                {
+                    Vector Me(Ediff.Size());
+                    lhoper->MultMe(Ediff, Me);
+                    generator_Fe->takeSample(Me.GetData(), t, dt);
+                }
             }
         }
         else
@@ -147,6 +178,13 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 {
     SetStateVariables(S);
 
+    Vector dSdt;
+    if (sampleFdirectly)
+    {
+        dSdt.SetSize(S.Size());
+        lhoper->Mult(S, dSdt);
+    }
+
     if (offsetInit)
     {
         for (int i=0; i<tH1size; ++i)
@@ -172,9 +210,21 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
         if (sampleF)
         {
-            Vector Mv(Xdiff.Size());
-            lhoper->MultMv(Xdiff, Mv);
-            generator_Fv->takeSample(Mv.GetData(), t, dt);
+            if (sampleFdirectly)
+            {
+                MFEM_VERIFY(gfH1.Size() == H1size, "");
+                for (int i=0; i<H1size; ++i)
+                    gfH1[i] = dSdt[H1size + i];  // Fv
+
+                gfH1.GetTrueDofs(Xdiff);
+                generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+            }
+            else
+            {
+                Vector Mv(Xdiff.Size());
+                lhoper->MultMv(Xdiff, Mv);
+                generator_Fv->takeSample(Mv.GetData(), t, dt);
+            }
         }
     }
     else
@@ -193,9 +243,21 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
         if (sampleF)
         {
-            Vector Me(Ediff.Size());
-            lhoper->MultMe(Ediff, Me);
-            generator_Fe->takeSample(Me.GetData(), t, dt);
+            if (sampleFdirectly)
+            {
+                MFEM_VERIFY(gfL2.Size() == L2size, "");
+                for (int i=0; i<L2size; ++i)
+                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+                gfL2.GetTrueDofs(Ediff);
+                generator_Fe->takeSample(Ediff.GetData(), t, dt);
+            }
+            else
+            {
+                Vector Me(Ediff.Size());
+                lhoper->MultMe(Ediff, Me);
+                generator_Fe->takeSample(Me.GetData(), t, dt);
+            }
         }
     }
     else
@@ -222,6 +284,16 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, "E", generator_E);
+
+        if (sampleF)
+        {
+            int dummy;
+            cout << "Fv basis summary output: ";
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, dummy);
+
+            cout << "Fe basis summary output: ";
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, dummy);
+        }
     }
 
     delete generator_X;
@@ -330,6 +402,8 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
 
         initE = new CAROM::Vector(tL2size, true);
         initE->read("run/ROMoffset/initE" + std::to_string(window));
+
+        cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
     }
 
     if (hyperreduce)
@@ -898,7 +972,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         GatherDistributedMatrixRows(*basisFv, *basisFe, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
 #else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
-    ?
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
     MFEM_VERIFY(!RHSbasis, "");
@@ -1388,6 +1461,7 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
         for (int i=0; i<rdimv; ++i)
             (*rV)(i) = x[rdimx + i];
 
+        // TODO: might need to add v0
         BsinvX->mult(*rV, *rX);
         for (int i=0; i<rdimx; ++i)
             y[i] = (*rX)(i);

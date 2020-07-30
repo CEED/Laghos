@@ -279,6 +279,12 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         if (noMvSolve)
         {
             dv = rhs;
+
+            for (int i=0; i<ess_tdofs.Size(); ++i)
+            {
+                dv[ess_tdofs[i]] = 0.0;
+            }
+
             return;
         }
 
@@ -308,6 +314,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         if (noMvSolve)
         {
             dv = rhs;
+            for (int i=0; i<ess_tdofs.Size(); ++i)
+            {
+                dv[ess_tdofs[i]] = 0.0;
+            }
+
             return;
         }
 
@@ -426,6 +437,11 @@ void LagrangianHydroOperator::MultMv(const Vector &u, Vector &v)
         HypreParMatrix A;
         Mv.FormSystemMatrix(ess_tdofs, A);
         A.Mult(u, v);
+    }
+
+    for (int i=0; i<ess_tdofs.Size(); ++i)
+    {
+        v[ess_tdofs[i]] = 0.0;
     }
 }
 

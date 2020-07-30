@@ -199,6 +199,7 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sampleF;
+    const bool sampleFdirectly = true;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
