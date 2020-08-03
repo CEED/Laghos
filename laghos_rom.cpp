@@ -1581,6 +1581,130 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     }
 }
 
+void ROM_Operator::InnerProductReducedMv(const int id1, const int id2, double& ip)
+{
+    ip = 0.0;
+    if (hyperreduce)
+    {
+        const int size_H1_sp = basis->SolutionSizeH1SP();
+        Vector vj_sp(size_H1_sp);
+        Vector vi_sp(size_H1_sp);
+        Vector Mvj_sp(size_H1_sp);
+
+        basis->GetBasisVectorV(hyperreduce, id1, vj_sp);
+        basis->GetBasisVectorV(hyperreduce, id2, vi_sp);
+        operSP->MultMv(vj_sp, Mvj_sp);
+        for (int k=0; k<size_H1_sp; ++k)
+        {
+            ip += Mvj_sp[k]*vi_sp[k];
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InnerProductReducedMe(const int id1, const int id2, double& ip)
+{
+    ip = 0.0;
+    if (hyperreduce)
+    {
+        const int size_L2_sp = basis->SolutionSizeL2SP();
+        Vector ej_sp(size_L2_sp);
+        Vector ei_sp(size_L2_sp);
+        Vector Mej_sp(size_L2_sp);
+
+        basis->GetBasisVectorE(hyperreduce, id1, ej_sp);
+        basis->GetBasisVectorE(hyperreduce, id2, ei_sp);
+        operSP->MultMe(ej_sp, Mej_sp);
+        for (int k=0; k<size_L2_sp; ++k)
+        {
+            ip += Mej_sp[k]*ei_sp[k];
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InducedGramSchmidtMv()
+{
+    if (hyperreduce)
+    {
+        const int size_H1_sp = basis->SolutionSizeH1SP();
+        const int rdimv = basis->GetDimV();
+        CAROM::Matrix *Basis_V = basis->GetBVsp(); 
+        double factor;
+
+        InnerProductReducedMv(0, 0, factor);
+        for (int k=0; k<size_H1_sp; ++k)
+        {
+            (*Basis_V)(k,0) /= sqrt(factor);
+        }
+        
+        for (int j=1; j<rdimv; ++j) 
+        {
+            for (int i=0; i<j; ++i)
+            {
+                InnerProductReducedMv(j, i, factor);
+                for (int k=0; k<size_H1_sp; ++k) 
+                {
+                    (*Basis_V)(k,j) -= factor*(*Basis_V)(k,i);
+                }
+            }
+            InnerProductReducedMv(j, j, factor);
+            for (int k=0; k<size_H1_sp; ++k)
+            {
+                (*Basis_V)(k,j) /= sqrt(factor);
+            }
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InducedGramSchmidtMe()
+{
+    if (hyperreduce)
+    {
+        const int size_L2_sp = basis->SolutionSizeL2SP();
+        const int rdime = basis->GetDimE();
+        CAROM::Matrix *Basis_E = basis->GetBEsp(); 
+        double factor;
+
+        InnerProductReducedMe(0, 0, factor);
+        for (int k=0; k<size_L2_sp; ++k)
+        {
+            (*Basis_E)(k,0) /= sqrt(factor);
+        }
+        
+        for (int j=1; j<rdime; ++j) 
+        {
+            for (int i=0; i<j; ++i)
+            {
+                InnerProductReducedMe(j, i, factor);
+                for (int k=0; k<size_L2_sp; ++k) 
+                {
+                    (*Basis_E)(k,j) -= factor*(*Basis_E)(k,i);
+                }
+            }
+            InnerProductReducedMe(j, j, factor);
+            for (int k=0; k<size_L2_sp; ++k)
+            {
+                (*Basis_E)(k,j) /= sqrt(factor);
+            }
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
