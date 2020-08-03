@@ -341,13 +341,13 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 }
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-                     int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
+                     int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
                      const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
                      const bool RHSbasis_, const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
-      rdimx(dimX), rdimv(dimV), rdime(dimE),
+      rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
       staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_)
 {
@@ -608,12 +608,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
+    BsinvV = new CAROM::Matrix(numSamplesV, RHSbasis ? rdimfv : rdimv, false);
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
-    BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
+    BsinvE = new CAROM::Matrix(numSamplesE, RHSbasis ? rdimfe : rdime, false);
     if(rank == 0)
     {
         cout << "number of samples for position: " << numSamplesX << "\n";
@@ -625,7 +625,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     if (RHSbasis)
     {
         CAROM::GNAT(basisFv,
-                    rdimv,
+                    rdimfv,
                     sample_dofs_V.data(),
                     num_sample_dofs_per_procV.data(),
                     *BsinvV,
@@ -634,7 +634,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                     numSamplesV);
 
         CAROM::GNAT(basisFe,
-                    rdime,
+                    rdimfe,
                     sample_dofs_E.data(),
                     num_sample_dofs_per_procE.data(),
                     *BsinvE,
@@ -956,8 +956,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
         if (RHSbasis)
         {
-            BFvsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
-            BFesp = new CAROM::Matrix(size_L2_sp, rdime, false);
+            BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+            BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
         }
     }  // if (rank == 0)
 
@@ -969,7 +969,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
 
     if (RHSbasis)
-        GatherDistributedMatrixRows(*basisFv, *basisFe, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
+        GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
 #else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
@@ -1088,8 +1088,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (RHSbasis)
     {
-        basisFv = ReadBasisROM(rank, ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimv);
-        basisFe = ReadBasisROM(rank, ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdime);
+        basisFv = ReadBasisROM(rank, ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
     }
 }
 

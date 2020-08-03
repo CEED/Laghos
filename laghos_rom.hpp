@@ -250,7 +250,7 @@ class ROM_Basis
 {
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-              int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
+              int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
               const bool RHSbasis_ = false, const int window=0);
 
@@ -345,8 +345,7 @@ private:
     const bool hyperreduce;
     const bool offsetInit;
     const bool RHSbasis;
-    int rdimx, rdimv, rdime;
-
+    int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
     const int H1size;
