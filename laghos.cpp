@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, rom_sample_RHS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -751,7 +751,7 @@ int main(int argc, char *argv[])
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
-    Array<int> cutoff(3);
+    Array<int> cutoff(5);
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
@@ -787,9 +787,15 @@ int main(int argc, char *argv[])
             rom_dimx = twparam(0,0);
             rom_dimv = twparam(0,1);
             rom_dime = twparam(0,2);
-            numSampX = twparam(0,3);
-            numSampV = twparam(0,4);
-            numSampE = twparam(0,5);
+            if (rom_sample_RHS)
+            {
+                rom_dimfv = twparam(0,3);
+                rom_dimfe = twparam(0,4);
+            }
+            const int oss = rom_sample_RHS ? 5 : 3;
+            numSampX = twparam(0,oss);
+            numSampV = twparam(0,oss+1);
+            numSampE = twparam(0,oss+2);
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
@@ -819,6 +825,11 @@ int main(int argc, char *argv[])
             rom_dimx = twparam(rom_window,0);
             rom_dimv = twparam(rom_window,1);
             rom_dime = twparam(rom_window,2);
+            if (rom_sample_RHS)
+            {
+                rom_dimfv = twparam(rom_window,3);
+                rom_dimfe = twparam(rom_window,4);
+            }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
                                   rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
@@ -880,6 +891,11 @@ int main(int argc, char *argv[])
                 rom_dimx = twparam(rom_window,0);
                 rom_dimv = twparam(rom_window,1);
                 rom_dime = twparam(rom_window,2);
+                if (rom_sample_RHS)
+                {
+                    rom_dimfv = twparam(rom_window,3);
+                    rom_dimfe = twparam(rom_window,4);
+                }
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
@@ -1047,7 +1063,11 @@ int main(int argc, char *argv[])
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0) {
                             outfile_twp << tOverlapMidpoint << ", ";
-                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                            if (rom_sample_RHS)
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            else
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
                         delete samplerLast;
                         samplerLast = NULL;
@@ -1066,7 +1086,11 @@ int main(int argc, char *argv[])
                         sampler->Finalize(t, last_dt, S, cutoff);
                         if (myid == 0) {
                             outfile_twp << t << ", ";
-                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                            if (rom_sample_RHS)
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            else
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
                         delete sampler;
                     }
@@ -1096,9 +1120,15 @@ int main(int argc, char *argv[])
                     rom_dimx = twparam(rom_window,0);
                     rom_dimv = twparam(rom_window,1);
                     rom_dime = twparam(rom_window,2);
-                    numSampX = twparam(rom_window,3);
-                    numSampV = twparam(rom_window,4);
-                    numSampE = twparam(rom_window,5);
+                    if (rom_sample_RHS)
+                    {
+                        rom_dimfv = twparam(rom_window,3);
+                        rom_dimfe = twparam(rom_window,4);
+                    }
+                    const int oss = rom_sample_RHS ? 5 : 3;
+                    numSampX = twparam(rom_window,oss);
+                    numSampV = twparam(rom_window,oss+1);
+                    numSampE = twparam(rom_window,oss+2);
 
                     delete basis;
                     timeLoopTimer.Stop();
@@ -1235,7 +1265,12 @@ int main(int argc, char *argv[])
 
         if (myid == 0 && usingWindows) {
             outfile_twp << t << ", ";
-            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+
+            if (rom_sample_RHS)
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                            << cutoff[3] << ", " << cutoff[4] << "\n";
+            else
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
         delete sampler;
         delete samplerLast;

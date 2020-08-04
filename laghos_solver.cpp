@@ -441,7 +441,8 @@ void LagrangianHydroOperator::MultMv(const Vector &u, Vector &v)
 
     for (int i=0; i<ess_tdofs.Size(); ++i)
     {
-        v[ess_tdofs[i]] = 0.0;
+        //v[ess_tdofs[i]] = 0.0;
+        v[ess_tdofs[i]] = u[ess_tdofs[i]];
     }
 }
 

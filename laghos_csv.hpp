@@ -64,7 +64,7 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
     return 0;
 }
 
-int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus)
+int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs)
 {
     if (printStatus) cout << "Reading time window parameters from file " << twfile << endl;
 
@@ -78,10 +78,10 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
 
     // Parameters to read for each time window:
     // end time, rdimx, rdimv, rdime
-    const int nparamRead = 4; // number of parameters to read for each time window
+    const int nparamRead = rhs ? 6 : 4; // number of parameters to read for each time window
 
     // Add 3 more parameters for nsamx, nsamv, nsame
-    const int nparam = 7;
+    const int nparam = nparamRead + 3;
 
     twep.SetSize(nw);
     twparam.SetSize(nw, nparam - 1);
@@ -115,13 +115,17 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
             twparam(count,i) = stoi(row[i+1]);
 
         // Setting nsamx, nsamv, nsame
-        twparam(count, 3) = sFactor[0] * twparam(count, 0);
-        twparam(count, 4) = sFactor[1] * twparam(count, 1);
-        twparam(count, 5) = sFactor[2] * twparam(count, 2);
+        twparam(count, nparamRead-1) = sFactor[0] * twparam(count, 0);
+        twparam(count, nparamRead)   = sFactor[1] * twparam(count, rhs ? 3 : 1);
+        twparam(count, nparamRead+1) = sFactor[2] * twparam(count, rhs ? 4 : 2);
 
-        if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
-                                  << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", nsamx " << twparam(count,3)
-                                  << ", nsamv " << twparam(count,4) << ", nsame " << twparam(count,5) << endl;
+        if (rhs && printStatus) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
+                                         << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", rdimfv " << twparam(count,3)
+                                         << ", rdimfe " << twparam(count,4) << ", nsamx " << twparam(count,5)
+                                         << ", nsamv " << twparam(count,6) << ", nsame " << twparam(count,7) << endl;
+        else if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
+                                       << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", nsamx " << twparam(count,3)
+                                       << ", nsamv " << twparam(count,4) << ", nsame " << twparam(count,5) << endl;
 
         count++;
     }

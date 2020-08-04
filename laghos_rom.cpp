@@ -50,6 +50,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     const bool sampleV = generator_V->isNextSample(t);
 
+    const bool sampleFv = generator_Fv->isNextSample(t);  // TODO: use this. So far, it seems sampleV == true on every step.
+
     if (sampleV)
     {
         if (rank == 0)
@@ -287,12 +289,11 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
         if (sampleF)
         {
-            int dummy;
             cout << "Fv basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, dummy);
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
 
             cout << "Fe basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, dummy);
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
         }
     }
 
@@ -1294,13 +1295,10 @@ void ROM_Basis::RestrictFromSampleMesh_V(const Vector &usp, Vector &u) const
     MFEM_VERIFY(u.Size() == rdimv, "");
     MFEM_VERIFY(usp.Size() == size_H1_sp, "");
 
-    // Select entries out of usp on the sample mesh.
-    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spV)(i) = usp[i];
 
-    for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = usp[s2sp_V[i]];
-
-    BVsp->transposeMult(*sV, *rV);
+    BVsp->transposeMult(*spV, *rV);
 
     for (int i=0; i<rdimv; ++i)
         u[i] = (*rV)(i);
@@ -1311,13 +1309,10 @@ void ROM_Basis::RestrictFromSampleMesh_E(const Vector &usp, Vector &u) const
     MFEM_VERIFY(u.Size() == rdime, "");
     MFEM_VERIFY(usp.Size() == size_L2_sp, "");
 
-    // Select entries out of usp on the sample mesh.
-    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
+    for (int i=0; i<size_L2_sp; ++i)
+        (*spE)(i) = usp[i];
 
-    for (int i=0; i<numSamplesE; ++i)
-        (*sE)(i) = usp[s2sp_E[i]];
-
-    BEsp->transposeMult(*sE, *rE);
+    BEsp->transposeMult(*spE, *rE);
 
     for (int i=0; i<rdime; ++i)
         u[i] = (*rE)(i);
