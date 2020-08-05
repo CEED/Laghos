@@ -278,6 +278,7 @@ public:
         delete BsinvX;
         delete BsinvV;
         delete BsinvE;
+        delete BX0;
     }
 
     void ReadSolutionBases(const int window);
@@ -411,6 +412,7 @@ private:
     CAROM::Vector *initXsp = 0;
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
+    CAROM::Vector *BX0 = NULL;
 
     int numSamplesX = 0;
     int numSamplesV = 0;

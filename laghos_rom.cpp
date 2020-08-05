@@ -1057,6 +1057,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         // Compute reduced matrix BsinvX = BXsp^T BVsp
         BsinvX = BXsp->transposeMult(BVsp);
 
+        BX0 = BXsp->transposeMult(initVsp);
+        MFEM_VERIFY(BX0->dim() == rdimx, "");
+
         // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
         CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
         CAROM::Matrix *prod2 = BsinvV->mult(prod1);
@@ -1484,10 +1487,9 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
         for (int i=0; i<rdimv; ++i)
             (*rV)(i) = x[rdimx + i];
 
-        // TODO: might need to add v0
         BsinvX->mult(*rV, *rX);
         for (int i=0; i<rdimx; ++i)
-            y[i] = (*rX)(i);
+            y[i] = (*rX)(i) + (*BX0)(i);
     }
 }
 
