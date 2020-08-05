@@ -338,7 +338,7 @@ public:
     void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
     void GetBasisVectorE(const bool sp, const int id, Vector &v) const;
 
-    CAROM::Matrix *GetBVsp() { 
+    CAROM::Matrix *GetBVsp() {
         return BVsp;
     }
 
@@ -493,7 +493,7 @@ private:
     void ComputeReducedMv();
     void ComputeReducedMe();
 
-    void InnerProductReducedMv(const int id1, const int id2, double& ip); 
+    void InnerProductReducedMv(const int id1, const int id2, double& ip);
     void InnerProductReducedMe(const int id1, const int id2, double& ip);
     void InducedGramSchmidtMv();
     void InducedGramSchmidtMe();

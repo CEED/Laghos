@@ -328,7 +328,8 @@ int main(int argc, char *argv[])
         numWindows = 1;  // one window for the entire simulation
     }
 
-    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 1;
+    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 2;
+    MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
     MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     StopWatch totalTimer;

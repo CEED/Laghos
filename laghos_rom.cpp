@@ -86,6 +86,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                     lhoper->MultMv(Xdiff, Mv);
                     generator_Fv->takeSample(Mv.GetData(), t, dt);
                 }
+
+                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+                MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
             }
         }
         else
@@ -136,6 +140,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                     lhoper->MultMe(Ediff, Me);
                     generator_Fe->takeSample(Me.GetData(), t, dt);
                 }
+
+                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+                MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
             }
         }
         else
@@ -199,6 +207,10 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_X->takeSample(X.GetData(), t, dt);
 
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+
     generator_X->endSamples();
 
     if (offsetInit)
@@ -227,10 +239,18 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
                 lhoper->MultMv(Xdiff, Mv);
                 generator_Fv->takeSample(Mv.GetData(), t, dt);
             }
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
         }
     }
     else
         generator_V->takeSample(V.GetData(), t, dt);
+
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
     generator_V->endSamples();
 
@@ -260,10 +280,18 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
                 lhoper->MultMe(Ediff, Me);
                 generator_Fe->takeSample(Me.GetData(), t, dt);
             }
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
         }
     }
     else
         generator_E->takeSample(E.GetData(), t, dt);
+
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
     generator_E->endSamples();
 
@@ -1630,7 +1658,7 @@ void ROM_Operator::InducedGramSchmidtMv()
     {
         const int size_H1_sp = basis->SolutionSizeH1SP();
         const int rdimv = basis->GetDimV();
-        CAROM::Matrix *Basis_V = basis->GetBVsp(); 
+        CAROM::Matrix *Basis_V = basis->GetBVsp();
         double factor;
 
         InnerProductReducedMv(0, 0, factor);
@@ -1638,13 +1666,13 @@ void ROM_Operator::InducedGramSchmidtMv()
         {
             (*Basis_V)(k,0) /= sqrt(factor);
         }
-        
-        for (int j=1; j<rdimv; ++j) 
+
+        for (int j=1; j<rdimv; ++j)
         {
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMv(j, i, factor);
-                for (int k=0; k<size_H1_sp; ++k) 
+                for (int k=0; k<size_H1_sp; ++k)
                 {
                     (*Basis_V)(k,j) -= factor*(*Basis_V)(k,i);
                 }
@@ -1668,7 +1696,7 @@ void ROM_Operator::InducedGramSchmidtMe()
     {
         const int size_L2_sp = basis->SolutionSizeL2SP();
         const int rdime = basis->GetDimE();
-        CAROM::Matrix *Basis_E = basis->GetBEsp(); 
+        CAROM::Matrix *Basis_E = basis->GetBEsp();
         double factor;
 
         InnerProductReducedMe(0, 0, factor);
@@ -1676,13 +1704,13 @@ void ROM_Operator::InducedGramSchmidtMe()
         {
             (*Basis_E)(k,0) /= sqrt(factor);
         }
-        
-        for (int j=1; j<rdime; ++j) 
+
+        for (int j=1; j<rdime; ++j)
         {
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMe(j, i, factor);
-                for (int k=0; k<size_L2_sp; ++k) 
+                for (int k=0; k<size_L2_sp; ++k)
                 {
                     (*Basis_E)(k,j) -= factor*(*Basis_E)(k,i);
                 }
