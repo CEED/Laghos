@@ -372,13 +372,13 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                      int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
                      const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
-                     const bool RHSbasis_, const int window)
+                     const bool RHSbasis_, const bool GramSchmidt, const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
       rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_)
+      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -440,7 +440,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
-        SetupHyperreduction(H1FESpace, L2FESpace, nH1, window);
+        SetupHyperreduction(H1FESpace, L2FESpace, useGramSchmidt, nH1, window);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -622,7 +622,7 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window)
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, const bool GramSchmidt, Array<int>& nH1, const int window)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
 
@@ -1052,6 +1052,14 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_H1_space;
     delete sp_L2_space;
 
+    if (!GramSchmidt) 
+    {
+        ComputeReducedRHS();
+    }
+}
+
+void ROM_Basis::ComputeReducedRHS()
+{
     if (RHSbasis && rank == 0)
     {
         // Compute reduced matrix BsinvX = BXsp^T BVsp
@@ -1354,9 +1362,9 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
-                           FiniteElementCollection *L2fec, const bool reduceMass)
+                           FiniteElementCollection *L2fec, const bool reduceMass, const bool GramSchmidt)
     : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
-      rank(b->GetRank()), hyperreduce(hyperreduce_), useReducedMv(reduceMass), useReducedMe(reduceMass)
+      rank(b->GetRank()), hyperreduce(hyperreduce_), useReducedMv(reduceMass), useReducedMe(reduceMass), useGramSchmidt(GramSchmidt)
 {
     MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
 
@@ -1433,7 +1441,7 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType(), useReducedMv, useReducedMe);
+                H1fec->GetBasisType(), (useReducedMv || useGramSchmidt), (useReducedMe || useGramSchmidt));
     }
     else if (!hyperreduce)
     {
@@ -1590,7 +1598,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             }
 
             operSP->Mult(fx, fy);
-            basis->RestrictFromSampleMesh(fy, y, true, useReducedMv, &invMvROM, &invMeROM);
+            basis->RestrictFromSampleMesh(fy, y, true, (useReducedMv && !useGramSchmidt), &invMvROM, &invMeROM);
             basis->Set_dxdt_Reduced(x, y);
 
             operSP->ResetQuadratureData();
@@ -1663,10 +1671,12 @@ void ROM_Operator::InducedGramSchmidtMv()
         CAROM::Matrix *Basis_V = basis->GetBVsp();
         double factor;
 
+        CoordinateBVsp.SetSize(rdimv);
         InnerProductReducedMv(0, 0, factor);
+        CoordinateBVsp(0,0) = sqrt(factor);
         for (int k=0; k<size_H1_sp; ++k)
         {
-            (*Basis_V)(k,0) /= sqrt(factor);
+            (*Basis_V)(k,0) /= CoordinateBVsp(0,0);
         }
 
         for (int j=1; j<rdimv; ++j)
@@ -1674,15 +1684,17 @@ void ROM_Operator::InducedGramSchmidtMv()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMv(j, i, factor);
+                CoordinateBVsp(i,j) = factor; 
                 for (int k=0; k<size_H1_sp; ++k)
                 {
-                    (*Basis_V)(k,j) -= factor*(*Basis_V)(k,i);
+                    (*Basis_V)(k,j) -= CoordinateBVsp(i,j)*(*Basis_V)(k,i);
                 }
             }
             InnerProductReducedMv(j, j, factor);
+            CoordinateBVsp(j,j) = sqrt(factor);
             for (int k=0; k<size_H1_sp; ++k)
             {
-                (*Basis_V)(k,j) /= sqrt(factor);
+                (*Basis_V)(k,j) /= CoordinateBVsp(j,j);
             }
         }
     }
@@ -1701,10 +1713,12 @@ void ROM_Operator::InducedGramSchmidtMe()
         CAROM::Matrix *Basis_E = basis->GetBEsp();
         double factor;
 
+        CoordinateBEsp.SetSize(rdime);
         InnerProductReducedMe(0, 0, factor);
+        CoordinateBEsp(0,0) = sqrt(factor);
         for (int k=0; k<size_L2_sp; ++k)
         {
-            (*Basis_E)(k,0) /= sqrt(factor);
+            (*Basis_E)(k,0) /= CoordinateBEsp(0,0);
         }
 
         for (int j=1; j<rdime; ++j)
@@ -1712,15 +1726,17 @@ void ROM_Operator::InducedGramSchmidtMe()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMe(j, i, factor);
+                CoordinateBEsp(i,j) = factor; 
                 for (int k=0; k<size_L2_sp; ++k)
                 {
-                    (*Basis_E)(k,j) -= factor*(*Basis_E)(k,i);
+                    (*Basis_E)(k,j) -= CoordinateBEsp(i,j)*(*Basis_E)(k,i);
                 }
             }
             InnerProductReducedMe(j, j, factor);
+            CoordinateBEsp(j,j) = sqrt(factor);
             for (int k=0; k<size_L2_sp; ++k)
             {
-                (*Basis_E)(k,j) /= sqrt(factor);
+                (*Basis_E)(k,j) /= CoordinateBEsp(j,j);
             }
         }
     }
@@ -1728,6 +1744,133 @@ void ROM_Operator::InducedGramSchmidtMe()
     {
         MFEM_VERIFY(false, "TODO");
     }
+}
+
+void ROM_Operator::RedoInducedGramSchmidtMv()
+{
+    if (hyperreduce)
+    {
+        const int size_H1_sp = basis->SolutionSizeH1SP();
+        const int rdimv = basis->GetDimV();
+        CAROM::Matrix *Basis_V = basis->GetBVsp();
+        for (int j=rdimv-1; j>-1; --j)
+        {
+            for (int k=0; k<size_H1_sp; ++k)
+            {
+                (*Basis_V)(k,j) *= CoordinateBVsp(j,j);
+            }
+            for (int i=0; i<j; ++i)
+            {
+                for (int k=0; k<size_H1_sp; ++k)
+                {
+                    (*Basis_V)(k,j) += CoordinateBVsp(i,j)*(*Basis_V)(k,i);
+                }
+            }
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::RedoInducedGramSchmidtMe()
+{
+    if (hyperreduce)
+    {
+        const int size_L2_sp = basis->SolutionSizeL2SP();
+        const int rdime = basis->GetDimE();
+        CAROM::Matrix *Basis_E = basis->GetBEsp();
+        for (int j=rdime-1; j>-1; --j)
+        {
+            for (int k=0; k<size_L2_sp; ++k)
+            {
+                (*Basis_E)(k,j) *= CoordinateBEsp(j,j);
+            }
+            for (int i=0; i<j; ++i)
+            {
+                for (int k=0; k<size_L2_sp; ++k)
+                {
+                    (*Basis_E)(k,j) += CoordinateBEsp(i,j)*(*Basis_E)(k,i);
+                }
+            }
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
+{
+    const int rdimx = basis->GetDimX();
+    const int rdimv = basis->GetDimV();
+    const int rdime = basis->GetDimE();
+
+    InducedGramSchmidtMv();
+    InducedGramSchmidtMe();
+    basis->ComputeReducedRHS();
+    if (useReducedMv)
+    {
+        ComputeReducedMv();
+        ComputeReducedMe();
+    }
+
+    Vector rV(rdimv);
+    Vector rV_gs(rdimv);
+    for (int i=0; i<rdimv; ++i)
+    {
+        rV[i] = S[rdimx + i];
+    }
+    CoordinateBVsp.Mult(rV,rV_gs);
+    for (int i=0; i<rdimv; ++i)
+        S[rdimx + i] = rV_gs[i];
+
+    Vector rE(rdime);
+    Vector rE_gs(rdime);
+    for (int i=0; i<rdime; ++i)
+        rE[i] = S[rdimx + rdimv + i];
+    CoordinateBEsp.Mult(rE,rE_gs);
+    for (int i=0; i<rdime; ++i)
+        S[rdimx + rdimv + i] = rE_gs[i];
+}
+
+void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
+{
+    const int rdimx = basis->GetDimX();
+    const int rdimv = basis->GetDimV();
+    const int rdime = basis->GetDimE();
+
+    RedoInducedGramSchmidtMv();
+    RedoInducedGramSchmidtMe();
+    basis->ComputeReducedRHS();
+    if (useReducedMv)
+    {
+        ComputeReducedMv();
+        ComputeReducedMe();
+    }
+
+    CoordinateBVsp.Invert();
+    Vector rV(rdimv);
+    Vector rV_gs(rdimv);
+    for (int i=0; i<rdimv; ++i)
+        rV_gs[i] = S[rdimx + i];
+    CoordinateBVsp.Mult(rV_gs,rV);
+    for (int i=0; i<rdimv; ++i)
+        S[rdimx + i] = rV[i];
+
+    CoordinateBEsp.Invert();
+    Vector rE(rdime);
+    Vector rE_gs(rdime);
+    for (int i=0; i<rdime; ++i)
+        rE_gs[i] = S[rdimx + rdimv + i];
+    CoordinateBEsp.Mult(rE_gs,rE);
+    for (int i=0; i<rdime; ++i)
+        S[rdimx + rdimv + i] = rE[i];
+
+    CoordinateBVsp.Clear();
+    CoordinateBEsp.Clear();
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const

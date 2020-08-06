@@ -252,7 +252,7 @@ public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
               int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
-              const bool RHSbasis_ = false, const int window=0);
+              const bool RHSbasis_ = false, const bool GramSchmidt = false, const int window=0);
 
     ~ROM_Basis()
     {
@@ -326,6 +326,10 @@ public:
         return rank;
     }
 
+    int GetDimX() const {
+        return rdimx;
+    }
+
     int GetDimV() const {
         return rdimv;
     }
@@ -347,6 +351,8 @@ public:
         return BEsp;
     }
 
+    void ComputeReducedRHS();
+
     MPI_Comm comm;
 
 private:
@@ -354,6 +360,7 @@ private:
     const bool hyperreduce;
     const bool offsetInit;
     const bool RHSbasis;
+    const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
@@ -418,7 +425,7 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, const bool GramSchmidt, Array<int>& nH1, const int window);
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -429,7 +436,7 @@ public:
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
                  H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
-                 const bool reduceMass = false);
+                 const bool reduceMass = false, const bool GramSchmidt = false);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -449,6 +456,8 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
+    void InducedGramSchmidtInitialize(Vector &S);
+    void InducedGramSchmidtFinalize(Vector &S);
 
     ~ROM_Operator()
     {
@@ -495,10 +504,14 @@ private:
     void ComputeReducedMv();
     void ComputeReducedMe();
 
+    bool useGramSchmidt;
+    DenseMatrix CoordinateBVsp, CoordinateBEsp;
     void InnerProductReducedMv(const int id1, const int id2, double& ip);
     void InnerProductReducedMe(const int id1, const int id2, double& ip);
     void InducedGramSchmidtMv();
     void InducedGramSchmidtMe();
+    void RedoInducedGramSchmidtMv();
+    void RedoInducedGramSchmidtMe();
 };
 
 #endif // MFEM_LAGHOS_ROM

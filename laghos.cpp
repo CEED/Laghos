@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     bool rom_reduceMass = false;
     bool rom_sample_RHS = false;
+    bool rom_GramSchmidt = false;
     int rom_sample_dim = 0;
     const char *normtype_char = "l2";
     Array<double> twep;
@@ -288,10 +289,10 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
                    "Enable or disable reduction of V and E mass matrices.");
-    args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
-                   "Enable or disable reduction of V and E mass matrices.");
     args.AddOption(&rom_sample_RHS, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
                    "Sample RHS");
+    args.AddOption(&rom_GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
+                   "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
 
     args.Parse();
     if (!args.Good())
@@ -800,14 +801,14 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS);
+                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass);
+                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -833,11 +834,11 @@ int main(int argc, char *argv[])
             }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -900,7 +901,7 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -933,6 +934,10 @@ int main(int argc, char *argv[])
         // usual time loop when rom_restore phase is false.
         std::ofstream outfile_tw_steps("run/tw_steps");
         timeLoopTimer.Start();
+        if (rom_hyperreduce && rom_GramSchmidt) 
+        {
+            romOper->InducedGramSchmidtInitialize(romS);
+        }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
@@ -1116,7 +1121,13 @@ int main(int argc, char *argv[])
                         cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
 
                     if (rom_hyperreduce)
+                    {
+                        if (rom_GramSchmidt)
+                        {
+                            romOper->InducedGramSchmidtFinalize(romS); 
+                        }
                         basis->LiftROMtoFOM(romS, S);
+                    }
 
                     rom_dimx = twparam(rom_window,0);
                     rom_dimv = twparam(rom_window,1);
@@ -1135,7 +1146,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_window);
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 
@@ -1143,8 +1154,12 @@ int main(int argc, char *argv[])
 
                     delete romOper;
                     romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass);
+                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
 
+                    if (rom_hyperreduce && rom_GramSchmidt)
+                    {
+                        romOper->InducedGramSchmidtInitialize(romS); 
+                    }
                     ode_solver->Init(*romOper);
                 }
             }
@@ -1251,8 +1266,12 @@ int main(int argc, char *argv[])
         outfile_tw_steps.close();
     }
 
-    if (rom_hyperreduce)
+    if (rom_hyperreduce) 
     {
+        if (rom_GramSchmidt)
+        {
+            romOper->InducedGramSchmidtFinalize(romS);
+        }
         basis->LiftROMtoFOM(romS, S);
     }
 
