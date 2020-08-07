@@ -143,7 +143,10 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_X->takeSample(X.GetData(), t, dt);
 
-    generator_X->endSamples();
+    if (writeSnapshots)
+        generator_X->writeSnapshot();
+    else
+        generator_X->endSamples();
 
     if (offsetInit)
     {
@@ -157,7 +160,10 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_V->takeSample(V.GetData(), t, dt);
 
-    generator_V->endSamples();
+    if (writeSnapshots)
+        generator_V->writeSnapshot();
+    else
+        generator_V->endSamples();
 
     if (offsetInit)
     {
@@ -171,9 +177,12 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_E->takeSample(E.GetData(), t, dt);
 
-    generator_E->endSamples();
+    if (writeSnapshots)
+        generator_E->writeSnapshot();
+    else
+        generator_E->endSamples();
 
-    if (rank == 0)
+    if (rank == 0 && !writeSnapshots)
     {
         cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
@@ -902,12 +911,6 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    /*
-    basisX = ReadBasisROM(rank, ROMBasisName::X, H1size, (staticSVD ? rowOffsetH1 : 0), rdimx);
-    basisV = ReadBasisROM(rank, ROMBasisName::V, H1size, (staticSVD ? rowOffsetH1 : 0), rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E, L2size, (staticSVD ? rowOffsetL2 : 0), rdime);
-    */
-
     basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
     basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
     basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
@@ -1078,7 +1081,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
 }
 
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
-                           FunctionCoefficient& rho_coeff, FunctionCoefficient& mat_coeff,
+                           Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
