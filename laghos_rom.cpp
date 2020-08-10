@@ -1666,12 +1666,16 @@ void ROM_Operator::InducedGramSchmidtMv()
 {
     if (hyperreduce)
     {
+        // Induced Gram Schmidt normalization is equivalent to
+        // factorizing the basis into X = QR,
+        // where size(Q) = size(X), Q is M-orthonormal,
+        // and R is square and upper triangular.
         const int size_H1_sp = basis->SolutionSizeH1SP();
         const int rdimv = basis->GetDimV();
-        CAROM::Matrix *Basis_V = basis->GetBVsp();
+        CAROM::Matrix *Basis_V = basis->GetBVsp(); // Matrix X, will be substituted by matrix Q
         double factor;
 
-        CoordinateBVsp.SetSize(rdimv);
+        CoordinateBVsp.SetSize(rdimv); // Matrix R
         InnerProductReducedMv(0, 0, factor);
         CoordinateBVsp(0,0) = sqrt(factor);
         for (int k=0; k<size_H1_sp; ++k)
@@ -1750,6 +1754,8 @@ void ROM_Operator::RedoInducedGramSchmidtMv()
 {
     if (hyperreduce)
     {
+        // Get back the original basis X from Q by undoing all the operations
+        // in the induced Gram Schmidt normalization process.
         const int size_H1_sp = basis->SolutionSizeH1SP();
         const int rdimv = basis->GetDimV();
         CAROM::Matrix *Basis_V = basis->GetBVsp();
@@ -1817,6 +1823,9 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
         ComputeReducedMe();
     }
 
+    // With solution representation by s = Xc = Qd,
+    // the coefficients of s with respect to Q is
+    // obtained by d = Rc.
     for (int i=0; i<rdimv; ++i)
     {
         S[rdimx+i] *= CoordinateBVsp(i,i);
@@ -1851,6 +1860,9 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
         ComputeReducedMe();
     }
 
+    // With solution representation by s = Xc = Qd,
+    // the coefficients of s with respect to X is
+    // obtained from c = R\d.
     for (int i=rdimv-1; i>-1; --i)
     {
         for (int j = rdimv-1; j>i; --j)
