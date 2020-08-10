@@ -1052,7 +1052,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_H1_space;
     delete sp_L2_space;
 
-    if (!GramSchmidt) 
+    if (!GramSchmidt)
     {
         ComputeReducedRHS();
     }
@@ -1684,7 +1684,7 @@ void ROM_Operator::InducedGramSchmidtMv()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMv(j, i, factor);
-                CoordinateBVsp(i,j) = factor; 
+                CoordinateBVsp(i,j) = factor;
                 for (int k=0; k<size_H1_sp; ++k)
                 {
                     (*Basis_V)(k,j) -= CoordinateBVsp(i,j)*(*Basis_V)(k,i);
@@ -1726,7 +1726,7 @@ void ROM_Operator::InducedGramSchmidtMe()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMe(j, i, factor);
-                CoordinateBEsp(i,j) = factor; 
+                CoordinateBEsp(i,j) = factor;
                 for (int k=0; k<size_L2_sp; ++k)
                 {
                     (*Basis_E)(k,j) -= CoordinateBEsp(i,j)*(*Basis_E)(k,i);
@@ -1817,23 +1817,23 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
         ComputeReducedMe();
     }
 
-    Vector rV(rdimv);
-    Vector rV_gs(rdimv);
     for (int i=0; i<rdimv; ++i)
     {
-        rV[i] = S[rdimx + i];
+        S[rdimx+i] *= CoordinateBVsp(i,i);
+        for (int j=i+1; j<rdimv; ++j)
+        {
+            S[rdimx+i] += CoordinateBVsp(i,j)*S[rdimx+j];
+        }
     }
-    CoordinateBVsp.Mult(rV,rV_gs);
-    for (int i=0; i<rdimv; ++i)
-        S[rdimx + i] = rV_gs[i];
 
-    Vector rE(rdime);
-    Vector rE_gs(rdime);
     for (int i=0; i<rdime; ++i)
-        rE[i] = S[rdimx + rdimv + i];
-    CoordinateBEsp.Mult(rE,rE_gs);
-    for (int i=0; i<rdime; ++i)
-        S[rdimx + rdimv + i] = rE_gs[i];
+    {
+        S[rdimx+rdimv+i] *= CoordinateBEsp(i,i);
+        for (int j=i+1; j<rdime; ++j)
+        {
+            S[rdimx+rdimv+i] += CoordinateBEsp(i,j)*S[rdimx+rdimv+j];
+        }
+    }
 }
 
 void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
@@ -1842,32 +1842,32 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
     const int rdimv = basis->GetDimV();
     const int rdime = basis->GetDimE();
 
-    RedoInducedGramSchmidtMv();
-    RedoInducedGramSchmidtMe();
-    basis->ComputeReducedRHS();
+    //RedoInducedGramSchmidtMv();
+    //RedoInducedGramSchmidtMe();
+    //basis->ComputeReducedRHS();
     if (useReducedMv)
     {
         ComputeReducedMv();
         ComputeReducedMe();
     }
 
-    CoordinateBVsp.Invert();
-    Vector rV(rdimv);
-    Vector rV_gs(rdimv);
-    for (int i=0; i<rdimv; ++i)
-        rV_gs[i] = S[rdimx + i];
-    CoordinateBVsp.Mult(rV_gs,rV);
-    for (int i=0; i<rdimv; ++i)
-        S[rdimx + i] = rV[i];
+    for (int i=rdimv-1; i>-1; --i)
+    {
+        for (int j = rdimv-1; j>i; --j)
+        {
+            S[rdimx+i] -= CoordinateBVsp(i,j)*S[rdimx+j];
+        }
+        S[rdimx+i] /= CoordinateBVsp(i,i);
+    }
 
-    CoordinateBEsp.Invert();
-    Vector rE(rdime);
-    Vector rE_gs(rdime);
-    for (int i=0; i<rdime; ++i)
-        rE_gs[i] = S[rdimx + rdimv + i];
-    CoordinateBEsp.Mult(rE_gs,rE);
-    for (int i=0; i<rdime; ++i)
-        S[rdimx + rdimv + i] = rE[i];
+    for (int i=rdime-1; i>-1; --i)
+    {
+        for (int j = rdime-1; j>i; --j)
+        {
+            S[rdimx+rdimv+i] -= CoordinateBEsp(i,j)*S[rdimx+rdimv+j];
+        }
+        S[rdimx+rdimv+i] /= CoordinateBEsp(i,i);
+    }
 
     CoordinateBVsp.Clear();
     CoordinateBEsp.Clear();
