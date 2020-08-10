@@ -211,7 +211,10 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
     MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
-    generator_X->endSamples();
+    if (writeSnapshots)
+        generator_X->writeSnapshot();
+    else
+        generator_X->endSamples();
 
     if (offsetInit)
     {
@@ -252,7 +255,10 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
     MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
-    generator_V->endSamples();
+    if (writeSnapshots)
+        generator_V->writeSnapshot();
+    else
+        generator_V->endSamples();
 
     if (offsetInit)
     {
@@ -293,15 +299,26 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
     MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
-    generator_E->endSamples();
+    if (writeSnapshots)
+        generator_E->writeSnapshot();
+    else
+        generator_E->endSamples();
 
     if (sampleF)
     {
-        generator_Fv->endSamples();
-        generator_Fe->endSamples();
+        if (writeSnapshots)
+        {
+            generator_Fv->writeSnapshot();
+            generator_Fe->writeSnapshot();
+        }
+        else
+        {
+            generator_Fv->endSamples();
+            generator_Fe->endSamples();
+        }
     }
 
-    if (rank == 0)
+    if (rank == 0 && !writeSnapshots)
     {
         cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
@@ -1052,7 +1069,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_H1_space;
     delete sp_L2_space;
 
-    if (!GramSchmidt) 
+    if (!GramSchmidt)
     {
         ComputeReducedRHS();
     }
@@ -1116,12 +1133,6 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    /*
-    basisX = ReadBasisROM(rank, ROMBasisName::X, H1size, (staticSVD ? rowOffsetH1 : 0), rdimx);
-    basisV = ReadBasisROM(rank, ROMBasisName::V, H1size, (staticSVD ? rowOffsetH1 : 0), rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E, L2size, (staticSVD ? rowOffsetL2 : 0), rdime);
-    */
-
     basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
     basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
     basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
@@ -1358,7 +1369,7 @@ void ROM_Basis::RestrictFromSampleMesh_E(const Vector &usp, Vector &u) const
 }
 
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
-                           FunctionCoefficient& rho_coeff, FunctionCoefficient& mat_coeff,
+                           Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
@@ -1684,7 +1695,7 @@ void ROM_Operator::InducedGramSchmidtMv()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMv(j, i, factor);
-                CoordinateBVsp(i,j) = factor; 
+                CoordinateBVsp(i,j) = factor;
                 for (int k=0; k<size_H1_sp; ++k)
                 {
                     (*Basis_V)(k,j) -= CoordinateBVsp(i,j)*(*Basis_V)(k,i);
@@ -1726,7 +1737,7 @@ void ROM_Operator::InducedGramSchmidtMe()
             for (int i=0; i<j; ++i)
             {
                 InnerProductReducedMe(j, i, factor);
-                CoordinateBEsp(i,j) = factor; 
+                CoordinateBEsp(i,j) = factor;
                 for (int k=0; k<size_L2_sp; ++k)
                 {
                     (*Basis_E)(k,j) -= CoordinateBEsp(i,j)*(*Basis_E)(k,i);

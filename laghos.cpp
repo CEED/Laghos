@@ -188,6 +188,8 @@ int main(int argc, char *argv[])
     bool rom_sample_RHS = false;
     bool rom_GramSchmidt = false;
     int rom_sample_dim = 0;
+    double rhoFactor = 1.0;
+    int rom_paramID = -1;
     const char *normtype_char = "l2";
     Array<double> twep;
     Array2D<int> twparam;
@@ -293,7 +295,8 @@ int main(int argc, char *argv[])
                    "Sample RHS");
     args.AddOption(&rom_GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
-
+    args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.Parse();
     if (!args.Good())
     {
@@ -615,7 +618,8 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction rho(&L2FESpace);
-    FunctionCoefficient rho_coeff(rho0);
+    FunctionCoefficient rho_coeff0(rho0);
+    ProductCoefficient rho_coeff(rhoFactor, rho_coeff0);
     L2_FECollection l2_fec(order_e, pmesh->Dimension());
     ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
     ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -763,7 +767,8 @@ int main(int argc, char *argv[])
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim, rom_sample_RHS, &oper);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
+                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -934,7 +939,7 @@ int main(int argc, char *argv[])
         // usual time loop when rom_restore phase is false.
         std::ofstream outfile_tw_steps("run/tw_steps");
         timeLoopTimer.Start();
-        if (rom_hyperreduce && rom_GramSchmidt) 
+        if (rom_hyperreduce && rom_GramSchmidt)
         {
             romOper->InducedGramSchmidtInitialize(romS);
         }
@@ -1103,7 +1108,8 @@ int main(int argc, char *argv[])
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim, rom_sample_RHS, &oper);
+                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
+                                              rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
                     sampler->SampleSolution(t, dt, S);
                 }
                 samplerTimer.Stop();
@@ -1124,7 +1130,7 @@ int main(int argc, char *argv[])
                     {
                         if (rom_GramSchmidt)
                         {
-                            romOper->InducedGramSchmidtFinalize(romS); 
+                            romOper->InducedGramSchmidtFinalize(romS);
                         }
                         basis->LiftROMtoFOM(romS, S);
                     }
@@ -1158,7 +1164,7 @@ int main(int argc, char *argv[])
 
                     if (rom_hyperreduce && rom_GramSchmidt)
                     {
-                        romOper->InducedGramSchmidtInitialize(romS); 
+                        romOper->InducedGramSchmidtInitialize(romS);
                     }
                     ode_solver->Init(*romOper);
                 }
@@ -1266,7 +1272,7 @@ int main(int argc, char *argv[])
         outfile_tw_steps.close();
     }
 
-    if (rom_hyperreduce) 
+    if (rom_hyperreduce)
     {
         if (rom_GramSchmidt)
         {

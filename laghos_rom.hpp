@@ -29,6 +29,8 @@ const char* const Fv = "run/basisFv";
 const char* const Fe = "run/basisFe";
 };
 
+enum VariableName { X, V, E, Fv, Fe };
+
 class ROM_Sampler
 {
 public:
@@ -36,12 +38,12 @@ public:
                 const double t_final, const double initial_dt, Vector const& S_init,
                 const bool staticSVD = false, const bool useOffset = false, double energyFraction_=0.9999,
                 const int window=0, const int max_dim=0, const bool sample_RHS=false,
-                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL)
+                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL, const int parameterID=-1)
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_),
-          sampleF(sample_RHS), lhoper(FOMoper)
+          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0)
     {
         if (sampleF)
         {
@@ -60,18 +62,18 @@ public:
         if (staticSVD)
         {
             generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::X + std::to_string(window));
+                    BasisFileName(VariableName::X, window, parameterID));
             generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::V + std::to_string(window));
+                    BasisFileName(VariableName::V, window, parameterID));
             generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                    ROMBasisName::E + std::to_string(window));
+                    BasisFileName(VariableName::E, window, parameterID));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                        ROMBasisName::Fv + std::to_string(window));
+                        BasisFileName(VariableName::Fv, window, parameterID));
                 generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                        ROMBasisName::Fe + std::to_string(window));
+                        BasisFileName(VariableName::Fe, window, parameterID));
             }
         }
         else
@@ -187,6 +189,8 @@ private:
     const int rank;
     double energyFraction;
 
+    const bool writeSnapshots;
+
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
@@ -243,6 +247,35 @@ private:
         {
             dEdt[i] = (E[i] - E0[i]) / dt;
         }
+    }
+
+    std::string BasisFileName(VariableName v, const int window, const int parameter)
+    {
+        std::string fileName, path;
+
+        const std::string prefix = (parameter >= 0) ? "var" : "basis";
+
+        switch (v)
+        {
+        case VariableName::V:
+            fileName = "V" + std::to_string(window);
+            break;
+        case VariableName::E:
+            fileName = "E" + std::to_string(window);
+            break;
+        case VariableName::Fv:
+            fileName = "Fv" + std::to_string(window);
+            break;
+        case VariableName::Fe:
+            fileName = "Fe" + std::to_string(window);
+            break;
+        default:
+            fileName = "X" + std::to_string(window);
+        }
+
+        path = (parameter >= 0) ? "run/param" + std::to_string(parameter) + "_" : "run/";
+
+        return path + prefix + fileName;
     }
 };
 
@@ -431,7 +464,7 @@ private:
 class ROM_Operator : public TimeDependentOperator
 {
 public:
-    ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, FunctionCoefficient& rho_coeff,
+    ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, Coefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
