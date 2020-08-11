@@ -140,6 +140,19 @@ fi
 # RUN TESTS
 ###############################################################################
 
+case "$(uname -s)" in
+    Linux*)
+			SERIAL="srun -n 1 -p pdebug"
+			PARALLEL="srun -n 8 -p pdebug";;
+    Darwin*)
+			SERIAL="mpirun -n 1"
+			PARALLEL="mpirun -oversubscribe -n 8";;
+    *)
+			echo "The regression tests can only run on Linux and MAC."
+			exit 1
+esac
+
+
 # Test number counter
 testNum=0
 testNumFail=0
