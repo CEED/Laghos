@@ -1,4 +1,5 @@
 normtype=${normtype:-"l2"}
+set -o xtrace
 case $testtype in
   offline)
     ./laghos -m "$BASE_DIR"/data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -ef 0.9999 -normtype "$normtype" -nwin 4 -tw "$BASE_DIR"/tests/sedov-blast/sedov-blast-time-window.csv -writesol -romsvds

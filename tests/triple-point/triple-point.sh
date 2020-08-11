@@ -1,4 +1,5 @@
 normtype=${normtype:-"l2"}
+set -o xtrace
 case $testtype in
   offline)
     ./laghos -p 3 -m "$BASE_DIR"/data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds -normtype "$normtype"

@@ -1,4 +1,5 @@
 normtype=${normtype:-"l2"}
+set -o xtrace
 case $testtype in
   offline)
     ./laghos -p 4 -m "$BASE_DIR"/data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.12 -s 7 -pa -offline -normtype "$normtype" -writesol -romsvds
