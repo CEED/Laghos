@@ -50,7 +50,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     const bool sampleV = generator_V->isNextSample(t);
 
-    const bool sampleFv = generator_Fv->isNextSample(t);  // TODO: use this. So far, it seems sampleV == true on every step.
+    //TODO: use this, plus generator_Fv->computeNextSampleTime? So far, it seems sampleV == true on every step.
+    //const bool sampleFv = generator_Fv->isNextSample(t);
 
     if (sampleV)
     {
