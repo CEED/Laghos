@@ -458,7 +458,7 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, const bool GramSchmidt, Array<int>& nH1, const int window);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -539,12 +539,9 @@ private:
 
     bool useGramSchmidt;
     DenseMatrix CoordinateBVsp, CoordinateBEsp;
-    void InnerProductReducedMv(const int id1, const int id2, double& ip);
-    void InnerProductReducedMe(const int id1, const int id2, double& ip);
-    void InducedGramSchmidtMv();
-    void InducedGramSchmidtMe();
-    void RedoInducedGramSchmidtMv();
-    void RedoInducedGramSchmidtMe();
+    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
+    void InducedGramSchmidt(const int var, Vector &S);
+    void UndoInducedGramSchmidt(const int var, Vector &S);
 };
 
 #endif // MFEM_LAGHOS_ROM

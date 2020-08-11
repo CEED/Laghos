@@ -458,7 +458,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
-        SetupHyperreduction(H1FESpace, L2FESpace, useGramSchmidt, nH1, window);
+        SetupHyperreduction(H1FESpace, L2FESpace, nH1, window);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -640,7 +640,7 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, const bool GramSchmidt, Array<int>& nH1, const int window)
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
 
@@ -1070,7 +1070,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_H1_space;
     delete sp_L2_space;
 
-    if (!GramSchmidt)
+    if (!useGramSchmidt)
     {
         ComputeReducedRHS();
     }
@@ -1626,22 +1626,31 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     }
 }
 
-void ROM_Operator::InnerProductReducedMv(const int id1, const int id2, double& ip)
+void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip)
 {
     ip = 0.0;
     if (hyperreduce)
     {
-        const int size_H1_sp = basis->SolutionSizeH1SP();
-        Vector vj_sp(size_H1_sp);
-        Vector vi_sp(size_H1_sp);
-        Vector Mvj_sp(size_H1_sp);
+        Vector xj_sp(dim);
+        Vector xi_sp(dim);
+        Vector Mxj_sp(dim);
 
-        basis->GetBasisVectorV(hyperreduce, id1, vj_sp);
-        basis->GetBasisVectorV(hyperreduce, id2, vi_sp);
-        operSP->MultMv(vj_sp, Mvj_sp);
-        for (int k=0; k<size_H1_sp; ++k)
+        if (var == 1) // velocity
         {
-            ip += Mvj_sp[k]*vi_sp[k];
+            basis->GetBasisVectorV(hyperreduce, id1, xj_sp);
+            basis->GetBasisVectorV(hyperreduce, id2, xi_sp);
+            operSP->MultMv(xj_sp, Mxj_sp);
+        }
+        else if (var == 2) // energy
+        {
+            basis->GetBasisVectorE(hyperreduce, id1, xj_sp);
+            basis->GetBasisVectorE(hyperreduce, id2, xi_sp);
+            operSP->MultMe(xj_sp, Mxj_sp);
+        }
+
+        for (int k=0; k<dim; ++k)
+        {
+            ip += Mxj_sp[k]*xi_sp[k];
         }
     }
     else if (!hyperreduce)
@@ -1650,31 +1659,7 @@ void ROM_Operator::InnerProductReducedMv(const int id1, const int id2, double& i
     }
 }
 
-void ROM_Operator::InnerProductReducedMe(const int id1, const int id2, double& ip)
-{
-    ip = 0.0;
-    if (hyperreduce)
-    {
-        const int size_L2_sp = basis->SolutionSizeL2SP();
-        Vector ej_sp(size_L2_sp);
-        Vector ei_sp(size_L2_sp);
-        Vector Mej_sp(size_L2_sp);
-
-        basis->GetBasisVectorE(hyperreduce, id1, ej_sp);
-        basis->GetBasisVectorE(hyperreduce, id2, ei_sp);
-        operSP->MultMe(ej_sp, Mej_sp);
-        for (int k=0; k<size_L2_sp; ++k)
-        {
-            ip += Mej_sp[k]*ei_sp[k];
-        }
-    }
-    else if (!hyperreduce)
-    {
-        MFEM_VERIFY(false, "TODO");
-    }
-}
-
-void ROM_Operator::InducedGramSchmidtMv()
+void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
     if (hyperreduce)
     {
@@ -1682,37 +1667,69 @@ void ROM_Operator::InducedGramSchmidtMv()
         // factorizing the basis into X = QR,
         // where size(Q) = size(X), Q is M-orthonormal,
         // and R is square and upper triangular.
-        const int size_H1_sp = basis->SolutionSizeH1SP();
-        const int rdimv = basis->GetDimV();
-        CAROM::Matrix *Basis_V = basis->GetBVsp(); // Matrix X, will be substituted by matrix Q
+        // Matrix X will be substituted by matrix Q.
+        int spdim, rdim, offset;
+        CAROM::Matrix *X;
+        DenseMatrix *R;
         double factor;
 
-        CoordinateBVsp.SetSize(rdimv); // Matrix R
-        InnerProductReducedMv(0, 0, factor);
-        CoordinateBVsp(0,0) = sqrt(factor);
-        for (int k=0; k<size_H1_sp; ++k)
+        if (var == 1) // velocity
         {
-            (*Basis_V)(k,0) /= CoordinateBVsp(0,0);
+            spdim = basis->SolutionSizeH1SP();
+            rdim = basis->GetDimV();
+            offset = basis->GetDimX();
+            CoordinateBVsp.SetSize(rdim);
+            X = basis->GetBVsp();
+            R = &CoordinateBVsp;
+        }
+        else if (var == 2) // energy
+        {
+            spdim = basis->SolutionSizeL2SP();
+            rdim = basis->GetDimE();
+            offset = basis->GetDimX() + basis->GetDimV();
+            CoordinateBEsp.SetSize(rdim);
+            X = basis->GetBEsp();
+            R = &CoordinateBEsp;
         }
 
-        for (int j=1; j<rdimv; ++j)
+        InducedInnerProduct(0, 0, var, spdim, factor);
+        (*R)(0,0) = sqrt(factor);
+        for (int k=0; k<spdim; ++k)
+        {
+            (*X)(k,0) /= (*R)(0,0); // normalize
+        }
+
+        for (int j=1; j<rdim; ++j)
         {
             for (int i=0; i<j; ++i)
             {
-                InnerProductReducedMv(j, i, factor);
-                CoordinateBVsp(i,j) = factor;
-                for (int k=0; k<size_H1_sp; ++k)
+                InducedInnerProduct(j, i, var, spdim, factor);
+                (*R)(i,j) = factor;
+                for (int k=0; k<spdim; ++k)
                 {
-                    (*Basis_V)(k,j) -= CoordinateBVsp(i,j)*(*Basis_V)(k,i);
+                    (*X)(k,j) -= (*R)(i,j)*(*X)(k,i); // orthogonalize
                 }
             }
-            InnerProductReducedMv(j, j, factor);
-            CoordinateBVsp(j,j) = sqrt(factor);
-            for (int k=0; k<size_H1_sp; ++k)
+            InducedInnerProduct(j, j, var, spdim, factor);
+            (*R)(j,j) = sqrt(factor);
+            for (int k=0; k<spdim; ++k)
             {
-                (*Basis_V)(k,j) /= CoordinateBVsp(j,j);
+                (*X)(k,j) /= (*R)(j,j); // normalize
             }
         }
+
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to Q is
+        // obtained by d = Rc.
+        for (int i=0; i<rdim; ++i)
+        {
+            S[offset+i] *= (*R)(i,i);
+            for (int j=i+1; j<rdim; ++j)
+            {
+                S[offset+i] += (*R)(i,j)*S[offset+j]; // triangular update
+            }
+        }
+
     }
     else if (!hyperreduce)
     {
@@ -1720,99 +1737,62 @@ void ROM_Operator::InducedGramSchmidtMv()
     }
 }
 
-void ROM_Operator::InducedGramSchmidtMe()
+void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
 {
     if (hyperreduce)
     {
-        const int size_L2_sp = basis->SolutionSizeL2SP();
-        const int rdime = basis->GetDimE();
-        CAROM::Matrix *Basis_E = basis->GetBEsp();
-        double factor;
-
-        CoordinateBEsp.SetSize(rdime);
-        InnerProductReducedMe(0, 0, factor);
-        CoordinateBEsp(0,0) = sqrt(factor);
-        for (int k=0; k<size_L2_sp; ++k)
-        {
-            (*Basis_E)(k,0) /= CoordinateBEsp(0,0);
-        }
-
-        for (int j=1; j<rdime; ++j)
-        {
-            for (int i=0; i<j; ++i)
-            {
-                InnerProductReducedMe(j, i, factor);
-                CoordinateBEsp(i,j) = factor;
-                for (int k=0; k<size_L2_sp; ++k)
-                {
-                    (*Basis_E)(k,j) -= CoordinateBEsp(i,j)*(*Basis_E)(k,i);
-                }
-            }
-            InnerProductReducedMe(j, j, factor);
-            CoordinateBEsp(j,j) = sqrt(factor);
-            for (int k=0; k<size_L2_sp; ++k)
-            {
-                (*Basis_E)(k,j) /= CoordinateBEsp(j,j);
-            }
-        }
-    }
-    else if (!hyperreduce)
-    {
-        MFEM_VERIFY(false, "TODO");
-    }
-}
-
-void ROM_Operator::RedoInducedGramSchmidtMv()
-{
-    if (hyperreduce)
-    {
-        // Get back the original basis X from Q by undoing all the operations
+        // Get back the original matrix X from matrix Q by undoing all the operations
         // in the induced Gram Schmidt normalization process.
-        const int size_H1_sp = basis->SolutionSizeH1SP();
-        const int rdimv = basis->GetDimV();
-        CAROM::Matrix *Basis_V = basis->GetBVsp();
-        for (int j=rdimv-1; j>-1; --j)
-        {
-            for (int k=0; k<size_H1_sp; ++k)
-            {
-                (*Basis_V)(k,j) *= CoordinateBVsp(j,j);
-            }
-            for (int i=0; i<j; ++i)
-            {
-                for (int k=0; k<size_H1_sp; ++k)
-                {
-                    (*Basis_V)(k,j) += CoordinateBVsp(i,j)*(*Basis_V)(k,i);
-                }
-            }
-        }
-    }
-    else if (!hyperreduce)
-    {
-        MFEM_VERIFY(false, "TODO");
-    }
-}
+        // See ROM_Operator::InducedGramSchmidt
+        int spdim, rdim, offset;
+        CAROM::Matrix *X;
+        DenseMatrix *R;
 
-void ROM_Operator::RedoInducedGramSchmidtMe()
-{
-    if (hyperreduce)
-    {
-        const int size_L2_sp = basis->SolutionSizeL2SP();
-        const int rdime = basis->GetDimE();
-        CAROM::Matrix *Basis_E = basis->GetBEsp();
-        for (int j=rdime-1; j>-1; --j)
+        if (var == 1) // velocity
         {
-            for (int k=0; k<size_L2_sp; ++k)
+            spdim = basis->SolutionSizeH1SP();
+            rdim = basis->GetDimV();
+            offset = basis->GetDimX();
+            X = basis->GetBVsp();
+            R = &CoordinateBVsp;
+        }
+        else if (var == 2) // energy
+        {
+            spdim = basis->SolutionSizeL2SP();
+            rdim = basis->GetDimE();
+            offset = basis->GetDimX() + basis->GetDimV();
+            X = basis->GetBEsp();
+            R = &CoordinateBEsp;
+        }
+
+        for (int j=rdim-1; j>-1; --j)
+        {
+            for (int k=0; k<spdim; ++k)
             {
-                (*Basis_E)(k,j) *= CoordinateBEsp(j,j);
+                (*X)(k,j) *= (*R)(j,j);
             }
             for (int i=0; i<j; ++i)
             {
-                for (int k=0; k<size_L2_sp; ++k)
+                for (int k=0; k<spdim; ++k)
                 {
-                    (*Basis_E)(k,j) += CoordinateBEsp(i,j)*(*Basis_E)(k,i);
+                    (*X)(k,j) += (*R)(i,j)*(*X)(k,i);
                 }
             }
         }
+
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to X is
+        // obtained from c = R\d.
+        for (int i=rdim-1; i>-1; --i)
+        {
+            for (int j = rdim-1; j>i; --j)
+            {
+                S[offset+i] -= (*R)(i,j)*S[offset+j]; // backward substitution
+            }
+            S[offset+i] /= (*R)(i,i);
+        }
+        (*R).Clear();
+
     }
     else if (!hyperreduce)
     {
@@ -1822,79 +1802,26 @@ void ROM_Operator::RedoInducedGramSchmidtMe()
 
 void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
 {
-    const int rdimx = basis->GetDimX();
-    const int rdimv = basis->GetDimV();
-    const int rdime = basis->GetDimE();
-
-    InducedGramSchmidtMv();
-    InducedGramSchmidtMe();
+    InducedGramSchmidt(1, S); // velocity
+    InducedGramSchmidt(2, S); // energy
     basis->ComputeReducedRHS();
     if (useReducedMv)
     {
         ComputeReducedMv();
         ComputeReducedMe();
     }
-
-    // With solution representation by s = Xc = Qd,
-    // the coefficients of s with respect to Q is
-    // obtained by d = Rc.
-    for (int i=0; i<rdimv; ++i)
-    {
-        S[rdimx+i] *= CoordinateBVsp(i,i);
-        for (int j=i+1; j<rdimv; ++j)
-        {
-            S[rdimx+i] += CoordinateBVsp(i,j)*S[rdimx+j];
-        }
-    }
-
-    for (int i=0; i<rdime; ++i)
-    {
-        S[rdimx+rdimv+i] *= CoordinateBEsp(i,i);
-        for (int j=i+1; j<rdime; ++j)
-        {
-            S[rdimx+rdimv+i] += CoordinateBEsp(i,j)*S[rdimx+rdimv+j];
-        }
-    }
 }
 
 void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
 {
-    const int rdimx = basis->GetDimX();
-    const int rdimv = basis->GetDimV();
-    const int rdime = basis->GetDimE();
-
-    //RedoInducedGramSchmidtMv();
-    //RedoInducedGramSchmidtMe();
-    //basis->ComputeReducedRHS();
+    UndoInducedGramSchmidt(1, S); // velocity
+    UndoInducedGramSchmidt(2, S); // energy
+    basis->ComputeReducedRHS();
     if (useReducedMv)
     {
         ComputeReducedMv();
         ComputeReducedMe();
     }
-
-    // With solution representation by s = Xc = Qd,
-    // the coefficients of s with respect to X is
-    // obtained from c = R\d.
-    for (int i=rdimv-1; i>-1; --i)
-    {
-        for (int j = rdimv-1; j>i; --j)
-        {
-            S[rdimx+i] -= CoordinateBVsp(i,j)*S[rdimx+j];
-        }
-        S[rdimx+i] /= CoordinateBVsp(i,i);
-    }
-
-    for (int i=rdime-1; i>-1; --i)
-    {
-        for (int j = rdime-1; j>i; --j)
-        {
-            S[rdimx+rdimv+i] -= CoordinateBEsp(i,j)*S[rdimx+rdimv+j];
-        }
-        S[rdimx+rdimv+i] /= CoordinateBEsp(i,i);
-    }
-
-    CoordinateBVsp.Clear();
-    CoordinateBEsp.Clear();
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const

@@ -250,9 +250,15 @@ do
                   fi
                   ;;
                 restore)
-                  if [[ "$fileName" != *"_gf" ]] && [[ "$fileName" != "num_steps" ]]; then
-                    continue 1
-                  fi
+									if [[ "$scriptName" == *"parallel"* ]]; then
+										if [[ "$fileName" != "num_steps" ]]; then
+	                    continue 1
+	                  fi
+									else
+										if [[ "$fileName" != *"_gf" ]] && [[ "$fileName" != "num_steps" ]]; then
+	                    continue 1
+	                  fi
+									fi
                   ;;
               esac
             }
@@ -285,7 +291,11 @@ do
   							echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
                 basetestfile="$BASE_DIR/run/$fileName/romS_$num_steps"
                 check_exists
-  							$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "0.0" >> $simulationLogFile 2>&1)
+								if [[ "$scriptName" == *"parallel"* ]]; then
+  								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+								else
+  								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+								fi
                 check_fail
 
   			    # Compare FOM basis
@@ -300,11 +310,15 @@ do
 
   					# Compare solutions, singular values, and number of time steps
   					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
-  					[[ "$fileName" == "num_steps" ]] || [[ "$fileName" == *"_gf" ]]; then
+  					[[ "$fileName" == "num_steps" ]] || [[ "$fileName" == *"_gf" ]] ; then
   						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
               basetestfile="$BASE_DIR/run/$fileName"
               check_exists
-  						$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+							if [[ "$scriptName" == *"parallel"* ]]; then
+								$($DIR/./fileComparator "$testFile" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+							else
+								$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+							fi
               check_fail
   					fi
   				done
