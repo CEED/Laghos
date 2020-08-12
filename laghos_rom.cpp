@@ -14,7 +14,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (sampleFdirectly)
+    if (sampleF && sampleFdirectly)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -191,7 +191,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     SetStateVariables(S);
 
     Vector dSdt;
-    if (sampleFdirectly)
+    if (sampleF && sampleFdirectly)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
