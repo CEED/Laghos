@@ -1110,9 +1110,17 @@ int main(int argc, char *argv[])
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
-                                              rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
-                    sampler->SampleSolution(t, dt, S);
+                    if (last_step)
+                    {
+                        sampler = NULL;
+                        samplerLast = NULL;
+                    }
+                    else
+                    {
+                        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
+                                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
+                        sampler->SampleSolution(t, dt, S);
+                    }
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
@@ -1288,7 +1296,7 @@ int main(int argc, char *argv[])
         samplerTimer.Start();
         if (samplerLast)
             samplerLast->Finalize(t, dt, S, cutoff);
-        else
+        else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
         if (myid == 0 && usingWindows) {
