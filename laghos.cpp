@@ -1299,7 +1299,7 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
-        if (myid == 0 && usingWindows) {
+        if (myid == 0 && usingWindows && sampler != NULL) {
             outfile_twp << t << ", ";
 
             if (rom_sample_RHS)
