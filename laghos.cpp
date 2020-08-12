@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
     const char *twpfile = "twp.csv";
     int partition_type = 0;
     double blast_energy = 0.25;
+    double blast_energyFactor = 1.0;
     double blast_position[] = {0.0, 0.0, 0.0};
     bool rom_offline = false;
     bool rom_online = false;
@@ -296,6 +297,7 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.Parse();
     if (!args.Good())
@@ -629,7 +631,7 @@ int main(int argc, char *argv[])
     {
         // For the Sedov test, we use a delta function at the origin.
         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                                 blast_position[2], blast_energy);
+                                 blast_position[2], blast_energyFactor*blast_energy);
         l2_e.ProjectCoefficient(e_coeff);
     }
     else
@@ -1304,7 +1306,7 @@ int main(int argc, char *argv[])
         if(usingWindows) outfile_twp.close();
     }
 
-    if (rom_offline && writeSol)
+    if (writeSol)
     {
         PrintParGridFunction(myid, "run/Sol_Position", &x_gf);
         PrintParGridFunction(myid, "run/Sol_Velocity", &v_gf);
