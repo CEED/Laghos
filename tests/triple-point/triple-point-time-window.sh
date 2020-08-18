@@ -1,16 +1,16 @@
-normtype=${normtype:-"l2"}
-set -o xtrace
-case $testtype in
-  offline)
-    $SERIAL laghos -p 3 -m "$BASE_DIR"/data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/triple-point/triple-point-time-window.csv -normtype "$normtype"
+NUM_PARALLEL_PROCESSORS=8
+testNames=(offline online romhr restore)
+case $subTestNum in
+  1)
+    $HEADER laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/triple-point/triple-point-time-window.csv
     ;;
-  online)
-    $SERIAL laghos -p 3 -m "$BASE_DIR"/data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -soldiff -nwin 4 -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  2)
+    $HEADER laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -soldiff -nwin 4 -twp twpTemp.csv
     ;;
-  romhr)
-    $SERIAL laghos -p 3 -m "$BASE_DIR"/data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -soldiff -nwin 4 -romhr -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  3)
+    $HEADER laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -soldiff -nwin 4 -romhr -twp twpTemp.csv
     ;;
-  restore)
-    $SERIAL laghos -p 3 -m "$BASE_DIR"/data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -restore -nwin 4 -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  4)
+    $HEADER laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -restore -nwin 4 -twp twpTemp.csv
     ;;
 esac

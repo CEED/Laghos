@@ -1,16 +1,16 @@
-normtype=${normtype:-"l2"}
-set -o xtrace
-case $testtype in
-  offline)
-    $SERIAL laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -offline -writesol -romsvds -nwin 2 -tw "$BASE_DIR"/tests/taylor-green/taylor-green-time-window.csv -normtype "$normtype"
+NUM_PARALLEL_PROCESSORS=8
+testNames=(offline online romhr restore)
+case $subTestNum in
+  1)
+    $HEADER laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -offline -writesol -romsvds -nwin 2 -tw "$BASE_DIR"/tests/taylor-green/taylor-green-time-window.csv
     ;;
-  online)
-    $SERIAL laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -soldiff -nwin 2 -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  2)
+    $HEADER laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -soldiff -nwin 2 -twp twpTemp.csv
     ;;
-  romhr)
-    $SERIAL laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhr -soldiff -nwin 2 -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  3)
+    $HEADER laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhr -soldiff -nwin 2 -twp twpTemp.csv
     ;;
-  restore)
-    $SERIAL laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -restore -nwin 2 -twp "$BASE_DIR"/twpTemp.csv -normtype "$normtype"
+  4)
+    $HEADER laghos -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -restore -nwin 2 -twp twpTemp.csv
     ;;
 esac

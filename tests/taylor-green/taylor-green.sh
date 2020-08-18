@@ -1,16 +1,16 @@
-normtype=${normtype:-"l2"}
-set -o xtrace
-case $testtype in
-  offline)
-    $SERIAL laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -offline -writesol -romsvds -normtype "$normtype"
+NUM_PARALLEL_PROCESSORS=8
+testNames=(offline online romhr restore)
+case $subTestNum in
+  1)
+    $HEADER laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -offline -writesol -romsvds
     ;;
-  online)
-    $SERIAL laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -online -rdimx 2 -rdimv 6 -rdime 2 -soldiff -normtype "$normtype"
+  2)
+    $HEADER laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -online -rdimx 2 -rdimv 6 -rdime 2 -soldiff
     ;;
-  romhr)
-    $SERIAL laghos  -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -online -rdimx 2 -rdimv 6 -rdime 2 -soldiff -romhr -nsamx 96 -nsamv 320 -nsame 64 -normtype "$normtype"
+  3)
+    $HEADER laghos  -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -online -rdimx 2 -rdimv 6 -rdime 2 -soldiff -romhr -nsamx 96 -nsamv 320 -nsame 64
     ;;
-  restore)
-    $SERIAL laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -restore -rdimx 2 -rdimv 6 -rdime 2 -normtype "$normtype"
+  4)
+    $HEADER laghos -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -restore -rdimx 2 -rdimv 6 -rdime 2
     ;;
 esac
