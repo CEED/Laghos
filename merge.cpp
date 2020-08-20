@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
                 GetSnapshotDim(0, "Fv", t, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
                 GetSnapshotDim(0, "Fe", t, dimFe, dummy);
-                MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
+                MFEM_VERIFY(dummy >= snapshotSize[0], "Inconsistent snapshot sizes");
             }
         }
 
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
                 GetSnapshotDim(i, "Fv", t, dim, snapshotSizeFv[i]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
                 GetSnapshotDim(i, "Fe", t, dim, dummy);
-                MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+                MFEM_VERIFY(dim == dimE && dummy >= snapshotSize[i], "Inconsistent snapshot sizes");
             }
 
             totalSnapshotSize += snapshotSize[i];
@@ -182,8 +182,8 @@ int main(int argc, char *argv[])
 
         if (rhsBasis)
         {
-            LoadSampleSets(myid, energyFraction, nset, t, "Fv", dimV, totalSnapshotSizeFv);
-            LoadSampleSets(myid, energyFraction, nset, t, "Fe", dimE, totalSnapshotSize);
+            LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv);
+            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSize);
         }
     }
 
