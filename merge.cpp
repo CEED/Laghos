@@ -53,36 +53,36 @@ void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasi
 }
 
 void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& varName,
-                    const int dim, const int totalSamples)
+                    const int window, const int dim, const int totalSamples)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
 
-    std::string basis_filename = "run/basis" + varName + "0";  // 0 is the time window index
+    std::string basis_filename = "run/basis" + varName + std::to_string(window);
     basis_generator.reset(new CAROM::StaticSVDBasisGenerator(dim, totalSamples, basis_filename));
 
-    cout << "Loading snapshots for " << varName << endl;
+    cout << "Loading snapshots for " << varName << " in time window " << window << endl;
 
     for (int i=0; i<nsets; ++i)
     {
-        std::string filename = "run/param" + std::to_string(i) + "_var" + varName + "0_snapshot";  // 0 is time window index
+        std::string filename = "run/param" + std::to_string(i) + "_var" + varName + std::to_string(window) + "_snapshot";
         basis_generator->loadSamples(filename,"snapshot");
     }
 
     //cout << "Saving data uploaded as a snapshot" << endl;
     //basis_generator->writeSnapshot();
 
-    cout << "Computing SVD for " << varName << endl;
+    cout << "Computing SVD for " << varName << " in time window " << window << endl;
     basis_generator->endSamples();  // save the basis file
 
-    cout << varName << " basis summary output: ";
+    cout << varName << " basis in time window " << window << " summary output: ";
     BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
     PrintSingularValues(rank, varName, basis_generator.get());
 }
 
 // id is snapshot index, 0-based
-void GetSnapshotDim(const int id, const std::string& varName, int& varDim, int& numSnapshots)
+void GetSnapshotDim(const int id, const std::string& varName, const int window, int& varDim, int& numSnapshots)
 {
-    std::string filename = "run/param" + std::to_string(id) + "_var" + varName + "0_snapshot";  // 0 is time window index
+    std::string filename = "run/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + "_snapshot";
 
     CAROM::BasisReader reader(filename);
     const CAROM::Matrix *S = reader.getSnapshotMatrix(0.0);
@@ -98,11 +98,13 @@ int main(int argc, char *argv[])
 
     // Parse command-line options.
     int nset = 0;
+    int numWindows = 0;
     double energyFraction = 0.9999;
     bool rhsBasis = false;
 
     OptionsParser args(argc, argv);
-    args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge");
+    args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge.");
+    args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
@@ -126,60 +128,63 @@ int main(int argc, char *argv[])
     Array<int> snapshotSizeFv(nset);
     int dimX, dimV, dimE, dimFv, dimFe;
 
-    GetSnapshotDim(0, "X", dimX, snapshotSize[0]);
+    for (int t=0; t<numWindows; ++t)
     {
-        int dummy = 0;
-        GetSnapshotDim(0, "V", dimV, dummy);
-        MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
-        GetSnapshotDim(0, "E", dimE, dummy);
-        MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
-
-        if (rhsBasis)
+        GetSnapshotDim(0, "X", t, dimX, snapshotSize[0]);
         {
-            GetSnapshotDim(0, "Fv", dimFv, snapshotSizeFv[0]);
-            MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
-            GetSnapshotDim(0, "Fe", dimFe, dummy);
+            int dummy = 0;
+            GetSnapshotDim(0, "V", t, dimV, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
+            GetSnapshotDim(0, "E", t, dimE, dummy);
+            MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
+
+            if (rhsBasis)
+            {
+                GetSnapshotDim(0, "Fv", t, dimFv, snapshotSizeFv[0]);
+                MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
+                GetSnapshotDim(0, "Fe", t, dimFe, dummy);
+                MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
+            }
         }
-    }
 
-    MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
-    MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
-    MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
+        MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
+        MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
 
-    int totalSnapshotSize = snapshotSize[0];
-    int totalSnapshotSizeFv = snapshotSizeFv[0];
-    for (int i=1; i<nset; ++i)
-    {
-        int dummy = 0;
-        int dim = 0;
-        GetSnapshotDim(i, "X", dim, snapshotSize[i]);
-        MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
-        GetSnapshotDim(i, "V", dim, dummy);
-        MFEM_VERIFY(dim == dimV && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
-        GetSnapshotDim(i, "E", dim, dummy);
-        MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+        int totalSnapshotSize = snapshotSize[0];
+        int totalSnapshotSizeFv = snapshotSizeFv[0];
+        for (int i=1; i<nset; ++i)
+        {
+            int dummy = 0;
+            int dim = 0;
+            GetSnapshotDim(i, "X", t, dim, snapshotSize[i]);
+            MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
+            GetSnapshotDim(i, "V", t, dim, dummy);
+            MFEM_VERIFY(dim == dimV && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+            GetSnapshotDim(i, "E", t, dim, dummy);
+            MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+
+            if (rhsBasis)
+            {
+                GetSnapshotDim(i, "Fv", t, dim, snapshotSizeFv[i]);
+                MFEM_VERIFY(dim == dimV && snapshotSizeFv[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
+                GetSnapshotDim(i, "Fe", t, dim, dummy);
+                MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+            }
+
+            totalSnapshotSize += snapshotSize[i];
+            totalSnapshotSizeFv += snapshotSizeFv[i];
+        }
+
+        LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize);
+        LoadSampleSets(myid, energyFraction, nset, "V", t, dimV, totalSnapshotSize);
+        LoadSampleSets(myid, energyFraction, nset, "E", t, dimE, totalSnapshotSize);
 
         if (rhsBasis)
         {
-            GetSnapshotDim(i, "Fv", dim, snapshotSizeFv[i]);
-            MFEM_VERIFY(dim == dimV && snapshotSizeFv[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
-            GetSnapshotDim(i, "Fe", dim, dummy);
-            MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
+            LoadSampleSets(myid, energyFraction, nset, t, "Fv", dimV, totalSnapshotSizeFv);
+            LoadSampleSets(myid, energyFraction, nset, t, "Fe", dimE, totalSnapshotSize);
         }
-
-        totalSnapshotSize += snapshotSize[i];
-        totalSnapshotSizeFv += snapshotSizeFv[i];
-    }
-
-    LoadSampleSets(myid, energyFraction, nset, "X", dimX, totalSnapshotSize);
-    LoadSampleSets(myid, energyFraction, nset, "V", dimV, totalSnapshotSize);
-    LoadSampleSets(myid, energyFraction, nset, "E", dimE, totalSnapshotSize);
-
-    if (rhsBasis)
-    {
-        LoadSampleSets(myid, energyFraction, nset, "Fv", dimV, totalSnapshotSizeFv);
-        LoadSampleSets(myid, energyFraction, nset, "Fe", dimE, totalSnapshotSize);
     }
 
     return 0;
