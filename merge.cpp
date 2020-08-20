@@ -126,6 +126,7 @@ int main(int argc, char *argv[])
 
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);
+    Array<int> snapshotSizeFe(nset);
     int dimX, dimV, dimE, dimFv, dimFe;
 
     for (int t=0; t<numWindows; ++t)
@@ -142,7 +143,7 @@ int main(int argc, char *argv[])
             {
                 GetSnapshotDim(0, "Fv", t, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
-                GetSnapshotDim(0, "Fe", t, dimFe, dummy);
+                GetSnapshotDim(0, "Fe", t, dimFe, snapshotSizeFe[0]);
                 MFEM_VERIFY(dummy >= snapshotSize[0], "Inconsistent snapshot sizes");
             }
         }
@@ -153,6 +154,7 @@ int main(int argc, char *argv[])
 
         int totalSnapshotSize = snapshotSize[0];
         int totalSnapshotSizeFv = snapshotSizeFv[0];
+        int totalSnapshotSizeFe = snapshotSizeFe[0];
         for (int i=1; i<nset; ++i)
         {
             int dummy = 0;
@@ -168,12 +170,13 @@ int main(int argc, char *argv[])
             {
                 GetSnapshotDim(i, "Fv", t, dim, snapshotSizeFv[i]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
-                GetSnapshotDim(i, "Fe", t, dim, dummy);
-                MFEM_VERIFY(dim == dimE && dummy >= snapshotSize[i], "Inconsistent snapshot sizes");
+                GetSnapshotDim(i, "Fe", t, dim, snapshotSizeFe[i]);
+                MFEM_VERIFY(dim == dimE && snapshotSizeFe[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
             }
 
             totalSnapshotSize += snapshotSize[i];
             totalSnapshotSizeFv += snapshotSizeFv[i];
+            totalSnapshotSizeFe += snapshotSizeFe[i];
         }
 
         LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize);
@@ -183,7 +186,7 @@ int main(int argc, char *argv[])
         if (rhsBasis)
         {
             LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv);
-            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSize);
+            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSizeFe);
         }
     }
 
