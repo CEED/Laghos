@@ -33,14 +33,14 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg)
+void PrintSingularValues(const int rank, const std::string& name, const int window, CAROM::SVDBasisGenerator* bg)
 {
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
 
-    std::string fullname = "run/sVal" + name + tmp;
+    std::string fullname = "run/sVal" + name + std::to_string(window) + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
@@ -76,7 +76,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
 
     cout << varName << " basis in time window " << window << " summary output: ";
     BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
-    PrintSingularValues(rank, varName, basis_generator.get());
+    PrintSingularValues(rank, varName, window, basis_generator.get());
 }
 
 // id is snapshot index, 0-based
