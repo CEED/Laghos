@@ -224,7 +224,7 @@ evaluation. (Viscosity can still be activated for these problems with the
 Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.5 -pa
-mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -cfl 0.1 -tf 0.25 -pa
+mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.25 -pa
 mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
 ```
 
@@ -242,8 +242,8 @@ vorticity, thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 2.5 -cfl 0.025 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 2.5 -cfl 0.05 -vis -pa
+mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
