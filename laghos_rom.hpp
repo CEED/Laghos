@@ -53,6 +53,7 @@ public:
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
         double model_sampling_tol = 1.e-7;
+        double model_singular_value_tol = 1.e-14;
 
         const int max_model_dim_est = int(t_final/initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
         const int max_model_dim = (max_dim > 0) ? max_dim : max_model_dim_est;
@@ -80,6 +81,7 @@ public:
         {
             generator_X = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
+                    model_singular_value_tol,
                     false,
                     true,
                     max_model_dim,
@@ -90,6 +92,7 @@ public:
                     ROMBasisName::X + std::to_string(window));
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
+                    model_singular_value_tol,
                     false,
                     true,
                     max_model_dim,
@@ -100,6 +103,7 @@ public:
                     ROMBasisName::V + std::to_string(window));
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
+                    model_singular_value_tol,
                     false,
                     true,
                     max_model_dim,
@@ -113,6 +117,7 @@ public:
             {
                 generator_Fv = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                         model_linearity_tol,
+                        model_singular_value_tol,
                         false,
                         true,
                         max_model_dim,
@@ -123,6 +128,7 @@ public:
                         ROMBasisName::Fv + std::to_string(window));
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                         model_linearity_tol,
+                        model_singular_value_tol,
                         false,
                         true,
                         max_model_dim,
