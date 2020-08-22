@@ -7,36 +7,47 @@ The usage instructions are outputted whenever the script is run. Currently, ther
 How to run the tests on both MAC and LC
 
 1. If you have just changed branches, run "make clean".
-
 2. Run "make" to make sure you your branch is up-to-date with any local changes.
-
 3. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
 test options.
-
 4. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved
 in run and tests/Laghos/run. Use option -f to stop at the first failure and look at the failed run's data.
-
 5. To erase the regression test data, run from the base directory: make clean-regtest
 
 How to add a non-time-windowing test
 
 1. Choose an appropriate sub-test directory.
 2. Copy sedov-blast/sedov-blast.sh to your test directory, renaming it as desired.
-3. Your tests will be run both serially and in parallel.
-4. Choose a number for NUM_PARALLEL_PROCESSORS.
-5. The tests will be run sequentially (1, 2, 3, 4, ...). Create as many tests as
+Use it as an example.
+3. Choose a number for NUM_PARALLEL_PROCESSORS. Your tests will be run both serially and in parallel. If you remove this line, your tests will only run in serial.
+4. The tests will be run sequentially (1, 2, 3, 4, ...). Create as many tests as
 desired following the given format.
-6. All tests should have the format $HEADER laghos ...
-7. Name your tests in testNames, which is an array of test names.
+5. Any laghos commands should have the format $HEADER laghos ...
+6. Name your tests in testNames, which is an array of test names. If your test name
+is multiple words, separate the words with an underscore, rather than a space.
 
 How to add a time-windowing test
 
 1. Choose an appropriate sub-test directory.
 2. Copy sedov-blast/sedov-blast-time-window.sh and sedov-blast/sedov-blast-time-window.csv
-to your test directory, renaming them as desired.
+to your test directory, renaming them as desired. Use it as an example.
 3. Modify the csv to fit your problem.
-5. For any offline commands, make sure to point to the csv with "$BASE_DIR"/tests/...
-6. Follow the instructions for how to add a non-time-windowing test.
+4. For any offline commands, make sure to point to the csv with "$BASE_DIR"/tests/...
+5. Follow the instructions for how to add a non-time-windowing test.
+
+How to add a non-time-windowing parameter variation test
+
+1. Choose an appropriate sub-test directory.
+2. Copy sedov-blast/sedov-blast-parameter-variation.sh to your test directory, renaming
+the file as desired. Use it as an example.
+3. Since what we want to compare is the FOM solution and ROM solution, the tests
+only need to be split into two sub-tests, like sedov-blast-parameter-variation.sh.
+4. Follow the instructions for how to add a non-time-windowing test.
+
+How to add a time-windowing parameter variation test
+1. Choose an appropriate sub-test directory.
+2. Follow the instructions of both the time-windowing test and non-time-windowing
+parameter variation test to create your test script.
 
 Here are some example runs and results:
 
