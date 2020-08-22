@@ -568,6 +568,8 @@ int main(int argc, char *argv[])
         return 3;
     }
 
+    const bool usingRK2Avg = (ode_solver_type == 7);
+
     HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
     HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
 
@@ -808,7 +810,7 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt);
+                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -841,11 +843,11 @@ int main(int argc, char *argv[])
             }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -908,7 +910,7 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -971,6 +973,7 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
+            // TODO: in the online case with hyperreduction, can we avoid these FOM operations?
             S_old = S;
             t_old = t;
             oper.ResetTimeStepEstimate();
@@ -1162,7 +1165,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, rom_window);
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 

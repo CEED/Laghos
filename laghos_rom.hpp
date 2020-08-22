@@ -285,7 +285,8 @@ public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
               int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
-              const bool RHSbasis_ = false, const bool GramSchmidt = false, const int window=0);
+              const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
+              const int window=0);
 
     ~ROM_Basis()
     {
@@ -319,7 +320,7 @@ public:
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
-    int TotalSize() {
+    int TotalSize() const {
         return rdimx + rdimv + rdime;
     }
 
@@ -352,6 +353,12 @@ public:
 
     void RestrictFromSampleMesh_V(const Vector &xsp, Vector &x) const;
     void RestrictFromSampleMesh_E(const Vector &xsp, Vector &x) const;
+
+    void ProjectFromSampleMesh(const Vector &usp, Vector &u,
+                               const bool timeDerivative) const;
+
+    void HyperreduceRHS_V(Vector &v) const;
+    void HyperreduceRHS_E(Vector &e) const;
 
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
@@ -418,6 +425,10 @@ private:
     CAROM::Vector *rV = 0;
     CAROM::Vector *rE = 0;
 
+    CAROM::Vector *rX2 = 0;
+    CAROM::Vector *rV2 = 0;
+    CAROM::Vector *rE2 = 0;
+
     // For hyperreduction
     std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
@@ -458,6 +469,11 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
+    const bool RK2AvgFormulation;
+    CAROM::Matrix *BXXinv = NULL;
+    CAROM::Matrix *BVVinv = NULL;
+    CAROM::Matrix *BEEinv = NULL;
+
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
 
@@ -489,6 +505,8 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
+    void StepRK2AvgOpt(Vector &S, double &t, double &dt) const;
+
     void InducedGramSchmidtInitialize(Vector &S);
     void InducedGramSchmidtFinalize(Vector &S);
 
@@ -537,7 +555,7 @@ private:
     void ComputeReducedMv();
     void ComputeReducedMe();
 
-    bool useGramSchmidt;
+    const bool useGramSchmidt;
     DenseMatrix CoordinateBVsp, CoordinateBEsp;
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);

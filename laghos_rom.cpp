@@ -391,13 +391,15 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                      int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
                      const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
-                     const bool RHSbasis_, const bool GramSchmidt, const int window)
+                     const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
+                     const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
       rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt)
+      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
+      RK2AvgFormulation(RK2AvgSolver)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -435,6 +437,13 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);
     rE = new CAROM::Vector(rdime, false);
+
+    if (RK2AvgFormulation)
+    {
+        rX2 = new CAROM::Vector(rdimx, false);
+        rV2 = new CAROM::Vector(rdimv, false);
+        rE2 = new CAROM::Vector(rdime, false);
+    }
 
     dimX = rdimx;
     dimV = rdimv;
@@ -1104,6 +1113,21 @@ void ROM_Basis::ComputeReducedRHS()
         delete BsinvE;
 
         BsinvE = prod2;
+
+        if (RK2AvgFormulation)
+        {
+            const CAROM::Matrix *prodX = BXsp->transposeMult(BXsp);
+            BXXinv = prodX->inverse();
+            delete prodX;
+
+            const CAROM::Matrix *prodV = BVsp->transposeMult(BVsp);
+            BVVinv = prodV->inverse();
+            delete prodV;
+
+            const CAROM::Matrix *prodE = BEsp->transposeMult(BEsp);
+            BEEinv = prodE->inverse();
+            delete prodE;
+        }
     }
 }
 
@@ -1313,7 +1337,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
         for (int i=0; i<rdimv; ++i)
             rhs[i] = (*rV)(i);
 
-        // TODO: multiply BsinvV by invMvROM and store that rather than doing 2 mults.
+        // TODO: multiply BsinvV by invMvROM and store that rather than doing 2 mults, in the case of no Gram-Schmidt (will that version be maintained?).
         invMvROM->Mult(rhs, invMrhs);
         for (int i=0; i<rdimv; ++i)
             u[rdimx + i] = invMrhs[i];
@@ -1368,6 +1392,54 @@ void ROM_Basis::RestrictFromSampleMesh_E(const Vector &usp, Vector &u) const
 
     for (int i=0; i<rdime; ++i)
         u[i] = (*rE)(i);
+}
+
+void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
+                                      const bool timeDerivative) const
+{
+    MFEM_VERIFY(u.Size() == TotalSize(), "");
+    MFEM_VERIFY(usp.Size() == (2*size_H1_sp) + size_L2_sp, "");
+
+    const bool useOffset = offsetInit && (!timeDerivative);
+
+    int ossp = 0;
+    int osrom = 0;
+
+    // X
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spX)(i) = useOffset ? usp[ossp + i] - (*initXsp)(i) : usp[ossp + i];
+
+    BXsp->transposeMult(*spX, *rX);
+    BXXinv->mult(*rX, *rX2);
+
+    for (int i=0; i<rdimx; ++i)
+        u[osrom + i] = (*rX2)(i);
+
+    osrom += rdimx;
+    ossp += size_H1_sp;
+
+    // V
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spV)(i) = useOffset ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
+
+    BVsp->transposeMult(*spV, *rV);
+    BVVinv->mult(*rV, *rV2);
+
+    for (int i=0; i<rdimv; ++i)
+        u[osrom + i] = (*rV2)(i);
+
+    osrom += rdimv;
+    ossp += size_H1_sp;
+
+    // E
+    for (int i=0; i<size_L2_sp; ++i)
+        (*spE)(i) = useOffset ? usp[ossp + i] - (*initEsp)(i) : usp[ossp + i];
+
+    BEsp->transposeMult(*spE, *rE);
+    BEEinv->mult(*rE, *rE2);
+
+    for (int i=0; i<rdime; ++i)
+        u[osrom + i] = (*rE2)(i);
 }
 
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
@@ -1512,6 +1584,43 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
         for (int i=0; i<rdimx; ++i)
             y[i] = (*rX)(i) + (*BX0)(i);
     }
+}
+
+void ROM_Basis::HyperreduceRHS_V(Vector &v) const
+{
+    MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
+    MFEM_VERIFY(v.Size() == size_H1_sp, "");
+
+    for (int i=0; i<numSamplesV; ++i)
+        (*sV)(i) = v[s2sp_V[i]];
+
+    BsinvV->transposeMult(*sV, *rV);
+
+    // Lift from rV to v
+    // Note that here there is the product BVsp BVsp^T, which cannot be simplified and should not be stored.
+    BVsp->mult(*rV, *spV);
+    //BFvsp->mult(*rV, *spV);
+    for (int i=0; i<size_H1_sp; ++i)
+        v[i] = (*spV)(i);
+    //v[i] = offsetInit ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
+}
+
+void ROM_Basis::HyperreduceRHS_E(Vector &e) const
+{
+    MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
+    MFEM_VERIFY(e.Size() == size_L2_sp, "");
+
+    for (int i=0; i<numSamplesE; ++i)
+        (*sE)(i) = e[s2sp_E[i]];
+
+    BsinvE->transposeMult(*sE, *rE);
+
+    // Lift from rE to e
+    // Note that here there is the product BEsp BEsp^T, which cannot be simplified and should not be stored.
+    BEsp->mult(*rE, *spE);
+    //BFesp->mult(*rE, *spE);
+    for (int i=0; i<size_L2_sp; ++i)
+        e[i] = (*spE)(i);
 }
 
 void ROM_Operator::ComputeReducedMv()
@@ -1825,13 +1934,89 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
     }
 }
 
+void ROM_Operator::StepRK2AvgOpt(Vector &S, double &t, double &dt) const
+{
+    MFEM_VERIFY(hyperreduce && rank == 0 && useGramSchmidt, "");
+    // TODO: if !useGramSchmidt, then apply reduced mass matrix inverses
+
+    basis->LiftToSampleMesh(S, fx);
+    // TODO: is this necessary? Does the call to UpdateMesh accomplish this anyway?
+    {   // update mesh
+        for (int i=0; i<Vsize_h1sp; ++i)
+            (*xsp_gf)[i] = fx[i];
+
+        spmesh->NewNodes(*xsp_gf, false);
+    }
+
+    const int Vsize = basis->SolutionSizeH1SP();
+    const int Esize = basis->SolutionSizeL2SP();
+    Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
+
+    // The monolithic BlockVector stores the unknown fields as follows:
+    // (Position, Velocity, Specific Internal Energy).
+    Vector dv_dt, v0, dx_dt, de_dt;
+    v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+    de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
+    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
+    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+    // In each sub-step:
+    // - Update the global state Vector S.
+    // - Compute dv_dt using S.
+    // - Update V using dv_dt.
+    // - Compute de_dt and dx_dt using S and V.
+
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = operSP;
+
+    // -- 1.
+    // S is S0.
+    hydro_oper->UpdateMesh(fx);
+    hydro_oper->SolveVelocity(fx, dS_dt);
+
+    basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+    // V = v0 + 0.5 * dt * dv_dt;
+    add(v0, 0.5 * dt, dv_dt, V);
+    hydro_oper->SolveEnergy(fx, V, dS_dt);
+
+    basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+
+    dx_dt = V;
+
+    // -- 2.
+    // S = S0 + 0.5 * dt * dS_dt;
+    add(S0, 0.5 * dt, dS_dt, fx);
+    hydro_oper->ResetQuadratureData();
+    hydro_oper->UpdateMesh(fx);
+    hydro_oper->SolveVelocity(fx, dS_dt);
+
+    basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+    // V = v0 + 0.5 * dt * dv_dt;
+    add(v0, 0.5 * dt, dv_dt, V);
+    hydro_oper->SolveEnergy(fx, V, dS_dt);
+
+    basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+
+    dx_dt = V;
+
+    // -- 3.
+    // S = S0 + dt * dS_dt.
+    add(S0, dt, dS_dt, fx);
+    hydro_oper->ResetQuadratureData();
+
+    MFEM_VERIFY(!useReducedMv, "TODO");
+
+    basis->ProjectFromSampleMesh(fx, S, false);
+}
+
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
 
-    if (!hyperreduce || rank == 0)
+    if ((!hyperreduce || rank == 0) && !useGramSchmidt)  // simple version without RHS optimizations
     {
         if (hyperreduce)
         {
@@ -1867,6 +2052,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
+
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
@@ -1878,6 +2064,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
+
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
@@ -1895,6 +2082,8 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->ProjectFOMtoROM(fx, S);
     }
+    else if (hyperreduce && useGramSchmidt && rank == 0)
+        StepRK2AvgOpt(S, t, dt);
 
     if (hyperreduce)
     {
