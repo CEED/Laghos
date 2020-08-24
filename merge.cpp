@@ -7,9 +7,9 @@ using namespace std;
 using namespace mfem;
 
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction)
+void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int& cutoff)
 {
-    int cutoff = 0;
+    //int cutoff = 0;
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
@@ -53,7 +53,7 @@ void PrintSingularValues(const int rank, const std::string& name, const int wind
 }
 
 void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& varName,
-                    const int window, const int dim, const int totalSamples)
+                    const int window, const int dim, const int totalSamples, int& cutoff)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
 
@@ -75,7 +75,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     basis_generator->endSamples();  // save the basis file
 
     cout << varName << " basis in time window " << window << " summary output: ";
-    BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
+    BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff);
     PrintSingularValues(rank, varName, window, basis_generator.get());
 }
 
@@ -90,6 +90,61 @@ void GetSnapshotDim(const int id, const std::string& varName, const int window, 
     numSnapshots = S->numColumns();
 }
 
+int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const bool printStatus)
+{
+    if (printStatus) cout << "Reading time windows from file " << twfile << endl;
+
+    std::ifstream ifs(twfile.c_str());
+
+    if (!ifs.is_open())
+    {
+        cout << "Error: invalid file" << endl;
+        return 1;  // invalid file
+    }
+
+    twep.SetSize(nw);
+
+    string line, word;
+    int count = 0;
+    while (getline(ifs, line))
+    {
+        if (count >= nw)
+        {
+            cout << "Error reading CSV file. Read more than " << nw << " lines" << endl;
+            ifs.close();
+            return 3;
+        }
+
+        stringstream s(line);
+        vector<string> row;
+
+        while (getline(s, word, ','))
+            row.push_back(word);
+
+        if (row.size() != 1)
+        {
+            cout << "Error: CSV file does not specify exactly 1 parameter" << endl;
+            ifs.close();
+            return 2;  // incorrect number of parameters
+        }
+
+        twep[count] = stod(row[0]);
+
+        if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << endl;
+        count++;
+    }
+
+    ifs.close();
+
+    if (count != nw)
+    {
+        cout << "Error reading CSV file. Read " << count << " lines but expected " << nw << endl;
+        return 3;
+    }
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
@@ -98,9 +153,10 @@ int main(int argc, char *argv[])
 
     // Parse command-line options.
     int nset = 0;
-    int numWindows = 1;
+    int numWindows = 0;
     double energyFraction = 0.9999;
     bool rhsBasis = false;
+    const char *twfile = "tw.csv";
 
     OptionsParser args(argc, argv);
     args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge.");
@@ -108,6 +164,8 @@ int main(int argc, char *argv[])
     args.AddOption(&energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
+    args.AddOption(&twfile, "-tw", "--timewindowfilename",
+                   "Name of the CSV file defining offline time windows");
 
     args.Parse();
     if (!args.Good())
@@ -123,6 +181,21 @@ int main(int argc, char *argv[])
 
     if (nset < 2)
         cout << "More than one set must be specified. No merging is being done." << endl;
+
+    const bool usingWindows = (numWindows > 0); // TODO: || windowNumSamples > 0);
+    Array<double> twep;
+    std::ofstream outfile_twp;
+    Array<int> cutoff(5);
+
+    if (usingWindows) {
+        const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
+        MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
+        outfile_twp.open("twpTemp.csv");
+    }
+    else {
+        numWindows = 1;
+    }
+
 
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);
@@ -179,15 +252,21 @@ int main(int argc, char *argv[])
             totalSnapshotSizeFe += snapshotSizeFe[i];
         }
 
-        LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize);
-        LoadSampleSets(myid, energyFraction, nset, "V", t, dimV, totalSnapshotSize);
-        LoadSampleSets(myid, energyFraction, nset, "E", t, dimE, totalSnapshotSize);
+        outfile_twp << twep[t] << ", ";
+
+        LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize, cutoff[0]);
+        LoadSampleSets(myid, energyFraction, nset, "V", t, dimV, totalSnapshotSize, cutoff[1]);
+        LoadSampleSets(myid, energyFraction, nset, "E", t, dimE, totalSnapshotSize, cutoff[2]);
 
         if (rhsBasis)
         {
-            LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv);
-            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSizeFe);
+            LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv, cutoff[3]);
+            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSizeFe, cutoff[4]);
+            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                        << cutoff[3] << ", " << cutoff[4] << "\n";
         }
+        else
+            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
     }
 
     return 0;

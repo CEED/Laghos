@@ -311,8 +311,8 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
-    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
-    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinstep and -nwin cannot both be set");
+    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
+    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
@@ -765,7 +765,7 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
 
         samplerTimer.Start();
-        if (usingWindows) {
+        if (usingWindows && rom_paramID == -1) {
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
@@ -1074,7 +1074,7 @@ int main(int argc, char *argv[])
                     {
                         samplerLast->Finalize(t, last_dt, S, cutoff);
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
-                        if (myid == 0) {
+                        if (myid == 0 && rom_paramID == -1) {
                             outfile_twp << tOverlapMidpoint << ", ";
                             if (rom_sample_RHS)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1097,7 +1097,7 @@ int main(int argc, char *argv[])
                     else
                     {
                         sampler->Finalize(t, last_dt, S, cutoff);
-                        if (myid == 0) {
+                        if (myid == 0 && rom_paramID == -1) {
                             outfile_twp << t << ", ";
                             if (rom_sample_RHS)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1299,7 +1299,7 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
-        if (myid == 0 && usingWindows && sampler != NULL) {
+        if (myid == 0 && usingWindows && sampler != NULL && rom_paramID == -1) {
             outfile_twp << t << ", ";
 
             if (rom_sample_RHS)
@@ -1311,7 +1311,7 @@ int main(int argc, char *argv[])
         delete sampler;
         delete samplerLast;
         samplerTimer.Stop();
-        if(usingWindows) outfile_twp.close();
+        if(usingWindows && rom_paramID == -1) outfile_twp.close();
     }
 
     if (writeSol)
