@@ -201,7 +201,7 @@ do
 				subTestNum=$((subTestNum+1))
 
 				# Get testtype
-				RAN_COMMAND=$(awk "/$subTestNum)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
+				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
 				if [[ $RAN_COMMAND == *"writesol"* ]]; then
 					testtype=fom
 				elif [[ $RAN_COMMAND == *"online"* ]]; then
