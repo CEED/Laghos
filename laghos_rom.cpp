@@ -14,7 +14,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (sampleF && sampleFdirectly)
+    if (sampleF)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -73,21 +73,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             if (sampleF)
             {
-                if (sampleFdirectly)
-                {
-                    MFEM_VERIFY(gfH1.Size() == H1size, "");
-                    for (int i=0; i<H1size; ++i)
-                        gfH1[i] = dSdt[H1size + i];  // Fv
+                MFEM_VERIFY(gfH1.Size() == H1size, "");
+                for (int i=0; i<H1size; ++i)
+                    gfH1[i] = dSdt[H1size + i];  // Fv
 
-                    gfH1.GetTrueDofs(Xdiff);
-                    generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-                }
-                else
-                {
-                    Vector Mv(Xdiff.Size());
-                    lhoper->MultMv(Xdiff, Mv);
-                    generator_Fv->takeSample(Mv.GetData(), t, dt);
-                }
+                gfH1.GetTrueDofs(Xdiff);
+                generator_Fv->takeSample(Xdiff.GetData(), t, dt);
 
                 // Without this check, libROM may use multiple time intervals, and without appropriate implementation
                 // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -127,21 +118,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             if (sampleF)
             {
-                if (sampleFdirectly)
-                {
-                    MFEM_VERIFY(gfL2.Size() == L2size, "");
-                    for (int i=0; i<L2size; ++i)
-                        gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+                MFEM_VERIFY(gfL2.Size() == L2size, "");
+                for (int i=0; i<L2size; ++i)
+                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
-                    gfL2.GetTrueDofs(Ediff);
-                    generator_Fe->takeSample(Ediff.GetData(), t, dt);
-                }
-                else
-                {
-                    Vector Me(Ediff.Size());
-                    lhoper->MultMe(Ediff, Me);
-                    generator_Fe->takeSample(Me.GetData(), t, dt);
-                }
+                gfL2.GetTrueDofs(Ediff);
+                generator_Fe->takeSample(Ediff.GetData(), t, dt);
 
                 // Without this check, libROM may use multiple time intervals, and without appropriate implementation
                 // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -191,7 +173,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     SetStateVariables(S);
 
     Vector dSdt;
-    if (sampleF && sampleFdirectly)
+    if (sampleF)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -229,21 +211,12 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
         if (sampleF)
         {
-            if (sampleFdirectly)
-            {
-                MFEM_VERIFY(gfH1.Size() == H1size, "");
-                for (int i=0; i<H1size; ++i)
-                    gfH1[i] = dSdt[H1size + i];  // Fv
+            MFEM_VERIFY(gfH1.Size() == H1size, "");
+            for (int i=0; i<H1size; ++i)
+                gfH1[i] = dSdt[H1size + i];  // Fv
 
-                gfH1.GetTrueDofs(Xdiff);
-                generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-            }
-            else
-            {
-                Vector Mv(Xdiff.Size());
-                lhoper->MultMv(Xdiff, Mv);
-                generator_Fv->takeSample(Mv.GetData(), t, dt);
-            }
+            gfH1.GetTrueDofs(Xdiff);
+            generator_Fv->takeSample(Xdiff.GetData(), t, dt);
 
             // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -273,21 +246,12 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
         if (sampleF)
         {
-            if (sampleFdirectly)
-            {
-                MFEM_VERIFY(gfL2.Size() == L2size, "");
-                for (int i=0; i<L2size; ++i)
-                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+            MFEM_VERIFY(gfL2.Size() == L2size, "");
+            for (int i=0; i<L2size; ++i)
+                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
-                gfL2.GetTrueDofs(Ediff);
-                generator_Fe->takeSample(Ediff.GetData(), t, dt);
-            }
-            else
-            {
-                Vector Me(Ediff.Size());
-                lhoper->MultMe(Ediff, Me);
-                generator_Fe->takeSample(Me.GetData(), t, dt);
-            }
+            gfL2.GetTrueDofs(Ediff);
+            generator_Fe->takeSample(Ediff.GetData(), t, dt);
 
             // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -1599,10 +1563,8 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
     // Lift from rV to v
     // Note that here there is the product BVsp BVsp^T, which cannot be simplified and should not be stored.
     BVsp->mult(*rV, *spV);
-    //BFvsp->mult(*rV, *spV);
     for (int i=0; i<size_H1_sp; ++i)
         v[i] = (*spV)(i);
-    //v[i] = offsetInit ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
 }
 
 void ROM_Basis::HyperreduceRHS_E(Vector &e) const
@@ -1618,7 +1580,6 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     // Lift from rE to e
     // Note that here there is the product BEsp BEsp^T, which cannot be simplified and should not be stored.
     BEsp->mult(*rE, *spE);
-    //BFesp->mult(*rE, *spE);
     for (int i=0; i<size_L2_sp; ++i)
         e[i] = (*spE)(i);
 }
@@ -1944,89 +1905,15 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
     }
 }
 
-void ROM_Operator::StepRK2AvgOpt(Vector &S, double &t, double &dt) const
-{
-    MFEM_VERIFY(hyperreduce && rank == 0 && useGramSchmidt, "");
-    // TODO: if !useGramSchmidt, then apply reduced mass matrix inverses
-
-    basis->LiftToSampleMesh(S, fx);
-    // TODO: is this necessary? Does the call to UpdateMesh accomplish this anyway?
-    {   // update mesh
-        for (int i=0; i<Vsize_h1sp; ++i)
-            (*xsp_gf)[i] = fx[i];
-
-        spmesh->NewNodes(*xsp_gf, false);
-    }
-
-    const int Vsize = basis->SolutionSizeH1SP();
-    const int Esize = basis->SolutionSizeL2SP();
-    Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
-
-    // The monolithic BlockVector stores the unknown fields as follows:
-    // (Position, Velocity, Specific Internal Energy).
-    Vector dv_dt, v0, dx_dt, de_dt;
-    v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
-    de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
-    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
-    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
-
-    // In each sub-step:
-    // - Update the global state Vector S.
-    // - Compute dv_dt using S.
-    // - Update V using dv_dt.
-    // - Compute de_dt and dx_dt using S and V.
-
-    hydrodynamics::LagrangianHydroOperator *hydro_oper = operSP;
-
-    // -- 1.
-    // S is S0.
-    hydro_oper->UpdateMesh(fx);
-    hydro_oper->SolveVelocity(fx, dS_dt);
-
-    basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
-
-    // V = v0 + 0.5 * dt * dv_dt;
-    add(v0, 0.5 * dt, dv_dt, V);
-    hydro_oper->SolveEnergy(fx, V, dS_dt);
-
-    basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-
-    dx_dt = V;
-
-    // -- 2.
-    // S = S0 + 0.5 * dt * dS_dt;
-    add(S0, 0.5 * dt, dS_dt, fx);
-    hydro_oper->ResetQuadratureData();
-    hydro_oper->UpdateMesh(fx);
-    hydro_oper->SolveVelocity(fx, dS_dt);
-
-    basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
-
-    // V = v0 + 0.5 * dt * dv_dt;
-    add(v0, 0.5 * dt, dv_dt, V);
-    hydro_oper->SolveEnergy(fx, V, dS_dt);
-
-    basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-
-    dx_dt = V;
-
-    // -- 3.
-    // S = S0 + dt * dS_dt.
-    add(S0, dt, dS_dt, fx);
-    hydro_oper->ResetQuadratureData();
-
-    MFEM_VERIFY(!useReducedMv, "TODO");
-
-    basis->ProjectFromSampleMesh(fx, S, false);
-}
-
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
+    MFEM_VERIFY((hyperreduce && useGramSchmidt) || (!hyperreduce && !useGramSchmidt), "");
+    // TODO: if (hyperreduce && !useGramSchmidt), then apply reduced mass matrix inverses
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
 
-    if ((!hyperreduce || rank == 0) && !useGramSchmidt)  // simple version without RHS optimizations
+    if (!hyperreduce || rank == 0)
     {
         if (hyperreduce)
         {
@@ -2043,12 +1930,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
             basis->LiftROMtoFOM(S, fx);
 
         const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
+        const int Esize = basis->SolutionSizeL2SP();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
 
         // The monolithic BlockVector stores the unknown fields as follows:
         // (Position, Velocity, Specific Internal Energy).
-        Vector dv_dt, v0, dx_dt;
+        Vector dv_dt, v0, dx_dt, de_dt;
         v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+        de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
         dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
         dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
 
@@ -2062,10 +1951,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-
+        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 2.
@@ -2074,10 +1964,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-
+        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 3.
@@ -2088,12 +1979,10 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         MFEM_VERIFY(!useReducedMv, "TODO");
 
         if (hyperreduce)
-            basis->RestrictFromSampleMesh(fx, S);
+            basis->ProjectFromSampleMesh(fx, S, false);
         else
             basis->ProjectFOMtoROM(fx, S);
     }
-    else if (hyperreduce && useGramSchmidt && rank == 0)
-        StepRK2AvgOpt(S, t, dt);
 
     if (hyperreduce)
     {

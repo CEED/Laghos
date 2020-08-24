@@ -203,7 +203,6 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sampleF;
-    const bool sampleFdirectly = true;  // TODO: clean this before merging
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
@@ -505,7 +504,6 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
-    void StepRK2AvgOpt(Vector &S, double &t, double &dt) const;
 
     void InducedGramSchmidtInitialize(Vector &S);
     void InducedGramSchmidtFinalize(Vector &S);
