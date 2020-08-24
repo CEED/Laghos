@@ -61,18 +61,18 @@ public:
 
         if (staticSVD)
         {
-            generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, -1,
+            generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
                     BasisFileName(VariableName::X, window, parameterID), false, (parameterID >= 0));
-            generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, -1,
+            generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
                     BasisFileName(VariableName::V, window, parameterID), false, (parameterID >= 0));
-            generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, -1,
+            generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, 1,
                     BasisFileName(VariableName::E, window, parameterID), false, (parameterID >= 0));
 
             if (sampleF)
             {
-                generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, -1,
+                generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
                         BasisFileName(VariableName::Fv, window, parameterID), false, (parameterID >= 0));
-                generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, -1,
+                generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, 1,
                         BasisFileName(VariableName::Fe, window, parameterID), false, (parameterID >= 0));
             }
         }
@@ -87,7 +87,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    -1,
+                    1,
                     ROMBasisName::X + std::to_string(window),
                     false,
                     false,
@@ -102,7 +102,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    -1,
+                    1,
                     ROMBasisName::V + std::to_string(window),
                     false,
                     false,
@@ -117,7 +117,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    -1,
+                    1,
                     ROMBasisName::E + std::to_string(window),
                     false,
                     false,
@@ -135,7 +135,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         t_final,
-                        -1,
+                        1,
                         ROMBasisName::Fv + std::to_string(window),
                         false,
                         false,
@@ -150,7 +150,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         t_final,
-                        -1,
+                        1,
                         ROMBasisName::Fe + std::to_string(window),
                         false,
                         false,
