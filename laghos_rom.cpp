@@ -1771,7 +1771,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
 
 void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
-    if (hyperreduce)
+    if (hyperreduce && rank == 0)
     {
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
@@ -1849,7 +1849,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 
 void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
 {
-    if (hyperreduce)
+    if (hyperreduce && rank == 0)
     {
         // Get back the original matrix X from matrix Q by undoing all the operations
         // in the induced Gram Schmidt normalization process.
@@ -1920,6 +1920,11 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
         ComputeReducedMv();
         ComputeReducedMe();
     }
+
+    if (hyperreduce)
+    {
+        MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
+    }
 }
 
 void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
@@ -1931,6 +1936,11 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
     {
         ComputeReducedMv();
         ComputeReducedMe();
+    }
+
+    if (hyperreduce)
+    {
+        MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 }
 
