@@ -182,9 +182,12 @@ do
 			# Get test names
 			. $script
 
-			# Clear run directories
-			make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-			make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+			clean_tests() {
+				# Clear run directories
+				make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+				make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+			}
+			clean_tests
 			while true;
 			do
 
@@ -213,6 +216,7 @@ do
 					then
 						parallel=true
 						subTestNum=0
+						clean_tests
 						continue
 					else
 						break
@@ -282,6 +286,7 @@ do
 				num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
 				if [[ $(head -n 1 $BASE_DIR/run/num_steps) -ne $num_steps ]]; then
 					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
+					set_fail
 					continue 1
 				fi
 
@@ -298,7 +303,7 @@ do
 								continue 1
 							fi
 						elif [[ $testtype == "online" ]]; then
-							if [[ "$fileName" != *"norm.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
+							if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
 								continue 1
 							fi
 						elif [[ $testtype == "restore" ]]; then
