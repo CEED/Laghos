@@ -1269,6 +1269,12 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
 
+    if (RK2AvgFormulation && RHSbasis)
+    {
+        ProjectFromSampleMesh(usp, u, timeDerivative);
+        return;
+    }
+
     const bool useOffset = offsetInit && (!timeDerivative);
 
     // Select entries out of usp on the sample mesh.
@@ -1981,7 +1987,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         MFEM_VERIFY(!useReducedMv, "TODO");
 
         if (hyperreduce)
-            basis->ProjectFromSampleMesh(fx, S, false);
+            basis->RestrictFromSampleMesh(fx, S, false);
         else
             basis->ProjectFOMtoROM(fx, S);
     }
