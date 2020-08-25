@@ -179,8 +179,8 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
-    if (nset < 2)
-        cout << "More than one set must be specified. No merging is being done." << endl;
+    //if (nset < 2)
+    //    cout << "More than one set must be specified. No merging is being done." << endl;
 
     const bool usingWindows = (numWindows > 0); // TODO: || windowNumSamples > 0);
     Array<double> twep;
@@ -252,7 +252,6 @@ int main(int argc, char *argv[])
             totalSnapshotSizeFe += snapshotSizeFe[i];
         }
 
-        outfile_twp << twep[t] << ", ";
 
         LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize, cutoff[0]);
         LoadSampleSets(myid, energyFraction, nset, "V", t, dimV, totalSnapshotSize, cutoff[1]);
@@ -262,11 +261,16 @@ int main(int argc, char *argv[])
         {
             LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv, cutoff[3]);
             LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSizeFe, cutoff[4]);
-            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                        << cutoff[3] << ", " << cutoff[4] << "\n";
         }
-        else
-            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+        if (usingWindows)
+        {
+            outfile_twp << twep[t] << ", ";
+            if (rhsBasis)
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                            << cutoff[3] << ", " << cutoff[4] << "\n";
+            else
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+        }
     }
 
     return 0;
