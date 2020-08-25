@@ -1552,6 +1552,8 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 
 void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 {
+    if (!RHSbasis) return;
+
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
 
@@ -1569,6 +1571,8 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 
 void ROM_Basis::HyperreduceRHS_E(Vector &e) const
 {
+    if (!RHSbasis) return;
+
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
 
@@ -1908,8 +1912,6 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
-    MFEM_VERIFY((hyperreduce && useGramSchmidt) || (!hyperreduce && !useGramSchmidt), "");
-    // TODO: if (hyperreduce && !useGramSchmidt), then apply reduced mass matrix inverses
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
 
