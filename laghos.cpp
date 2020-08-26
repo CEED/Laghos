@@ -1073,9 +1073,16 @@ int main(int argc, char *argv[])
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                         tOverlapMidpoint = t;
 
-                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples)
+                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
                         samplerLast->Finalize(t, last_dt, S, cutoff);
+                        if (last_step)
+                        {
+                            // Let samplerLast define the final window, discarding the sampler window.
+                            tOverlapMidpoint = t;
+                            sampler = NULL;
+                        }
+
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0) {
                             outfile_twp << tOverlapMidpoint << ", ";
@@ -1113,12 +1120,7 @@ int main(int argc, char *argv[])
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    if (last_step)
-                    {
-                        sampler = NULL;
-                        samplerLast = NULL;
-                    }
-                    else
+                    if (!last_step)
                     {
                         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
                                                   rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
@@ -1311,8 +1313,14 @@ int main(int argc, char *argv[])
             else
                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
-        delete sampler;
-        delete samplerLast;
+        if (samplerLast == sampler)
+            delete sampler;
+        else
+        {
+            delete sampler;
+            delete samplerLast;
+        }
+
         samplerTimer.Stop();
         if(usingWindows) outfile_twp.close();
     }
