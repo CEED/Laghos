@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
     const char *twpfile = "twp.csv";
     int partition_type = 0;
     double blast_energy = 0.25;
+    double blast_energyFactor = 1.0;
     double blast_position[] = {0.0, 0.0, 0.0};
     bool rom_offline = false;
     bool rom_online = false;
@@ -167,6 +168,8 @@ int main(int argc, char *argv[])
     int rom_dimx = -1;
     int rom_dimv = -1;
     int rom_dime = -1;
+    int rom_dimfv = -1;
+    int rom_dimfe = -1;
     int numSampX = 0;
     int numSampV = 0;
     int numSampE = 0;
@@ -182,7 +185,12 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool rom_hyperreduce = false;
     bool match_end_time = false;
+    bool rom_reduceMass = false;
+    bool rom_sample_RHS = false;
+    bool rom_GramSchmidt = false;
     int rom_sample_dim = 0;
+    double rhoFactor = 1.0;
+    int rom_paramID = -1;
     const char *normtype_char = "l2";
     Array<double> twep;
     Array2D<int> twparam;
@@ -255,6 +263,8 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
     args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
     args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
+    args.AddOption(&rom_dimfv, "-rdimfv", "--rom_dimfv", "ROM dimension for Fv.");
+    args.AddOption(&rom_dimfe, "-rdimfe", "--rom_dimfe", "ROM dimension for Fe.");
     args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
@@ -280,6 +290,15 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
+    args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
+                   "Enable or disable reduction of V and E mass matrices.");
+    args.AddOption(&rom_sample_RHS, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
+                   "Sample RHS");
+    args.AddOption(&rom_GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
+                   "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
+    args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
+    args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.Parse();
     if (!args.Good())
     {
@@ -301,7 +320,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0);
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, rom_sample_RHS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -315,7 +334,8 @@ int main(int argc, char *argv[])
         numWindows = 1;  // one window for the entire simulation
     }
 
-    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 1;
+    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 2;
+    MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
     MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     StopWatch totalTimer;
@@ -548,6 +568,8 @@ int main(int argc, char *argv[])
         return 3;
     }
 
+    const bool usingRK2Avg = (ode_solver_type == 7);
+
     HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
     HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
 
@@ -600,7 +622,8 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction rho(&L2FESpace);
-    FunctionCoefficient rho_coeff(rho0);
+    FunctionCoefficient rho_coeff0(rho0);
+    ProductCoefficient rho_coeff(rhoFactor, rho_coeff0);
     L2_FECollection l2_fec(order_e, pmesh->Dimension());
     ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
     ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -610,7 +633,7 @@ int main(int argc, char *argv[])
     {
         // For the Sedov test, we use a delta function at the origin.
         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                                 blast_position[2], blast_energy);
+                                 blast_position[2], blast_energyFactor*blast_energy);
         l2_e.ProjectCoefficient(e_coeff);
     }
     else
@@ -738,7 +761,7 @@ int main(int argc, char *argv[])
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
-    Array<int> cutoff(3);
+    Array<int> cutoff(5);
     if (rom_offline)
     {
         if (dtc > 0.0) dt = dtc;
@@ -748,7 +771,8 @@ int main(int argc, char *argv[])
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
+        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
+                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -774,19 +798,26 @@ int main(int argc, char *argv[])
             rom_dimx = twparam(0,0);
             rom_dimv = twparam(0,1);
             rom_dime = twparam(0,2);
-            numSampX = twparam(0,3);
-            numSampV = twparam(0,4);
-            numSampE = twparam(0,5);
+            if (rom_sample_RHS)
+            {
+                rom_dimfv = twparam(0,3);
+                rom_dimfe = twparam(0,4);
+            }
+            const int oss = rom_sample_RHS ? 5 : 3;
+            numSampX = twparam(0,oss);
+            numSampV = twparam(0,oss+1);
+            numSampE = twparam(0,oss+2);
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                              numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset);
+                              rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
+                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
-        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -805,13 +836,18 @@ int main(int argc, char *argv[])
             rom_dimx = twparam(rom_window,0);
             rom_dimv = twparam(rom_window,1);
             rom_dime = twparam(rom_window,2);
+            if (rom_sample_RHS)
+            {
+                rom_dimfv = twparam(rom_window,3);
+                rom_dimfe = twparam(rom_window,4);
+            }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                  numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                  rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                  numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset);
+                                  rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -866,10 +902,15 @@ int main(int argc, char *argv[])
                 rom_dimx = twparam(rom_window,0);
                 rom_dimv = twparam(rom_window,1);
                 rom_dime = twparam(rom_window,2);
+                if (rom_sample_RHS)
+                {
+                    rom_dimfv = twparam(rom_window,3);
+                    rom_dimfe = twparam(rom_window,4);
+                }
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                      numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -902,6 +943,10 @@ int main(int argc, char *argv[])
         // usual time loop when rom_restore phase is false.
         std::ofstream outfile_tw_steps("run/tw_steps");
         timeLoopTimer.Start();
+        if (rom_hyperreduce && rom_GramSchmidt)
+        {
+            romOper->InducedGramSchmidtInitialize(romS);
+        }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
@@ -928,6 +973,7 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
+            // TODO: in the online case with hyperreduction, can we avoid these FOM operations?
             S_old = S;
             t_old = t;
             oper.ResetTimeStepEstimate();
@@ -937,7 +983,7 @@ int main(int argc, char *argv[])
             if (rom_online)
             {
                 if (myid == 0)
-                    cout << "ROM online at t " << t << ", dt " << dt << endl;
+                    cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
 
                 romS_old = romS;
                 ode_solver->Step(romS, t, dt);
@@ -1027,13 +1073,24 @@ int main(int argc, char *argv[])
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                         tOverlapMidpoint = t;
 
-                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples)
+                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
                         samplerLast->Finalize(t, last_dt, S, cutoff);
+                        if (last_step)
+                        {
+                            // Let samplerLast define the final window, discarding the sampler window.
+                            tOverlapMidpoint = t;
+                            sampler = NULL;
+                        }
+
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0) {
                             outfile_twp << tOverlapMidpoint << ", ";
-                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                            if (rom_sample_RHS)
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            else
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
                         delete samplerLast;
                         samplerLast = NULL;
@@ -1052,15 +1109,23 @@ int main(int argc, char *argv[])
                         sampler->Finalize(t, last_dt, S, cutoff);
                         if (myid == 0) {
                             outfile_twp << t << ", ";
-                            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                            if (rom_sample_RHS)
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            else
+                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
                         delete sampler;
                     }
 
                     rom_window++;
                     const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
-                    sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction, rom_window, rom_sample_dim);
-                    sampler->SampleSolution(t, dt, S);
+                    if (!last_step)
+                    {
+                        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
+                                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
+                        sampler->SampleSolution(t, dt, S);
+                    }
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
@@ -1077,28 +1142,45 @@ int main(int argc, char *argv[])
                         cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
 
                     if (rom_hyperreduce)
+                    {
+                        if (rom_GramSchmidt)
+                        {
+                            romOper->InducedGramSchmidtFinalize(romS);
+                        }
                         basis->LiftROMtoFOM(romS, S);
+                    }
 
                     rom_dimx = twparam(rom_window,0);
                     rom_dimv = twparam(rom_window,1);
                     rom_dime = twparam(rom_window,2);
-                    numSampX = twparam(rom_window,3);
-                    numSampV = twparam(rom_window,4);
-                    numSampE = twparam(rom_window,5);
+                    if (rom_sample_RHS)
+                    {
+                        rom_dimfv = twparam(rom_window,3);
+                        rom_dimfe = twparam(rom_window,4);
+                    }
+                    const int oss = rom_sample_RHS ? 5 : 3;
+                    numSampX = twparam(rom_window,oss);
+                    numSampV = twparam(rom_window,oss+1);
+                    numSampE = twparam(rom_window,oss+2);
 
                     delete basis;
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                          numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_window);
+                                          rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 
                     basis->ProjectFOMtoROM(S, romS);
 
                     delete romOper;
-                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC);
+                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
 
+                    if (rom_hyperreduce && rom_GramSchmidt)
+                    {
+                        romOper->InducedGramSchmidtInitialize(romS);
+                    }
                     ode_solver->Init(*romOper);
                 }
             }
@@ -1207,6 +1289,10 @@ int main(int argc, char *argv[])
 
     if (rom_hyperreduce)
     {
+        if (rom_GramSchmidt)
+        {
+            romOper->InducedGramSchmidtFinalize(romS);
+        }
         basis->LiftROMtoFOM(romS, S);
     }
 
@@ -1215,20 +1301,31 @@ int main(int argc, char *argv[])
         samplerTimer.Start();
         if (samplerLast)
             samplerLast->Finalize(t, dt, S, cutoff);
-        else
+        else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
-        if (myid == 0 && usingWindows) {
+        if (myid == 0 && usingWindows && sampler != NULL) {
             outfile_twp << t << ", ";
-            outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+
+            if (rom_sample_RHS)
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
+                            << cutoff[3] << ", " << cutoff[4] << "\n";
+            else
+                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
         }
-        delete sampler;
-        delete samplerLast;
+        if (samplerLast == sampler)
+            delete sampler;
+        else
+        {
+            delete sampler;
+            delete samplerLast;
+        }
+
         samplerTimer.Stop();
         if(usingWindows) outfile_twp.close();
     }
 
-    if (rom_offline && writeSol)
+    if (writeSol)
     {
         PrintParGridFunction(myid, "run/Sol_Position", &x_gf);
         PrintParGridFunction(myid, "run/Sol_Velocity", &v_gf);

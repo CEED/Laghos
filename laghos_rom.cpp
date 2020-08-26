@@ -13,6 +13,14 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     const bool sampleX = generator_X->isNextSample(t);
 
+    Vector dSdt;
+    if (sampleF)
+    {
+        dSdt.SetSize(S.Size());
+        lhoper->Mult(S, dSdt);
+        lhoper->GetTimeStepEstimate(S);  // Reset quadrature data after the Mult
+    }
+
     if (sampleX)
     {
         if (rank == 0)
@@ -43,6 +51,9 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     const bool sampleV = generator_V->isNextSample(t);
 
+    //TODO: use this, plus generator_Fv->computeNextSampleTime? So far, it seems sampleV == true on every step.
+    //const bool sampleFv = generator_Fv->isNextSample(t);
+
     if (sampleV)
     {
         if (rank == 0)
@@ -59,9 +70,24 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             generator_V->takeSample(Xdiff.GetData(), t, dt);
             generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+
+            if (sampleF)
+            {
+                MFEM_VERIFY(gfH1.Size() == H1size, "");
+                for (int i=0; i<H1size; ++i)
+                    gfH1[i] = dSdt[H1size + i];  // Fv
+
+                gfH1.GetTrueDofs(Xdiff);
+                generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+                MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+            }
         }
         else
         {
+            MFEM_VERIFY(!sampleF, "");
             generator_V->takeSample(V.GetData(), t, dt);
             generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
         }
@@ -89,9 +115,24 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
+
+            if (sampleF)
+            {
+                MFEM_VERIFY(gfL2.Size() == L2size, "");
+                for (int i=0; i<L2size; ++i)
+                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+                gfL2.GetTrueDofs(Ediff);
+                generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+                MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+            }
         }
         else
         {
+            MFEM_VERIFY(!sampleF, "");
             generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
@@ -131,6 +172,13 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 {
     SetStateVariables(S);
 
+    Vector dSdt;
+    if (sampleF)
+    {
+        dSdt.SetSize(S.Size());
+        lhoper->Mult(S, dSdt);
+    }
+
     if (offsetInit)
     {
         for (int i=0; i<tH1size; ++i)
@@ -143,7 +191,14 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_X->takeSample(X.GetData(), t, dt);
 
-    generator_X->endSamples();
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+
+    if (writeSnapshots)
+        generator_X->writeSnapshot();
+    else
+        generator_X->endSamples();
 
     if (offsetInit)
     {
@@ -153,11 +208,32 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
 
         generator_V->takeSample(Xdiff.GetData(), t, dt);
+
+        if (sampleF)
+        {
+            MFEM_VERIFY(gfH1.Size() == H1size, "");
+            for (int i=0; i<H1size; ++i)
+                gfH1[i] = dSdt[H1size + i];  // Fv
+
+            gfH1.GetTrueDofs(Xdiff);
+            generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+        }
     }
     else
         generator_V->takeSample(V.GetData(), t, dt);
 
-    generator_V->endSamples();
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+
+    if (writeSnapshots)
+        generator_V->writeSnapshot();
+    else
+        generator_V->endSamples();
 
     if (offsetInit)
     {
@@ -167,13 +243,48 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
 
         generator_E->takeSample(Ediff.GetData(), t, dt);
+
+        if (sampleF)
+        {
+            MFEM_VERIFY(gfL2.Size() == L2size, "");
+            for (int i=0; i<L2size; ++i)
+                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+            gfL2.GetTrueDofs(Ediff);
+            generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+        }
     }
     else
         generator_E->takeSample(E.GetData(), t, dt);
 
-    generator_E->endSamples();
+    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+    MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
 
-    if (rank == 0)
+    if (writeSnapshots)
+        generator_E->writeSnapshot();
+    else
+        generator_E->endSamples();
+
+    if (sampleF)
+    {
+        if (writeSnapshots)
+        {
+            generator_Fv->writeSnapshot();
+            generator_Fe->writeSnapshot();
+        }
+        else
+        {
+            generator_Fv->endSamples();
+            generator_Fe->endSamples();
+        }
+    }
+
+    if (rank == 0 && !writeSnapshots)
     {
         cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
@@ -186,11 +297,26 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, "E", generator_E);
+
+        if (sampleF)
+        {
+            cout << "Fv basis summary output: ";
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
+
+            cout << "Fe basis summary output: ";
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+        }
     }
 
     delete generator_X;
     delete generator_V;
     delete generator_E;
+
+    if (sampleF)
+    {
+        delete generator_Fv;
+        delete generator_Fe;
+    }
 }
 
 CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
@@ -227,14 +353,17 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 }
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-                     int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
-                     const bool staticSVD_, const bool hyperreduce_, const bool useXoffset, const int window)
+                     int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
+                     const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
+                     const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
+                     const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
-      rdimx(dimX), rdimv(dimV), rdime(dimE),
+      rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useXoffset)
+      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
+      RK2AvgFormulation(RK2AvgSolver)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -273,6 +402,13 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     rV = new CAROM::Vector(rdimv, false);
     rE = new CAROM::Vector(rdime, false);
 
+    if (RK2AvgFormulation)
+    {
+        rX2 = new CAROM::Vector(rdimx, false);
+        rV2 = new CAROM::Vector(rdimv, false);
+        rE2 = new CAROM::Vector(rdime, false);
+    }
+
     dimX = rdimx;
     dimV = rdimv;
     dimE = rdime;
@@ -287,6 +423,8 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
 
         initE = new CAROM::Vector(tL2size, true);
         initE->read("run/ROMoffset/initE" + std::to_string(window));
+
+        cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
     }
 
     if (hyperreduce)
@@ -483,20 +621,20 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     const int fomH1size = H1FESpace->GlobalTrueVSize();
     const int fomL2size = L2FESpace->GlobalTrueVSize();
 
-    numSamplesX = std::min(fomH1size, numSamplesX);
+    numSamplesX = RHSbasis ? 0 : std::min(fomH1size, numSamplesX);
     vector<int> sample_dofs_X(numSamplesX);
     vector<int> num_sample_dofs_per_procX(nprocs);
-    BsinvX = new CAROM::Matrix(numSamplesX, rdimx, false);
+    BsinvX = RHSbasis ? NULL : new CAROM::Matrix(numSamplesX, rdimx, false);
 
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = new CAROM::Matrix(numSamplesV, rdimv, false);
+    BsinvV = new CAROM::Matrix(numSamplesV, RHSbasis ? rdimfv : rdimv, false);
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
-    BsinvE = new CAROM::Matrix(numSamplesE, rdime, false);
+    BsinvE = new CAROM::Matrix(numSamplesE, RHSbasis ? rdimfe : rdime, false);
     if(rank == 0)
     {
         cout << "number of samples for position: " << numSamplesX << "\n";
@@ -505,32 +643,55 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }
 
     // Perform DEIM or GNAT to find sample DOF's.
-    CAROM::GNAT(basisX,
-                rdimx,
-                sample_dofs_X.data(),
-                num_sample_dofs_per_procX.data(),
-                *BsinvX,
-                rank,
-                nprocs,
-                numSamplesX);
+    if (RHSbasis)
+    {
+        CAROM::GNAT(basisFv,
+                    rdimfv,
+                    sample_dofs_V.data(),
+                    num_sample_dofs_per_procV.data(),
+                    *BsinvV,
+                    rank,
+                    nprocs,
+                    numSamplesV);
 
-    CAROM::GNAT(basisV,
-                rdimv,
-                sample_dofs_V.data(),
-                num_sample_dofs_per_procV.data(),
-                *BsinvV,
-                rank,
-                nprocs,
-                numSamplesV);
+        CAROM::GNAT(basisFe,
+                    rdimfe,
+                    sample_dofs_E.data(),
+                    num_sample_dofs_per_procE.data(),
+                    *BsinvE,
+                    rank,
+                    nprocs,
+                    numSamplesE);
+    }
+    else
+    {
+        CAROM::GNAT(basisX,
+                    rdimx,
+                    sample_dofs_X.data(),
+                    num_sample_dofs_per_procX.data(),
+                    *BsinvX,
+                    rank,
+                    nprocs,
+                    numSamplesX);
 
-    CAROM::GNAT(basisE,
-                rdime,
-                sample_dofs_E.data(),
-                num_sample_dofs_per_procE.data(),
-                *BsinvE,
-                rank,
-                nprocs,
-                numSamplesE);
+        CAROM::GNAT(basisV,
+                    rdimv,
+                    sample_dofs_V.data(),
+                    num_sample_dofs_per_procV.data(),
+                    *BsinvV,
+                    rank,
+                    nprocs,
+                    numSamplesV);
+
+        CAROM::GNAT(basisE,
+                    rdime,
+                    sample_dofs_E.data(),
+                    num_sample_dofs_per_procE.data(),
+                    *BsinvE,
+                    rank,
+                    nprocs,
+                    numSamplesE);
+    }
 
     // We assume that the same H1 fespace is used for X and V, and a different L2 fespace is used for E.
     // We merge all sample DOF's for X, V, and E into one set for each process.
@@ -813,6 +974,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         sX = new CAROM::Vector(numSamplesX, false);
         sV = new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
+
+        if (RHSbasis)
+        {
+            BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+            BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
+        }
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
@@ -821,10 +988,14 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+
+    if (RHSbasis)
+        GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
 #else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+    MFEM_VERIFY(!RHSbasis, "");
 #endif
 
     if (offsetInit)
@@ -872,6 +1043,56 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     delete sp_H1_space;
     delete sp_L2_space;
+
+    if (!useGramSchmidt)
+    {
+        ComputeReducedRHS();
+    }
+}
+
+void ROM_Basis::ComputeReducedRHS()
+{
+    if (RHSbasis && rank == 0)
+    {
+        // Compute reduced matrix BsinvX = BXsp^T BVsp
+        BsinvX = BXsp->transposeMult(BVsp);
+
+        BX0 = BXsp->transposeMult(initVsp);
+        MFEM_VERIFY(BX0->dim() == rdimx, "");
+
+        // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
+        CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
+        CAROM::Matrix *prod2 = BsinvV->mult(prod1);
+
+        delete prod1;
+        delete BsinvV;
+
+        BsinvV = prod2;
+
+        // Compute reduced matrix BsinvE = (BEsp^T BFesp BsinvE^T)^T = BsinvE BFesp^T BEsp
+        prod1 = BFesp->transposeMult(BEsp);
+        prod2 = BsinvE->mult(prod1);
+
+        delete prod1;
+        delete BsinvE;
+
+        BsinvE = prod2;
+
+        if (RK2AvgFormulation)
+        {
+            const CAROM::Matrix *prodX = BXsp->transposeMult(BXsp);
+            BXXinv = prodX->inverse();
+            delete prodX;
+
+            const CAROM::Matrix *prodV = BVsp->transposeMult(BVsp);
+            BVVinv = prodV->inverse();
+            delete prodV;
+
+            const CAROM::Matrix *prodE = BEsp->transposeMult(BEsp);
+            BEEinv = prodE->inverse();
+            delete prodE;
+        }
+    }
 }
 
 void ROM_Basis::ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs)
@@ -902,15 +1123,15 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    /*
-    basisX = ReadBasisROM(rank, ROMBasisName::X, H1size, (staticSVD ? rowOffsetH1 : 0), rdimx);
-    basisV = ReadBasisROM(rank, ROMBasisName::V, H1size, (staticSVD ? rowOffsetH1 : 0), rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E, L2size, (staticSVD ? rowOffsetL2 : 0), rdime);
-    */
-
     basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
     basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
     basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+
+    if (RHSbasis)
+    {
+        basisFv = ReadBasisROM(rank, ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+    }
 }
 
 // f is a full vector, not a true vector
@@ -1041,10 +1262,18 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
     }
 }
 
-void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool timeDerivative) const
+void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool timeDerivative,
+                                       const bool rhs_without_mass_matrix, const DenseMatrix *invMvROM,
+                                       const DenseMatrix *invMeROM) const
 {
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
+
+    if (RK2AvgFormulation && RHSbasis)
+    {
+        ProjectFromSampleMesh(usp, u, timeDerivative);
+        return;
+    }
 
     const bool useOffset = offsetInit && (!timeDerivative);
 
@@ -1053,9 +1282,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
 
     for (int i=0; i<numSamplesX; ++i)
-    {
         (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
-    }
 
     for (int i=0; i<numSamplesV; ++i)
         (*sV)(i) = useOffset ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
@@ -1063,28 +1290,136 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
-    BsinvX->transposeMult(*sX, *rX);
+    if (!RHSbasis)
+    {
+        BsinvX->transposeMult(*sX, *rX);
+        for (int i=0; i<rdimx; ++i)
+            u[i] = (*rX)(i);
+    }
+
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
 
-    for (int i=0; i<rdimx; ++i)
-        u[i] = (*rX)(i);
+    if (rhs_without_mass_matrix && timeDerivative)
+    {
+        Vector rhs(rdimv);
+        Vector invMrhs(rdimv);
+        for (int i=0; i<rdimv; ++i)
+            rhs[i] = (*rV)(i);
+
+        // TODO: multiply BsinvV by invMvROM and store that rather than doing 2 mults, in the case of no Gram-Schmidt (will that version be maintained?).
+        invMvROM->Mult(rhs, invMrhs);
+        for (int i=0; i<rdimv; ++i)
+            u[rdimx + i] = invMrhs[i];
+    }
+    else
+    {
+        for (int i=0; i<rdimv; ++i)
+            u[rdimx + i] = (*rV)(i);
+    }
+
+    if (rhs_without_mass_matrix && timeDerivative)
+    {
+        Vector rhs(rdime);
+        Vector invMrhs(rdime);
+        for (int i=0; i<rdime; ++i)
+            rhs[i] = (*rE)(i);
+
+        invMeROM->Mult(rhs, invMrhs);
+        for (int i=0; i<rdime; ++i)
+            u[rdimx + rdimv + i] = invMrhs[i];
+    }
+    else
+    {
+        for (int i=0; i<rdime; ++i)
+            u[rdimx + rdimv + i] = (*rE)(i);
+    }
+}
+
+void ROM_Basis::RestrictFromSampleMesh_V(const Vector &usp, Vector &u) const
+{
+    MFEM_VERIFY(u.Size() == rdimv, "");
+    MFEM_VERIFY(usp.Size() == size_H1_sp, "");
+
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spV)(i) = usp[i];
+
+    BVsp->transposeMult(*spV, *rV);
 
     for (int i=0; i<rdimv; ++i)
-        u[rdimx + i] = (*rV)(i);
+        u[i] = (*rV)(i);
+}
+
+void ROM_Basis::RestrictFromSampleMesh_E(const Vector &usp, Vector &u) const
+{
+    MFEM_VERIFY(u.Size() == rdime, "");
+    MFEM_VERIFY(usp.Size() == size_L2_sp, "");
+
+    for (int i=0; i<size_L2_sp; ++i)
+        (*spE)(i) = usp[i];
+
+    BEsp->transposeMult(*spE, *rE);
 
     for (int i=0; i<rdime; ++i)
-        u[rdimx + rdimv + i] = (*rE)(i);
+        u[i] = (*rE)(i);
+}
+
+void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
+                                      const bool timeDerivative) const
+{
+    MFEM_VERIFY(u.Size() == TotalSize(), "");
+    MFEM_VERIFY(usp.Size() == (2*size_H1_sp) + size_L2_sp, "");
+
+    const bool useOffset = offsetInit && (!timeDerivative);
+
+    int ossp = 0;
+    int osrom = 0;
+
+    // X
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spX)(i) = useOffset ? usp[ossp + i] - (*initXsp)(i) : usp[ossp + i];
+
+    BXsp->transposeMult(*spX, *rX);
+    BXXinv->mult(*rX, *rX2);
+
+    for (int i=0; i<rdimx; ++i)
+        u[osrom + i] = (*rX2)(i);
+
+    osrom += rdimx;
+    ossp += size_H1_sp;
+
+    // V
+    for (int i=0; i<size_H1_sp; ++i)
+        (*spV)(i) = useOffset ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
+
+    BVsp->transposeMult(*spV, *rV);
+    BVVinv->mult(*rV, *rV2);
+
+    for (int i=0; i<rdimv; ++i)
+        u[osrom + i] = (*rV2)(i);
+
+    osrom += rdimv;
+    ossp += size_H1_sp;
+
+    // E
+    for (int i=0; i<size_L2_sp; ++i)
+        (*spE)(i) = useOffset ? usp[ossp + i] - (*initEsp)(i) : usp[ossp + i];
+
+    BEsp->transposeMult(*spE, *rE);
+    BEEinv->mult(*rE, *rE2);
+
+    for (int i=0; i<rdime; ++i)
+        u[osrom + i] = (*rE2)(i);
 }
 
 ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
-                           FunctionCoefficient& rho_coeff, FunctionCoefficient& mat_coeff,
+                           Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
-                           FiniteElementCollection *L2fec)
+                           FiniteElementCollection *L2fec, const bool reduceMass, const bool GramSchmidt)
     : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
-      rank(b->GetRank()), hyperreduce(hyperreduce_)
+      rank(b->GetRank()), hyperreduce(hyperreduce_), useReducedMv(reduceMass), useReducedMe(reduceMass), useGramSchmidt(GramSchmidt)
 {
     MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
 
@@ -1161,12 +1496,161 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType());
+                H1fec->GetBasisType(), (useReducedMv || useGramSchmidt), (useReducedMe || useGramSchmidt));
     }
     else if (!hyperreduce)
     {
         fx.SetSize(lhoper->Height());
         fy.SetSize(lhoper->Height());
+    }
+
+    if (useReducedMv)
+    {
+        ComputeReducedMv();
+        ComputeReducedMe();
+    }
+}
+
+void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
+{
+    if (sp)  // Sample mesh version
+    {
+        MFEM_VERIFY(v.Size() == size_H1_sp, "");
+
+        for (int i=0; i<size_H1_sp; ++i)
+            v[i] = (*BVsp)(i,id);
+    }
+    else  // FOM version
+    {
+        MFEM_VERIFY(v.Size() == tH1size, "");
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Basis::GetBasisVectorE(const bool sp, const int id, Vector &v) const
+{
+    if (sp)  // Sample mesh version
+    {
+        MFEM_VERIFY(v.Size() == size_L2_sp, "");
+
+        for (int i=0; i<size_L2_sp; ++i)
+            v[i] = (*BEsp)(i,id);
+    }
+    else  // FOM version
+    {
+        MFEM_VERIFY(v.Size() == tL2size, "");
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
+{
+    if (RHSbasis)
+    {
+        for (int i=0; i<rdimv; ++i)
+            (*rV)(i) = x[rdimx + i];
+
+        BsinvX->mult(*rV, *rX);
+        for (int i=0; i<rdimx; ++i)
+            y[i] = (*rX)(i) + (*BX0)(i);
+    }
+}
+
+void ROM_Basis::HyperreduceRHS_V(Vector &v) const
+{
+    if (!RHSbasis) return;
+
+    MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
+    MFEM_VERIFY(v.Size() == size_H1_sp, "");
+
+    for (int i=0; i<numSamplesV; ++i)
+        (*sV)(i) = v[s2sp_V[i]];
+
+    BsinvV->transposeMult(*sV, *rV);
+
+    // Lift from rV to v
+    // Note that here there is the product BVsp BVsp^T, which cannot be simplified and should not be stored.
+    BVsp->mult(*rV, *spV);
+    for (int i=0; i<size_H1_sp; ++i)
+        v[i] = (*spV)(i);
+}
+
+void ROM_Basis::HyperreduceRHS_E(Vector &e) const
+{
+    if (!RHSbasis) return;
+
+    MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
+    MFEM_VERIFY(e.Size() == size_L2_sp, "");
+
+    for (int i=0; i<numSamplesE; ++i)
+        (*sE)(i) = e[s2sp_E[i]];
+
+    BsinvE->transposeMult(*sE, *rE);
+
+    // Lift from rE to e
+    // Note that here there is the product BEsp BEsp^T, which cannot be simplified and should not be stored.
+    BEsp->mult(*rE, *spE);
+    for (int i=0; i<size_L2_sp; ++i)
+        e[i] = (*spE)(i);
+}
+
+void ROM_Operator::ComputeReducedMv()
+{
+    const int nv = basis->GetDimV();
+
+    if (hyperreduce && rank == 0)
+    {
+        invMvROM.SetSize(nv);
+        const int size_H1_sp = basis->SolutionSizeH1SP();
+
+        Vector vj_sp(size_H1_sp);
+        Vector Mvj_sp(size_H1_sp);
+        Vector Mvj(nv);
+        for (int j=0; j<nv; ++j)
+        {
+            basis->GetBasisVectorV(hyperreduce, j, vj_sp);
+            operSP->MultMv(vj_sp, Mvj_sp);
+            basis->RestrictFromSampleMesh_V(Mvj_sp, Mvj);
+
+            for (int i=0; i<nv; ++i)
+                invMvROM(i,j) = Mvj[i];
+        }
+
+        invMvROM.Invert();
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::ComputeReducedMe()
+{
+    const int ne = basis->GetDimE();
+
+    if (hyperreduce && rank == 0)
+    {
+        invMeROM.SetSize(ne);
+        const int size_L2_sp = basis->SolutionSizeL2SP();
+
+        Vector ej_sp(size_L2_sp);
+        Vector Mej_sp(size_L2_sp);
+        Vector Mej(ne);
+        for (int j=0; j<ne; ++j)
+        {
+            basis->GetBasisVectorE(hyperreduce, j, ej_sp);
+            operSP->MultMe(ej_sp, Mej_sp);
+            basis->RestrictFromSampleMesh_E(Mej_sp, Mej);
+
+            for (int i=0; i<ne; ++i)
+                invMeROM(i,j) = Mej[i];
+        }
+
+        invMeROM.Invert();
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
     }
 }
 
@@ -1190,6 +1674,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 {
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
+    MFEM_VERIFY((useReducedMv && useReducedMe) || (!useReducedMv && !useReducedMe), "");
 
     if (hyperreduce)
     {
@@ -1206,7 +1691,8 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             }
 
             operSP->Mult(fx, fy);
-            basis->RestrictFromSampleMesh(fy, y, true);
+            basis->RestrictFromSampleMesh(fy, y, true, (useReducedMv && !useGramSchmidt), &invMvROM, &invMeROM);
+            basis->Set_dxdt_Reduced(x, y);
 
             operSP->ResetQuadratureData();
         }
@@ -1218,6 +1704,214 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
         basis->LiftROMtoFOM(x, fx);
         operFOM->Mult(fx, fy);
         basis->ProjectFOMtoROM(fy, y, true);
+    }
+}
+
+void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip)
+{
+    ip = 0.0;
+    if (hyperreduce)
+    {
+        Vector xj_sp(dim);
+        Vector xi_sp(dim);
+        Vector Mxj_sp(dim);
+
+        if (var == 1) // velocity
+        {
+            basis->GetBasisVectorV(hyperreduce, id1, xj_sp);
+            basis->GetBasisVectorV(hyperreduce, id2, xi_sp);
+            operSP->MultMv(xj_sp, Mxj_sp);
+        }
+        else if (var == 2) // energy
+        {
+            basis->GetBasisVectorE(hyperreduce, id1, xj_sp);
+            basis->GetBasisVectorE(hyperreduce, id2, xi_sp);
+            operSP->MultMe(xj_sp, Mxj_sp);
+        }
+
+        for (int k=0; k<dim; ++k)
+        {
+            ip += Mxj_sp[k]*xi_sp[k];
+        }
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
+{
+    if (hyperreduce && rank == 0)
+    {
+        // Induced Gram Schmidt normalization is equivalent to
+        // factorizing the basis into X = QR,
+        // where size(Q) = size(X), Q is M-orthonormal,
+        // and R is square and upper triangular.
+        // Matrix X will be substituted by matrix Q.
+        int spdim, rdim, offset;
+        CAROM::Matrix *X;
+        DenseMatrix *R;
+        double factor;
+
+        if (var == 1) // velocity
+        {
+            spdim = basis->SolutionSizeH1SP();
+            rdim = basis->GetDimV();
+            offset = basis->GetDimX();
+            CoordinateBVsp.SetSize(rdim);
+            X = basis->GetBVsp();
+            R = &CoordinateBVsp;
+        }
+        else if (var == 2) // energy
+        {
+            spdim = basis->SolutionSizeL2SP();
+            rdim = basis->GetDimE();
+            offset = basis->GetDimX() + basis->GetDimV();
+            CoordinateBEsp.SetSize(rdim);
+            X = basis->GetBEsp();
+            R = &CoordinateBEsp;
+        }
+
+        InducedInnerProduct(0, 0, var, spdim, factor);
+        (*R)(0,0) = sqrt(factor);
+        for (int k=0; k<spdim; ++k)
+        {
+            (*X)(k,0) /= (*R)(0,0); // normalize
+        }
+
+        for (int j=1; j<rdim; ++j)
+        {
+            for (int i=0; i<j; ++i)
+            {
+                InducedInnerProduct(j, i, var, spdim, factor);
+                (*R)(i,j) = factor;
+                for (int k=0; k<spdim; ++k)
+                {
+                    (*X)(k,j) -= (*R)(i,j)*(*X)(k,i); // orthogonalize
+                }
+            }
+            InducedInnerProduct(j, j, var, spdim, factor);
+            (*R)(j,j) = sqrt(factor);
+            for (int k=0; k<spdim; ++k)
+            {
+                (*X)(k,j) /= (*R)(j,j); // normalize
+            }
+        }
+
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to Q is
+        // obtained by d = Rc.
+        for (int i=0; i<rdim; ++i)
+        {
+            S[offset+i] *= (*R)(i,i);
+            for (int j=i+1; j<rdim; ++j)
+            {
+                S[offset+i] += (*R)(i,j)*S[offset+j]; // triangular update
+            }
+        }
+
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
+{
+    if (hyperreduce && rank == 0)
+    {
+        // Get back the original matrix X from matrix Q by undoing all the operations
+        // in the induced Gram Schmidt normalization process.
+        // See ROM_Operator::InducedGramSchmidt
+        int spdim, rdim, offset;
+        CAROM::Matrix *X;
+        DenseMatrix *R;
+
+        if (var == 1) // velocity
+        {
+            spdim = basis->SolutionSizeH1SP();
+            rdim = basis->GetDimV();
+            offset = basis->GetDimX();
+            X = basis->GetBVsp();
+            R = &CoordinateBVsp;
+        }
+        else if (var == 2) // energy
+        {
+            spdim = basis->SolutionSizeL2SP();
+            rdim = basis->GetDimE();
+            offset = basis->GetDimX() + basis->GetDimV();
+            X = basis->GetBEsp();
+            R = &CoordinateBEsp;
+        }
+
+        for (int j=rdim-1; j>-1; --j)
+        {
+            for (int k=0; k<spdim; ++k)
+            {
+                (*X)(k,j) *= (*R)(j,j);
+            }
+            for (int i=0; i<j; ++i)
+            {
+                for (int k=0; k<spdim; ++k)
+                {
+                    (*X)(k,j) += (*R)(i,j)*(*X)(k,i);
+                }
+            }
+        }
+
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to X is
+        // obtained from c = R\d.
+        for (int i=rdim-1; i>-1; --i)
+        {
+            for (int j = rdim-1; j>i; --j)
+            {
+                S[offset+i] -= (*R)(i,j)*S[offset+j]; // backward substitution
+            }
+            S[offset+i] /= (*R)(i,i);
+        }
+        (*R).Clear();
+
+    }
+    else if (!hyperreduce)
+    {
+        MFEM_VERIFY(false, "TODO");
+    }
+}
+
+void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
+{
+    InducedGramSchmidt(1, S); // velocity
+    InducedGramSchmidt(2, S); // energy
+    basis->ComputeReducedRHS();
+    if (useReducedMv)
+    {
+        ComputeReducedMv();
+        ComputeReducedMe();
+    }
+
+    if (hyperreduce)
+    {
+        MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
+    }
+}
+
+void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
+{
+    UndoInducedGramSchmidt(1, S); // velocity
+    UndoInducedGramSchmidt(2, S); // energy
+    basis->ComputeReducedRHS();
+    if (useReducedMv)
+    {
+        ComputeReducedMv();
+        ComputeReducedMe();
+    }
+
+    if (hyperreduce)
+    {
+        MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 }
 
@@ -1244,12 +1938,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
             basis->LiftROMtoFOM(S, fx);
 
         const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
+        const int Esize = basis->SolutionSizeL2SP();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
 
         // The monolithic BlockVector stores the unknown fields as follows:
         // (Position, Velocity, Specific Internal Energy).
-        Vector dv_dt, v0, dx_dt;
+        Vector dv_dt, v0, dx_dt, de_dt;
         v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+        de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
         dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
         dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
 
@@ -1263,9 +1959,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 2.
@@ -1274,9 +1972,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
+        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 3.
@@ -1284,8 +1984,10 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         add(S0, dt, dS_dt, fx);
         hydro_oper->ResetQuadratureData();
 
+        MFEM_VERIFY(!useReducedMv, "TODO");
+
         if (hyperreduce)
-            basis->RestrictFromSampleMesh(fx, S);
+            basis->RestrictFromSampleMesh(fx, S, false);
         else
             basis->ProjectFOMtoROM(fx, S);
     }

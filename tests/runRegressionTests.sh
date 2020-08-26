@@ -4,8 +4,16 @@
 # SET UP
 ###############################################################################
 
+usage() {
+	echo "Unknown option. Refer to REGRESSIONTEST.md"
+	exit 1
+}
+
+# Stop at failure
+stopAtFailure=false
+
 # Get options
-while getopts ":i:e:n:" o;
+while getopts ":i:e:fh" o;
 do
 	case "${o}" in
 		i)
@@ -14,8 +22,8 @@ do
     e)
       e=${OPTARG}
       ;;
-		n)
-			n=${OPTARG}
+		f)
+			stopAtFailure=true
 			;;
     *)
       usage
@@ -28,12 +36,6 @@ shift $((OPTIND-1))
 if [ -n "${i}" ] && [ -n "${e}" ]; then
     usage
 		exit 1
-fi
-
-# If normtypes option is set, set normtypes
-normtypes=( $n )
-if [ ${#normtypes[@]} -eq 0 ]; then
-		normtypes=("l2")
 fi
 
 # Save directory of this script
@@ -132,21 +134,32 @@ make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 # Check if make built correctly
 if [ $? -ne 0 ]
 then
-	echo "The baseline branch failed to build" | tee -a $setupLogFile
+	echo "The baseline branch failed to build. Make sure to run 'make clean' and 'make'." | tee -a $setupLogFile
   exit 1
 fi
+
+# Build merge
+make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 ###############################################################################
 # RUN TESTS
 ###############################################################################
 
+case "$(uname -s)" in
+    Linux*)
+		  COMMAND="srun -p pdebug";;
+    Darwin*)
+		  COMMAND="mpirun -oversubscribe";;
+    *)
+			echo "The regression tests can only run on Linux and MAC."
+			exit 1
+esac
+
+
 # Test number counter
 testNum=0
 testNumFail=0
 testNumPass=0
-
-# Test type
-testtypes=(offline online romhr restore)
 
 # Run all tests
 for simulation in "${testsToRun[@]}"
@@ -162,158 +175,212 @@ do
 			scriptName=$(basename $script)
       scriptName="${scriptName%.*}"
 
-			# Run script with the following normtypes
-			for normtype in "${normtypes[@]}"
+			subTestNum=0
+			parallel=false
+			NUM_PARALLEL_PROCESSORS=0
+
+			# Get test names
+			. $script
+
+			clean_tests() {
+				# Clear run directories
+				make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+				make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+			}
+			clean_tests
+			while true;
 			do
 
-        # Clear run directories
-        make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-        make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+				if [ "$parallel" == "false" ]
+				then
+					HEADER="$COMMAND -n 1"
+					testName="${testNames[$subTestNum]}"
+				else
+					HEADER="$COMMAND -n $NUM_PARALLEL_PROCESSORS"
+					testName="${testNames[$subTestNum]}-parallel"
+				fi
 
-        # Run every test type
-        for testtype in "${testtypes[@]}"
-        do
-					testNum=$((testNum+1))
+				# Update subtest numbers
+				subTestNum=$((subTestNum+1))
 
-					# Test failed boolean variable
-					testFailed=false
+				# Get testtype
+				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
+				if [[ $RAN_COMMAND == *"writesol"* ]]; then
+					testtype=fom
+				elif [[ $RAN_COMMAND == *"online"* ]]; then
+					testtype=online
+				elif [[ $RAN_COMMAND == *"restore"* ]]; then
+					testtype=restore
+				else
+					if [[ "$parallel" == "false" ]] && [[ $NUM_PARALLEL_PROCESSORS -ne 0 ]];
+					then
+						parallel=true
+						subTestNum=0
+						clean_tests
+						continue
+					else
+						break
+					fi
+				fi
 
-					# Create simulation results log file
-					simulationLogFile="${RESULTS_DIR}/${scriptName}-${testtype}-${normtype}.log"
-					touch $simulationLogFile
+				# Update test numbers
+				testNum=$((testNum+1))
 
-					set_pass() {
-						testNumPass=$((testNumPass+1))
-						echo -e "\\r\033[0K$testNum. ${scriptName}-${testtype}-${normtype}: PASS"
-						echo "${scriptName}-${testtype}-${normtype}: PASS" >> $simulationLogFile
+				# Test failed boolean variable
+				testFailed=false
+
+				# Create simulation results log file
+				simulationLogFile="${RESULTS_DIR}/${scriptName}-${testName}.log"
+				touch $simulationLogFile
+
+				set_pass() {
+					testNumPass=$((testNumPass+1))
+					echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: PASS"
+					echo "${scriptName}-${testName}: PASS" >> $simulationLogFile
+				}
+
+				set_fail() {
+					testFailed=true
+					testNumFail=$((testNumFail+1))
+					echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: FAIL"
+					echo "${scriptName}-${testName}: FAIL" >> $simulationLogFile
+					if [ "$stopAtFailure" == "true" ]
+					then
+						exit 1
+					fi
+				}
+
+				echo -n "$testNum. ${scriptName}-${testName}: RUNNING"
+
+				# Run simulation from rom-dev branch
+				echo $"Running baseline simulation for comparison" >> $simulationLogFile 2>&1
+				(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
+
+				# Check if simulation failed
+				if [ "$?" -ne 0 ]
+				then
+					echo "Something went wrong running the baseline simulation with the
+					test script: $scriptName. Try running 'make clean' and 'make'." >> $simulationLogFile 2>&1
+					set_fail
+
+					# Skip to next test
+					continue 1
+				fi
+
+				# # Run simulation from current branch
+				echo $"Running new simulation for regression testing" >> $simulationLogFile 2>&1
+				(cd $BASE_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
+
+				# Check if simulation failed
+				if [ "$?" -ne 0 ]
+				then
+					echo "Something went wrong running the new user branch simulation with the
+					 test script: $scriptName" >> $simulationLogFile 2>&1
+					set_fail
+
+					# Skip to next test
+					continue 1
+				fi
+
+				# Find number of steps simulation took in rom-dev to compare final timestep later
+				num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
+				if [[ $(head -n 1 $BASE_DIR/run/num_steps) -ne $num_steps ]]; then
+					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
+					set_fail
+					continue 1
+				fi
+
+				# After simulations complete, compare results
+				for testFile in $BASELINE_LAGHOS_DIR/run/*
+				do
+					fileName="$(basename "$testFile")"
+
+					# Skip if not correct file type to compare
+					check_file_type() {
+						if [[ $testtype == "fom" ]]; then
+							if [[ "$fileName" != "basis"* ]] && [[ "$fileName" != "Sol"* ]] &&
+							[[ "$fileName" != "sVal"* ]]; then
+								continue 1
+							fi
+						elif [[ $testtype == "online" ]]; then
+							if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
+								continue 1
+							fi
+						elif [[ $testtype == "restore" ]]; then
+							if [[ $parallel == "false" ]]; then
+								if [[ "$fileName" != *"_gf" ]]; then
+									continue 1
+								fi
+							else
+								continue 1
+							fi
+						fi
+					}
+					check_file_type
+
+					# Check if comparison failed
+					check_fail() {
+						if [ "${PIPESTATUS[0]}" -ne 0 ]
+						then
+							set_fail
+
+							# Skip to next test
+							break 1
+						fi
 					}
 
-					set_fail() {
-						testFailed=true
-						testNumFail=$((testNumFail+1))
-						echo -e "\\r\033[0K$testNum. ${scriptName}-${testtype}-${normtype}: FAIL"
-						echo "${scriptName}-${testtype}-${normtype}: FAIL" >> $simulationLogFile
+					# Check if a file exists on the user branch
+					check_exists() {
+						if [[ ! -f "$basetestfile" ]]; then
+							echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
+							set_fail
+
+							# Skip to next test
+							break 1
+						fi
 					}
 
-					echo -n "$testNum. ${scriptName}-${testtype}-${normtype}: RUNNING"
+					# Compare last timestep of ROMSol
+					if [[ -d "$testFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
+							echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
+							basetestfile="$BASE_DIR/run/$fileName/romS_$num_steps"
+							check_exists
+							if [[ "$scriptName" == *"parallel"* ]]; then
+								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+							else
+								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+							fi
+							check_fail
 
-  				# Run simulation from rom-dev branch
-  			  echo $"Running baseline simulation for comparison" >> $simulationLogFile 2>&1
-  				(cd $BASELINE_LAGHOS_DIR && . "$script") >> $simulationLogFile 2>&1
+					# Compare FOM basis
+					elif [[ "$fileName" == "basis"* ]]; then
+						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
+						basetestfile="$BASE_DIR/run/$fileName"
+						check_exists
+						testFile="${testFile%.*}"
+						basetestfile="${basetestfile%.*}"
+						$($DIR/./basisComparator "$testFile" "$basetestfile" "1.0e-2" >> $simulationLogFile 2>&1)
+						check_fail
 
-					# Check if simulation failed
-					if [ "$?" -ne 0 ]
-					then
-						echo "Something went wrong running the baseline simulation with the
-            test script: $scriptName" >> $simulationLogFile 2>&1
-            set_fail
-
-            # Skip to next test
-						continue 1
+					# Compare solutions, singular values, and number of time steps
+					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
+					[[ "$fileName" == *"_gf" ]] ; then
+						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
+						basetestfile="$BASE_DIR/run/$fileName"
+						check_exists
+						if [[ "$scriptName" == *"parallel"* ]]; then
+							$($DIR/./fileComparator "$testFile" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+						else
+							$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+						fi
+						check_fail
 					fi
+				done
 
-  				# # Run simulation from current branch
-  				echo $"Running new simulation for regression testing" >> $simulationLogFile 2>&1
-  				(cd $BASE_DIR && . "$script") >> $simulationLogFile 2>&1
-
-					# Check if simulation failed
-          if [ "$?" -ne 0 ]
-					then
-						echo "Something went wrong running the new user branch simulation with the
-             test script: $scriptName" >> $simulationLogFile 2>&1
-            set_fail
-
-            # Skip to next test
-						continue 1
-					fi
-
-          # Find number of steps simulation took in rom-dev to compare final timestep later
-          num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
-
-  				# After simulations complete, compare results
-  				for testFile in $BASELINE_LAGHOS_DIR/run/*
-  				do
-  					fileName="$(basename "$testFile")"
-
-            # Skip if not correct file type to compare
-            check_file_type() {
-              case $testtype in
-                offline)
-                  if [[ "$fileName" != "basis"* ]] && [[ "$fileName" != "Sol"* ]] &&
-                  [[ "$fileName" != "sVal"* ]] && [[ "$fileName" != "num_steps" ]]; then
-                    continue 1
-                  fi
-                  ;;
-                online | romhr)
-                  if [[ "$fileName" != *"norm"* ]] && [[ "$fileName" != "ROMsol" ]] && [[ "$fileName" != "num_steps" ]]; then
-                    continue 1
-                  fi
-                  ;;
-                restore)
-                  if [[ "$fileName" != *"_gf" ]] && [[ "$fileName" != "num_steps" ]]; then
-                    continue 1
-                  fi
-                  ;;
-              esac
-            }
-            check_file_type
-
-            # Check if comparison failed
-            check_fail() {
-    					if [ "${PIPESTATUS[0]}" -ne 0 ]
-    					then
-    						set_fail
-
-                # Skip to next test
-								break 1
-    					fi
-            }
-
-            # Check if a file exists on the user branch
-            check_exists() {
-              if [[ ! -f "$basetestfile" ]]; then
-                echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
-                set_fail
-
-                # Skip to next test
-								break 1
-              fi
-            }
-
-  					# Compare last timestep of ROMSol
-  					if [[ -d "$testFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
-  							echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
-                basetestfile="$BASE_DIR/run/$fileName/romS_$num_steps"
-                check_exists
-  							$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "0.0" >> $simulationLogFile 2>&1)
-                check_fail
-
-  			    # Compare FOM basis
-  					elif [[ "$fileName" == "basis"* ]]; then
-  						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-              basetestfile="$BASE_DIR/run/$fileName"
-              check_exists
-							testFile="${testFile%.*}"
-							basetestfile="${basetestfile%.*}"
-  						$($DIR/./basisComparator "$testFile" "$basetestfile" "1.0e-2" >> $simulationLogFile 2>&1)
-              check_fail
-
-  					# Compare solutions, singular values, and number of time steps
-  					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
-  					[[ "$fileName" == "num_steps" ]] || [[ "$fileName" == *"_gf" ]]; then
-  						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-              basetestfile="$BASE_DIR/run/$fileName"
-              check_exists
-  						$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
-              check_fail
-  					fi
-  				done
-
-          # Passed
-					if [ "$testFailed" == false ]; then
-						set_pass
-					fi
-        done
+				# Passed
+				if [ "$testFailed" == false ]; then
+					set_pass
+				fi
 			done
 		fi
 	done

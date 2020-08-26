@@ -129,7 +129,10 @@ include $(CURDIR)/user.mk
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
-all: laghos
+merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
+				$(CCC) -o merge merge.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
+
+all: laghos merge
 
 opt:
 	$(MAKE) "LAGHOS_DEBUG=NO"
@@ -158,13 +161,13 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 clean: clean-regtest clean-build
 
 clean-build:
-	rm -rf laghos *.o *~ *.dSYM run
+	rm -rf laghos *.o *~ *.dSYM run merge
 
 clean-exec:
 	rm -f twpTemp.csv
 	rm -rf run/ROMsol/*
 	rm -rf run/ROMoffset/*
-	(cd run && (ls | grep -v ROMsol | xargs rm -rf))
+	(cd run && (ls | grep -v 'ROMsol\|ROMoffset' | xargs rm -rf))
 
 clean-regtest: clean-exec
 	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
@@ -188,7 +191,7 @@ status info:
 	@true
 
 #ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
-FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES) $(TEST_FILES)
+FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES) $(TEST_FILES) merge.cpp
 
 style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\

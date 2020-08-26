@@ -90,7 +90,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         bool visc, bool pa,
         double cgt, int cgiter,
         double ftz,
-        int h1_basis_type)
+        int h1_basis_type,
+        bool noMvSolve_,
+        bool noMeSolve_)
     : TimeDependentOperator(size),
       H1FESpace(h1_fes), L2FESpace(l2_fes),
       ess_tdofs(essential_tdofs),
@@ -101,6 +103,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       source_type(source_type_), cfl(cfl_),
       use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
+      noMvSolve(noMvSolve_), noMeSolve(noMeSolve_),
       material_pcf(material_),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -273,6 +276,18 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         timer.sw_force.Stop();
         rhs.Neg();
 
+        if (noMvSolve)
+        {
+            dv = rhs;
+
+            for (int i=0; i<ess_tdofs.Size(); ++i)
+            {
+                dv[ess_tdofs[i]] = 0.0;
+            }
+
+            return;
+        }
+
         Operator *cVMassPA;
         VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
@@ -295,6 +310,17 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         Force.Mult(one, rhs);
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (noMvSolve)
+        {
+            dv = rhs;
+            for (int i=0; i<ess_tdofs.Size(); ++i)
+            {
+                dv[ess_tdofs[i]] = 0.0;
+            }
+
+            return;
+        }
 
         HypreParMatrix A;
         Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -351,16 +377,22 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         if (e_source) {
             e_rhs += *e_source;
         }
-        for (int z = 0; z < nzones; z++)
+
+        if (noMeSolve)
+            de = e_rhs;
+        else
         {
-            L2FESpace.GetElementDofs(z, l2dofs);
-            e_rhs.GetSubVector(l2dofs, loc_rhs);
-            locEMassPA.SetZoneId(z);
-            timer.sw_cgL2.Start();
-            locCG.Mult(loc_rhs, loc_de);
-            timer.sw_cgL2.Stop();
-            timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
-            de.SetSubVector(l2dofs, loc_de);
+            for (int z = 0; z < nzones; z++)
+            {
+                L2FESpace.GetElementDofs(z, l2dofs);
+                e_rhs.GetSubVector(l2dofs, loc_rhs);
+                locEMassPA.SetZoneId(z);
+                timer.sw_cgL2.Start();
+                locCG.Mult(loc_rhs, loc_de);
+                timer.sw_cgL2.Stop();
+                timer.L2dof_iter += locCG.GetNumIterations() * l2dofs_cnt;
+                de.SetSubVector(l2dofs, loc_de);
+            }
         }
     }
     else
@@ -371,18 +403,81 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         if (e_source) {
             e_rhs += *e_source;
         }
-        for (int z = 0; z < nzones; z++)
+
+        if (noMeSolve)
+            de = e_rhs;
+        else
         {
-            L2FESpace.GetElementDofs(z, l2dofs);
-            e_rhs.GetSubVector(l2dofs, loc_rhs);
-            timer.sw_cgL2.Start();
-            Me_inv(z).Mult(loc_rhs, loc_de);
-            timer.sw_cgL2.Stop();
-            timer.L2dof_iter += l2dofs_cnt;
-            de.SetSubVector(l2dofs, loc_de);
+            for (int z = 0; z < nzones; z++)
+            {
+                L2FESpace.GetElementDofs(z, l2dofs);
+                e_rhs.GetSubVector(l2dofs, loc_rhs);
+                timer.sw_cgL2.Start();
+                Me_inv(z).Mult(loc_rhs, loc_de);
+                timer.sw_cgL2.Stop();
+                timer.L2dof_iter += l2dofs_cnt;
+                de.SetSubVector(l2dofs, loc_de);
+            }
         }
     }
     delete e_source;
+}
+
+void LagrangianHydroOperator::MultMv(const Vector &u, Vector &v)
+{
+    if (p_assembly)
+    {
+        Operator *cVMassPA;
+        VMassPA.FormSystemOperator(ess_tdofs, cVMassPA);
+        cVMassPA->Mult(u, v);
+        delete cVMassPA;
+    }
+    else
+    {
+        HypreParMatrix A;
+        Mv.FormSystemMatrix(ess_tdofs, A);
+        A.Mult(u, v);
+    }
+
+    for (int i=0; i<ess_tdofs.Size(); ++i)
+    {
+        //v[ess_tdofs[i]] = 0.0;
+        v[ess_tdofs[i]] = u[ess_tdofs[i]];
+    }
+}
+
+void LagrangianHydroOperator::MultMe(const Vector &u, Vector &v)
+{
+    v = 0.0;
+
+    const int VsizeL2 = L2FESpace.GetVSize();
+
+    MFEM_VERIFY(u.Size() == VsizeL2 && u.Size() == v.Size(), "");
+
+    Array<int> l2dofs;
+    Vector loc_rhs(l2dofs_cnt), loc_v(l2dofs_cnt);
+
+    if (p_assembly)
+    {
+        for (int z = 0; z < nzones; z++)
+        {
+            L2FESpace.GetElementDofs(z, l2dofs);
+            u.GetSubVector(l2dofs, loc_rhs);
+            locEMassPA.SetZoneId(z);
+            locEMassPA.Mult(loc_rhs, loc_v);
+            v.SetSubVector(l2dofs, loc_v);
+        }
+    }
+    else
+    {
+        for (int z = 0; z < nzones; z++)
+        {
+            L2FESpace.GetElementDofs(z, l2dofs);
+            u.GetSubVector(l2dofs, loc_rhs);
+            Me(z).Mult(loc_rhs, loc_v);
+            v.SetSubVector(l2dofs, loc_v);
+        }
+    }
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const

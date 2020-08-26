@@ -25,7 +25,11 @@ namespace ROMBasisName {
 const char* const X = "run/basisX";
 const char* const V = "run/basisV";
 const char* const E = "run/basisE";
+const char* const Fv = "run/basisFv";
+const char* const Fe = "run/basisFe";
 };
+
+enum VariableName { X, V, E, Fv, Fe };
 
 class ROM_Sampler
 {
@@ -33,12 +37,19 @@ public:
     ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                 const double t_final, const double initial_dt, Vector const& S_init,
                 const bool staticSVD = false, const bool useOffset = false, double energyFraction_=0.9999,
-                const int window=0, const int max_dim=0)
+                const int window=0, const int max_dim=0, const bool sample_RHS=false,
+                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL, const int parameterID=-1)
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
-          gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_)
+          gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_),
+          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0)
     {
+        if (sampleF)
+        {
+            MFEM_VERIFY(offsetInit, "");
+        }
+
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
         double model_sampling_tol = 1.e-7;
@@ -51,11 +62,19 @@ public:
         if (staticSVD)
         {
             generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::X + std::to_string(window));
+                    BasisFileName(VariableName::X, window, parameterID));
             generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    ROMBasisName::V + std::to_string(window));
+                    BasisFileName(VariableName::V, window, parameterID));
             generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                    ROMBasisName::E + std::to_string(window));
+                    BasisFileName(VariableName::E, window, parameterID));
+
+            if (sampleF)
+            {
+                generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+                        BasisFileName(VariableName::Fv, window, parameterID));
+                generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
+                        BasisFileName(VariableName::Fe, window, parameterID));
+            }
         }
         else
         {
@@ -89,6 +108,30 @@ public:
                     model_sampling_tol,
                     t_final,
                     ROMBasisName::E + std::to_string(window));
+
+            if (sampleF)
+            {
+                generator_Fv = new CAROM::IncrementalSVDBasisGenerator(tH1size,
+                        model_linearity_tol,
+                        false,
+                        true,
+                        max_model_dim,
+                        initial_dt,
+                        max_model_dim,
+                        model_sampling_tol,
+                        t_final,
+                        ROMBasisName::Fv + std::to_string(window));
+                generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
+                        model_linearity_tol,
+                        false,
+                        true,
+                        max_model_dim,
+                        initial_dt,
+                        max_model_dim,
+                        model_sampling_tol,
+                        t_final,
+                        ROMBasisName::Fe + std::to_string(window));
+            }
         }
 
         SetStateVariables(S_init);
@@ -146,7 +189,9 @@ private:
     const int rank;
     double energyFraction;
 
-    CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E;
+    const bool writeSnapshots;
+
+    CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
@@ -156,6 +201,10 @@ private:
     CAROM::Vector *initE = 0;
 
     ParGridFunction gfH1, gfL2;
+
+    const bool sampleF;
+
+    hydrodynamics::LagrangianHydroOperator *lhoper;
 
     void SetStateVariables(Vector const& S)
     {
@@ -198,14 +247,44 @@ private:
             dEdt[i] = (E[i] - E0[i]) / dt;
         }
     }
+
+    std::string BasisFileName(VariableName v, const int window, const int parameter)
+    {
+        std::string fileName, path;
+
+        const std::string prefix = (parameter >= 0) ? "var" : "basis";
+
+        switch (v)
+        {
+        case VariableName::V:
+            fileName = "V" + std::to_string(window);
+            break;
+        case VariableName::E:
+            fileName = "E" + std::to_string(window);
+            break;
+        case VariableName::Fv:
+            fileName = "Fv" + std::to_string(window);
+            break;
+        case VariableName::Fe:
+            fileName = "Fe" + std::to_string(window);
+            break;
+        default:
+            fileName = "X" + std::to_string(window);
+        }
+
+        path = (parameter >= 0) ? "run/param" + std::to_string(parameter) + "_" : "run/";
+
+        return path + prefix + fileName;
+    }
 };
 
 class ROM_Basis
 {
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-              int & dimX, int & dimV, int & dimE, int nsamx, int nsamv, int nsame,
-              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useXoffset = false,
+              int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
+              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
+              const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
               const int window=0);
 
     ~ROM_Basis()
@@ -216,6 +295,8 @@ public:
         delete basisX;
         delete basisV;
         delete basisE;
+        delete basisFv;
+        delete basisFe;
         delete fH1;
         delete fL2;
         delete spX;
@@ -230,6 +311,7 @@ public:
         delete BsinvX;
         delete BsinvV;
         delete BsinvE;
+        delete BX0;
     }
 
     void ReadSolutionBases(const int window);
@@ -237,7 +319,7 @@ public:
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
-    int TotalSize() {
+    int TotalSize() const {
         return rdimx + rdimv + rdime;
     }
 
@@ -253,19 +335,62 @@ public:
         return size_H1_sp;
     }
 
+    int SolutionSizeL2SP() const {
+        return size_L2_sp;
+    }
+
     int SolutionSizeH1FOM() const {
         return tH1size;
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
-                                const bool timeDerivative=false) const;
+                                const bool timeDerivative=false,
+                                const bool rhs_without_mass_matrix=false,
+                                const DenseMatrix *invMvROM=NULL,
+                                const DenseMatrix *invMeROM=NULL) const;
+
+    void RestrictFromSampleMesh_V(const Vector &xsp, Vector &x) const;
+    void RestrictFromSampleMesh_E(const Vector &xsp, Vector &x) const;
+
+    void ProjectFromSampleMesh(const Vector &usp, Vector &u,
+                               const bool timeDerivative) const;
+
+    void HyperreduceRHS_V(Vector &v) const;
+    void HyperreduceRHS_E(Vector &e) const;
+
+    void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
         return rank;
     }
 
+    int GetDimX() const {
+        return rdimx;
+    }
+
+    int GetDimV() const {
+        return rdimv;
+    }
+
+    int GetDimE() const {
+        return rdime;
+    }
+
     void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
+
+    void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
+    void GetBasisVectorE(const bool sp, const int id, Vector &v) const;
+
+    CAROM::Matrix *GetBVsp() {
+        return BVsp;
+    }
+
+    CAROM::Matrix *GetBEsp() {
+        return BEsp;
+    }
+
+    void ComputeReducedRHS();
 
     MPI_Comm comm;
 
@@ -273,8 +398,9 @@ private:
     const bool staticSVD;
     const bool hyperreduce;
     const bool offsetInit;
-    int rdimx, rdimv, rdime;
-
+    const bool RHSbasis;
+    const bool useGramSchmidt;
+    int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
     const int H1size;
@@ -285,6 +411,8 @@ private:
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
     CAROM::Matrix* basisE = 0;
+    CAROM::Matrix* basisFv = 0;
+    CAROM::Matrix* basisFe = 0;
 
     CAROM::Vector *fH1, *fL2;
 
@@ -296,6 +424,10 @@ private:
     CAROM::Vector *rV = 0;
     CAROM::Vector *rE = 0;
 
+    CAROM::Vector *rX2 = 0;
+    CAROM::Vector *rV2 = 0;
+    CAROM::Vector *rE2 = 0;
+
     // For hyperreduction
     std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
@@ -306,6 +438,8 @@ private:
     CAROM::Matrix *BXsp = NULL;
     CAROM::Matrix *BVsp = NULL;
     CAROM::Matrix *BEsp = NULL;
+    CAROM::Matrix *BFvsp = NULL;
+    CAROM::Matrix *BFesp = NULL;
 
     int size_H1_sp = 0;
     int size_L2_sp = 0;
@@ -328,10 +462,16 @@ private:
     CAROM::Vector *initXsp = 0;
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
+    CAROM::Vector *BX0 = NULL;
 
     int numSamplesX = 0;
     int numSamplesV = 0;
     int numSamplesE = 0;
+
+    const bool RK2AvgFormulation;
+    CAROM::Matrix *BXXinv = NULL;
+    CAROM::Matrix *BVVinv = NULL;
+    CAROM::Matrix *BEEinv = NULL;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
@@ -339,11 +479,12 @@ private:
 class ROM_Operator : public TimeDependentOperator
 {
 public:
-    ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, FunctionCoefficient& rho_coeff,
+    ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, Coefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
-                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
+                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
+                 const bool reduceMass = false, const bool GramSchmidt = false);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -363,6 +504,9 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
+
+    void InducedGramSchmidtInitialize(Vector &S);
+    void InducedGramSchmidtFinalize(Vector &S);
 
     ~ROM_Operator()
     {
@@ -402,6 +546,18 @@ private:
     const int rank;
 
     mutable double dt_est_SP = 0.0;
+
+    bool useReducedMv, useReducedMe;
+    DenseMatrix invMvROM, invMeROM;
+
+    void ComputeReducedMv();
+    void ComputeReducedMe();
+
+    const bool useGramSchmidt;
+    DenseMatrix CoordinateBVsp, CoordinateBEsp;
+    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
+    void InducedGramSchmidt(const int var, Vector &S);
+    void UndoInducedGramSchmidt(const int var, Vector &S);
 };
 
 #endif // MFEM_LAGHOS_ROM

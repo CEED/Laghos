@@ -1,15 +1,16 @@
-normtype=${normtype:-"l2"}
-case $testtype in
-  offline)
-    ./laghos -m "$BASE_DIR"/data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -normtype "$normtype" -writesol -romsvds
+NUM_PARALLEL_PROCESSORS=8
+testNames=(offline online romhr restore)
+case $subTestNum in
+  1)
+    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -writesol -romsvds
     ;;
-  online)
-    ./laghos -m "$BASE_DIR"/data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 2 -rdimv 12 -rdime 16 -nsamx 12 -nsamv 184 -nsame 30 -normtype "$normtype" -soldiff
+  2)
+    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 2 -rdimv 12 -rdime 16 -nsamx 12 -nsamv 184 -nsame 30 -soldiff
     ;;
-  romhr)
-    ./laghos -m "$BASE_DIR"/data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 2 -rdimv 12 -rdime 16 -romhr -nsamx 4 -nsamv 24 -nsame 32 -normtype "$normtype" -soldiff
+  3)
+    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 2 -rdimv 12 -rdime 16 -romhr -nsamx 4 -nsamv 24 -nsame 32 -soldiff
     ;;
-  restore)
-    ./laghos -m "$BASE_DIR"/data/cube01_hex.mesh -pt 211 -tf 0.01 -restore -rdimx 2 -rdimv 12 -rdime 16 -normtype "$normtype"
+  4)
+    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -restore -rdimx 2 -rdimv 12 -rdime 16
     ;;
 esac
