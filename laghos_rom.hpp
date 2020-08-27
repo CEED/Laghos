@@ -283,7 +283,7 @@ class ROM_Basis
 public:
     ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
               int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
+              const bool hyperreduce_ = false, const bool useOffset = false,
               const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
               const int window=0);
 
@@ -395,7 +395,6 @@ public:
     MPI_Comm comm;
 
 private:
-    const bool staticSVD;
     const bool hyperreduce;
     const bool offsetInit;
     const bool RHSbasis;

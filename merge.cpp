@@ -74,9 +74,12 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     cout << "Computing SVD for " << varName << endl;
     basis_generator->endSamples();  // save the basis file
 
-    cout << varName << " basis summary output: ";
-    BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
-    PrintSingularValues(rank, varName, basis_generator.get());
+    if (rank == 0)
+    {
+        cout << varName << " basis summary output: ";
+        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
+        PrintSingularValues(rank, varName, basis_generator.get());
+    }
 }
 
 // id is snapshot index, 0-based

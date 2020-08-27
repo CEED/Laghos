@@ -354,7 +354,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
                      int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-                     const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
+                     const bool hyperreduce_, const bool useOffset,
                      const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
                      const int window)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
@@ -362,7 +362,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
       gfH1(H1FESpace), gfL2(L2FESpace),
       rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
+      hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
       RK2AvgFormulation(RK2AvgSolver)
 {
     MPI_Comm_size(comm, &nprocs);

@@ -810,7 +810,7 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                              rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -843,11 +843,11 @@ int main(int argc, char *argv[])
             }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -910,7 +910,7 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                      rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -1167,7 +1167,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                          rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 
