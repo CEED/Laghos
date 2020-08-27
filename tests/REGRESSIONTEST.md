@@ -4,15 +4,23 @@ The script will git clone the master branch into tests/Laghos and run the regres
 
 The usage instructions are outputted whenever the script is run. Currently, there are include, exclude, and stopping options. Include is used if a user only wants to run some tests. Exclude is used if a user wants to run all tests except for some. The default is that all tests are run. The stop option is used to end the regression tests at the first test failure. This allows a user to look at the simulation data from both the user branch and the baseline branch, whereas without, it would be overwritten by the next test.
 
-How to run the tests on both MAC and LC
+How to run the tests on LC
 
 1. If you have just changed branches, run "make clean".
 2. Run "make" to make sure you your branch is up-to-date with any local changes.
-3. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
+3. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
 test options.
-4. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved
+4. The slurm output file will be stored in sbatch.log in the directory you ran the previous command frp,.
+5. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved
 in run and tests/Laghos/run. Use option -f to stop at the first failure and look at the failed run's data.
-5. To erase the regression test data, run from the base directory: make clean-regtest
+6. To erase the regression test data, run from the base directory: make clean-regtest
+
+How to run the tests on MAC
+
+1. Follow steps 1 and 2 from the instructions above.
+2. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
+test options.
+3. Follow steps 5 and 6 from the instructions above.
 
 How to add a non-time-windowing test
 
