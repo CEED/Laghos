@@ -7,7 +7,7 @@ The usage instructions are outputted whenever the script is run. Currently, ther
 How to run the tests on LC
 
 1. If you have just changed branches, run "make clean".
-2. Run "make" to make sure you your branch is up-to-date with any local changes.
+2. Run "make" and "make merge" to make sure you your branch is up-to-date with any local changes.
 3. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
 test options.
 4. The slurm output file will be stored in sbatch.log in the directory you ran the previous command frp,.
