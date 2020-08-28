@@ -138,6 +138,9 @@ then
   exit 1
 fi
 
+# Build merge
+make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
 ###############################################################################
 # RUN TESTS
 ###############################################################################
@@ -174,13 +177,17 @@ do
 
 			subTestNum=0
 			parallel=false
+			NUM_PARALLEL_PROCESSORS=0
 
 			# Get test names
 			. $script
 
-			# Clear run directories
-			make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-			make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+			clean_tests() {
+				# Clear run directories
+				make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+				make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+			}
+			clean_tests
 			while true;
 			do
 
@@ -197,18 +204,19 @@ do
 				subTestNum=$((subTestNum+1))
 
 				# Get testtype
-				RAN_COMMAND=$(awk "/$subTestNum)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
-				if [[ $RAN_COMMAND == *"offline"* ]]; then
-					testtype=offline
+				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
+				if [[ $RAN_COMMAND == *"writesol"* ]]; then
+					testtype=fom
 				elif [[ $RAN_COMMAND == *"online"* ]]; then
 					testtype=online
 				elif [[ $RAN_COMMAND == *"restore"* ]]; then
 					testtype=restore
 				else
-					if [ "$parallel" == "false" ]
+					if [[ "$parallel" == "false" ]] && [[ $NUM_PARALLEL_PROCESSORS -ne 0 ]];
 					then
 						parallel=true
 						subTestNum=0
+						clean_tests
 						continue
 					else
 						break
@@ -276,6 +284,11 @@ do
 
 				# Find number of steps simulation took in rom-dev to compare final timestep later
 				num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
+				if [[ $(head -n 1 $BASE_DIR/run/num_steps) -ne $num_steps ]]; then
+					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
+					set_fail
+					continue 1
+				fi
 
 				# After simulations complete, compare results
 				for testFile in $BASELINE_LAGHOS_DIR/run/*
@@ -284,24 +297,22 @@ do
 
 					# Skip if not correct file type to compare
 					check_file_type() {
-						if [[ $testtype == "offline" ]]; then
+						if [[ $testtype == "fom" ]]; then
 							if [[ "$fileName" != "basis"* ]] && [[ "$fileName" != "Sol"* ]] &&
-							[[ "$fileName" != "sVal"* ]] && [[ "$fileName" != "num_steps" ]]; then
+							[[ "$fileName" != "sVal"* ]]; then
 								continue 1
 							fi
 						elif [[ $testtype == "online" ]]; then
-							if [[ "$fileName" != *"norm"* ]] && [[ "$fileName" != "ROMsol" ]] && [[ "$fileName" != "num_steps" ]]; then
+							if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
 								continue 1
 							fi
 						elif [[ $testtype == "restore" ]]; then
-							if [[ $parallel == "true" ]]; then
-								if [[ "$fileName" != "num_steps" ]]; then
+							if [[ $parallel == "false" ]]; then
+								if [[ "$fileName" != *"_gf" ]]; then
 									continue 1
 								fi
 							else
-								if [[ "$fileName" != *"_gf" ]] && [[ "$fileName" != "num_steps" ]]; then
-									continue 1
-								fi
+								continue 1
 							fi
 						fi
 					}
@@ -353,7 +364,7 @@ do
 
 					# Compare solutions, singular values, and number of time steps
 					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
-					[[ "$fileName" == "num_steps" ]] || [[ "$fileName" == *"_gf" ]] ; then
+					[[ "$fileName" == *"_gf" ]] ; then
 						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
 						basetestfile="$BASE_DIR/run/$fileName"
 						check_exists
