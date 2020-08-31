@@ -319,7 +319,6 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
     if (mpi.Root()) {
-        mkdir(std::string("run").c_str(), 0777);
         mkdir(outputPath.c_str(), 0777);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((outputPath + "/ROMsol").c_str(), 0777);

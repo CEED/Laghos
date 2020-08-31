@@ -332,12 +332,13 @@ do
 				fi
 
 				# Find number of steps simulation took in rom-dev to compare final timestep later
-				num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
-				if [[ "$(cat $BASE_DIR/run/${OUTPUT_DIR}/num_steps)" -ne $num_steps ]]; then
+				cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
+				if [ $? -eq 1 ]; then
 					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
 					set_fail
 					continue 1
 				fi
+				num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
 
 				# After simulations complete, compare results
 				for testFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*

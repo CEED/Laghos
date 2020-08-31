@@ -165,7 +165,7 @@ clean-build:
 
 clean-exec:
 	rm -f twpTemp.csv
-	rm -rf run
+	rm -rf run/*
 
 clean-regtest: clean-exec
 	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
@@ -195,3 +195,4 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+$(shell mkdir -p run)
