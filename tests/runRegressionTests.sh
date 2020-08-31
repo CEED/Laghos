@@ -133,7 +133,7 @@ g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
 
 # Clone and compile rom-dev branch of Laghos
 echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
-git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+git -C $DIR clone -b parallelize-regtest https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
 # Copy user.mk
 echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
@@ -179,6 +179,10 @@ testNum=0
 testNumFail=0
 testNumPass=0
 
+# Clear run directories
+make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+
 # Run all tests
 for simulation in "${testsToRun[@]}"
 do
@@ -200,29 +204,26 @@ do
 			# Get test names
 			. $script
 
-			clean_tests() {
-				# Clear run directories
-				make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-				make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-			}
-			clean_tests
 			while true;
 			do
 
 				if [ "$parallel" == "false" ]
 				then
-					HEADER="$COMMAND -n 1"
+					LAGHOS="$COMMAND -n 1"
 					testName="${testNames[$subTestNum]}"
+					OUTPUT_DIR=${scriptName}
 				else
-					HEADER="$COMMAND -n $NUM_PARALLEL_PROCESSORS"
+					LAGHOS="$COMMAND -n $NUM_PARALLEL_PROCESSORS"
 					testName="${testNames[$subTestNum]}-parallel"
+					OUTPUT_DIR="${scriptName}-parallel"
 				fi
+				LAGHOS="$LAGHOS laghos -k ${OUTPUT_DIR}"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
 
 				# Get testtype
-				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$HEADER')
+				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$LAGHOS')
 				if [[ $RAN_COMMAND == *"writesol"* ]]; then
 					testtype=fom
 				elif [[ $RAN_COMMAND == *"online"* ]]; then
@@ -234,7 +235,6 @@ do
 					then
 						parallel=true
 						subTestNum=0
-						clean_tests
 						continue
 					else
 						break
@@ -310,15 +310,15 @@ do
 				fi
 
 				# Find number of steps simulation took in rom-dev to compare final timestep later
-				num_steps=$(head -n 1 $BASELINE_LAGHOS_DIR/run/num_steps)
-				if [[ $(head -n 1 $BASE_DIR/run/num_steps) -ne $num_steps ]]; then
+				num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+				if [[ "$(cat $BASE_DIR/run/${OUTPUT_DIR}/num_steps)" -ne $num_steps ]]; then
 					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
 					set_fail
 					continue 1
 				fi
 
 				# After simulations complete, compare results
-				for testFile in $BASELINE_LAGHOS_DIR/run/*
+				for testFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
 				do
 					fileName="$(basename "$testFile")"
 
@@ -370,7 +370,7 @@ do
 					# Compare last timestep of ROMSol
 					if [[ -d "$testFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
 							echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
-							basetestfile="$BASE_DIR/run/$fileName/romS_$num_steps"
+							basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$num_steps"
 							check_exists
 							if [[ "$scriptName" == *"parallel"* ]]; then
 								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
@@ -382,7 +382,7 @@ do
 					# Compare FOM basis
 					elif [[ "$fileName" == "basis"* ]]; then
 						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-						basetestfile="$BASE_DIR/run/$fileName"
+						basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 						check_exists
 						testFile="${testFile%.*}"
 						basetestfile="${basetestfile%.*}"
@@ -393,7 +393,7 @@ do
 					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
 					[[ "$fileName" == *"_gf" ]] ; then
 						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-						basetestfile="$BASE_DIR/run/$fileName"
+						basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 						check_exists
 						if [[ "$scriptName" == *"parallel"* ]]; then
 							$($DIR/./fileComparator "$testFile" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)

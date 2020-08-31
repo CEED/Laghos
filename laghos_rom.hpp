@@ -275,7 +275,6 @@ private:
         }
 
         path = (parameter >= 0) ? basename + "/param" + std::to_string(parameter) + "_" : basename + "/";
-        std::cout << path << std::endl;
         return path + prefix + fileName;
     }
 };

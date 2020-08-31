@@ -10,8 +10,8 @@ How to run the tests on LC
 2. Run "make" and "make merge" to make sure you your branch is up-to-date with any local changes.
 3. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
 test options.
-4. The slurm output file will be stored in sbatch.log in the directory you ran the previous command frp,.
-5. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved
+4. The slurm output file will be stored in sbatch.log in the directory you ran the previous command from.
+5. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved.
 in run and tests/Laghos/run. Use option -f to stop at the first failure and look at the failed run's data.
 6. To erase the regression test data, run from the base directory: make clean-regtest
 
@@ -30,7 +30,7 @@ Use it as an example.
 3. Choose a number for NUM_PARALLEL_PROCESSORS. Your tests will be run both serially and in parallel. If you remove this line, your tests will only run in serial.
 4. The tests will be run sequentially (1, 2, 3, 4, ...). Create as many tests as
 desired following the given format.
-5. Any laghos commands should have the format $HEADER laghos ...
+5. Any laghos commands should have the format $LAGHOS ...
 6. Name your tests in testNames, which is an array of test names. If your test name
 is multiple words, separate the words with an underscore, rather than a space.
 

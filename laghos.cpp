@@ -316,14 +316,14 @@ int main(int argc, char *argv[])
     }
     std::string outputPath = "run";
     if (basename != "") {
-      outputPath += "/" + std::string(basename);
+        outputPath += "/" + std::string(basename);
     }
     if (mpi.Root()) {
-      mkdir(std::string("run").c_str(), 0777);
-      mkdir(outputPath.c_str(), 0777);
-      mkdir((outputPath + "/ROMoffset").c_str(), 0777);
-      mkdir((outputPath + "/ROMsol").c_str(), 0777);
-      args.PrintOptions(cout);
+        mkdir(std::string("run").c_str(), 0777);
+        mkdir(outputPath.c_str(), 0777);
+        mkdir((outputPath + "/ROMoffset").c_str(), 0777);
+        mkdir((outputPath + "/ROMsol").c_str(), 0777);
+        args.PrintOptions(cout);
     }
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
