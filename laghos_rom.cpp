@@ -288,15 +288,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     {
         cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
-        PrintSingularValues(rank, "X", generator_X);
+        PrintSingularValues(rank, basename, "X", generator_X);
 
         cout << "V basis summary output: ";
         BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-        PrintSingularValues(rank, "V", generator_V);
+        PrintSingularValues(rank, basename, "V", generator_V);
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
-        PrintSingularValues(rank, "E", generator_E);
+        PrintSingularValues(rank, basename, "E", generator_E);
 
         if (sampleF)
         {
@@ -356,14 +356,14 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
                      int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
                      const bool hyperreduce_, const bool useOffset,
                      const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
-                     const int window)
+                     const int window, const std::string basename_)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
       rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
       numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
       hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
-      RK2AvgFormulation(RK2AvgSolver)
+      RK2AvgFormulation(RK2AvgSolver), basename(basename_)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -416,13 +416,13 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     if (offsetInit)
     {
         initX = new CAROM::Vector(tH1size, true);
-        initX->read("run/ROMoffset/initX" + std::to_string(window));
+        initX->read(basename + "/ROMoffset/initX" + std::to_string(window));
 
         initV = new CAROM::Vector(tH1size, true);
-        initV->read("run/ROMoffset/initV" + std::to_string(window));
+        initV->read(basename + "/ROMoffset/initV" + std::to_string(window));
 
         initE = new CAROM::Vector(tL2size, true);
-        initE->read("run/ROMoffset/initE" + std::to_string(window));
+        initE->read(basename + "/ROMoffset/initE" + std::to_string(window));
 
         cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
     }
@@ -876,7 +876,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         if (printSampleMesh)
         {
             ostringstream mesh_name;
-            mesh_name << "run/smesh." << setfill('0') << setw(6) << rank;
+            mesh_name << basename + "/smesh." << setfill('0') << setw(6) << rank;
 
             ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
@@ -1123,14 +1123,14 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
-    basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+    basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+    basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
 
     if (RHSbasis)
     {
-        basisFv = ReadBasisROM(rank, ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
     }
 }
 
@@ -2000,14 +2000,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     t += dt;
 }
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg)
+void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg)
 {
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
 
-    std::string fullname = "run/sVal" + name + tmp;
+    std::string fullname = basename + "/sVal" + name + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);

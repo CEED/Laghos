@@ -62,6 +62,13 @@
 #include "laghos_csv.hpp"
 #include <fstream>
 
+#ifndef _WIN32
+#include <sys/stat.h>  // mkdir
+#else
+#include <direct.h>    // _mkdir
+#define mkdir(dir, mode) _mkdir(dir)
+#endif
+
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
@@ -152,7 +159,7 @@ int main(int argc, char *argv[])
     int vis_steps = 5;
     bool visit = false;
     bool gfprint = false;
-    const char *basename = "run/results/Laghos";
+    const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
     int partition_type = 0;
@@ -240,7 +247,7 @@ int main(int argc, char *argv[])
     args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                    "Enable or disable result output (files in mfem format).");
     args.AddOption(&basename, "-k", "--outputfilename",
-                   "Name of the visit dump files");
+                   "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
@@ -307,8 +314,16 @@ int main(int argc, char *argv[])
         }
         return 1;
     }
+    std::string outputPath = "run";
+    if (basename != "") {
+      outputPath += "/" + std::string(basename);
+    }
     if (mpi.Root()) {
-        args.PrintOptions(cout);
+      mkdir(std::string("run").c_str(), 0777);
+      mkdir(outputPath.c_str(), 0777);
+      mkdir((outputPath + "/ROMoffset").c_str(), 0777);
+      mkdir((outputPath + "/ROMsol").c_str(), 0777);
+      args.PrintOptions(cout);
     }
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
@@ -729,7 +744,8 @@ int main(int argc, char *argv[])
     }
 
     // Save data for VisIt visualization.
-    VisItDataCollection visit_dc(basename, pmesh);
+    const char *visit_basename = (outputPath + "/results/Laghos").c_str();
+    VisItDataCollection visit_dc(visit_basename, pmesh);
     if (visit)
     {
         if (rom_offline || rom_restore)
@@ -772,7 +788,7 @@ int main(int argc, char *argv[])
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
-                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
+                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID, outputPath);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -810,7 +826,7 @@ int main(int argc, char *argv[])
         }
         basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                              rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, outputPath);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -829,7 +845,7 @@ int main(int argc, char *argv[])
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
-        std::ifstream infile_tw_steps("run/tw_steps");
+        std::ifstream infile_tw_steps(outputPath + "/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
@@ -843,11 +859,11 @@ int main(int argc, char *argv[])
             }
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
         } else {
             basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, outputPath);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -862,7 +878,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+            std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -910,13 +926,13 @@ int main(int argc, char *argv[])
                 delete basis;
                 basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                      rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -941,7 +957,7 @@ int main(int argc, char *argv[])
     else
     {
         // usual time loop when rom_restore phase is false.
-        std::ofstream outfile_tw_steps("run/tw_steps");
+        std::ofstream outfile_tw_steps(outputPath + "/tw_steps");
         timeLoopTimer.Start();
         if (rom_hyperreduce && rom_GramSchmidt)
         {
@@ -992,7 +1008,7 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+                std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 romS.Print(outfile_romS, 1);
                 outfile_romS.close();
@@ -1123,7 +1139,7 @@ int main(int argc, char *argv[])
                     if (!last_step)
                     {
                         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
-                                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID);
+                                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID, outputPath);
                         sampler->SampleSolution(t, dt, S);
                     }
                 }
@@ -1167,7 +1183,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
                                           rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                          rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 
@@ -1208,7 +1224,7 @@ int main(int argc, char *argv[])
                          << ",\t|e| = " << setprecision(10)
                          << sqrt(tot_norm) << endl;
                     if (last_step) {
-                        std::ofstream outfile("run/num_steps");
+                        std::ofstream outfile(outputPath + "/num_steps");
                         outfile << ti;
                         outfile.close();
                     }
@@ -1252,13 +1268,13 @@ int main(int argc, char *argv[])
                 if (gfprint)
                 {
                     ostringstream mesh_name, rho_name, v_name, e_name;
-                    mesh_name << basename << "_" << ti
+                    mesh_name << visit_basename << "_" << ti
                               << "_mesh." << setfill('0') << setw(6) << myid;
-                    rho_name  << basename << "_" << ti
+                    rho_name  << visit_basename << "_" << ti
                               << "_rho." << setfill('0') << setw(6) << myid;
-                    v_name << basename << "_" << ti
+                    v_name << visit_basename << "_" << ti
                            << "_v." << setfill('0') << setw(6) << myid;
-                    e_name << basename << "_" << ti
+                    e_name << visit_basename << "_" << ti
                            << "_e." << setfill('0') << setw(6) << myid;
 
                     ofstream mesh_ofs(mesh_name.str().c_str());
@@ -1327,22 +1343,22 @@ int main(int argc, char *argv[])
 
     if (writeSol)
     {
-        PrintParGridFunction(myid, "run/Sol_Position", &x_gf);
-        PrintParGridFunction(myid, "run/Sol_Velocity", &v_gf);
-        PrintParGridFunction(myid, "run/Sol_Energy", &e_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Position", &x_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Velocity", &v_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Energy", &e_gf);
     }
 
     if (solDiff)
     {
         cout << "solDiff mode " << endl;
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Position", &x_gf);
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Velocity", &v_gf);
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Energy", &e_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", &x_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", &v_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", &e_gf);
     }
 
     if (visitDiffCycle >= 0)
     {
-        VisItDataCollection dc(MPI_COMM_WORLD, "run/results/Laghos", pmesh);
+        VisItDataCollection dc(MPI_COMM_WORLD, outputPath + "/results/Laghos", pmesh);
         dc.Load(visitDiffCycle);
         cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
@@ -1389,15 +1405,15 @@ int main(int argc, char *argv[])
              << fabs(energy_init - energy_final) << endl;
     }
 
-    std::ofstream outfile_e("run/e_gf");
+    std::ofstream outfile_e(outputPath + "/e_gf");
     e_gf.Print(outfile_e, 1);
     outfile_e.close();
 
-    std::ofstream outfile_v("run/v_gf");
+    std::ofstream outfile_v(outputPath + "/v_gf");
     v_gf.Print(outfile_v, 1);
     outfile_v.close();
 
-    std::ofstream outfile_x("run/x_gf");
+    std::ofstream outfile_x(outputPath + "/x_gf");
     x_gf.Print(outfile_x, 1);
     outfile_x.close();
 

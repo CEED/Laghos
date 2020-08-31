@@ -14,7 +14,7 @@ using namespace mfem;
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg);
+void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg);
 
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                   const bool scalar);
@@ -22,11 +22,11 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
                                     const bool scalar);
 
 namespace ROMBasisName {
-const char* const X = "run/basisX";
-const char* const V = "run/basisV";
-const char* const E = "run/basisE";
-const char* const Fv = "run/basisFv";
-const char* const Fe = "run/basisFe";
+const char* const X = "basisX";
+const char* const V = "basisV";
+const char* const E = "basisE";
+const char* const Fv = "basisFv";
+const char* const Fe = "basisFe";
 };
 
 enum VariableName { X, V, E, Fv, Fe };
@@ -38,12 +38,12 @@ public:
                 const double t_final, const double initial_dt, Vector const& S_init,
                 const bool staticSVD = false, const bool useOffset = false, double energyFraction_=0.9999,
                 const int window=0, const int max_dim=0, const bool sample_RHS=false,
-                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL, const int parameterID=-1)
+                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL, const int parameterID=-1, const std::string basename_ = "run")
         : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_),
-          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0)
+          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0), basename(basename_)
     {
         if (sampleF)
         {
@@ -62,18 +62,18 @@ public:
         if (staticSVD)
         {
             generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    BasisFileName(VariableName::X, window, parameterID));
+                    BasisFileName(basename, VariableName::X, window, parameterID));
             generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                    BasisFileName(VariableName::V, window, parameterID));
+                    BasisFileName(basename, VariableName::V, window, parameterID));
             generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                    BasisFileName(VariableName::E, window, parameterID));
+                    BasisFileName(basename, VariableName::E, window, parameterID));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
-                        BasisFileName(VariableName::Fv, window, parameterID));
+                        BasisFileName(basename, VariableName::Fv, window, parameterID));
                 generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
-                        BasisFileName(VariableName::Fe, window, parameterID));
+                        BasisFileName(basename, VariableName::Fe, window, parameterID));
             }
         }
         else
@@ -87,7 +87,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::X + std::to_string(window));
+                    basename + "/" + ROMBasisName::X + std::to_string(window));
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
                     false,
@@ -97,7 +97,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::V + std::to_string(window));
+                    basename + "/" + ROMBasisName::V + std::to_string(window));
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
                     false,
@@ -107,7 +107,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     t_final,
-                    ROMBasisName::E + std::to_string(window));
+                    basename + "/" + ROMBasisName::E + std::to_string(window));
 
             if (sampleF)
             {
@@ -120,7 +120,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         t_final,
-                        ROMBasisName::Fv + std::to_string(window));
+                        basename + "/" + ROMBasisName::Fv + std::to_string(window));
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                         model_linearity_tol,
                         false,
@@ -130,7 +130,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         t_final,
-                        ROMBasisName::Fe + std::to_string(window));
+                        basename + "/" + ROMBasisName::Fe + std::to_string(window));
             }
         }
 
@@ -156,18 +156,18 @@ public:
             {
                 (*initX)(i) = X[i];
             }
-            initX->write("run/ROMoffset/initX" + std::to_string(window));
+            initX->write(basename + "/ROMoffset/initX" + std::to_string(window));
 
             for (int i=0; i<tH1size; ++i)
             {
                 (*initV)(i) = V[i];
             }
-            initV->write("run/ROMoffset/initV" + std::to_string(window));
+            initV->write(basename + "/ROMoffset/initV" + std::to_string(window));
             for (int i=0; i<tL2size; ++i)
             {
                 (*initE)(i) = E[i];
             }
-            initE->write("run/ROMoffset/initE" + std::to_string(window));
+            initE->write(basename + "/ROMoffset/initE" + std::to_string(window));
         }
     }
 
@@ -190,6 +190,8 @@ private:
     double energyFraction;
 
     const bool writeSnapshots;
+
+    const std::string basename = "run";
 
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
@@ -248,7 +250,7 @@ private:
         }
     }
 
-    std::string BasisFileName(VariableName v, const int window, const int parameter)
+    std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter)
     {
         std::string fileName, path;
 
@@ -272,8 +274,8 @@ private:
             fileName = "X" + std::to_string(window);
         }
 
-        path = (parameter >= 0) ? "run/param" + std::to_string(parameter) + "_" : "run/";
-
+        path = (parameter >= 0) ? basename + "/param" + std::to_string(parameter) + "_" : basename + "/";
+        std::cout << path << std::endl;
         return path + prefix + fileName;
     }
 };
@@ -285,7 +287,7 @@ public:
               int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool hyperreduce_ = false, const bool useOffset = false,
               const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
-              const int window=0);
+              const int window=0, const std::string basename="run");
 
     ~ROM_Basis()
     {
@@ -412,6 +414,8 @@ private:
     CAROM::Matrix* basisE = 0;
     CAROM::Matrix* basisFv = 0;
     CAROM::Matrix* basisFe = 0;
+
+    const std::string basename = "run";
 
     CAROM::Vector *fH1, *fL2;
 
