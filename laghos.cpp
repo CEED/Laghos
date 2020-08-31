@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, rom_sample_RHS);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + twpfile, twep, twparam, sFactor, myid == 0, rom_sample_RHS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -784,7 +784,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows) {
-            outfile_twp.open("twpTemp.csv");
+            outfile_twp.open(outputPath + "/twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
