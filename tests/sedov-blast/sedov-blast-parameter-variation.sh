@@ -3,7 +3,7 @@ testNames=(fom online)
 case $subTestNum in
   1)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -offline -romsvds -romos -romsrhs -bef 1.0 -rpar 0
-    $LAGHOS ./merge -nset 1 -rhs
+    $MERGE -nset 1 -rhs
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -bef 0.5 -writesol -visit
     ;;
   2)

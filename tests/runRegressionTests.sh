@@ -1,9 +1,9 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -t 1:00:00
+#SBATCH -t 0:30:00
 #SBATCH -M rztopaz
-#SBATCH -p pbatch
+#SBATCH -p pdebug
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
 
@@ -17,9 +17,10 @@ usage() {
 
 # Stop at failure
 stopAtFailure=false
-
+skipSetup=false
+${SLURM:-false}
 # Get options
-while getopts ":i:e:fh" o;
+while getopts ":i:e:ph:sh:fh" o;
 do
 	case "${o}" in
 		i)
@@ -30,6 +31,9 @@ do
       ;;
 		f)
 			stopAtFailure=true
+			;;
+		s)
+			skipSetup=true
 			;;
     *)
       usage
@@ -51,12 +55,6 @@ elif [ -f "$PWD/tests/runRegressionTests.sh" ]; then
 	DIR=$PWD/tests
 else
 	echo "Run tests from the Laghos or Laghos/tests directory"
-fi
-
-if [[ $0 == *"slurm"* ]]; then
-	SLURM=true
-else
-	SLURM=false
 fi
 
 # Accumulate tests to run
@@ -102,15 +100,20 @@ echo "For detailed logs of the regression tests, please check tests/results."
 
 # Create results directory
 RESULTS_DIR=$DIR/results
-if [ ! -d $RESULTS_DIR ]; then
-  mkdir -p $RESULTS_DIR;
-else
-  rm -rf $RESULTS_DIR/*
-fi
+if [[ "$skipSetup" == "false" ]];
+then
 
-# Create regression test log file
-setupLogFile=${RESULTS_DIR}/setup.log
-touch $setupLogFile >> $setupLogFile 2>&1
+	if [ ! -d $RESULTS_DIR ]; then
+	  mkdir -p $RESULTS_DIR;
+	else
+	  rm -rf $RESULTS_DIR/*
+	fi
+
+	# Create regression test log file
+	setupLogFile=${RESULTS_DIR}/setup.log
+	touch $setupLogFile >> $setupLogFile 2>&1
+
+fi
 
 # Save directory of the new Laghos executable
 BASE_DIR=$DIR/..
@@ -125,39 +128,62 @@ else
 	LIBS_DIR="$CI_BUILDS_DIR/$CI_PROJECT_NAME/env"
 fi
 
-# Compile the C++ comparators
-echo $"Compiling the file and basis comparators" >> $setupLogFile 2>&1
-g++ -std=c++11 -o $DIR/fileComparator $DIR/fileComparator.cpp >> $setupLogFile 2>&1
-g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
--I$LIBS_DIR/libROM -L$LIBS_DIR/libROM/build -lROM -Wl,-rpath,$LIBS_DIR/libROM/build >> $setupLogFile 2>&1
-
-# Clone and compile rom-dev branch of Laghos
-echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
-git -C $DIR clone -b parallelize-regtest https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
-
-# Copy user.mk
-echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
-cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
-
-# Check that rom-dev branch of Laghos is present
-if [ ! -d $BASE_LAGHOS_DIR ]; then
-	echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
-	exit 1
-fi
-
-# Build the baseline Laghos executable
-echo $"Building the baseline branch" >> $setupLogFile 2>&1
-make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
-
-# Check if make built correctly
-if [ $? -ne 0 ]
+if [[ "$skipSetup" == "false" ]];
 then
-	echo "The baseline branch failed to build. Make sure to run 'make clean' and 'make'." | tee -a $setupLogFile
-  exit 1
-fi
 
-# Build merge
-make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	# Compile the C++ comparators
+	echo $"Compiling the file and basis comparators" >> $setupLogFile 2>&1
+	g++ -std=c++11 -o $DIR/fileComparator $DIR/fileComparator.cpp >> $setupLogFile 2>&1
+	g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
+	-I$LIBS_DIR/libROM -L$LIBS_DIR/libROM/build -lROM -Wl,-rpath,$LIBS_DIR/libROM/build >> $setupLogFile 2>&1
+
+	# Clone and compile rom-dev branch of Laghos
+	echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
+	git -C $DIR clone -b parallelize-regtest https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+
+	# Copy user.mk
+	echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
+	cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
+
+	# Check that rom-dev branch of Laghos is present
+	if [ ! -d $BASE_LAGHOS_DIR ]; then
+		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
+		exit 1
+	fi
+
+	# Build the baseline Laghos executable
+	echo $"Building the baseline branch" >> $setupLogFile 2>&1
+	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Check if make built correctly
+	if [ $? -ne 0 ]
+	then
+		echo "The baseline branch failed to build. Make sure to run 'make clean' and 'make'." | tee -a $setupLogFile
+	  exit 1
+	fi
+
+	# Build merge
+	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Clear run directories
+	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
+
+fi
+if [[ -z "$SLURM" ]]; then
+	if [[ $0 == *"slurm"* ]]; then
+		SLURM=true
+		for simulation in "${testsToRun[@]}"
+		do
+			echo "Forking child process. Check ${RESULTS_DIR}/${simulation}-results.log"
+			SLURM=true $DIR/runRegressionTests.sh -s -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+		done
+		wait
+		exit 0
+	else
+		SLURM=false
+	fi
+fi
 
 ###############################################################################
 # RUN TESTS
@@ -173,15 +199,10 @@ case "$(uname -s)" in
 			exit 1
 esac
 
-
 # Test number counter
 testNum=0
 testNumFail=0
 testNumPass=0
-
-# Clear run directories
-make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
 
 # Run all tests
 for simulation in "${testsToRun[@]}"
@@ -209,15 +230,16 @@ do
 
 				if [ "$parallel" == "false" ]
 				then
-					LAGHOS="$COMMAND -n 1"
+					HEADER="$COMMAND -n 1"
 					testName="${testNames[$subTestNum]}"
 					OUTPUT_DIR=${scriptName}
 				else
-					LAGHOS="$COMMAND -n $NUM_PARALLEL_PROCESSORS"
+					HEADER="$COMMAND -n $NUM_PARALLEL_PROCESSORS"
 					testName="${testNames[$subTestNum]}-parallel"
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
-				LAGHOS="$LAGHOS laghos -k ${OUTPUT_DIR}"
+				MERGE="$HEADER ./merge -k ${OUTPUT_DIR}"
+				LAGHOS="$HEADER laghos -k ${OUTPUT_DIR}"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
