@@ -352,18 +352,14 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-                     int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-                     const bool hyperreduce_, const bool useOffset,
-                     const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
-                     const int window)
-    : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
-      H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
-      gfH1(H1FESpace), gfL2(L2FESpace),
-      rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
-      numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-      hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
-      RK2AvgFormulation(RK2AvgSolver)
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_)
+    : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
+      H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
+      gfH1(input.H1FESpace), gfL2(input.L2FESpace),
+      rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
+      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
+      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
+      RK2AvgFormulation(input.RK2AvgSolver)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -396,7 +392,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     mfH1.SetSize(tH1size);
     mfL2.SetSize(tL2size);
 
-    ReadSolutionBases(window);
+    ReadSolutionBases(input.window);
 
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);
@@ -409,20 +405,16 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    dimX = rdimx;
-    dimV = rdimv;
-    dimE = rdime;
-
     if (offsetInit)
     {
         initX = new CAROM::Vector(tH1size, true);
-        initX->read("run/ROMoffset/initX" + std::to_string(window));
+        initX->read("run/ROMoffset/initX" + std::to_string(input.window));
 
         initV = new CAROM::Vector(tH1size, true);
-        initV->read("run/ROMoffset/initV" + std::to_string(window));
+        initV->read("run/ROMoffset/initV" + std::to_string(input.window));
 
         initE = new CAROM::Vector(tL2size, true);
-        initE->read("run/ROMoffset/initE" + std::to_string(window));
+        initE->read("run/ROMoffset/initE" + std::to_string(input.window));
 
         cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
     }
@@ -432,7 +424,7 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
-        SetupHyperreduction(H1FESpace, L2FESpace, nH1, window);
+        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -1412,16 +1404,16 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
         u[osrom + i] = (*rE2)(i);
 }
 
-ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b,
+ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
-                           const double ftz_tol, const bool hyperreduce_, H1_FECollection *H1fec,
-                           FiniteElementCollection *L2fec, const bool reduceMass, const bool GramSchmidt)
-    : TimeDependentOperator(b->TotalSize()), operFOM(lhoper), basis(b),
-      rank(b->GetRank()), hyperreduce(hyperreduce_), useReducedMv(reduceMass), useReducedMe(reduceMass), useGramSchmidt(GramSchmidt)
+                           const double ftz_tol, H1_FECollection *H1fec,
+                           FiniteElementCollection *L2fec)
+    : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
+      rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt)
 {
-    MFEM_VERIFY(lhoper->Height() == lhoper->Width(), "");
+    MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
 
     if (hyperreduce && rank == 0)
     {
@@ -1500,8 +1492,8 @@ ROM_Operator::ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_B
     }
     else if (!hyperreduce)
     {
-        fx.SetSize(lhoper->Height());
-        fy.SetSize(lhoper->Height());
+        fx.SetSize(input.FOMoper->Height());
+        fy.SetSize(input.FOMoper->Height());
     }
 
     if (useReducedMv)
