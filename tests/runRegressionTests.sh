@@ -17,10 +17,11 @@ usage() {
 
 # Stop at failure
 stopAtFailure=false
-skipSetup=false
-${SLURM:-false}
+
+# Skip setup (git pull, make))
+${skipSetup:=false}
 # Get options
-while getopts ":i:e:ph:sh:fh" o;
+while getopts ":i:e:fh" o;
 do
 	case "${o}" in
 		i)
@@ -32,9 +33,6 @@ do
 		f)
 			stopAtFailure=true
 			;;
-		s)
-			skipSetup=true
-			;;
     *)
       usage
       ;;
@@ -43,15 +41,15 @@ done
 shift $((OPTIND-1))
 
 # If both include and exclude are set, fail
-if [ -n "${i}" ] && [ -n "${e}" ]; then
+if [[ -n "${i}" ]] && [[ -n "${e}" ]]; then
     usage
 		exit 1
 fi
 
 # Save directory of this script
-if [ -f "$PWD/runRegressionTests.sh" ]; then
+if [[ -f "$PWD/runRegressionTests.sh" ]]; then
 	DIR=$PWD
-elif [ -f "$PWD/tests/runRegressionTests.sh" ]; then
+elif [[ -f "$PWD/tests/runRegressionTests.sh" ]]; then
 	DIR=$PWD/tests
 else
 	echo "Run tests from the Laghos or Laghos/tests directory"
@@ -60,7 +58,7 @@ fi
 # Accumulate tests to run
 testsToRun=( $i )
 testsToExclude=( $e )
-if [ ${#testsToRun[@]} -eq 0 ]
+if [[ ${#testsToRun[@]} -eq 0 ]];
 then
 	echo "Running all tests"
 	for file in $DIR/*;
@@ -95,13 +93,15 @@ done
 # COMPILATION
 ###############################################################################
 
-echo "Setting up test suite"
-echo "For detailed logs of the regression tests, please check tests/results."
-
 # Create results directory
 RESULTS_DIR=$DIR/results
+
+# If skipping setup, don't set up results directory
 if [[ "$skipSetup" == "false" ]];
 then
+
+	echo "Setting up test suite"
+	echo "For detailed logs of the regression tests, please check tests/results."
 
 	if [ ! -d $RESULTS_DIR ]; then
 	  mkdir -p $RESULTS_DIR;
@@ -122,12 +122,13 @@ BASE_DIR=$DIR/..
 BASELINE_LAGHOS_DIR=$DIR/Laghos
 
 # Get LIBS_DIR to run make depending on whether Gitlab is running
-if [ -z "$CI_BUILDS_DIR" ]; then
+if [[ -z "$CI_BUILDS_DIR" ]]; then
 	LIBS_DIR="$BASE_DIR/.."
 else
 	LIBS_DIR="$CI_BUILDS_DIR/$CI_PROJECT_NAME/env"
 fi
 
+# If skipping setup, don't do make
 if [[ "$skipSetup" == "false" ]];
 then
 
@@ -156,7 +157,7 @@ then
 	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
-	if [ $? -ne 0 ]
+	if [[ $? -ne 0 ]];
 	then
 		echo "The baseline branch failed to build. Make sure to run 'make clean' and 'make'." | tee -a $setupLogFile
 	  exit 1
@@ -168,17 +169,26 @@ then
 	# Clear run directories
 	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
 	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-
 fi
+
+# If running on slurm, parallelize the tests.
 if [[ -z "$SLURM" ]]; then
 	if [[ $0 == *"slurm"* ]]; then
 		SLURM=true
 		for simulation in "${testsToRun[@]}"
 		do
-			echo "Forking child process. Check ${RESULTS_DIR}/${simulation}-results.log"
-			SLURM=true $DIR/runRegressionTests.sh -s -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results"
+			if [[ "$stopAtFailure" == "true" ]];
+			then
+				skipSetup=true SLURM=true $DIR/runRegressionTests.sh -f -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+			else
+				skipSetup=true SLURM=true $DIR/runRegressionTests.sh -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+			fi
 		done
+		echo "When all processes are finished, the results will be concatenated to ${RESULTS_DIR}/sbatch-results.log"
 		wait
+		echo "Finished. Check ${RESULTS_DIR}/sbatch-results.log"
+		cat ${RESULTS_DIR}/*-results.log > ${RESULTS_DIR}/sbatch-results.log
 		exit 0
 	else
 		SLURM=false
@@ -189,6 +199,7 @@ fi
 # RUN TESTS
 ###############################################################################
 
+# Check machine
 case "$(uname -s)" in
     Linux*)
 		  COMMAND="srun -p pdebug";;
@@ -228,7 +239,7 @@ do
 			while true;
 			do
 
-				if [ "$parallel" == "false" ]
+				if [[ "$parallel" == "false" ]];
 				then
 					HEADER="$COMMAND -n 1"
 					testName="${testNames[$subTestNum]}"
@@ -292,7 +303,7 @@ do
 						echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: FAIL"
 					fi
 					echo "${scriptName}-${testName}: FAIL" >> $simulationLogFile
-					if [ "$stopAtFailure" == "true" ]
+					if [ "$stopAtFailure" == "true" ];
 					then
 						exit 1
 					fi
@@ -306,7 +317,7 @@ do
 				(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
 				# Check if simulation failed
-				if [ "$?" -ne 0 ]
+				if [[ "$?" -ne 0 ]];
 				then
 					echo "Something went wrong running the baseline simulation with the
 					test script: $scriptName. Try running 'make clean' and 'make'." >> $simulationLogFile 2>&1
@@ -321,7 +332,7 @@ do
 				(cd $BASE_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
 				# Check if simulation failed
-				if [ "$?" -ne 0 ]
+				if [[ "$?" -ne 0 ]];
 				then
 					echo "Something went wrong running the new user branch simulation with the
 					 test script: $scriptName" >> $simulationLogFile 2>&1
@@ -333,13 +344,12 @@ do
 
 				# Find number of steps simulation took in rom-dev to compare final timestep later
 				cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
-				if [ $? -eq 1 ]; then
+				if [[ $? -eq 1 ]]; then
 					echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
 					set_fail
 					continue 1
 				fi
 				num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
-
 				# After simulations complete, compare results
 				for testFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
 				do
@@ -370,7 +380,7 @@ do
 
 					# Check if comparison failed
 					check_fail() {
-						if [ "${PIPESTATUS[0]}" -ne 0 ]
+						if [[ "${PIPESTATUS[0]}" -ne 0 ]];
 						then
 							set_fail
 
@@ -381,7 +391,7 @@ do
 
 					# Check if a file exists on the user branch
 					check_exists() {
-						if [[ ! -f "$basetestfile" ]]; then
+						if [ ! -f $basetestfile ]; then
 							echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
 							set_fail
 
@@ -428,7 +438,7 @@ do
 				done
 
 				# Passed
-				if [ "$testFailed" == false ]; then
+				if [[ "$testFailed" == false ]]; then
 					set_pass
 				fi
 			done
@@ -436,6 +446,6 @@ do
 	done
 done
 echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"
-if [ $testNumFail -ne 0 ]; then
+if [[ $testNumFail -ne 0 ]]; then
 	exit 1
 fi
