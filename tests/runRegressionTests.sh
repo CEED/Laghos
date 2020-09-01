@@ -218,9 +218,10 @@ testNumPass=0
 # Run all tests
 for simulation in "${testsToRun[@]}"
 do
+	echo $simulation
 
 	# Run every script in each test directory
-	for script in $DIR/$simulation/*;
+	for script in ${DIR}/${simulation}/*;
 	do
 
 		if [[ "$script" == *".sh" ]]; then
