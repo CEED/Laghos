@@ -1,9 +1,15 @@
 #!/bin/bash
 
+#SBATCH -N 1
+#SBATCH -t 1:00:00
+#SBATCH -M rztopaz
+#SBATCH -p pbatch
+#SBATCH -o sbatch.log
+#SBATCH --open-mode truncate
+
 ###############################################################################
 # SET UP
 ###############################################################################
-
 usage() {
 	echo "Unknown option. Refer to REGRESSIONTEST.md"
 	exit 1
@@ -39,7 +45,19 @@ if [ -n "${i}" ] && [ -n "${e}" ]; then
 fi
 
 # Save directory of this script
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+if [ -f "$PWD/runRegressionTests.sh" ]; then
+	DIR=$PWD
+elif [ -f "$PWD/tests/runRegressionTests.sh" ]; then
+	DIR=$PWD/tests
+else
+	echo "Run tests from the Laghos or Laghos/tests directory"
+fi
+
+if [[ $0 == *"slurm"* ]]; then
+	SLURM=true
+else
+	SLURM=false
+fi
 
 # Accumulate tests to run
 testsToRun=( $i )
@@ -235,22 +253,31 @@ do
 
 				set_pass() {
 					testNumPass=$((testNumPass+1))
-					echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: PASS"
+					if [[ $SLURM == "true" ]]; then
+						echo "$testNum. ${scriptName}-${testName}: PASS"
+					else
+						echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: PASS"
+					fi
 					echo "${scriptName}-${testName}: PASS" >> $simulationLogFile
 				}
 
 				set_fail() {
 					testFailed=true
 					testNumFail=$((testNumFail+1))
-					echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: FAIL"
+					if [[ $SLURM == "true" ]]; then
+						echo "$testNum. ${scriptName}-${testName}: FAIL"
+					else
+						echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: FAIL"
+					fi
 					echo "${scriptName}-${testName}: FAIL" >> $simulationLogFile
 					if [ "$stopAtFailure" == "true" ]
 					then
 						exit 1
 					fi
 				}
-
-				echo -n "$testNum. ${scriptName}-${testName}: RUNNING"
+				if [[ $SLURM == "false" ]]; then
+					echo -n "$testNum. ${scriptName}-${testName}: RUNNING"
+				fi
 
 				# Run simulation from rom-dev branch
 				echo $"Running baseline simulation for comparison" >> $simulationLogFile 2>&1

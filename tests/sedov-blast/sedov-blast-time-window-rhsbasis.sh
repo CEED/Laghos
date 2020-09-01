@@ -11,6 +11,6 @@ case $subTestNum in
     $HEADER laghos -m data/cube01_hex.mesh -pt 211 -tf 0.05 -online -romsvds -romos -sfacx 10 -sfacv 10 -sface 10 -soldiff -romsrhs -nwin 2 -twp twpTemp.csv -romgs -romhr
     ;;
   4)
-    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -restore -nwin 2 -twp twpTemp.csv
+    $HEADER laghos -m data/cube01_hex.mesh -pt 211 -restore -nwin 2 -twp twpTemp.csv -romsrhs
     ;;
 esac
