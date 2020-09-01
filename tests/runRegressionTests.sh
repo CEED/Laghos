@@ -303,7 +303,7 @@ do
 						echo -e "\\r\033[0K$testNum. ${scriptName}-${testName}: FAIL"
 					fi
 					echo "${scriptName}-${testName}: FAIL" >> $simulationLogFile
-					if [ "$stopAtFailure" == "true" ];
+					if [[ "$stopAtFailure" == "true" ]];
 					then
 						exit 1
 					fi
