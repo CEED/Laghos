@@ -835,7 +835,19 @@ double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+      case 3:
+      {
+         if (x(0) < 1.0) { return 1.0; }         // zone 1
+         else {
+             if ( (x(1) < 1.5 && x(2) < 1.5) ||
+                  (x(1) > 1.5 && x(2) > 1.5) ) { // zone 2
+                 return 1.0;
+             }
+             else {                              // zone 3
+                 return 0.125;
+             }
+         }
+      }
       case 4: return 1.0;
       case 5:
       {
@@ -860,7 +872,7 @@ double gamma(const Vector &x)
       case 0: return 5./3.;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 3: return 1.4;
       case 4: return 5.0 / 3.0;
       case 5: return 1.4;
       case 6: return 1.4;
@@ -951,8 +963,19 @@ double e0(const Vector &x)
       case 1: return 0.0; // This case in initialized in main().
       case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
                         : 0.1 / rho0(x) / (gamma(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
+      case 3:
+      {
+       if (x(0) < 1.0) { return 1.0 / rho0(x) / (gamma(x) - 1.0); } // zone 1
+       else {
+           if ((x(1) < 1.5 && x(2) < 1.5) ||
+               (x(1) > 1.5 && x(2) > 1.5)) {                        // zone 2
+               return 0.1 / rho0(x) / (gamma(x) - 1.0);
+           }
+           else {                                                   // zone 3
+               return 0.1 / rho0(x) / (gamma(x) - 1.0);
+           }
+        }
+      }
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
