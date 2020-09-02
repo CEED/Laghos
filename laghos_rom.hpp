@@ -306,11 +306,11 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
+    ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Vector const& S,
               int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
               const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
               const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
-              const int window=0);
+              const int window=0, const int parameter=-1);
 
     ~ROM_Basis()
     {

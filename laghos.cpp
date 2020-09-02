@@ -808,9 +808,9 @@ int main(int argc, char *argv[])
             numSampV = twparam(0,oss+1);
             numSampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
                               rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                              rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, rom_paramID);
         romS.SetSize(rom_dimx + rom_dimv + rom_dime);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -841,13 +841,13 @@ int main(int argc, char *argv[])
                 rom_dimfv = twparam(rom_window,3);
                 rom_dimfe = twparam(rom_window,4);
             }
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
         } else {
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
                                   rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg);
+                                  rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, rom_paramID);
         }
         int romSsize = rom_dimx + rom_dimv + rom_dime;
         romS.SetSize(romSsize);
@@ -907,10 +907,11 @@ int main(int argc, char *argv[])
                     rom_dimfv = twparam(rom_window,3);
                     rom_dimfe = twparam(rom_window,4);
                 }
+                basis->LiftROMtoFOM(romS, S);
                 delete basis;
-                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
                                       rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
                 romSsize = rom_dimx + rom_dimv + rom_dime;
                 romS.SetSize(romSsize);
             }
@@ -941,7 +942,11 @@ int main(int argc, char *argv[])
     else
     {
         // usual time loop when rom_restore phase is false.
-        std::ofstream outfile_tw_steps("run/tw_steps");
+        std::ofstream outfile_tw_steps;
+        if (rom_online && usingWindows)
+        {
+            outfile_tw_steps.open("run/tw_steps");
+        }
         timeLoopTimer.Start();
         if (rom_hyperreduce && rom_GramSchmidt)
         {
@@ -1141,13 +1146,9 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
 
-                    if (rom_hyperreduce)
+                    if (rom_hyperreduce && rom_GramSchmidt)
                     {
-                        if (rom_GramSchmidt)
-                        {
-                            romOper->InducedGramSchmidtFinalize(romS);
-                        }
-                        basis->LiftROMtoFOM(romS, S);
+                        romOper->InducedGramSchmidtFinalize(romS);
                     }
 
                     rom_dimx = twparam(rom_window,0);
@@ -1163,11 +1164,12 @@ int main(int argc, char *argv[])
                     numSampV = twparam(rom_window,oss+1);
                     numSampE = twparam(rom_window,oss+2);
 
+                    basis->LiftROMtoFOM(romS, S);
                     delete basis;
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
+                    basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
                                           rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window);
+                                          rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
                     romS.SetSize(rom_dimx + rom_dimv + rom_dime);
                     timeLoopTimer.Start();
 

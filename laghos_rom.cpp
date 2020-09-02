@@ -352,11 +352,11 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
+ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Vector const& S,
                      int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
                      const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
                      const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
-                     const int window)
+                     const int window, const int parameter)
     : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
       H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
       gfH1(H1FESpace), gfL2(L2FESpace),
@@ -416,15 +416,51 @@ ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFinite
     if (offsetInit)
     {
         initX = new CAROM::Vector(tH1size, true);
-        initX->read("run/ROMoffset/initX" + std::to_string(window));
-
         initV = new CAROM::Vector(tH1size, true);
-        initV->read("run/ROMoffset/initV" + std::to_string(window));
-
         initE = new CAROM::Vector(tL2size, true);
-        initE->read("run/ROMoffset/initE" + std::to_string(window));
 
-        cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        if (parameter >= 0)
+        {
+            Vector X, V, E;
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[i];
+            }
+            gfH1.GetTrueDofs(X);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initX)(i) = X[i];
+            }
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[H1size+i];
+            }
+            gfH1.GetTrueDofs(V);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initV)(i) = V[i];
+            }
+
+            for (int i=0; i<L2size; ++i)
+            {
+                gfL2[i] = S[2*H1size+i];
+            }
+            gfL2.GetTrueDofs(E);
+            for (int i=0; i<tL2size; ++i)
+            {
+                (*initE)(i) = E[i];
+            }
+        }
+        else
+        {
+            initX->read("run/ROMoffset/initX" + std::to_string(window));
+            initV->read("run/ROMoffset/initV" + std::to_string(window));
+            initE->read("run/ROMoffset/initE" + std::to_string(window));
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
     }
 
     if (hyperreduce)
