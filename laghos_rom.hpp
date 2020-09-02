@@ -43,7 +43,7 @@ public:
           H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_),
-          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0)
+          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0), parameter(parameterID)
     {
         if (sampleF)
         {
@@ -171,6 +171,7 @@ public:
 
         if (offsetInit)
         {
+            std::string path_init = (parameter >= 0)? "run/ROMoffset/param" + std::to_string(parameter) + "_init" : "run/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
@@ -181,18 +182,18 @@ public:
             {
                 (*initX)(i) = X[i];
             }
-            initX->write("run/ROMoffset/initX" + std::to_string(window));
+            initX->write(path_init + "X" + std::to_string(window));
 
             for (int i=0; i<tH1size; ++i)
             {
                 (*initV)(i) = V[i];
             }
-            initV->write("run/ROMoffset/initV" + std::to_string(window));
+            initV->write(path_init + "V" + std::to_string(window));
             for (int i=0; i<tL2size; ++i)
             {
                 (*initE)(i) = E[i];
             }
-            initE->write("run/ROMoffset/initE" + std::to_string(window));
+            initE->write(path_init + "E" + std::to_string(window));
         }
     }
 
@@ -214,7 +215,13 @@ private:
     const int rank;
     double energyFraction;
 
+    const int parameter;
     const bool writeSnapshots;
+    std::vector<double> tSnapX;
+    std::vector<double> tSnapV;
+    std::vector<double> tSnapE;
+    std::vector<double> tSnapFv;
+    std::vector<double> tSnapFe;
 
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 

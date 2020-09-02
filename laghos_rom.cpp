@@ -8,6 +8,7 @@ using namespace std;
 
 void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
 {
+    bool addSample, addSampleF;
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
@@ -35,13 +36,18 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 Xdiff[i] = X[i] - (*initX)(i);
             }
 
-            generator_X->takeSample(Xdiff.GetData(), t, dt);
+            addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
             generator_X->computeNextSampleTime(Xdiff.GetData(), dXdt.GetData(), t);
         }
         else
         {
-            generator_X->takeSample(X.GetData(), t, dt);
+            addSample = generator_X->takeSample(X.GetData(), t, dt);
             generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
+        }
+
+        if (writeSnapshots && addSample)
+        {
+            tSnapX.push_back(t);
         }
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
@@ -68,7 +74,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 Xdiff[i] = V[i] - (*initV)(i);
             }
 
-            generator_V->takeSample(Xdiff.GetData(), t, dt);
+            addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
             generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
 
             if (sampleF)
@@ -78,7 +84,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                     gfH1[i] = dSdt[H1size + i];  // Fv
 
                 gfH1.GetTrueDofs(Xdiff);
-                generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+                addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+                if (writeSnapshots && addSampleF)
+                {
+                    tSnapFv.push_back(t);
+                }
 
                 // Without this check, libROM may use multiple time intervals, and without appropriate implementation
                 // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -88,8 +99,13 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         else
         {
             MFEM_VERIFY(!sampleF, "");
-            generator_V->takeSample(V.GetData(), t, dt);
+            addSample = generator_V->takeSample(V.GetData(), t, dt);
             generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+        }
+
+        if (writeSnapshots && addSample)
+        {
+            tSnapV.push_back(t);
         }
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
@@ -113,7 +129,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 Ediff[i] = E[i] - (*initE)(i);
             }
 
-            generator_E->takeSample(Ediff.GetData(), t, dt);
+            addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
 
             if (sampleF)
@@ -123,7 +139,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                     gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
                 gfL2.GetTrueDofs(Ediff);
-                generator_Fe->takeSample(Ediff.GetData(), t, dt);
+                addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+                if (writeSnapshots && addSampleF)
+                {
+                    tSnapFe.push_back(t);
+                }
 
                 // Without this check, libROM may use multiple time intervals, and without appropriate implementation
                 // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -133,8 +154,13 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         else
         {
             MFEM_VERIFY(!sampleF, "");
-            generator_E->takeSample(E.GetData(), t, dt);
+            addSample = generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
+        }
+
+        if (writeSnapshots && addSample)
+        {
+            tSnapE.push_back(t);
         }
 
         // Without this check, libROM may use multiple time intervals, and without appropriate implementation
@@ -168,8 +194,19 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
+void printSnapshotTime(std::vector<double> const &tSnap, std::string const filename)
+{
+    cout << tSnap.size() << endl;
+    std::ofstream outfile_tSnap(filename);
+    for (auto const& i: tSnap)
+    {
+        outfile_tSnap << i << endl;
+    }
+}
+
 void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
 {
+    bool addSample, addSampleF;
     SetStateVariables(S);
 
     Vector dSdt;
@@ -186,10 +223,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             Xdiff[i] = X[i] - (*initX)(i);
         }
 
-        generator_X->takeSample(Xdiff.GetData(), t, dt);
+        addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
     }
     else
-        generator_X->takeSample(X.GetData(), t, dt);
+        addSample = generator_X->takeSample(X.GetData(), t, dt);
+
+    if (writeSnapshots && addSample)
+    {
+        tSnapX.push_back(t);
+    }
 
     // Without this check, libROM may use multiple time intervals, and without appropriate implementation
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -207,7 +249,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             Xdiff[i] = V[i] - (*initV)(i);
         }
 
-        generator_V->takeSample(Xdiff.GetData(), t, dt);
+        addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
 
         if (sampleF)
         {
@@ -216,7 +258,12 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
                 gfH1[i] = dSdt[H1size + i];  // Fv
 
             gfH1.GetTrueDofs(Xdiff);
-            generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFv.push_back(t);
+            }
 
             // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -224,7 +271,12 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
     }
     else
-        generator_V->takeSample(V.GetData(), t, dt);
+        addSample = generator_V->takeSample(V.GetData(), t, dt);
+
+    if (writeSnapshots && addSample)
+    {
+        tSnapV.push_back(t);
+    }
 
     // Without this check, libROM may use multiple time intervals, and without appropriate implementation
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -242,7 +294,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             Ediff[i] = E[i] - (*initE)(i);
         }
 
-        generator_E->takeSample(Ediff.GetData(), t, dt);
+        addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
 
         if (sampleF)
         {
@@ -251,15 +303,26 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
                 gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
             gfL2.GetTrueDofs(Ediff);
-            generator_Fe->takeSample(Ediff.GetData(), t, dt);
+            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
 
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFe.push_back(t);
+            }
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
             MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
         }
     }
     else
-        generator_E->takeSample(E.GetData(), t, dt);
+        addSample = generator_E->takeSample(E.GetData(), t, dt);
+
+    if (writeSnapshots && addSample)
+    {
+        tSnapE.push_back(t);
+    }
 
     // Without this check, libROM may use multiple time intervals, and without appropriate implementation
     // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
@@ -305,6 +368,29 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
             cout << "Fe basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+        }
+    }
+
+    if (rank == 0 && writeSnapshots)
+    {
+        std::string path_tSnap = "run/param" + std::to_string(parameter) + "_tSnap";
+
+        cout << "X snapshot size: ";
+        printSnapshotTime(tSnapX, path_tSnap + "X");
+
+        cout << "V snapshot size: ";
+        printSnapshotTime(tSnapV, path_tSnap + "V");
+
+        cout << "E snapshot size: ";
+        printSnapshotTime(tSnapE, path_tSnap + "E");
+
+        if (sampleF)
+        {
+            cout << "Fv snapshot size: ";
+            printSnapshotTime(tSnapFv, path_tSnap + "Fv");
+
+            cout << "Fe snapshot size: ";
+            printSnapshotTime(tSnapFe, path_tSnap + "Fe");
         }
     }
 
