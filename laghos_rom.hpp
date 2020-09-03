@@ -31,20 +31,54 @@ const char* const Fe = "run/basisFe";
 
 enum VariableName { X, V, E, Fv, Fe };
 
+struct ROM_Options
+{
+    int rank = 0;  // MPI rank
+    ParFiniteElementSpace *H1FESpace = NULL; // FOM H1 FEM space
+    ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
+
+    double t_final = 0.0; // simulation final time
+    double initial_dt = 0.0; // initial timestep size
+
+    bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
+    bool useOffset = false; // if true, sample variables minus initial state as an offset
+    bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
+    int window = 0; // Laghos-ROM time window index
+    int max_dim = 0; // maximimum dimension for libROM basis generator time interval
+    int parameterID = 0; // index of parameters chosen for this Laghos simulation
+    hydrodynamics::LagrangianHydroOperator *FOMoper = NULL; // FOM operator
+
+    // Variable basis dimensions
+    int dimX = -1;
+    int dimV = -1;
+    int dimE = -1;
+    int dimFv = -1;
+    int dimFe = -1;
+
+    // Number of samples for each variable
+    int sampX = 0;
+    int sampV = 0;
+    int sampE = 0;
+
+    bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
+    bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
+    bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
+};
+
 class ROM_Sampler
 {
 public:
-    ROM_Sampler(const int rank_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-                const double t_final, const double initial_dt, Vector const& S_init,
-                const bool staticSVD = false, const bool useOffset = false, double energyFraction_=0.9999,
-                const int window=0, const int max_dim=0, const bool sample_RHS=false,
-                hydrodynamics::LagrangianHydroOperator *FOMoper=NULL, const int parameterID=-1)
-        : rank(rank_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
-          H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
+    ROM_Sampler(ROM_Options const& input, Vector const& S_init)
+        : rank(input.rank), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
+          H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
-          gfH1(H1FESpace), gfL2(L2FESpace), offsetInit(useOffset), energyFraction(energyFraction_),
-          sampleF(sample_RHS), lhoper(FOMoper), writeSnapshots(parameterID >= 0)
+          gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0)
     {
+        const int window = input.window;
+        const int parameterID = input.parameterID;
+
         if (sampleF)
         {
             MFEM_VERIFY(offsetInit, "");
@@ -54,12 +88,12 @@ public:
         double model_linearity_tol = 1.e-7;
         double model_sampling_tol = 1.e-7;
 
-        const int max_model_dim_est = int(t_final/initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
-        const int max_model_dim = (max_dim > 0) ? max_dim : max_model_dim_est;
+        const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
+        const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
-        if (staticSVD)
+        if (input.staticSVD)
         {
             generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
                     BasisFileName(VariableName::X, window, parameterID));
@@ -83,30 +117,30 @@ public:
                     false,
                     true,
                     max_model_dim,
-                    initial_dt,
+                    input.initial_dt,
                     max_model_dim,
                     model_sampling_tol,
-                    t_final,
+                    input.t_final,
                     ROMBasisName::X + std::to_string(window));
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
                     false,
                     true,
                     max_model_dim,
-                    initial_dt,
+                    input.initial_dt,
                     max_model_dim,
                     model_sampling_tol,
-                    t_final,
+                    input.t_final,
                     ROMBasisName::V + std::to_string(window));
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
                     false,
                     true,
                     max_model_dim,
-                    initial_dt,
+                    input.initial_dt,
                     max_model_dim,
                     model_sampling_tol,
-                    t_final,
+                    input.t_final,
                     ROMBasisName::E + std::to_string(window));
 
             if (sampleF)
@@ -116,20 +150,20 @@ public:
                         false,
                         true,
                         max_model_dim,
-                        initial_dt,
+                        input.initial_dt,
                         max_model_dim,
                         model_sampling_tol,
-                        t_final,
+                        input.t_final,
                         ROMBasisName::Fv + std::to_string(window));
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                         model_linearity_tol,
                         false,
                         true,
                         max_model_dim,
-                        initial_dt,
+                        input.initial_dt,
                         max_model_dim,
                         model_sampling_tol,
-                        t_final,
+                        input.t_final,
                         ROMBasisName::Fe + std::to_string(window));
             }
         }
@@ -281,11 +315,7 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace,
-              int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-              const bool hyperreduce_ = false, const bool useOffset = false,
-              const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
-              const int window=0);
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_);
 
     ~ROM_Basis()
     {
@@ -478,12 +508,11 @@ private:
 class ROM_Operator : public TimeDependentOperator
 {
 public:
-    ROM_Operator(hydrodynamics::LagrangianHydroOperator *lhoper, ROM_Basis *b, Coefficient& rho_coeff,
+    ROM_Operator(ROM_Options const& input, ROM_Basis *b, Coefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
-                 const int cg_max_iter, const double ftz_tol, const bool hyperreduce_ = false,
-                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
-                 const bool reduceMass = false, const bool GramSchmidt = false);
+                 const int cg_max_iter, const double ftz_tol,
+                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -546,7 +575,9 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool useReducedMv, useReducedMe;
+    bool useReducedMv = false;  // TODO: remove this?
+    bool useReducedMe = false;  // TODO: remove this?
+
     DenseMatrix invMvROM, invMeROM;
 
     void ComputeReducedMv();
