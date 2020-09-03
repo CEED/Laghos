@@ -170,141 +170,52 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
 
 void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
 {
-    SetStateVariables(S);
-
-    Vector dSdt;
-    if (sampleF)
-    {
-        dSdt.SetSize(S.Size());
-        lhoper->Mult(S, dSdt);
-    }
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tH1size; ++i)
-        {
-            Xdiff[i] = X[i] - (*initX)(i);
-        }
-
-        generator_X->takeSample(Xdiff.GetData(), t, dt);
-    }
-    else
-        generator_X->takeSample(X.GetData(), t, dt);
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
     if (writeSnapshots)
+    {
         generator_X->writeSnapshot();
-    else
-        generator_X->endSamples();
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tH1size; ++i)
-        {
-            Xdiff[i] = V[i] - (*initV)(i);
-        }
-
-        generator_V->takeSample(Xdiff.GetData(), t, dt);
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfH1.Size() == H1size, "");
-            for (int i=0; i<H1size; ++i)
-                gfH1[i] = dSdt[H1size + i];  // Fv
-
-            gfH1.GetTrueDofs(Xdiff);
-            generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-    }
-    else
-        generator_V->takeSample(V.GetData(), t, dt);
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
-    if (writeSnapshots)
         generator_V->writeSnapshot();
-    else
-        generator_V->endSamples();
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tL2size; ++i)
-        {
-            Ediff[i] = E[i] - (*initE)(i);
-        }
-
-        generator_E->takeSample(Ediff.GetData(), t, dt);
+        generator_E->writeSnapshot();
 
         if (sampleF)
-        {
-            MFEM_VERIFY(gfL2.Size() == L2size, "");
-            for (int i=0; i<L2size; ++i)
-                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-            gfL2.GetTrueDofs(Ediff);
-            generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-    }
-    else
-        generator_E->takeSample(E.GetData(), t, dt);
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
-    if (writeSnapshots)
-        generator_E->writeSnapshot();
-    else
-        generator_E->endSamples();
-
-    if (sampleF)
-    {
-        if (writeSnapshots)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
         }
-        else
+    }
+    else
+    {
+        generator_X->endSamples();
+        generator_V->endSamples();
+        generator_E->endSamples();
+
+        if (sampleF)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();
         }
-    }
 
-    if (rank == 0 && !writeSnapshots)
-    {
-        cout << "X basis summary output: ";
-        BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
-        PrintSingularValues(rank, "X", generator_X);
-
-        cout << "V basis summary output: ";
-        BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-        PrintSingularValues(rank, "V", generator_V);
-
-        cout << "E basis summary output: ";
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
-        PrintSingularValues(rank, "E", generator_E);
-
-        if (sampleF)
+        if (rank == 0)
         {
-            cout << "Fv basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
+            cout << "X basis summary output: ";
+            BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
+            PrintSingularValues(rank, "X", generator_X);
 
-            cout << "Fe basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+            cout << "V basis summary output: ";
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
+            PrintSingularValues(rank, "V", generator_V);
+
+            cout << "E basis summary output: ";
+            BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
+            PrintSingularValues(rank, "E", generator_E);
+
+            if (sampleF)
+            {
+                cout << "Fv basis summary output: ";
+                BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
+
+                cout << "Fe basis summary output: ";
+                BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+            }
         }
     }
 
