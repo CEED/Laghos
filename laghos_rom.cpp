@@ -438,20 +438,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-//TODO: Tony PR77
-//ROM_Basis::ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Vector const& S,
-//                     int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-//                     const bool staticSVD_, const bool hyperreduce_, const bool useOffset,
-//                     const bool RHSbasis_, const bool GramSchmidt, const bool RK2AvgSolver,
-//                     const int window, const int parameter)
-//    : comm(comm_), tH1size(H1FESpace->GetTrueVSize()), tL2size(L2FESpace->GetTrueVSize()),
-//      H1size(H1FESpace->GetVSize()), L2size(L2FESpace->GetVSize()),
-//      gfH1(H1FESpace), gfL2(L2FESpace),
-//      rdimx(dimX), rdimv(dimV), rdime(dimE), rdimfv(dimFv), rdimfe(dimFe),
-//      numSamplesX(nsamx), numSamplesV(nsamv), numSamplesE(nsame),
-//      staticSVD(staticSVD_), hyperreduce(hyperreduce_), offsetInit(useOffset), RHSbasis(RHSbasis_), useGramSchmidt(GramSchmidt),
-//      RK2AvgFormulation(RK2AvgSolver)
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_)
+ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
@@ -510,7 +497,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_)
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        if (parameter >= 0)
+        if (input.parameterID >= 0)
         {
             Vector X, V, E;
 
@@ -546,6 +533,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_)
         }
         else
         {
+            //TODO: PR77 param init
             initX->read("run/ROMoffset/initX" + std::to_string(input.window));
             initV->read("run/ROMoffset/initV" + std::to_string(input.window));
             initE->read("run/ROMoffset/initE" + std::to_string(input.window));

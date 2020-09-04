@@ -77,8 +77,8 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction);
-        PrintSingularValues(rank, varName, basis_generator.get());
+        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff);
+        PrintSingularValues(rank, varName, window, basis_generator.get());
     }
 }
 

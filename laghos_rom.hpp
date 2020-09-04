@@ -121,7 +121,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    //1,  // TODO: Tony PR77
+                    1,
                     ROMBasisName::X + std::to_string(window),
                     false,
                     false,
@@ -137,7 +137,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    //1,  // TODO: Tony PR77
+                    1,
                     ROMBasisName::V + std::to_string(window),
                     false,
                     false,
@@ -153,7 +153,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    //1,  // TODO: Tony PR77
+                    1,
                     ROMBasisName::E + std::to_string(window),
                     false,
                     false,
@@ -172,7 +172,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         input.t_final,
-                        //1,  // TODO: Tony PR77
+                        1,
                         ROMBasisName::Fv + std::to_string(window),
                         false,
                         false,
@@ -188,7 +188,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         input.t_final,
-                        //1,  // TODO: Tony PR77
+                        1,
                         ROMBasisName::Fe + std::to_string(window),
                         false,
                         false,
@@ -351,13 +351,7 @@ private:
 class ROM_Basis
 {
 public:
-//TODO: Tony PR77
-//    ROM_Basis(MPI_Comm comm_, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Vector const& S,
-//              int & dimX, int & dimV, int & dimE, int & dimFv, int & dimFe, int nsamx, int nsamv, int nsame,
-//              const bool staticSVD_ = false, const bool hyperreduce_ = false, const bool useOffset = false,
-//              const bool RHSbasis_ = false, const bool GramSchmidt = false, const bool RK2AvgSolver = false,
-//              const int window=0, const int parameter=-1);
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_);
+    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_);
 
     ~ROM_Basis()
     {

@@ -756,7 +756,7 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
 
         samplerTimer.Start();
-        if (usingWindows && rom_paramID == -1) {
+        if (usingWindows && romOptions.parameterID == -1) {
             outfile_twp.open("twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
@@ -798,11 +798,7 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
-        //TODO: Tony PR77
-        //basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
-        //                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-        //                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, rom_paramID);
-        basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -833,17 +829,9 @@ int main(int argc, char *argv[])
                 romOptions.dimFv = twparam(romOptions.window,3);
                 romOptions.dimFe = twparam(romOptions.window,4);
             }
-            //TODO: Tony PR77
-            //basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
-            //                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-            //                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
-        //} else {
-            //basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
-            //                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-            //                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, rom_paramID);
-            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         } else {
-            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         }
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
@@ -905,11 +893,7 @@ int main(int argc, char *argv[])
                 }
                 basis->LiftROMtoFOM(romS, S);
                 delete basis;
-                // TODO: Tony PR77
-                //basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
-                //                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                //                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
-                basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
             }
@@ -1087,7 +1071,7 @@ int main(int argc, char *argv[])
                         }
 
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
-                        if (myid == 0 && rom_paramID == -1) {
+                        if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << tOverlapMidpoint << ", ";
                             if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1110,7 +1094,7 @@ int main(int argc, char *argv[])
                     else
                     {
                         sampler->Finalize(t, last_dt, S, cutoff);
-                        if (myid == 0 && rom_paramID == -1) {
+                        if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << t << ", ";
                             if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1166,11 +1150,7 @@ int main(int argc, char *argv[])
                     basis->LiftROMtoFOM(romS, S);
                     delete basis;
                     timeLoopTimer.Stop();
-                    //TODO: Tony PR77
-                    //basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, S, rom_dimx, rom_dimv, rom_dime,
-                    //                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                    //                      rom_staticSVD, rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, rom_paramID);
-                    basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
                     romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     timeLoopTimer.Start();
 
@@ -1307,7 +1287,7 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
-        if (myid == 0 && usingWindows && sampler != NULL && rom_paramID == -1) {
+        if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
 
             if (romOptions.RHSbasis)
@@ -1325,7 +1305,7 @@ int main(int argc, char *argv[])
         }
 
         samplerTimer.Stop();
-        if(usingWindows && rom_paramID == -1) outfile_twp.close();
+        if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
     if (writeSol)
