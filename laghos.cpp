@@ -93,11 +93,7 @@ void PrintParGridFunction(const int rank, const std::string& name, ParGridFuncti
     std::string fullname = name + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int i=0; i<tv.Size(); ++i)
-        ofs << tv[i] << std::endl;
-
+    gf->Print(ofs, 1);
     ofs.close();
 }
 
@@ -169,17 +165,6 @@ int main(int argc, char *argv[])
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
-    bool rom_staticSVD = false;
-    bool rom_offset = false;
-    double rom_energyFraction = 0.9999;
-    int rom_dimx = -1;
-    int rom_dimv = -1;
-    int rom_dime = -1;
-    int rom_dimfv = -1;
-    int rom_dimfe = -1;
-    int numSampX = 0;
-    int numSampV = 0;
-    int numSampE = 0;
     double sFactorX = 2.0;
     double sFactorV = 20.0;
     double sFactorE = 2.0;
@@ -190,17 +175,13 @@ int main(int argc, char *argv[])
     int visitDiffCycle = -1;
     bool writeSol = false;
     bool solDiff = false;
-    bool rom_hyperreduce = false;
     bool match_end_time = false;
-    bool rom_reduceMass = false;
-    bool rom_sample_RHS = false;
-    bool rom_GramSchmidt = false;
-    int rom_sample_dim = 0;
     double rhoFactor = 1.0;
     int rom_paramID = -1;
     const char *normtype_char = "l2";
     Array<double> twep;
     Array2D<int> twparam;
+    ROM_Options romOptions;
 
     OptionsParser args(argc, argv);
     args.AddOption(&mesh_file, "-m", "--mesh",
@@ -267,18 +248,18 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM online computations and output.");
     args.AddOption(&rom_restore, "-restore", "--restore", "-no-restore", "--no-restore",
                    "Enable or disable ROM restoration phase where ROM solution is lifted to FOM size.");
-    args.AddOption(&rom_dimx, "-rdimx", "--rom_dimx", "ROM dimension for X.");
-    args.AddOption(&rom_dimv, "-rdimv", "--rom_dimv", "ROM dimension for V.");
-    args.AddOption(&rom_dime, "-rdime", "--rom_dime", "ROM dimension for E.");
-    args.AddOption(&rom_dimfv, "-rdimfv", "--rom_dimfv", "ROM dimension for Fv.");
-    args.AddOption(&rom_dimfe, "-rdimfe", "--rom_dimfe", "ROM dimension for Fe.");
-    args.AddOption(&numSampX, "-nsamx", "--numsamplex", "number of samples for X.");
-    args.AddOption(&numSampV, "-nsamv", "--numsamplev", "number of samples for V.");
-    args.AddOption(&numSampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&romOptions.dimX, "-rdimx", "--rom_dimx", "ROM dimension for X.");
+    args.AddOption(&romOptions.dimV, "-rdimv", "--rom_dimv", "ROM dimension for V.");
+    args.AddOption(&romOptions.dimE, "-rdime", "--rom_dime", "ROM dimension for E.");
+    args.AddOption(&romOptions.dimFv, "-rdimfv", "--rom_dimfv", "ROM dimension for Fv.");
+    args.AddOption(&romOptions.dimFe, "-rdimfe", "--rom_dimfe", "ROM dimension for Fe.");
+    args.AddOption(&romOptions.sampX, "-nsamx", "--numsamplex", "number of samples for X.");
+    args.AddOption(&romOptions.sampV, "-nsamv", "--numsamplev", "number of samples for V.");
+    args.AddOption(&romOptions.sampE, "-nsame", "--numsamplee", "number of samples for E.");
     args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
     args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
-    args.AddOption(&rom_energyFraction, "-ef", "--rom-ef",
+    args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
@@ -289,19 +270,17 @@ int main(int argc, char *argv[])
                    "Enable or disable write solution.");
     args.AddOption(&solDiff, "-soldiff", "--soldiff", "-no-soldiff", "--no-soldiff",
                    "Enable or disable solution difference norm computation.");
-    args.AddOption(&rom_hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
+    args.AddOption(&romOptions.hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
                    "Enable or disable ROM hyperreduction.");
-    args.AddOption(&rom_staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
+    args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
-    args.AddOption(&rom_offset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
+    args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
-    args.AddOption(&rom_sample_dim, "-sdim", "--sdim", "ROM max sample dimension");
-    args.AddOption(&rom_reduceMass, "-romrmass", "--romreducemass", "-no-romrmass", "--no-romreducemass",
-                   "Enable or disable reduction of V and E mass matrices.");
-    args.AddOption(&rom_sample_RHS, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
+    args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
+    args.AddOption(&romOptions.RHSbasis, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
                    "Sample RHS");
-    args.AddOption(&rom_GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
+    args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
@@ -322,8 +301,11 @@ int main(int argc, char *argv[])
         mkdir(outputPath.c_str(), 0777);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((outputPath + "/ROMsol").c_str(), 0777);
+
         args.PrintOptions(cout);
     }
+    
+    romOptions.basename = outputPath;
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinstep and -nwin cannot both be set");
@@ -334,7 +316,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + twpfile, twep, twparam, sFactor, myid == 0, rom_sample_RHS);
+            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -348,7 +330,7 @@ int main(int argc, char *argv[])
         numWindows = 1;  // one window for the entire simulation
     }
 
-    if (windowNumSamples > 0) rom_sample_dim = windowNumSamples + windowOverlapSamples + 2;
+    if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
     MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
@@ -582,7 +564,7 @@ int main(int argc, char *argv[])
         return 3;
     }
 
-    const bool usingRK2Avg = (ode_solver_type == 7);
+    romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
     HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
     HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
@@ -760,6 +742,13 @@ int main(int argc, char *argv[])
 
     cout << myid << ": pmesh number of elements " << pmesh->GetNE() << endl;
 
+    romOptions.rank = myid;
+    romOptions.H1FESpace = &H1FESpace;
+    romOptions.L2FESpace = &L2FESpace;
+    romOptions.window = 0;
+    romOptions.FOMoper = &oper;
+    romOptions.parameterID = rom_paramID;
+
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that
     // defines the Mult() method that is used by the time integrators.
@@ -772,7 +761,6 @@ int main(int argc, char *argv[])
     BlockVector S_old(S);
 
     StopWatch samplerTimer;
-    int rom_window = 0;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
@@ -786,8 +774,9 @@ int main(int argc, char *argv[])
             outfile_twp.open(outputPath + "/twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
-        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
-                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID, outputPath);
+        romOptions.t_final = tf;
+        romOptions.initial_dt = dt;
+        sampler = new ROM_Sampler(romOptions, S);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
     }
@@ -798,9 +787,9 @@ int main(int argc, char *argv[])
 
     if (!usingWindows)
     {
-        if (numSampX == 0) numSampX = sFactorX * rom_dimx;
-        if (numSampV == 0) numSampV = sFactorV * rom_dimv;
-        if (numSampE == 0) numSampE = sFactorE * rom_dime;
+        if (romOptions.sampX == 0) romOptions.sampX = sFactorX * romOptions.dimX;
+        if (romOptions.sampV == 0) romOptions.sampV = sFactorV * romOptions.dimV;
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimE;
     }
 
     StopWatch onlinePreprocessTimer;
@@ -810,29 +799,27 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
-            rom_dimx = twparam(0,0);
-            rom_dimv = twparam(0,1);
-            rom_dime = twparam(0,2);
-            if (rom_sample_RHS)
+            romOptions.dimX = twparam(0,0);
+            romOptions.dimV = twparam(0,1);
+            romOptions.dimE = twparam(0,2);
+            if (romOptions.RHSbasis)
             {
-                rom_dimfv = twparam(0,3);
-                rom_dimfe = twparam(0,4);
+                romOptions.dimFv = twparam(0,3);
+                romOptions.dimFe = twparam(0,4);
             }
-            const int oss = rom_sample_RHS ? 5 : 3;
-            numSampX = twparam(0,oss);
-            numSampV = twparam(0,oss+1);
-            numSampE = twparam(0,oss+2);
+            const int oss = romOptions.RHSbasis ? 5 : 3;
+            romOptions.sampX = twparam(0,oss);
+            romOptions.sampV = twparam(0,oss+1);
+            romOptions.sampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                              rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                              rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, outputPath);
-        romS.SetSize(rom_dimx + rom_dimv + rom_dime);
+        basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+        romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
-        romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                   cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
+        romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                   cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
         ode_solver->Init(*romOper);
         onlinePreprocessTimer.Stop();
@@ -848,23 +835,19 @@ int main(int argc, char *argv[])
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
-            rom_dimx = twparam(rom_window,0);
-            rom_dimv = twparam(rom_window,1);
-            rom_dime = twparam(rom_window,2);
-            if (rom_sample_RHS)
+            romOptions.dimX = twparam(romOptions.window,0);
+            romOptions.dimV = twparam(romOptions.window,1);
+            romOptions.dimE = twparam(romOptions.window,2);
+            if (romOptions.RHSbasis)
             {
-                rom_dimfv = twparam(rom_window,3);
-                rom_dimfe = twparam(rom_window,4);
+                romOptions.dimFv = twparam(romOptions.window,3);
+                romOptions.dimFe = twparam(romOptions.window,4);
             }
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                  rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
+            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
         } else {
-            basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                  rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                  rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, 0, outputPath);
+            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
         }
-        int romSsize = rom_dimx + rom_dimv + rom_dime;
+        int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
         if (infile_tw_steps.good())
         {
@@ -913,20 +896,18 @@ int main(int argc, char *argv[])
                 {
                     infile_tw_steps >> nb_step;
                 }
-                rom_window++;
-                rom_dimx = twparam(rom_window,0);
-                rom_dimv = twparam(rom_window,1);
-                rom_dime = twparam(rom_window,2);
-                if (rom_sample_RHS)
+                romOptions.window++;
+                romOptions.dimX = twparam(romOptions.window,0);
+                romOptions.dimV = twparam(romOptions.window,1);
+                romOptions.dimE = twparam(romOptions.window,2);
+                if (romOptions.RHSbasis)
                 {
-                    rom_dimfv = twparam(rom_window,3);
-                    rom_dimfe = twparam(rom_window,4);
+                    romOptions.dimFv = twparam(romOptions.window,3);
+                    romOptions.dimFe = twparam(romOptions.window,4);
                 }
                 delete basis;
-                basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                      rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                      rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
-                romSsize = rom_dimx + rom_dimv + rom_dime;
+                basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
             }
         } // time loop in "restore" phase
@@ -958,7 +939,7 @@ int main(int argc, char *argv[])
         // usual time loop when rom_restore phase is false.
         std::ofstream outfile_tw_steps(outputPath + "/tw_steps");
         timeLoopTimer.Start();
-        if (rom_hyperreduce && rom_GramSchmidt)
+        if (romOptions.hyperreduce && romOptions.GramSchmidt)
         {
             romOper->InducedGramSchmidtInitialize(romS);
         }
@@ -977,11 +958,11 @@ int main(int argc, char *argv[])
                 use_dt_old = false;
             }
 
-            if (rom_online && usingWindows && (t + dt >= twep[rom_window]) & match_end_time)
+            if (rom_online && usingWindows && (t + dt >= twep[romOptions.window]) & match_end_time)
             {
                 dt_old = dt;
                 use_dt_old = true;
-                dt = twep[rom_window] - t;
+                dt = twep[romOptions.window] - t;
             }
 
             if (steps == max_tsteps) {
@@ -1012,7 +993,7 @@ int main(int argc, char *argv[])
                 romS.Print(outfile_romS, 1);
                 outfile_romS.close();
 
-                if (!rom_hyperreduce)
+                if (!romOptions.hyperreduce)
                     basis->LiftROMtoFOM(romS, S);
 
                 romOper->UpdateSampleMeshNodes(romS);
@@ -1032,7 +1013,7 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            const double dt_est = rom_hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+            const double dt_est = romOptions.hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
 
             //const double dt_est = oper.GetTimeStepEstimate(S);
             //cout << myid << ": dt_est " << dt_est << endl;
@@ -1074,7 +1055,7 @@ int main(int argc, char *argv[])
                 {
                     if (numWindows > 0)
                     {
-                        endWindow = (t >= twep[rom_window] && rom_window < numWindows-1);
+                        endWindow = (t >= twep[romOptions.window] && romOptions.window < numWindows-1);
                     }
                     else
                     {
@@ -1101,7 +1082,7 @@ int main(int argc, char *argv[])
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0) {
                             outfile_twp << tOverlapMidpoint << ", ";
-                            if (rom_sample_RHS)
+                            if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
                                             << cutoff[3] << ", " << cutoff[4] << "\n";
                             else
@@ -1124,7 +1105,7 @@ int main(int argc, char *argv[])
                         sampler->Finalize(t, last_dt, S, cutoff);
                         if (myid == 0) {
                             outfile_twp << t << ", ";
-                            if (rom_sample_RHS)
+                            if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
                                             << cutoff[3] << ", " << cutoff[4] << "\n";
                             else
@@ -1133,12 +1114,13 @@ int main(int argc, char *argv[])
                         delete sampler;
                     }
 
-                    rom_window++;
-                    const double tf = (usingWindows && windowNumSamples == 0) ? twep[rom_window] : t_final;
+                    romOptions.window++;
                     if (!last_step)
                     {
-                        sampler = new ROM_Sampler(myid, &H1FESpace, &L2FESpace, tf, dt, S, rom_staticSVD, rom_offset, rom_energyFraction,
-                                                  rom_window, rom_sample_dim, rom_sample_RHS, &oper, rom_paramID, outputPath);
+                        romOptions.t_final = (usingWindows && windowNumSamples == 0) ? twep[romOptions.window] : t_final;
+                        romOptions.initial_dt = dt;
+                        romOptions.window = romOptions.window;
+                        sampler = new ROM_Sampler(romOptions, S);
                         sampler->SampleSolution(t, dt, S);
                     }
                 }
@@ -1148,51 +1130,49 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                if (usingWindows && t >= twep[rom_window] && rom_window < numWindows-1)
+                if (usingWindows && t >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
-                    rom_window++;
+                    romOptions.window++;
                     outfile_tw_steps << ti << "\n";
 
                     if (myid == 0)
-                        cout << "ROM online basis change for window " << rom_window << " at t " << t << ", dt " << dt << endl;
+                        cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (rom_hyperreduce)
+                    if (romOptions.hyperreduce)
                     {
-                        if (rom_GramSchmidt)
+                        if (romOptions.GramSchmidt)
                         {
                             romOper->InducedGramSchmidtFinalize(romS);
                         }
                         basis->LiftROMtoFOM(romS, S);
                     }
 
-                    rom_dimx = twparam(rom_window,0);
-                    rom_dimv = twparam(rom_window,1);
-                    rom_dime = twparam(rom_window,2);
-                    if (rom_sample_RHS)
+                    romOptions.dimX = twparam(romOptions.window,0);
+                    romOptions.dimV = twparam(romOptions.window,1);
+                    romOptions.dimE = twparam(romOptions.window,2);
+                    if (romOptions.RHSbasis)
                     {
-                        rom_dimfv = twparam(rom_window,3);
-                        rom_dimfe = twparam(rom_window,4);
+                        romOptions.dimFv = twparam(romOptions.window,3);
+                        romOptions.dimFe = twparam(romOptions.window,4);
                     }
-                    const int oss = rom_sample_RHS ? 5 : 3;
-                    numSampX = twparam(rom_window,oss);
-                    numSampV = twparam(rom_window,oss+1);
-                    numSampE = twparam(rom_window,oss+2);
+                    const int oss = romOptions.RHSbasis ? 5 : 3;
+                    romOptions.sampX = twparam(romOptions.window,oss);
+                    romOptions.sampV = twparam(romOptions.window,oss+1);
+                    romOptions.sampE = twparam(romOptions.window,oss+2);
 
                     delete basis;
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(MPI_COMM_WORLD, &H1FESpace, &L2FESpace, rom_dimx, rom_dimv, rom_dime,
-                                          rom_dimfv, rom_dimfe, numSampX, numSampV, numSampE,
-                                          rom_hyperreduce, rom_offset, rom_sample_RHS, rom_GramSchmidt, usingRK2Avg, rom_window, outputPath);
-                    romS.SetSize(rom_dimx + rom_dimv + rom_dime);
+                    basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                    romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     timeLoopTimer.Start();
 
                     basis->ProjectFOMtoROM(S, romS);
 
                     delete romOper;
-                    romOper = new ROM_Operator(&oper, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                               cg_tol, cg_max_iter, ftz_tol, rom_hyperreduce, &H1FEC, &L2FEC, rom_reduceMass, rom_GramSchmidt);
+                    romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                               cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
-                    if (rom_hyperreduce && rom_GramSchmidt)
+                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
                         romOper->InducedGramSchmidtInitialize(romS);
                     }
@@ -1211,7 +1191,7 @@ int main(int argc, char *argv[])
                 MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                               pmesh->GetComm());
 
-                if (rom_hyperreduce)
+                if (romOptions.hyperreduce)
                     tot_norm = 0.0;  // e_gf is not updated in hyperreduction case
 
                 if (mpi.Root())
@@ -1302,9 +1282,9 @@ int main(int argc, char *argv[])
         outfile_tw_steps.close();
     }
 
-    if (rom_hyperreduce)
+    if (romOptions.hyperreduce)
     {
-        if (rom_GramSchmidt)
+        if (romOptions.GramSchmidt)
         {
             romOper->InducedGramSchmidtFinalize(romS);
         }
@@ -1322,7 +1302,7 @@ int main(int argc, char *argv[])
         if (myid == 0 && usingWindows && sampler != NULL) {
             outfile_twp << t << ", ";
 
-            if (rom_sample_RHS)
+            if (romOptions.RHSbasis)
                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
                             << cutoff[3] << ", " << cutoff[4] << "\n";
             else
