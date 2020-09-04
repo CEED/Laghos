@@ -93,7 +93,11 @@ void PrintParGridFunction(const int rank, const std::string& name, ParGridFuncti
     std::string fullname = name + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    gf->Print(ofs, 1);
+    ofs.precision(16);
+
+    for (int i=0; i<tv.Size(); ++i)
+        ofs << tv[i] << std::endl;
+
     ofs.close();
 }
 
@@ -304,7 +308,7 @@ int main(int argc, char *argv[])
 
         args.PrintOptions(cout);
     }
-    
+
     romOptions.basename = outputPath;
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
@@ -316,7 +320,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
