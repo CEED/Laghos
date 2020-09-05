@@ -994,6 +994,7 @@ int main(int argc, char *argv[])
                 // TODO: think about how to reuse "gfprint" option
                 std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
+                outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
                 outfile_romS.close();
 
@@ -1389,14 +1390,17 @@ int main(int argc, char *argv[])
     }
 
     std::ofstream outfile_e(outputPath + "/e_gf");
+    outfile_e.precision(8);
     e_gf.Print(outfile_e, 1);
     outfile_e.close();
 
     std::ofstream outfile_v(outputPath + "/v_gf");
+    outfile_v.precision(8);
     v_gf.Print(outfile_v, 1);
     outfile_v.close();
 
     std::ofstream outfile_x(outputPath + "/x_gf");
+    outfile_x.precision(8);
     x_gf.Print(outfile_x, 1);
     outfile_x.close();
 

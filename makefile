@@ -26,6 +26,7 @@ Laghos makefile targets:
    make clean-regtest
    make distclean
    make style
+   make regtest
 
 Examples:
 
@@ -118,7 +119,7 @@ include $(CURDIR)/user.mk
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest
+.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest regtest
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -157,6 +158,12 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
+regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp
+	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
+	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
+
+# $(CXX) $(CXXFLAGS) -o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM tests/basisComparator tests/basisComparator.cpp
 
 clean: clean-regtest clean-build
 

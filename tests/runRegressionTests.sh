@@ -133,22 +133,48 @@ if [[ "$skipSetup" == "false" ]];
 then
 
 	# Compile the C++ comparators
-	echo $"Compiling the file and basis comparators" >> $setupLogFile 2>&1
-	g++ -std=c++11 -o $DIR/fileComparator $DIR/fileComparator.cpp >> $setupLogFile 2>&1
-	g++ -std=c++11 -o $DIR/basisComparator $DIR/basisComparator.cpp \
-	-I$LIBS_DIR/libROM -L$LIBS_DIR/libROM/build -lROM -Wl,-rpath,$LIBS_DIR/libROM/build >> $setupLogFile 2>&1
+	echo $"Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
+	make regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Check if make built correctly
+	if [[ $? -ne 0 ]];
+	then
+		echo "The regtest comparators failed to build." | tee -a $setupLogFile
+		exit 1
+	fi
 
 	# Clone and compile rom-dev branch of Laghos
 	echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
 	git -C $DIR clone -b parallelize-regtest https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
+	# Check that rom-dev branch of Laghos is present
+	if [ ! -d $BASE_LAGHOS_DIR ]; then
+		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
+		exit 1
+	fi
+
 	# Copy user.mk
 	echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
 	cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
-	# Check that rom-dev branch of Laghos is present
-	if [ ! -d $BASE_LAGHOS_DIR ]; then
-		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
+	# Build the user branch executable
+	echo $"Building the user branch" >> $setupLogFile 2>&1
+	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Check if make built correctly
+	if [[ $? -ne 0 ]];
+	then
+		echo "The user branch failed to build." | tee -a $setupLogFile
+		exit 1
+	fi
+
+	# Build merge
+	make merge --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Check if make built correctly
+	if [[ $? -ne 0 ]];
+	then
+		echo "The user branch merge executable failed to build." | tee -a $setupLogFile
 		exit 1
 	fi
 
@@ -165,6 +191,13 @@ then
 
 	# Build merge
 	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
+	# Check if make built correctly
+	if [[ $? -ne 0 ]];
+	then
+		echo "The baseline branch merge executable failed to build." | tee -a $setupLogFile
+		exit 1
+	fi
 
 	# Clear run directories
 	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
@@ -343,6 +376,10 @@ do
 					continue 1
 				fi
 
+				# Necessary for now, mkdir in C++ does something weird where this bash can't find the file
+				ls $BASELINE_LAGHOS_DIR/run > /dev/null
+				ls $BASE_DIR/run > /dev/null
+
 				# Find number of steps simulation took in rom-dev to compare final timestep later
 				cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
 				if [[ $? -eq 1 ]]; then
@@ -351,16 +388,17 @@ do
 					continue 1
 				fi
 				num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+
 				# After simulations complete, compare results
-				for testFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
+				for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
 				do
-					fileName="$(basename "$testFile")"
+					fileName="$(basename "$baselineTestFile")"
 
 					# Skip if not correct file type to compare
 					check_file_type() {
 						if [[ $testtype == "fom" ]]; then
-							if [[ "$fileName" != "basis"* ]] && [[ "$fileName" != "Sol"* ]] &&
-							[[ "$fileName" != "sVal"* ]]; then
+							if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
+							[[ "$fileName" != "sVal"*".000000" ]]; then
 								continue 1
 							fi
 						elif [[ $testtype == "online" ]]; then
@@ -368,11 +406,7 @@ do
 								continue 1
 							fi
 						elif [[ $testtype == "restore" ]]; then
-							if [[ $parallel == "false" ]]; then
-								if [[ "$fileName" != *"_gf" ]]; then
-									continue 1
-								fi
-							else
+							if [[ "$fileName" != *"_gf" ]]; then
 								continue 1
 							fi
 						fi
@@ -392,7 +426,7 @@ do
 
 					# Check if a file exists on the user branch
 					check_exists() {
-						if [ ! -f $basetestfile ]; then
+						if [ ! -f $targetTestFile ]; then
 							echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
 							set_fail
 
@@ -401,38 +435,66 @@ do
 						fi
 					}
 
-					# Compare last timestep of ROMSol
-					if [[ -d "$testFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
+					# Compare last timestep of ROMSol solutions
+					if [[ -d "$baselineTestFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
 							echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
-							basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$num_steps"
+							targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$num_steps"
 							check_exists
-							if [[ "$scriptName" == *"parallel"* ]]; then
-								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+							baselineTestFile="$baselineTestFile/romS_$num_steps"
+							if [[ "$parallel" == "true" ]]; then
+								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 							else
-								$($DIR/./fileComparator "$testFile/romS_$num_steps" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 							fi
 							check_fail
 
 					# Compare FOM basis
 					elif [[ "$fileName" == "basis"* ]]; then
-						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-						basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+						echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+						targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 						check_exists
-						testFile="${testFile%.*}"
-						basetestfile="${basetestfile%.*}"
-						$($DIR/./basisComparator "$testFile" "$basetestfile" "1.0e-2" >> $simulationLogFile 2>&1)
+						baselineTestFile="${baselineTestFile%.*}"
+						targetTestFile="${targetTestFile%.*}"
+						if [[ "$parallel" == "true" ]]; then
+							$(srun -n $NUM_PARALLEL_PROCESSORS -p pdebug $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+						else
+							$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
+						fi
 						check_fail
 
-					# Compare solutions, singular values, and number of time steps
-					elif [[ "$fileName" == "Sol"* ]] || [[ "$fileName" == "sVal"* ]] ||
-					[[ "$fileName" == *"_gf" ]] ; then
-						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-						basetestfile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+					# Compare singular values and norms
+				elif [[ "$fileName" == "sVal"* ]] ||	[[ "$fileName" == *"norms"* ]]; then
+						echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+						targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 						check_exists
-						if [[ "$scriptName" == *"parallel"* ]]; then
-							$($DIR/./fileComparator "$testFile" "$basetestfile" "3.0" >> $simulationLogFile 2>&1)
+						if [[ "$parallel" == "true" ]]; then
+							$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
 						else
-							$($DIR/./fileComparator "$testFile" "$basetestfile" "1.0e-7" >> $simulationLogFile 2>&1)
+							$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
+						fi
+						check_fail
+
+					# Compare solutions
+					elif [[ "$fileName" == "Sol"* ]] ; then
+						echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+						targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+						check_exists
+						if [[ "$parallel" == "true" ]]; then
+							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+						else
+							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
+						fi
+						check_fail
+
+					# Compare _gf
+					elif [[ "$fileName" == *"_gf" ]] ; then
+						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
+						targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+						check_exists
+						if [[ "$parallel" == "true" ]]; then
+							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-1" "1" >> $simulationLogFile 2>&1)
+						else
+							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 						fi
 						check_fail
 					fi
@@ -446,6 +508,7 @@ do
 		fi
 	done
 done
+
 echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"
 if [[ $testNumFail -ne 0 ]]; then
 	exit 1

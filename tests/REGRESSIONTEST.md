@@ -6,21 +6,18 @@ The usage instructions are outputted whenever the script is run. Currently, ther
 
 How to run the tests on LC
 
-1. If you have just changed branches, run "make clean".
-2. Run "make" and "make merge" to make sure you your branch is up-to-date with any local changes.
-3. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
+1. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
 test options.
-4. The slurm output file will be stored in sbatch.log in the directory you ran the previous command from.
-5. Test commands/logs are stored in tests/results. Since each run overwrites the previous run, only the last run's data is saved.
-in run and tests/Laghos/run. Use option -f to stop at the first failure and look at the failed run's data.
-6. To erase the regression test data, run from the base directory: make clean-regtest
+2. The slurm output file will be stored in sbatch.log in the directory you ran the previous command from.
+3. Test commands/logs are stored in tests/results. Each run's data is in it's own directory in run and tests/Laghos/run.
+4. To find the particular error and where it occurred, scroll to the bottom of each test file. You can additionally look through the data files to see what went wrong.
+5. To erase the regression test data, run from the base directory: make clean-regtest
 
 How to run the tests on MAC
 
-1. Follow steps 1 and 2 from the instructions above.
-2. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
+1. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
 test options.
-3. Follow steps 5 and 6 from the instructions above.
+2. Follow steps 2-5 from the instructions above.
 
 How to add a non-time-windowing test
 
