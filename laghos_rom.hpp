@@ -95,19 +95,19 @@ public:
 
         if (input.staticSVD)
         {
-            generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
-                    BasisFileName(VariableName::X, window, parameterID), false, (parameterID >= 0));
-            generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
-                    BasisFileName(VariableName::V, window, parameterID), false, (parameterID >= 0));
-            generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, 1,
-                    BasisFileName(VariableName::E, window, parameterID), false, (parameterID >= 0));
+            generator_X = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+                    BasisFileName(VariableName::X, window, parameterID));
+            generator_V = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+                    BasisFileName(VariableName::V, window, parameterID));
+            generator_E = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
+                    BasisFileName(VariableName::E, window, parameterID));
 
             if (sampleF)
             {
-                generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim, 1,
-                        BasisFileName(VariableName::Fv, window, parameterID), false, (parameterID >= 0));
-                generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim, 1,
-                        BasisFileName(VariableName::Fe, window, parameterID), false, (parameterID >= 0));
+                generator_Fv = new CAROM::StaticSVDBasisGenerator(tH1size, max_model_dim,
+                        BasisFileName(VariableName::Fv, window, parameterID));
+                generator_Fe = new CAROM::StaticSVDBasisGenerator(tL2size, max_model_dim,
+                        BasisFileName(VariableName::Fe, window, parameterID));
             }
         }
         else
@@ -121,12 +121,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    1,
-                    ROMBasisName::X + std::to_string(window),
-                    false,
-                    false,
-                    false,
-                    (parameterID >= 0));
+                    ROMBasisName::X + std::to_string(window));
 
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
@@ -137,12 +132,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    1,
-                    ROMBasisName::V + std::to_string(window),
-                    false,
-                    false,
-                    false,
-                    (parameterID >= 0));
+                    ROMBasisName::V + std::to_string(window));
 
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
@@ -153,12 +143,7 @@ public:
                     max_model_dim,
                     model_sampling_tol,
                     input.t_final,
-                    1,
-                    ROMBasisName::E + std::to_string(window),
-                    false,
-                    false,
-                    false,
-                    (parameterID >= 0));
+                    ROMBasisName::E + std::to_string(window));
 
 
             if (sampleF)
@@ -172,12 +157,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         input.t_final,
-                        1,
-                        ROMBasisName::Fv + std::to_string(window),
-                        false,
-                        false,
-                        false,
-                        (parameterID >= 0));
+                        ROMBasisName::Fv + std::to_string(window));
 
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                         model_linearity_tol,
@@ -188,12 +168,7 @@ public:
                         max_model_dim,
                         model_sampling_tol,
                         input.t_final,
-                        1,
-                        ROMBasisName::Fe + std::to_string(window),
-                        false,
-                        false,
-                        false,
-                        (parameterID >= 0));
+                        ROMBasisName::Fe + std::to_string(window));
             }
         }
 
