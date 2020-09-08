@@ -132,8 +132,12 @@ fi
 if [[ "$skipSetup" == "false" ]];
 then
 
+	# Cleaning the user branch
+	echo "Cleaning up the user branch build" >> $setupLogFile 2>&1
+	make clean-build --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+
 	# Compile the C++ comparators
-	echo $"Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
+	echo "Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
 	make regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly

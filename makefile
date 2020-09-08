@@ -169,7 +169,6 @@ clean-build:
 	rm -rf laghos *.o *~ *.dSYM run merge
 
 clean-exec:
-	rm -f twpTemp.csv
 	rm -rf run/*
 
 clean-regtest: clean-exec
