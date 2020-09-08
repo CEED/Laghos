@@ -163,8 +163,6 @@ regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionCompar
 	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
 	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
 
-# $(CXX) $(CXXFLAGS) -o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM tests/basisComparator tests/basisComparator.cpp
-
 clean: clean-regtest clean-build
 
 clean-build:

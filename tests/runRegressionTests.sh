@@ -406,7 +406,7 @@ do
 								continue 1
 							fi
 						elif [[ $testtype == "restore" ]]; then
-							if [[ "$fileName" != *"_gf" ]]; then
+							if [[ "$fileName" != *"_gf.000000" ]]; then
 								continue 1
 							fi
 						fi
@@ -487,12 +487,12 @@ do
 						check_fail
 
 					# Compare _gf
-					elif [[ "$fileName" == *"_gf" ]] ; then
+				elif [[ "$fileName" == *"_gf"* ]] ; then
 						echo "Comparing: $fileName" >> $simulationLogFile 2>&1
 						targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 						check_exists
 						if [[ "$parallel" == "true" ]]; then
-							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-1" "1" >> $simulationLogFile 2>&1)
+							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
 						else
 							$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 						fi

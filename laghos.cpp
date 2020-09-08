@@ -1387,22 +1387,12 @@ int main(int argc, char *argv[])
         cout << endl;
         cout << "Energy  diff: " << scientific << setprecision(2)
              << fabs(energy_init - energy_final) << endl;
+
     }
 
-    std::ofstream outfile_e(outputPath + "/e_gf");
-    outfile_e.precision(8);
-    e_gf.Print(outfile_e, 1);
-    outfile_e.close();
-
-    std::ofstream outfile_v(outputPath + "/v_gf");
-    outfile_v.precision(8);
-    v_gf.Print(outfile_v, 1);
-    outfile_v.close();
-
-    std::ofstream outfile_x(outputPath + "/x_gf");
-    outfile_x.precision(8);
-    x_gf.Print(outfile_x, 1);
-    outfile_x.close();
+    PrintParGridFunction(myid, outputPath + "/x_gf", &x_gf);
+    PrintParGridFunction(myid, outputPath + "/v_gf", &v_gf);
+    PrintParGridFunction(myid, outputPath + "/e_gf", &e_gf);
 
     // Print the error.
     // For problems 0 and 4 the exact velocity is constant in time.
