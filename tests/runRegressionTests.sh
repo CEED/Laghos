@@ -145,7 +145,7 @@ then
 
 	# Clone and compile rom-dev branch of Laghos
 	echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
-	git -C $DIR clone -b parallelize-regtest https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+	git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
 	# Check that rom-dev branch of Laghos is present
 	if [ ! -d $BASE_LAGHOS_DIR ]; then
