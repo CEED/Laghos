@@ -308,7 +308,6 @@ int main(int argc, char *argv[])
 
         args.PrintOptions(cout);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
 
     romOptions.basename = &outputPath;
 
