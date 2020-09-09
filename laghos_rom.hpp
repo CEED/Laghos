@@ -64,6 +64,7 @@ struct ROM_Options
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
+    bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
 };
 
 class ROM_Sampler

@@ -282,6 +282,8 @@ int main(int argc, char *argv[])
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
+    args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset", 
+                   "Enable or disable parametric offset.");
     args.Parse();
     if (!args.Good())
     {

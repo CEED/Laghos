@@ -497,7 +497,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        if (input.parameterID >= 0)
+        //TODO: Tony param init after PR 77
+        if (input.paramOffset)
         {
             Vector X, V, E;
 
@@ -533,7 +534,6 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         }
         else
         {
-            //TODO: PR77 param init
             initX->read("run/ROMoffset/initX" + std::to_string(input.window));
             initV->read("run/ROMoffset/initV" + std::to_string(input.window));
             initE->read("run/ROMoffset/initE" + std::to_string(input.window));
