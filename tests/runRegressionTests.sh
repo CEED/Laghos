@@ -460,7 +460,7 @@ do
 						baselineTestFile="${baselineTestFile%.*}"
 						targetTestFile="${targetTestFile%.*}"
 						if [[ "$parallel" == "true" ]]; then
-							$(srun -n $NUM_PARALLEL_PROCESSORS -p pdebug $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+							$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
 						else
 							$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
 						fi
