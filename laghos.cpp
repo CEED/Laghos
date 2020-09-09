@@ -308,8 +308,9 @@ int main(int argc, char *argv[])
 
         args.PrintOptions(cout);
     }
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    romOptions.basename = outputPath;
+    romOptions.basename = &outputPath;
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinstep and -nwin cannot both be set");

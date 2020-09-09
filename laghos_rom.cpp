@@ -359,7 +359,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_)
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(input.basename)
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);

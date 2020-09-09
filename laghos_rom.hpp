@@ -37,7 +37,7 @@ struct ROM_Options
     ParFiniteElementSpace *H1FESpace = NULL; // FOM H1 FEM space
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
-    std::string basename = "run";
+    std::string *basename = NULL;
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
@@ -76,7 +76,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), basename(input.basename)
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), basename(*input.basename)
     {
         const int window = input.window;
         const int parameterID = input.parameterID;
@@ -227,7 +227,7 @@ private:
 
     const bool writeSnapshots;
 
-    const std::string basename = "run";
+    std::string basename = "run";
 
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
@@ -446,7 +446,7 @@ private:
     CAROM::Matrix* basisFv = 0;
     CAROM::Matrix* basisFe = 0;
 
-    const std::string basename = "run";
+    std::string basename = "run";
 
     CAROM::Vector *fH1, *fL2;
 
