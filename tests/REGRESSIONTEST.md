@@ -60,6 +60,8 @@ Here are some example runs and results:
 
 ./runRegressionTests.sh -f -> Run all tests, stopping at the first test failure.
 
+./runRegressionTests.sh -d -> Run all tests, but do not do comparisons. Failures only occur if the simulations do not run successfully.
+
 ./runRegressionTests.sh -i "sedov_blast gresho_vortices" -> Run sedov_blast and gresho_vortices.
 
 ./runRegressionTests.sh -e "taylor-green" -> Run all tests except taylor-green.
