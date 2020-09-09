@@ -151,7 +151,7 @@ then
 	fi
 
 	# Clone and compile rom-dev branch of Laghos
-	echo $"Cloning the baseline branch" >> $setupLogFile 2>&1
+	echo "Cloning the baseline branch" >> $setupLogFile 2>&1
 	git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
 	# Check that rom-dev branch of Laghos is present
@@ -161,11 +161,11 @@ then
 	fi
 
 	# Copy user.mk
-	echo $"Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
+	echo "Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
 	cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
 	# Build the user branch executable
-	echo $"Building the user branch" >> $setupLogFile 2>&1
+	echo "Building the user branch" >> $setupLogFile 2>&1
 	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
@@ -186,7 +186,7 @@ then
 	fi
 
 	# Build the baseline Laghos executable
-	echo $"Building the baseline branch" >> $setupLogFile 2>&1
+	echo "Building the baseline branch" >> $setupLogFile 2>&1
 	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
@@ -268,7 +268,7 @@ testNumPass=0
 # Run all tests
 for simulation in "${testsToRun[@]}"
 do
-	echo $simulation
+	echo "$simulation"
 
 	# Run every script in each test directory
 	for script in ${DIR}/${simulation}/*;
@@ -285,7 +285,7 @@ do
 			NUM_PARALLEL_PROCESSORS=0
 
 			# Get test names
-			. $script
+			. "$script"
 
 			while true;
 			do
@@ -366,7 +366,7 @@ do
 				fi
 
 				# Run simulation from rom-dev branch
-				echo $"Running baseline simulation for comparison" >> $simulationLogFile 2>&1
+				echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
 				(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
 				# Check if simulation failed
@@ -381,7 +381,7 @@ do
 				fi
 
 				# # Run simulation from current branch
-				echo $"Running new simulation for regression testing" >> $simulationLogFile 2>&1
+				echo "Running new simulation for regression testing" >> $simulationLogFile 2>&1
 				(cd $BASE_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
 				# Check if simulation failed
@@ -532,6 +532,7 @@ do
 		fi
 	done
 done
+
 
 echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"
 if [[ $testNumFail -ne 0 ]]; then
