@@ -302,7 +302,14 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
     if (mpi.Root()) {
-        mkdir(outputPath.c_str(), 0777);
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+          pos = outputPath.find(path_delim, pos+1);
+          std::string subdir = outputPath.substr(0, pos);
+          mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((outputPath + "/ROMsol").c_str(), 0777);
 
