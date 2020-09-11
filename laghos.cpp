@@ -298,7 +298,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     std::string outputPath = "run";
-    if (basename != "") {
+    if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
     if (mpi.Root()) {
