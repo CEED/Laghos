@@ -33,14 +33,14 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
-void PrintSingularValues(const int rank, const std::string& name, const int window, CAROM::SVDBasisGenerator* bg)
+void PrintSingularValues(const int rank, const std::string& name, const bool usingWindows, const int window, CAROM::SVDBasisGenerator* bg)
 {
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
 
-    std::string fullname = "run/sVal" + name + std::to_string(window) + tmp;
+    std::string fullname = (usingWindows) ? "run/sVal" + name + std::to_string(window) + tmp : "run/sVal" + name + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
@@ -53,7 +53,7 @@ void PrintSingularValues(const int rank, const std::string& name, const int wind
 }
 
 void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& varName,
-                    const int window, const int dim, const int totalSamples, int& cutoff)
+                    const bool usingWindows, const int window, const int dim, const int totalSamples, int& cutoff)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
 
@@ -78,7 +78,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     {
         cout << varName << " basis summary output: ";
         BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff);
-        PrintSingularValues(rank, varName, window, basis_generator.get());
+        PrintSingularValues(rank, varName, usingWindows, window, basis_generator.get());
     }
 }
 
@@ -182,10 +182,7 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
-    //if (nset < 2)
-    //    cout << "More than one set must be specified. No merging is being done." << endl;
-
-    const bool usingWindows = (numWindows > 0); // TODO: || windowNumSamples > 0);
+    const bool usingWindows = (numWindows > 0); // TODO: Tony PR77 || windowNumSamples > 0);
     Array<double> twep;
     std::ofstream outfile_twp;
     Array<int> cutoff(5);
@@ -255,16 +252,16 @@ int main(int argc, char *argv[])
             totalSnapshotSizeFe += snapshotSizeFe[i];
         }
 
-
-        LoadSampleSets(myid, energyFraction, nset, "X", t, dimX, totalSnapshotSize, cutoff[0]);
-        LoadSampleSets(myid, energyFraction, nset, "V", t, dimV, totalSnapshotSize, cutoff[1]);
-        LoadSampleSets(myid, energyFraction, nset, "E", t, dimE, totalSnapshotSize, cutoff[2]);
+        LoadSampleSets(myid, energyFraction, nset, "X", usingWindows, t, dimX, totalSnapshotSize, cutoff[0]);
+        LoadSampleSets(myid, energyFraction, nset, "V", usingWindows, t, dimV, totalSnapshotSize, cutoff[1]);
+        LoadSampleSets(myid, energyFraction, nset, "E", usingWindows, t, dimE, totalSnapshotSize, cutoff[2]);
 
         if (rhsBasis)
         {
-            LoadSampleSets(myid, energyFraction, nset, "Fv", t, dimV, totalSnapshotSizeFv, cutoff[3]);
-            LoadSampleSets(myid, energyFraction, nset, "Fe", t, dimE, totalSnapshotSizeFe, cutoff[4]);
+            LoadSampleSets(myid, energyFraction, nset, "Fv", usingWindows, t, dimV, totalSnapshotSizeFv, cutoff[3]);
+            LoadSampleSets(myid, energyFraction, nset, "Fe", usingWindows, t, dimE, totalSnapshotSizeFe, cutoff[4]);
         }
+
         if (usingWindows)
         {
             outfile_twp << twep[t] << ", ";
