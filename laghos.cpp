@@ -962,8 +962,7 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
-            // TODO: in the online case with hyperreduction, can we avoid these FOM operations?
-            S_old = S;
+            if (!rom_online || !romOptions.hyperreduce) S_old = S;
             t_old = t;
             oper.ResetTimeStepEstimate();
 
@@ -1020,9 +1019,8 @@ int main(int argc, char *argv[])
                     MFEM_ABORT("The time step crashed!");
                 }
                 t = t_old;
-                S = S_old;
-                if (rom_online)
-                    romS = romS_old;
+                if (!rom_online || !romOptions.hyperreduce) S = S_old;
+                if (rom_online) romS = romS_old;
                 oper.ResetQuadratureData();
                 if (mpi.Root()) {
                     cout << "Repeating step " << ti << endl;

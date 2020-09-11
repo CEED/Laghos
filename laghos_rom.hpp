@@ -382,7 +382,7 @@ public:
     }
 
     int SolutionSizeH1FOM() const {
-        return tH1size;
+        return H1size;
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;

@@ -1797,14 +1797,6 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
         {
             basis->LiftToSampleMesh(x, fx);
 
-            // TODO: is this necessary? Does the call to UpdateMesh in operSP->Mult accomplish this anyway?
-            {   // update mesh
-                for (int i=0; i<Vsize_h1sp; ++i)
-                    (*xsp_gf)[i] = fx[i];
-
-                spmesh->NewNodes(*xsp_gf, false);
-            }
-
             operSP->Mult(fx, fy);
             basis->RestrictFromSampleMesh(fy, y, true, (useReducedMv && !useGramSchmidt), &invMvROM, &invMeROM);
             basis->Set_dxdt_Reduced(x, y);
@@ -2039,16 +2031,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     if (!hyperreduce || rank == 0)
     {
         if (hyperreduce)
-        {
             basis->LiftToSampleMesh(S, fx);
-            // TODO: is this necessary? Does the call to UpdateMesh accomplish this anyway?
-            {   // update mesh
-                for (int i=0; i<Vsize_h1sp; ++i)
-                    (*xsp_gf)[i] = fx[i];
-
-                spmesh->NewNodes(*xsp_gf, false);
-            }
-        }
         else
             basis->LiftROMtoFOM(S, fx);
 
