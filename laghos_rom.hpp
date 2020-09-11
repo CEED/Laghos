@@ -185,7 +185,8 @@ public:
 
         if (offsetInit)
         {
-            std::string path_init = (parameter >= 0)? "run/ROMoffset/param" + std::to_string(parameter) + "_init" : "run/ROMoffset/init";
+            //std::string path_init = (parameter >= 0) ? "run/ROMoffset/param" + std::to_string(parameter) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+            std::string path_init = "run/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
