@@ -75,10 +75,9 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameter(input.parameterID)
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID)
     {
         const int window = input.window;
-        const int parameterID = input.parameterID;
 
         if (sampleF)
         {
@@ -185,7 +184,7 @@ public:
 
         if (offsetInit)
         {
-            //std::string path_init = (parameter >= 0) ? "run/ROMoffset/param" + std::to_string(parameter) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+            //std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
             std::string path_init = "run/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
@@ -230,13 +229,9 @@ private:
     const int rank;
     double energyFraction;
 
-    const int parameter;
+    const int parameterID;
     const bool writeSnapshots;
-    std::vector<double> tSnapX;
-    std::vector<double> tSnapV;
-    std::vector<double> tSnapE;
-    std::vector<double> tSnapFv;
-    std::vector<double> tSnapFe;
+    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
 
     CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 

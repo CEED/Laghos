@@ -8,7 +8,6 @@ using namespace std;
 
 void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
 {
-    bool addSample, addSampleF;
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
@@ -28,6 +27,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             cout << "X taking sample at t " << t << endl;
         }
+
+        bool addSample;
 
         if (offsetInit)
         {
@@ -66,6 +67,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             cout << "V taking sample at t " << t << endl;
         }
+
+        bool addSample, addSampleF;
 
         if (offsetInit)
         {
@@ -121,6 +124,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             cout << "E taking sample at t " << t << endl;
         }
+
+        bool addSample, addSampleF;
 
         if (offsetInit)
         {
@@ -194,10 +199,10 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
-void printSnapshotTime(std::vector<double> const &tSnap, std::string const filename)
+void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var)
 {
-    cout << tSnap.size() << endl;
-    std::ofstream outfile_tSnap(filename);
+    cout << var << " snapshot size: " << tSnap.size() << endl;
+    std::ofstream outfile_tSnap(path + var);
     for (auto const& i: tSnap)
     {
         outfile_tSnap << i << endl;
@@ -373,24 +378,16 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0 && writeSnapshots)
     {
-        std::string path_tSnap = "run/param" + std::to_string(parameter) + "_tSnap";
+        std::string path_tSnap = "run/param" + std::to_string(parameterID) + "_tSnap";
 
-        cout << "X snapshot size: ";
-        printSnapshotTime(tSnapX, path_tSnap + "X");
-
-        cout << "V snapshot size: ";
-        printSnapshotTime(tSnapV, path_tSnap + "V");
-
-        cout << "E snapshot size: ";
-        printSnapshotTime(tSnapE, path_tSnap + "E");
+        printSnapshotTime(tSnapX, path_tSnap, "X");
+        printSnapshotTime(tSnapV, path_tSnap, "V");
+        printSnapshotTime(tSnapE, path_tSnap, "E");
 
         if (sampleF)
         {
-            cout << "Fv snapshot size: ";
-            printSnapshotTime(tSnapFv, path_tSnap + "Fv");
-
-            cout << "Fe snapshot size: ";
-            printSnapshotTime(tSnapFe, path_tSnap + "Fe");
+            printSnapshotTime(tSnapFv, path_tSnap, "Fv");
+            printSnapshotTime(tSnapFe, path_tSnap, "Fe");
         }
     }
 

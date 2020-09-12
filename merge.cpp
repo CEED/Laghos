@@ -9,7 +9,6 @@ using namespace mfem;
 
 void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int& cutoff)
 {
-    //int cutoff = 0;
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 

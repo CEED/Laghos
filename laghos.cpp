@@ -1147,7 +1147,10 @@ int main(int argc, char *argv[])
                     romOptions.sampV = twparam(romOptions.window,oss+1);
                     romOptions.sampE = twparam(romOptions.window,oss+2);
 
-                    basis->LiftROMtoFOM(romS, S);
+                    if (romOptions.hyperreduce)
+                    {
+                        basis->LiftROMtoFOM(romS, S);
+                    }
                     delete basis;
                     timeLoopTimer.Stop();
                     basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
