@@ -195,7 +195,6 @@ int main(int argc, char *argv[])
         numWindows = 1;
     }
 
-
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);
     Array<int> snapshotSizeFe(nset);

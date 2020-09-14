@@ -316,7 +316,6 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             }
 
             // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
             // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
             MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
         }

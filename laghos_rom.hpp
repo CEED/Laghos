@@ -145,7 +145,6 @@ public:
                     input.t_final,
                     ROMBasisName::E + std::to_string(window));
 
-
             if (sampleF)
             {
                 generator_Fv = new CAROM::IncrementalSVDBasisGenerator(tH1size,
