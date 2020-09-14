@@ -377,7 +377,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0 && writeSnapshots)
     {
-        std::string path_tSnap = "run/param" + std::to_string(parameterID) + "_tSnap";
+        std::string path_tSnap = basename + "/param" + std::to_string(parameterID) + "_tSnap";
 
         printSnapshotTime(tSnapX, path_tSnap, "X");
         printSnapshotTime(tSnapV, path_tSnap, "V");
@@ -530,9 +530,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         }
         else
         {
-            initX->read("run/ROMoffset/initX" + std::to_string(input.window));
-            initV->read("run/ROMoffset/initV" + std::to_string(input.window));
-            initE->read("run/ROMoffset/initE" + std::to_string(input.window));
+            initX->read(basename + "/ROMoffset/initX" + std::to_string(input.window));
+            initV->read(basename + "/ROMoffset/initV" + std::to_string(input.window));
+            initE->read(basename + "/ROMoffset/initE" + std::to_string(input.window));
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
