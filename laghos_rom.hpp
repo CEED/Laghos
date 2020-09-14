@@ -66,6 +66,7 @@ struct ROM_Options
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
+    bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
 };
 
 class ROM_Sampler
@@ -76,10 +77,9 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), basename(*input.basename)
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID), basename(*input.basename)
     {
         const int window = input.window;
-        const int parameterID = input.parameterID;
 
         if (sampleF)
         {
@@ -124,6 +124,7 @@ public:
                     model_sampling_tol,
                     input.t_final,
                     basename + "/" + ROMBasisName::X + std::to_string(window));
+
             generator_V = new CAROM::IncrementalSVDBasisGenerator(tH1size,
                     model_linearity_tol,
                     false,
@@ -134,6 +135,7 @@ public:
                     model_sampling_tol,
                     input.t_final,
                     basename + "/" + ROMBasisName::V + std::to_string(window));
+
             generator_E = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                     model_linearity_tol,
                     false,
@@ -157,6 +159,7 @@ public:
                         model_sampling_tol,
                         input.t_final,
                         basename + "/" + ROMBasisName::Fv + std::to_string(window));
+
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(tL2size,
                         model_linearity_tol,
                         false,
@@ -182,6 +185,8 @@ public:
 
         if (offsetInit)
         {
+            //std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+            std::string path_init = basename + "/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
@@ -192,18 +197,18 @@ public:
             {
                 (*initX)(i) = X[i];
             }
-            initX->write(basename + "/ROMoffset/initX" + std::to_string(window));
+            initX->write(path_init + "X" + std::to_string(window));
 
             for (int i=0; i<tH1size; ++i)
             {
                 (*initV)(i) = V[i];
             }
-            initV->write(basename + "/ROMoffset/initV" + std::to_string(window));
+            initV->write(path_init + "V" + std::to_string(window));
             for (int i=0; i<tL2size; ++i)
             {
                 (*initE)(i) = E[i];
             }
-            initE->write(basename + "/ROMoffset/initE" + std::to_string(window));
+            initE->write(path_init + "E" + std::to_string(window));
         }
     }
 
@@ -225,7 +230,9 @@ private:
     const int rank;
     double energyFraction;
 
+    const int parameterID;
     const bool writeSnapshots;
+    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
 
     std::string basename = "run";
 
@@ -318,7 +325,7 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_);
+    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_);
 
     ~ROM_Basis()
     {

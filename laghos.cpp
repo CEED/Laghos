@@ -289,6 +289,8 @@ int main(int argc, char *argv[])
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
+    args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
+                   "Enable or disable parametric offset.");
     args.Parse();
     if (!args.Good())
     {
@@ -318,8 +320,8 @@ int main(int argc, char *argv[])
 
     romOptions.basename = &outputPath;
 
-    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinstep should be specified only in offline mode");
-    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinstep and -nwin cannot both be set");
+    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
+    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
@@ -781,7 +783,7 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
 
         samplerTimer.Start();
-        if (usingWindows) {
+        if (usingWindows && romOptions.parameterID == -1) {
             outfile_twp.open(outputPath + "/twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
@@ -823,7 +825,7 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -854,9 +856,9 @@ int main(int argc, char *argv[])
                 romOptions.dimFv = twparam(romOptions.window,3);
                 romOptions.dimFe = twparam(romOptions.window,4);
             }
-            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         } else {
-            basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
         }
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
@@ -916,8 +918,9 @@ int main(int argc, char *argv[])
                     romOptions.dimFv = twparam(romOptions.window,3);
                     romOptions.dimFe = twparam(romOptions.window,4);
                 }
+                basis->LiftROMtoFOM(romS, S);
                 delete basis;
-                basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
             }
@@ -948,7 +951,11 @@ int main(int argc, char *argv[])
     else
     {
         // usual time loop when rom_restore phase is false.
-        std::ofstream outfile_tw_steps(outputPath + "/tw_steps");
+        std::ofstream outfile_tw_steps;
+        if (rom_online && usingWindows)
+        {
+            outfile_tw_steps.open(outputPath + "/tw_steps");
+        }
         timeLoopTimer.Start();
         if (romOptions.hyperreduce && romOptions.GramSchmidt)
         {
@@ -1090,7 +1097,7 @@ int main(int argc, char *argv[])
                         }
 
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
-                        if (myid == 0) {
+                        if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << tOverlapMidpoint << ", ";
                             if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1113,7 +1120,7 @@ int main(int argc, char *argv[])
                     else
                     {
                         sampler->Finalize(t, last_dt, S, cutoff);
-                        if (myid == 0) {
+                        if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << t << ", ";
                             if (romOptions.RHSbasis)
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
@@ -1148,13 +1155,9 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce)
+                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
-                        if (romOptions.GramSchmidt)
-                        {
-                            romOper->InducedGramSchmidtFinalize(romS);
-                        }
-                        basis->LiftROMtoFOM(romS, S);
+                        romOper->InducedGramSchmidtFinalize(romS);
                     }
 
                     romOptions.dimX = twparam(romOptions.window,0);
@@ -1170,9 +1173,13 @@ int main(int argc, char *argv[])
                     romOptions.sampV = twparam(romOptions.window,oss+1);
                     romOptions.sampE = twparam(romOptions.window,oss+2);
 
+                    if (romOptions.hyperreduce)
+                    {
+                        basis->LiftROMtoFOM(romS, S);
+                    }
                     delete basis;
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(romOptions, MPI_COMM_WORLD);
+                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
                     romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     timeLoopTimer.Start();
 
@@ -1309,7 +1316,7 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
-        if (myid == 0 && usingWindows && sampler != NULL) {
+        if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
 
             if (romOptions.RHSbasis)
@@ -1327,7 +1334,7 @@ int main(int argc, char *argv[])
         }
 
         samplerTimer.Stop();
-        if(usingWindows) outfile_twp.close();
+        if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
     if (writeSol)
