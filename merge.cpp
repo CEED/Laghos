@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
     if (usingWindows) {
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        outfile_twp.open("twpTemp.csv");
+        outfile_twp.open(outputPath + "/twpTemp.csv");
     }
     else {
         numWindows = 1;
