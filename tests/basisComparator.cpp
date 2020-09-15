@@ -37,12 +37,12 @@ void compareBasis(string &baselineFile, string &targetFile, double errorBound, i
     // Test basis matrices have the same dimensions
     if (baselineNumRows != targetNumRows) {
         cerr << "The number of rows of the two basis matrices \
-  are not equal in the following files: " << baselineFile << " and " << targetFile;
+are not equal in the following files: " << baselineFile << " and " << targetFile << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     if (baselineNumColumns != targetNumColumns) {
         cerr << "The number of columns of the two basis matrices \
-  are not equal in the following file: " << baselineFile << " and " << targetFile;
+are not equal in the following file: " << baselineFile << " and " << targetFile << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -54,7 +54,7 @@ void compareBasis(string &baselineFile, string &targetFile, double errorBound, i
     }
     catch (const exception& e) {
         cerr << "Something went wrong when calculating the difference \
-between the basis matrices in the following files: " << baselineFile << " and " << targetFile;
+between the basis matrices in the following files: " << baselineFile << " and " << targetFile << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
