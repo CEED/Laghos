@@ -284,6 +284,7 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
                    "Enable or disable parametric offset.");
+    args.AddOption(&romOptions.offsetType, "-rostype", "--romoffsettype", "Offset type for initializing ROM windows.");
     args.Parse();
     if (!args.Good())
     {

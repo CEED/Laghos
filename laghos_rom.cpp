@@ -441,7 +441,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
-      RK2AvgFormulation(input.RK2AvgSolver)
+      RK2AvgFormulation(input.RK2AvgSolver), offsetType(input.offsetType)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -493,48 +493,100 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        //TODO: Tony param init after PR 77
-        if (input.paramOffset)
+        if (input.offsetType == 0)
         {
-            Vector X, V, E;
+            if (input.paramOffset)
+            {
+                // TODO: Tony interpolation
+                Vector X, V, E;
 
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[i];
-            }
-            gfH1.GetTrueDofs(X);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initX)(i) = X[i];
-            }
+                for (int i=0; i<H1size; ++i)
+                {
+                    gfH1[i] = S[i];
+                }
+                gfH1.GetTrueDofs(X);
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initX)(i) = X[i];
+                }
 
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[H1size+i];
-            }
-            gfH1.GetTrueDofs(V);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initV)(i) = V[i];
-            }
+                for (int i=0; i<H1size; ++i)
+                {
+                    gfH1[i] = S[H1size+i];
+                }
+                gfH1.GetTrueDofs(V);
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initV)(i) = V[i];
+                }
 
-            for (int i=0; i<L2size; ++i)
-            {
-                gfL2[i] = S[2*H1size+i];
+                for (int i=0; i<L2size; ++i)
+                {
+                    gfL2[i] = S[2*H1size+i];
+                }
+                gfL2.GetTrueDofs(E);
+                for (int i=0; i<tL2size; ++i)
+                {
+                    (*initE)(i) = E[i];
+                }
             }
-            gfL2.GetTrueDofs(E);
-            for (int i=0; i<tL2size; ++i)
+            else
             {
-                (*initE)(i) = E[i];
+                initX->read("run/ROMoffset/initX" + std::to_string(input.window));
+                initV->read("run/ROMoffset/initV" + std::to_string(input.window));
+                initE->read("run/ROMoffset/initE" + std::to_string(input.window));
+
+                cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
             }
         }
         else
         {
-            initX->read("run/ROMoffset/initX" + std::to_string(input.window));
-            initV->read("run/ROMoffset/initV" + std::to_string(input.window));
-            initE->read("run/ROMoffset/initE" + std::to_string(input.window));
+            if ((input.offsetType == 1 && input.paramOffset && input.window == 0) || input.offsetType == 2)
+            {
+                Vector X, V, E;
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+                for (int i=0; i<H1size; ++i)
+                {
+                    gfH1[i] = S[i];
+                }
+                gfH1.GetTrueDofs(X);
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initX)(i) = X[i];
+                }
+
+                for (int i=0; i<H1size; ++i)
+                {
+                    gfH1[i] = S[H1size+i];
+                }
+                gfH1.GetTrueDofs(V);
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initV)(i) = V[i];
+                }
+
+                for (int i=0; i<L2size; ++i)
+                {
+                    gfL2[i] = S[2*H1size+i];
+                }
+                gfL2.GetTrueDofs(E);
+                for (int i=0; i<tL2size; ++i)
+                {
+                    (*initE)(i) = E[i];
+                }
+
+                initX->write("run/ROMoffset/initX0");
+                initV->write("run/ROMoffset/initV0");
+                initE->write("run/ROMoffset/initE0");
+            }
+            else
+            {
+                initX->read("run/ROMoffset/initX0");
+                initV->read("run/ROMoffset/initV0");
+                initE->read("run/ROMoffset/initE0");
+
+                cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            }
         }
     }
 

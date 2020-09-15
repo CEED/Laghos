@@ -65,6 +65,7 @@ struct ROM_Options
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
+    int offsetType = 0; // 0 -> save and load offset; 1 -> use initial state as offset; 2 -> use solution from previous window as offset
 };
 
 class ROM_Sampler
@@ -75,7 +76,8 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID)
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          parameterID(input.parameterID), offsetType(input.offsetType)
     {
         const int window = input.window;
 
@@ -183,30 +185,41 @@ public:
 
         if (offsetInit)
         {
-            //std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
-            std::string path_init = "run/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
             Xdiff.SetSize(tH1size);
             Ediff.SetSize(tL2size);
 
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initX)(i) = X[i];
-            }
-            initX->write(path_init + "X" + std::to_string(window));
+            //std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+            std::string path_init = "run/ROMoffset/init";
 
-            for (int i=0; i<tH1size; ++i)
+            if (input.offsetType == 1 && input.window > 0)
             {
-                (*initV)(i) = V[i];
+                initX->read(path_init + "X0");
+                initE->read(path_init + "E0");
+                initV->read(path_init + "V0");
             }
-            initV->write(path_init + "V" + std::to_string(window));
-            for (int i=0; i<tL2size; ++i)
+            else
             {
-                (*initE)(i) = E[i];
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initX)(i) = X[i];
+                }
+                initX->write(path_init + "X" + std::to_string(window));
+
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initV)(i) = V[i];
+                }
+                initV->write(path_init + "V" + std::to_string(window));
+
+                for (int i=0; i<tL2size; ++i)
+                {
+                    (*initE)(i) = E[i];
+                }
+                initE->write(path_init + "E" + std::to_string(window));
             }
-            initE->write(path_init + "E" + std::to_string(window));
         }
     }
 
@@ -237,6 +250,7 @@ private:
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
     const bool offsetInit;
+    const int offsetType;
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
     CAROM::Vector *initE = 0;
@@ -434,6 +448,7 @@ public:
 private:
     const bool hyperreduce;
     const bool offsetInit;
+    const int offsetType;
     const bool RHSbasis;
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
