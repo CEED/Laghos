@@ -17,11 +17,12 @@ usage() {
 # Stop at failure
 stopAtFailure=false
 dryRun=false
+useUserAsBaseline=false
 
 # Skip setup (git pull, make))
 ${skipSetup:=false}
 # Get options
-while getopts ":i:e:dh:fh" o;
+while getopts ":i:e:th:dh:fh" o;
 do
 	case "${o}" in
 		i)
@@ -29,6 +30,9 @@ do
       ;;
     e)
       e=${OPTARG}
+      ;;
+		t)
+      useUserAsBaseline=true
       ;;
 		d)
 			dryRun=true
@@ -135,9 +139,9 @@ fi
 if [[ "$skipSetup" == "false" ]];
 then
 
-	# Cleaning the user branch
-	echo "Cleaning up the user branch build" >> $setupLogFile 2>&1
-	make clean-build --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	# Cleaning the regression test directory
+	make clean-regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR"
+	echo "Cleaned the regression test directory and user branch build" >> $setupLogFile 2>&1
 
 	# Compile the C++ comparators
 	echo "Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
@@ -150,9 +154,19 @@ then
 		exit 1
 	fi
 
-	# Clone and compile rom-dev branch of Laghos
-	echo "Cloning the baseline branch" >> $setupLogFile 2>&1
-	git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+	# If skipping setup, don't do make
+	if [[ "$useUserAsBaseline" == "true" ]];
+	then
+
+		# Clone and compile user branch as baseline
+		echo "Cloning $(git branch | sed -n '/\* /s///p') as the baseline branch" >> $setupLogFile 2>&1
+		git -C $DIR clone -b "$(git branch | sed -n '/\* /s///p')" https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+	else
+
+		# Clone and compile rom-dev branch of Laghos as baseline
+		echo "Cloning rom-dev as the baseline branch" >> $setupLogFile 2>&1
+		git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+	fi
 
 	# Check that rom-dev branch of Laghos is present
 	if [ ! -d $BASE_LAGHOS_DIR ]; then
@@ -192,7 +206,7 @@ then
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
 	then
-		echo "The baseline branch failed to build. Make sure to run 'make clean' and 'make'." | tee -a $setupLogFile
+		echo "The baseline branch failed to build." | tee -a $setupLogFile
 	  exit 1
 	fi
 
@@ -205,10 +219,6 @@ then
 		echo "The baseline branch merge executable failed to build." | tee -a $setupLogFile
 		exit 1
 	fi
-
-	# Clear run directories
-	make --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
-	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" clean-exec >/dev/null 2>&1
 fi
 
 # If running on slurm, parallelize the tests.
@@ -217,7 +227,7 @@ if [[ -z "$SLURM" ]]; then
 		SLURM=true
 		for simulation in "${testsToRun[@]}"
 		do
-			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results"
+			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
 			if [[ "$stopAtFailure" == "true" ]];
 			then
 				if [[ "$dryRun" == "true" ]];
@@ -235,7 +245,7 @@ if [[ -z "$SLURM" ]]; then
 				fi
 			fi
 		done
-		echo "When all processes are finished, the results will be concatenated to ${RESULTS_DIR}/sbatch-results.log"
+		echo "After all processes are finished, results will be concatenated and outputted to ${RESULTS_DIR}/sbatch-results.log."
 		wait
 		echo "Finished. Check ${RESULTS_DIR}/sbatch-results.log"
 		cat ${RESULTS_DIR}/*-results.log > ${RESULTS_DIR}/sbatch-results.log

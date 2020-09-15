@@ -172,7 +172,7 @@ clean-exec:
 	rm -rf run/*
 
 clean-regtest: clean-exec
-	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
+	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/solutionComparator tests/results
 
 distclean: clean
 	rm -rf bin/

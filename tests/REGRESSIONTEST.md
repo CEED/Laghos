@@ -6,17 +6,15 @@ The usage instructions are outputted whenever the script is run. Currently, ther
 
 How to run the tests on LC
 
-1. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). Look below for
-test options.
+1. sbatch tests/runRegressionTests.sh (if in the base directory) or sbatch runRegressionTests.sh (if in the tests directory). make clean-regtest, make clean, make, and make merge will be run automatically. The baseline branch will be git cloned and rebuilt each time the script is called. The different tests will automatically run in parallel (can not be turned off). Look below for test options.
 2. The slurm output file will be stored in sbatch.log in the directory you ran the previous command from.
 3. Test commands/logs are stored in tests/results. Each run's data is in it's own directory in run and tests/Laghos/run.
-4. To find the particular error and where it occurred, scroll to the bottom of each test file. You can additionally look through the data files to see what went wrong.
+4. To find the particular error and where it occurred, scroll to the bottom of each test file. You can then look through the data files in Laghos/run and Laghos/run/tests/run to see what went wrong with each individual test and to compare the numerical values yourself. Use -f to avoid online-non-romhr failing commands being overwritten by the subsequent romhr test command.
 5. To erase the regression test data, run from the base directory: make clean-regtest
 
 How to run the tests on MAC
 
-1. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for
-test options.
+1. ./tests/runRegressionTests.sh (if in the base directory) or ./runRegressionTests.sh (if in the tests directory). Look below for test options.
 2. Follow steps 2-5 from the instructions above.
 
 How to add a non-time-windowing test
@@ -51,14 +49,17 @@ only need to be split into two sub-tests, like sedov-blast-parameter-variation.s
 
 How to add a time-windowing parameter variation test
 1. Choose an appropriate sub-test directory.
-2. Follow the instructions of both the time-windowing test and non-time-windowing
+2. Copy sedov-blast/sedov-blast-parameter-variation-time-window.sh
+3. Follow the instructions of both the time-windowing test and non-time-windowing
 parameter variation test to create your test script.
 
 Here are some example runs and results:
 
 ./runRegressionTests.sh -> Run all tests.
 
-./runRegressionTests.sh -f -> Run all tests, stopping at the first test failure.
+./runRegressionTests.sh -f -> Run all tests, stopping at the first test failure on each processor.
+
+./runRegressionTests.sh -t -> Run all tests, but uses the current user branch (as on the Github repo) as the baseline to verify new tests or uncommitted local changes.
 
 ./runRegressionTests.sh -d -> Run all tests, but do not do comparisons. Failures only occur if the simulations do not run successfully.
 
