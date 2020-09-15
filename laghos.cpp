@@ -990,7 +990,7 @@ int main(int argc, char *argv[])
 
                 romOper->UpdateSampleMeshNodes(romS);
 
-                oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
+                if (!romOptions.hyperreduce) oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
             }
             else
             {
