@@ -159,6 +159,7 @@ int main(int argc, char *argv[])
     int vis_steps = 5;
     bool visit = false;
     bool gfprint = false;
+    const char *visit_basename = "results/Laghos";
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
@@ -231,8 +232,10 @@ int main(int argc, char *argv[])
                    "Enable or disable VisIt visualization.");
     args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                    "Enable or disable result output (files in mfem format).");
-    args.AddOption(&basename, "-k", "--outputfilename",
+    args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
+    args.AddOption(&visit_basename, "-k", "--visitfilename",
+                   "Name of the visit dump files");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
@@ -738,8 +741,8 @@ int main(int argc, char *argv[])
     }
 
     // Save data for VisIt visualization.
-    const char *visit_basename = (outputPath + "/results/Laghos").c_str();
-    VisItDataCollection visit_dc(visit_basename, pmesh);
+    const char *visit_outputPath = (outputPath + "/" + std::string(visit_basename)).c_str();
+    VisItDataCollection visit_dc(visit_outputPath, pmesh);
     if (visit)
     {
         if (rom_offline || rom_restore)
@@ -1264,13 +1267,13 @@ int main(int argc, char *argv[])
                 if (gfprint)
                 {
                     ostringstream mesh_name, rho_name, v_name, e_name;
-                    mesh_name << visit_basename << "_" << ti
+                    mesh_name << visit_outputPath << "_" << ti
                               << "_mesh." << setfill('0') << setw(6) << myid;
-                    rho_name  << visit_basename << "_" << ti
+                    rho_name  << visit_outputPath << "_" << ti
                               << "_rho." << setfill('0') << setw(6) << myid;
-                    v_name << visit_basename << "_" << ti
+                    v_name << visit_outputPath << "_" << ti
                            << "_v." << setfill('0') << setw(6) << myid;
-                    e_name << visit_basename << "_" << ti
+                    e_name << visit_outputPath << "_" << ti
                            << "_e." << setfill('0') << setw(6) << myid;
 
                     ofstream mesh_ofs(mesh_name.str().c_str());

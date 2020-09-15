@@ -310,8 +310,8 @@ do
 					testName="${testNames[$subTestNum]}-parallel"
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
-				MERGE="$HEADER ./merge -k ${OUTPUT_DIR}"
-				LAGHOS="$HEADER laghos -k ${OUTPUT_DIR}"
+				MERGE="$HEADER ./merge -o ${OUTPUT_DIR}"
+				LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))

@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
     args.AddOption(&energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
-    args.AddOption(&basename, "-k", "--outputfilename",
+    args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
