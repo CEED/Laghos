@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     Array<int> cutoff(5);
 
     if (usingWindows) {
-        const int err = ReadTimeWindows(numWindows, outputPath + "/" + std::string(twfile), twep, myid == 0);
+        const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
         outfile_twp.open("twpTemp.csv");
     }
