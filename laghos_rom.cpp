@@ -18,7 +18,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
-        lhoper->GetTimeStepEstimate(S);  // Reset quadrature data after the Mult
     }
 
     if (sampleX)

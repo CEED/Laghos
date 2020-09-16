@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
             LoadSampleSets(myid, energyFraction, nset, "Fe", usingWindows, t, dimE, totalSnapshotSizeFe, cutoff[4]);
         }
 
-        if (usingWindows)
+        if (myid == 0 && usingWindows)
         {
             outfile_twp << twep[t] << ", ";
             if (rhsBasis)
