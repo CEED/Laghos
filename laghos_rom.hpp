@@ -136,9 +136,9 @@ public:
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                     GenerateIncrementalSVDOptions(
                       tH1size,
+                      max_model_dim,
                       model_linearity_tol,
                       true,
-                      max_model_dim,
                       input.initial_dt,
                       max_model_dim,
                       model_sampling_tol,
@@ -149,9 +149,9 @@ public:
             generator_V = new CAROM::IncrementalSVDBasisGenerator(
                     GenerateIncrementalSVDOptions(
                       tH1size,
+                      max_model_dim,
                       model_linearity_tol,
                       true,
-                      max_model_dim,
                       input.initial_dt,
                       max_model_dim,
                       model_sampling_tol,
@@ -162,9 +162,9 @@ public:
             generator_E = new CAROM::IncrementalSVDBasisGenerator(
                     GenerateIncrementalSVDOptions(
                       tL2size,
+                      max_model_dim,
                       model_linearity_tol,
                       true,
-                      max_model_dim,
                       input.initial_dt,
                       max_model_dim,
                       model_sampling_tol,
@@ -177,9 +177,9 @@ public:
                 generator_Fv = new CAROM::IncrementalSVDBasisGenerator(
                         GenerateIncrementalSVDOptions(
                           tH1size,
+                          max_model_dim,
                           model_linearity_tol,
                           true,
-                          max_model_dim,
                           input.initial_dt,
                           max_model_dim,
                           model_sampling_tol,
@@ -190,9 +190,9 @@ public:
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(
                         GenerateIncrementalSVDOptions(
                           tL2size,
+                          max_model_dim,
                           model_linearity_tol,
                           true,
-                          max_model_dim,
                           input.initial_dt,
                           max_model_dim,
                           model_sampling_tol,
@@ -251,9 +251,9 @@ public:
       return static_svd_options;
     }
 
-    CAROM::IncrementalSVDOptions GenerateIncrementalSVDOptions(int dim, double linearity_tol, bool fast_update, int max_basis_dimension, double initial_dt, int samples_per_time_interval, double sampling_tol, double max_time_between_samples)
+    CAROM::IncrementalSVDOptions GenerateIncrementalSVDOptions(int dim, int samples_per_time_interval, double linearity_tol, bool fast_update, int max_basis_dimension, double initial_dt, double sampling_tol, double max_time_between_samples)
     {
-      CAROM::IncrementalSVDOptions inc_svd_options(dim, linearity_tol, max_basis_dimension, initial_dt, samples_per_time_interval, sampling_tol, max_time_between_samples);
+      CAROM::IncrementalSVDOptions inc_svd_options(dim, samples_per_time_interval, linearity_tol, max_basis_dimension, initial_dt, sampling_tol, max_time_between_samples);
       inc_svd_options.fast_update = fast_update;
       return inc_svd_options;
     }
