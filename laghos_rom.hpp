@@ -95,109 +95,78 @@ public:
 
         if (input.staticSVD)
         {
+            CAROM::StaticSVDOptions static_x_options(
+              tH1size,
+              max_model_dim
+            );
+            CAROM::StaticSVDOptions static_e_options(
+              tL2size,
+              max_model_dim
+            );
             generator_X = new CAROM::StaticSVDBasisGenerator(
-                    GenerateStaticSVDOptions(
-                      tH1size,
-                      max_model_dim
-                    ),
+                    static_x_options,
                     BasisFileName(VariableName::X, window, parameterID));
             generator_V = new CAROM::StaticSVDBasisGenerator(
-                    GenerateStaticSVDOptions(
-                      tH1size,
-                      max_model_dim
-                    ),
+                    static_x_options,
                     BasisFileName(VariableName::V, window, parameterID));
             generator_E = new CAROM::StaticSVDBasisGenerator(
-                    GenerateStaticSVDOptions(
-                      tL2size,
-                      max_model_dim
-                    ),
+                    static_e_options,
                     BasisFileName(VariableName::E, window, parameterID));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::StaticSVDBasisGenerator(
-                        GenerateStaticSVDOptions(
-                          tH1size,
-                          max_model_dim
-                        ),
+                        static_x_options,
                         BasisFileName(VariableName::Fv, window, parameterID));
                 generator_Fe = new CAROM::StaticSVDBasisGenerator(
-                        GenerateStaticSVDOptions(
-                          tL2size,
-                          max_model_dim
-                        ),
+                        static_e_options,
                         BasisFileName(VariableName::Fe, window, parameterID));
             }
         }
         else
         {
-
+            CAROM::IncrementalSVDOptions inc_x_options(
+              tH1size,
+              max_model_dim,
+              model_linearity_tol,
+              input.initial_dt,
+              max_model_dim,
+              model_sampling_tol,
+              input.t_final,
+              false,
+              true
+            );
+            CAROM::IncrementalSVDOptions inc_e_options(
+              tL2size,
+              max_model_dim,
+              model_linearity_tol,
+              input.initial_dt,
+              max_model_dim,
+              model_sampling_tol,
+              input.t_final,
+              false,
+              true
+            );
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
-                    GenerateIncrementalSVDOptions(
-                      tH1size,
-                      max_model_dim,
-                      model_linearity_tol,
-                      true,
-                      input.initial_dt,
-                      max_model_dim,
-                      model_sampling_tol,
-                      input.t_final
-                    ),
+                    inc_x_options,
                     ROMBasisName::X + std::to_string(window));
 
             generator_V = new CAROM::IncrementalSVDBasisGenerator(
-                    GenerateIncrementalSVDOptions(
-                      tH1size,
-                      max_model_dim,
-                      model_linearity_tol,
-                      true,
-                      input.initial_dt,
-                      max_model_dim,
-                      model_sampling_tol,
-                      input.t_final
-                    ),
+                    inc_x_options,
                     ROMBasisName::V + std::to_string(window));
 
             generator_E = new CAROM::IncrementalSVDBasisGenerator(
-                    GenerateIncrementalSVDOptions(
-                      tL2size,
-                      max_model_dim,
-                      model_linearity_tol,
-                      true,
-                      input.initial_dt,
-                      max_model_dim,
-                      model_sampling_tol,
-                      input.t_final
-                    ),
+                    inc_e_options,
                     ROMBasisName::E + std::to_string(window));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::IncrementalSVDBasisGenerator(
-                        GenerateIncrementalSVDOptions(
-                          tH1size,
-                          max_model_dim,
-                          model_linearity_tol,
-                          true,
-                          input.initial_dt,
-                          max_model_dim,
-                          model_sampling_tol,
-                          input.t_final
-                        ),
+                        inc_x_options,
                         ROMBasisName::Fv + std::to_string(window));
 
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(
-                        GenerateIncrementalSVDOptions(
-                          tL2size,
-                          max_model_dim,
-                          model_linearity_tol,
-                          true,
-                          input.initial_dt,
-                          max_model_dim,
-                          model_sampling_tol,
-                          input.t_final
-                        ),
+                        inc_e_options,
                         ROMBasisName::Fe + std::to_string(window));
             }
         }
@@ -244,19 +213,6 @@ public:
     void SampleSolution(const double t, const double dt, Vector const& S);
 
     void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff);
-
-    CAROM::StaticSVDOptions GenerateStaticSVDOptions(int dim, int samples_per_time_interval)
-    {
-      CAROM::StaticSVDOptions static_svd_options(dim, samples_per_time_interval);
-      return static_svd_options;
-    }
-
-    CAROM::IncrementalSVDOptions GenerateIncrementalSVDOptions(int dim, int samples_per_time_interval, double linearity_tol, bool fast_update, int max_basis_dimension, double initial_dt, double sampling_tol, double max_time_between_samples)
-    {
-      CAROM::IncrementalSVDOptions inc_svd_options(dim, samples_per_time_interval, linearity_tol, max_basis_dimension, initial_dt, sampling_tol, max_time_between_samples);
-      inc_svd_options.fast_update = fast_update;
-      return inc_svd_options;
-    }
 
     int MaxNumSamples()
     {
