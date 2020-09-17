@@ -298,6 +298,8 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
+    if (romOptions.mergeXV) romOptions.dimX = romOptions.dimV;
+
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
