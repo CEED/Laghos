@@ -378,53 +378,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         // std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
         std::string path_init = "run/ROMoffset/init";
 
-        if (input.offsetType == 0)
-        {
-            if (input.paramOffset)
-            {
-                // TODO: Tony interpolation
-                Vector X, V, E;
-
-                for (int i=0; i<H1size; ++i)
-                {
-                    gfH1[i] = S[i];
-                }
-                gfH1.GetTrueDofs(X);
-                for (int i=0; i<tH1size; ++i)
-                {
-                    (*initX)(i) = X[i];
-                }
-
-                for (int i=0; i<H1size; ++i)
-                {
-                    gfH1[i] = S[H1size+i];
-                }
-                gfH1.GetTrueDofs(V);
-                for (int i=0; i<tH1size; ++i)
-                {
-                    (*initV)(i) = V[i];
-                }
-
-                for (int i=0; i<L2size; ++i)
-                {
-                    gfL2[i] = S[2*H1size+i];
-                }
-                gfL2.GetTrueDofs(E);
-                for (int i=0; i<tL2size; ++i)
-                {
-                    (*initE)(i) = E[i];
-                }
-            }
-            else
-            {
-                initX->read(path_init + "X" + std::to_string(input.window));
-                initV->read(path_init + "V" + std::to_string(input.window));
-                initE->read(path_init + "E" + std::to_string(input.window));
-
-                cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
-            }
-        }
-        else if (input.offsetType == 1 && input.window > 0)
+        if (input.offsetType == 1 && input.window > 0)
         {
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
@@ -432,7 +386,54 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else
+        else if (!input.online || (input.offsetType == 0 && !input.paramOffset))
+        {
+            initX->read(path_init + "X" + std::to_string(input.window));
+            initV->read(path_init + "V" + std::to_string(input.window));
+            initE->read(path_init + "E" + std::to_string(input.window));
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
+        else if (input.offsetType == 0)
+        {
+            // TODO: Tony interpolation PR 77
+            Vector X, V, E;
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[i];
+            }
+            gfH1.GetTrueDofs(X);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initX)(i) = X[i];
+            }
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[H1size+i];
+            }
+            gfH1.GetTrueDofs(V);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initV)(i) = V[i];
+            }
+
+            for (int i=0; i<L2size; ++i)
+            {
+                gfL2[i] = S[2*H1size+i];
+            }
+            gfL2.GetTrueDofs(E);
+            for (int i=0; i<tL2size; ++i)
+            {
+                (*initE)(i) = E[i];
+            }
+
+            initX->write(path_init + "X" + std::to_string(input.window));
+            initV->write(path_init + "V" + std::to_string(input.window));
+            initE->write(path_init + "E" + std::to_string(input.window));
+        }
+        else // online, type 1 window 0 or type 2
         {
             Vector X, V, E;
 
