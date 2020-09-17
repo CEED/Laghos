@@ -186,140 +186,23 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
 
 void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
 {
-    bool addSample, addSampleF;
-    SetStateVariables(S);
-
-    Vector dSdt;
-    if (sampleF)
-    {
-        dSdt.SetSize(S.Size());
-        lhoper->Mult(S, dSdt);
-    }
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tH1size; ++i)
-        {
-            Xdiff[i] = X[i] - (*initX)(i);
-        }
-
-        addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
-    }
-    else
-        addSample = generator_X->takeSample(X.GetData(), t, dt);
-
-    if (writeSnapshots && addSample)
-    {
-        tSnapX.push_back(t);
-    }
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
     if (writeSnapshots)
+    {
         generator_X->writeSnapshot();
-    else
-        generator_X->endSamples();
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tH1size; ++i)
-        {
-            Xdiff[i] = V[i] - (*initV)(i);
-        }
-
-        addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfH1.Size() == H1size, "");
-            for (int i=0; i<H1size; ++i)
-                gfH1[i] = dSdt[H1size + i];  // Fv
-
-            gfH1.GetTrueDofs(Xdiff);
-            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFv.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-    }
-    else
-        addSample = generator_V->takeSample(V.GetData(), t, dt);
-
-    if (writeSnapshots && addSample)
-    {
-        tSnapV.push_back(t);
-    }
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
-    if (writeSnapshots)
         generator_V->writeSnapshot();
-    else
-        generator_V->endSamples();
-
-    if (offsetInit)
-    {
-        for (int i=0; i<tL2size; ++i)
-        {
-            Ediff[i] = E[i] - (*initE)(i);
-        }
-
-        addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfL2.Size() == L2size, "");
-            for (int i=0; i<L2size; ++i)
-                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-            gfL2.GetTrueDofs(Ediff);
-            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFe.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-    }
-    else
-        addSample = generator_E->takeSample(E.GetData(), t, dt);
-
-    if (writeSnapshots && addSample)
-    {
-        tSnapE.push_back(t);
-    }
-
-    // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-    // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-    MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-
-    if (writeSnapshots)
         generator_E->writeSnapshot();
-    else
-        generator_E->endSamples();
-
-    if (sampleF)
-    {
-        if (writeSnapshots)
+        if (sampleF)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
         }
-        else
+    }
+    else
+    {
+        generator_X->endSamples();
+        generator_V->endSamples();
+        generator_E->endSamples();
+        if (sampleF)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();

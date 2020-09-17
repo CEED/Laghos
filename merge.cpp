@@ -13,7 +13,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
 
     std::string basis_filename = "run/basis" + varName + std::to_string(window);
-    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(dim, totalSamples, basis_filename));
+    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(CAROM::StaticSVDOptions(dim, totalSamples), basis_filename));
 
     cout << "Loading snapshots for " << varName << " in time window " << window << endl;
 
