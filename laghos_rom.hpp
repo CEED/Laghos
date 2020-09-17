@@ -86,6 +86,7 @@ public:
 
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
+        double model_singular_value_tol = 1.e-14;
         double model_sampling_tol = 1.e-7;
 
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
@@ -136,6 +137,7 @@ public:
                 false,
                 true
             );
+            inc_x_options.singular_value_tol = model_singular_value_tol;
             CAROM::IncrementalSVDOptions inc_e_options(
                 tL2size,
                 max_model_dim,
@@ -147,6 +149,7 @@ public:
                 false,
                 true
             );
+            inc_e_options.singular_value_tol = model_singular_value_tol;
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                 inc_x_options,
                 ROMBasisName::X + std::to_string(window));
