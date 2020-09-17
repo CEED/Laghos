@@ -200,7 +200,7 @@ public:
                 initE->read(path_init + "E0");
                 initV->read(path_init + "V0");
             }
-            else
+            else if (input.offsetType <= 1)
             {
                 for (int i=0; i<tH1size; ++i)
                 {

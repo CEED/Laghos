@@ -375,6 +375,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
+        // std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+        std::string path_init = "run/ROMoffset/init";
+
         if (input.offsetType == 0)
         {
             if (input.paramOffset)
@@ -414,61 +417,58 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
             }
             else
             {
-                initX->read("run/ROMoffset/initX" + std::to_string(input.window));
-                initV->read("run/ROMoffset/initV" + std::to_string(input.window));
-                initE->read("run/ROMoffset/initE" + std::to_string(input.window));
+                initX->read(path_init + "X" + std::to_string(input.window));
+                initV->read(path_init + "V" + std::to_string(input.window));
+                initE->read(path_init + "E" + std::to_string(input.window));
 
                 cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
             }
         }
+        else if (input.offsetType == 1 && input.window > 0)
+        {
+            initX->read(path_init + "X0");
+            initV->read(path_init + "V0");
+            initE->read(path_init + "E0");
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
         else
         {
-            if ((input.offsetType == 1 && input.paramOffset && input.window == 0) || input.offsetType == 2)
+            Vector X, V, E;
+
+            for (int i=0; i<H1size; ++i)
             {
-                Vector X, V, E;
-
-                for (int i=0; i<H1size; ++i)
-                {
-                    gfH1[i] = S[i];
-                }
-                gfH1.GetTrueDofs(X);
-                for (int i=0; i<tH1size; ++i)
-                {
-                    (*initX)(i) = X[i];
-                }
-
-                for (int i=0; i<H1size; ++i)
-                {
-                    gfH1[i] = S[H1size+i];
-                }
-                gfH1.GetTrueDofs(V);
-                for (int i=0; i<tH1size; ++i)
-                {
-                    (*initV)(i) = V[i];
-                }
-
-                for (int i=0; i<L2size; ++i)
-                {
-                    gfL2[i] = S[2*H1size+i];
-                }
-                gfL2.GetTrueDofs(E);
-                for (int i=0; i<tL2size; ++i)
-                {
-                    (*initE)(i) = E[i];
-                }
-
-                initX->write("run/ROMoffset/initX0");
-                initV->write("run/ROMoffset/initV0");
-                initE->write("run/ROMoffset/initE0");
+                gfH1[i] = S[i];
             }
-            else
+            gfH1.GetTrueDofs(X);
+            for (int i=0; i<tH1size; ++i)
             {
-                initX->read("run/ROMoffset/initX0");
-                initV->read("run/ROMoffset/initV0");
-                initE->read("run/ROMoffset/initE0");
-
-                cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+                (*initX)(i) = X[i];
             }
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[H1size+i];
+            }
+            gfH1.GetTrueDofs(V);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initV)(i) = V[i];
+            }
+
+            for (int i=0; i<L2size; ++i)
+            {
+                gfL2[i] = S[2*H1size+i];
+            }
+            gfL2.GetTrueDofs(E);
+            for (int i=0; i<tL2size; ++i)
+            {
+                (*initE)(i) = E[i];
+            }
+
+            initX->write(path_init + "X" + std::to_string(input.window));
+            initV->write(path_init + "V" + std::to_string(input.window));
+            initE->write(path_init + "E" + std::to_string(input.window));
         }
     }
 
