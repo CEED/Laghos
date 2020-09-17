@@ -69,7 +69,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
         bool addSample, addSampleF;
 
-        if (offsetInit)
+        if (offsetInit && Voffset)
         {
             for (int i=0; i<tH1size; ++i)
             {
@@ -78,31 +78,30 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
             generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
-
-            if (sampleF)
-            {
-                MFEM_VERIFY(gfH1.Size() == H1size, "");
-                for (int i=0; i<H1size; ++i)
-                    gfH1[i] = dSdt[H1size + i];  // Fv
-
-                gfH1.GetTrueDofs(Xdiff);
-                addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-                if (writeSnapshots && addSampleF)
-                {
-                    tSnapFv.push_back(t);
-                }
-
-                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-                MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-            }
         }
         else
         {
-            MFEM_VERIFY(!sampleF, "");
             addSample = generator_V->takeSample(V.GetData(), t, dt);
             generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+        }
+
+        if (sampleF)
+        {
+            MFEM_VERIFY(gfH1.Size() == H1size, "");
+            for (int i=0; i<H1size; ++i)
+                gfH1[i] = dSdt[H1size + i];  // Fv
+
+            gfH1.GetTrueDofs(Xdiff);
+            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFv.push_back(t);
+            }
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
         }
 
         if (writeSnapshots && addSample)
@@ -135,32 +134,32 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
-
-            if (sampleF)
-            {
-                MFEM_VERIFY(gfL2.Size() == L2size, "");
-                for (int i=0; i<L2size; ++i)
-                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-                gfL2.GetTrueDofs(Ediff);
-                addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-                if (writeSnapshots && addSampleF)
-                {
-                    tSnapFe.push_back(t);
-                }
-
-                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-                MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-            }
         }
         else
         {
-            MFEM_VERIFY(!sampleF, "");
             addSample = generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
+
+        if (sampleF)
+        {
+            MFEM_VERIFY(gfL2.Size() == L2size, "");
+            for (int i=0; i<L2size; ++i)
+                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+            gfL2.GetTrueDofs(Ediff);
+            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFe.push_back(t);
+            }
+
+            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+        }
+
 
         if (writeSnapshots && addSample)
         {
@@ -246,7 +245,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     else
         generator_X->endSamples();
 
-    if (offsetInit)
+    if (offsetInit && Voffset)
     {
         for (int i=0; i<tH1size; ++i)
         {
@@ -254,28 +253,28 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
 
         addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfH1.Size() == H1size, "");
-            for (int i=0; i<H1size; ++i)
-                gfH1[i] = dSdt[H1size + i];  // Fv
-
-            gfH1.GetTrueDofs(Xdiff);
-            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFv.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
     }
     else
         addSample = generator_V->takeSample(V.GetData(), t, dt);
+
+    if (sampleF)
+    {
+        MFEM_VERIFY(gfH1.Size() == H1size, "");
+        for (int i=0; i<H1size; ++i)
+            gfH1[i] = dSdt[H1size + i];  // Fv
+
+        gfH1.GetTrueDofs(Xdiff);
+        addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+        if (writeSnapshots && addSampleF)
+        {
+            tSnapFv.push_back(t);
+        }
+
+        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+        MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+    }
 
     if (writeSnapshots && addSample)
     {
@@ -299,28 +298,28 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
 
         addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfL2.Size() == L2size, "");
-            for (int i=0; i<L2size; ++i)
-                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-            gfL2.GetTrueDofs(Ediff);
-            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFe.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
     }
     else
         addSample = generator_E->takeSample(E.GetData(), t, dt);
+
+    if (sampleF)
+    {
+        MFEM_VERIFY(gfL2.Size() == L2size, "");
+        for (int i=0; i<L2size; ++i)
+            gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+        gfL2.GetTrueDofs(Ediff);
+        addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+        if (writeSnapshots && addSampleF)
+        {
+            tSnapFe.push_back(t);
+        }
+
+        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
+        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
+        MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
+    }
 
     if (writeSnapshots && addSample)
     {
@@ -439,9 +438,12 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
-      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
-      RK2AvgFormulation(input.RK2AvgSolver)
+      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis),
+      useGramSchmidt(input.GramSchmidt), RK2AvgFormulation(input.RK2AvgSolver),
+      mergeXV(input.mergeXV), Voffset(!input.mergeXV)
 {
+    if (mergeXV) rdimx = rdimv;
+
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
 
@@ -1167,8 +1169,11 @@ void ROM_Basis::ComputeReducedRHS()
         // Compute reduced matrix BsinvX = BXsp^T BVsp
         BsinvX = BXsp->transposeMult(BVsp);
 
-        BX0 = BXsp->transposeMult(initVsp);
-        MFEM_VERIFY(BX0->dim() == rdimx, "");
+        if (offsetInit)
+        {
+            BX0 = BXsp->transposeMult(initVsp);
+            MFEM_VERIFY(BX0->dim() == rdimx, "");
+        }
 
         // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
         CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
@@ -1233,9 +1238,13 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
     basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
     basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+
+    if (mergeXV)
+        basisX = basisV;
+    else
+        basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
 
     if (RHSbasis)
     {
@@ -1268,7 +1277,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = useOffset ? mfH1[i] - (*initV)(i) : mfH1[i];
+        (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
 
     basisV->transposeMult(*fH1, *rV);
 
@@ -1320,7 +1329,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     basisV->mult(*rV, *fH1);
 
     for (int i=0; i<tH1size; ++i)
-        mfH1[i] = offsetInit ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
+        mfH1[i] = (offsetInit && Voffset) ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
 
     gfH1.SetFromTrueDofs(mfH1);
 
@@ -1361,7 +1370,7 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
         for (int i=0; i<size_H1_sp; ++i)
         {
             usp[i] = offsetInit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
-            usp[size_H1_sp + i] = offsetInit ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
+            usp[size_H1_sp + i] = (offsetInit && Voffset) ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
         }
 
         for (int i=0; i<size_L2_sp; ++i)
@@ -1395,7 +1404,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
         (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
 
     for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = useOffset ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
+        (*sV)(i) = (useOffset && Voffset) ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
@@ -1500,7 +1509,7 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
 
     // V
     for (int i=0; i<size_H1_sp; ++i)
-        (*spV)(i) = useOffset ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
+        (*spV)(i) = (useOffset && Voffset) ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
 
     BVsp->transposeMult(*spV, *rV);
     BVVinv->mult(*rV, *rV2);

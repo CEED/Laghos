@@ -65,6 +65,8 @@ struct ROM_Options
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
+
+    bool mergeXV = false; // If true, use V basis for X-X0.
 };
 
 class ROM_Sampler
@@ -75,14 +77,10 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID)
+          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID),
+          Voffset(!input.mergeXV)
     {
         const int window = input.window;
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(offsetInit, "");
-        }
 
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
@@ -245,6 +243,8 @@ private:
 
     const bool sampleF;
 
+    const bool Voffset;
+
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
     void SetStateVariables(Vector const& S)
@@ -330,7 +330,7 @@ public:
         delete rV;
         delete rE;
         delete basisX;
-        delete basisV;
+        if (!mergeXV) delete basisV;
         delete basisE;
         delete basisFv;
         delete basisFe;
@@ -439,6 +439,8 @@ private:
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
+    const bool mergeXV;  // If true, use V basis for X-X0.
+
     const int H1size;
     const int L2size;
     const int tH1size;
@@ -503,6 +505,8 @@ private:
     int numSamplesX = 0;
     int numSamplesV = 0;
     int numSamplesE = 0;
+
+    const bool Voffset;
 
     const bool RK2AvgFormulation;
     CAROM::Matrix *BXXinv = NULL;

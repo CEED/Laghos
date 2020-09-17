@@ -284,6 +284,8 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
                    "Enable or disable parametric offset.");
+    args.AddOption(&romOptions.mergeXV, "-romxv", "--rommergexv", "-no-romxv", "--no-rommergexv",
+                   "Enable or disable merging of X-X0 and V bases.");
     args.Parse();
     if (!args.Good())
     {
