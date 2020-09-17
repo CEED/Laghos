@@ -96,78 +96,78 @@ public:
         if (input.staticSVD)
         {
             CAROM::StaticSVDOptions static_x_options(
-              tH1size,
-              max_model_dim
+                tH1size,
+                max_model_dim
             );
             CAROM::StaticSVDOptions static_e_options(
-              tL2size,
-              max_model_dim
+                tL2size,
+                max_model_dim
             );
             generator_X = new CAROM::StaticSVDBasisGenerator(
-                    static_x_options,
-                    BasisFileName(VariableName::X, window, parameterID));
+                static_x_options,
+                BasisFileName(VariableName::X, window, parameterID));
             generator_V = new CAROM::StaticSVDBasisGenerator(
-                    static_x_options,
-                    BasisFileName(VariableName::V, window, parameterID));
+                static_x_options,
+                BasisFileName(VariableName::V, window, parameterID));
             generator_E = new CAROM::StaticSVDBasisGenerator(
-                    static_e_options,
-                    BasisFileName(VariableName::E, window, parameterID));
+                static_e_options,
+                BasisFileName(VariableName::E, window, parameterID));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::StaticSVDBasisGenerator(
-                        static_x_options,
-                        BasisFileName(VariableName::Fv, window, parameterID));
+                    static_x_options,
+                    BasisFileName(VariableName::Fv, window, parameterID));
                 generator_Fe = new CAROM::StaticSVDBasisGenerator(
-                        static_e_options,
-                        BasisFileName(VariableName::Fe, window, parameterID));
+                    static_e_options,
+                    BasisFileName(VariableName::Fe, window, parameterID));
             }
         }
         else
         {
             CAROM::IncrementalSVDOptions inc_x_options(
-              tH1size,
-              max_model_dim,
-              model_linearity_tol,
-              input.initial_dt,
-              max_model_dim,
-              model_sampling_tol,
-              input.t_final,
-              false,
-              true
+                tH1size,
+                max_model_dim,
+                model_linearity_tol,
+                max_model_dim,
+                input.initial_dt,
+                model_sampling_tol,
+                input.t_final,
+                false,
+                true
             );
             CAROM::IncrementalSVDOptions inc_e_options(
-              tL2size,
-              max_model_dim,
-              model_linearity_tol,
-              input.initial_dt,
-              max_model_dim,
-              model_sampling_tol,
-              input.t_final,
-              false,
-              true
+                tL2size,
+                max_model_dim,
+                model_linearity_tol,
+                max_model_dim,
+                input.initial_dt,
+                model_sampling_tol,
+                input.t_final,
+                false,
+                true
             );
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_x_options,
-                    ROMBasisName::X + std::to_string(window));
+                inc_x_options,
+                ROMBasisName::X + std::to_string(window));
 
             generator_V = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_x_options,
-                    ROMBasisName::V + std::to_string(window));
+                inc_x_options,
+                ROMBasisName::V + std::to_string(window));
 
             generator_E = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_e_options,
-                    ROMBasisName::E + std::to_string(window));
+                inc_e_options,
+                ROMBasisName::E + std::to_string(window));
 
             if (sampleF)
             {
                 generator_Fv = new CAROM::IncrementalSVDBasisGenerator(
-                        inc_x_options,
-                        ROMBasisName::Fv + std::to_string(window));
+                    inc_x_options,
+                    ROMBasisName::Fv + std::to_string(window));
 
                 generator_Fe = new CAROM::IncrementalSVDBasisGenerator(
-                        inc_e_options,
-                        ROMBasisName::Fe + std::to_string(window));
+                    inc_e_options,
+                    ROMBasisName::Fe + std::to_string(window));
             }
         }
 
