@@ -97,10 +97,12 @@ public:
                 tH1size,
                 max_model_dim
             );
+            static_x_options.max_time_intervals = 1;
             CAROM::StaticSVDOptions static_e_options(
                 tL2size,
                 max_model_dim
             );
+            static_e_options.max_time_intervals = 1;
             generator_X = new CAROM::StaticSVDBasisGenerator(
                 static_x_options,
                 BasisFileName(VariableName::X, window, parameterID));
@@ -134,6 +136,7 @@ public:
                 false,
                 true
             );
+            inc_x_options.max_time_intervals = 1;
             CAROM::IncrementalSVDOptions inc_e_options(
                 tL2size,
                 max_model_dim,
@@ -145,6 +148,7 @@ public:
                 false,
                 true
             );
+            inc_e_options.max_time_intervals = 1;
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                 inc_x_options,
                 ROMBasisName::X + std::to_string(window));

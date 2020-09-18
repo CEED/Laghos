@@ -50,10 +50,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapX.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleV = generator_V->isNextSample(t);
@@ -93,10 +89,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 {
                     tSnapFv.push_back(t);
                 }
-
-                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-                MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
             }
         }
         else
@@ -110,10 +102,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapV.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -150,10 +138,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 {
                     tSnapFe.push_back(t);
                 }
-
-                // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-                // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-                MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
             }
         }
         else
@@ -167,10 +151,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapE.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 }
 
