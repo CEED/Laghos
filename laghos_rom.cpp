@@ -386,7 +386,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else if (!input.online || (input.offsetType == 0 && !input.paramOffset))
+        else if (input.restore || (input.offsetType == 0 && !input.paramOffset))
         {
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
@@ -433,7 +433,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
         }
-        else // online, type 1 window 0 or type 2
+        else // online phase, type 1 window 0 or type 2
         {
             Vector X, V, E;
 

@@ -737,7 +737,7 @@ int main(int argc, char *argv[])
     romOptions.window = 0;
     romOptions.FOMoper = &oper;
     romOptions.parameterID = rom_paramID;
-    romOptions.online = rom_online;
+    romOptions.restore = rom_restore;
 
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that

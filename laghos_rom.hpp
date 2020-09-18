@@ -40,7 +40,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
 
-    bool online = false; // if true, online phase
+    bool restore = false; // if true, restore phase
     bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
@@ -201,25 +201,29 @@ public:
                 initE->read(path_init + "E0");
                 initV->read(path_init + "V0");
             }
-            else if (input.offsetType <= 1)
+            else
             {
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
                 }
-                initX->write(path_init + "X" + std::to_string(window));
 
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initV)(i) = V[i];
                 }
-                initV->write(path_init + "V" + std::to_string(window));
 
                 for (int i=0; i<tL2size; ++i)
                 {
                     (*initE)(i) = E[i];
                 }
-                initE->write(path_init + "E" + std::to_string(window));
+
+                if (input.offsetType <= 1)
+                {
+                    initX->write(path_init + "X" + std::to_string(window));
+                    initV->write(path_init + "V" + std::to_string(window));
+                    initE->write(path_init + "E" + std::to_string(window));
+                }
             }
         }
     }
