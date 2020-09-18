@@ -1,4 +1,5 @@
 #include "laghos_rom.hpp"
+#include "laghos_utils.hpp"
 
 #include "DEIM.h"
 #include "SampleMesh.hpp"
@@ -151,31 +152,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             tSnapE.push_back(t);
         }
     }
-}
-
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff)
-{
-    const int rom_dim = bg->getSpatialBasis()->numColumns();
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
-
-    double sum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        sum += (*sing_vals)(sv, sv);
-    }
-
-    double partialSum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        partialSum += (*sing_vals)(sv, sv);
-        if (partialSum / sum > energyFraction)
-        {
-            cutoff = sv+1;
-            break;
-        }
-    }
-
-    cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
 void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var)
@@ -1954,25 +1930,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     }
 
     t += dt;
-}
-
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg)
-{
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = "run/sVal" + name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        ofs << (*sing_vals)(sv, sv) << endl;
-    }
-
-    ofs.close();
 }
 
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
