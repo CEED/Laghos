@@ -11,7 +11,7 @@ using namespace mfem;
 
 void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff);
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows = false, const int window = -1);
+void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows = false, const int window = -1);
 
 int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const bool printStatus);
 

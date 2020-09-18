@@ -30,14 +30,14 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows, const int window)
+void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows, const int window)
 {
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
 
-    std::string fullname = (usingWindows) ? "run/sVal" + name + std::to_string(window) + tmp : "run/sVal" + name + tmp;
+    std::string fullname = (usingWindows) ? basename + "/sVal" + name + std::to_string(window) + tmp : basename + "/sVal" + name + tmp;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);

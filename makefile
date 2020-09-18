@@ -26,6 +26,7 @@ Laghos makefile targets:
    make clean-regtest
    make distclean
    make style
+   make regtest
 
 Examples:
 
@@ -118,7 +119,7 @@ include $(CURDIR)/user.mk
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest
+.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest regtest
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -157,6 +158,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
+regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp
+	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
+	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
 
 clean: clean-regtest clean-build
 
@@ -164,13 +169,10 @@ clean-build:
 	rm -rf laghos *.o *~ *.dSYM run merge
 
 clean-exec:
-	rm -f twpTemp.csv
-	rm -rf run/ROMsol/*
-	rm -rf run/ROMoffset/*
-	(cd run && (ls | grep -v 'ROMsol\|ROMoffset' | xargs rm -rf))
+	rm -rf run/*
 
 clean-regtest: clean-exec
-	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
+	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/solutionComparator tests/results
 
 distclean: clean
 	rm -rf bin/
@@ -197,7 +199,4 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
-
 $(shell mkdir -p run)
-$(shell mkdir -p run/ROMsol)
-$(shell mkdir -p run/ROMoffset)

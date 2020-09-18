@@ -7,60 +7,47 @@
 
 using namespace std;
 
-void compareFiles(ifstream &origFile, ifstream &testFile, double errorBound) {
-    string origLine, testLine;
-    double origNum, testNum;
+void compareFiles(ifstream &baselineFile, ifstream &targetFile, double errorBound) {
+    string baselineLine, targetLine;
+    double baselineNum, targetNum;
     int fileLine = 1;
     bool outOfRange;
 
-    while(!origFile.eof()) {
+    while(!baselineFile.eof()) {
         outOfRange = false;
-        getline(origFile, origLine);
-        getline(testFile, testLine);
-        if (origLine == "" || testLine == "") {
-            assert(origLine == testLine || !(cerr << "The files are not the same length. "));
+        getline(baselineFile, baselineLine);
+        getline(targetFile, targetLine);
+        if (baselineLine == "" || targetLine == "") {
+            assert(baselineLine == targetLine || !(cerr << "The files are not the same length." << endl));
             break;
         }
 
-        auto posOfData = origLine.find_last_of(' ');
-        auto stripped = origLine.substr(posOfData != string::npos ? posOfData : 0);
+        auto posOfData = baselineLine.find_last_of(' ');
+        auto stripped = baselineLine.substr(posOfData != string::npos ? posOfData : 0);
+        baselineNum = stod(stripped);
 
-        // If one number underflows/overflows, the number from the other file should as well
-        try {
-            origNum = stod(stripped);
-        }
-        catch (exception& e) {
-            outOfRange = !outOfRange;
-        }
+        posOfData = targetLine.find_last_of(' ');
+        stripped =targetLine.substr(posOfData != string::npos ? posOfData : 0);
+        targetNum = stod(stripped);
 
-        posOfData = testLine.find_last_of(' ');
-        stripped =testLine.substr(posOfData != string::npos ? posOfData : 0);
-
-        try {
-            testNum = stod(stripped);
-        }
-        catch (exception& e) {
-            outOfRange = !outOfRange;
-        }
-
-        // If only one number out of two was out of range, abort
-        if (outOfRange) {
-            cerr << "Error bound was surpassed on line: " << fileLine << ". ";
+        if (abs(baselineNum - targetNum) > errorBound) {
+            cerr << "errorBound = " << errorBound << endl;
+            cerr << "abs(baselineNum - targetNum) = " << abs(baselineNum - targetNum) << endl;
+            cerr << "TargetNum = " << targetNum << ", BaselineNum = " << baselineNum << endl;
+            cerr << "Error bound was surpassed on line: " << fileLine << endl;
             abort();
         }
-        assert(abs(origNum - testNum) <= errorBound || !(cerr << "Error bound was surpassed \
-on line: " << fileLine << ". "));
         fileLine++;
     }
-    assert(testFile.eof() || !(cerr << "The files are not the same length. "));
+    assert(targetFile.eof() || !(cerr << "The files are not the same length." << endl));
 }
 
 int main(int argc, char *argv[]) {
-    ifstream origFile, testFile;
-    origFile.open((string) argv[1]);
-    testFile.open((string) argv[2]);
+    ifstream baselineFile, targetFile;
+    baselineFile.open((string) argv[1]);
+    targetFile.open((string) argv[2]);
     double errorBound = stod(argv[3]);
-    compareFiles(origFile, testFile, errorBound);
+    compareFiles(baselineFile, targetFile, errorBound);
 
     return 0;
 }
