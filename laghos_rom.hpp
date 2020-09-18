@@ -14,8 +14,6 @@ using namespace mfem;
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
-void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg);
-
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                   const bool scalar);
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
@@ -101,10 +99,12 @@ public:
                 tH1size,
                 max_model_dim
             );
+            static_x_options.max_time_intervals = 1;
             CAROM::StaticSVDOptions static_e_options(
                 tL2size,
                 max_model_dim
             );
+            static_e_options.max_time_intervals = 1;
             generator_X = new CAROM::StaticSVDBasisGenerator(
                 static_x_options,
                 BasisFileName(basename, VariableName::X, window, parameterID));
@@ -138,6 +138,7 @@ public:
                 false,
                 true
             );
+            inc_x_options.max_time_intervals = 1;
             CAROM::IncrementalSVDOptions inc_e_options(
                 tL2size,
                 max_model_dim,
@@ -149,6 +150,7 @@ public:
                 false,
                 true
             );
+            inc_e_options.max_time_intervals = 1;
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                 inc_x_options,
                 basename + "/" + ROMBasisName::X + std::to_string(window));

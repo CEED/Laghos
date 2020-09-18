@@ -109,10 +109,10 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp laghos_utils.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_csv.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
 TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
 
 include $(CURDIR)/user.mk
@@ -131,7 +131,7 @@ laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
 merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o merge merge.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
+				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
 all: laghos merge
 
