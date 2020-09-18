@@ -103,25 +103,6 @@ done
 # Create results directory
 RESULTS_DIR=$DIR/results
 
-# If skipping setup, don't set up results directory
-if [[ "$skipSetup" == "false" ]];
-then
-
-	echo "Setting up test suite"
-	echo "For detailed logs of the regression tests, please check tests/results."
-
-	if [ ! -d $RESULTS_DIR ]; then
-	  mkdir -p $RESULTS_DIR;
-	else
-	  rm -rf $RESULTS_DIR/*
-	fi
-
-	# Create regression test log file
-	setupLogFile=${RESULTS_DIR}/setup.log
-	touch $setupLogFile >> $setupLogFile 2>&1
-
-fi
-
 # Save directory of the new Laghos executable
 BASE_DIR=$DIR/..
 
@@ -140,7 +121,21 @@ if [[ "$skipSetup" == "false" ]];
 then
 
 	# Cleaning the regression test directory
-	make clean-regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR"
+	make clean --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" > /dev/null
+
+	echo "Setting up test suite"
+	echo "For detailed logs of the regression tests, please check tests/results."
+
+	if [ ! -d $RESULTS_DIR ]; then
+	  mkdir -p $RESULTS_DIR;
+	else
+	  rm -rf $RESULTS_DIR/*
+	fi
+
+	# Create regression test log file
+	setupLogFile=${RESULTS_DIR}/setup.log
+	touch $setupLogFile >> $setupLogFile 2>&1
+
 	echo "Cleaned the regression test directory and user branch build" >> $setupLogFile 2>&1
 
 	# Compile the C++ comparators
