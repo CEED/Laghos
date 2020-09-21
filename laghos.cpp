@@ -294,7 +294,11 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
                    "Enable or disable parametric offset.");
-    args.AddOption(&romOptions.offsetType, "-rostype", "--romoffsettype", "Offset type for initializing ROM windows.");
+    args.AddOption(&romOptions.offsetType, "-rostype", "--romoffsettype",
+                   "Offset type for initializing ROM windows.\n\t"
+                   "0 -> save and load offset;\n\t"
+                   "1 -> use initial state as offset;\n\t"
+                   "2 -> use solution from previous window as offset");
     args.Parse();
     if (!args.Good())
     {
@@ -311,9 +315,9 @@ int main(int argc, char *argv[])
         const char path_delim = '/';
         std::string::size_type pos = 0;
         do {
-          pos = outputPath.find(path_delim, pos+1);
-          std::string subdir = outputPath.substr(0, pos);
-          mkdir(subdir.c_str(), 0777);
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
