@@ -59,8 +59,15 @@
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
 #include "laghos_rom.hpp"
-#include "laghos_csv.hpp"
+#include "laghos_utils.hpp"
 #include <fstream>
+
+#ifndef _WIN32
+#include <sys/stat.h>  // mkdir
+#else
+#include <direct.h>    // _mkdir
+#define mkdir(dir, mode) _mkdir(dir)
+#endif
 
 using namespace std;
 using namespace mfem;
@@ -152,7 +159,8 @@ int main(int argc, char *argv[])
     int vis_steps = 5;
     bool visit = false;
     bool gfprint = false;
-    const char *basename = "run/results/Laghos";
+    const char *visit_basename = "results/Laghos";
+    const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
     int partition_type = 0;
@@ -224,7 +232,9 @@ int main(int argc, char *argv[])
                    "Enable or disable VisIt visualization.");
     args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                    "Enable or disable result output (files in mfem format).");
-    args.AddOption(&basename, "-k", "--outputfilename",
+    args.AddOption(&basename, "-o", "--outputfilename",
+                   "Name of the sub-folder to dump files within the run directory");
+    args.AddOption(&visit_basename, "-k", "--visitfilename",
                    "Name of the visit dump files");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
@@ -293,9 +303,26 @@ int main(int argc, char *argv[])
         }
         return 1;
     }
+    std::string outputPath = "run";
+    if (std::string(basename) != "") {
+        outputPath += "/" + std::string(basename);
+    }
     if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+          pos = outputPath.find(path_delim, pos+1);
+          std::string subdir = outputPath.substr(0, pos);
+          mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        mkdir((outputPath + "/ROMoffset").c_str(), 0777);
+        mkdir((outputPath + "/ROMsol").c_str(), 0777);
+
         args.PrintOptions(cout);
     }
+
+    romOptions.basename = &outputPath;
 
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
@@ -306,7 +333,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, twpfile, twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -715,7 +742,8 @@ int main(int argc, char *argv[])
     }
 
     // Save data for VisIt visualization.
-    VisItDataCollection visit_dc(basename, pmesh);
+    const char *visit_outputPath = (outputPath + "/" + std::string(visit_basename)).c_str();
+    VisItDataCollection visit_dc(visit_outputPath, pmesh);
     if (visit)
     {
         if (rom_offline || rom_restore)
@@ -761,7 +789,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            outfile_twp.open("twpTemp.csv");
+            outfile_twp.open(outputPath + "/twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
@@ -821,7 +849,7 @@ int main(int argc, char *argv[])
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
-        std::ifstream infile_tw_steps("run/tw_steps");
+        std::ifstream infile_tw_steps(outputPath + "/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
@@ -850,7 +878,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+            std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -903,7 +931,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -931,7 +959,7 @@ int main(int argc, char *argv[])
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
-            outfile_tw_steps.open("run/tw_steps");
+            outfile_tw_steps.open(outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
         if (romOptions.hyperreduce && romOptions.GramSchmidt)
@@ -982,8 +1010,9 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = std::string("run/ROMsol/romS_")+std::to_string(ti);
+                std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
+                outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
                 outfile_romS.close();
 
@@ -1196,7 +1225,7 @@ int main(int argc, char *argv[])
                          << ",\t|e| = " << setprecision(10)
                          << sqrt(tot_norm) << endl;
                     if (last_step) {
-                        std::ofstream outfile("run/num_steps");
+                        std::ofstream outfile(outputPath + "/num_steps");
                         outfile << ti;
                         outfile.close();
                     }
@@ -1240,13 +1269,13 @@ int main(int argc, char *argv[])
                 if (gfprint)
                 {
                     ostringstream mesh_name, rho_name, v_name, e_name;
-                    mesh_name << basename << "_" << ti
+                    mesh_name << visit_outputPath << "_" << ti
                               << "_mesh." << setfill('0') << setw(6) << myid;
-                    rho_name  << basename << "_" << ti
+                    rho_name  << visit_outputPath << "_" << ti
                               << "_rho." << setfill('0') << setw(6) << myid;
-                    v_name << basename << "_" << ti
+                    v_name << visit_outputPath << "_" << ti
                            << "_v." << setfill('0') << setw(6) << myid;
-                    e_name << basename << "_" << ti
+                    e_name << visit_outputPath << "_" << ti
                            << "_e." << setfill('0') << setw(6) << myid;
 
                     ofstream mesh_ofs(mesh_name.str().c_str());
@@ -1315,22 +1344,22 @@ int main(int argc, char *argv[])
 
     if (writeSol)
     {
-        PrintParGridFunction(myid, "run/Sol_Position", &x_gf);
-        PrintParGridFunction(myid, "run/Sol_Velocity", &v_gf);
-        PrintParGridFunction(myid, "run/Sol_Energy", &e_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Position", &x_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Velocity", &v_gf);
+        PrintParGridFunction(myid, outputPath + "/Sol_Energy", &e_gf);
     }
 
     if (solDiff)
     {
         cout << "solDiff mode " << endl;
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Position", &x_gf);
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Velocity", &v_gf);
-        PrintDiffParGridFunction(normtype, myid, "run/Sol_Energy", &e_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", &x_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", &v_gf);
+        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", &e_gf);
     }
 
     if (visitDiffCycle >= 0)
     {
-        VisItDataCollection dc(MPI_COMM_WORLD, "run/results/Laghos", pmesh);
+        VisItDataCollection dc(MPI_COMM_WORLD, outputPath + "/results/Laghos", pmesh);
         dc.Load(visitDiffCycle);
         cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
@@ -1375,19 +1404,12 @@ int main(int argc, char *argv[])
         cout << endl;
         cout << "Energy  diff: " << scientific << setprecision(2)
              << fabs(energy_init - energy_final) << endl;
+
     }
 
-    std::ofstream outfile_e("run/e_gf");
-    e_gf.Print(outfile_e, 1);
-    outfile_e.close();
-
-    std::ofstream outfile_v("run/v_gf");
-    v_gf.Print(outfile_v, 1);
-    outfile_v.close();
-
-    std::ofstream outfile_x("run/x_gf");
-    x_gf.Print(outfile_x, 1);
-    outfile_x.close();
+    PrintParGridFunction(myid, outputPath + "/x_gf", &x_gf);
+    PrintParGridFunction(myid, outputPath + "/v_gf", &v_gf);
+    PrintParGridFunction(myid, outputPath + "/e_gf", &e_gf);
 
     // Print the error.
     // For problems 0 and 4 the exact velocity is constant in time.

@@ -26,6 +26,7 @@ Laghos makefile targets:
    make clean-regtest
    make distclean
    make style
+   make regtest
 
 Examples:
 
@@ -108,17 +109,17 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
-SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp
+SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp laghos_utils.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_csv.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
 TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
 
 include $(CURDIR)/user.mk
 
 # Targets
 
-.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest
+.PHONY: all clean distclean install status info opt debug test style clean-build clean-exec clean-regtest regtest
 
 .SUFFIXES: .c .cpp .o
 .cpp.o:
@@ -130,7 +131,7 @@ laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
 merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o merge merge.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
+				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
 
 all: laghos merge
 
@@ -157,6 +158,10 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
+regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp
+	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
+	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
 
 clean: clean-regtest clean-build
 
@@ -164,13 +169,10 @@ clean-build:
 	rm -rf laghos *.o *~ *.dSYM run merge
 
 clean-exec:
-	rm -f twpTemp.csv
-	rm -rf run/ROMsol/*
-	rm -rf run/ROMoffset/*
-	(cd run && (ls | grep -v 'ROMsol\|ROMoffset' | xargs rm -rf))
+	rm -rf run/*
 
 clean-regtest: clean-exec
-	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/results
+	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/solutionComparator tests/results
 
 distclean: clean
 	rm -rf bin/
@@ -197,7 +199,4 @@ style:
 	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
-
 $(shell mkdir -p run)
-$(shell mkdir -p run/ROMsol)
-$(shell mkdir -p run/ROMoffset)

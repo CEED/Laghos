@@ -1,4 +1,5 @@
 #include "mfem.hpp"
+#include "laghos_utils.hpp"
 
 #include "StaticSVDBasisGenerator.h"
 #include "BasisReader.h"
@@ -6,64 +7,21 @@
 using namespace std;
 using namespace mfem;
 
-
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int& cutoff)
-{
-    const int rom_dim = bg->getSpatialBasis()->numColumns();
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
-
-    double sum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        sum += (*sing_vals)(sv, sv);
-    }
-
-    double partialSum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        partialSum += (*sing_vals)(sv, sv);
-        if (partialSum / sum > energyFraction)
-        {
-            cutoff = sv+1;
-            break;
-        }
-    }
-
-    cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
-}
-
-void PrintSingularValues(const int rank, const std::string& name, const bool usingWindows, const int window, CAROM::SVDBasisGenerator* bg)
-{
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = (usingWindows) ? "run/sVal" + name + std::to_string(window) + tmp : "run/sVal" + name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        ofs << (*sing_vals)(sv, sv) << endl;
-    }
-
-    ofs.close();
-}
-
-void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& varName,
+void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
                     const bool usingWindows, const int window, const int dim, const int totalSamples, int& cutoff)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
 
-    std::string basis_filename = "run/basis" + varName + std::to_string(window);
-    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(CAROM::StaticSVDOptions(dim, totalSamples), basis_filename));
+    std::string basis_filename = basename + "/basis" + varName + std::to_string(window);
+    CAROM::StaticSVDOptions static_svd_options(dim, totalSamples);
+    static_svd_options.max_time_intervals = 1;
+    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
 
     cout << "Loading snapshots for " << varName << " in time window " << window << endl;
 
     for (int i=0; i<nsets; ++i)
     {
-        std::string filename = "run/param" + std::to_string(i) + "_var" + varName + std::to_string(window) + "_snapshot";
+        std::string filename = basename + "/param" + std::to_string(i) + "_var" + varName + std::to_string(window) + "_snapshot";
         basis_generator->loadSamples(filename,"snapshot");
     }
 
@@ -77,74 +35,19 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     {
         cout << varName << " basis summary output: ";
         BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff);
-        PrintSingularValues(rank, varName, usingWindows, window, basis_generator.get());
+        PrintSingularValues(rank, basename, varName, basis_generator.get(), usingWindows, window);
     }
 }
 
 // id is snapshot index, 0-based
-void GetSnapshotDim(const int id, const std::string& varName, const int window, int& varDim, int& numSnapshots)
+void GetSnapshotDim(const int id, const std::string& basename, const std::string& varName, const int window, int& varDim, int& numSnapshots)
 {
-    std::string filename = "run/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + "_snapshot";
+    std::string filename = basename + "/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + "_snapshot";
 
     CAROM::BasisReader reader(filename);
     const CAROM::Matrix *S = reader.getSnapshotMatrix(0.0);
     varDim = S->numRows();
     numSnapshots = S->numColumns();
-}
-
-int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const bool printStatus)
-{
-    if (printStatus) cout << "Reading time windows from file " << twfile << endl;
-
-    std::ifstream ifs(twfile.c_str());
-
-    if (!ifs.is_open())
-    {
-        cout << "Error: invalid file" << endl;
-        return 1;  // invalid file
-    }
-
-    twep.SetSize(nw);
-
-    string line, word;
-    int count = 0;
-    while (getline(ifs, line))
-    {
-        if (count >= nw)
-        {
-            cout << "Error reading CSV file. Read more than " << nw << " lines" << endl;
-            ifs.close();
-            return 3;
-        }
-
-        stringstream s(line);
-        vector<string> row;
-
-        while (getline(s, word, ','))
-            row.push_back(word);
-
-        if (row.size() != 1)
-        {
-            cout << "Error: CSV file does not specify exactly 1 parameter" << endl;
-            ifs.close();
-            return 2;  // incorrect number of parameters
-        }
-
-        twep[count] = stod(row[0]);
-
-        if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << endl;
-        count++;
-    }
-
-    ifs.close();
-
-    if (count != nw)
-    {
-        cout << "Error reading CSV file. Read " << count << " lines but expected " << nw << endl;
-        return 3;
-    }
-
-    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -158,6 +61,7 @@ int main(int argc, char *argv[])
     int numWindows = 0;
     double energyFraction = 0.9999;
     bool rhsBasis = false;
+    const char *basename = "";
     const char *twfile = "tw.csv";
 
     OptionsParser args(argc, argv);
@@ -166,6 +70,8 @@ int main(int argc, char *argv[])
     args.AddOption(&energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
+    args.AddOption(&basename, "-o", "--outputfilename",
+                   "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
 
@@ -180,6 +86,10 @@ int main(int argc, char *argv[])
     if (mpi.Root()) {
         args.PrintOptions(cout);
     }
+    std::string outputPath = "run";
+    if (basename != "") {
+        outputPath += "/" + std::string(basename);
+    }
 
     const bool usingWindows = (numWindows > 0); // TODO: Tony PR77 || windowNumSamples > 0);
     Array<double> twep;
@@ -189,7 +99,7 @@ int main(int argc, char *argv[])
     if (usingWindows) {
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        outfile_twp.open("twpTemp.csv");
+        outfile_twp.open(outputPath + "/twpTemp.csv");
     }
     else {
         numWindows = 1;
@@ -202,19 +112,19 @@ int main(int argc, char *argv[])
 
     for (int t=0; t<numWindows; ++t)
     {
-        GetSnapshotDim(0, "X", t, dimX, snapshotSize[0]);
+        GetSnapshotDim(0, outputPath, "X", t, dimX, snapshotSize[0]);
         {
             int dummy = 0;
-            GetSnapshotDim(0, "V", t, dimV, dummy);
+            GetSnapshotDim(0, outputPath, "V", t, dimV, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
-            GetSnapshotDim(0, "E", t, dimE, dummy);
+            GetSnapshotDim(0, outputPath, "E", t, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
             if (rhsBasis)
             {
-                GetSnapshotDim(0, "Fv", t, dimFv, snapshotSizeFv[0]);
+                GetSnapshotDim(0, outputPath, "Fv", t, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
-                GetSnapshotDim(0, "Fe", t, dimFe, snapshotSizeFe[0]);
+                GetSnapshotDim(0, outputPath, "Fe", t, dimFe, snapshotSizeFe[0]);
                 MFEM_VERIFY(dummy >= snapshotSize[0], "Inconsistent snapshot sizes");
             }
         }
@@ -230,18 +140,18 @@ int main(int argc, char *argv[])
         {
             int dummy = 0;
             int dim = 0;
-            GetSnapshotDim(i, "X", t, dim, snapshotSize[i]);
+            GetSnapshotDim(i, outputPath, "X", t, dim, snapshotSize[i]);
             MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
-            GetSnapshotDim(i, "V", t, dim, dummy);
+            GetSnapshotDim(i, outputPath, "V", t, dim, dummy);
             MFEM_VERIFY(dim == dimV && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
-            GetSnapshotDim(i, "E", t, dim, dummy);
+            GetSnapshotDim(i, outputPath, "E", t, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[i], "Inconsistent snapshot sizes");
 
             if (rhsBasis)
             {
-                GetSnapshotDim(i, "Fv", t, dim, snapshotSizeFv[i]);
+                GetSnapshotDim(i, outputPath, "Fv", t, dim, snapshotSizeFv[i]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
-                GetSnapshotDim(i, "Fe", t, dim, snapshotSizeFe[i]);
+                GetSnapshotDim(i, outputPath, "Fe", t, dim, snapshotSizeFe[i]);
                 MFEM_VERIFY(dim == dimE && snapshotSizeFe[i] >= snapshotSize[i], "Inconsistent snapshot sizes");
             }
 
@@ -250,14 +160,14 @@ int main(int argc, char *argv[])
             totalSnapshotSizeFe += snapshotSizeFe[i];
         }
 
-        LoadSampleSets(myid, energyFraction, nset, "X", usingWindows, t, dimX, totalSnapshotSize, cutoff[0]);
-        LoadSampleSets(myid, energyFraction, nset, "V", usingWindows, t, dimV, totalSnapshotSize, cutoff[1]);
-        LoadSampleSets(myid, energyFraction, nset, "E", usingWindows, t, dimE, totalSnapshotSize, cutoff[2]);
+        LoadSampleSets(myid, energyFraction, nset, outputPath, "X", usingWindows, t, dimX, totalSnapshotSize, cutoff[0]);
+        LoadSampleSets(myid, energyFraction, nset, outputPath, "V", usingWindows, t, dimV, totalSnapshotSize, cutoff[1]);
+        LoadSampleSets(myid, energyFraction, nset, outputPath, "E", usingWindows, t, dimE, totalSnapshotSize, cutoff[2]);
 
         if (rhsBasis)
         {
-            LoadSampleSets(myid, energyFraction, nset, "Fv", usingWindows, t, dimV, totalSnapshotSizeFv, cutoff[3]);
-            LoadSampleSets(myid, energyFraction, nset, "Fe", usingWindows, t, dimE, totalSnapshotSizeFe, cutoff[4]);
+            LoadSampleSets(myid, energyFraction, nset, outputPath, "Fv", usingWindows, t, dimV, totalSnapshotSizeFv, cutoff[3]);
+            LoadSampleSets(myid, energyFraction, nset, outputPath, "Fe", usingWindows, t, dimE, totalSnapshotSizeFe, cutoff[4]);
         }
 
         if (myid == 0 && usingWindows)
