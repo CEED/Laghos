@@ -1126,7 +1126,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
     if (mergeXV)
         basisX = basisV;
     else
-      basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
 
     if (RHSbasis)
     {

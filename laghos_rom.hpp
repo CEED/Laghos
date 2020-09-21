@@ -78,7 +78,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID),
-	  basename(*input.basename), Voffset(!input.mergeXV)
+          basename(*input.basename), Voffset(!input.mergeXV)
     {
         const int window = input.window;
 
