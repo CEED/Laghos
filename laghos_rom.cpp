@@ -1,4 +1,5 @@
 #include "laghos_rom.hpp"
+#include "laghos_utils.hpp"
 
 #include "DEIM.h"
 #include "SampleMesh.hpp"
@@ -49,10 +50,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapX.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_X->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleV = generator_V->isNextSample(t);
@@ -78,6 +75,21 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
             generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+
+            if (sampleF)
+            {
+                MFEM_VERIFY(gfH1.Size() == H1size, "");
+                for (int i=0; i<H1size; ++i)
+                    gfH1[i] = dSdt[H1size + i];  // Fv
+
+                gfH1.GetTrueDofs(Xdiff);
+                addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+                if (writeSnapshots && addSampleF)
+                {
+                    tSnapFv.push_back(t);
+                }
+            }
         }
         else
         {
@@ -108,10 +120,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapV.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_V->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -134,6 +142,21 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
+
+            if (sampleF)
+            {
+                MFEM_VERIFY(gfL2.Size() == L2size, "");
+                for (int i=0; i<L2size; ++i)
+                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+                gfL2.GetTrueDofs(Ediff);
+                addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+                if (writeSnapshots && addSampleF)
+                {
+                    tSnapFe.push_back(t);
+                }
+            }
         }
         else
         {
@@ -165,36 +188,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         {
             tSnapE.push_back(t);
         }
-
-        // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-        // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-        MFEM_VERIFY(generator_E->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
     }
-}
-
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff)
-{
-    const int rom_dim = bg->getSpatialBasis()->numColumns();
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
-
-    double sum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        sum += (*sing_vals)(sv, sv);
-    }
-
-    double partialSum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        partialSum += (*sing_vals)(sv, sv);
-        if (partialSum / sum > energyFraction)
-        {
-            cutoff = sv+1;
-            break;
-        }
-    }
-
-    cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
 void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var)
@@ -240,15 +234,15 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     {
         cout << "X basis summary output: ";
         BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
-        PrintSingularValues(rank, "X", generator_X);
+        PrintSingularValues(rank, basename, "X", generator_X);
 
         cout << "V basis summary output: ";
         BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-        PrintSingularValues(rank, "V", generator_V);
+        PrintSingularValues(rank, basename, "V", generator_V);
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
-        PrintSingularValues(rank, "E", generator_E);
+        PrintSingularValues(rank, basename, "E", generator_E);
 
         if (sampleF)
         {
@@ -262,7 +256,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0 && writeSnapshots)
     {
-        std::string path_tSnap = "run/param" + std::to_string(parameterID) + "_tSnap";
+        std::string path_tSnap = basename + "/param" + std::to_string(parameterID) + "_tSnap";
 
         printSnapshotTime(tSnapX, path_tSnap, "X");
         printSnapshotTime(tSnapV, path_tSnap, "V");
@@ -325,9 +319,10 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
-      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis),
-      useGramSchmidt(input.GramSchmidt), RK2AvgFormulation(input.RK2AvgSolver),
+      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), Voffset(!input.mergeXV)
+
 {
     if (mergeXV) rdimx = rdimv;
 
@@ -418,9 +413,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         }
         else
         {
-            initX->read("run/ROMoffset/initX" + std::to_string(input.window));
-            initV->read("run/ROMoffset/initV" + std::to_string(input.window));
-            initE->read("run/ROMoffset/initE" + std::to_string(input.window));
+            initX->read(basename + "/ROMoffset/initX" + std::to_string(input.window));
+            initV->read(basename + "/ROMoffset/initV" + std::to_string(input.window));
+            initE->read(basename + "/ROMoffset/initE" + std::to_string(input.window));
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
@@ -875,7 +870,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         if (printSampleMesh)
         {
             ostringstream mesh_name;
-            mesh_name << "run/smesh." << setfill('0') << setw(6) << rank;
+            mesh_name << basename + "/smesh." << setfill('0') << setw(6) << rank;
 
             ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
@@ -1125,18 +1120,18 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    basisV = ReadBasisROM(rank, ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
-    basisE = ReadBasisROM(rank, ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+    basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
 
     if (mergeXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+      basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
 
     if (RHSbasis)
     {
-        basisFv = ReadBasisROM(rank, ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
     }
 }
 
@@ -1987,25 +1982,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     }
 
     t += dt;
-}
-
-void PrintSingularValues(const int rank, const std::string& name, CAROM::SVDBasisGenerator* bg)
-{
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = "run/sVal" + name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        ofs << (*sing_vals)(sv, sv) << endl;
-    }
-
-    ofs.close();
 }
 
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
