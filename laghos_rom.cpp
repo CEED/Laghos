@@ -97,25 +97,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
         }
 
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfH1.Size() == H1size, "");
-            for (int i=0; i<H1size; ++i)
-                gfH1[i] = dSdt[H1size + i];  // Fv
-
-            gfH1.GetTrueDofs(Xdiff);
-            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFv.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fv->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-
         if (writeSnapshots && addSample)
         {
             tSnapV.push_back(t);
@@ -163,26 +144,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             addSample = generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(gfL2.Size() == L2size, "");
-            for (int i=0; i<L2size; ++i)
-                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-            gfL2.GetTrueDofs(Ediff);
-            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFe.push_back(t);
-            }
-
-            // Without this check, libROM may use multiple time intervals, and without appropriate implementation
-            // the basis will be from just one interval, resulting in large errors and difficulty in debugging.
-            MFEM_VERIFY(generator_Fe->getNumBasisTimeIntervals() <= 1, "Only 1 basis time interval allowed");
-        }
-
 
         if (writeSnapshots && addSample)
         {
