@@ -17,7 +17,14 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     static_svd_options.max_time_intervals = 1;
     basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
 
-    cout << "Loading snapshots for " << varName << " in time window " << window << endl;
+    if (usingWindows)
+    {
+        cout << "Loading snapshots for " << varName << " in time window " << window << endl;
+    }
+    else
+    {
+        cout << "Loading snapshots for " << varName << endl;
+    }
 
     for (int i=0; i<nsets; ++i)
     {
@@ -25,10 +32,14 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
         basis_generator->loadSamples(filename,"snapshot");
     }
 
-    //cout << "Saving data uploaded as a snapshot" << endl;
-    //basis_generator->writeSnapshot();
-
-    cout << "Computing SVD for " << varName << " in time window " << window << endl;
+    if (usingWindows)
+    {
+        cout << "Computing SVD for " << varName << " in time window " << window << endl;
+    }
+    else
+    {
+        cout << "Computing SVD for " << varName << endl;
+    }
     basis_generator->endSamples();  // save the basis file
 
     if (rank == 0)
