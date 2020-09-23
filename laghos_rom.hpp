@@ -201,8 +201,8 @@ public:
             if (input.offsetType == 1 && input.window > 0)
             {
                 initX->read(path_init + "X0");
-                initE->read(path_init + "E0");
                 initV->read(path_init + "V0");
+                initE->read(path_init + "E0");
             }
             else
             {

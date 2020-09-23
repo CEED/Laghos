@@ -334,25 +334,19 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         // std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
         std::string path_init = basename + "/ROMoffset/init";
 
-        if (input.offsetType == 1 && input.window > 0)
+        if (input.restore || (input.offsetType == 0 && !input.paramOffset))
         {
-            initX->read(path_init + "X0");
-            initV->read(path_init + "V0");
-            initE->read(path_init + "E0");
-
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
-        }
-        else if (input.restore || (input.offsetType == 0 && !input.paramOffset))
-        {
+            // Restore phase OR Online phase rostype 0: Read the saved offsets
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else if (input.offsetType == 0)
+        else if (input.offsetType == 0 && input.paramOffset)
         {
             // TODO: Tony interpolation PR 77
+            // Online phase rostype 0 parametric: Read the saved offsets and interpolate
             Vector X, V, E;
 
             for (int i=0; i<H1size; ++i)
@@ -389,8 +383,18 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
         }
-        else // online phase, type 1 window 0 or type 2
+        else if (input.offsetType == 1 && input.window > 0)
         {
+            // Online phase rostype 1 time window > 0: Read the initial state
+            initX->read(path_init + "X0");
+            initV->read(path_init + "V0");
+            initE->read(path_init + "E0");
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
+        else
+        {
+            // Online phase rostype 1 time window 0 OR Online phase rostype 2: Compute and save offsets
             Vector X, V, E;
 
             for (int i=0; i<H1size; ++i)
