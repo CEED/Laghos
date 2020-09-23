@@ -268,6 +268,8 @@ int main(int argc, char *argv[])
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
     args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
+    args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
+                   "Energy fraction for recommended X ROM basis size.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
@@ -296,6 +298,8 @@ int main(int argc, char *argv[])
                    "Enable or disable parametric offset.");
     args.AddOption(&romOptions.mergeXV, "-romxv", "--rommergexv", "-no-romxv", "--no-rommergexv",
                    "Enable or disable merging of X-X0 and V bases.");
+    args.AddOption(&romOptions.mergeVX, "-romvx", "--rommergevx", "-no-romvx", "--no-rommergevx",
+                   "Enable or disable merging of X-X0 and V bases.");
     args.Parse();
     if (!args.Good())
     {
@@ -323,7 +327,10 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
 
+    MFEM_VERIFY(!(romOptions.mergeXV && romOptions.mergeVX), "");
+
     if (romOptions.mergeXV) romOptions.dimX = romOptions.dimV;
+    if (romOptions.mergeVX) romOptions.dimV = romOptions.dimX;
 
     romOptions.basename = &outputPath;
 

@@ -191,7 +191,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     if (rank == 0 && !writeSnapshots)
     {
         cout << "X basis summary output: ";
-        BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
+        BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
         PrintSingularValues(rank, basename, "X", generator_X);
 
         cout << "V basis summary output: ";
@@ -279,9 +279,12 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
-      mergeXV(input.mergeXV), Voffset(!input.mergeXV)
+      mergeXV(input.mergeXV), mergeVX(input.mergeVX), Voffset(!input.mergeXV && !input.mergeVX)
 {
+    MFEM_VERIFY(!(input.mergeXV && input.mergeVX), "");
+
     if (mergeXV) rdimx = rdimv;
+    if (mergeVX) rdimv = rdimx;
 
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -1077,13 +1080,18 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+    if (!mergeVX)
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+
     basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
 
     if (mergeXV)
         basisX = basisV;
     else
         basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+
+    if (mergeVX)
+        basisV = basisX;
 
     if (RHSbasis)
     {

@@ -44,6 +44,7 @@ struct ROM_Options
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
+    double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = 0; // index of parameters chosen for this Laghos simulation
@@ -67,6 +68,7 @@ struct ROM_Options
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
 
     bool mergeXV = false; // If true, use V basis for X-X0.
+    bool mergeVX = false; // If true, use X-X0 basis for V.
 };
 
 class ROM_Sampler
@@ -77,8 +79,8 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0), parameterID(input.parameterID),
-          basename(*input.basename), Voffset(!input.mergeXV)
+          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.mergeXV && !input.mergeVX)
     {
         const int window = input.window;
 
@@ -229,6 +231,7 @@ private:
 
     const int rank;
     double energyFraction;
+    double energyFraction_X;
 
     const int parameterID;
     const bool writeSnapshots;
@@ -335,7 +338,7 @@ public:
         delete rV;
         delete rE;
         delete basisX;
-        if (!mergeXV) delete basisV;
+        if (!mergeXV && !mergeVX) delete basisV;
         delete basisE;
         delete basisFv;
         delete basisFe;
@@ -445,6 +448,7 @@ private:
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
     const bool mergeXV;  // If true, use V basis for X-X0.
+    const bool mergeVX;  // If true, use X-X0 for V.
 
     const int H1size;
     const int L2size;
