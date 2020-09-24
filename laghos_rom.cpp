@@ -21,6 +21,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         lhoper->Mult(S, dSdt);
     }
 
+    // TODO: do not sample X or V depending on useXV and useVX
+
     if (sampleX)
     {
         if (rank == 0)
@@ -279,12 +281,13 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
-      mergeXV(input.mergeXV), mergeVX(input.mergeVX), Voffset(!input.mergeXV && !input.mergeVX)
+      mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+      energyFraction_X(input.energyFraction_X)
 {
-    MFEM_VERIFY(!(input.mergeXV && input.mergeVX), "");
+    MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
-    if (mergeXV) rdimx = rdimv;
-    if (mergeVX) rdimv = rdimx;
+    if (useXV) rdimx = rdimv;
+    if (useVX) rdimv = rdimx;
 
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -1080,23 +1083,79 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    if (!mergeVX)
+    if (!useVX)
         basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
 
     basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
 
-    if (mergeXV)
+    if (useXV)
         basisX = basisV;
     else
         basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
 
-    if (mergeVX)
+    if (useVX)
         basisV = basisX;
 
     if (RHSbasis)
     {
         basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
         basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+    }
+
+    if (mergeXV)
+    {
+        const int max_model_dim = basisX->numColumns() + basisV->numColumns();
+        CAROM::StaticSVDOptions static_x_options(tH1size, max_model_dim);
+        static_x_options.max_time_intervals = 1;
+
+        CAROM::StaticSVDBasisGenerator generator_XV(static_x_options);
+
+        Vector Bej(basisX->numRows());  // owns its data
+        MFEM_VERIFY(Bej.Size() == tH1size, "");
+
+        CAROM::Vector ej(basisX->numColumns(), false);
+        CAROM::Vector CBej(Bej.GetData(), basisX->numRows(), true, false);  // data owned by Bej
+        ej = 0.0;
+        for (int j=0; j<basisX->numColumns(); ++j)
+        {
+            ej(j) = 1.0;
+            basisX->mult(ej, CBej);
+
+            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            MFEM_VERIFY(addSample, "Sample not added");
+
+            ej(j) = 0.0;
+        }
+
+        ej.setSize(basisV->numColumns());
+        ej = 0.0;
+
+        for (int j=0; j<basisV->numColumns(); ++j)
+        {
+            ej(j) = 1.0;
+            basisV->mult(ej, CBej);
+
+            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            MFEM_VERIFY(addSample, "Sample not added");
+
+            ej(j) = 0.0;
+        }
+
+        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, false);
+        rdimv = rdimx;
+
+        cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
+             << " and merged X-X0 and V bases with resulting dimension " << rdimx << endl;
+
+        delete basisX;
+        delete basisV;
+
+        const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
+
+        // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
+        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
+        MFEM_VERIFY(basisX->numRows() == tH1size, "");
+        basisV = basisX;
     }
 }
 

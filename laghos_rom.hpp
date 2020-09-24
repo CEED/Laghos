@@ -67,8 +67,10 @@ struct ROM_Options
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
 
-    bool mergeXV = false; // If true, use V basis for X-X0.
-    bool mergeVX = false; // If true, use X-X0 basis for V.
+    bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
+
+    bool useXV = false; // If true, use V basis for X-X0.
+    bool useVX = false; // If true, use X-X0 basis for V.
 };
 
 class ROM_Sampler
@@ -80,7 +82,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
-          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.mergeXV && !input.mergeVX)
+          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV)
     {
         const int window = input.window;
 
@@ -338,7 +340,7 @@ public:
         delete rV;
         delete rE;
         delete basisX;
-        if (!mergeXV && !mergeVX) delete basisV;
+        if (!useXV && !useVX && !mergeXV) delete basisV;
         delete basisE;
         delete basisFv;
         delete basisFe;
@@ -447,8 +449,9 @@ private:
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
-    const bool mergeXV;  // If true, use V basis for X-X0.
-    const bool mergeVX;  // If true, use X-X0 for V.
+    const bool useXV;  // If true, use V basis for X-X0.
+    const bool useVX;  // If true, use X-X0 for V.
+    const bool mergeXV;  // If true, merge bases for X-X0 and V.
 
     const int H1size;
     const int L2size;
@@ -523,6 +526,8 @@ private:
     CAROM::Matrix *BXXinv = NULL;
     CAROM::Matrix *BVVinv = NULL;
     CAROM::Matrix *BEEinv = NULL;
+
+    double energyFraction_X;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };
