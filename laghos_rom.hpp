@@ -82,7 +82,8 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
-          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV)
+          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+          useXV(input.useXV), useVX(input.useVX)
     {
         const int window = input.window;
 
@@ -255,6 +256,8 @@ private:
     const bool sampleF;
 
     const bool Voffset;
+    const bool useXV;
+    const bool useVX;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 

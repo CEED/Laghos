@@ -21,9 +21,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         lhoper->Mult(S, dSdt);
     }
 
-    // TODO: do not sample X or V depending on useXV and useVX
-
-    if (sampleX)
+    if (sampleX && !useXV)
     {
         if (rank == 0)
         {
@@ -61,27 +59,35 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     if (sampleV)
     {
-        if (rank == 0)
+        if (!useVX)
         {
-            cout << "V taking sample at t " << t << endl;
-        }
-
-        bool addSample, addSampleF;
-
-        if (offsetInit && Voffset)
-        {
-            for (int i=0; i<tH1size; ++i)
+            if (rank == 0)
             {
-                Xdiff[i] = V[i] - (*initV)(i);
+                cout << "V taking sample at t " << t << endl;
             }
 
-            addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
-            generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
-        }
-        else
-        {
-            addSample = generator_V->takeSample(V.GetData(), t, dt);
-            generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+            bool addSample;
+
+            if (offsetInit && Voffset)
+            {
+                for (int i=0; i<tH1size; ++i)
+                {
+                    Xdiff[i] = V[i] - (*initV)(i);
+                }
+
+                addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
+                generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+            }
+            else
+            {
+                addSample = generator_V->takeSample(V.GetData(), t, dt);
+                generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+            }
+
+            if (writeSnapshots && addSample)
+            {
+                tSnapV.push_back(t);
+            }
         }
 
         if (sampleF)
@@ -91,17 +97,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 gfH1[i] = dSdt[H1size + i];  // Fv
 
             gfH1.GetTrueDofs(Xdiff);
-            addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+            bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
 
             if (writeSnapshots && addSampleF)
             {
                 tSnapFv.push_back(t);
             }
-        }
-
-        if (writeSnapshots && addSample)
-        {
-            tSnapV.push_back(t);
         }
     }
 
@@ -169,8 +170,8 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 {
     if (writeSnapshots)
     {
-        generator_X->writeSnapshot();
-        generator_V->writeSnapshot();
+        if (!useXV) generator_X->writeSnapshot();
+        if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
         if (sampleF)
         {
@@ -180,8 +181,8 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     }
     else
     {
-        generator_X->endSamples();
-        generator_V->endSamples();
+        if (!useXV) generator_X->endSamples();
+        if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
         if (sampleF)
         {
@@ -192,13 +193,19 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0 && !writeSnapshots)
     {
-        cout << "X basis summary output: ";
-        BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
-        PrintSingularValues(rank, basename, "X", generator_X);
+        if (!useXV)
+        {
+            cout << "X basis summary output: ";
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
+            PrintSingularValues(rank, basename, "X", generator_X);
+        }
 
-        cout << "V basis summary output: ";
-        BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-        PrintSingularValues(rank, basename, "V", generator_V);
+        if (!useVX)
+        {
+            cout << "V basis summary output: ";
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
+            PrintSingularValues(rank, basename, "V", generator_V);
+        }
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
