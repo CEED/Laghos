@@ -8,6 +8,6 @@ case $subTestNum in
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.05 -online -romsvds -romos -sfacx 10 -sfacv 10 -sface 10 -soldiff -romsrhs -romgs -romhr -rdimx 66 -rdime 20 -rdimfv 114 -rdimfe 40 -romvx
     ;;
   3)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -romsrhs
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -romsrhs -rdimx 66 -rdime 20 -romvx
     ;;
 esac
