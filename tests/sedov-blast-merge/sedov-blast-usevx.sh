@@ -1,4 +1,4 @@
-NUM_PARALLEL_PROCESSORS=4
+NUM_PARALLEL_PROCESSORS=2
 testNames=(offline romhr restore)
 case $subTestNum in
   1)
