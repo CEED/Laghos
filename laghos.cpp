@@ -817,8 +817,8 @@ int main(int argc, char *argv[])
 
     if (!usingWindows)
     {
-        if (romOptions.sampX == 0) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0) romOptions.sampV = sFactorV * romOptions.dimV;
+        if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimV;
         if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimE;
     }
 
@@ -842,7 +842,7 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
 
         if (romOptions.mergeXV)
         {
@@ -880,9 +880,9 @@ int main(int argc, char *argv[])
                 romOptions.dimFv = twparam(romOptions.window,3);
                 romOptions.dimFe = twparam(romOptions.window,4);
             }
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
         } else {
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
         }
         if (romOptions.mergeXV)
         {
@@ -950,7 +950,7 @@ int main(int argc, char *argv[])
                 }
                 basis->LiftROMtoFOM(romS, S);
                 delete basis;
-                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
                 if (romOptions.mergeXV)
                 {
                     romOptions.dimX = basis->GetDimX();
@@ -1215,7 +1215,7 @@ int main(int argc, char *argv[])
                     }
                     delete basis;
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
                     if (romOptions.mergeXV)
                     {
                         romOptions.dimX = basis->GetDimX();

@@ -335,7 +335,7 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_);
+    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV);
 
     ~ROM_Basis()
     {

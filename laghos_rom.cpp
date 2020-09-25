@@ -280,7 +280,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
+ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
@@ -328,6 +328,13 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
     mfL2.SetSize(tL2size);
 
     ReadSolutionBases(input.window);
+
+    if (mergeXV)
+    {
+        // Update number of samples based on changed rdimx and rdimv.
+        numSamplesX = sFactorX * rdimx;
+        numSamplesV = sFactorV * rdimv;
+    }
 
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);
