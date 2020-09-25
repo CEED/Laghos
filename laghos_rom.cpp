@@ -1591,7 +1591,7 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 
         BsinvX->mult(*rV, *rX);
         for (int i=0; i<rdimx; ++i)
-            y[i] = (*rX)(i) + (*BX0)(i);
+            y[i] = offsetInit ? (*rX)(i) + (*BX0)(i) : (*rX)(i);
     }
 }
 
