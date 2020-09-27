@@ -226,7 +226,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
-   qupdate(dim, NE, Q1D, visc, cfl, &timer, gamma_gf, ir, H1, L2),
+   qupdate(nullptr),
    X(H1c.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
@@ -244,6 +244,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    if (p_assembly)
    {
+      qupdate = new QUpdate(dim, NE, Q1D, visc, cfl,
+                            &timer, gamma_gf, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
       VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
       EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
@@ -294,7 +296,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-   if (dim > 1) { Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol); }
+   if (dim > 1 && p_assembly)
+   {
+      Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol);
+   }
    else
    {
       const int NQ = ir.GetNPoints();
@@ -362,6 +367,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
+   delete qupdate;
    if (p_assembly)
    {
       delete EMassPA;
@@ -696,7 +702,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
-   if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata); }
+   if (dim > 1 && p_assembly) { return qupdate->UpdateQuadratureData(S, qdata); }
 
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
