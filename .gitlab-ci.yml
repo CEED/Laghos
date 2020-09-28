@@ -4,8 +4,6 @@ test:
         - shell
     script:
         - cd rom
-	- cp $CI_BUILDS_DIR/$CI_PROJECT_NAME/user.mk $CI_PROJECT_DIR/rom/user.mk
-        - make LIBS_DIR=$CI_BUILDS_DIR/$CI_PROJECT_NAME/env
-        - make merge LIBS_DIR=$CI_BUILDS_DIR/$CI_PROJECT_NAME/env
+	- make setup
         - ./tests/runRegressionTests.sh
     allow_failure: true
