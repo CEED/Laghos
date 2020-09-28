@@ -45,11 +45,5 @@ cd $LIB_DIR
 if [ ! -d "libROM" ]; then
   git clone https://github.com/LLNL/libROM.git
   cd libROM
-  if [ "$(uname)" == "Darwin" ]; then
-      cd build
-      cmake ..
-      make
-  elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-      ./scripts/laghos_compile.sh
-  fi
+  ./scripts/laghos_compile.sh
 fi
