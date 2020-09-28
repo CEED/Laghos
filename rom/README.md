@@ -63,12 +63,6 @@ necessary operations. As the local action is defined by utilizing the tensor
 structure of the finite element spaces, the amount of data storage, memory
 transfers, and FLOPs are lower (especially for higher orders).
 
-The Laghos implementation includes support for hardware devices, such
-as GPUs, and programming models, such as CUDA, OCCA, RAJA and OpenMP,
-based on [MFEM](http://mfem.org), version 4.1 or later. These device
-backends are selectable at runtime, see the `-d/--device` command-line
-option.
-
 Other computational motives in Laghos include the following:
 
 - Support for unstructured meshes, in 2D and 3D, with quadrilateral and
@@ -99,9 +93,9 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 609.
+  starting around line 488.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 544 of `laghos.cpp`
+  the class `LagrangianHydroOperator`, defined around line 424 of `laghos.cpp`
   and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
@@ -126,7 +120,7 @@ Other computational motives in Laghos include the following:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
+- *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
    https://computation.llnl.gov/casc/hypre/software.html
 
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
@@ -139,16 +133,16 @@ To build the miniapp, first download *hypre* and METIS from the links above
 and put everything on the same level as the `Laghos` directory:
 ```sh
 ~> ls
-Laghos/  hypre-2.11.2.tar.gz  metis-4.0.3.tar.gz
+Laghos/  hypre-2.10.0b.tar.gz  metis-4.0.tar.gz
 ```
 
 Build *hypre*:
 ```sh
-~> tar -zxvf hypre-2.11.2.tar.gz
-~> cd hypre-2.11.2/src/
-~/hypre-2.11.2/src> ./configure --disable-fortran
-~/hypre-2.11.2/src> make -j
-~/hypre-2.11.2/src> cd ../..
+~> tar -zxvf hypre-2.10.0b.tar.gz
+~> cd hypre-2.10.0b/src/
+~/hypre-2.10.0b/src> ./configure --disable-fortran
+~/hypre-2.10.0b/src> make -j
+~/hypre-2.10.0b/src> cd ../..
 ```
 For large runs (problem size above 2 billion unknowns), add the
 `--enable-bigint` option to the above `configure` line.
@@ -168,12 +162,14 @@ Clone and build the parallel version of MFEM:
 ```sh
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
-~/mfem> git checkout master
+~/mfem> git checkout laghos-v2.0
 ~/mfem> make parallel -j
 ~/mfem> cd ..
 ```
-The above uses the `master` branch of MFEM.
-See the [MFEM building page](http://mfem.org/building/) for additional details.
+The above uses the `laghos-v2.0` tag of MFEM, which is guaranteed to work with
+Laghos v2.0. Alternatively, one can use the latest versions of the MFEM and
+Laghos `master` branches (provided there are no conflicts). See the [MFEM
+building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
 ```sh
@@ -189,13 +185,10 @@ to the GLVis socket.
 Build Laghos
 ```sh
 ~> cd Laghos/
-~/Laghos> make -j
+~/Laghos> make
 ```
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
-
-See also the `make setup` target that can be used to automated the
-download and building of hypre, METIS and MFEM.
 
 ## Running
 
@@ -206,8 +199,8 @@ partial assembly option (`-pa`).
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
-mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
+mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
+mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -vis -pa
 ```
 
 The latter produces the following density plot (notice the `-vis` option)
@@ -223,9 +216,9 @@ evaluation. (Viscosity can still be activated for these problems with the
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.5 -pa
-mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.25 -pa
-mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
+mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -pa
+mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.25 -pa
+mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
 ```
 
 The latter produce the following velocity magnitude plots (notice the `-vis` option)
@@ -242,8 +235,8 @@ vorticity, thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
+mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
+mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -vis -pa
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
@@ -255,36 +248,25 @@ The latter produces the following specific internal energy plot (notice the `-vi
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa`
-4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa`
-5. `mpirun -np 8 ./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa`
-6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
-8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
+1. `mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
+2. `mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
+3. `mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa`
+4. `mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa`
+5. `mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
+6. `mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
+7. `mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
+8. `mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
-|  1. |  339 | 0.000702 | 4.9695537349e+01 |
-|  2. | 1041 | 0.000121 | 3.3909635545e+03 |
-|  3. | 1154 | 0.001655 | 4.6303396053e+01 |
-|  4. |  560 | 0.002449 | 1.3408616722e+02 |
-|  5. |  413 | 0.000470 | 3.2012077410e+01 |
-|  6. | 2872 | 0.000064 | 5.6547039096e+01 |
-|  7. |  528 | 0.000180 | 5.6505348812e+01 |
-|  8. |  776 | 0.000045 | 4.0982431726e+02 |
-
-Similar GPU runs using the MFEM CUDA *device* can be run as follows:
-
-1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
-2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`
-3. `./laghos -p 1 -dim 2 -rs 3 -tf 0.80 -pa -d cuda`
-4. `./laghos -p 1 -dim 3 -rs 2 -tf 0.60 -pa -d cuda`
-5. `./laghos -p 2 -dim 1 -rs 5 -tf 0.20 -fa`
-6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d cuda`
-7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -cgt 1e-12 -d cuda`
-8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d cuda`
+|  1. |  339 | 0.000702 | 49.6955373491   |
+|  2. | 1041 | 0.000121 | 3390.9635545458 |
+|  3. | 1154 | 0.001655 | 46.3033960530   |
+|  4. |  560 | 0.002449 | 134.0861672235  |
+|  5. |  413 | 0.000470 | 32.0120774101   |
+|  6. | 2872 | 0.000064 | 56.5470233805   |
+|  7. |  528 | 0.000180 | 56.5053488122   |
+|  8. |  776 | 0.000045 | 409.8243172608  |
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
@@ -306,7 +288,8 @@ overall computation.)
 Laghos also reports the total rate for these major kernels, which is a proposed
 **Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
 allocation, the FOM should be reported for different problem sizes and finite
-element orders.
+element orders, as illustrated in the sample scripts in the [timing](./timing)
+directory.
 
 A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
 machine at LLNL is:
@@ -332,8 +315,12 @@ In addition to the main MPI-based CPU implementation in https://github.com/CEED/
 the following versions of Laghos have been developed
 
 - **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **AMR** version in the [amr/](./amr/README.md) directory.
-  This version supports dynamic adaptive mesh refinement.
+- **CUDA** version in the [cuda/](./cuda/README.md) directory. This version supports GPU acceleration.
+- **RAJA** version in the [raja/](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
+- **OCCA** version in the [occa/](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
+- **AMR** version in the [amr/](./amr/README.md) directory. This version supports dynamic adaptive mesh refinement.
+- **MFEM/engines**-based version in the
+  [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branch.
 
 ## Contact
 
