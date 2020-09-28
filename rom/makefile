@@ -19,6 +19,7 @@ define LAGHOS_HELP_MSG
 Laghos makefile targets:
 
    make
+   make setup
    make status/info
    make install
    make clean
@@ -30,6 +31,9 @@ Laghos makefile targets:
 
 Examples:
 
+make setup
+   Build Laghos third party libraries: HYPRE, ParMETIS, MFEM, and libROM
+   (By default MFEM will be compiled in parallel mode)
 make -j 4
    Build Laghos using the current configuration options from MFEM.
    (Laghos requires the MFEM finite element library, and uses its compiler and
@@ -53,13 +57,14 @@ make style
 
 endef
 
+GOALS = help clean distclean style setup
+
 # Default installation location
 PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-$(info $$OS is [${OS}])
-LIBS_DIR ?= ../..
+LIBS_DIR ?= dependencies
 MFEM_DIR = $(LIBS_DIR)/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
@@ -73,7 +78,7 @@ MFEM_DIR2 := $(realpath $(MFEM_DIR))
 # and linking from MFEM's config.mk. (Skip this if the target does not require
 # building.)
 MFEM_LIB_FILE = mfem_is_not_built
-ifeq (,$(filter help clean distclean style,$(MAKECMDGOALS)))
+ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
 endif
 
@@ -116,7 +121,7 @@ OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
 TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
 
-include $(CURDIR)/user.mk
+#include $(CURDIR)/user.mk
 
 # Targets
 
@@ -129,10 +134,10 @@ include $(CURDIR)/user.mk
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
+				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
 
 merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM $(SCALAPACK_FLAGS)
+				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
 
 all: laghos merge
 
@@ -146,7 +151,9 @@ $(OBJECT_FILES): override MFEM_DIR = $(MFEM_DIR2)
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 
 MFEM_TESTS = laghos
-include $(TEST_MK)
+ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
+   -include $(TEST_MK)
+endif
 # Testing: Specific execution options
 RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
 test: laghos
@@ -197,7 +204,11 @@ status info:
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES) $(TEST_FILES) merge.cpp
 
 style:
-	@if ! $(ASTYLE) $(FORMAT_FILES) | grep Formatted; then\
+	@if ! dependencies/astyle/build/gcc/bin/astyle $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
+
+setup:
+	$(shell ./setup.sh >&2)
+
 $(shell mkdir -p run)

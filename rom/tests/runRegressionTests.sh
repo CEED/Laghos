@@ -104,14 +104,14 @@ done
 RESULTS_DIR=$DIR/results
 
 # Save directory of the new Laghos executable
-BASE_DIR=$DIR/../..
+BASE_DIR=$DIR/..
 
 # Save directory of the baseline Laghos executable
 BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
 
 # Get LIBS_DIR to run make depending on whether Gitlab is running
 if [[ -z "$CI_BUILDS_DIR" ]]; then
-	LIBS_DIR="$BASE_DIR/.."
+	LIBS_DIR="$BASE_DIR/../.."
 else
 	LIBS_DIR="$CI_BUILDS_DIR/$CI_PROJECT_NAME/env"
 fi
@@ -168,10 +168,6 @@ then
 		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
 		exit 1
 	fi
-
-	# Copy user.mk
-	echo "Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
-	cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
 	# Build the user branch executable
 	echo "Building the user branch" >> $setupLogFile 2>&1
@@ -483,7 +479,7 @@ do
 							baselineTestFile="${baselineTestFile%.*}"
 							targetTestFile="${targetTestFile%.*}"
 							if [[ "$parallel" == "true" ]]; then
-								$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+								$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
 							else
 								$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
 							fi
