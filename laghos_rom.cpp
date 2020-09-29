@@ -358,7 +358,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
 
         if (input.restore || (input.offsetType == saveLoadOffset && !input.paramOffset))
         {
-            // Restore phase OR Online phase rostype 0: Read the saved offsets
+            // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
@@ -368,7 +368,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         else if (input.offsetType == saveLoadOffset && input.paramOffset)
         {
             // TODO: Tony interpolation PR 77
-            // Online phase rostype 0 parametric: Read the saved offsets and interpolate
+            // Interpolate and save offset in the online phase of parametric save-and-load mode
             Vector X, V, E;
 
             for (int i=0; i<H1size; ++i)
@@ -407,7 +407,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         }
         else if (input.offsetType == useInitialState && input.window > 0)
         {
-            // Online phase rostype 1 time window > 0: Read the initial state
+            // Read offset in the online phase of initial mode
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
@@ -416,7 +416,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         }
         else
         {
-            // Online phase rostype 1 time window 0 OR Online phase rostype 2: Compute and save offsets
+            // Compute and save offset in the online phase of previous mode or initial window of initial mode
             Vector X, V, E;
 
             for (int i=0; i<H1size; ++i)

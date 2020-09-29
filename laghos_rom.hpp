@@ -222,14 +222,14 @@ public:
 
             if (input.offsetType == useInitialState && input.window > 0)
             {
-                // Offline phase rostype 1 time window > 0: Read the initial state
+                // Read the initial state in the offline phase
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
             }
             else
             {
-                // Offline phase otherwise: Compute offsets. Save offsets if rostype = 0 OR rostype = 1.
+                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
