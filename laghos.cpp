@@ -838,7 +838,10 @@ int main(int argc, char *argv[])
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
-        cout << "Offset Style: " << offsetType << endl;
+        if (myid == 0)
+        {
+            cout << "Offset Style: " << offsetType << endl;
+        }
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
