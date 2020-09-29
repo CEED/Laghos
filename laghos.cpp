@@ -61,6 +61,7 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 #include <fstream>
+#include <map>
 
 #ifndef _WIN32
 #include <sys/stat.h>  // mkdir
@@ -184,6 +185,7 @@ int main(int argc, char *argv[])
     double rhoFactor = 1.0;
     int rom_paramID = -1;
     const char *normtype_char = "l2";
+    const char *offsetType = "load";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -294,11 +296,8 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
                    "Enable or disable parametric offset.");
-    args.AddOption(&romOptions.offsetType, "-rostype", "--romoffsettype",
-                   "Offset type for initializing ROM windows.\n\t"
-                   "0 -> save and load offset;\n\t"
-                   "1 -> use initial state as offset;\n\t"
-                   "2 -> use solution from previous window as offset");
+    args.AddOption(&offsetType, "-rostype", "--romoffsettype",
+                   "Offset type for initializing ROM windows.");
     args.Parse();
     if (!args.Good())
     {
@@ -770,6 +769,7 @@ int main(int argc, char *argv[])
     romOptions.FOMoper = &oper;
     romOptions.parameterID = rom_paramID;
     romOptions.restore = rom_restore;
+    romOptions.offsetType = getOffsetStyle(offsetType);
 
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that
@@ -838,6 +838,7 @@ int main(int argc, char *argv[])
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
+        cout << "Offset Style: " << offsetType << endl;
         cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,

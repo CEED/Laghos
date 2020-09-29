@@ -279,7 +279,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), offsetType(input.offsetType)
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename)
 {
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
@@ -334,7 +334,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
         // std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
         std::string path_init = basename + "/ROMoffset/init";
 
-        if (input.restore || (input.offsetType == 0 && !input.paramOffset))
+        if (input.restore || (input.offsetType == saveLoadOffset && !input.paramOffset))
         {
             // Restore phase OR Online phase rostype 0: Read the saved offsets
             initX->read(path_init + "X" + std::to_string(input.window));
@@ -343,7 +343,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else if (input.offsetType == 0 && input.paramOffset)
+        else if (input.offsetType == saveLoadOffset && input.paramOffset)
         {
             // TODO: Tony interpolation PR 77
             // Online phase rostype 0 parametric: Read the saved offsets and interpolate
@@ -383,7 +383,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
         }
-        else if (input.offsetType == 1 && input.window > 0)
+        else if (input.offsetType == useInitialState && input.window > 0)
         {
             // Online phase rostype 1 time window > 0: Read the initial state
             initX->read(path_init + "X0");

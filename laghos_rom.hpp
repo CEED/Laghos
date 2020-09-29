@@ -29,6 +29,26 @@ const char* const Fe = "basisFe";
 
 enum VariableName { X, V, E, Fv, Fe };
 
+enum offsetStyle
+{
+    saveLoadOffset,
+    useInitialState,
+    usePreviousSolution
+};
+
+static offsetStyle getOffsetStyle(const char* offsetType)
+{
+    static std::unordered_map<std::string, offsetStyle> offsetMap =
+    {
+        {"load", saveLoadOffset},
+        {"initial", useInitialState},
+        {"previous", usePreviousSolution}
+    };
+    auto iter = offsetMap.find(offsetType);
+    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    return iter->second;
+}
+
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
@@ -66,7 +86,7 @@ struct ROM_Options
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    int offsetType = 0; // 0 -> save and load offset; 1 -> use initial state as offset; 2 -> use solution from previous window as offset
+    offsetStyle offsetType = saveLoadOffset; // types of offset in time windows
 };
 
 class ROM_Sampler
@@ -78,7 +98,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
-          parameterID(input.parameterID), basename(*input.basename), offsetType(input.offsetType)
+          parameterID(input.parameterID), basename(*input.basename)
     {
         const int window = input.window;
 
@@ -198,7 +218,7 @@ public:
             Xdiff.SetSize(tH1size);
             Ediff.SetSize(tL2size);
 
-            if (input.offsetType == 1 && input.window > 0)
+            if (input.offsetType == useInitialState && input.window > 0)
             {
                 // Offline phase rostype 1 time window > 0: Read the initial state
                 initX->read(path_init + "X0");
@@ -223,7 +243,7 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType <= 1)
+                if (input.offsetType == saveLoadOffset || input.offsetType == useInitialState)
                 {
                     initX->write(path_init + "X" + std::to_string(window));
                     initV->write(path_init + "V" + std::to_string(window));
@@ -262,7 +282,6 @@ private:
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
     const bool offsetInit;
-    const int offsetType;
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
     CAROM::Vector *initE = 0;
@@ -459,7 +478,6 @@ public:
 private:
     const bool hyperreduce;
     const bool offsetInit;
-    const int offsetType;
     const bool RHSbasis;
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
