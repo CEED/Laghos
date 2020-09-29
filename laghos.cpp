@@ -61,7 +61,6 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 #include <fstream>
-#include <map>
 
 #ifndef _WIN32
 #include <sys/stat.h>  // mkdir
