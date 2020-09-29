@@ -65,6 +65,7 @@ struct ROM_Options
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
+    double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = 0; // index of parameters chosen for this Laghos simulation
@@ -87,6 +88,11 @@ struct ROM_Options
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = saveLoadOffset; // types of offset in time windows
+
+    bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
+
+    bool useXV = false; // If true, use V basis for X-X0.
+    bool useVX = false; // If true, use X-X0 basis for V.
 };
 
 class ROM_Sampler
@@ -97,15 +103,11 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
-          parameterID(input.parameterID), basename(*input.basename)
+          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+          useXV(input.useXV), useVX(input.useVX)
     {
         const int window = input.window;
-
-        if (sampleF)
-        {
-            MFEM_VERIFY(offsetInit, "");
-        }
 
         // TODO: read the following parameters from input?
         double model_linearity_tol = 1.e-7;
@@ -270,6 +272,7 @@ private:
 
     const int rank;
     double energyFraction;
+    double energyFraction_X;
 
     const int parameterID;
     const bool writeSnapshots;
@@ -289,6 +292,10 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sampleF;
+
+    const bool Voffset;
+    const bool useXV;
+    const bool useVX;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
@@ -366,7 +373,7 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_);
+    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV);
 
     ~ROM_Basis()
     {
@@ -374,7 +381,7 @@ public:
         delete rV;
         delete rE;
         delete basisX;
-        delete basisV;
+        if (!useXV && !useVX && !mergeXV) delete basisV;
         delete basisE;
         delete basisFv;
         delete basisFe;
@@ -483,6 +490,10 @@ private:
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
 
+    const bool useXV;  // If true, use V basis for X-X0.
+    const bool useVX;  // If true, use X-X0 for V.
+    const bool mergeXV;  // If true, merge bases for X-X0 and V.
+
     const int H1size;
     const int L2size;
     const int tH1size;
@@ -550,10 +561,14 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
+    const bool Voffset;
+
     const bool RK2AvgFormulation;
     CAROM::Matrix *BXXinv = NULL;
     CAROM::Matrix *BVVinv = NULL;
     CAROM::Matrix *BEEinv = NULL;
+
+    double energyFraction_X;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };

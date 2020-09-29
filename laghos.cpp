@@ -270,6 +270,8 @@ int main(int argc, char *argv[])
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
     args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef",
                    "Energy fraction for recommended ROM basis sizes.");
+    args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
+                   "Energy fraction for recommended X ROM basis size.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
@@ -298,6 +300,12 @@ int main(int argc, char *argv[])
                    "Enable or disable parametric offset.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
+                   "Enable or disable use of V basis for X-X0.");
+    args.AddOption(&romOptions.useVX, "-romvx", "--romusevx", "-no-romvx", "--no-romusevx",
+                   "Enable or disable use of X-X0 basis for V.");
+    args.AddOption(&romOptions.mergeXV, "-romxandv", "--romusexandv", "-no-romxandv", "--no-romusexandv",
+                   "Enable or disable merging of X-X0 and V bases.");
     args.Parse();
     if (!args.Good())
     {
@@ -324,6 +332,12 @@ int main(int argc, char *argv[])
 
         args.PrintOptions(cout);
     }
+
+    MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
+    MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
+
+    if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
+    if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     romOptions.basename = &outputPath;
 
@@ -809,8 +823,8 @@ int main(int argc, char *argv[])
 
     if (!usingWindows)
     {
-        if (romOptions.sampX == 0) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0) romOptions.sampV = sFactorV * romOptions.dimV;
+        if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimV;
         if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimE;
     }
 
@@ -834,7 +848,14 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+
+        if (romOptions.mergeXV)
+        {
+            romOptions.dimX = basis->GetDimX();
+            romOptions.dimV = basis->GetDimV();
+        }
+
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         basis->ProjectFOMtoROM(S, romS);
 
@@ -869,10 +890,16 @@ int main(int argc, char *argv[])
                 romOptions.dimFv = twparam(romOptions.window,3);
                 romOptions.dimFe = twparam(romOptions.window,4);
             }
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
         } else {
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
         }
+        if (romOptions.mergeXV)
+        {
+            romOptions.dimX = basis->GetDimX();
+            romOptions.dimV = basis->GetDimV();
+        }
+
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
         if (infile_tw_steps.good())
@@ -933,7 +960,13 @@ int main(int argc, char *argv[])
                 }
                 basis->LiftROMtoFOM(romS, S);
                 delete basis;
-                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+                if (romOptions.mergeXV)
+                {
+                    romOptions.dimX = basis->GetDimX();
+                    romOptions.dimV = basis->GetDimV();
+                }
+
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
             }
@@ -1192,7 +1225,13 @@ int main(int argc, char *argv[])
                     }
                     delete basis;
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD);
+                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+                    if (romOptions.mergeXV)
+                    {
+                        romOptions.dimX = basis->GetDimX();
+                        romOptions.dimV = basis->GetDimV();
+                    }
+
                     romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     timeLoopTimer.Start();
 
