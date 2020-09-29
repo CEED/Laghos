@@ -29,6 +29,26 @@ const char* const Fe = "basisFe";
 
 enum VariableName { X, V, E, Fv, Fe };
 
+enum offsetStyle
+{
+    saveLoadOffset,
+    useInitialState,
+    usePreviousSolution
+};
+
+static offsetStyle getOffsetStyle(const char* offsetType)
+{
+    static std::unordered_map<std::string, offsetStyle> offsetMap =
+    {
+        {"load", saveLoadOffset},
+        {"initial", useInitialState},
+        {"previous", usePreviousSolution}
+    };
+    auto iter = offsetMap.find(offsetType);
+    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    return iter->second;
+}
+
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
@@ -40,6 +60,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
 
+    bool restore = false; // if true, restore phase
     bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
@@ -66,6 +87,7 @@ struct ROM_Options
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
+    offsetStyle offsetType = saveLoadOffset; // types of offset in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -190,7 +212,7 @@ public:
 
         if (offsetInit)
         {
-            //std::string path_init = (parameterID >= 0) ? "run/ROMoffset/param" + std::to_string(parameterID) + "_init" : "run/ROMoffset/init"; // TODO: Tony PR77
+            //std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
             std::string path_init = basename + "/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
@@ -198,22 +220,38 @@ public:
             Xdiff.SetSize(tH1size);
             Ediff.SetSize(tL2size);
 
-            for (int i=0; i<tH1size; ++i)
+            if (input.offsetType == useInitialState && input.window > 0)
             {
-                (*initX)(i) = X[i];
+                // Read the initial state in the offline phase
+                initX->read(path_init + "X0");
+                initV->read(path_init + "V0");
+                initE->read(path_init + "E0");
             }
-            initX->write(path_init + "X" + std::to_string(window));
+            else
+            {
+                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initX)(i) = X[i];
+                }
 
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initV)(i) = V[i];
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initV)(i) = V[i];
+                }
+
+                for (int i=0; i<tL2size; ++i)
+                {
+                    (*initE)(i) = E[i];
+                }
+
+                if (input.offsetType == saveLoadOffset || input.offsetType == useInitialState)
+                {
+                    initX->write(path_init + "X" + std::to_string(window));
+                    initV->write(path_init + "V" + std::to_string(window));
+                    initE->write(path_init + "E" + std::to_string(window));
+                }
             }
-            initV->write(path_init + "V" + std::to_string(window));
-            for (int i=0; i<tL2size; ++i)
-            {
-                (*initE)(i) = E[i];
-            }
-            initE->write(path_init + "E" + std::to_string(window));
         }
     }
 

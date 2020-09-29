@@ -353,9 +353,22 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        //TODO: Tony param init after PR 77
-        if (input.paramOffset)
+        // std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
+        std::string path_init = basename + "/ROMoffset/init";
+
+        if (input.restore || (input.offsetType == saveLoadOffset && !input.paramOffset))
         {
+            // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
+            initX->read(path_init + "X" + std::to_string(input.window));
+            initV->read(path_init + "V" + std::to_string(input.window));
+            initE->read(path_init + "E" + std::to_string(input.window));
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
+        else if (input.offsetType == saveLoadOffset && input.paramOffset)
+        {
+            // TODO: Tony interpolation PR 77
+            // Interpolate and save offset in the online phase of parametric save-and-load mode
             Vector X, V, E;
 
             for (int i=0; i<H1size; ++i)
@@ -387,14 +400,58 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
             {
                 (*initE)(i) = E[i];
             }
+
+            initX->write(path_init + "X" + std::to_string(input.window));
+            initV->write(path_init + "V" + std::to_string(input.window));
+            initE->write(path_init + "E" + std::to_string(input.window));
+        }
+        else if (input.offsetType == useInitialState && input.window > 0)
+        {
+            // Read offset in the online phase of initial mode
+            initX->read(path_init + "X0");
+            initV->read(path_init + "V0");
+            initE->read(path_init + "E0");
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else
         {
-            initX->read(basename + "/ROMoffset/initX" + std::to_string(input.window));
-            initV->read(basename + "/ROMoffset/initV" + std::to_string(input.window));
-            initE->read(basename + "/ROMoffset/initE" + std::to_string(input.window));
+            // Compute and save offset in the online phase of previous mode or initial window of initial mode
+            Vector X, V, E;
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[i];
+            }
+            gfH1.GetTrueDofs(X);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initX)(i) = X[i];
+            }
+
+            for (int i=0; i<H1size; ++i)
+            {
+                gfH1[i] = S[H1size+i];
+            }
+            gfH1.GetTrueDofs(V);
+            for (int i=0; i<tH1size; ++i)
+            {
+                (*initV)(i) = V[i];
+            }
+
+            for (int i=0; i<L2size; ++i)
+            {
+                gfL2[i] = S[2*H1size+i];
+            }
+            gfL2.GetTrueDofs(E);
+            for (int i=0; i<tL2size; ++i)
+            {
+                (*initE)(i) = E[i];
+            }
+
+            initX->write(path_init + "X" + std::to_string(input.window));
+            initV->write(path_init + "V" + std::to_string(input.window));
+            initE->write(path_init + "E" + std::to_string(input.window));
         }
     }
 
