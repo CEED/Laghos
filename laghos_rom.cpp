@@ -21,7 +21,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         lhoper->Mult(S, dSdt);
     }
 
-    if (sampleX)
+    if (sampleX && !useXV)
     {
         if (rank == 0)
         {
@@ -59,48 +59,50 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     if (sampleV)
     {
-        if (rank == 0)
+        if (!useVX)
         {
-            cout << "V taking sample at t " << t << endl;
-        }
-
-        bool addSample, addSampleF;
-
-        if (offsetInit)
-        {
-            for (int i=0; i<tH1size; ++i)
+            if (rank == 0)
             {
-                Xdiff[i] = V[i] - (*initV)(i);
+                cout << "V taking sample at t " << t << endl;
             }
 
-            addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
-            generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+            bool addSample;
 
-            if (sampleF)
+            if (offsetInit && Voffset)
             {
-                MFEM_VERIFY(gfH1.Size() == H1size, "");
-                for (int i=0; i<H1size; ++i)
-                    gfH1[i] = dSdt[H1size + i];  // Fv
-
-                gfH1.GetTrueDofs(Xdiff);
-                addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-                if (writeSnapshots && addSampleF)
+                for (int i=0; i<tH1size; ++i)
                 {
-                    tSnapFv.push_back(t);
+                    Xdiff[i] = V[i] - (*initV)(i);
                 }
+
+                addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
+                generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
+            }
+            else
+            {
+                addSample = generator_V->takeSample(V.GetData(), t, dt);
+                generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
+            }
+
+            if (writeSnapshots && addSample)
+            {
+                tSnapV.push_back(t);
             }
         }
-        else
-        {
-            MFEM_VERIFY(!sampleF, "");
-            addSample = generator_V->takeSample(V.GetData(), t, dt);
-            generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
-        }
 
-        if (writeSnapshots && addSample)
+        if (sampleF)
         {
-            tSnapV.push_back(t);
+            MFEM_VERIFY(gfH1.Size() == H1size, "");
+            for (int i=0; i<H1size; ++i)
+                gfH1[i] = dSdt[H1size + i];  // Fv
+
+            gfH1.GetTrueDofs(Xdiff);
+            bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFv.push_back(t);
+            }
         }
     }
 
@@ -125,26 +127,26 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
 
-            if (sampleF)
-            {
-                MFEM_VERIFY(gfL2.Size() == L2size, "");
-                for (int i=0; i<L2size; ++i)
-                    gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-                gfL2.GetTrueDofs(Ediff);
-                addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-                if (writeSnapshots && addSampleF)
-                {
-                    tSnapFe.push_back(t);
-                }
-            }
         }
         else
         {
-            MFEM_VERIFY(!sampleF, "");
             addSample = generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
+        }
+
+        if (sampleF)
+        {
+            MFEM_VERIFY(gfL2.Size() == L2size, "");
+            for (int i=0; i<L2size; ++i)
+                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+            gfL2.GetTrueDofs(Ediff);
+            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+
+            if (writeSnapshots && addSampleF)
+            {
+                tSnapFe.push_back(t);
+            }
         }
 
         if (writeSnapshots && addSample)
@@ -168,8 +170,8 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 {
     if (writeSnapshots)
     {
-        generator_X->writeSnapshot();
-        generator_V->writeSnapshot();
+        if (!useXV) generator_X->writeSnapshot();
+        if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
         if (sampleF)
         {
@@ -179,8 +181,8 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     }
     else
     {
-        generator_X->endSamples();
-        generator_V->endSamples();
+        if (!useXV) generator_X->endSamples();
+        if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
         if (sampleF)
         {
@@ -191,13 +193,19 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 
     if (rank == 0 && !writeSnapshots)
     {
-        cout << "X basis summary output: ";
-        BasisGeneratorFinalSummary(generator_X, energyFraction, cutoff[0]);
-        PrintSingularValues(rank, basename, "X", generator_X);
+        if (!useXV)
+        {
+            cout << "X basis summary output: ";
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
+            PrintSingularValues(rank, basename, "X", generator_X);
+        }
 
-        cout << "V basis summary output: ";
-        BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-        PrintSingularValues(rank, basename, "V", generator_V);
+        if (!useVX)
+        {
+            cout << "V basis summary output: ";
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
+            PrintSingularValues(rank, basename, "V", generator_V);
+        }
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
@@ -272,15 +280,22 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
+ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename)
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
+      mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+      energyFraction_X(input.energyFraction_X)
 {
+    MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
+
+    if (useXV) rdimx = rdimv;
+    if (useVX) rdimv = rdimx;
+
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
 
@@ -313,6 +328,13 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_)
     mfL2.SetSize(tL2size);
 
     ReadSolutionBases(input.window);
+
+    if (mergeXV)
+    {
+        // Update number of samples based on changed rdimx and rdimv.
+        numSamplesX = sFactorX * rdimx;
+        numSamplesV = sFactorV * rdimv;
+    }
 
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);
@@ -1006,8 +1028,11 @@ void ROM_Basis::ComputeReducedRHS()
         // Compute reduced matrix BsinvX = BXsp^T BVsp
         BsinvX = BXsp->transposeMult(BVsp);
 
-        BX0 = BXsp->transposeMult(initVsp);
-        MFEM_VERIFY(BX0->dim() == rdimx, "");
+        if (offsetInit)
+        {
+            BX0 = BXsp->transposeMult(initVsp);
+            MFEM_VERIFY(BX0->dim() == rdimx, "");
+        }
 
         // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
         CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
@@ -1072,14 +1097,79 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::ReadSolutionBases(const int window)
 {
-    basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
-    basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+    if (!useVX)
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+
     basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+
+    if (useXV)
+        basisX = basisV;
+    else
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+
+    if (useVX)
+        basisV = basisX;
 
     if (RHSbasis)
     {
         basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
         basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+    }
+
+    if (mergeXV)
+    {
+        const int max_model_dim = basisX->numColumns() + basisV->numColumns();
+        CAROM::StaticSVDOptions static_x_options(tH1size, max_model_dim);
+        static_x_options.max_time_intervals = 1;
+
+        CAROM::StaticSVDBasisGenerator generator_XV(static_x_options);
+
+        Vector Bej(basisX->numRows());  // owns its data
+        MFEM_VERIFY(Bej.Size() == tH1size, "");
+
+        CAROM::Vector ej(basisX->numColumns(), false);
+        CAROM::Vector CBej(Bej.GetData(), basisX->numRows(), true, false);  // data owned by Bej
+        ej = 0.0;
+        for (int j=0; j<basisX->numColumns(); ++j)
+        {
+            ej(j) = 1.0;
+            basisX->mult(ej, CBej);
+
+            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            MFEM_VERIFY(addSample, "Sample not added");
+
+            ej(j) = 0.0;
+        }
+
+        ej.setSize(basisV->numColumns());
+        ej = 0.0;
+
+        for (int j=0; j<basisV->numColumns(); ++j)
+        {
+            ej(j) = 1.0;
+            basisV->mult(ej, CBej);
+
+            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            MFEM_VERIFY(addSample, "Sample not added");
+
+            ej(j) = 0.0;
+        }
+
+        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, false);
+        rdimv = rdimx;
+
+        cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
+             << " and merged X-X0 and V bases with resulting dimension " << rdimx << endl;
+
+        delete basisX;
+        delete basisV;
+
+        const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
+
+        // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
+        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
+        MFEM_VERIFY(basisX->numRows() == tH1size, "");
+        basisV = basisX;
     }
 }
 
@@ -1107,7 +1197,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     gfH1.GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = useOffset ? mfH1[i] - (*initV)(i) : mfH1[i];
+        (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
 
     basisV->transposeMult(*fH1, *rV);
 
@@ -1159,7 +1249,7 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     basisV->mult(*rV, *fH1);
 
     for (int i=0; i<tH1size; ++i)
-        mfH1[i] = offsetInit ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
+        mfH1[i] = (offsetInit && Voffset) ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
 
     gfH1.SetFromTrueDofs(mfH1);
 
@@ -1200,7 +1290,7 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
         for (int i=0; i<size_H1_sp; ++i)
         {
             usp[i] = offsetInit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
-            usp[size_H1_sp + i] = offsetInit ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
+            usp[size_H1_sp + i] = (offsetInit && Voffset) ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
         }
 
         for (int i=0; i<size_L2_sp; ++i)
@@ -1234,7 +1324,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
         (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
 
     for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = useOffset ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
+        (*sV)(i) = (useOffset && Voffset) ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
@@ -1339,7 +1429,7 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
 
     // V
     for (int i=0; i<size_H1_sp; ++i)
-        (*spV)(i) = useOffset ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
+        (*spV)(i) = (useOffset && Voffset) ? usp[ossp + i] - (*initVsp)(i) : usp[ossp + i];
 
     BVsp->transposeMult(*spV, *rV);
     BVVinv->mult(*rV, *rV2);
@@ -1501,7 +1591,7 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 
         BsinvX->mult(*rV, *rX);
         for (int i=0; i<rdimx; ++i)
-            y[i] = (*rX)(i) + (*BX0)(i);
+            y[i] = offsetInit ? (*rX)(i) + (*BX0)(i) : (*rX)(i);
     }
 }
 
