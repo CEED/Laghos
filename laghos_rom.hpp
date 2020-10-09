@@ -93,6 +93,8 @@ struct ROM_Options
 
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
+
+    bool qdeim = false; // If true, use QDEIM instead of GNAT.
 };
 
 class ROM_Sampler
@@ -569,6 +571,8 @@ private:
     CAROM::Matrix *BEEinv = NULL;
 
     double energyFraction_X;
+
+    const bool use_qdeim;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 };

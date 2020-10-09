@@ -2,6 +2,7 @@
 #include "laghos_utils.hpp"
 
 #include "DEIM.h"
+#include "QDEIM.h"
 #include "SampleMesh.hpp"
 
 
@@ -289,7 +290,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -673,14 +674,27 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // Perform DEIM or GNAT to find sample DOF's.
     if (RHSbasis)
     {
-        CAROM::GNAT(basisFv,
-                    rdimfv,
-                    sample_dofs_V.data(),
-                    num_sample_dofs_per_procV.data(),
-                    *BsinvV,
-                    rank,
-                    nprocs,
-                    numSamplesV);
+        if (use_qdeim)
+        {
+            MFEM_VERIFY(numSamplesV == rdimfv, "");
+            CAROM::QDEIM(basisFv,
+                         rdimfv,
+                         sample_dofs_V.data(),
+                         num_sample_dofs_per_procV.data(),
+                         *BsinvV,
+                         rank);
+        }
+        else
+        {
+            CAROM::GNAT(basisFv,
+                        rdimfv,
+                        sample_dofs_V.data(),
+                        num_sample_dofs_per_procV.data(),
+                        *BsinvV,
+                        rank,
+                        nprocs,
+                        numSamplesV);
+        }
 
         CAROM::GNAT(basisFe,
                     rdimfe,
@@ -999,7 +1013,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         spV = new CAROM::Vector(size_H1_sp, false);
         spE = new CAROM::Vector(size_L2_sp, false);
 
-        sX = new CAROM::Vector(numSamplesX, false);
+        if (!RHSbasis) sX = new CAROM::Vector(numSamplesX, false);
         sV = new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
 
