@@ -79,7 +79,7 @@ int problem;
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
-double gamma(const Vector &);
+double gamma_func(const Vector &);
 void display_banner(ostream & os);
 
 void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
@@ -680,7 +680,7 @@ int main(int argc, char *argv[])
     L2_FECollection mat_fec(0, pmesh->Dimension());
     ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
     ParGridFunction mat_gf(&mat_fes);
-    FunctionCoefficient mat_coeff(gamma);
+    FunctionCoefficient mat_coeff(gamma_func);
     mat_gf.ProjectCoefficient(mat_coeff);
     GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
 
@@ -1519,7 +1519,7 @@ double rho0(const Vector &x)
     }
 }
 
-double gamma(const Vector &x)
+double gamma_func(const Vector &x)
 {
     switch (problem)
     {
@@ -1612,11 +1612,11 @@ double e0(const Vector &x)
     case 1:
         return 0.0; // This case in initialized in main().
     case 2:
-        return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-               : 0.1 / rho0(x) / (gamma(x) - 1.0);
+        return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
+               : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
     case 3:
-        return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-               : 1.0 / rho0(x) / (gamma(x) - 1.0);
+        return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
+               : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
     case 4:
     {
         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
