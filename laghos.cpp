@@ -128,6 +128,11 @@ void PrintDiffParGridFunction(NormType normtype, const int rank, const std::stri
     PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }
 
+bool to_bool(std::string const& s)
+{
+    return (s != "0");
+}
+
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
@@ -783,6 +788,86 @@ int main(int argc, char *argv[])
     romOptions.parameterID = rom_paramID;
     romOptions.restore = rom_restore;
     romOptions.offsetType = getOffsetStyle(offsetType);
+
+    std::string paramID_outputPath = outputPath + "/paramID.csv";
+    if (rom_offline && rom_paramID >= 0)
+    {
+        std::ofstream outfile_paramID;
+        if (romOptions.parameterID == 0)
+        {
+            outfile_paramID.open(paramID_outputPath);
+            if (myid == 0)
+            {
+                outfile_paramID << romOptions.useOffset << " " << romOptions.offsetType << " " << romOptions.RHSbasis << " " << numWindows << " " << twfile << endl;
+            }
+        }
+        else
+        {
+            std::ifstream infile_paramID(paramID_outputPath);
+            MFEM_VERIFY(infile_paramID.is_open(), "Parameter record file does not exist.");
+            std::string line;
+            std::vector<std::string> words;
+            std::getline(infile_paramID, line);
+            split_line(line, words);
+            MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+            MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-rostype option does not match record.");
+            MFEM_VERIFY(std::stoi(words[2]) == romOptions.RHSbasis, "-romsrhs option does not match record.");
+            MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
+            MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
+            infile_paramID.close();
+            outfile_paramID.open(paramID_outputPath, std::fstream::app);
+        }
+        if (myid == 0)
+        {
+            outfile_paramID << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+        }
+        outfile_paramID.close();
+    }
+
+    if (rom_online && romOptions.paramOffset)
+    {
+        std::ifstream infile_paramID(paramID_outputPath);
+        MFEM_VERIFY(infile_paramID.is_open(), "Parameter record file does not exist.");
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(infile_paramID, line);
+        split_line(line, words);
+        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-rostype option does not match record.");
+
+        if (romOptions.offsetType == saveLoadOffset)
+        {
+            int true_idx = -1;
+            double coeff_sum = 0.0;
+            while (std::getline(infile_paramID, line))
+            {
+                split_line(line, words);
+                romOptions.paramID_list.push_back(std::stoi(words[0]));
+                double coeff = 0.0;
+                coeff += (rhoFactor - atof(words[1].c_str())) * (rhoFactor - atof(words[1].c_str()));
+                coeff += (blast_energyFactor - atof(words[2].c_str())) * (blast_energyFactor - atof(words[2].c_str()));
+                if (coeff == 0.0)
+                {
+                    true_idx = romOptions.coeff_list.size();
+                }
+                coeff = 1 / sqrt(coeff);
+                coeff_sum += coeff;
+                romOptions.coeff_list.push_back(coeff);
+            }
+            for (int param=0; param<romOptions.paramID_list.size(); ++param)
+            {
+                if (true_idx >= 0)
+                {
+                    romOptions.coeff_list[param] = (param == true_idx) ? 1.0 : 0.0;
+                }
+                else
+                {
+                    romOptions.coeff_list[param] /= coeff_sum;
+                }
+            }
+            infile_paramID.close();
+        }
+    }
 
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that

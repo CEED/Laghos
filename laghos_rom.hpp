@@ -88,6 +88,8 @@ struct ROM_Options
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = saveLoadOffset; // types of offset in time windows
+    std::vector<int> paramID_list; // list of all offline parameter IDs
+    std::vector<double> coeff_list; // list of all interpolating coefficients with respect to offline parameters
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -212,8 +214,7 @@ public:
 
         if (offsetInit)
         {
-            //std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
-            std::string path_init = basename + "/ROMoffset/init";
+            std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);

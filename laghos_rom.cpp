@@ -353,8 +353,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        // std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
-        std::string path_init = basename + "/ROMoffset/init";
+        std::string path_init = (input.paramOffset) ? basename + "/ROMoffset/online_param_init" : basename + "/ROMoffset/init";
 
         if (input.restore || (input.offsetType == saveLoadOffset && !input.paramOffset))
         {
@@ -367,43 +366,43 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         }
         else if (input.offsetType == saveLoadOffset && input.paramOffset)
         {
-            // TODO: Tony interpolation PR 77
             // Interpolate and save offset in the online phase of parametric save-and-load mode
-            Vector X, V, E;
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[i];
-            }
-            gfH1.GetTrueDofs(X);
             for (int i=0; i<tH1size; ++i)
-            {
-                (*initX)(i) = X[i];
-            }
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[H1size+i];
-            }
-            gfH1.GetTrueDofs(V);
+                (*initX)(i) = 0;
             for (int i=0; i<tH1size; ++i)
-            {
-                (*initV)(i) = V[i];
-            }
-
-            for (int i=0; i<L2size; ++i)
-            {
-                gfL2[i] = S[2*H1size+i];
-            }
-            gfL2.GetTrueDofs(E);
+                (*initV)(i) = 0;
             for (int i=0; i<tL2size; ++i)
-            {
-                (*initE)(i) = E[i];
-            }
+                (*initE)(i) = 0;
 
+            for (int param_off=0; param_off<input.paramID_list.size(); ++param_off)
+            {
+                CAROM::Vector *initX_off = 0;
+                CAROM::Vector *initV_off = 0;
+                CAROM::Vector *initE_off = 0;
+
+                initX_off = new CAROM::Vector(tH1size, true);
+                initV_off = new CAROM::Vector(tH1size, true);
+                initE_off = new CAROM::Vector(tL2size, true);
+
+                int paramID_off = input.paramID_list[param_off];
+                std::string path_init_off = basename + "/ROMoffset/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
+
+                initX_off->read(path_init_off + "X" + std::to_string(input.window));
+                initV_off->read(path_init_off + "V" + std::to_string(input.window));
+                initE_off->read(path_init_off + "E" + std::to_string(input.window));
+
+                for (int i=0; i<tH1size; ++i)
+                    (*initX)(i) += input.coeff_list[param_off] * (*initX_off)(i);
+                for (int i=0; i<tH1size; ++i)
+                    (*initV)(i) += input.coeff_list[param_off] * (*initV_off)(i);
+                for (int i=0; i<tL2size; ++i)
+                    (*initE)(i) += input.coeff_list[param_off] * (*initE_off)(i);
+            }
             initX->write(path_init + "X" + std::to_string(input.window));
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
+
+            cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == useInitialState && input.window > 0)
         {
