@@ -827,8 +827,6 @@ int main(int argc, char *argv[])
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
         if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
         if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
-
-        if (romOptions.qdeim) romOptions.sampV = romOptions.dimFv;
     }
 
     StopWatch onlinePreprocessTimer;

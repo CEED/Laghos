@@ -676,13 +676,14 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     {
         if (use_qdeim)
         {
-            MFEM_VERIFY(numSamplesV == rdimfv, "");
             CAROM::QDEIM(basisFv,
                          rdimfv,
                          sample_dofs_V.data(),
                          num_sample_dofs_per_procV.data(),
                          *BsinvV,
-                         rank);
+                         rank,
+                         nprocs,
+                         numSamplesV);
         }
         else
         {
