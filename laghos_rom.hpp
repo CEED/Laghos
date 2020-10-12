@@ -56,6 +56,11 @@ struct ROM_Options
     int dimFv = -1;
     int dimFe = -1;
 
+    // Incremental SVD options
+    double model_linearity_tol = 1.e-7;
+    double model_singular_value_tol = 1.e-14;
+    double model_sampling_tol = 1.e-7;
+
     // Number of samples for each variable
     int sampX = 0;
     int sampV = 0;
@@ -83,11 +88,6 @@ public:
         {
             MFEM_VERIFY(offsetInit, "");
         }
-
-        // TODO: read the following parameters from input?
-        double model_linearity_tol = 1.e-7;
-        double model_singular_value_tol = 1.e-14;
-        double model_sampling_tol = 1.e-7;
 
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
         const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
@@ -131,28 +131,28 @@ public:
             CAROM::IncrementalSVDOptions inc_x_options(
                 tH1size,
                 max_model_dim,
-                model_linearity_tol,
+                input.model_linearity_tol,
                 max_model_dim,
                 input.initial_dt,
-                model_sampling_tol,
+                input.model_sampling_tol,
                 input.t_final,
                 false,
                 true
             );
-            inc_x_options.singular_value_tol = model_singular_value_tol;
+            inc_x_options.singular_value_tol = input.model_singular_value_tol;
             inc_x_options.max_time_intervals = 1;
             CAROM::IncrementalSVDOptions inc_e_options(
                 tL2size,
                 max_model_dim,
-                model_linearity_tol,
+                input.model_linearity_tol,
                 max_model_dim,
                 input.initial_dt,
-                model_sampling_tol,
+                input.model_sampling_tol,
                 input.t_final,
                 false,
                 true
             );
-            inc_e_options.singular_value_tol = model_singular_value_tol;
+            inc_e_options.singular_value_tol = input.model_singular_value_tol;
             inc_e_options.max_time_intervals = 1;
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                 inc_x_options,

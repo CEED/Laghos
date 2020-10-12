@@ -173,6 +173,9 @@ int main(int argc, char *argv[])
     double sFactorX = 2.0;
     double sFactorV = 20.0;
     double sFactorE = 2.0;
+    double model_linearity_tol = 1.e-7;
+    double model_singular_value_tol = 1.e-14;
+    double model_sampling_tol = 1.e-7;
     int numWindows = 0;
     int windowNumSamples = 0;
     int windowOverlapSamples = 0;
@@ -285,6 +288,9 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
+    args.AddOption(&romOptions.model_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
+    args.AddOption(&romOptions.model_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
+    args.AddOption(&romOptions.model_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
     args.AddOption(&romOptions.RHSbasis, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
                    "Sample RHS");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
