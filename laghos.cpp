@@ -128,11 +128,6 @@ void PrintDiffParGridFunction(NormType normtype, const int rank, const std::stri
     PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }
 
-bool to_bool(std::string const& s)
-{
-    return (s != "0");
-}
-
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
