@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff)
+void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
@@ -27,7 +27,7 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
         }
     }
 
-    cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
+    if (printout) cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
 }
 
 void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows, const int window)
