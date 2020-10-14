@@ -102,17 +102,6 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    std::ifstream infile_paramID(outputPath + "/paramID.csv");
-    MFEM_VERIFY(infile_paramID.is_open(), "Parameter record file does not exist.");
-    std::string line;
-    std::vector<std::string> words;
-    std::getline(infile_paramID, line);
-    split_line(line, words);
-    MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
-    MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-    MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
-    infile_paramID.close();
-
     const bool usingWindows = (numWindows > 0); // TODO: Tony PR77 || windowNumSamples > 0);
     Array<double> twep;
     std::ofstream outfile_twp;
@@ -126,6 +115,17 @@ int main(int argc, char *argv[])
     else {
         numWindows = 1;
     }
+
+    std::ifstream infile_offlineParam(outputPath + "/offline_param.csv");
+    MFEM_VERIFY(infile_offlineParam.is_open(), "Parameter record file does not exist.");
+    std::string line;
+    std::vector<std::string> words;
+    std::getline(infile_offlineParam, line);
+    split_line(line, words);
+    MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
+    MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
+    MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
+    infile_offlineParam.close();
 
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);

@@ -353,9 +353,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
 
-        std::string path_init = (input.paramOffset) ? basename + "/ROMoffset/online_param_init" : basename + "/ROMoffset/init";
+        std::string path_init = basename + "/ROMoffset/init";
 
-        if (input.restore || (input.offsetType == saveLoadOffset && !input.paramOffset))
+        if (input.restore || input.offsetType == saveLoadOffset)
         {
             // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
@@ -364,7 +364,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else if (input.offsetType == saveLoadOffset && input.paramOffset)
+        else if (input.offsetType == interpolateOffset)
         {
             // Interpolate and save offset in the online phase of parametric save-and-load mode
             for (int i=0; i<tH1size; ++i)
