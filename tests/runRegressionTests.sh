@@ -464,7 +464,7 @@ do
 
 				# Create necessary files for absolute
 				if [[ "$absolute" == "true" ]] && [[ "$testtype" == "fom" ]]; then
-					num_steps="$(ls -v $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} | tail -1 | cut -f 1 -d '.' | sed 's/[^0-9]*//g')"
+					num_steps="$(ls $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} | sort -V | tail -1 | cut -f 1 -d '.' | sed 's/[^0-9]*//g')"
 					echo -n $num_steps > $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps
 					remove_header_of_solution_file() {
 						for filename in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Laghos_${num_steps}_${file_type[0]}*; do

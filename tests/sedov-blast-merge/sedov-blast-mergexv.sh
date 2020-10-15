@@ -1,8 +1,8 @@
 NUM_PARALLEL_PROCESSORS=2
 testNames=(offline romhr restore)
-runAbsoluteFOM="false"
+runAbsoluteFOM="true"
 absoluteFOMOptions="-m data/cube01_hex.mesh -pt 211 -tf 0.05 -print"
-absoluteFOMTol="1e-6"
+absoluteFOMTol="1e-3"
 absoluteFOMTolParallel="1e-1"
 absoluteRelErrorTol="1e-1"
 absoluteRelErrorTolParallel="1e-1"
