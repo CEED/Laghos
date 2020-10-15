@@ -6,7 +6,7 @@ absoluteFOMTol="1e-11"
 absoluteFOMTolParallel="1"
 absoluteRelErrorTol="1e-1"
 absoluteRelErrorTolParallel="1e-1"
-speedupPercentTol="200"
+speedupTol="2"
 case $subTestNum in
   1)
     $LAGHOS -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -offline -writesol -romsvds

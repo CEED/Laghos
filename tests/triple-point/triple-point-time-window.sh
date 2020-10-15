@@ -6,7 +6,7 @@ absoluteFOMTol="1e-10"
 absoluteFOMTolParallel="1e-1"
 absoluteRelErrorTol="1"
 absoluteRelErrorTolParallel="1"
-speedupPercentTol="200"
+speedupTol="2"
 case $subTestNum in
   1)
     $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/triple-point/triple-point-time-window.csv

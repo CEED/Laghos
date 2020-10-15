@@ -6,7 +6,7 @@ absoluteFOMTol="1e-10"
 absoluteFOMTolParallel="1e-1"
 absoluteRelErrorTol="10"
 absoluteRelErrorTolParallel="10"
-speedupPercentTol="200"
+speedupTol="2"
 case $subTestNum in
   1)
     $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -offline -writesol -romsvds -nwin 2 -tw "$BASE_DIR"/tests/taylor-green/taylor-green-time-window.csv

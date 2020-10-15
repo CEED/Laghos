@@ -6,13 +6,12 @@
 using namespace std;
 
 int main(int argc, char *argv[]) {
-    double offlineSpeed = stod(argv[1]);
-    double onlineSpeed = stod(argv[2]);
-    double errorBound = stod(argv[3]);
-    if (offlineSpeed / onlineSpeed * 100 < errorBound) {
-        cerr << "speedupTol = " << errorBound << endl;
-        cerr << "onlineSpeed / offlineSpeed = " << offlineSpeed / onlineSpeed * 100 << endl;
-        cerr << "speedupTol: " << errorBound << " was not surpassed." << endl;
+    double offlineTime = stod(argv[1]);
+    double onlineTime = stod(argv[2]);
+    double speedupTol = stod(argv[3]);
+    if (offlineTime / onlineTime < speedupTol) {
+        cerr << "offlineTime / onlineTime = " << offlineTime / onlineTime << endl;
+        cerr << "speedupTol: " << speedupTol << " was not surpassed." << endl;
         abort();
     }
 

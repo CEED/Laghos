@@ -6,7 +6,7 @@ absoluteFOMTol="1e-4"
 absoluteFOMTolParallel="1e-1"
 absoluteRelErrorTol="1e-1"
 absoluteRelErrorTolParallel="1e-1"
-speedupPercentTol="200"
+speedupTol="2"
 case $subTestNum in
   1)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -offline -romsvds -romos -romsrhs -bef 1.0 -rpar 0 -nwin 2 -tw "$BASE_DIR"/tests/sedov-blast/sedov-blast-time-window-rhsbasis-parameter-variation.csv -writesol -visit

@@ -6,7 +6,7 @@ absoluteFOMTol="1e-11"
 absoluteFOMTolParallel="1e-1"
 absoluteRelErrorTol="1"
 absoluteRelErrorTolParallel="1"
-speedupPercentTol="200"
+speedupTol="2"
 case $subTestNum in
   1)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -writesol -romsvds

@@ -31,9 +31,8 @@ void compareFiles(ifstream &baselineFile, ifstream &targetFile, double errorBoun
         targetNum = stod(stripped);
 
         if (abs(baselineNum - targetNum) > errorBound) {
-            cerr << "errorBound = " << errorBound << endl;
-            cerr << "abs(baselineNum - targetNum) = " << abs(baselineNum - targetNum) << endl;
             cerr << "TargetNum = " << targetNum << ", BaselineNum = " << baselineNum << endl;
+            cerr << "abs(baselineNum - targetNum) = " << abs(baselineNum - targetNum) << endl;
             cerr << "Error bound: " << errorBound << " was surpassed on line: " << fileLine << endl;
             abort();
         }

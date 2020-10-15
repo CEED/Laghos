@@ -76,8 +76,8 @@ between the basis matrices in the following files: " << baselineFile << " and " 
         }
         // Test whether l2 norm is smaller than error bound
         if (matrixNormL2 > errorBound) {
-            cerr << "The matrixNormL2 of the difference of the basis matrices is "
-                 << matrixNormL2 << " and it surpassed the error bound: " << errorBound << "." << endl;
+            cerr << "matrixNormL2 = " << matrixNormL2 << endl;
+            cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the basis matrices." << endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
     }
