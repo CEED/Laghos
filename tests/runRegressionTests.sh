@@ -108,6 +108,19 @@ done
 # COMPILATION
 ###############################################################################
 
+# Check machine
+case "$(uname -s)" in
+    Linux*)
+		  COMMAND="srun -p pdebug"
+			MACHINE="Linux";;
+    Darwin*)
+		  COMMAND="mpirun -oversubscribe"
+			MACHINE="Darwin";;
+    *)
+			echo "The regression tests can only run on Linux and MAC."
+			exit 1
+esac
+
 # Create results directory
 RESULTS_DIR=$DIR/results
 
@@ -147,7 +160,7 @@ then
 	echo "Cleaned the regression test directory and user branch build" >> $setupLogFile 2>&1
 
 	# Compile the C++ comparators
-	echo "Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
+	echo "Compiling the comparator files" >> $setupLogFile 2>&1
 	make regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
@@ -171,10 +184,15 @@ then
 		git -C $DIR clone https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 
 		# Changing precision of print in master
-		sed -i 's/mesh_ofs.precision(8)/mesh_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-		sed -i 's/v_ofs.precision(8)/v_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-		sed -i 's/e_ofs.precision(8)/e_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-
+		if [[ "$MACHINE" == "Linux" ]]; then
+			sed -i 's/mesh_ofs.precision(8)/mesh_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+			sed -i 's/v_ofs.precision(8)/v_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+			sed -i 's/e_ofs.precision(8)/e_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+		elif [[ "$MACHINE" == "Darwin" ]]; then
+			sed -i '' 's/mesh_ofs.precision(8)/mesh_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+			sed -i '' 's/v_ofs.precision(8)/v_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+			sed -i '' 's/e_ofs.precision(8)/e_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
+		fi
 	else
 
 		# Clone and compile rom-dev branch of Laghos as baseline
@@ -278,17 +296,6 @@ fi
 ###############################################################################
 # RUN TESTS
 ###############################################################################
-
-# Check machine
-case "$(uname -s)" in
-    Linux*)
-		  COMMAND="srun -p pdebug";;
-    Darwin*)
-		  COMMAND="mpirun -oversubscribe";;
-    *)
-			echo "The regression tests can only run on Linux and MAC."
-			exit 1
-esac
 
 # Test number counter
 testNum=0
@@ -467,12 +474,18 @@ do
 					file_type=mesh
 					remove_header_of_solution_file
 					file_type=v
-					remove_header_of_solution_file v
+					remove_header_of_solution_file
 					file_type=e
-					remove_header_of_solution_file e
-					(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_mesh Sol_Position *Laghos_${num_steps}_mesh*)
-					(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_v Sol_Velocity *Laghos_${num_steps}_v*)
-					(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_e Sol_Energy *Laghos_${num_steps}_e*)
+					remove_header_of_solution_file
+					if [[ "$MACHINE" == "Linux" ]]; then
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_mesh Sol_Position *Laghos_${num_steps}_mesh*)
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_v Sol_Velocity *Laghos_${num_steps}_v*)
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_e Sol_Energy *Laghos_${num_steps}_e*)
+					elif [[ "$MACHINE" == "Darwin" ]]; then
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_mesh/Sol_Position' *)
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_v/Sol_Velocity' *)
+						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_e/Sol_Energy' *)
+					fi
 				fi
 
 				# If doing dry run, skip comparisons
