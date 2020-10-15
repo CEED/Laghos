@@ -71,8 +71,8 @@ between the basis matrices in the following files: " << baselineFile << " and " 
 
     if (rank == 0) {
         double matrixNormL2 = 0;
-        for (int i = 0; i < vecNormL2.size(); i++) {
-            matrixNormL2 += sqrt(vecNormL2[i]);
+        for (int i = 0; i < reducedVecNormL2.size(); i++) {
+            matrixNormL2 += sqrt(reducedVecNormL2[i]);
         }
         // Test whether l2 norm is smaller than error bound
         if (matrixNormL2 > errorBound) {

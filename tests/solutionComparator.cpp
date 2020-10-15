@@ -55,25 +55,22 @@ void compareSolutions(string &baselineFile, string &targetFile, double errorBoun
     baseline.Load(baselineFiles, numProcessors, baselineDim);
     target.Load(targetFiles, numProcessors, targetDim);
 
-    double baselineNormL2 = baseline.Norml2();
-    double targetNormL2 = target.Norml2();
+    Vector diff = Vector(baseline.Size());
+    try {
+        subtract(baseline, target, diff);
+    }
+    catch (const exception& e) {
+        cerr << "Something went wrong when calculating the difference \
+between the solution vectors." << endl;
+        abort();
+    }
+    double diffNormL2 = diff.Norml2();
 
     // Test whether l2 norm is smaller than error bound
-    if (baselineNormL2 == 0.0) {
-        if (abs(baselineNormL2 - targetNormL2) > errorBound) {
-            cerr << "TargetNormL2 = " << targetNormL2 << ", baselineNormL2 = " << baselineNormL2 << endl;
-            cerr << "abs(baselineNormL2 - targetNormL2) = " << abs(baselineNormL2 - targetNormL2) << endl;
-            cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the solutions." << endl;
-            abort();
-        }
-    }
-    else {
-        if (abs(baselineNormL2 - targetNormL2) / baselineNormL2 > errorBound) {
-            cerr << "TargetNormL2 = " << targetNormL2 << ", baselineNormL2 = " << baselineNormL2 << endl;
-            cerr << "abs(baselineNormL2 - targetNormL2) / baselineNormL2 = " << abs(baselineNormL2 - targetNormL2) / baselineNormL2 << endl;
-            cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the solutions." << endl;
-            abort();
-        }
+    if (diffNormL2 > errorBound) {
+        cerr << "diffNormL2 = " << diffNormL2 << endl;
+        cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the solutions." << endl;
+        abort();
     }
 }
 
