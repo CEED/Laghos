@@ -1074,11 +1074,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     if (!useGramSchmidt)
     {
-        ComputeReducedRHS();
+        ComputeReducedMatrices();
     }
 }
 
-void ROM_Basis::ComputeReducedRHS()
+void ROM_Basis::ComputeReducedMatrices()
 {
     if (RHSbasis && rank == 0)
     {
@@ -1973,7 +1973,7 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
 {
     InducedGramSchmidt(1, S); // velocity
     InducedGramSchmidt(2, S); // energy
-    basis->ComputeReducedRHS();
+    basis->ComputeReducedMatrices();
     if (useReducedMv)
     {
         ComputeReducedMv();
@@ -1990,12 +1990,6 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
 {
     UndoInducedGramSchmidt(1, S); // velocity
     UndoInducedGramSchmidt(2, S); // energy
-    basis->ComputeReducedRHS();
-    if (useReducedMv)
-    {
-        ComputeReducedMv();
-        ComputeReducedMe();
-    }
 
     if (hyperreduce)
     {
