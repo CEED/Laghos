@@ -1235,6 +1235,7 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Start();
 
                     basis->ProjectFOMtoROM(S, romS);
+                    cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
                     delete romOper;
                     romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,

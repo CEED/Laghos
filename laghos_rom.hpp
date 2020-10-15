@@ -31,18 +31,20 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
-    saveLoadOffset,
+    usePreviousSolution,
     useInitialState,
-    usePreviousSolution
+    saveLoadOffset,
+    interpolateOffset
 };
 
 static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"load", saveLoadOffset},
+        {"previous", usePreviousSolution},
         {"initial", useInitialState},
-        {"previous", usePreviousSolution}
+        {"load", saveLoadOffset},
+        {"interpolate", interpolateOffset}
     };
     auto iter = offsetMap.find(offsetType);
     MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
@@ -245,12 +247,9 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType == saveLoadOffset || input.offsetType == useInitialState)
-                {
-                    initX->write(path_init + "X" + std::to_string(window));
-                    initV->write(path_init + "V" + std::to_string(window));
-                    initE->write(path_init + "E" + std::to_string(window));
-                }
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
             }
         }
     }
