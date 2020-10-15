@@ -486,7 +486,7 @@ public:
         return BEsp;
     }
 
-    void ComputeReducedRHS();
+    void ComputeReducedMatrices();
 
     MPI_Comm comm;
 
