@@ -1,5 +1,12 @@
 NUM_PARALLEL_PROCESSORS=8
 testNames=(offline online romhr restore)
+runAbsoluteFOM="true"
+absoluteFOMOptions="-m data/cube01_hex.mesh -pt 211 -tf 0.01 -print"
+absoluteFOMTol="1e-6"
+absoluteFOMTolParallel="1e-1"
+absoluteRelErrorTol="1e-1"
+absoluteRelErrorTolParallel="1e-1"
+speedupPercentTol="200"
 case $subTestNum in
   1)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/sedov-blast/sedov-blast-time-window.csv -writesol -romsvds

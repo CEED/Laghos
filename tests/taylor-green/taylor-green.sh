@@ -1,5 +1,12 @@
 NUM_PARALLEL_PROCESSORS=8
 testNames=(offline online romhr restore)
+runAbsoluteFOM="true"
+absoluteFOMOptions="-p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -print"
+absoluteFOMTol="1e-6"
+absoluteFOMTolParallel="1"
+absoluteRelErrorTol="1e-1"
+absoluteRelErrorTolParallel="1e-1"
+speedupPercentTol="200"
 case $subTestNum in
   1)
     $LAGHOS -p 0 -rs 1 -iv -cfl 0.5 -tf 0.07 -pa -offline -writesol -romsvds

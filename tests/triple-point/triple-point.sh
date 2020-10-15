@@ -1,5 +1,12 @@
 NUM_PARALLEL_PROCESSORS=8
 testNames=(offline online romhr restore)
+runAbsoluteFOM="true"
+absoluteFOMOptions="-p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -print"
+absoluteFOMTol="1e-6"
+absoluteFOMTolParallel="1e-1"
+absoluteRelErrorTol="1e-1"
+absoluteRelErrorTolParallel="1e-1"
+speedupPercentTol="200"
 case $subTestNum in
   1)
     $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds
