@@ -467,25 +467,17 @@ do
 					num_steps="$(ls -v $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} | tail -1 | cut -f 1 -d '.' | sed 's/[^0-9]*//g')"
 					echo -n $num_steps > $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps
 					remove_header_of_solution_file() {
-						for filename in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Laghos_${num_steps}_${file_type}*; do
-							sed '1,/^Ordering/d' $filename | tail -n +2 > $filename.tmp && mv $filename.tmp $filename
+						for filename in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Laghos_${num_steps}_${file_type[0]}*; do
+							processor=$(cut -d "." -f2 <<< "$filename")
+							sed '1,/^Ordering/d' $filename | tail -n +2 > $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Sol_${file_type[1]}.${processor}
 						done
 					}
-					file_type=mesh
+					file_type=(mesh Position)
 					remove_header_of_solution_file
-					file_type=v
+					file_type=(v Velocity)
 					remove_header_of_solution_file
-					file_type=e
+					file_type=(e Energy)
 					remove_header_of_solution_file
-					if [[ "$MACHINE" == "Linux" ]]; then
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_mesh Sol_Position *Laghos_${num_steps}_mesh*)
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_v Sol_Velocity *Laghos_${num_steps}_v*)
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename Laghos_${num_steps}_e Sol_Energy *Laghos_${num_steps}_e*)
-					elif [[ "$MACHINE" == "Darwin" ]]; then
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_mesh/Sol_Position' *)
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_v/Sol_Velocity' *)
-						(cd $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} && rename 's/Laghos_${num_steps}_e/Sol_Energy' *)
-					fi
 				fi
 
 				# If doing dry run, skip comparisons
