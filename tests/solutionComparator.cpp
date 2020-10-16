@@ -55,6 +55,12 @@ void compareSolutions(string &baselineFile, string &targetFile, double errorBoun
     baseline.Load(baselineFiles, numProcessors, baselineDim);
     target.Load(targetFiles, numProcessors, targetDim);
 
+    if (baseline.Size() != target.Size()) {
+      cerr << "The solution vectors are different dimensions." << endl;
+      cerr << "Baseline dim: " << baseline.Size() << ", Target dim: " << target.Size() << endl;
+      abort();
+    }
+
     Vector diff = Vector(baseline.Size());
     try {
         subtract(baseline, target, diff);

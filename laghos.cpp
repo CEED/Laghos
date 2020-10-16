@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
     int vis_steps = 5;
     bool visit = false;
     bool gfprint = false;
-    const char *visit_basename = "results/Laghos";
+    const char *visit_basename = "Laghos";
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
@@ -758,7 +758,8 @@ int main(int argc, char *argv[])
     }
 
     // Save data for VisIt visualization.
-    const char *visit_outputPath = (outputPath + "/" + std::string(visit_basename)).c_str();
+    string visit_outputName = outputPath + "/" + std::string(visit_basename);
+    const char *visit_outputPath = visit_outputName.c_str();
     VisItDataCollection visit_dc(visit_outputPath, pmesh);
     if (visit)
     {
@@ -1405,7 +1406,7 @@ int main(int argc, char *argv[])
 
     if (visitDiffCycle >= 0)
     {
-        VisItDataCollection dc(MPI_COMM_WORLD, outputPath + "/results/Laghos", pmesh);
+        VisItDataCollection dc(MPI_COMM_WORLD, outputPath + "/Laghos", pmesh);
         dc.Load(visitDiffCycle);
         cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 

@@ -1,0 +1,18 @@
+void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+    Vector tv(gf->ParFESpace()->GetTrueVSize());
+    gf->GetTrueDofs(tv);
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = name + tmp;
+
+    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+    ofs.precision(16);
+
+    for (int i=0; i<tv.Size(); ++i)
+        ofs << tv[i] << std::endl;
+
+    ofs.close();
+}

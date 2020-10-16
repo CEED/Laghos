@@ -182,17 +182,8 @@ then
 		# Clone and compile master as branch
 		echo "Cloning master as the baseline branch" >> $setupLogFile 2>&1
 		git -C $DIR clone https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+		sed '/using namespace mfem;/r PrintParGridFunction.txt' Laghos/laghos.cpp | sed '/MFEM_VERIFY(!check || checks == 2, "Check error!");/r PrintParGridFunctionCall.txt' > temp.cpp && mv temp.cpp Laghos/laghos.cpp
 
-		# Changing precision of print in master
-		if [[ "$MACHINE" == "Linux" ]]; then
-			sed -i 's/mesh_ofs.precision(8)/mesh_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-			sed -i 's/v_ofs.precision(8)/v_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-			sed -i 's/e_ofs.precision(8)/e_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-		elif [[ "$MACHINE" == "Darwin" ]]; then
-			sed -i '' 's/mesh_ofs.precision(8)/mesh_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-			sed -i '' 's/v_ofs.precision(8)/v_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-			sed -i '' 's/e_ofs.precision(8)/e_ofs.precision(16)/g' $BASELINE_LAGHOS_DIR/laghos.cpp
-		fi
 	else
 
 		# Clone and compile rom-dev branch of Laghos as baseline
@@ -416,7 +407,7 @@ do
 					# Absolute on master branch requires different options for running Laghos
 					if [[ "$testtype" == "fom" ]]; then
 						mkdir -p $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}
-						LAGHOS="$HEADER laghos -k run/${OUTPUT_DIR}/Laghos"
+						LAGHOS="$HEADER laghos -k run/${OUTPUT_DIR}/Laghos -print"
 
 						# Run simulation from master branch
 						echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
@@ -461,24 +452,6 @@ do
 				# Necessary for now, mkdir in C++ does something weird where bash can't find the file
 				ls $BASELINE_LAGHOS_DIR/run > /dev/null
 				ls $BASE_DIR/run > /dev/null
-
-				# Create necessary files for absolute
-				if [[ "$absolute" == "true" ]] && [[ "$testtype" == "fom" ]]; then
-					num_steps="$(ls $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR} | sort -V | tail -1 | cut -f 1 -d '.' | sed 's/[^0-9]*//g')"
-					echo -n $num_steps > $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps
-					remove_header_of_solution_file() {
-						for filename in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Laghos_${num_steps}_${file_type[0]}*; do
-							processor=$(cut -d "." -f2 <<< "$filename")
-							sed '1,/^Ordering/d' $filename | tail -n +2 > $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/Sol_${file_type[1]}.${processor}
-						done
-					}
-					file_type=(mesh Position)
-					remove_header_of_solution_file
-					file_type=(v Velocity)
-					remove_header_of_solution_file
-					file_type=(e Energy)
-					remove_header_of_solution_file
-				fi
 
 				# If doing dry run, skip comparisons
 				if [[ "$dryRun" == "false" ]]; then
@@ -606,6 +579,7 @@ do
 						done
 					else
 						if [[ "$testtype" == "fom" ]]; then
+							offlineSpeed=$(sed -n -e 's/^.*Total time: //p' $simulationLogFile)
 							# After simulations complete, compare results
 							for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
 							do
@@ -623,8 +597,9 @@ do
 									check_fail
 								fi
 							done
-							offlineSpeed=$(sed -n -e 's/^.*Elapsed time for time loop: //p' $simulationLogFile)
 						elif [[ "$testtype" == "online" ]]; then
+							onlineSpeed=$(sed -n -e 's/^.*Total time: //p' $simulationLogFile)
+
 							# After simulations complete, compare results
 							for targetTestFile in $BASE_DIR/run/${OUTPUT_DIR}/*
 							do
@@ -642,9 +617,14 @@ do
 									check_fail
 								fi
 							done
-							echo "Checking speedup" >> $simulationLogFile 2>&1
-							onlineSpeed=$(sed -n -e 's/^.*Elapsed time for time loop: //p' $simulationLogFile)
-							$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupTol" >> $simulationLogFile 2>&1)
+							if [[ "$testFailed" == "false" ]]; then
+								echo "Checking speedup" >> $simulationLogFile 2>&1
+								$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupTol" >> $simulationLogFile 2>&1)
+								if [[ "${PIPESTATUS[0]}" -ne 0 ]];
+								then
+									set_fail
+								fi
+							fi
 						fi
 					fi
 				fi

@@ -1,12 +1,12 @@
 NUM_PARALLEL_PROCESSORS=4
 testNames=(offline romhr restore)
 runAbsoluteFOM="true"
-absoluteFOMOptions="-p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -pa -print"
+absoluteFOMOptions="-p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -pa"
 absoluteFOMTol="1e-14"
-absoluteFOMTolParallel="1e-1"
+absoluteFOMTolParallel="1e-14"
 absoluteRelErrorTol="1e-1"
 absoluteRelErrorTolParallel="1e-1"
-speedupTol="2"
+speedupTol="1.5"
 case $subTestNum in
   1)
     $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -pa -offline -writesol -romsvds -romos -romsrhs -romxv
