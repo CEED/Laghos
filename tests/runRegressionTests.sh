@@ -644,7 +644,7 @@ do
 							done
 							echo "Checking speedup" >> $simulationLogFile 2>&1
 							onlineSpeed=$(sed -n -e 's/^.*Elapsed time for time loop: //p' $simulationLogFile)
-							$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupPercentTol" >> $simulationLogFile 2>&1)
+							$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupTol" >> $simulationLogFile 2>&1)
 						fi
 					fi
 				fi
