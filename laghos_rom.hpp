@@ -79,9 +79,9 @@ struct ROM_Options
     int dimFe = -1;
 
     // Incremental SVD options
-    double model_linearity_tol = 1.e-7;
-    double model_singular_value_tol = 1.e-14;
-    double model_sampling_tol = 1.e-7;
+    double incSVD_linearity_tol = 1.e-7;
+    double incSVD_singular_value_tol = 1.e-14;
+    double incSVD_sampling_tol = 1.e-7;
 
     // Number of samples for each variable
     int sampX = 0;
@@ -161,28 +161,28 @@ public:
             CAROM::IncrementalSVDOptions inc_x_options(
                 tH1size,
                 max_model_dim,
-                input.model_linearity_tol,
+                input.incSVD_linearity_tol,
                 max_model_dim,
                 input.initial_dt,
-                input.model_sampling_tol,
+                input.incSVD_sampling_tol,
                 input.t_final,
                 false,
                 true
             );
-            inc_x_options.singular_value_tol = input.model_singular_value_tol;
+            inc_x_options.singular_value_tol = input.incSVD_singular_value_tol;
             inc_x_options.max_time_intervals = 1;
             CAROM::IncrementalSVDOptions inc_e_options(
                 tL2size,
                 max_model_dim,
-                input.model_linearity_tol,
+                input.incSVD_linearity_tol,
                 max_model_dim,
                 input.initial_dt,
-                input.model_sampling_tol,
+                input.incSVD_sampling_tol,
                 input.t_final,
                 false,
                 true
             );
-            inc_e_options.singular_value_tol = input.model_singular_value_tol;
+            inc_e_options.singular_value_tol = input.incSVD_singular_value_tol;
             inc_e_options.max_time_intervals = 1;
             generator_X = new CAROM::IncrementalSVDBasisGenerator(
                 inc_x_options,
