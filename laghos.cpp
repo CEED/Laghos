@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
     double rhoFactor = 1.0;
     int rom_paramID = -1;
     const char *normtype_char = "l2";
-    const char *offsetType = "load";
+    const char *offsetType = "previous";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -295,8 +295,6 @@ int main(int argc, char *argv[])
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
-    args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
-                   "Enable or disable parametric offset.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
@@ -783,6 +781,91 @@ int main(int argc, char *argv[])
     romOptions.parameterID = rom_paramID;
     romOptions.restore = rom_restore;
     romOptions.offsetType = getOffsetStyle(offsetType);
+
+
+    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    if (rom_offline)
+    {
+        MFEM_VERIFY(romOptions.parameterID >= 0 || romOptions.offsetType != interpolateOffset, "-rostype interpolate is not compatible with non-parametric ROM.");
+        MFEM_VERIFY(romOptions.parameterID == -1 || romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM.");
+        if (romOptions.parameterID <= 0)
+        {
+            if (myid == 0)
+            {
+                std::ofstream outfile_offlineParam(offlineParam_outputPath);
+                outfile_offlineParam << romOptions.useOffset << " " << romOptions.offsetType << " " << romOptions.RHSbasis << " " << numWindows << " " << twfile << endl;
+                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam.close();
+            }
+        }
+        else
+        {
+            std::ifstream infile_offlineParam(offlineParam_outputPath);
+            MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
+            std::string line;
+            std::vector<std::string> words;
+            std::getline(infile_offlineParam, line);
+            split_line(line, words);
+            MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+            MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
+            MFEM_VERIFY(std::stoi(words[2]) == romOptions.RHSbasis, "-romsrhs option does not match record.");
+            MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
+            MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
+            infile_offlineParam.close();
+            if (myid == 0)
+            {
+                std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
+                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam.close();
+            }
+        }
+    }
+
+    if (rom_online)
+    {
+        std::ifstream infile_offlineParam(offlineParam_outputPath);
+        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(infile_offlineParam, line);
+        split_line(line, words);
+        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
+
+        if (romOptions.offsetType == interpolateOffset)
+        {
+            int true_idx = -1;
+            double coeff_sum = 0.0;
+            while (std::getline(infile_offlineParam, line))
+            {
+                split_line(line, words);
+                romOptions.paramID_list.push_back(std::stoi(words[0]));
+                double coeff = 0.0;
+                coeff += (rhoFactor - atof(words[1].c_str())) * (rhoFactor - atof(words[1].c_str()));
+                coeff += (blast_energyFactor - atof(words[2].c_str())) * (blast_energyFactor - atof(words[2].c_str()));
+                if (coeff == 0.0)
+                {
+                    true_idx = romOptions.coeff_list.size();
+                }
+                coeff = 1 / sqrt(coeff);
+                coeff_sum += coeff;
+                romOptions.coeff_list.push_back(coeff);
+            }
+            for (int param=0; param<romOptions.paramID_list.size(); ++param)
+            {
+                if (true_idx >= 0)
+                {
+                    romOptions.coeff_list[param] = (param == true_idx) ? 1.0 : 0.0;
+                }
+                else
+                {
+                    romOptions.coeff_list[param] /= coeff_sum;
+                }
+            }
+        }
+
+        infile_offlineParam.close();
+    }
 
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that
