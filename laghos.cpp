@@ -795,8 +795,14 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 std::ofstream outfile_offlineParam(offlineParam_outputPath);
-                outfile_offlineParam << romOptions.useOffset << " " << romOptions.offsetType << " " << romOptions.RHSbasis << " " << numWindows << " " << twfile << endl;
-                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.useOffset << " ";
+                outfile_offlineParam << romOptions.offsetType << " ";
+                outfile_offlineParam << romOptions.RHSbasis << " ";
+                outfile_offlineParam << numWindows << " ";
+                outfile_offlineParam << twfile << endl;
+                outfile_offlineParam << romOptions.parameterID << " ";
+                outfile_offlineParam << rhoFactor << " ";
+                outfile_offlineParam << blast_energyFactor << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -817,7 +823,9 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
-                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.parameterID << " ";
+                outfile_offlineParam << rhoFactor << " ";
+                outfile_offlineParam << blast_energyFactor << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -865,7 +873,6 @@ int main(int argc, char *argv[])
                 }
             }
         }
-
         infile_offlineParam.close();
     }
 
