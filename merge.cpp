@@ -81,7 +81,6 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator, window_basis_generator;
     CAROM::StaticSVDOptions static_svd_options(dim, totalSamples);
     static_svd_options.max_time_intervals = 1;
-    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
 
     int windowSamples = 0;
     for (int paramID=0; paramID<nsets; ++paramID)
@@ -100,6 +99,7 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     for (int paramID=0; paramID<nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0_snapshot";
+        basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
         basis_generator->loadSamples(snapshot_filename,"snapshot");
 
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
