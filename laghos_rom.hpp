@@ -61,6 +61,8 @@ struct ROM_Options
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
+    double rhoFactor = 1.0; // factor for scaling rho
+    double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
     bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
@@ -90,8 +92,6 @@ struct ROM_Options
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
-    std::vector<int> paramID_list; // list of all offline parameter IDs
-    std::vector<double> coeff_list; // list of all interpolating coefficients with respect to offline parameters
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -574,6 +574,9 @@ private:
     double energyFraction_X;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
+
+    std::vector<int> paramID_list;
+    std::vector<double> coeff_list;
 };
 
 class ROM_Operator : public TimeDependentOperator
