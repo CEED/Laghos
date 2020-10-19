@@ -182,7 +182,6 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     double rhoFactor = 1.0;
-    int rom_paramID = -1;
     const char *normtype_char = "l2";
     const char *offsetType = "previous";
     Array<double> twep;
@@ -294,7 +293,7 @@ int main(int argc, char *argv[])
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
-    args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
+    args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
                    "Enable or disable parametric offset."); // TODO: redundant, remove after PR 98 and remove in regression tests
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -780,16 +779,17 @@ int main(int argc, char *argv[])
     romOptions.L2FESpace = &L2FESpace;
     romOptions.window = 0;
     romOptions.FOMoper = &oper;
-    romOptions.parameterID = rom_paramID;
     romOptions.restore = rom_restore;
     romOptions.offsetType = getOffsetStyle(offsetType);
-
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     if (rom_offline)
     {
-        MFEM_VERIFY(romOptions.parameterID >= 0 || romOptions.offsetType != interpolateOffset, "-rostype interpolate is not compatible with non-parametric ROM.");
-        MFEM_VERIFY(romOptions.parameterID == -1 || romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM.");
+        int err_rostype;
+        err_rostype = (romOptions.parameterID == -1 && romOptions.offsetType == interpolateOffset);
+        MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
+        err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
+        MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
         if (romOptions.parameterID <= 0)
         {
             if (myid == 0)
