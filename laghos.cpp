@@ -165,7 +165,6 @@ int main(int argc, char *argv[])
     const char *twpfile = "twp.csv";
     int partition_type = 0;
     double blast_energy = 0.25;
-    double blast_energyFactor = 1.0;
     double blast_position[] = {0.0, 0.0, 0.0};
     bool rom_offline = false;
     bool rom_online = false;
@@ -181,8 +180,6 @@ int main(int argc, char *argv[])
     bool writeSol = false;
     bool solDiff = false;
     bool match_end_time = false;
-    double rhoFactor = 1.0;
-    int rom_paramID = -1;
     const char *normtype_char = "l2";
     const char *offsetType = "previous";
     Array<double> twep;
@@ -292,9 +289,9 @@ int main(int argc, char *argv[])
                    "Sample RHS");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
-    args.AddOption(&rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
-    args.AddOption(&blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
-    args.AddOption(&rom_paramID, "-rpar", "--romparam", "ROM offline parameter index.");
+    args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
+    args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
@@ -650,7 +647,7 @@ int main(int argc, char *argv[])
     // time evolution.
     ParGridFunction rho(&L2FESpace);
     FunctionCoefficient rho_coeff0(rho0);
-    ProductCoefficient rho_coeff(rhoFactor, rho_coeff0);
+    ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     L2_FECollection l2_fec(order_e, pmesh->Dimension());
     ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
     ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
@@ -660,7 +657,7 @@ int main(int argc, char *argv[])
     {
         // For the Sedov test, we use a delta function at the origin.
         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                                 blast_position[2], blast_energyFactor*blast_energy);
+                                 blast_position[2], romOptions.blast_energyFactor*blast_energy);
         l2_e.ProjectCoefficient(e_coeff);
     }
     else
@@ -778,23 +775,30 @@ int main(int argc, char *argv[])
     romOptions.L2FESpace = &L2FESpace;
     romOptions.window = 0;
     romOptions.FOMoper = &oper;
-    romOptions.parameterID = rom_paramID;
     romOptions.restore = rom_restore;
     romOptions.offsetType = getOffsetStyle(offsetType);
-
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     if (rom_offline)
     {
-        MFEM_VERIFY(romOptions.parameterID >= 0 || romOptions.offsetType != interpolateOffset, "-rostype interpolate is not compatible with non-parametric ROM.");
-        MFEM_VERIFY(romOptions.parameterID == -1 || romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM.");
+        int err_rostype;
+        err_rostype = (romOptions.parameterID == -1 && romOptions.offsetType == interpolateOffset);
+        MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
+        err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
+        MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
         if (romOptions.parameterID <= 0)
         {
             if (myid == 0)
             {
                 std::ofstream outfile_offlineParam(offlineParam_outputPath);
-                outfile_offlineParam << romOptions.useOffset << " " << romOptions.offsetType << " " << romOptions.RHSbasis << " " << numWindows << " " << twfile << endl;
-                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.useOffset << " ";
+                outfile_offlineParam << romOptions.offsetType << " ";
+                outfile_offlineParam << romOptions.RHSbasis << " ";
+                outfile_offlineParam << numWindows << " ";
+                outfile_offlineParam << twfile << endl;
+                outfile_offlineParam << romOptions.parameterID << " ";
+                outfile_offlineParam << romOptions.rhoFactor << " ";
+                outfile_offlineParam << romOptions.blast_energyFactor << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -815,7 +819,9 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
-                outfile_offlineParam << romOptions.parameterID << " " <<  rhoFactor << " " << blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.parameterID << " ";
+                outfile_offlineParam << romOptions.rhoFactor << " ";
+                outfile_offlineParam << romOptions.blast_energyFactor << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -831,39 +837,6 @@ int main(int argc, char *argv[])
         split_line(line, words);
         MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
         MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-
-        if (romOptions.offsetType == interpolateOffset)
-        {
-            int true_idx = -1;
-            double coeff_sum = 0.0;
-            while (std::getline(infile_offlineParam, line))
-            {
-                split_line(line, words);
-                romOptions.paramID_list.push_back(std::stoi(words[0]));
-                double coeff = 0.0;
-                coeff += (rhoFactor - atof(words[1].c_str())) * (rhoFactor - atof(words[1].c_str()));
-                coeff += (blast_energyFactor - atof(words[2].c_str())) * (blast_energyFactor - atof(words[2].c_str()));
-                if (coeff == 0.0)
-                {
-                    true_idx = romOptions.coeff_list.size();
-                }
-                coeff = 1 / sqrt(coeff);
-                coeff_sum += coeff;
-                romOptions.coeff_list.push_back(coeff);
-            }
-            for (int param=0; param<romOptions.paramID_list.size(); ++param)
-            {
-                if (true_idx >= 0)
-                {
-                    romOptions.coeff_list[param] = (param == true_idx) ? 1.0 : 0.0;
-                }
-                else
-                {
-                    romOptions.coeff_list[param] /= coeff_sum;
-                }
-            }
-        }
-
         infile_offlineParam.close();
     }
 
