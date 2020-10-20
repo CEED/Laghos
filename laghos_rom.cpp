@@ -671,7 +671,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
-    // Perform DEIM or GNAT to find sample DOF's.
+    // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
     if (RHSbasis)
     {
         if (use_qdeim)
@@ -684,6 +684,15 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          rank,
                          nprocs,
                          numSamplesV);
+
+            CAROM::QDEIM(basisFe,
+                         rdimfe,
+                         sample_dofs_E.data(),
+                         num_sample_dofs_per_procE.data(),
+                         *BsinvE,
+                         rank,
+                         nprocs,
+                         numSamplesE);
         }
         else
         {
@@ -695,16 +704,16 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         rank,
                         nprocs,
                         numSamplesV);
-        }
 
-        CAROM::GNAT(basisFe,
-                    rdimfe,
-                    sample_dofs_E.data(),
-                    num_sample_dofs_per_procE.data(),
-                    *BsinvE,
-                    rank,
-                    nprocs,
-                    numSamplesE);
+            CAROM::GNAT(basisFe,
+                        rdimfe,
+                        sample_dofs_E.data(),
+                        num_sample_dofs_per_procE.data(),
+                        *BsinvE,
+                        rank,
+                        nprocs,
+                        numSamplesE);
+        }
     }
     else
     {

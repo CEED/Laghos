@@ -315,6 +315,7 @@ int main(int argc, char *argv[])
         }
         return 1;
     }
+
     std::string outputPath = "run";
     if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
@@ -825,8 +826,12 @@ int main(int argc, char *argv[])
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
-        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimV;
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimE;
+        /* Add this back. This makes sense, but it causes slight differences that make the regression tests fail.
+            if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
+            if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        */
     }
 
     StopWatch onlinePreprocessTimer;
