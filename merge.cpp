@@ -12,8 +12,8 @@ enum VariableName { X, V, E, Fv, Fe };
 enum offsetStyle
 {
     usePreviousSolution,
-    saveLoadOffset,
     useInitialState,
+    saveLoadOffset,
     interpolateOffset
 };
 
