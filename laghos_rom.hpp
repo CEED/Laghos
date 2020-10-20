@@ -31,18 +31,20 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
+    usePreviousSolution,
     saveLoadOffset,
     useInitialState,
-    usePreviousSolution
+    interpolateOffset
 };
 
 static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"load", saveLoadOffset},
+        {"previous", usePreviousSolution},
         {"initial", useInitialState},
-        {"previous", usePreviousSolution}
+        {"load", saveLoadOffset},
+        {"interpolate", interpolateOffset}
     };
     auto iter = offsetMap.find(offsetType);
     MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
@@ -59,6 +61,8 @@ struct ROM_Options
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
+    double rhoFactor = 1.0; // factor for scaling rho
+    double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
     bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
@@ -86,8 +90,8 @@ struct ROM_Options
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
-    bool paramOffset = false; // used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    offsetStyle offsetType = saveLoadOffset; // types of offset in time windows
+    bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
+    offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -212,8 +216,7 @@ public:
 
         if (offsetInit)
         {
-            //std::string path_init = (parameterID >= 0) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init"; // TODO: Tony PR77
-            std::string path_init = basename + "/ROMoffset/init";
+            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
@@ -245,7 +248,7 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType == saveLoadOffset || input.offsetType == useInitialState)
+                if (input.offsetType != usePreviousSolution)
                 {
                     initX->write(path_init + "X" + std::to_string(window));
                     initV->write(path_init + "V" + std::to_string(window));
@@ -571,6 +574,9 @@ private:
     double energyFraction_X;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
+
+    std::vector<int> paramID_list;
+    std::vector<double> coeff_list;
 };
 
 class ROM_Operator : public TimeDependentOperator
