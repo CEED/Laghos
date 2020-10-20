@@ -1,6 +1,5 @@
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "laghos_utils.hpp"
 
@@ -180,14 +179,4 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
     }
 
     return 0;
-}
-
-void split_line(const std::string &line, std::vector<std::string> &words)
-{
-    words.clear();
-    std::istringstream iss(line);
-    std::string new_word;
-    while (std::getline(iss, new_word, ' ')) {
-        words.push_back(new_word);
-    }
 }

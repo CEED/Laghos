@@ -116,17 +116,6 @@ int main(int argc, char *argv[])
         numWindows = 1;
     }
 
-    std::ifstream infile_offlineParam(outputPath + "/offline_param.csv");
-    MFEM_VERIFY(infile_offlineParam.is_open(), "Parameter record file does not exist.");
-    std::string line;
-    std::vector<std::string> words;
-    std::getline(infile_offlineParam, line);
-    split_line(line, words);
-    MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
-    MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-    MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
-    infile_offlineParam.close();
-
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);
     Array<int> snapshotSizeFe(nset);
