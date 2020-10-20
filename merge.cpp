@@ -31,8 +31,8 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     return iter->second;
 }
 
-void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, const std::string& basis_filename,
-                             const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
+void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
+                             const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
@@ -73,8 +73,9 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
     }
 }
 
-void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v, const std::string& varName, const std::string& basis_filename,
-                             const int windowOverlapSamples, const int basisWindow, const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+                             const std::string& varName, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
+                             const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
@@ -145,8 +146,9 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     }
 }
 
-void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v, const bool usingWindows, const int windowNumSamples,
-                    const int windowOverlapSamples, const int basisWindow, const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+                    const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
+                    const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                     const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::string varName;
@@ -171,7 +173,8 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
 
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basis_filename, windowOverlapSamples, basisWindow, useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
+        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basis_filename, windowOverlapSamples, basisWindow,
+                                useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
@@ -204,7 +207,8 @@ void GetSnapshotTime(const int id, const std::string& basename, const std::strin
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
+void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
+                              Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;

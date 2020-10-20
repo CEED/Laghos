@@ -919,8 +919,8 @@ int main(int argc, char *argv[])
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
+            cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
-        cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
                                    cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
@@ -1293,7 +1293,10 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Start();
 
                     basis->ProjectFOMtoROM(S, romS);
-                    cout << myid << ": initial romS norm " << romS.Norml2() << endl;
+                    if (myid == 0)
+                    {
+                        cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+                    }
 
                     delete romOper;
                     romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
