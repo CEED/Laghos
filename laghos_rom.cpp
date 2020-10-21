@@ -247,19 +247,23 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     }
 }
 
-CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
+CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows, const bool addOneVec)
 {
-    CAROM::Matrix* S = new CAROM::Matrix(numRows, std::min(N, A->numColumns()), A->distributed());
+    const int numColumns = std::min(N, A->numColumns());
+    CAROM::Matrix* S = new CAROM::Matrix(numRows, numColumns+addOneVec, A->distributed());
     for (int i=0; i<S->numRows(); ++i)
     {
-        for (int j=0; j<S->numColumns(); ++j)
+        for (int j=0; j<numColumns; ++j)
             (*S)(i,j) = (*A)(rowOS + i, j);
+        if (addOneVec)
+            (*S)(i,numColumns) = 1;
     }
+
 
     return S;
 }
 
-CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim)
+CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim, const bool addOneVec)
 {
     CAROM::BasisReader reader(filename);
     const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
@@ -269,7 +273,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
 
     // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
     // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
-    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, rowOS, vectorSize);
+    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, rowOS, vectorSize, addOneVec);
 
     MFEM_VERIFY(basisCopy->numRows() == vectorSize, "");
 
@@ -327,7 +331,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
     mfH1.SetSize(tH1size);
     mfL2.SetSize(tL2size);
 
-    ReadSolutionBases(input.window);
+    ReadSolutionBases(input.window, input.conservativeBases);
 
     if (mergeXV)
     {
@@ -1193,25 +1197,25 @@ int ROM_Basis::SolutionSizeFOM() const
     return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
-void ROM_Basis::ReadSolutionBases(const int window)
+void ROM_Basis::ReadSolutionBases(const int window, const bool conservativeBases)
 {
     if (!useVX)
-        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv, conservativeBases);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime, conservativeBases);
 
     if (useXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx, false);
 
     if (useVX)
         basisV = basisX;
 
     if (RHSbasis)
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv, false);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe, false);
     }
 
     if (mergeXV)
@@ -1265,7 +1269,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
 
         // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
-        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
+        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size, false);
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
     }

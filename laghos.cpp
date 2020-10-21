@@ -287,6 +287,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.RHSbasis, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
                    "Sample RHS");
+    args.AddOption(&romOptions.conservativeBases, "-romconserve", "--romconservativebases", "-no-romconverse", "--no-romconservativebases",
+                   "Use conservative bases for velocity and energy");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");

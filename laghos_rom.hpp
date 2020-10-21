@@ -68,6 +68,7 @@ struct ROM_Options
     bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool conservativeBases = false; // if true, add unity vector for velocity and energy bases
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -405,7 +406,7 @@ public:
         delete BX0;
     }
 
-    void ReadSolutionBases(const int window);
+    void ReadSolutionBases(const int window, const bool conservativeBases);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
