@@ -250,15 +250,14 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
 CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows, const bool addOneVec)
 {
     const int numColumns = std::min(N, A->numColumns());
-    CAROM::Matrix* S = new CAROM::Matrix(numRows, numColumns+addOneVec, A->distributed());
+    CAROM::Matrix* S = new CAROM::Matrix(numRows, numColumns, A->distributed());
     for (int i=0; i<S->numRows(); ++i)
     {
-        for (int j=0; j<numColumns; ++j)
+        for (int j=0; j<numColumns-addOneVec; ++j)
             (*S)(i,j) = (*A)(rowOS + i, j);
         if (addOneVec)
-            (*S)(i,numColumns) = 1;
+            (*S)(i,numColumns-1) = 1;
     }
-
 
     return S;
 }

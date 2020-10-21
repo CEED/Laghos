@@ -907,6 +907,13 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
+
+        if (romOptions.conservativeBases)
+        {
+            romOptions.dimV += 1;
+            romOptions.dimE += 1;
+        }
+
         basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
 
         if (romOptions.mergeXV)
