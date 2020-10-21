@@ -443,6 +443,9 @@ int main(int argc, char *argv[])
     Array<int> snapshotSizeFe(nset);
     int dimX, dimV, dimE, dimFv, dimFe;
 
+    StopWatch mergeTimer;
+    mergeTimer.Start();
+
     for (int sampleWindow = 0; sampleWindow < numWindows; ++sampleWindow)
     {
         GetSnapshotDim(0, outputPath, "X", sampleWindow, dimX, snapshotSize[0]);
@@ -519,5 +522,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    mergeTimer.Stop();
+    if (myid == 0)
+    {
+        cout << "Elapsed time for merge: " << mergeTimer.RealTime() << " sec\n";
+    }
     return 0;
 }
