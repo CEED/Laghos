@@ -72,7 +72,7 @@ struct ROM_Options
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
-    int parameterID = 0; // index of parameters chosen for this Laghos simulation
+    int parameterID = -1; // index of parameters chosen for this Laghos simulation
     hydrodynamics::LagrangianHydroOperator *FOMoper = NULL; // FOM operator
 
     // Variable basis dimensions
