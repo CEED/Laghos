@@ -31,8 +31,8 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     return iter->second;
 }
 
-void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, const std::string& basis_filename,
-                             const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
+void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
+                             const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
@@ -73,15 +73,15 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
     }
 }
 
-void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v, const std::string& varName, const std::string& basis_filename,
-                             const int windowOverlapSamples, const int basisWindow, const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+                             const std::string& varName, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
+                             const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator, window_basis_generator;
     CAROM::StaticSVDOptions static_svd_options(dim, totalSamples);
     static_svd_options.max_time_intervals = 1;
-    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
 
     int windowSamples = 0;
     for (int paramID=0; paramID<nsets; ++paramID)
@@ -100,6 +100,7 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     for (int paramID=0; paramID<nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0_snapshot";
+        basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
         basis_generator->loadSamples(snapshot_filename,"snapshot");
 
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
@@ -145,8 +146,9 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     }
 }
 
-void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v, const bool usingWindows, const int windowNumSamples,
-                    const int windowOverlapSamples, const int basisWindow, const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+                    const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
+                    const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                     const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::string varName;
@@ -171,7 +173,8 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
 
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basis_filename, windowOverlapSamples, basisWindow, useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
+        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basis_filename, windowOverlapSamples, basisWindow,
+                                useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
@@ -204,7 +207,8 @@ void GetSnapshotTime(const int id, const std::string& basename, const std::strin
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
+void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
+                              Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
@@ -269,7 +273,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         // A matrix offsetAllWindows is assembled by appending offsetCurrentWindow for each basis window
         // A basis window then takes the snapshots with indices between two consecutive vectors in offsetAllWindows inclusively,
         // which include the last overlapping snapshot in previous time window, all the snapshots taken strictly before windowRight, 
-        // and the overlapping snapshot just taken at or after windowRight, making sure no data is missed by closing the basis window at or before windowRight 
+        // and the overlapping snapshot just taken at or after windowRight, making sure no data is missed by closing the basis window at or before windowRight
         for (int paramID = 0; paramID < nset; ++paramID)
         {
             for (int t = 0; t < windowNumSamples + 2; ++t)
