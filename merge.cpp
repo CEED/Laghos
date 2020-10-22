@@ -272,7 +272,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         // Record a vector, offsetCurrentWindow, of the largest snapshot index whose time taken is smaller than windowRight for every variable and parameter
         // A matrix offsetAllWindows is assembled by appending offsetCurrentWindow for each basis window
         // A basis window then takes the snapshots with indices between two consecutive vectors in offsetAllWindows inclusively,
-        // which include the last overlapping snapshot in previous time window, all the snapshots taken strictly before windowRight, 
+        // which include the last overlapping snapshot in previous time window, all the snapshots taken strictly before windowRight,
         // and the overlapping snapshot just taken at or after windowRight, making sure no data is missed by closing the basis window at or before windowRight
         for (int paramID = 0; paramID < nset; ++paramID)
         {
@@ -313,9 +313,9 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         numBasisWindows += 1;
 
         // Find the largest time, windowLeft, such that the last snapshot is counted for every variable and parameter
-        // The next basis window takes this snapshot, making sure no data is missed by opening the next basis window at or after windowLeft 
-        // By opening new basis window at the midpoint of windowLeft and windowRight, 
-        // we make sure no data is missed in both basis windows 
+        // The next basis window takes this snapshot, making sure no data is missed by opening the next basis window at or after windowLeft
+        // By opening new basis window at the midpoint of windowLeft and windowRight,
+        // we make sure no data is missed in both basis windows
         for (int paramID = 0; paramID < nset; ++paramID)
         {
             tTemp[paramID+nset*VariableName::X] = tSnapX[paramID].back();
