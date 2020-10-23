@@ -563,25 +563,37 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    }
 }
 
+
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
-   // This should be turned into a kernel so that it could be displayed in pa
-   if (!p_assembly)
-   {
-      Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
-      one = 1.0;
-      Array<int> l2dofs;
-      double loc_ie = 0.0;
-      for (int e = 0; e < NE; e++)
-      {
-         L2.GetElementDofs(e, l2dofs);
-         gf.GetSubVector(l2dofs, loc_e);
-         loc_ie += Me(e).InnerProduct(loc_e, one);
-      }
-      MPI_Comm comm = H1.GetParMesh()->GetComm();
-      MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
-   }
+   
+    // get the restriction and interpolator objects 
+    const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(ir);
+    l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+    auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+    const int NQ = ir.GetNPoints(); 
+   Vector e_vector(NE*NQ), eintQ(NE*NQ);
+
+    // Get internal energy at the quadrature points
+    L2r->Mult(gf, e_vector);
+    l2_interpolator->Values(e_vector, eintQ);
+
+    // Get the IE, initial weighted mass 
+    auto ie_vals = mfem::Reshape(eintQ.Read(),NQ, NE);
+    auto initial_mass = mfem::Reshape(qdata.rho0DetJ0w.Read(),NQ, NE);
+
+
+    double internal_energy = 0;
+    for (int e = 0; e < NE; ++e) {
+        for (int q = 0; q < NQ; ++q) {
+            
+            internal_energy += initial_mass(q,e)*ie_vals(q,e);
+
+        }
+    }
+   MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, L2.GetParMesh()->GetComm());
+
    return glob_ie;
 }
 

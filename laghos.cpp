@@ -663,15 +663,19 @@ int main(int argc, char *argv[])
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
+         const double internal_energy = hydro.InternalEnergy(e_gf);
          if (mpi.Root())
          {
             const double sqrt_norm = sqrt(norm);
+
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
                  << ",\tt = " << std::setw(5) << std::setprecision(4) << t
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
-                 << sqrt_norm;
+                 << sqrt_norm
+                 << ",\t|IE| = " << std::setprecision(10) << std::scientific
+                 << internal_energy;
             cout << std::fixed;
             if (mem_usage)
             {
