@@ -214,6 +214,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
     const int numVar = (rhsBasis) ? 5 : 3;
     std::vector<int> numSnap(nset*numVar);
+    // The snapshot time vectors are placed in descending order, with the last element is when the first snapshot is taken
     for (int paramID = 0; paramID < nset; ++paramID)
     {
         GetSnapshotTime(paramID, basename, "X", tVec);
@@ -245,7 +246,6 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
     bool lastBasisWindow = false;
     std::vector<double> tTemp(nset*numVar, 0.0);
     std::vector<int> offsetCurrentWindow(nset*numVar, 0);
-    std::vector<double> twepTemp;
 
     offsetAllWindows.push_back(offsetCurrentWindow);
     numBasisWindows = 0;
@@ -313,9 +313,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         numBasisWindows += 1;
 
         // Find the largest time, windowLeft, such that the last snapshot is counted for every variable and parameter
-        // The next basis window takes this snapshot, making sure no data is missed by opening the next basis window at or after windowLeft
-        // By opening new basis window at the midpoint of windowLeft and windowRight,
-        // we make sure no data is missed in both basis windows
+        // The next basis window takes this snapshot and is opened at the midpoint of windowLeft and windowRight,
         for (int paramID = 0; paramID < nset; ++paramID)
         {
             tTemp[paramID+nset*VariableName::X] = tSnapX[paramID].back();
@@ -331,19 +329,15 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
 
         double windowLeft = *max_element(tTemp.begin(), tTemp.end());
         double overlapMidpoint = (windowLeft + windowRight) / 2;
-        twepTemp.push_back(overlapMidpoint);
+        twep.Append(overlapMidpoint);
 
         if (numSnap[0] == offsetCurrentWindow[0]+1)
         {
-            MFEM_VERIFY(windowLeft == windowRight, "");
+            for (int i = 1; i < nset*numVar; ++i)
+                MFEM_VERIFY(numSnap[i] == offsetCurrentWindow[i]+1, "Fail to merge since not all samples are used up");
+            MFEM_VERIFY(windowLeft == windowRight, "Fail to merge since windowLeft is not equal to windowRight at the final time");
             lastBasisWindow = true;
         }
-    }
-
-    twep.SetSize(numBasisWindows);
-    for (int basisWindow = 0; basisWindow < numBasisWindows; ++basisWindow)
-    {
-        twep[basisWindow] = twepTemp[basisWindow];
     }
 }
 
