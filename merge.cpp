@@ -312,8 +312,6 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         offsetAllWindows.push_back(offsetCurrentWindow);
         numBasisWindows += 1;
 
-        // Find the largest time, windowLeft, such that the last snapshot is counted for every variable and parameter
-        // The next basis window takes this snapshot and is opened at the midpoint of windowLeft and windowRight,
         for (int paramID = 0; paramID < nset; ++paramID)
         {
             tTemp[paramID+nset*VariableName::X] = tSnapX[paramID].back();
@@ -327,6 +325,8 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
             }
         }
 
+        // Find the largest time, windowLeft, such that the last snapshot is counted for every variable and parameter
+        // The next basis window takes this snapshot and is opened at the midpoint of windowLeft and windowRight,
         double windowLeft = *max_element(tTemp.begin(), tTemp.end());
         double overlapMidpoint = (windowLeft + windowRight) / 2;
         twep.Append(overlapMidpoint);
@@ -496,7 +496,6 @@ int main(int argc, char *argv[])
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
-            args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
             if (rhsBasis)
             {
                 LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
