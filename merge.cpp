@@ -326,7 +326,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         }
 
         // Find the largest time, windowLeft, such that the last snapshot is counted for every variable and parameter
-        // The next basis window takes this snapshot and is opened at the midpoint of windowLeft and windowRight,
+        // The next basis window takes this snapshot and is opened at the midpoint of windowLeft and windowRight.
         double windowLeft = *max_element(tTemp.begin(), tTemp.end());
         double overlapMidpoint = (windowLeft + windowRight) / 2;
         twep.Append(overlapMidpoint);
