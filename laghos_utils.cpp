@@ -11,7 +11,7 @@ void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energ
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Matrix* sing_vals = bg->getSingularValues();
 
-    MFEM_VERIFY(rom_dim == sing_vals->numColumns(), "");
+    MFEM_VERIFY(rom_dim <= sing_vals->numColumns(), "");
 
     double sum = 0.0;
     for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
