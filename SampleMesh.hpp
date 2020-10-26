@@ -807,6 +807,7 @@ void CreateSampleMesh(ParMesh& pmesh, ParFiniteElementSpace& H1DummySpace,
     if (myid == 0)
     {
         sample_pmesh = new ParMesh(rom_com, *sample_mesh);
+        delete sample_mesh;
 
         // Create fespaces on sample mesh
         spfespace1 = new ParFiniteElementSpace(sample_pmesh, &fecoll1, fespace1.GetVDim());

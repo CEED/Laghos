@@ -382,6 +382,9 @@ public:
         delete rX;
         delete rV;
         delete rE;
+        delete rX2;
+        delete rV2;
+        delete rE2;
         delete basisX;
         if (!useXV && !useVX && !mergeXV) delete basisV;
         delete basisE;
@@ -398,10 +401,21 @@ public:
         delete BXsp;
         delete BVsp;
         delete BEsp;
+        delete BFvsp;
+        delete BFesp;
         delete BsinvX;
         delete BsinvV;
         delete BsinvE;
         delete BX0;
+        delete initX;
+        delete initV;
+        delete initE;
+        delete initXsp;
+        delete initVsp;
+        delete initEsp;
+        delete BXXinv;
+        delete BVVinv;
+        delete BEEinv;
     }
 
     void ReadSolutionBases(const int window);
@@ -617,6 +631,7 @@ public:
         delete mat_fes;
         delete mat_fec;
         delete spmesh;
+        delete xsp_gf;
     }
 
 private:
