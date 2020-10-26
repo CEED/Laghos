@@ -6,6 +6,6 @@ case $subTestNum in
     $MERGE -nset 1 -rhs -nwin 2 -nwinsamp 125 -nwinover 30
     ;;
   2)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype previous -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -rparos -nwin 2 -twp twpTemp.csv
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype previous -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -nwin 2 -twp twpTemp.csv
     ;;
 esac
