@@ -114,11 +114,6 @@ public:
     {
         const int window = input.window;
 
-        if (sampleF)
-        {
-            MFEM_VERIFY(offsetInit, "");
-        }
-
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
         const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
 
