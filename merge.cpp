@@ -429,6 +429,8 @@ int main(int argc, char *argv[])
     std::vector<std::string> words;
     std::getline(infile_offlineParam, line);
     split_line(line, words);
+    MFEM_VERIFY(std::stoi(words[0]) == useOffset, "-romos option does not match record.");
+    MFEM_VERIFY(std::stoi(words[1]) == trueOffsetType, "-romostype option does not match record.");
     MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
     MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
     MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
@@ -438,6 +440,9 @@ int main(int argc, char *argv[])
     Array<int> snapshotSizeFv(nset);
     Array<int> snapshotSizeFe(nset);
     int dimX, dimV, dimE, dimFv, dimFe;
+
+    StopWatch mergeTimer;
+    mergeTimer.Start();
 
     for (int sampleWindow = 0; sampleWindow < numWindows; ++sampleWindow)
     {
@@ -514,5 +519,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    mergeTimer.Stop();
+    if (myid == 0)
+    {
+        cout << "Elapsed time for merge: " << mergeTimer.RealTime() << " sec\n";
+    }
     return 0;
 }
