@@ -1038,7 +1038,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         spV = new CAROM::Vector(size_H1_sp, false);
         spE = new CAROM::Vector(size_L2_sp, false);
 
-        sX = new CAROM::Vector(numSamplesX, false);
+        sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
         sV = new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
 
