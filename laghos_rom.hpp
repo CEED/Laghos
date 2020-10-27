@@ -406,7 +406,7 @@ public:
         delete BX0;
     }
 
-    void ReadSolutionBases(const int window, const bool conservativeBases);
+    void ReadSolutionBases(const int window, const bool conservativeBases, ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
