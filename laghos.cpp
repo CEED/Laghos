@@ -1467,7 +1467,7 @@ int main(int argc, char *argv[])
 
     if (visitDiffCycle >= 0)
     {
-        VisItDataCollection dc(MPI_COMM_WORLD, outputPath + "/Laghos", pmesh);
+        VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
         dc.Load(visitDiffCycle);
         cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
