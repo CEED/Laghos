@@ -295,8 +295,6 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
     args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
-    args.AddOption(&romOptions.paramOffset, "-rparos", "--romparamoffset", "-no-rparos", "--no-romparamoffset",
-                   "Enable or disable parametric offset."); // TODO: redundant, remove after PR 98 and remove in regression tests
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
@@ -922,8 +920,8 @@ int main(int argc, char *argv[])
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
+            cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
-        cout << myid << ": initial romS norm " << romS.Norml2() << endl;
 
         romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
                                    cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
@@ -1296,6 +1294,10 @@ int main(int argc, char *argv[])
                     timeLoopTimer.Start();
 
                     basis->ProjectFOMtoROM(S, romS);
+                    if (myid == 0)
+                    {
+                        cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+                    }
 
                     delete romOper;
                     romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
