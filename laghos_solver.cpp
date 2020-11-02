@@ -564,6 +564,68 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 }
 
 
+
+double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,const int Q1D,const int VDIM,const double ln_norm,
+const mfem::Vector& mass, const mfem::Vector& f)
+{
+    
+    auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
+    mfem::Vector integrand(NE*NQ); 
+    auto I = Reshape(integrand.Write(), NQ, NE);
+
+   if (DIM == 1){
+      for (int e=0; e < NE; ++e){
+         for (int q = 0; q < NQ; ++q) {
+               double vmag = 0; 
+               for(int k = 0; k < VDIM; k++){
+                  vmag += pow(f_vals(k,q,e),ln_norm);
+               }
+               I(q,e) = vmag;
+         }
+      }
+   }
+   else if (DIM == 2){
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               double vmag = 0; 
+               for(int k = 0; k < VDIM; k++){
+                  vmag += pow(f_vals(k,q,e),ln_norm);
+               }
+               I(q,e) = vmag;
+            }
+         }
+      });
+   }
+   else if (DIM == 3){
+    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  double vmag = 0; 
+               for(int k = 0; k < VDIM; k++){
+                  vmag += pow(f_vals(k,q,e),ln_norm);
+               }
+               I(q,e) = vmag;
+               }
+            }
+         }
+      });
+   
+}
+   const double integral = integrand * mass;
+return integral; 
+
+}
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
@@ -579,19 +641,8 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     L2r->Mult(gf, e_vector);
     l2_interpolator->Values(e_vector, eintQ);
 
-    // Get the IE, initial weighted mass 
-    auto ie_vals = mfem::Reshape(eintQ.Read(),NQ, NE);
-    auto initial_mass = mfem::Reshape(qdata.rho0DetJ0w.Read(),NQ, NE);
-
-
-    double internal_energy = 0;
-    for (int e = 0; e < NE; ++e) {
-        for (int q = 0; q < NQ; ++q) {
-            
-            internal_energy += initial_mass(q,e)*ie_vals(q,e);
-
-        }
-    }
+   double internal_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,1,1.0,qdata.rho0DetJ0w,eintQ); 
+    
    MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, L2.GetParMesh()->GetComm());
 
    return glob_ie;
@@ -599,15 +650,26 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-   double glob_ke = 0.0;
-   // This should be turned into a kernel so that it could be displayed in pa
-   if (!p_assembly)
-   {
-      double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
-      MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
-                    H1.GetParMesh()->GetComm());
-   }
-   return glob_ke;
+  double glob_ke = 0.0;
+   
+    // get the restriction and interpolator objects 
+    const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(ir);
+    h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+    auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+    const int NQ = ir.GetNPoints(); 
+   Vector e_vector(dim*NE*NQ), ekinQ(dim*NE*NQ);
+
+    // Get internal energy at the quadrature points
+    H1r->Mult(v, e_vector);
+    h1_interpolator->Values(e_vector, ekinQ);
+
+    // Get the IE, initial weighted mass 
+
+   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,qdata.rho0DetJ0w,ekinQ); 
+    
+   MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM, H1.GetParMesh()->GetComm());
+
+   return 0.5*glob_ke;
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
