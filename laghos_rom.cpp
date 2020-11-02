@@ -367,6 +367,46 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         }
         else if (input.offsetType == interpolateOffset)
         {
+
+            // Calculation of coefficients of offset data using inverse distance weighting interpolation
+            std::ifstream infile_offlineParam(basename + "/offline_param.csv");
+            MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
+            std::string line;
+            std::vector<std::string> words;
+            std::getline(infile_offlineParam, line);
+            int true_idx = -1;
+            double coeff_sum = 0.0;
+            // Compute the distances from online parameters to each offline parameter
+            while (std::getline(infile_offlineParam, line))
+            {
+                split_line(line, words);
+                paramID_list.push_back(std::stoi(words[0]));
+                double coeff = 0.0;
+                coeff += (input.rhoFactor - atof(words[1].c_str())) * (input.rhoFactor - atof(words[1].c_str()));
+                coeff += (input.blast_energyFactor - atof(words[2].c_str())) * (input.blast_energyFactor - atof(words[2].c_str()));
+                if (coeff == 0.0)
+                {
+                    true_idx = coeff_list.size();
+                }
+                coeff = 1 / sqrt(coeff);
+                coeff_sum += coeff;
+                coeff_list.push_back(coeff);
+            }
+            // Determine the coefficients with respect to the offline parameters
+            // The coefficients are inversely porportional to distances and form a convex combination of offset data
+            for (int param=0; param<paramID_list.size(); ++param)
+            {
+                if (true_idx >= 0)
+                {
+                    coeff_list[param] = (param == true_idx) ? 1.0 : 0.0;
+                }
+                else
+                {
+                    coeff_list[param] /= coeff_sum;
+                }
+            }
+            infile_offlineParam.close();
+
             // Interpolate and save offset in the online phase of parametric save-and-load mode
             for (int i=0; i<tH1size; ++i)
                 (*initX)(i) = 0;
@@ -375,7 +415,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
             for (int i=0; i<tL2size; ++i)
                 (*initE)(i) = 0;
 
-            for (int param_off=0; param_off<paramID_list.size(); ++param_off)
+            for (int param=0; param<paramID_list.size(); ++param)
             {
                 CAROM::Vector *initX_off = 0;
                 CAROM::Vector *initV_off = 0;
@@ -385,7 +425,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
                 initV_off = new CAROM::Vector(tH1size, true);
                 initE_off = new CAROM::Vector(tL2size, true);
 
-                int paramID_off = paramID_list[param_off];
+                int paramID_off = paramID_list[param];
                 std::string path_init_off = basename + "/ROMoffset/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
 
                 initX_off->read(path_init_off + "X" + std::to_string(input.window));
@@ -393,11 +433,11 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
                 initE_off->read(path_init_off + "E" + std::to_string(input.window));
 
                 for (int i=0; i<tH1size; ++i)
-                    (*initX)(i) += coeff_list[param_off] * (*initX_off)(i);
+                    (*initX)(i) += coeff_list[param] * (*initX_off)(i);
                 for (int i=0; i<tH1size; ++i)
-                    (*initV)(i) += coeff_list[param_off] * (*initV_off)(i);
+                    (*initV)(i) += coeff_list[param] * (*initV_off)(i);
                 for (int i=0; i<tL2size; ++i)
-                    (*initE)(i) += coeff_list[param_off] * (*initE_off)(i);
+                    (*initE)(i) += coeff_list[param] * (*initE_off)(i);
             }
             initX->write(path_init + "X" + std::to_string(input.window));
             initV->write(path_init + "V" + std::to_string(input.window));
@@ -463,48 +503,6 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
-    }
-
-    if (input.offsetType == interpolateOffset)
-    {
-        // Calculation of coefficients of offset data using inverse distance weighting interpolation
-        std::ifstream infile_offlineParam(basename + "/offline_param.csv");
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        int true_idx = -1;
-        double coeff_sum = 0.0;
-        // Compute the distances from online parameters to each offline parameter
-        while (std::getline(infile_offlineParam, line))
-        {
-            split_line(line, words);
-            paramID_list.push_back(std::stoi(words[0]));
-            double coeff = 0.0;
-            coeff += (input.rhoFactor - atof(words[1].c_str())) * (input.rhoFactor - atof(words[1].c_str()));
-            coeff += (input.blast_energyFactor - atof(words[2].c_str())) * (input.blast_energyFactor - atof(words[2].c_str()));
-            if (coeff == 0.0)
-            {
-                true_idx = coeff_list.size();
-            }
-            coeff = 1 / sqrt(coeff);
-            coeff_sum += coeff;
-            coeff_list.push_back(coeff);
-        }
-        // Determine the coefficients with respect to the offline parameters
-        // The coefficients are inversely porportional to distances and form a convex combination of offset data
-        for (int param=0; param<paramID_list.size(); ++param)
-        {
-            if (true_idx >= 0)
-            {
-                coeff_list[param] = (param == true_idx) ? 1.0 : 0.0;
-            }
-            else
-            {
-                coeff_list[param] /= coeff_sum;
-            }
-        }
-        infile_offlineParam.close();
     }
 }
 
