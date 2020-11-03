@@ -39,6 +39,9 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 //    p = 4  --> Gresho vortex (smooth problem).
+//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
+//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
+//    p = 7  --> 2D Rayleigh-Taylor instability problem.
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
@@ -701,6 +704,15 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 4:
+        visc = false;
+        break;
+    case 5:
+        visc = true;
+        break;
+    case 6:
+        visc = true;
+        break;
+    case 7:
         visc = false;
         break;
     default:
@@ -1572,6 +1584,28 @@ double rho0(const Vector &x)
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
     case 4:
         return 1.0;
+    case 5:
+    {
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 0.5313;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 0.8;
+        }
+        return 1.0;
+    }
+    case 6:
+    {
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 2.0;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 3.0;
+        }
+        return 1.0;
+    }
+    case 7:
+        return 1.5 + atan(20.0 * x(1)) / M_PI;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -1591,6 +1625,12 @@ double gamma_func(const Vector &x)
     case 3:
         return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
     case 4:
+        return 5.0 / 3.0;
+    case 5:
+        return 1.4;
+    case 6:
+        return 1.4;
+    case 7:
         return 5.0 / 3.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
@@ -1644,6 +1684,58 @@ void v0(const Vector &x, Vector &v)
         }
         break;
     }
+    case 5:
+    {
+        const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+        v = 0.0;
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            v(0)=0.0*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            v(0)=0.7276*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            v(0)=0.0*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            v(0)=0.0*atn, v(1)=0.7276*atn;
+            return;
+        }
+        MFEM_ABORT("Error in problem 5!");
+        return;
+    }
+    case 6:
+    {
+        const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+        v = 0.0;
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            v(0)=+0.75*atn, v(1)=-0.5*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            v(0)=+0.75*atn, v(1)=+0.5*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            v(0)=-0.75*atn, v(1)=+0.5*atn;
+            return;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            v(0)=-0.75*atn, v(1)=-0.5*atn;
+            return;
+        }
+        MFEM_ABORT("Error in problem 6!");
+        return;
+    }
+    case 7:
+    {
+        v(0) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * 2*x(1) * sin(2*M_PI*x(0));
+        v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+        break;
+    }
     default:
         MFEM_ABORT("Bad number given for problem id!");
     }
@@ -1693,6 +1785,49 @@ double e0(const Vector &x)
         else {
             return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0);
         }
+    }
+    case 5:
+    {
+        const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 0.4 * irg;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        MFEM_ABORT("Error in problem 5!");
+        return 0.0;
+    }
+    case 6:
+    {
+        const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        MFEM_ABORT("Error in problem 6!");
+        return 0.0;
+    }
+    case 7:
+    {
+        const double denom = rho0(x) * (gamma_func(x) - 1.0);
+        const double val = 5.5 - 1.5*x(1) + (atan(20.0) - x(1) * atan(20.0 * x(1))) / M_PI +
+                           log((400.0 * x(1) * x(1) + 1.0) / 401.0) / (40.0 * M_PI);
+        return val/denom;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");
