@@ -102,6 +102,8 @@ struct ROM_Options
 
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
+
+    bool qdeim = false; // If true, use QDEIM instead of GNAT.
 };
 
 class ROM_Sampler
@@ -386,6 +388,9 @@ public:
         delete rX;
         delete rV;
         delete rE;
+        delete rX2;
+        delete rV2;
+        delete rE2;
         delete basisX;
         if (!useXV && !useVX && !mergeXV) delete basisV;
         delete basisE;
@@ -402,10 +407,21 @@ public:
         delete BXsp;
         delete BVsp;
         delete BEsp;
+        delete BFvsp;
+        delete BFesp;
         delete BsinvX;
         delete BsinvV;
         delete BsinvE;
         delete BX0;
+        delete initX;
+        delete initV;
+        delete initE;
+        delete initXsp;
+        delete initVsp;
+        delete initEsp;
+        delete BXXinv;
+        delete BVVinv;
+        delete BEEinv;
     }
 
     void ReadSolutionBases(const int window);
@@ -576,6 +592,8 @@ private:
 
     double energyFraction_X;
 
+    const bool use_qdeim;
+
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
 
     std::vector<int> paramID_list;
@@ -622,6 +640,7 @@ public:
         delete mat_fes;
         delete mat_fec;
         delete spmesh;
+        delete xsp_gf;
     }
 
 private:

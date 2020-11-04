@@ -303,6 +303,8 @@ int main(int argc, char *argv[])
                    "Enable or disable use of X-X0 basis for V.");
     args.AddOption(&romOptions.mergeXV, "-romxandv", "--romusexandv", "-no-romxandv", "--no-romusexandv",
                    "Enable or disable merging of X-X0 and V bases.");
+    args.AddOption(&romOptions.qdeim, "-qdeim", "--romuseqdeim", "-no-qdeim", "--no-romuseqdeim",
+                   "Enable or disable use of QDEIM.");
     args.Parse();
     if (!args.Good())
     {
@@ -311,6 +313,7 @@ int main(int argc, char *argv[])
         }
         return 1;
     }
+
     std::string outputPath = "run";
     if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
@@ -884,6 +887,10 @@ int main(int argc, char *argv[])
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
         if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimV;
         if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimE;
+        /* Add this back. This makes sense, but it causes slight differences that make the regression tests fail.
+            if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
+            if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        */
     }
 
     StopWatch onlinePreprocessTimer;

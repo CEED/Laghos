@@ -2,6 +2,7 @@
 #include "laghos_utils.hpp"
 
 #include "DEIM.h"
+#include "QDEIM.h"
 #include "SampleMesh.hpp"
 
 
@@ -289,7 +290,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -709,26 +710,49 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
-    // Perform DEIM or GNAT to find sample DOF's.
+    // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
     if (RHSbasis)
     {
-        CAROM::GNAT(basisFv,
-                    rdimfv,
-                    sample_dofs_V.data(),
-                    num_sample_dofs_per_procV.data(),
-                    *BsinvV,
-                    rank,
-                    nprocs,
-                    numSamplesV);
+        if (use_qdeim)
+        {
+            CAROM::QDEIM(basisFv,
+                         rdimfv,
+                         sample_dofs_V.data(),
+                         num_sample_dofs_per_procV.data(),
+                         *BsinvV,
+                         rank,
+                         nprocs,
+                         numSamplesV);
 
-        CAROM::GNAT(basisFe,
-                    rdimfe,
-                    sample_dofs_E.data(),
-                    num_sample_dofs_per_procE.data(),
-                    *BsinvE,
-                    rank,
-                    nprocs,
-                    numSamplesE);
+            CAROM::QDEIM(basisFe,
+                         rdimfe,
+                         sample_dofs_E.data(),
+                         num_sample_dofs_per_procE.data(),
+                         *BsinvE,
+                         rank,
+                         nprocs,
+                         numSamplesE);
+        }
+        else
+        {
+            CAROM::GNAT(basisFv,
+                        rdimfv,
+                        sample_dofs_V.data(),
+                        num_sample_dofs_per_procV.data(),
+                        *BsinvV,
+                        rank,
+                        nprocs,
+                        numSamplesV);
+
+            CAROM::GNAT(basisFe,
+                        rdimfe,
+                        sample_dofs_E.data(),
+                        num_sample_dofs_per_procE.data(),
+                        *BsinvE,
+                        rank,
+                        nprocs,
+                        numSamplesE);
+        }
     }
     else
     {
