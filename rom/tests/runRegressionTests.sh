@@ -155,11 +155,11 @@ then
 	else
 
 		# Clone and compile rom branch of Laghos as baseline
-		echo "Cloning rom-dev as the baseline branch" >> $setupLogFile 2>&1
+		echo "Cloning rom as the baseline branch" >> $setupLogFile 2>&1
 		git -C $DIR clone -b rom https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 	fi
 
-	# Check that rom-dev branch of Laghos is present
+	# Check that rom branch of Laghos is present
 	if [ ! -d $BASE_LAGHOS_DIR ]; then
 		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
 		exit 1
@@ -362,7 +362,7 @@ do
 					echo -n "$testNum. ${scriptName}-${testName}: RUNNING"
 				fi
 
-				# Run simulation from rom-dev branch
+				# Run simulation from rom branch
 				echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
 				(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
@@ -399,7 +399,7 @@ do
 					ls $BASELINE_LAGHOS_DIR/run > /dev/null
 					ls $BASE_DIR/run > /dev/null
 
-					# Find number of steps simulation took in rom-dev to compare final timestep later
+					# Find number of steps simulation took in rom to compare final timestep later
 					cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
 					if [[ $? -eq 1 ]]; then
 						echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
