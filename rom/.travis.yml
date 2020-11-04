@@ -1,0 +1,121 @@
+os: linux
+
+language: cpp
+
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - gcc-7
+            - g++-7
+            - libopenmpi-dev
+            - openmpi-bin
+      before_cache:
+        - cd $TRAVIS_BUILD_DIR/../metis-4.0;
+          mv libmetis.a ..; rm -rf *; mv ../libmetis.a .
+
+install:
+   # Save Laghos top directory
+  - export LAGHOS_DIR=$PWD
+
+  # Back out of the directory to install the libraries
+  - cd ..
+
+  # HYPRE (cached 2.10.0b build)
+  - if [ ! -e hypre-2.10.0b/src/hypre/lib/libHYPRE.a ]; then
+      wget https://computation.llnl.gov/project/linear_solvers/download/hypre-2.10.0b.tar.gz --no-check-certificate;
+      rm -rf hypre-2.10.0b;
+      tar xvzf hypre-2.10.0b.tar.gz;
+      cd hypre-2.10.0b/src;
+      ./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++;
+      make -j3;
+      cd ../..;
+    else
+      echo "Reusing cached hypre-2.10.0b/";
+    fi;
+  - ln -s hypre-2.10.0b hypre
+
+  # METIS (cached 4.0 build)
+  - if [ ! -e metis-4.0/libmetis.a ]; then
+      wget http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz;
+      tar xvzf metis-4.0.3.tar.gz;
+      make -j3 -C metis-4.0.3/Lib CC="$CC" OPTFLAGS="-O2";
+      rm -rf metis-4.0;
+      mv metis-4.0.3 metis-4.0;
+    else
+      echo "Reusing cached metis-4.0/";
+    fi;
+
+  # MFEM (master branch)
+  - if [ ! -e mfem/libmfem.a ]; then
+      rm -rf mfem;
+      git clone --depth 1 https://github.com/mfem/mfem.git;
+      cd mfem;
+      make -j3 parallel;
+      make info;
+        cd ..;
+     else
+        echo "Reusing cached mfem";
+     fi;
+
+   # Back to Laghos
+  - cd $LAGHOS_DIR
+
+branches:
+  only:
+  - master
+
+script:
+   - make -j
+   - touch RESULTS.dat
+
+   - mpirun -np 8 laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 18 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - mpirun -np 8 laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
+   - cat RUN.dat | tail -n 21 | head -n 1 | awk '{ printf("step = %04d, dt = %s |e| = %s\n", $2, $8, $11); }' >> RESULTS.dat
+
+   - |
+     cat <<EOF  > BASELINE.dat
+     step = 0339, dt = 0.000702, |e| = 49.6955373491
+     step = 1041, dt = 0.000121, |e| = 3390.9635545457
+     step = 1154, dt = 0.001655, |e| = 46.3033960530
+     step = 0560, dt = 0.002449, |e| = 134.0861672235
+     step = 0413, dt = 0.000470, |e| = 32.0120774101
+     step = 2872, dt = 0.000064, |e| = 56.5470233805
+     step = 0528, dt = 0.000180, |e| = 56.5053488122
+     step = 0776, dt = 0.000045, |e| = 409.8243172608
+     EOF
+
+   - diff --report-identical-files RESULTS.dat BASELINE.dat
+
+
+cache:
+   directories:
+     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/lib
+     - $TRAVIS_BUILD_DIR/../hypre-2.10.0b/src/hypre/include
+     - $TRAVIS_BUILD_DIR/../metis-4.0
+

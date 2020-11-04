@@ -1,0 +1,10 @@
+test:
+    tags:
+        - quartz
+        - shell
+    script:
+        - cp $CI_BUILDS_DIR/$CI_PROJECT_NAME/user.mk $CI_PROJECT_DIR/user.mk
+        - make LIBS_DIR=$CI_BUILDS_DIR/$CI_PROJECT_NAME/env
+        - make merge LIBS_DIR=$CI_BUILDS_DIR/$CI_PROJECT_NAME/env
+        - ./tests/runRegressionTests.sh
+    allow_failure: true
