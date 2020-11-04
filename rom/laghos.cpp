@@ -43,18 +43,18 @@
 // Sample runs: see README.md, section 'Verification of Results'.
 //
 // Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
-// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
-// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
-// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
-// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
-// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
-// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
-// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
-// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
-// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
+// -m ../data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
+// -m ../data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
+// -m ../data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
+// -m ../data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
+// -m ../data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
+// -m ../data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
+// -m ../data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
+// -m ../data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
+// -m ../data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
+// -m ../data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
+// -m ../data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
+// -m ../data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
 
     // Parse command-line options.
     problem = 1;
-    const char *mesh_file = "data/cube01_hex.mesh";
+    const char *mesh_file = "../data/cube01_hex.mesh";
     int rs_levels = 2;
     int rp_levels = 0;
     int order_v = 2;
@@ -380,7 +380,15 @@ int main(int argc, char *argv[])
 
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
-    Mesh *mesh = new Mesh(mesh_file, 1, 1);
+    Mesh *mesh = NULL;
+    if (std::string(mesh_file).substr(0, 3) != "../") 
+    {
+        mesh = new Mesh(("../" + std::string(mesh_file)).c_str(), 1, 1);
+    }
+    else 
+    {
+	mesh = new Mesh(mesh_file, 1, 1);
+    }
     const int dim = mesh->Dimension();
     for (int lev = 0; lev < rs_levels; lev++) {
         mesh->UniformRefinement();

@@ -107,14 +107,10 @@ RESULTS_DIR=$DIR/results
 BASE_DIR=$DIR/..
 
 # Save directory of the baseline Laghos executable
-BASELINE_LAGHOS_DIR=$DIR/Laghos
+BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
 
-# Get LIBS_DIR to run make depending on whether Gitlab is running
-if [[ -z "$CI_BUILDS_DIR" ]]; then
-	LIBS_DIR="$BASE_DIR/.."
-else
-	LIBS_DIR="$CI_BUILDS_DIR/$CI_PROJECT_NAME/env"
-fi
+# Get LIBS_DIR
+LIBS_DIR="$BASE_DIR/dependencies"
 
 # If skipping setup, don't do make
 if [[ "$skipSetup" == "false" ]];
@@ -158,9 +154,9 @@ then
 		git -C $DIR clone -b "$(git branch | sed -n '/\* /s///p')" https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 	else
 
-		# Clone and compile rom-dev branch of Laghos as baseline
+		# Clone and compile rom branch of Laghos as baseline
 		echo "Cloning rom-dev as the baseline branch" >> $setupLogFile 2>&1
-		git -C $DIR clone -b rom-dev https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+		git -C $DIR clone -b rom https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 	fi
 
 	# Check that rom-dev branch of Laghos is present
@@ -168,10 +164,6 @@ then
 		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
 		exit 1
 	fi
-
-	# Copy user.mk
-	echo "Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
-	cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 
 	# Build the user branch executable
 	echo "Building the user branch" >> $setupLogFile 2>&1
