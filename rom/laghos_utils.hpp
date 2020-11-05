@@ -19,4 +19,6 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
 
 void split_line(const string &line, vector<string> &words);
 
+void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions);
+
 #endif // MFEM_LAGHOS_UTILS

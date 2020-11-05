@@ -887,8 +887,8 @@ int main(int argc, char *argv[])
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-	if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
-	if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
     }
 
     StopWatch onlinePreprocessTimer;
@@ -898,20 +898,18 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
-            romOptions.dimX = twparam(0,0);
-            romOptions.dimV = twparam(0,1);
-            romOptions.dimE = twparam(0,2);
-            if (romOptions.RHSbasis)
+            // Construct the ROM_Basis for each window.
+            for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
-                romOptions.dimFv = twparam(0,3);
-                romOptions.dimFe = twparam(0,4);
+                SetWindowParameters(twparam, romOptions);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
             }
-            const int oss = romOptions.RHSbasis ? 5 : 3;
-            romOptions.sampX = twparam(0,oss);
-            romOptions.sampV = twparam(0,oss+1);
-            romOptions.sampE = twparam(0,oss+2);
+
+            romOptions.window = 0;
         }
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
+        else
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+
         basis[0]->Init(romOptions, S);
 
         if (romOptions.mergeXV)
@@ -946,17 +944,10 @@ int main(int argc, char *argv[])
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
-            romOptions.dimX = twparam(romOptions.window,0);
-            romOptions.dimV = twparam(romOptions.window,1);
-            romOptions.dimE = twparam(romOptions.window,2);
-            if (romOptions.RHSbasis)
-            {
-                romOptions.dimFv = twparam(romOptions.window,3);
-                romOptions.dimFe = twparam(romOptions.window,4);
-            }
+            SetWindowParameters(twparam, romOptions);
         }
 
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
         basis[0]->Init(romOptions, S);
 
         if (romOptions.mergeXV)
@@ -1015,17 +1006,10 @@ int main(int argc, char *argv[])
                     infile_tw_steps >> nb_step;
                 }
                 romOptions.window++;
-                romOptions.dimX = twparam(romOptions.window,0);
-                romOptions.dimV = twparam(romOptions.window,1);
-                romOptions.dimE = twparam(romOptions.window,2);
-                if (romOptions.RHSbasis)
-                {
-                    romOptions.dimFv = twparam(romOptions.window,3);
-                    romOptions.dimFe = twparam(romOptions.window,4);
-                }
+                SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window-1]->LiftROMtoFOM(romS, S);
                 delete basis[romOptions.window-1];
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);  // TODO: precompute a basis for each window?
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, S);
 
                 if (romOptions.mergeXV)
@@ -1089,7 +1073,7 @@ int main(int argc, char *argv[])
                 use_dt_old = false;
             }
 
-            if (rom_online && usingWindows && (t + dt >= twep[romOptions.window]) & match_end_time)
+            if (rom_online && usingWindows && ((t + dt) >= twep[romOptions.window]) && match_end_time)
             {
                 dt_old = dt;
                 use_dt_old = true;
@@ -1273,18 +1257,7 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
                     }
 
-                    romOptions.dimX = twparam(romOptions.window,0);
-                    romOptions.dimV = twparam(romOptions.window,1);
-                    romOptions.dimE = twparam(romOptions.window,2);
-                    if (romOptions.RHSbasis)
-                    {
-                        romOptions.dimFv = twparam(romOptions.window,3);
-                        romOptions.dimFe = twparam(romOptions.window,4);
-                    }
-                    const int oss = romOptions.RHSbasis ? 5 : 3;
-                    romOptions.sampX = twparam(romOptions.window,oss);
-                    romOptions.sampV = twparam(romOptions.window,oss+1);
-                    romOptions.sampE = twparam(romOptions.window,oss+2);
+                    SetWindowParameters(twparam, romOptions);
 
                     if (romOptions.hyperreduce)
                     {
@@ -1292,7 +1265,6 @@ int main(int argc, char *argv[])
                     }
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
-                    basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
                     basis[romOptions.window]->Init(romOptions, S);
 
                     if (romOptions.mergeXV)

@@ -281,7 +281,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV, Vector const& S)
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
@@ -455,7 +455,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
     }
-    
+
     if (hyperreduce)
     {
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
@@ -469,95 +469,91 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    // TODO: just return if !offsetInit
-      if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
+    if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
+    {
+        std::string path_init = basename + "/ROMoffset/init";
+
+        // Compute and save offset in the online phase of previous mode or initial window of initial mode
+        Vector X, V, E;
+
+        for (int i=0; i<H1size; ++i)
         {
-	  std::string path_init = basename + "/ROMoffset/init";
-
-            // Compute and save offset in the online phase of previous mode or initial window of initial mode
-            Vector X, V, E;
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[i];
-            }
-            gfH1.GetTrueDofs(X);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initX)(i) = X[i];
-            }
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[H1size+i];
-            }
-            gfH1.GetTrueDofs(V);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initV)(i) = V[i];
-            }
-
-            for (int i=0; i<L2size; ++i)
-            {
-                gfL2[i] = S[2*H1size+i];
-            }
-            gfL2.GetTrueDofs(E);
-            for (int i=0; i<tL2size; ++i)
-            {
-                (*initE)(i) = E[i];
-            }
-
-            initX->write(path_init + "X" + std::to_string(input.window));
-            initV->write(path_init + "V" + std::to_string(input.window));
-            initE->write(path_init + "E" + std::to_string(input.window));
+            gfH1[i] = S[i];
+        }
+        gfH1.GetTrueDofs(X);
+        for (int i=0; i<tH1size; ++i)
+        {
+            (*initX)(i) = X[i];
         }
 
-      if (offsetInit)
-      {
-        if (hyperreduce)
+        for (int i=0; i<H1size; ++i)
         {
-            CAROM::Matrix FOMX0(tH1size, 2, true);
+            gfH1[i] = S[H1size+i];
+        }
+        gfH1.GetTrueDofs(V);
+        for (int i=0; i<tH1size; ++i)
+        {
+            (*initV)(i) = V[i];
+        }
 
-            for (int i=0; i<tH1size; ++i)
-            {
-                FOMX0(i,0) = (*initX)(i);
-                FOMX0(i,1) = (*initV)(i);
-            }
+        for (int i=0; i<L2size; ++i)
+        {
+            gfL2[i] = S[2*H1size+i];
+        }
+        gfL2.GetTrueDofs(E);
+        for (int i=0; i<tL2size; ++i)
+        {
+            (*initE)(i) = E[i];
+        }
 
-            CAROM::Matrix FOME0(tL2size, 1, true);
+        initX->write(path_init + "X" + std::to_string(input.window));
+        initV->write(path_init + "V" + std::to_string(input.window));
+        initE->write(path_init + "E" + std::to_string(input.window));
+    }
 
-            for (int i=0; i<tL2size; ++i)
-            {
-                FOME0(i,0) = (*initE)(i);
-            }
+    if (offsetInit && hyperreduce)
+    {
+        CAROM::Matrix FOMX0(tH1size, 2, true);
 
-            CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
-            CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
+        for (int i=0; i<tH1size; ++i)
+        {
+            FOMX0(i,0) = (*initX)(i);
+            FOMX0(i,1) = (*initV)(i);
+        }
+
+        CAROM::Matrix FOME0(tL2size, 1, true);
+
+        for (int i=0; i<tL2size; ++i)
+        {
+            FOME0(i,0) = (*initE)(i);
+        }
+
+        CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
+        CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
 #ifdef FULL_DOF_STENCIL
-            const int NR = input.H1FESpace->GetVSize();
-            GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+        const int NR = input.H1FESpace->GetVSize();
+        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #else
-            GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #endif
 
-            if (rank == 0)
+        if (rank == 0)
+        {
+            initXsp = new CAROM::Vector(size_H1_sp, false);
+            initVsp = new CAROM::Vector(size_H1_sp, false);
+            initEsp = new CAROM::Vector(size_L2_sp, false);
+            for (int i=0; i<size_H1_sp; ++i)
             {
-                initXsp = new CAROM::Vector(size_H1_sp, false);
-                initVsp = new CAROM::Vector(size_H1_sp, false);
-                initEsp = new CAROM::Vector(size_L2_sp, false);
-                for (int i=0; i<size_H1_sp; ++i)
-                {
-                    (*initXsp)(i) = spX0mat(i,0);
-                    (*initVsp)(i) = spX0mat(i,1);
-                }
-                for (int i=0; i<size_L2_sp; ++i)
-                {
-                    (*initEsp)(i) = spE0mat(i,0);
-                }
+                (*initXsp)(i) = spX0mat(i,0);
+                (*initVsp)(i) = spX0mat(i,1);
+            }
+            for (int i=0; i<size_L2_sp; ++i)
+            {
+                (*initEsp)(i) = spE0mat(i,0);
             }
         }
-      }
+    }
 }
 
 // cp = a x b
