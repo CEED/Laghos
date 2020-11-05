@@ -6,6 +6,8 @@
 
 #include "mfem.hpp"
 
+#include "laghos_rom.hpp"
+
 using namespace std;
 using namespace mfem;
 

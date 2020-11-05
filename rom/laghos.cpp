@@ -903,12 +903,19 @@ int main(int argc, char *argv[])
             {
                 SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+
+                romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
+                        visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
 
             romOptions.window = 0;
         }
         else
+        {
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+        }
 
         basis[0]->Init(romOptions, S);
 
@@ -927,8 +934,6 @@ int main(int argc, char *argv[])
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
-        romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                      cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
         ode_solver->Init(*romOper[0]);
         onlinePreprocessTimer.Stop();
@@ -1283,8 +1288,6 @@ int main(int argc, char *argv[])
                     }
 
                     delete romOper[romOptions.window-1];
-                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff,
-                            order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
                     if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
