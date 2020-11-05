@@ -878,15 +878,17 @@ int main(int argc, char *argv[])
         samplerTimer.Stop();
     }
 
-    ROM_Basis *basis = NULL;
+    std::vector<ROM_Basis*> basis;
+    basis.assign(std::max(numWindows, 1), nullptr);
     Vector romS, romS_old;
-    ROM_Operator *romOper = NULL;
+    std::vector<ROM_Operator*> romOper;
+    romOper.assign(std::max(numWindows, 1), nullptr);
 
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
-        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+	if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
+	if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
     }
 
     StopWatch onlinePreprocessTimer;
@@ -909,16 +911,17 @@ int main(int argc, char *argv[])
             romOptions.sampV = twparam(0,oss+1);
             romOptions.sampE = twparam(0,oss+2);
         }
-        basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
+        basis[0]->Init(romOptions, S);
 
         if (romOptions.mergeXV)
         {
-            romOptions.dimX = basis->GetDimX();
-            romOptions.dimV = basis->GetDimV();
+            romOptions.dimX = basis[0]->GetDimX();
+            romOptions.dimV = basis[0]->GetDimV();
         }
 
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
-        basis->ProjectFOMtoROM(S, romS);
+        basis[0]->ProjectFOMtoROM(S, romS);
 
         if (myid == 0)
         {
@@ -926,10 +929,10 @@ int main(int argc, char *argv[])
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
-        romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                   cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+        romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                      cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
-        ode_solver->Init(*romOper);
+        ode_solver->Init(*romOper[0]);
         onlinePreprocessTimer.Stop();
     }
 
@@ -951,14 +954,15 @@ int main(int argc, char *argv[])
                 romOptions.dimFv = twparam(romOptions.window,3);
                 romOptions.dimFe = twparam(romOptions.window,4);
             }
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
-        } else {
-            basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
         }
+
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
+        basis[0]->Init(romOptions, S);
+
         if (romOptions.mergeXV)
         {
-            romOptions.dimX = basis->GetDimX();
-            romOptions.dimV = basis->GetDimV();
+            romOptions.dimX = basis[0]->GetDimX();
+            romOptions.dimV = basis[0]->GetDimV();
         }
 
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
@@ -988,7 +992,7 @@ int main(int argc, char *argv[])
                     }
 
                     infile_romS.close();
-                    basis->LiftROMtoFOM(romS, S);
+                    basis[romOptions.window]->LiftROMtoFOM(romS, S);
 
                     if (visit)
                     {
@@ -1019,13 +1023,15 @@ int main(int argc, char *argv[])
                     romOptions.dimFv = twparam(romOptions.window,3);
                     romOptions.dimFe = twparam(romOptions.window,4);
                 }
-                basis->LiftROMtoFOM(romS, S);
-                delete basis;
-                basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window-1]->LiftROMtoFOM(romS, S);
+                delete basis[romOptions.window-1];
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);  // TODO: precompute a basis for each window?
+                basis[romOptions.window]->Init(romOptions, S);
+
                 if (romOptions.mergeXV)
                 {
-                    romOptions.dimX = basis->GetDimX();
-                    romOptions.dimV = basis->GetDimV();
+                    romOptions.dimX = basis[romOptions.window]->GetDimX();
+                    romOptions.dimV = basis[romOptions.window]->GetDimV();
                 }
 
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
@@ -1043,7 +1049,7 @@ int main(int argc, char *argv[])
         }
 
         infile_romS.close();
-        basis->LiftROMtoFOM(romS, S);
+        basis[romOptions.window]->LiftROMtoFOM(romS, S);
 
         if (visit)
         {
@@ -1066,7 +1072,7 @@ int main(int argc, char *argv[])
         timeLoopTimer.Start();
         if (romOptions.hyperreduce && romOptions.GramSchmidt)
         {
-            romOper->InducedGramSchmidtInitialize(romS);
+            romOper[0]->InducedGramSchmidtInitialize(romS);
         }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
@@ -1119,9 +1125,9 @@ int main(int argc, char *argv[])
                 outfile_romS.close();
 
                 if (!romOptions.hyperreduce)
-                    basis->LiftROMtoFOM(romS, S);
+                    basis[romOptions.window]->LiftROMtoFOM(romS, S);
 
-                romOper->UpdateSampleMeshNodes(romS);
+                romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
                 if (!romOptions.hyperreduce) oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
             }
@@ -1138,7 +1144,7 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            const double dt_est = romOptions.hyperreduce ? romOper->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
 
             //const double dt_est = oper.GetTimeStepEstimate(S);
             //cout << myid << ": dt_est " << dt_est << endl;
@@ -1264,7 +1270,7 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
-                        romOper->InducedGramSchmidtFinalize(romS);
+                        romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
                     }
 
                     romOptions.dimX = twparam(romOptions.window,0);
@@ -1282,35 +1288,37 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce)
                     {
-                        basis->LiftROMtoFOM(romS, S);
+                        basis[romOptions.window-1]->LiftROMtoFOM(romS, S);
                     }
-                    delete basis;
+                    delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
-                    basis = new ROM_Basis(romOptions, S, MPI_COMM_WORLD, sFactorX, sFactorV);
+                    basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, S);
+                    basis[romOptions.window]->Init(romOptions, S);
+
                     if (romOptions.mergeXV)
                     {
-                        romOptions.dimX = basis->GetDimX();
-                        romOptions.dimV = basis->GetDimV();
+                        romOptions.dimX = basis[romOptions.window]->GetDimX();
+                        romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
                     romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     timeLoopTimer.Start();
 
-                    basis->ProjectFOMtoROM(S, romS);
+                    basis[romOptions.window]->ProjectFOMtoROM(S, romS);
                     if (myid == 0)
                     {
                         cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
                     }
 
-                    delete romOper;
-                    romOper = new ROM_Operator(romOptions, basis, rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                               cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                    delete romOper[romOptions.window-1];
+                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff,
+                            order_e, source, visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
 
                     if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
-                        romOper->InducedGramSchmidtInitialize(romS);
+                        romOper[romOptions.window]->InducedGramSchmidtInitialize(romS);
                     }
-                    ode_solver->Init(*romOper);
+                    ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
 
@@ -1420,9 +1428,9 @@ int main(int argc, char *argv[])
     {
         if (romOptions.GramSchmidt)
         {
-            romOper->InducedGramSchmidtFinalize(romS);
+            romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
         }
-        basis->LiftROMtoFOM(romS, S);
+        basis[romOptions.window]->LiftROMtoFOM(romS, S);
     }
 
     if (rom_offline)
@@ -1486,8 +1494,8 @@ int main(int argc, char *argv[])
 
     if (rom_online)
     {
-        delete basis;
-        delete romOper;
+        delete basis[romOptions.window];
+        delete romOper[romOptions.window];
     }
 
     switch (ode_solver_type)

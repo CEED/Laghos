@@ -381,7 +381,7 @@ private:
 class ROM_Basis
 {
 public:
-    ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV);
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV, Vector const& S);
 
     ~ROM_Basis()
     {
@@ -423,6 +423,8 @@ public:
         delete BVVinv;
         delete BEEinv;
     }
+
+    void Init(ROM_Options const& input, Vector const& S);
 
     void ReadSolutionBases(const int window);
 
@@ -549,6 +551,11 @@ private:
     std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
     std::vector<int> s2sp_H1;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
     std::vector<int> s2sp_L2;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
+
+    std::vector<int> sprows;
+    std::vector<int> all_sprows;
+
+    std::vector<int> s2sp;   // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+), for both F and E
 
     CAROM::Matrix *BXsp = NULL;
     CAROM::Matrix *BVsp = NULL;

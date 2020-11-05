@@ -281,7 +281,7 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, const double sFactorX, const double sFactorV)
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV, Vector const& S)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
@@ -454,8 +454,26 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
 
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else
+    }
+    
+    if (hyperreduce)
+    {
+        if(rank == 0) cout << "start preprocessing hyper-reduction\n";
+        StopWatch preprocessHyperreductionTymer;
+        preprocessHyperreductionTymer.Start();
+        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
+        preprocessHyperreductionTymer.Stop();
+        if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
+    }
+}
+
+void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
+{
+    // TODO: just return if !offsetInit
+      if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
         {
+	  std::string path_init = basename + "/ROMoffset/init";
+
             // Compute and save offset in the online phase of previous mode or initial window of initial mode
             Vector X, V, E;
 
@@ -493,17 +511,53 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, Vector const& S, MPI_Comm comm_, 
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
         }
-    }
 
-    if (hyperreduce)
-    {
-        if(rank == 0) cout << "start preprocessing hyper-reduction\n";
-        StopWatch preprocessHyperreductionTymer;
-        preprocessHyperreductionTymer.Start();
-        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
-        preprocessHyperreductionTymer.Stop();
-        if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
-    }
+      if (offsetInit)
+      {
+        if (hyperreduce)
+        {
+            CAROM::Matrix FOMX0(tH1size, 2, true);
+
+            for (int i=0; i<tH1size; ++i)
+            {
+                FOMX0(i,0) = (*initX)(i);
+                FOMX0(i,1) = (*initV)(i);
+            }
+
+            CAROM::Matrix FOME0(tL2size, 1, true);
+
+            for (int i=0; i<tL2size; ++i)
+            {
+                FOME0(i,0) = (*initE)(i);
+            }
+
+            CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
+            CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
+
+#ifdef FULL_DOF_STENCIL
+            const int NR = input.H1FESpace->GetVSize();
+            GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+#else
+            GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+#endif
+
+            if (rank == 0)
+            {
+                initXsp = new CAROM::Vector(size_H1_sp, false);
+                initVsp = new CAROM::Vector(size_H1_sp, false);
+                initEsp = new CAROM::Vector(size_L2_sp, false);
+                for (int i=0; i<size_H1_sp; ++i)
+                {
+                    (*initXsp)(i) = spX0mat(i,0);
+                    (*initVsp)(i) = spX0mat(i,1);
+                }
+                for (int i=0; i<size_L2_sp; ++i)
+                {
+                    (*initEsp)(i) = spE0mat(i,0);
+                }
+            }
+        }
+      }
 }
 
 // cp = a x b
@@ -944,11 +998,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     const int status = MPI_Comm_split(MPI_COMM_WORLD, color, rank, &rom_com);
     MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
 
-    vector<int> sprows;
-    vector<int> all_sprows;
-
-    vector<int> s2sp;   // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+), for both F and E
-
     // Construct sample mesh
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
@@ -1088,49 +1137,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
     MFEM_VERIFY(!RHSbasis, "");
 #endif
-
-    if (offsetInit)
-    {
-        CAROM::Matrix FOMX0(tH1size, 2, true);
-
-        for (int i=0; i<tH1size; ++i)
-        {
-            FOMX0(i,0) = (*initX)(i);
-            FOMX0(i,1) = (*initV)(i);
-        }
-
-        CAROM::Matrix FOME0(tL2size, 1, true);
-
-        for (int i=0; i<tL2size; ++i)
-        {
-            FOME0(i,0) = (*initE)(i);
-        }
-
-        CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
-        CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
-
-#ifdef FULL_DOF_STENCIL
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#else
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#endif
-
-        if (rank == 0)
-        {
-            initXsp = new CAROM::Vector(size_H1_sp, false);
-            initVsp = new CAROM::Vector(size_H1_sp, false);
-            initEsp = new CAROM::Vector(size_L2_sp, false);
-            for (int i=0; i<size_H1_sp; ++i)
-            {
-                (*initXsp)(i) = spX0mat(i,0);
-                (*initVsp)(i) = spX0mat(i,1);
-            }
-            for (int i=0; i<size_L2_sp; ++i)
-            {
-                (*initEsp)(i) = spE0mat(i,0);
-            }
-        }
-    }
 
     delete sp_H1_space;
     delete sp_L2_space;
