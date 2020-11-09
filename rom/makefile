@@ -65,7 +65,7 @@ INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
 LIBS_DIR ?= dependencies
-DEBUG := Off
+DEBUG := NO
 MFEM_DIR = $(LIBS_DIR)/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
@@ -207,7 +207,7 @@ style:
 	fi
 
 setup:
-ifeq ($(DEBUG),$(filter $(DEBUG),On on))
+ifeq ($(DEBUG),$(filter $(DEBUG),Yes YES))
 	$(shell ./setup.sh debug >&2)
 else
 	$(shell ./setup.sh >&2)
