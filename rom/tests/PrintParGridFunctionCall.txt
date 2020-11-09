@@ -1,0 +1,5 @@
+   std::string basenameStr = std::string(basename);
+   basenameStr = basenameStr.erase(basenameStr.rfind("/"));
+   PrintParGridFunction(myid, basenameStr + "/Sol_Position", &x_gf);
+   PrintParGridFunction(myid, basenameStr + "/Sol_Velocity", &v_gf);
+   PrintParGridFunction(myid, basenameStr + "/Sol_Energy", &e_gf);

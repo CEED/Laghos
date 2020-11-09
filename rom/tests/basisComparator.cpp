@@ -71,13 +71,13 @@ between the basis matrices in the following files: " << baselineFile << " and " 
 
     if (rank == 0) {
         double matrixNormL2 = 0;
-        for (int i = 0; i < vecNormL2.size(); i++) {
-            matrixNormL2 += sqrt(vecNormL2[i]);
+        for (int i = 0; i < reducedVecNormL2.size(); i++) {
+            matrixNormL2 += sqrt(reducedVecNormL2[i]);
         }
         // Test whether l2 norm is smaller than error bound
         if (matrixNormL2 > errorBound) {
-            cerr << "The matrixNormL2 of the difference of the basis matrices is "
-                 << matrixNormL2 << " and it surpassed the error bound." << endl;
+            cerr << "matrixNormL2 = " << matrixNormL2 << endl;
+            cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the basis matrices." << endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
     }
