@@ -63,6 +63,10 @@ Here are some example runs and results:
 
 ./runRegressionTests.sh -t -> Run all tests, but uses the current user branch (as on the Github repo) as the baseline to verify new tests or uncommitted local changes.
 
+./runRegressionTests.sh -a -> Run all tests, but compare the local branch to
+the master branch as the baseline to verify new tests or uncommitted local changes.
+Only FOM solutions, ROM relative errors, and speed up are checked.
+
 ./runRegressionTests.sh -d -> Run all tests, but do not do comparisons. Failures only occur if the simulations do not run successfully.
 
 ./runRegressionTests.sh -i "sedov_blast gresho_vortices" -> Run sedov_blast and gresho_vortices.
