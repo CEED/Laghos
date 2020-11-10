@@ -128,7 +128,11 @@ RESULTS_DIR=$DIR/results
 BASE_DIR=$DIR/..
 
 # Save directory of the baseline Laghos executable
-BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
+if [[ "$absolute" == "true" ]]; then
+	BASELINE_LAGHOS_DIR=$DIR/Laghos
+else
+	BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
+fi
 
 # Get LIBS_DIR
 LIBS_DIR="$BASE_DIR/dependencies"
@@ -220,9 +224,6 @@ then
 	# Build the baseline Laghos executable
 	echo "Building the baseline branch" >> $setupLogFile 2>&1
 	if [[ "$absolute" == "false" ]]; then
-		# Copy user.mk
-		echo "Copying user.mk to the baseline branch" >> $setupLogFile 2>&1
-		cp $DIR/../user.mk $DIR/Laghos/user.mk >> $setupLogFile 2>&1
 		make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 	else
 		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$LIBS_DIR/mfem" >> $setupLogFile 2>&1
@@ -252,24 +253,30 @@ fi
 if [[ -z "$SLURM" ]]; then
 	if [[ $0 == *"slurm"* ]]; then
 		OPTIONS=""
+		if [[ "$stopAtFailure" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -f"
+		fi
+		if [[ "$dryRun" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -d"
+		fi
 		SLURM=true
-		for simulation in "${testsToRun[@]}"
-		do
-			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
-			if [[ "$stopAtFailure" == "true" ]];
-			then
-				OPTIONS="$OPTIONS -f"
-			fi
-			if [[ "$dryRun" == "true" ]];
-			then
-				OPTIONS="$OPTIONS -d"
-			fi
-			if [[ "$absolute" == "true" ]];
-			then
-				OPTIONS="$OPTIONS -a"
-			fi
-			skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-		done
+		if [[ "$absolute" == "true" ]]; then
+			echo "Running absolute tests. Only tests in the absolute directory will be run."
+			echo "Forking child. Check ${RESULTS_DIR}/absolute-results.log for immediate results."
+			skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -a -i absolute >> ${RESULTS_DIR}/absolute-results.log 2>&1 &
+		else
+			for simulation in "${testsToRun[@]}"
+			do
+				if [[ $simulation == "absolute" ]]; then
+					echo "Skipping absolute tests."
+					continue
+				fi
+				echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
+				skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+			done
+		fi
 		echo "After all processes are finished, results will be concatenated and outputted to ${RESULTS_DIR}/sbatch-results.log."
 		wait
 		echo "Finished. Check ${RESULTS_DIR}/sbatch-results.log"
