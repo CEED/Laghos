@@ -4,5 +4,5 @@ test:
         - shell
     script:
         - cd rom
-	- make setup
-	- sbatch tests/runRegressionTests.sh
+        - make setup
+        - sbatch tests/runRegressionTests.sh
