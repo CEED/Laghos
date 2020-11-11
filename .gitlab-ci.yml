@@ -1,0 +1,8 @@
+test:
+    tags:
+        - quartz
+        - shell
+    script:
+        - cd rom
+        - make setup
+        - ./tests/runRegressionTests.sh
