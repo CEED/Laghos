@@ -6,6 +6,8 @@
 
 #include "mfem.hpp"
 
+#include "laghos_rom.hpp"
+
 using namespace std;
 using namespace mfem;
 
@@ -18,5 +20,7 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
 int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs);
 
 void split_line(const string &line, vector<string> &words);
+
+void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions);
 
 #endif // MFEM_LAGHOS_UTILS
