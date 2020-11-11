@@ -63,7 +63,7 @@ Here are some example runs and results:
 
 ./runRegressionTests.sh -t -> Run all tests, but uses the current user branch (as on the Github repo) as the baseline to verify new tests or uncommitted local changes.
 
-./runRegressionTests.sh -a -> Run all tests, but compare the local branch to
+./runRegressionTests.sh -a -> Run all absolute* tests, but compare the local branch to
 the master branch as the baseline to verify new tests or uncommitted local changes.
 Only FOM solutions, ROM relative errors, and speed up are checked.
 

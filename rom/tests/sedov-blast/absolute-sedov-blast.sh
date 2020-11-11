@@ -12,6 +12,6 @@ case $subTestNum in
     ;;
   2)
 
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -online -rdimx 12 -rdimv 108 -rdime 27 -romhr -nsamx 24 -nsamv 216 -nsame 34 -soldiff
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -online -rdimx 12 -rdimv 108 -rdime 27 -romhr -soldiff
     ;;
 esac

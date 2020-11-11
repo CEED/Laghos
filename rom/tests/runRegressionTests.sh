@@ -261,22 +261,16 @@ if [[ -z "$SLURM" ]]; then
 		then
 			OPTIONS="$OPTIONS -d"
 		fi
-		SLURM=true
-		if [[ "$absolute" == "true" ]]; then
-			echo "Running absolute tests. Only tests in the absolute directory will be run."
-			echo "Forking child. Check ${RESULTS_DIR}/absolute-results.log for immediate results."
-			skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -a -i absolute >> ${RESULTS_DIR}/absolute-results.log 2>&1 &
-		else
-			for simulation in "${testsToRun[@]}"
-			do
-				if [[ $simulation == "absolute" ]]; then
-					echo "Skipping absolute tests."
-					continue
-				fi
-				echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
-				skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-			done
+		if [[ "$absolute" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -a"
 		fi
+		SLURM=true
+		for simulation in "${testsToRun[@]}"
+		do
+			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
+			skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
+		done
 		echo "After all processes are finished, results will be concatenated and outputted to ${RESULTS_DIR}/sbatch-results.log."
 		wait
 		echo "Finished. Check ${RESULTS_DIR}/sbatch-results.log"
@@ -310,6 +304,12 @@ do
       # Get script name without extension
 			scriptName=$(basename $script)
       scriptName="${scriptName%.*}"
+
+			if [[ "$absolute" == "true" ]] && [[ "$scriptName" != "absolute"* ]]; then
+				continue
+			elif [[ "$absolute" == "false" ]] && [[ "$scriptName" == "absolute"* ]]; then
+				continue
+			fi
 
 			subTestNum=0
 			parallel=false
