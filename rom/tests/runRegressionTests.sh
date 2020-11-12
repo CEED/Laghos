@@ -406,7 +406,7 @@ do
 					# Absolute on master branch requires different options for running Laghos
 					if [[ "$testtype" == "fom" ]]; then
 						mkdir -p $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}
-						LAGHOS="$HEADER laghos -k run/${OUTPUT_DIR}/Laghos -print"
+						LAGHOS="$HEADER laghos -k run/${OUTPUT_DIR}/Laghos"
 
 						# Run simulation from master branch
 						echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1

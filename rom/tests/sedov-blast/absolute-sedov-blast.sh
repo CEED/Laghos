@@ -8,10 +8,10 @@ absoluteRelErrorTolParallel="1e-1"
 speedupTol="1.5"
 case $subTestNum in
   1)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -offline -writesol -romsvds
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -offline -writesol -romsvds -rostype load
     ;;
   2)
 
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -online -rdimx 12 -rdimv 108 -rdime 27 -romhr -soldiff
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.4 -online -rdimx 12 -rdimv 108 -rdime 27 -romhr -soldiff -rostype load
     ;;
 esac
