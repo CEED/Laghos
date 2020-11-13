@@ -616,7 +616,7 @@ do
 									check_fail
 								fi
 							done
-							if [[ "$testFailed" == "false" ]]; then
+							if [[ "$testFailed" == "false" ]] && [[ "$parallel" == "false" ]]; then
 								echo "Checking speedup" >> $simulationLogFile 2>&1
 								$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupTol" >> $simulationLogFile 2>&1)
 								if [[ "${PIPESTATUS[0]}" -ne 0 ]];
