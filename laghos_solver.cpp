@@ -294,7 +294,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-   if (dim > 1) { Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol); }
+   if (dim > 1 && p_assembly) { Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol); }
    else
    {
       const int NQ = ir.GetNPoints();
@@ -696,7 +696,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
-   if (dim > 1) { return qupdate.UpdateQuadratureData(S, qdata); }
+   if (dim > 1 && p_assembly) { return qupdate.UpdateQuadratureData(S, qdata); }
 
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
