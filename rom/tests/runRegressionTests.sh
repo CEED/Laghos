@@ -188,7 +188,7 @@ then
 
 	# Build the baseline Laghos executable
 	echo "Building the baseline branch" >> $setupLogFile 2>&1
-	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR/innerLib" >> $setupLogFile 2>&1
+	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
@@ -198,7 +198,7 @@ then
 	fi
 
 	# Build merge
-	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR/innerLib" >> $setupLogFile 2>&1
+	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
