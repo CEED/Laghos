@@ -132,16 +132,17 @@ public:
                         input.initial_dt,
                         input.incSVD_sampling_tol,
                         input.t_final,
-                        true)
-                        .setMaxBasisDimension(max_model_dim)
-                        .setSingularValueTol(input.incSVD_singular_value_tol);
+                        true);
+          x_options.setMaxBasisDimension(max_model_dim);
+          x_options.setSingularValueTol(input.incSVD_singular_value_tol);
+
           e_options.setIncrementalSVD(input.incSVD_linearity_tol,
                         input.initial_dt,
                         input.incSVD_sampling_tol,
                         input.t_final,
-                        true)
-                        .setMaxBasisDimension(max_model_dim)
-                        .setSingularValueTol(input.incSVD_singular_value_tol);
+                        true);
+          e_options.setMaxBasisDimension(max_model_dim);
+          e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
 
         generator_X = new CAROM::BasisGenerator(
