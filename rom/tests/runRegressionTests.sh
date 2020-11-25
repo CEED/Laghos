@@ -22,12 +22,15 @@ useUserAsBaseline=false
 # Skip setup (git pull, make))
 ${skipSetup:=false}
 # Get options
-while getopts ":i:e:th:dh:fh" o;
+while getopts ":i:l:e:th:dh:fh" o;
 do
 	case "${o}" in
 		i)
 			i=${OPTARG}
       ;;
+		l)
+			BASELINE_LIBS_DIR=${OPTARG}
+	     ;;
     e)
       e=${OPTARG}
       ;;
@@ -111,6 +114,10 @@ BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
 
 # Get LIBS_DIR
 LIBS_DIR="$BASE_DIR/dependencies"
+if [ -z ${BASELINE_LIBS_DIR+x} ]; then
+	BASELINE_LIBS_DIR=$LIBS_DIR
+fi
+
 
 # If skipping setup, don't do make
 if [[ "$skipSetup" == "false" ]];
@@ -188,7 +195,8 @@ then
 
 	# Build the baseline Laghos executable
 	echo "Building the baseline branch" >> $setupLogFile 2>&1
-	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	echo "Using $BASELINE_LIBS_DIR as the baseline libs directory." >> $setupLogFile 2>&1
+	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
@@ -198,7 +206,7 @@ then
 	fi
 
 	# Build merge
-	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
