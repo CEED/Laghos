@@ -202,7 +202,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi);
       Mv.Assemble();
-      Mv.Finalize();
       Mv_spmat_copy = Mv.SpMat();
    }
 
@@ -377,22 +376,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       Vector rhs_a(rhs.Size());
       rhs_a = 0.0;
       Mv_spmat_copy.Mult(a_gf, rhs_a);
-      //std::cout << "Init RHS: " << std::endl;
-      //rhs.Print();
-      //std::cout << "RHS_a: " << std::endl;
-      //rhs_a.Print();
-
       rhs += rhs_a;
-      //std::cout << "Final RHS: " << std::endl;
-      //rhs.Print();
-      //std::cout << "rhs before E: " << rhs.Norml2() << std::endl;
 
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
-      //Vector diag;
-      //A.GetDiag(diag);
-      //std::cout << "diagonal A: " << diag.Norml2() << std::endl;
-      //std::cout << "rhs after E:  " << B.Norml2() << std::endl;
 
       CGSolver cg(H1.GetParMesh()->GetComm());
       HypreSmoother prec;
@@ -408,10 +395,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_cgH1.Stop();
       timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
-
-      //std::cout << "solution: " << dv.Norml2() << std::endl;
    }
-   //MFEM_ABORT("one solve");
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -768,7 +752,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // being used.
                const double eps = 1e-12;
                visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
-                            (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
                stress.Add(visc_coeff, sgrad_v);
             }
             // Time step estimate at the point. Here the more relevant length

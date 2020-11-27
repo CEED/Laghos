@@ -121,7 +121,7 @@ public:
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr mass;
-public:
+private:
    MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
    virtual void SetEssentialTrueDofs(Array<int>&);
