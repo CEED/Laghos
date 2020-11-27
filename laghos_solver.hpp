@@ -208,13 +208,26 @@ public:
 // TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
-   virtual double Eval(ElementTransformation &T,
-                       const IntegrationPoint &ip)
+public:
+   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
       Vector x(2);
       T.Transform(ip, x);
       return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
                                   cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+   }
+};
+
+// Acceleration source coefficient used in the 2D Rayleigh-Taylor problem.
+class RTCoefficient : public VectorCoefficient
+{
+public:
+   RTCoefficient(int dim) : VectorCoefficient(dim) { }
+
+   virtual void Eval(Vector &V, ElementTransformation &T,
+                     const IntegrationPoint &ip)
+   {
+      V(0) = 0.0; V(1) = -1.0;
    }
 };
 

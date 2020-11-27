@@ -413,16 +413,19 @@ int main(int argc, char *argv[])
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   Array<int> ess_tdofs;
+   Array<int> ess_tdofs, ess_vdofs;
    {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
       for (int d = 0; d < pmesh->Dimension(); d++)
       {
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
          // i.e., we must enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-         ess_tdofs.Append(tdofs1d);
+         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+         ess_tdofs.Append(dofs_list);
+         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+         ess_vdofs.Append(dofs_list);
       }
    }
 
@@ -486,6 +489,10 @@ int main(int argc, char *argv[])
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   for (int i = 0; i < ess_vdofs.Size(); i++)
+   {
+      v_gf(ess_vdofs[i]) = 0.0;
+   }
    // Sync the data location of v_gf with its base, S
    v_gf.SyncAliasMemory(S);
 
@@ -537,7 +544,7 @@ int main(int argc, char *argv[])
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
-      case 7: visc = false; break;
+      case 7: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -851,7 +858,7 @@ double rho0(const Vector &x)
          if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
          return 1.0;
       }
-      case 7: return 1.5 + atan(20.0 * x(1)) / M_PI;
+      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -931,7 +938,7 @@ void v0(const Vector &x, Vector &v)
       }
       case 7:
       {
-          v(0) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * 2*x(1) * sin(2*M_PI*x(0));
+          v(0) = 0.0;
           v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
           break;
       }
@@ -1001,10 +1008,8 @@ double e0(const Vector &x)
       }
       case 7:
       {
-          const double denom = rho0(x) * (gamma_func(x) - 1.0);
-          const double val = 5.5 - 1.5*x(1) + (atan(20.0) - x(1) * atan(20.0 * x(1))) / M_PI +
-                             log((400.0 * x(1) * x(1) + 1.0) / 401.0) / (40.0 * M_PI);
-          return val/denom;
+         const double rho = rho0(x), gamma = gamma_func(x);
+         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }

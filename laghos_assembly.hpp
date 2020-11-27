@@ -114,7 +114,7 @@ public:
 // Performs partial assembly for the velocity mass matrix.
 class MassPAOperator : public Operator
 {
-private:
+public:
    const MPI_Comm comm;
    const int dim, NE, vsize;
    ParBilinearForm pabf;
