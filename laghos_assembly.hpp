@@ -114,16 +114,17 @@ public:
 // Performs partial assembly for the velocity mass matrix.
 class MassPAOperator : public Operator
 {
-public:
+private:
    const MPI_Comm comm;
    const int dim, NE, vsize;
    ParBilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;
    OperatorPtr mass;
-private:
+public:
    MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
+   void MultFull(const Vector &x, Vector &y) const { mass->Mult(x, y); }
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
    const ParBilinearForm &GetBF() const { return pabf; }

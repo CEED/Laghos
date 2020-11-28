@@ -339,8 +339,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          ParGridFunction a_gf_comp;
          a_gf_comp.MakeRef(&H1c, a_gf, c*size);
          Vector rhs_a(size);
-         VMassPA->mass->Mult(a_gf_comp, rhs_a);
-         //rhs_a.Print();
+         VMassPA->MultFull(a_gf_comp, rhs_a);
 
          dvc_gf.MakeRef(&H1c, dS_dt, H1Vsize + c*size);
          rhs_c_gf.MakeRef(&H1c, rhs, c*size);
