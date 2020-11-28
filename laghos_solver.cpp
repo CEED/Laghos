@@ -99,6 +99,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int source,
                                                  const double cfl,
                                                  const bool visc,
+                                                 const bool vort,
                                                  const bool p_assembly,
                                                  const double cgt,
                                                  const int cgiter,
@@ -122,6 +123,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
    use_viscosity(visc),
+   use_vorticity(vort),
    p_assembly(p_assembly),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    gamma_coeff(gamma_coeff),
@@ -327,24 +329,25 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_force.Stop();
       rhs.Neg();
 
-      ParGridFunction a_gf(&H1);
-      RTCoefficient a(dim);
-      a_gf.ProjectCoefficient(a);
-
       // Partial assembly solve for each velocity component
       const int size = H1c.GetVSize();
       const Operator *Pconf = H1c.GetProlongationMatrix();
       for (int c = 0; c < dim; c++)
       {
-         ParGridFunction a_gf_comp;
-         a_gf_comp.MakeRef(&H1c, a_gf, c*size);
-         Vector rhs_a(size);
-         VMassPA->MultFull(a_gf_comp, rhs_a);
-
          dvc_gf.MakeRef(&H1c, dS_dt, H1Vsize + c*size);
          rhs_c_gf.MakeRef(&H1c, rhs, c*size);
 
-         rhs_c_gf += rhs_a;
+         if (source_type == 2)
+         {
+            ParGridFunction a_gf(&H1);
+            RTCoefficient a(dim);
+            a_gf.ProjectCoefficient(a);
+            ParGridFunction a_gf_comp;
+            a_gf_comp.MakeRef(&H1c, a_gf, c*size);
+            Vector rhs_a(size);
+            VMassPA->MultFull(a_gf_comp, rhs_a);
+            rhs_c_gf += rhs_a;
+         }
 
          if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
          else { B = rhs_c_gf; }
@@ -369,13 +372,16 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.sw_force.Stop();
       rhs.Neg();
 
-      ParGridFunction a_gf(&H1);
-      RTCoefficient a(dim);
-      a_gf.ProjectCoefficient(a);
-      Vector rhs_a(rhs.Size());
-      rhs_a = 0.0;
-      Mv_spmat_copy.Mult(a_gf, rhs_a);
-      rhs += rhs_a;
+      if (source_type == 2)
+      {
+         ParGridFunction a_gf(&H1);
+         RTCoefficient a(dim);
+         a_gf.ProjectCoefficient(a);
+         Vector rhs_a(rhs.Size());
+         rhs_a = 0.0;
+         Mv_spmat_copy.Mult(a_gf, rhs_a);
+         rhs += rhs_a;
+      }
 
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -722,10 +728,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // relative change of the initial length scale.
                v.GetVectorGradient(*T, sgrad_v);
 
-               const double grad_norm = sgrad_v.FNorm();
-               const double div_v = fabs(sgrad_v.Trace());
-               const double vorticity_coeff = (grad_norm > 0.0) ?
-                                              div_v / grad_norm : 1.0;
+               double vorticity_coeff = 1.0;
+               if (use_viscosity)
+               {
+                  const double grad_norm = sgrad_v.FNorm();
+                  const double div_v = fabs(sgrad_v.Trace());
+                  vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+               }
 
                sgrad_v.Symmetrize();
                double eig_val_data[3], eig_vec_data[9];

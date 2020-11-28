@@ -534,7 +534,7 @@ int main(int argc, char *argv[])
    mat_gf.ProjectCoefficient(mat_coeff);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc = true;
+   int source = 0; bool visc = true, vorticity = false;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
@@ -544,7 +544,7 @@ int main(int argc, char *argv[])
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
-      case 7: visc = true; break;
+      case 7: source = 2; visc = true; vorticity = true;  break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
                                                 rho0_coeff, rho0_gf,
                                                 mat_coeff, mat_gf,
                                                 source, cfl,
-                                                visc, p_assembly,
+                                                visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 

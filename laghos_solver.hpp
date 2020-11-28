@@ -112,7 +112,7 @@ protected:
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
-   const bool use_viscosity, p_assembly;
+   const bool use_viscosity, use_vorticity, p_assembly;
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
@@ -173,7 +173,7 @@ public:
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,
-                           const bool visc, const bool pa,
+                           const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
