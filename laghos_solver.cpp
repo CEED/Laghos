@@ -329,6 +329,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       accel_src_gf.SetSpace(&H1);
       RTCoefficient accel_coeff(dim);
       accel_src_gf.ProjectCoefficient(accel_coeff);
+      accel_src_gf.Read();
    }
 
    if (p_assembly)

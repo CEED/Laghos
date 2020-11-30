@@ -224,7 +224,7 @@ class RTCoefficient : public VectorCoefficient
 {
 public:
    RTCoefficient(int dim) : VectorCoefficient(dim) { }
-
+   using VectorCoefficient::Eval;
    virtual void Eval(Vector &V, ElementTransformation &T,
                      const IntegrationPoint &ip)
    {
