@@ -169,7 +169,7 @@ ECHO=echo
 SED=sed -e
 ranks=1
 dims=2 3
-problems=0 1 2 3 4 5 6
+problems=0 1 2 3 4 5 6 7
 OPTS=-cgt 1.e-14 -rs 0 --checks
 USE_CUDA := $(MFEM_USE_CUDA:NO=)
 optioni=1 2$(if $(USE_CUDA), 3)
@@ -197,6 +197,7 @@ checks: |$(foreach p,$(problems), $(foreach d,$(dims), $(foreach o,$(optioni), $
 1:;@$(MAKE) -j $(NPROC) checks ranks=1
 2:;@$(MAKE) -j 8 checks ranks=2
 3:;@$(MAKE) -j 4 checks ranks=3
+4:;@$(MAKE) -j 2 checks ranks=4
 
 # Laghos run tests
 tests:

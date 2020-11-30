@@ -867,7 +867,7 @@ double gamma_func(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 5./3.;
+      case 0: return 5.0 / 3.0;
       case 1: return 1.4;
       case 2: return 1.4;
       case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
@@ -938,9 +938,9 @@ void v0(const Vector &x, Vector &v)
       }
       case 7:
       {
-          v(0) = 0.0;
-          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
-          break;
+         v = 0.0;
+         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         break;
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
@@ -1050,6 +1050,7 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;
+   printf("%.15e\n",nrm);
    if (dim==2)
    {
       const double p0_05 = 6.54653862453438e+00;
@@ -1068,10 +1069,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p3_16 = 8.0;
       if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
       if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 3.436923188323578e+01;
-      const double p4_52 = 2.682244912720685e+01;
+      const double p4_05 = 3.446324942352448e+01;
+      const double p4_18 = 3.446844033767240e+01;
       if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
       const double p5_05 = 1.030899557252528e+01;
       const double p5_36 = 1.057362418574309e+01;
       if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
@@ -1080,6 +1081,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p6_36 = 8.316970976817373e+00;
       if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
       if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+      const double p7_05 = 1.514929259650760e+01;
+      const double p7_25 = 1.514931278155159e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(rerr(nrm,p7_25,eps),"P7, #25");}
    }
    if (dim==3)
    {
@@ -1099,10 +1104,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p3_16 = 1.600000000000000e+01;
       if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
       if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 6.873846376647157e+01;
-      const double p4_52 = 5.364489825441373e+01;
+      const double p4_05 = 6.892649884704898e+01;
+      const double p4_18 = 6.893688067534482e+01;
       if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
       const double p5_05 = 2.061984481890964e+01;
       const double p5_36 = 2.114519664792607e+01;
       if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
@@ -1111,5 +1116,9 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p6_36 = 1.662736010353023e+01;
       if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
       if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+      const double p7_05 = 3.029858112572883e+01;
+      const double p7_24 = 3.029858832743707e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(rerr(nrm,p7_24,eps),"P7, #24");}
    }
 }
