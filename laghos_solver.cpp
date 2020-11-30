@@ -143,7 +143,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
-   qupdate(dim, NE, Q1D, visc, cfl, &timer, gamma_gf, ir, H1, L2),
+   qupdate(dim, NE, Q1D, visc, vort, cfl, &timer, gamma_gf, ir, H1, L2),
    X(H1c.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
@@ -813,10 +813,66 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    timer.quad_tstep += NE;
 }
 
+/// Trace of a square matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double Trace(const T * __restrict__ data)
+{
+   double t = 0.0;
+   for (int i = 0; i < W; i++) { t += data[i+i*H]; }
+   return t;
+}
+
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE static inline
+void SFNorm(double &scale_factor, double &scaled_fnorm2,
+            const T * __restrict__ data)
+{
+   int i;
+   constexpr int hw = H * W;
+   T max_norm = 0.0, entry, fnorm2;
+
+   for (i = 0; i < hw; i++)
+   {
+      entry = fabs(data[i]);
+      if (entry > max_norm)
+      {
+         max_norm = entry;
+      }
+   }
+
+   if (max_norm == 0.0)
+   {
+      scale_factor = scaled_fnorm2 = 0.0;
+      return;
+   }
+
+   fnorm2 = 0.0;
+   for (i = 0; i < hw; i++)
+   {
+      entry = data[i] / max_norm;
+      fnorm2 += entry * entry;
+   }
+
+   scale_factor = max_norm;
+   scaled_fnorm2 = fnorm2;
+}
+
+/// Compute the Frobenius norm of the matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double FNorm(const T * __restrict__ data)
+{
+   double s, n2;
+   SFNorm<H,W>(s, n2, data);
+   return s*sqrt(n2);
+}
+
 template<int DIM> MFEM_HOST_DEVICE static inline
 void QUpdateBody(const int NE, const int e,
                  const int NQ, const int q,
                  const bool use_viscosity,
+                 const bool use_vorticity,
                  const double h0,
                  const double h1order,
                  const double cfl,
@@ -866,6 +922,15 @@ void QUpdateBody(const int NE, const int e,
       // relative change of the initial length scale.
       const double *dV = d_grad_v_ext + DIM2*(NQ*e + q);
       kernels::Mult(DIM, DIM, DIM, dV, Jinv, sgrad_v);
+
+      double vorticity_coeff = 1.0;
+      if (use_vorticity)
+      {
+         const double grad_norm = FNorm<DIM,DIM>(sgrad_v);
+         const double div_v = fabs(Trace<DIM,DIM>(sgrad_v));
+         vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+      }
+
       kernels::Symmetrize(DIM, sgrad_v);
       if (DIM == 1)
       {
@@ -892,7 +957,8 @@ void QUpdateBody(const int NE, const int e,
       // eps must be scaled appropriately if a different unit system is
       // being used.
       const double eps = 1e-12;
-      visc_coeff += 0.5 * R * H  * S * (1.0 - smooth_step_01(mu-2.0*eps, eps));
+      visc_coeff += 0.5 * R * H  * S * vorticity_coeff *
+                    (1.0 - smooth_step_01(mu-2.0*eps, eps));
       kernels::Add(DIM, DIM, visc_coeff, stress, sgrad_v, stress);
    }
    // Time step estimate at the point. Here the more relevant length
@@ -947,10 +1013,10 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    Vector j, detj;
    const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
    qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
-   auto W = ir.GetWeights().Read();
-   auto R = Reshape(rho0Q.Read(), NQ, NE);
-   auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
-   auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
+   const auto W = ir.GetWeights().Read();
+   const auto R = Reshape(rho0Q.Read(), NQ, NE);
+   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
+   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
    auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
    Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
    const MemoryClass mc = Device::GetMemoryClass();
@@ -1026,6 +1092,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
 template<int DIM, int Q1D> static inline
 void QKernel(const int NE, const int NQ,
              const bool use_viscosity,
+             const bool use_vorticity,
              const double h0,
              const double h1order,
              const double cfl,
@@ -1041,13 +1108,13 @@ void QKernel(const int NE, const int NQ,
              DenseTensor &stressJinvT)
 {
    constexpr int DIM2 = DIM*DIM;
-   auto d_gamma = gamma_gf.Read();
-   auto d_weights = weights.Read();
-   auto d_Jacobians = Jacobians.Read();
-   auto d_rho0DetJ0w = rho0DetJ0w.Read();
-   auto d_e_quads = e_quads.Read();
-   auto d_grad_v_ext = grad_v_ext.Read();
-   auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
+   const auto d_gamma = gamma_gf.Read();
+   const auto d_weights = weights.Read();
+   const auto d_Jacobians = Jacobians.Read();
+   const auto d_rho0DetJ0w = rho0DetJ0w.Read();
+   const auto d_e_quads = e_quads.Read();
+   const auto d_grad_v_ext = grad_v_ext.Read();
+   const auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
    auto d_dt_est = dt_est.ReadWrite();
    auto d_stressJinvT = Write(stressJinvT.GetMemory(), stressJinvT.TotalSize());
    if (DIM == 2)
@@ -1068,7 +1135,7 @@ void QKernel(const int NE, const int NQ,
             MFEM_FOREACH_THREAD(qy,y,Q1D)
             {
                QUpdateBody<DIM>(NE, e, NQ, qx + qy * Q1D,
-               use_viscosity, h0, h1order, cfl, infinity,
+               use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                compr_dir, Jpi, ph_dir, stressJiT,
                d_gamma, d_weights, d_Jacobians, d_rho0DetJ0w,
@@ -1099,7 +1166,7 @@ void QKernel(const int NE, const int NQ,
                MFEM_FOREACH_THREAD(qz,z,Q1D)
                {
                   QUpdateBody<DIM>(NE, e, NQ, qx + Q1D * (qy + qz * Q1D),
-                  use_viscosity, h0, h1order, cfl, infinity,
+                  use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                   Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                   compr_dir, Jpi, ph_dir, stressJiT,
                   d_gamma, d_weights, d_Jacobians, d_rho0DetJ0w,
@@ -1135,6 +1202,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    const int id = (dim << 4) | Q1D;
    typedef void (*fQKernel)(const int NE, const int NQ,
                             const bool use_viscosity,
+                            const bool use_vorticity,
                             const double h0, const double h1order,
                             const double cfl, const double infinity,
                             const ParGridFunction &gamma_gf,
@@ -1153,8 +1221,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
       MFEM_ABORT("Unknown kernel");
    }
-   qupdate[id](NE, NQ, use_viscosity, qdata.h0, h1order, cfl, infinity,
-               gamma_gf, ir.GetWeights(), q_dx,
+   qupdate[id](NE, NQ, use_viscosity, use_vorticity, qdata.h0, h1order,
+               cfl, infinity, gamma_gf, ir.GetWeights(), q_dx,
                qdata.rho0DetJ0w, q_e, q_dv,
                qdata.Jac0inv, q_dt_est, qdata.stressJinvT);
    qdata.dt_est = q_dt_est.Min();

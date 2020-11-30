@@ -59,7 +59,7 @@ class QUpdate
 {
 private:
    const int dim, vdim, NQ, NE, Q1D;
-   const bool use_viscosity;
+   const bool use_viscosity, use_vorticity;
    const double cfl;
    TimingData *timer;
    const IntegrationRule &ir;
@@ -69,14 +69,15 @@ private:
    const QuadratureInterpolator *q1,*q2;
    const ParGridFunction &gamma_gf;
 public:
-   QUpdate(const int d, const int ne, const int q1d, const bool visc,
+   QUpdate(const int d, const int ne, const int q1d,
+           const bool visc, const bool vort,
            const double cfl, TimingData *t,
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
       dim(d), vdim(h1.GetVDim()),
       NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
-      use_viscosity(visc), cfl(cfl),
+      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
       H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
       q_dt_est(NE*NQ),
