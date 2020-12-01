@@ -144,7 +144,7 @@ protected:
    // Linear solver for energy.
    CGSolver CG_VMass, CG_EMass;
    mutable TimingData timer;
-   mutable QUpdate qupdate;
+   mutable QUpdate *qupdate;
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
