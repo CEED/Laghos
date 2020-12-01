@@ -657,11 +657,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    x.MakeRef(&H1, *sptr, 0);
    v.MakeRef(&H1, *sptr, H1.GetVSize());
    e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-   Vector e_vals, e_loc(l2dofs_cnt), vector_vals(h1dofs_cnt * dim);
-   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim),
-               vecvalMat(vector_vals.GetData(), h1dofs_cnt, dim);
-   DenseTensor grad_v_ref(dim, dim, nqp);
-   Array<int> L2dofs, H1dofs;
+   Vector e_vals;
+   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
+
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this
    // miniapp uses simple EOS equations, we still want to represent the batched
@@ -687,6 +685,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          nzones_batch = NE - z_id;
          nqp_batch    = nqp * nzones_batch;
       }
+
       double min_detJ = std::numeric_limits<double>::infinity();
       for (int z = 0; z < nzones_batch; z++)
       {
@@ -707,8 +706,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          }
          ++z_id;
       }
+
       // Batched computation of material properties.
       ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
+
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
       {
