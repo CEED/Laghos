@@ -790,8 +790,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                v.GetVectorGradient(*T, sgrad_v);
                sgrad_v.Symmetrize();
                double eig_val_data[3], eig_vec_data[9];
-               eig_val_data[0] = sgrad_v(0, 0);
-               eig_vec_data[0] = 1.;
+               if (dim==1)
+               {
+                  eig_val_data[0] = sgrad_v(0, 0);
+                  eig_vec_data[0] = 1.;
+               }
+               else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
                Vector compr_dir(eig_vec_data, dim);
                // Computes the initial->physical transformation Jacobian.
                mfem::Mult(Jpr, qdata.Jac0inv(z_id*nqp + q), Jpi);
