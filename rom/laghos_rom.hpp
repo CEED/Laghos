@@ -87,10 +87,14 @@ struct ROM_Options
     double incSVD_singular_value_tol = 1.e-14;
     double incSVD_sampling_tol = 1.e-7;
 
-    // Number of samples for each variable
+    // Number of spatial samples for each variable
     int sampX = 0;
     int sampV = 0;
     int sampE = 0;
+
+    // Number of temporal samples for each variable
+    int tsampV = 1;
+    int tsampE = 1;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
@@ -104,6 +108,8 @@ struct ROM_Options
     bool useVX = false; // If true, use X-X0 basis for V.
 
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
+
+    bool spaceTime = false;
 };
 
 class ROM_Sampler
@@ -120,6 +126,7 @@ public:
     {
         const int window = input.window;
 
+        // TODO: update the following comment, since there should now be a maximum of 1 time interval now.
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
         const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
 
@@ -127,37 +134,43 @@ public:
 
         if (input.staticSVD)
         {
-            CAROM::StaticSVDOptions static_x_options(
-                tH1size,
-                max_model_dim
-            );
-            static_x_options.max_time_intervals = 1;
-            CAROM::StaticSVDOptions static_e_options(
-                tL2size,
-                max_model_dim
-            );
-            static_e_options.max_time_intervals = 1;
-            generator_X = new CAROM::StaticSVDBasisGenerator(
-                static_x_options,
-                BasisFileName(basename, VariableName::X, window, parameterID));
-            generator_V = new CAROM::StaticSVDBasisGenerator(
-                static_x_options,
-                BasisFileName(basename, VariableName::V, window, parameterID));
-            generator_E = new CAROM::StaticSVDBasisGenerator(
-                static_e_options,
-                BasisFileName(basename, VariableName::E, window, parameterID));
-
-            if (sampleF)
             {
-                generator_Fv = new CAROM::StaticSVDBasisGenerator(
+                const bool output_rightSV = input.spaceTime;
+
+                CAROM::StaticSVDOptions static_x_options(
+                    tH1size,
+                    max_model_dim,
+                    output_rightSV
+                );
+                static_x_options.max_time_intervals = 1; // TODO: can this be in the constructor?
+                CAROM::StaticSVDOptions static_e_options(
+                    tL2size,
+                    max_model_dim,
+                    output_rightSV
+                );
+                static_e_options.max_time_intervals = 1; // TODO: can this be in the constructor?
+                generator_X = new CAROM::StaticSVDBasisGenerator(
                     static_x_options,
-                    BasisFileName(basename, VariableName::Fv, window, parameterID));
-                generator_Fe = new CAROM::StaticSVDBasisGenerator(
+                    BasisFileName(basename, VariableName::X, window, parameterID));
+                generator_V = new CAROM::StaticSVDBasisGenerator(
+                    static_x_options,
+                    BasisFileName(basename, VariableName::V, window, parameterID));
+                generator_E = new CAROM::StaticSVDBasisGenerator(
                     static_e_options,
-                    BasisFileName(basename, VariableName::Fe, window, parameterID));
+                    BasisFileName(basename, VariableName::E, window, parameterID));
+
+                if (sampleF)
+                {
+                    generator_Fv = new CAROM::StaticSVDBasisGenerator(
+                        static_x_options,
+                        BasisFileName(basename, VariableName::Fv, window, parameterID));
+                    generator_Fe = new CAROM::StaticSVDBasisGenerator(
+                        static_e_options,
+                        BasisFileName(basename, VariableName::Fe, window, parameterID));
+                }
             }
         }
-        else
+        else  // Incremental version
         {
             CAROM::IncrementalSVDOptions inc_x_options(
                 tH1size,
@@ -380,8 +393,10 @@ private:
 
 class ROM_Basis
 {
+    friend class STROM_Basis;
+
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV);
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX=1.0, const double sFactorV=1.0);
 
     ~ROM_Basis()
     {
@@ -427,6 +442,7 @@ public:
     void Init(ROM_Options const& input, Vector const& S);
 
     void ReadSolutionBases(const int window);
+    void ReadTemporalBases(const int window);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
@@ -566,6 +582,7 @@ private:
     int size_H1_sp = 0;
     int size_L2_sp = 0;
 
+protected:
     CAROM::Vector *spX = NULL;
     CAROM::Vector *spV = NULL;
     CAROM::Vector *spE = NULL;
@@ -590,6 +607,9 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
+    int numTimeSamplesV = 0;
+    int numTimeSamplesE = 0;
+
     const bool Voffset;
 
     const bool RK2AvgFormulation;
@@ -605,6 +625,60 @@ private:
 
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
+
+    // Space-time data
+    const bool spaceTime;
+    int temporalSize = 0;
+    const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero.
+    CAROM::Matrix* tbasisX = 0;
+    CAROM::Matrix* tbasisV = 0;
+    CAROM::Matrix* tbasisE = 0;
+    CAROM::Matrix* tbasisFv = 0;
+    CAROM::Matrix* tbasisFe = 0;
+
+    std::vector<int> timeSamples;  // merged V and E time samples
+};
+
+//class STROM_Basis : public ROM_Basis
+class STROM_Basis
+{
+public:
+    //STROM_Basis(ROM_Options const& input, MPI_Comm comm_) : ROM_Basis(input, comm_)
+    STROM_Basis(ROM_Options const& input, ROM_Basis *b_) : b(b_)
+    {
+        // TODO: I don't think this should be derived from ROM_Basis, since it reads the bases again.
+        MFEM_VERIFY(false, "");
+    }
+
+    int SolutionSizeST() const {
+        // TODO: this assumes 1 temporal basis vector for each spatial vector. Generalize to allow for multiple temporal basis vectors per spatial vector.
+        return b->TotalSize();
+    }
+
+    int nSampledTimes() const {
+        return b->timeSamples.size();
+    }
+
+    int GetTimeSampleIndex(const int i) const {
+        return b->timeSamples[i];
+    }
+
+    double GetTimeSample(const int i) const {
+        return 0.0;  // TODO
+    }
+
+    double GetTimestep(const int i) const {
+        return 0.0;  // TODO
+    }
+
+    void LiftToSampleMesh(const int ti, Vector const& x, Vector &xsp) const;
+
+    void RestrictFromSampleMesh(const int ti, Vector const& xsp, Vector &x) const;
+
+    void ApplySpaceTimeHyperreductionInverses(Vector const& x, Vector &y) const;
+
+private:
+    ROM_Basis *b;  // stores spatial and temporal bases
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -638,6 +712,11 @@ public:
     void InducedGramSchmidtInitialize(Vector &S);
     void InducedGramSchmidtFinalize(Vector &S);
 
+    // TODO: should the following space time functions be refactored into a new space time ROM operator class?
+    void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
+    void SolveSpaceTime() const;
+    void SpaceTimeInitialGuess(Vector & st0) const;  // TODO: private function?
+
     ~ROM_Operator()
     {
         delete mat_gf_coeff;
@@ -657,6 +736,11 @@ private:
     Array<int> ess_tdofs;
 
     ROM_Basis *basis;
+
+    // Space-time data
+    STROM_Basis *STbasis = 0;
+    ODESolver *ST_ode_solver = 0;
+    mutable Vector Sr;
 
     mutable Vector fx, fy;
 

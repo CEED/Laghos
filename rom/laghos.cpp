@@ -261,6 +261,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.sampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&romOptions.sampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&romOptions.sampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&romOptions.tsampV, "-ntsamv", "--numtsamplev", "number of time samples for V.");
+    args.AddOption(&romOptions.tsampE, "-ntsame", "--numtsamplee", "number of time samples for E.");
     args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
     args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
@@ -281,8 +283,10 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM hyperreduction.");
     args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
-    args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
+    args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romos", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
+    args.AddOption(&romOptions.spaceTime, "-romst", "--romspacetime", "-no-romst", "--no-romspacetime",
+                   "Enable or disable ROM space-time.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
@@ -912,7 +916,15 @@ int main(int argc, char *argv[])
         }
         else
         {
+            /*
+            if (romOptions.spaceTime)
+              basis[0] = NULL;
+            else
+              basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            */
+
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+
             romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
                                           cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
         }
@@ -933,7 +945,6 @@ int main(int argc, char *argv[])
             cout << "Offset Style: " << offsetType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
-
 
         ode_solver->Init(*romOper[0]);
         onlinePreprocessTimer.Stop();
@@ -1050,9 +1061,14 @@ int main(int argc, char *argv[])
         restoreTimer.Stop();
         infile_tw_steps.close();
     }
+    else if (rom_online && romOptions.spaceTime)
+    {
+        //Vector stSol(S);
+        romOper[0]->SolveSpaceTime();
+    }
     else
     {
-        // usual time loop when rom_restore phase is false.
+        // Usual time loop when not in restore or online space-time phase.
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
