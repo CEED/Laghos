@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
     cout << myid << ": pmesh->bdr_attributes.Max() " << pmesh->bdr_attributes.Max() << endl;
     // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
     // that the boundaries are straight.
-    Array<int> ess_tdofs;
+    Array<int> ess_tdofs, ess_vdofs;
     {
         Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
         for (int d = 0; d < pmesh->Dimension(); d++)
@@ -564,8 +564,11 @@ int main(int argc, char *argv[])
             // enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0;
             ess_bdr[d] = 1;
-            H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-            ess_tdofs.Append(tdofs1d);
+         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+         ess_tdofs.Append(dofs_list);
+         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+         ess_vdofs.Append(dofs_list);
         }
     }
 
@@ -647,6 +650,10 @@ int main(int argc, char *argv[])
     // Initialize the velocity.
     VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
     v_gf.ProjectCoefficient(v_coeff);
+   for (int i = 0; i < ess_vdofs.Size(); i++)
+   {
+      v_gf(ess_vdofs[i]) = 0.0;
+   }
 
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -689,6 +696,8 @@ int main(int argc, char *argv[])
     // Additional details, depending on the problem.
     int source = 0;
     bool visc = true;
+    bool vorticity = false;
+
     switch (problem)
     {
     case 0:
@@ -716,7 +725,7 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 7:
-        visc = false;
+      source = 2; visc = true; vorticity = true; 
         break;
     default:
         MFEM_ABORT("Wrong problem specification!");
@@ -727,7 +736,7 @@ int main(int argc, char *argv[])
 
     LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                  ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                                 visc, vorticity, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                  H1FEC.GetBasisType());
 
     socketstream vis_rho, vis_v, vis_e;
@@ -1591,7 +1600,7 @@ double rho0(const Vector &x)
         return 1.0;
     }
     case 7:
-        return 1.5 + atan(20.0 * x(1)) / M_PI;
+        return x(1) >= 0.0 ? 2.0 : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -1603,7 +1612,7 @@ double gamma_func(const Vector &x)
     switch (problem)
     {
     case 0:
-        return 5./3.;
+        return 5.0 / 3.0;
     case 1:
         return 1.4;
     case 2:
@@ -1717,11 +1726,11 @@ void v0(const Vector &x, Vector &v)
         return;
     }
     case 7:
-    {
-        v(0) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * 2*x(1) * sin(2*M_PI*x(0));
-        v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
-        break;
-    }
+      {
+         v = 0.0;
+         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         break;
+      }
     default:
         MFEM_ABORT("Bad number given for problem id!");
     }
@@ -1809,12 +1818,10 @@ double e0(const Vector &x)
         return 0.0;
     }
     case 7:
-    {
-        const double denom = rho0(x) * (gamma_func(x) - 1.0);
-        const double val = 5.5 - 1.5*x(1) + (atan(20.0) - x(1) * atan(20.0 * x(1))) / M_PI +
-                           log((400.0 * x(1) * x(1) + 1.0) / 401.0) / (40.0 * M_PI);
-        return val/denom;
-    }
+      {
+         const double rho = rho0(x), gamma = gamma_func(x);
+         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+      }
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;

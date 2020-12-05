@@ -178,6 +178,8 @@ public:
 
     // Mass matrix action.
     virtual void Mult(const Vector &x, Vector &y) const;
+    void MultFull(const Vector &x, Vector &y) const { mass->Mult(x, y); }
+
 
     void ComputeDiagonal2D(Vector &diag) const;
     void ComputeDiagonal3D(Vector &diag) const;
