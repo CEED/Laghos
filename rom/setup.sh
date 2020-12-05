@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# Check whether Homebrew or wget is installed
+if [ "$(uname)" == "Darwin" ]; then
+  which -s brew > /dev/null
+  if [[ $? != 0 ]] ; then
+      # Install Homebrew
+      echo "Homebrew installation is required."
+      exit 1
+  fi
+
+  which -s wget > /dev/null
+  # Install wget
+  if [[ $? != 0 ]] ; then
+      brew install wget
+  fi
+fi
+
 # Replace with your LIB_DIR
 LIB_DIR=$PWD/dependencies
 mkdir -p $LIB_DIR
@@ -36,7 +52,11 @@ METIS_LIB="-L${METIS_DIR}/build/${MACHINE_ARCH}/libparmetis -lparmetis -L${METIS
 cd $LIB_DIR
 if [ ! -d "mfem" ]; then
   git clone https://github.com/mfem/mfem.git
-  cd mfem
+fi
+cd mfem
+if [[ "debug" == $1 ]]; then
+  make pdebug -j MFEM_USE_MPI=YES MFEM_USE_METIS=YES MFEM_USE_METIS_5=YES METIS_DIR="$METIS_DIR" METIS_OPT="$METIS_OPT" METIS_LIB="$METIS_LIB"
+else
   make parallel -j MFEM_USE_MPI=YES MFEM_USE_METIS=YES MFEM_USE_METIS_5=YES METIS_DIR="$METIS_DIR" METIS_OPT="$METIS_OPT" METIS_LIB="$METIS_LIB"
 fi
 
@@ -46,4 +66,27 @@ if [ ! -d "libROM" ]; then
   git clone https://github.com/LLNL/libROM.git
   cd libROM
   ./scripts/laghos_compile.sh
+fi
+cd libROM
+if [[ "debug" == $1 ]]; then
+  ./scripts/laghos_compile.sh -DCMAKE_BUILD_TYPE=Debug
+else
+  ./scripts/laghos_compile.sh
+fi
+
+#Install astyle
+cd $LIB_DIR
+if [ ! -d "astyle" ]; then
+  # Check machine
+  case "$(uname -s)" in
+      Linux*)
+        wget -O astyle_2.05.1.tar.gz https://sourceforge.net/projects/astyle/files/astyle/astyle%202.05.1/astyle_2.05.1_linux.tar.gz/download
+        ;;
+      Darwin*)
+        wget -O astyle_2.05.1.tar.gz https://sourceforge.net/projects/astyle/files/astyle/astyle%202.05.1/astyle_2.05.1_macosx.tar.gz/download
+        ;;
+  esac
+  tar -zxvf astyle_2.05.1.tar.gz
+  cd astyle/build/gcc
+  make
 fi

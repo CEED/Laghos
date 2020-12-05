@@ -7,29 +7,6 @@
 using namespace std;
 using namespace mfem;
 
-enum VariableName { X, V, E, Fv, Fe };
-
-enum offsetStyle
-{
-    usePreviousSolution,
-    useInitialState,
-    saveLoadOffset,
-    interpolateOffset
-};
-
-static offsetStyle getOffsetStyle(const char* offsetType)
-{
-    static std::unordered_map<std::string, offsetStyle> offsetMap =
-    {
-        {"previous", usePreviousSolution},
-        {"initial", useInitialState},
-        {"load", saveLoadOffset},
-        {"interpolate", interpolateOffset}
-    };
-    auto iter = offsetMap.find(offsetType);
-    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
-    return iter->second;
-}
 
 void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
                              const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,

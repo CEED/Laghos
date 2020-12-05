@@ -65,6 +65,7 @@ INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
 LIBS_DIR ?= dependencies
+DEBUG := NO
 MFEM_DIR = $(LIBS_DIR)/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
@@ -120,8 +121,6 @@ OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
 HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
 TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
-
-#include $(CURDIR)/user.mk
 
 # Targets
 
@@ -200,15 +199,18 @@ status info:
 	$(info PREFIX      = $(PREFIX))
 	@true
 
-#ASTYLE = astyle --options=$(MFEM_DIR1)/config/mfem.astylerc
 FORMAT_FILES := $(SOURCE_FILES) $(HEADER_FILES) $(TEST_FILES) merge.cpp
 
 style:
-	@if ! dependencies/astyle/build/gcc/bin/astyle $(FORMAT_FILES) | grep Formatted; then\
+	@if ! $(LIBS_DIR)/astyle/build/gcc/bin/astyle $(FORMAT_FILES) | grep Formatted; then\
 	   echo "No source files were changed.";\
 	fi
 
 setup:
+ifeq ($(DEBUG),$(filter $(DEBUG),Yes YES))
+	$(shell ./setup.sh debug >&2)
+else
 	$(shell ./setup.sh >&2)
+endif
 
 $(shell mkdir -p run)

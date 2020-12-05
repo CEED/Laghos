@@ -191,3 +191,20 @@ void split_line(const std::string &line, std::vector<std::string> &words)
         words.push_back(new_word);
     }
 }
+
+void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
+{
+    const int w = romOptions.window;
+    romOptions.dimX = twparam(w,0);
+    romOptions.dimV = twparam(w,1);
+    romOptions.dimE = twparam(w,2);
+    if (romOptions.RHSbasis)
+    {
+        romOptions.dimFv = twparam(w,3);
+        romOptions.dimFe = twparam(w,4);
+    }
+    const int oss = romOptions.RHSbasis ? 5 : 3;
+    romOptions.sampX = twparam(w,oss);
+    romOptions.sampV = twparam(w,oss+1);
+    romOptions.sampE = twparam(w,oss+2);
+}
