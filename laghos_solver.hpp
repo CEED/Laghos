@@ -59,7 +59,7 @@ class QUpdate
 {
 private:
    const int dim, vdim, NQ, NE, Q1D;
-   const bool use_viscosity;
+   const bool use_viscosity, use_vorticity;
    const double cfl;
    TimingData *timer;
    const IntegrationRule &ir;
@@ -69,14 +69,15 @@ private:
    const QuadratureInterpolator *q1,*q2;
    const ParGridFunction &gamma_gf;
 public:
-   QUpdate(const int d, const int ne, const int q1d, const bool visc,
+   QUpdate(const int d, const int ne, const int q1d,
+           const bool visc, const bool vort,
            const double cfl, TimingData *t,
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
       dim(d), vdim(h1.GetVDim()),
       NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
-      use_viscosity(visc), cfl(cfl),
+      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
       H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
       q_dt_est(NE*NQ),
@@ -112,7 +113,7 @@ protected:
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
-   const bool use_viscosity, p_assembly;
+   const bool use_viscosity, use_vorticity, p_assembly;
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
@@ -143,7 +144,7 @@ protected:
    // Linear solver for energy.
    CGSolver CG_VMass, CG_EMass;
    mutable TimingData timer;
-   mutable QUpdate qupdate;
+   mutable QUpdate *qupdate;
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
@@ -173,7 +174,7 @@ public:
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,
-                           const bool visc, const bool pa,
+                           const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
@@ -208,13 +209,26 @@ public:
 // TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
-   virtual double Eval(ElementTransformation &T,
-                       const IntegrationPoint &ip)
+public:
+   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
       Vector x(2);
       T.Transform(ip, x);
       return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
                                   cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+   }
+};
+
+// Acceleration source coefficient used in the 2D Rayleigh-Taylor problem.
+class RTCoefficient : public VectorCoefficient
+{
+public:
+   RTCoefficient(int dim) : VectorCoefficient(dim) { }
+   using VectorCoefficient::Eval;
+   virtual void Eval(Vector &V, ElementTransformation &T,
+                     const IntegrationPoint &ip)
+   {
+      V = 0.0; V(1) = -1.0;
    }
 };
 

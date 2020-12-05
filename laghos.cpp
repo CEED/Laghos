@@ -413,16 +413,19 @@ int main(int argc, char *argv[])
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   Array<int> ess_tdofs;
+   Array<int> ess_tdofs, ess_vdofs;
    {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
       for (int d = 0; d < pmesh->Dimension(); d++)
       {
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
          // i.e., we must enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-         ess_tdofs.Append(tdofs1d);
+         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+         ess_tdofs.Append(dofs_list);
+         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+         ess_vdofs.Append(dofs_list);
       }
    }
 
@@ -486,6 +489,10 @@ int main(int argc, char *argv[])
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
+   for (int i = 0; i < ess_vdofs.Size(); i++)
+   {
+      v_gf(ess_vdofs[i]) = 0.0;
+   }
    // Sync the data location of v_gf with its base, S
    v_gf.SyncAliasMemory(S);
 
@@ -527,7 +534,7 @@ int main(int argc, char *argv[])
    mat_gf.ProjectCoefficient(mat_coeff);
 
    // Additional details, depending on the problem.
-   int source = 0; bool visc = true;
+   int source = 0; bool visc = true, vorticity = false;
    switch (problem)
    {
       case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
@@ -537,7 +544,7 @@ int main(int argc, char *argv[])
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
-      case 7: visc = false; break;
+      case 7: source = 2; visc = true; vorticity = true;  break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -547,7 +554,7 @@ int main(int argc, char *argv[])
                                                 rho0_coeff, rho0_gf,
                                                 mat_coeff, mat_gf,
                                                 source, cfl,
-                                                visc, p_assembly,
+                                                visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
@@ -851,7 +858,7 @@ double rho0(const Vector &x)
          if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
          return 1.0;
       }
-      case 7: return 1.5 + atan(20.0 * x(1)) / M_PI;
+      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -860,7 +867,7 @@ double gamma_func(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 5./3.;
+      case 0: return 5.0 / 3.0;
       case 1: return 1.4;
       case 2: return 1.4;
       case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
@@ -931,9 +938,9 @@ void v0(const Vector &x, Vector &v)
       }
       case 7:
       {
-          v(0) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * 2*x(1) * sin(2*M_PI*x(0));
-          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
-          break;
+         v = 0.0;
+         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         break;
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
@@ -1001,10 +1008,8 @@ double e0(const Vector &x)
       }
       case 7:
       {
-          const double denom = rho0(x) * (gamma_func(x) - 1.0);
-          const double val = 5.5 - 1.5*x(1) + (atan(20.0) - x(1) * atan(20.0 * x(1))) / M_PI +
-                             log((400.0 * x(1) * x(1) + 1.0) / 401.0) / (40.0 * M_PI);
-          return val/denom;
+         const double rho = rho0(x), gamma = gamma_func(x);
+         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -1045,6 +1050,7 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;
+   printf("%.15e\n",nrm);
    if (dim==2)
    {
       const double p0_05 = 6.54653862453438e+00;
@@ -1063,10 +1069,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p3_16 = 8.0;
       if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
       if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 3.436923188323578e+01;
-      const double p4_52 = 2.682244912720685e+01;
+      const double p4_05 = 3.446324942352448e+01;
+      const double p4_18 = 3.446844033767240e+01;
       if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
       const double p5_05 = 1.030899557252528e+01;
       const double p5_36 = 1.057362418574309e+01;
       if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
@@ -1075,6 +1081,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p6_36 = 8.316970976817373e+00;
       if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
       if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+      const double p7_05 = 1.514929259650760e+01;
+      const double p7_25 = 1.514931278155159e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(rerr(nrm,p7_25,eps),"P7, #25");}
    }
    if (dim==3)
    {
@@ -1094,10 +1104,10 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p3_16 = 1.600000000000000e+01;
       if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
       if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 6.873846376647157e+01;
-      const double p4_52 = 5.364489825441373e+01;
+      const double p4_05 = 6.892649884704898e+01;
+      const double p4_18 = 6.893688067534482e+01;
       if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==52) {chk++; MFEM_VERIFY(rerr(nrm,p4_52,eps),"P4, #52");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
       const double p5_05 = 2.061984481890964e+01;
       const double p5_36 = 2.114519664792607e+01;
       if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
@@ -1106,5 +1116,9 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
       const double p6_36 = 1.662736010353023e+01;
       if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
       if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
+      const double p7_05 = 3.029858112572883e+01;
+      const double p7_24 = 3.029858832743707e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(rerr(nrm,p7_24,eps),"P7, #24");}
    }
 }
