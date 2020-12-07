@@ -87,7 +87,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         ParGridFunction &rho0,
         int source_type_, double cfl_,
         Coefficient *material_,
-        bool visc, bool pa,
+        bool visc, bool vort, bool pa,
         double cgt, int cgiter,
         double ftz,
         int h1_basis_type,
@@ -101,7 +101,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
       h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
       source_type(source_type_), cfl(cfl_),
-      use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
+      use_viscosity(visc), use_vorticity(vort), 
+      p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
       noMvSolve(noMvSolve_), noMeSolve(noMeSolve_),
       material_pcf(material_),
@@ -257,6 +258,15 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
     dv = 0.0;
 
+   ParGridFunction accel_src_gf;
+   if (source_type == 2)
+   {
+      accel_src_gf.SetSpace(&H1);
+      RTCoefficient accel_coeff(dim);
+      accel_src_gf.ProjectCoefficient(accel_coeff);
+      accel_src_gf.Read();
+   }
+
     Vector one(VsizeL2), rhs(VsizeH1), B, X;
     one = 1.0;
     if (p_assembly)
@@ -289,7 +299,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         }
 
         Operator *cVMassPA;
-        VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
+        VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B); // TODO: PR118 Line 356-365
         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
         cg.SetPreconditioner(VMassPA_prec);
         cg.SetOperator(*cVMassPA);
@@ -323,7 +333,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         }
 
         HypreParMatrix A;
-        Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
+        Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B); // TODO: PR118 Line 388-393
         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
         HypreSmoother prec;
         prec.SetType(HypreSmoother::Jacobi, 1);
@@ -630,11 +640,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
     x.MakeRef(&H1FESpace, *sptr, 0);
     v.MakeRef(&H1FESpace, *sptr, H1FESpace.GetVSize());
     e.MakeRef(&L2FESpace, *sptr, 2*H1FESpace.GetVSize());
-    Vector e_vals, e_loc(l2dofs_cnt), vector_vals(h1dofs_cnt * dim);
-    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim),
-                vecvalMat(vector_vals.GetData(), h1dofs_cnt, dim);
-    DenseTensor grad_v_ref(dim, dim, nqp);
-    Array<int> L2dofs, H1dofs;
+   Vector e_vals;
+   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
     // Batched computations are needed, because hydrodynamic codes usually
     // involve expensive computations of material properties. Although this
@@ -738,7 +745,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     stress(d, d) = -p;
                 }
 
-                double visc_coeff = 0.0;
+                double visc_coeff = 0.0, vort_coeff = 1.0;
                 if (use_viscosity)
                 {
                     // Compression-based length scale at the point. The first
@@ -753,6 +760,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     {
                         v.GetVectorGradient(*T, sgrad_v);
                     }
+
+               if (use_vorticity)
+               {
+                  const double grad_norm = sgrad_v.FNorm();
+                  const double div_v = fabs(sgrad_v.Trace());
+                  vort_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+}
+
                     sgrad_v.Symmetrize();
                     double eig_val_data[3], eig_vec_data[9];
                     if (dim==1)
@@ -780,7 +795,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     // eps must be scaled appropriately if a different unit system is
                     // being used.
                     const double eps = 1e-12;
-                    visc_coeff += 0.5 * rho * h * sound_speed *
+                    visc_coeff += 0.5 * rho * h * sound_speed * vort_coeff * 
                                   (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
 
                     stress.Add(visc_coeff, sgrad_v);
@@ -831,6 +846,61 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
     timer.sw_qdata.Stop();
     timer.quad_tstep += nzones;
+}
+
+/// Trace of a square matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double Trace(const T * __restrict__ data)
+{
+   double t = 0.0;
+   for (int i = 0; i < W; i++) { t += data[i+i*H]; }
+   return t;
+}
+
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE static inline
+void SFNorm(double &scale_factor, double &scaled_fnorm2,
+            const T * __restrict__ data)
+{
+   int i;
+   constexpr int hw = H * W;
+   T max_norm = 0.0, entry, fnorm2;
+
+   for (i = 0; i < hw; i++)
+   {
+      entry = fabs(data[i]);
+      if (entry > max_norm)
+      {
+         max_norm = entry;
+      }
+   }
+
+   if (max_norm == 0.0)
+   {
+      scale_factor = scaled_fnorm2 = 0.0;
+      return;
+   }
+
+   fnorm2 = 0.0;
+   for (i = 0; i < hw; i++)
+   {
+      entry = data[i] / max_norm;
+      fnorm2 += entry * entry;
+   }
+
+   scale_factor = max_norm;
+   scaled_fnorm2 = fnorm2;
+}
+
+/// Compute the Frobenius norm of the matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double FNorm(const T * __restrict__ data)
+{
+   double s, n2;
+   SFNorm<H,W>(s, n2, data);
+   return s*sqrt(n2);
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const

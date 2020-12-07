@@ -65,7 +65,7 @@ protected:
 
     const int dim, nzones, l2dofs_cnt, h1dofs_cnt, source_type;
     const double cfl;
-    const bool use_viscosity, p_assembly;
+    const bool use_viscosity, use_vorticity, p_assembly;
     const double cg_rel_tol;
     const int cg_max_iter;
     const double ftz_tol;
@@ -166,6 +166,7 @@ public:
     void MultMe(const Vector &u, Vector &v);
 };
 
+// TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
     virtual double Eval(ElementTransformation &T,
@@ -176,6 +177,19 @@ class TaylorCoefficient : public Coefficient
         return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
                                     cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
     }
+};
+
+// Acceleration source coefficient used in the 2D Rayleigh-Taylor problem.
+class RTCoefficient : public VectorCoefficient
+{
+public:
+   RTCoefficient(int dim) : VectorCoefficient(dim) { }
+   using VectorCoefficient::Eval;
+   virtual void Eval(Vector &V, ElementTransformation &T,
+                     const IntegrationPoint &ip)
+   {
+      V = 0.0; V(1) = -1.0;
+   }
 };
 
 } // namespace hydrodynamics

@@ -696,7 +696,7 @@ int main(int argc, char *argv[])
     // Additional details, depending on the problem.
     int source = 0;
     bool visc = true;
-    bool vorticity = false;
+    bool vort = false;
 
     switch (problem)
     {
@@ -725,7 +725,7 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 7:
-      source = 2; visc = true; vorticity = true; 
+      source = 2; visc = true; vort = true; 
         break;
     default:
         MFEM_ABORT("Wrong problem specification!");
@@ -736,7 +736,7 @@ int main(int argc, char *argv[])
 
     LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                  ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                 visc, vorticity, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                                 visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                  H1FEC.GetBasisType());
 
     socketstream vis_rho, vis_v, vis_e;

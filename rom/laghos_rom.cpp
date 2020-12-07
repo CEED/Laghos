@@ -1575,7 +1575,8 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
 
 ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
-                           const int order_e, const int source, const bool visc, const double cfl,
+                           const int order_e, const int source, 
+                           const bool visc, const bool vort, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, H1_FECollection *H1fec,
                            FiniteElementCollection *L2fec)
@@ -1656,7 +1657,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                 H1fec->GetBasisType(), (useReducedMv || useGramSchmidt), (useReducedMe || useGramSchmidt));
     }
     else if (!hyperreduce)
