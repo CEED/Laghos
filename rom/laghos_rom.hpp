@@ -285,6 +285,12 @@ public:
         return std::max(std::max(generator_X->getNumSamples(), generator_V->getNumSamples()), generator_E->getNumSamples());
     }
 
+    int FinalNumberOfSamples()
+    {
+        MFEM_VERIFY(finalized, "ROM_Sampler not finalized");
+        return finalNumSamples;
+    }
+
 private:
     const int H1size;
     const int L2size;
@@ -317,6 +323,9 @@ private:
     const bool Voffset;
     const bool useXV;
     const bool useVX;
+
+    bool finalized = false;
+    int finalNumSamples = 0;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
@@ -396,7 +405,8 @@ class ROM_Basis
     friend class STROM_Basis;
 
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX=1.0, const double sFactorV=1.0);
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
+              const double sFactorX=1.0, const double sFactorV=1.0);
 
     ~ROM_Basis()
     {
@@ -448,7 +458,7 @@ public:
                          const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
     int TotalSize() const {
-        return rdimx + rdimv + rdime;
+        return rdimx + rdimv + rdime; // TODO: remove this function? It is the same as SolutionSize().
     }
 
     ParMesh *GetSampleMesh() {
@@ -519,6 +529,9 @@ public:
     }
 
     void ComputeReducedMatrices();
+
+    void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
+    void GetSpaceTimeInitialGuess(Vector& st) const;
 
     MPI_Comm comm;
 
@@ -626,10 +639,21 @@ protected:
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
 
+private:
+    void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
+    void SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
+                                           ParFiniteElementSpace *fespace,
+                                           const CAROM::Matrix* basis,
+                                           const CAROM::Matrix* tbasis,
+                                           const int nt,
+                                           const int rdim) const;
+
     // Space-time data
     const bool spaceTime;
     int temporalSize = 0;
-    const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero.
+    const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+    // TODO: generalize for nonzero initial velocity.
+
     CAROM::Matrix* tbasisX = 0;
     CAROM::Matrix* tbasisV = 0;
     CAROM::Matrix* tbasisE = 0;
@@ -637,6 +661,8 @@ protected:
     CAROM::Matrix* tbasisFe = 0;
 
     std::vector<int> timeSamples;  // merged V and E time samples
+
+    Vector st0;
 };
 
 //class STROM_Basis : public ROM_Basis
@@ -644,10 +670,11 @@ class STROM_Basis
 {
 public:
     //STROM_Basis(ROM_Options const& input, MPI_Comm comm_) : ROM_Basis(input, comm_)
-    STROM_Basis(ROM_Options const& input, ROM_Basis *b_) : b(b_)
+    STROM_Basis(ROM_Options const& input, ROM_Basis *b_, std::vector<double> *timesteps_)
+        : b(b_), u_ti(b_->TotalSize()), timesteps(timesteps_)
     {
         // TODO: I don't think this should be derived from ROM_Basis, since it reads the bases again.
-        MFEM_VERIFY(false, "");
+        //MFEM_VERIFY(false, "");
     }
 
     int SolutionSizeST() const {
@@ -655,8 +682,18 @@ public:
         return b->TotalSize();
     }
 
-    int nSampledTimes() const {
+    int GetNumSpatialSamples() const {
+        return b->numSamplesX + b->numSamplesV + b->numSamplesE;
+    }
+
+    int GetNumSampledTimes() const {
         return b->timeSamples.size();
+    }
+
+    int GetTotalNumSamples() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return GetNumSpatialSamples() * GetNumSampledTimes();
     }
 
     int GetTimeSampleIndex(const int i) const {
@@ -664,21 +701,27 @@ public:
     }
 
     double GetTimeSample(const int i) const {
-        return 0.0;  // TODO
+        MFEM_VERIFY(i <= timesteps->size(), "");
+        return (i == 0) ? t_initial : (*timesteps)[i-1];
     }
 
     double GetTimestep(const int i) const {
-        return 0.0;  // TODO
+        MFEM_VERIFY(i < timesteps->size(), "");
+        return GetTimeSample(i+1) - GetTimeSample(i);
     }
 
     void LiftToSampleMesh(const int ti, Vector const& x, Vector &xsp) const;
 
-    void RestrictFromSampleMesh(const int ti, Vector const& xsp, Vector &x) const;
+    void RestrictFromSampleMesh(const int ti, Vector const& usp, Vector &u) const;
 
-    void ApplySpaceTimeHyperreductionInverses(Vector const& x, Vector &y) const;
+    void ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &w) const;
 
 private:
     ROM_Basis *b;  // stores spatial and temporal bases
+    mutable Vector u_ti;
+    const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
+    std::vector<double> *timesteps; // Positive timestep times (excluding initial time which is assumed to be zero).
+
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -688,7 +731,8 @@ public:
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol,
-                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
+                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
+                 std::vector<double> *timesteps = NULL);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -715,7 +759,6 @@ public:
     // TODO: should the following space time functions be refactored into a new space time ROM operator class?
     void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
     void SolveSpaceTime() const;
-    void SpaceTimeInitialGuess(Vector & st0) const;  // TODO: private function?
 
     ~ROM_Operator()
     {
@@ -741,6 +784,8 @@ private:
     STROM_Basis *STbasis = 0;
     ODESolver *ST_ode_solver = 0;
     mutable Vector Sr;
+
+    //std::string basename = "run";
 
     mutable Vector fx, fy;
 

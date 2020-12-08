@@ -50,6 +50,67 @@ void PrintSingularValues(const int rank, const std::string& basename, const std:
     ofs.close();
 }
 
+int ReadTimesteps(std::string const& path, std::vector<double>& time)
+{
+    int nsteps = 0;
+    std::string nsfile(path + "/num_steps");
+
+    {
+        std::ifstream ifsn(nsfile.c_str());
+        ifsn >> nsteps;
+        ifsn.close();
+    }
+
+    MFEM_VERIFY(nsteps > 0, "");
+    time.assign(nsteps, -1.0);
+
+    std::string tsfile(path + "/timesteps.csv");
+    std::ifstream ifs(tsfile.c_str());
+
+    if (!ifs.is_open())
+    {
+        cout << "Error: invalid file" << endl;
+        return 1;  // invalid file
+    }
+
+    string line, word;
+    int count = 0;
+    while (getline(ifs, line))
+    {
+        if (count >= nsteps)
+        {
+            cout << "Error reading CSV file. Read more than " << nsteps << " lines" << endl;
+            ifs.close();
+            return 3;
+        }
+
+        stringstream s(line);
+        vector<string> row;
+
+        while (getline(s, word, ','))
+            row.push_back(word);
+
+        if (row.size() != 1)
+        {
+            cout << "Error: CSV file does not specify exactly 1 parameter" << endl;
+            ifs.close();
+            return 2;  // incorrect number of parameters
+        }
+
+        time[count++] = stod(row[0]);
+    }
+
+    ifs.close();
+
+    if (count != nsteps)
+    {
+        cout << "Error reading CSV file. Read " << count << " lines but expected " << nsteps << endl;
+        return 3;
+    }
+
+    return 0;
+}
+
 int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const bool printStatus)
 {
     if (printStatus) cout << "Reading time windows from file " << twfile << endl;
@@ -207,4 +268,58 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.sampX = twparam(w,oss);
     romOptions.sampV = twparam(w,oss+1);
     romOptions.sampE = twparam(w,oss+2);
+}
+
+void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf)
+{
+    Vector tv(gf->ParFESpace()->GetTrueVSize());
+    gf->GetTrueDofs(tv);
+
+    for (int i=0; i<tv.Size(); ++i)
+        *ofs << tv[i] << std::endl;
+}
+
+void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+{
+    Vector tv(gf->ParFESpace()->GetTrueVSize());
+    gf->GetTrueDofs(tv);
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = name + tmp;
+
+    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+    ofs.precision(16);
+
+    for (int i=0; i<tv.Size(); ++i)
+        ofs << tv[i] << std::endl;
+
+    ofs.close();
+}
+
+void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
+{
+    Vector tv(gf->ParFESpace()->GetTrueVSize());
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = name + tmp;
+
+    std::ifstream ifs(fullname.c_str());
+
+    for (int i=0; i<tv.Size(); ++i)
+    {
+        double d;
+        ifs >> d;
+        tv[i] = d;
+    }
+
+    ifs.close();
+
+    ParGridFunction rgf(gf->ParFESpace());
+    rgf.SetFromTrueDofs(tv);
+
+    PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }

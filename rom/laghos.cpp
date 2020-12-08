@@ -82,51 +82,6 @@ double e0(const Vector &);
 double gamma_func(const Vector &);
 void display_banner(ostream & os);
 
-void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-    gf->GetTrueDofs(tv);
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int i=0; i<tv.Size(); ++i)
-        ofs << tv[i] << std::endl;
-
-    ofs.close();
-}
-
-
-void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ifstream ifs(fullname.c_str());
-
-    for (int i=0; i<tv.Size(); ++i)
-    {
-        double d;
-        ifs >> d;
-        tv[i] = d;
-    }
-
-    ifs.close();
-
-    ParGridFunction rgf(gf->ParFESpace());
-    rgf.SetFromTrueDofs(tv);
-
-    PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
-}
 
 int main(int argc, char *argv[])
 {
@@ -864,7 +819,11 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
-    std::ofstream outfile_twp;
+    std::ofstream outfile_twp, outfile_time;
+    const bool outputTimes = rom_offline && romOptions.spaceTime;
+    const bool outputSpaceTimeSolution = rom_offline && romOptions.spaceTime;
+    const bool inputTimes = rom_online && romOptions.spaceTime;
+    const bool readTimes = rom_online && romOptions.spaceTime;
     Array<int> cutoff(5);
     if (rom_offline)
     {
@@ -880,6 +839,43 @@ int main(int argc, char *argv[])
         sampler = new ROM_Sampler(romOptions, S);
         sampler->SampleSolution(0, 0, S);
         samplerTimer.Stop();
+    }
+
+    if (outputTimes)
+    {
+        outfile_time.open(outputPath + "/timesteps.csv");
+        outfile_time.precision(16);
+    }
+
+    std::ofstream ofs_STX, ofs_STV, ofs_STE;
+    if (outputSpaceTimeSolution)
+    {
+        // TODO: output FOM solution at every timestep, including initial state at t=0.
+        char fileExtension[100];
+        sprintf(fileExtension, ".%06d", myid);
+
+        std::string fullname = outputPath + "/ST_Sol_Position" + fileExtension;
+        ofs_STX.open(fullname.c_str(), std::ofstream::out);
+        ofs_STX.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Velocity" + fileExtension;
+        ofs_STV.open(fullname.c_str(), std::ofstream::out);
+        ofs_STV.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Energy" + fileExtension;
+        ofs_STE.open(fullname.c_str(), std::ofstream::out);
+        ofs_STE.precision(16);
+
+        AppendPrintParGridFunction(&ofs_STX, &x_gf);
+        AppendPrintParGridFunction(&ofs_STV, &v_gf);
+        AppendPrintParGridFunction(&ofs_STE, &e_gf);
+    }
+
+    std::vector<double> timesteps;  // Used only for online space-time case.
+    if (inputTimes)
+    {
+        const int err = ReadTimesteps(outputPath, timesteps);
+        MFEM_VERIFY(err == 0, "Error in ReadTimesteps");
     }
 
     std::vector<ROM_Basis*> basis;
@@ -926,7 +922,7 @@ int main(int argc, char *argv[])
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
 
             romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
         }
 
         basis[0]->Init(romOptions, S);
@@ -1177,6 +1173,16 @@ int main(int argc, char *argv[])
             }
             else if (dtc == 0.0 && dt_est > 1.25 * dt) {
                 dt *= 1.02;
+            }
+
+            if (outputTimes) outfile_time << t << "\n";
+
+            if (outputSpaceTimeSolution)
+            {
+                // TODO: time this?
+                AppendPrintParGridFunction(&ofs_STX, &x_gf);
+                AppendPrintParGridFunction(&ofs_STV, &v_gf);
+                AppendPrintParGridFunction(&ofs_STE, &e_gf);
             }
 
             if (rom_offline)
@@ -1432,6 +1438,20 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
 
+        if (outputTimes)
+        {
+            outfile_time.close();
+            MFEM_VERIFY(romOptions.window == 0, "Time windows not implemented in this case");
+            MFEM_VERIFY(steps + 1 == sampler->FinalNumberOfSamples(), "");
+            // TODO: for now, we just write out the simulation timestep times, not the ROM basis generator
+            // snapshot times. So far, in our tests snapshots are taken on every timestep, so the timesteps
+            // and snapshots coincide. In general, this needs to be extended to allow for snapshots on a
+            // subset of timesteps. Both the timesteps and snapshot times will be needed for space-time ROM.
+            // The timesteps are needed for time integration (which defines the space-time system), and the
+            // snapshot times are needed because the temporal bases and temporal samples are based on
+            // snapshots.
+        }
+
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
 
@@ -1451,6 +1471,13 @@ int main(int argc, char *argv[])
 
         samplerTimer.Stop();
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
+    }
+
+    if (outputSpaceTimeSolution)
+    {
+        ofs_STX.close();
+        ofs_STV.close();
+        ofs_STE.close();
     }
 
     if (writeSol)

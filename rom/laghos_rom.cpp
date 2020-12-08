@@ -237,6 +237,20 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
     }
 
+    finalNumSamples = generator_X->getTemporalBasis()->numRows();
+
+    {
+        const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+        // TODO: generalize for nonzero initial velocity.
+
+        // TODO: this is a lot of checks, for debugging. Maybe these should be removed later.
+        MFEM_VERIFY(finalNumSamples == MaxNumSamples(), "bug");
+        MFEM_VERIFY(finalNumSamples == generator_V->getTemporalBasis()->numRows() + VTos, "bug");
+        MFEM_VERIFY(finalNumSamples == generator_E->getTemporalBasis()->numRows(), "bug");
+        MFEM_VERIFY(finalNumSamples == generator_Fv->getTemporalBasis()->numRows(), "bug");
+        MFEM_VERIFY(finalNumSamples == generator_Fe->getTemporalBasis()->numRows() + VTos, "bug");
+    }
+
     delete generator_X;
     delete generator_V;
     delete generator_E;
@@ -246,6 +260,8 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         delete generator_Fv;
         delete generator_Fe;
     }
+
+    finalized = true;
 }
 
 CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
@@ -358,7 +374,10 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     mfL2.SetSize(tL2size);
 
     ReadSolutionBases(input.window);
-    if (input.spaceTime) ReadTemporalBases(input.window);
+    if (input.spaceTime)
+    {
+        ReadTemporalBases(input.window);
+    }
 
     if (mergeXV)
     {
@@ -492,6 +511,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
+        if (input.spaceTime) SetSpaceTimeInitialGuess(input);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -777,18 +797,20 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = new CAROM::Matrix(numTimeSamplesV * numSamplesV, RHSbasis ? rdimfv : rdimv, false);
+    BsinvV = spaceTime ? NULL : new CAROM::Matrix(numTimeSamplesV * numSamplesV, RHSbasis ? rdimfv : rdimv, false); // TODO: numTimeSamplesV?
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
-    BsinvE = new CAROM::Matrix(numTimeSamplesE * numSamplesE, RHSbasis ? rdimfe : rdime, false);
+    BsinvE = spaceTime ? NULL : new CAROM::Matrix(numTimeSamplesE * numSamplesE, RHSbasis ? rdimfe : rdime, false); // TODO: numTimeSamplesE?
     if(rank == 0)
     {
         cout << "number of samples for position: " << numSamplesX << "\n";
         cout << "number of samples for velocity: " << numSamplesV << "\n";
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
+
+    // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
 
     if (spaceTime)
     {
@@ -804,16 +826,21 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
         const bool excludeFinalTimeSample = true;
 
+        CAROM::Matrix sampledSpatialBasisV(numSamplesV, basisFv->numColumns(), false); // TODO: distributed
+        CAROM::Matrix sampledSpatialBasisE(numSamplesE, basisFe->numColumns(), false); // TODO: distributed
+
         CAROM::SpaceTimeSampling(basisFv, tbasisFv, rdimfv, t_samples_V, sample_dofs_V.data(),
-                                 num_sample_dofs_per_procV.data(), *BsinvV, rank, nprocs,
+                                 num_sample_dofs_per_procV.data(), sampledSpatialBasisV, rank, nprocs,
                                  numTimeSamplesV, numSamplesV, excludeFinalTimeSample);
 
         CAROM::SpaceTimeSampling(basisFe, tbasisFe, rdimfe, t_samples_E, sample_dofs_E.data(),
-                                 num_sample_dofs_per_procE.data(), *BsinvE, rank, nprocs,
+                                 num_sample_dofs_per_procE.data(), sampledSpatialBasisE, rank, nprocs,
                                  numTimeSamplesE, numSamplesE, excludeFinalTimeSample);
 
-        MFEM_VERIFY(false, "shift Fe samples by VTos");
-        MFEM_VERIFY(false, "check for and remove final time as a sample, or prevent it from being selected in libROM");
+        // Shift Fe time samples by VTos
+        // TODO: should the shift be in t_samples_E or just mergedTimeSamples?
+        for (int i=0; i<numTimeSamplesE; ++i)
+            t_samples_E[i] = t_samples_E[i] + VTos;
 
         // Merge time samples for Fv and Fe
         std::set<int> mergedTimeSamples;
@@ -829,10 +856,18 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {
             timeSamples[cnt++] = s;
         }
-    }
 
-    // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
-    if (RHSbasis)
+        BsinvV = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimfv, false);
+        BsinvE = new CAROM::Matrix(timeSamples.size() * numSamplesE, rdimfe, false);
+
+        GetSampledSpaceTimeBasis(timeSamples, tbasisFv, sampledSpatialBasisV, *BsinvV);
+        GetSampledSpaceTimeBasis(timeSamples, tbasisFe, sampledSpatialBasisE, *BsinvE);
+
+        // TODO: BsinvV and BsinvE are already set by CAROM::SpaceTimeSampling for their own time samples, which is useless
+        // after merging time samples. Now we have to construct them for the merged time samples, so the initial computation
+        // is wasted and should be disabled by an input flag to CAROM::SpaceTimeSampling.
+    }
+    else if (RHSbasis)
     {
         if (use_qdeim)
         {
@@ -1209,7 +1244,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_L2_space;
 
     // TODO: keep 1 of the following
-    MFEM_VERIFY(!spaceTime || useGramSchmidt, "");
+    MFEM_VERIFY(!spaceTime || !useGramSchmidt, "");
     if (spaceTime)
         return;
 
@@ -1678,9 +1713,10 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            const int order_e, const int source, const bool visc, const double cfl,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, H1_FECollection *H1fec,
-                           FiniteElementCollection *L2fec)
+                           FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt)
+      //basename(*input.basename)
 {
     MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
 
@@ -1766,8 +1802,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
             ST_ode_solver->Init(*operSP);
 
             // TODO: should ROM_basis *b be an input to this constructor in the spaceTime case?
-            STbasis = new STROM_Basis(input, b);
-            Sr.SetSize(STbasis->SolutionSizeST());
+            STbasis = new STROM_Basis(input, b, timesteps);
+            Sr.SetSize(STbasis->GetTotalNumSamples());
         }
     }
     else if (!hyperreduce)
@@ -1864,6 +1900,32 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     BEsp->mult(*rE, *spE);
     for (int i=0; i<size_L2_sp; ++i)
         e[i] = (*spE)(i);
+}
+
+// t is a time sample, ranging from 0 to temporalSize-1.
+void ROM_Basis::ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut)
+{
+    MFEM_VERIFY(u.Size() == TotalSize() && ut.Size() == u.Size(), "");
+    MFEM_VERIFY(tbasisX->numColumns() == rdimx && basisX->numColumns() == rdimx, "");
+    MFEM_VERIFY(tbasisV->numColumns() == rdimv && basisV->numColumns() == rdimv, "");
+    MFEM_VERIFY(tbasisE->numColumns() == rdime && basisE->numColumns() == rdime, "");
+
+    MFEM_VERIFY(tbasisX->numRows() == temporalSize, "");  // TODO: remove?
+    MFEM_VERIFY(tbasisV->numRows() + VTos == temporalSize, "");  // TODO: remove?
+    MFEM_VERIFY(tbasisE->numRows() == temporalSize, "");  // TODO: remove?
+
+    MFEM_VERIFY(t < temporalSize, "");
+
+    for (int i=0; i<rdimx; ++i)
+        ut[i] = tbasisX->item(t, i) * u[i];
+
+    int os = rdimx;
+    for (int i=0; i<rdimv; ++i)
+        ut[os + i] = (t == 0) ? 0.0 : tbasisV->item(t, i) * u[os + i];  // Assuming v=0 at t=0, which is not sampled.
+
+    os += rdimv;
+    for (int i=0; i<rdime; ++i)
+        ut[os + i] = tbasisE->item(t, i) * u[os + i];
 }
 
 void ROM_Operator::ComputeReducedMv()
@@ -2175,66 +2237,161 @@ void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
 
 void STROM_Basis::LiftToSampleMesh(const int ti, Vector const& u, Vector &usp) const
 {
-    MFEM_VERIFY(false, "TODO: so far, this is just spatial");
-
     // Get the basis at timestep ti by scaling by the corresponding temporal basis entries.
-
-    /*
-      MFEM_VERIFY(u.Size() == SolutionSizeST(), "");  // rdimx + rdimv + rdime ????
-      MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
-
-      if (rank == 0)
-      {
-          for (int i=0; i<rdimx; ++i)
-              (*rX)(i) = u[i];
-
-          for (int i=0; i<rdimv; ++i)
-              (*rV)(i) = u[rdimx + i];
-
-          for (int i=0; i<rdime; ++i)
-              (*rE)(i) = u[rdimx + rdimv + i];
-
-          BXsp->mult(*rX, *spX);
-          BVsp->mult(*rV, *spV);
-          BEsp->mult(*rE, *spE);
-
-          for (int i=0; i<size_H1_sp; ++i)
-          {
-              usp[i] = offsetInit ? (*initXsp)(i) + (*spX)(i) : (*spX)(i);
-              usp[size_H1_sp + i] = (offsetInit && Voffset) ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
-          }
-
-          for (int i=0; i<size_L2_sp; ++i)
-          {
-              //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
-              usp[(2*size_H1_sp) + i] = offsetInit ? (*initEsp)(i) + (*spE)(i) : (*spE)(i);
-          }
-      }
-    */
+    MFEM_VERIFY(u.Size() == SolutionSizeST(), "");
+    MFEM_VERIFY(u.Size() == u_ti.Size(), "");
+    b->ScaleByTemporalBasis(ti, u, u_ti);
+    b->LiftToSampleMesh(u_ti, usp);
 }
 
-void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& x, Vector &y) const
+void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &w) const
 {
+    MFEM_VERIFY(u.Size() == GetTotalNumSamples(), "");
+    MFEM_VERIFY(w.Size() == b->TotalSize(), "");
+
+    // The X equation is linear and has no hyperreduction, just a linear operator multiplication against the vector of V ROM coefficients.
+
+
+    // The V RHS has hyperreduced term Fv.
+    // TODO: are mass matrices applied to the RHS in space-time? Should they be? If not, how should EvalSpaceTimeResidual_RK4 be changed?
+
+
+    // The E RHS has hyperreduced term Fe.
+
+
     // TODO
     MFEM_VERIFY(false, "");
 }
 
-void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& xsp, Vector &x) const
+// Select sample indices from xsp and set the corresponding values in x.
+// ti is the index of the time sample, ranging from 0 to GetNumSampledTimes()-1.
+void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector &u) const
 {
-    // TODO
-    MFEM_VERIFY(false, "");
+    MFEM_VERIFY(ti < GetNumSampledTimes(), "");
+    MFEM_VERIFY(u.Size() == GetTotalNumSamples(), "");
+    MFEM_VERIFY(usp.Size() == b->SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
+
+    int offset = ti * GetNumSpatialSamples();
+
+    // Select entries out of usp on the sample mesh.
+    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
+
+    // TODO: since the X RHS is linear, there should be no sampling of X! A linear operator (stored as a matrix) should simply be applied to the ROM coefficients, not the samples.
+    for (int i=0; i<b->numSamplesX; ++i)
+        u[offset + i] = usp[b->s2sp_X[i]];
+
+    offset += b->numSamplesX;
+    for (int i=0; i<b->numSamplesV; ++i)
+        u[offset + i] = usp[b->size_H1_sp + b->s2sp_V[i]];
+
+    offset += b->numSamplesV;
+    for (int i=0; i<b->numSamplesE; ++i)
+        u[offset + i] = usp[(2*b->size_H1_sp) + b->s2sp_E[i]];
 }
 
-void ROM_Operator::SpaceTimeInitialGuess(Vector & st0) const
+// TODO: remove argument rdim?
+// TODO: remove argument nt?
+void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
+        ParFiniteElementSpace *fespace,
+        const CAROM::Matrix* basis,
+        const CAROM::Matrix* tbasis,
+        const int nt,
+        const int rdim) const
 {
-    st0.SetSize(STbasis->SolutionSizeST());
+    MFEM_VERIFY(rdim == st.Size(), "");
+
+    Vector b(st.Size());
+
+    char fileExtension[100];
+    sprintf(fileExtension, ".%06d", rank);
+
+    std::string fullname = basename + "/ST_Sol_" + name + fileExtension;
+    std::ifstream ifs(fullname.c_str());
+
+    const int tvsize = fespace->GetTrueVSize();
+    //Vector s(tvsize);
+    MFEM_VERIFY(tvsize == basis->numRows() && nt == tbasis->numRows(), "");
+    MFEM_VERIFY(rdim == basis->numColumns() && rdim == tbasis->numColumns(), "");
+
+    // Compute the inner product of the input space-time vector against each
+    // space-time basis vector, which for the j-th basis vector is
+    // \sum_{t=0}^{nt-1} \sum_{i=0}^{tvsize-1} sol(t,i) basis(i,j) tbasis(t,j)
+    // Store the result in the vector b.
+    // Also, form the mass matrix for the space-time basis.
+
+    DenseMatrix M(rdim);
+
+    b = 0.0;
+    M = 0.0;
+
+    // TODO: this is a full-order computation. Should it be hyperreduced? In any case, the FOM solution will need to be read, since the hyperreduction samples are unknown when the FOM solution is written to file, so there does not seem to be potential savings.
+
+    for (int t=0; t<nt; ++t)
+    {
+        for (int i=0; i<tvsize; ++i)
+        {
+            double d;
+            ifs >> d;
+            for (int j=0; j<rdim; ++j)
+            {
+                b[j] += d * basis->item(i, j) * tbasis->item(t, j);
+                //s[i] = d;
+
+                for (int k=j; k<rdim; ++k)  // Upper triangular part only
+                    M(j,k) += basis->item(i, j) * tbasis->item(t, j) * basis->item(i, k) * tbasis->item(t, k);
+            }
+        }
+    }
+
+    ifs.close();
+
+    // Assert that the strictly upper triangular part of the mass matrix is zero
+    for (int i=0; i<rdim-1; ++i)
+        for (int j=i+1; j<rdim; ++j)
+        {
+            MFEM_VERIFY(fabs(M(i,j)) < 1.0e-15, "");
+        }
+
+    // TODO: remove the assertion that the mass matrix is diagonal?
+
+    // TODO: is M = I in general?
+
+    // Solve for st
+    for (int i=0; i<rdim; ++i)
+        st[i] = b[i] / M(i,i);
+}
+
+void ROM_Basis::SetSpaceTimeInitialGuess(ROM_Options const& input)
+{
+    // TODO: this assumes 1 temporal basis vector for each spatial vector. Generalize to allow for multiple temporal basis vectors per spatial vector.
+
+    //st0.SetSize(SolutionSizeST());
+    st0.SetSize(TotalSize());
     st0 = 0.0; // TODO
+
+    // For now, we simply test the reproductive case by projecting the known FOM solution.
+    // With hyperreduction, this projection will not be the exact solution of the ROM system,
+    // but it should be close.
+    // We use the entire FOM space-time solution read from a file in order to compute this projection.
+
+    Vector st0X, st0V, st0E;
+    st0X.MakeRef(st0, 0, rdimx);
+    st0V.MakeRef(st0, rdimx, rdimv);
+    st0E.MakeRef(st0, rdimx + rdimv, rdime);
+    SetSpaceTimeInitialGuessComponent(st0X, "Position", input.H1FESpace, basisX, tbasisX, temporalSize, rdimx);
+    SetSpaceTimeInitialGuessComponent(st0V, "Velocity", input.H1FESpace, basisV, tbasisV, temporalSize-1, rdimv);
+    SetSpaceTimeInitialGuessComponent(st0E, "Energy", input.L2FESpace, basisE, tbasisE, temporalSize, rdime);
+}
+
+void ROM_Basis::GetSpaceTimeInitialGuess(Vector& st) const
+{
+    st = st0;
 }
 
 void ROM_Operator::SolveSpaceTime() const
 {
     Vector sol;
-    SpaceTimeInitialGuess(sol);
+    basis->GetSpaceTimeInitialGuess(sol);
 
     Vector res(sol.Size());
 
@@ -2245,31 +2402,35 @@ void ROM_Operator::SolveSpaceTime() const
 
 void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 {
-    MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST(), "");  // rdimx + rdimv + rdime
+    MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST(), "");
 
     MFEM_VERIFY(hyperreduce, "");
 
+    Sr = 0.0;
+
     // Loop over sampled timesteps
-    for (int i=0; i<STbasis->nSampledTimes(); ++i)
+    for (int i=0; i<STbasis->GetNumSampledTimes(); ++i)
     {
         const int ti = STbasis->GetTimeSampleIndex(i);
         double t = STbasis->GetTimeSample(i);  // t_n
         double dt = STbasis->GetTimestep(i);
+        const double t0 = t;
 
         // Note: the time index ti corresponds to a time t_n, and we now compute the RK4 residual
         // w(t_{n+1}) - w(t_n) - dt/6 (k1 + 2k2 + 2k3 + k4)
         STbasis->LiftToSampleMesh(ti, S, fx);  // Set fx = w(t_n)
+        ST_ode_solver->Step(fx, t, dt);  // The underlying LagrangianHydroOperator is no good (0 Jacobian). Where is it setup?
 
-        ST_ode_solver->Step(fx, t, dt);
+        MFEM_VERIFY(fabs(t - t0 - dt) < 1.0e-12, "");
 
         // Now fx = w(t_n) + dt/6 (k1 + 2k2 + 2k3 + k4)
 
-        STbasis->LiftToSampleMesh(ti, S, fy);  // Set fy = w(t_{n+1})
+        STbasis->LiftToSampleMesh(ti+1, S, fy);  // Set fy = w(t_{n+1})
         fy -= fx;
 
         // Now fy is the residual w(t_{n+1}) - w(t_n) - dt/6 (k1 + 2k2 + 2k3 + k4)
 
-        STbasis->RestrictFromSampleMesh(ti, fy, Sr);
+        STbasis->RestrictFromSampleMesh(i, fy, Sr);
     }
 
     STbasis->ApplySpaceTimeHyperreductionInverses(Sr, f);
