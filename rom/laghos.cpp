@@ -557,18 +557,18 @@ int main(int argc, char *argv[])
     // that the boundaries are straight.
     Array<int> ess_tdofs, ess_vdofs;
     {
-        Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+        Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
         for (int d = 0; d < pmesh->Dimension(); d++)
         {
             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
             // enforce v_x/y/z = 0 for the velocity components.
             ess_bdr = 0;
             ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-         ess_tdofs.Append(dofs_list);
-         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-         ess_vdofs.Append(dofs_list);
+            H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+            ess_tdofs.Append(dofs_list);
+            H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+            FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+            ess_vdofs.Append(dofs_list);
         }
     }
 
@@ -650,10 +650,10 @@ int main(int argc, char *argv[])
     // Initialize the velocity.
     VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
     v_gf.ProjectCoefficient(v_coeff);
-   for (int i = 0; i < ess_vdofs.Size(); i++)
-   {
-      v_gf(ess_vdofs[i]) = 0.0;
-   }
+    for (int i = 0; i < ess_vdofs.Size(); i++)
+    {
+        v_gf(ess_vdofs[i]) = 0.0;
+    }
 
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -725,7 +725,9 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 7:
-      source = 2; visc = true; vort = true; 
+        source = 2;
+        visc = true;
+        vort = true;
         break;
     default:
         MFEM_ABORT("Wrong problem specification!");
@@ -735,7 +737,7 @@ int main(int argc, char *argv[])
     }
 
     LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
+                                 ess_tdofs, rho, source, cfl, mat_gf_coeff, mat_gf,
                                  visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                  H1FEC.GetBasisType());
 
@@ -926,7 +928,7 @@ int main(int argc, char *argv[])
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
 
                 romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                        visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                        visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
 
             romOptions.window = 0;
@@ -934,7 +936,7 @@ int main(int argc, char *argv[])
         else
         {
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
                                           cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
         }
 
@@ -1726,11 +1728,11 @@ void v0(const Vector &x, Vector &v)
         return;
     }
     case 7:
-      {
-         v = 0.0;
-         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
-         break;
-      }
+    {
+        v = 0.0;
+        v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+        break;
+    }
     default:
         MFEM_ABORT("Bad number given for problem id!");
     }
@@ -1818,10 +1820,10 @@ double e0(const Vector &x)
         return 0.0;
     }
     case 7:
-      {
-         const double rho = rho0(x), gamma = gamma_func(x);
-         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
-      }
+    {
+        const double rho = rho0(x), gamma = gamma_func(x);
+        return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+    }
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;

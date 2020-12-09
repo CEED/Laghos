@@ -51,6 +51,43 @@ struct TimingData
     TimingData() : H1cg_iter(0), L2dof_iter(0), quad_tstep(0) { }
 };
 
+class QUpdate
+{
+private:
+    const int dim, vdim, NQ, NE, Q1D;
+    const bool use_viscosity, use_vorticity;
+    const double cfl;
+    TimingData *timer;
+    const IntegrationRule &ir;
+    ParFiniteElementSpace &H1, &L2;
+    const Operator *H1R;
+    Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
+    const QuadratureInterpolator *q1,*q2;
+    const ParGridFunction &gamma_gf;
+public:
+    QUpdate(const int d, const int ne, const int q1d,
+            const bool visc, const bool vort,
+            const double cfl, TimingData *t,
+            const ParGridFunction &gamma_gf,
+            const IntegrationRule &ir,
+            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
+        dim(d), vdim(h1.GetVDim()),
+        NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
+        use_viscosity(visc), use_vorticity(vort), cfl(cfl),
+        timer(t), ir(ir), H1(h1), L2(l2),
+        H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+        q_dt_est(NE*NQ),
+        q_e(NE*NQ),
+        e_vec(NQ*NE*vdim),
+        q_dx(NQ*NE*vdim*vdim),
+        q_dv(NQ*NE*vdim*vdim),
+        q1(H1.GetQuadratureInterpolator(ir)),
+        q2(L2.GetQuadratureInterpolator(ir)),
+        gamma_gf(gamma_gf) { }
+
+    void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
+};
+
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
@@ -70,6 +107,7 @@ protected:
     const int cg_max_iter;
     const double ftz_tol;
     Coefficient *material_pcf;
+    const ParGridFunction &gamma_gf;
 
     // Velocity mass matrix and local inverses of the energy mass matrices. These
     // are constant in time, due to the pointwise mass conservation property.
@@ -82,6 +120,7 @@ protected:
 
     // Data associated with each quadrature point in the mesh. These values are
     // recomputed at each time step.
+    const int Q1D;
     mutable QuadratureData quad_data;
     mutable bool quad_data_is_current, forcemat_is_assembled;
 
@@ -107,6 +146,7 @@ protected:
     CGSolver locCG;
 
     mutable TimingData timer;
+    mutable QUpdate *qupdate;
 
     virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                            const double rho[], const double e[],
@@ -130,7 +170,8 @@ public:
                             ParFiniteElementSpace &l2_fes,
                             Array<int> &essential_tdofs, ParGridFunction &rho0,
                             int source_type_, double cfl_,
-                            Coefficient *material_, bool visc, bool pa,
+                            Coefficient *material_, ParGridFunction &gamma_gf,
+                            bool visc, bool vort, bool pa,
                             double cgt, int cgiter, double ftz_tol,
                             int h1_basis_type, bool noMvSolve_=false,
                             bool noMeSolve_=false);
@@ -183,13 +224,14 @@ class TaylorCoefficient : public Coefficient
 class RTCoefficient : public VectorCoefficient
 {
 public:
-   RTCoefficient(int dim) : VectorCoefficient(dim) { }
-   using VectorCoefficient::Eval;
-   virtual void Eval(Vector &V, ElementTransformation &T,
-                     const IntegrationPoint &ip)
-   {
-      V = 0.0; V(1) = -1.0;
-   }
+    RTCoefficient(int dim) : VectorCoefficient(dim) { }
+    using VectorCoefficient::Eval;
+    virtual void Eval(Vector &V, ElementTransformation &T,
+                      const IntegrationPoint &ip)
+    {
+        V = 0.0;
+        V(1) = -1.0;
+    }
 };
 
 } // namespace hydrodynamics
