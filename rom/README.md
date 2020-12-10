@@ -123,72 +123,41 @@ Other computational motives in Laghos include the following:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra, we recommend version 2.10.0b<br>
+- *hypre*, used for parallel linear algebra, version 2.11.2<br>
    https://computation.llnl.gov/casc/hypre/software.html
 
--  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
-   http://glaros.dtc.umn.edu/gkhome/metis/metis/download
+- ParMETIS, used for parallel domain decomposition, version 4.0.3<br>
+  http://glaros.dtc.umn.edu/gkhome/metis/parmetis/download
 
 - MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
   https://github.com/mfem/mfem
 
-To build the miniapp, first download *hypre* and METIS from the links above
-and put everything on the same level as the `Laghos` directory:
-```sh
-~> ls
-Laghos/  hypre-2.10.0b.tar.gz  metis-4.0.tar.gz
-```
+- libROM, used for computing proper orthogonal decomposition-based reduced order models (POD-based ROMs), its GitHub master branch <br>
+  https://github.com/LLNL/libROM
 
-Build *hypre*:
+To build the miniapp, build the dependencies of the rom version of Laghos.
 ```sh
-~> tar -zxvf hypre-2.10.0b.tar.gz
-~> cd hypre-2.10.0b/src/
-~/hypre-2.10.0b/src> ./configure --disable-fortran
-~/hypre-2.10.0b/src> make -j
-~/hypre-2.10.0b/src> cd ../..
+~> cd Laghos/rom
+~/Laghos/rom> make setup
 ```
-For large runs (problem size above 2 billion unknowns), add the
-`--enable-bigint` option to the above `configure` line.
-
-Build METIS:
-```sh
-~> tar -zxvf metis-4.0.3.tar.gz
-~> cd metis-4.0.3
-~/metis-4.0.3> make
-~/metis-4.0.3> cd ..
-~> ln -s metis-4.0.3 metis-4.0
-```
-This build is optional, as MFEM can be build without METIS by specifying
-`MFEM_USE_METIS = NO` below.
-
-Clone and build the parallel version of MFEM:
-```sh
-~> git clone https://github.com/mfem/mfem.git ./mfem
-~> cd mfem/
-~/mfem> git checkout laghos-v2.0
-~/mfem> make parallel -j
-~/mfem> cd ..
-```
-The above uses the `laghos-v2.0` tag of MFEM, which is guaranteed to work with
-Laghos v2.0. Alternatively, one can use the latest versions of the MFEM and
-Laghos `master` branches (provided there are no conflicts). See the [MFEM
-building page](http://mfem.org/building/) for additional details.
 
 (Optional) Clone and build GLVis:
 ```sh
-~> git clone https://github.com/GLVis/glvis.git ./glvis
-~> cd glvis/
-~/glvis> make
-~/glvis> cd ..
+~> cd Laghos/rom/dependencies
+~/Laghos/rom/dependencies> git clone https://github.com/GLVis/glvis.git ./glvis
+~/Laghos/rom/dependencies> cd glvis/
+~/Laghos/rom/dependencies/glvis> make
+~/Laghos/rom/dependencies/glvis> cd ..
 ```
 The easiest way to visualize Laghos results is to have GLVis running in a
 separate terminal. Then the `-vis` option in Laghos will stream results directly
 to the GLVis socket.
 
-Build Laghos
+Build the rom version of Laghos
 ```sh
-~> cd Laghos/
-~/Laghos> make
+~> cd Laghos/rom
+~/Laghos/rom> make
+~/Laghos/rom> make merge
 ```
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
