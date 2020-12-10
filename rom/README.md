@@ -93,10 +93,13 @@ Other computational motives in Laghos include the following:
 ## Code Structure
 
 - The file `laghos.cpp` contains the main driver with the time integration loop
-  starting around line 488.
+  for an offline (full-order) or online (ROM) simulation.
 - In each time step, the ODE system of interest is constructed and solved by
-  the class `LagrangianHydroOperator`, defined around line 424 of `laghos.cpp`
-  and implemented in files `laghos_solver.hpp` and `laghos_solver.cpp`.
+  the class `LagrangianHydroOperator`, in the offline (full-order) case. For the
+  online ROM case, the reduced system is constructed and solved using the
+  ROM_Basis and ROM_Operator classes in `laghos_rom.hpp` and `laghos_rom.cpp`.
+- In the offline case, the class ROM_Sampler samples the solution and source,
+  generating ROM bases.
 - All quadrature-based computations are performed in the function
   `LagrangianHydroOperator::UpdateQuadratureData` in `laghos_solver.cpp`.
 - Depending on the chosen option (`-pa` for partial assembly or `-fa` for full
