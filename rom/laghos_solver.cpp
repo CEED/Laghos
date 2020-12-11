@@ -293,6 +293,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         timer.sw_force.Stop();
         rhs.Neg();
 
+        if (source_type == 2)
+        {
+            Vector rhs_accel(rhs.Size());
+            Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
+            rhs += rhs_accel;
+        }
+
         if (noMvSolve)
         {
             dv = rhs;
@@ -306,7 +313,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         }
 
         Operator *cVMassPA;
-        VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B); // TODO: PR118 Line 356-365
+        VMassPA.FormLinearSystem(ess_tdofs, dv, rhs, cVMassPA, X, B);
         CGSolver cg(H1FESpace.GetParMesh()->GetComm());
         cg.SetPreconditioner(VMassPA_prec);
         cg.SetOperator(*cVMassPA);
