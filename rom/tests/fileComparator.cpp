@@ -27,12 +27,14 @@ void compareFiles(ifstream &baselineFile, ifstream &targetFile, double errorBoun
         baselineNum = stod(stripped);
 
         posOfData = targetLine.find_last_of(' ');
-        stripped =targetLine.substr(posOfData != string::npos ? posOfData : 0);
+        stripped = targetLine.substr(posOfData != string::npos ? posOfData : 0);
         targetNum = stod(stripped);
+        double diff = baselineNum - targetNum;
+        double error = abs(baselineNum - targetNum) / baselineNum;
 
-        if (abs(baselineNum - targetNum) > errorBound) {
-            cerr << "TargetNum = " << targetNum << ", BaselineNum = " << baselineNum << endl;
-            cerr << "abs(baselineNum - targetNum) = " << abs(baselineNum - targetNum) << endl;
+        if (error > errorBound) {
+            cerr << "baseline = " << baselineNum << ", diff = " << diff << endl;
+            cerr << "error = " << error << endl;
             cerr << "Error bound: " << errorBound << " was surpassed on line: " << fileLine << endl;
             abort();
         }

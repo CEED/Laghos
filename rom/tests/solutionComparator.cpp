@@ -70,11 +70,14 @@ void compareSolutions(string &baselineFile, string &targetFile, double errorBoun
 between the solution vectors." << endl;
         abort();
     }
+    double baselineNormL2 = baseline.Norml2();
     double diffNormL2 = diff.Norml2();
+    double error = diffNormL2 / baselineNormL2;
 
     // Test whether l2 norm is smaller than error bound
-    if (diffNormL2 > errorBound) {
-        cerr << "diffNormL2 = " << diffNormL2 << endl;
+    if (error > errorBound) {
+        cerr << "baselineNormL2 = " << baselineNormL2 << ", diffNormL2 = " << diffNormL2 << endl;
+        cerr << "error = " << error << endl;
         cerr << "Error bound: " << errorBound << " was surpassed for the l2 norm of the difference of the solutions." << endl;
         abort();
     }
