@@ -919,7 +919,7 @@ int main(int argc, char *argv[])
               basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
             */
 
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
 
             romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
                                           cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);

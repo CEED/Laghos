@@ -406,7 +406,8 @@ class ROM_Basis
 
 public:
     ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
-              const double sFactorX=1.0, const double sFactorV=1.0);
+              const double sFactorX=1.0, const double sFactorV=1.0,
+              const std::vector<double> *timesteps=NULL);
 
     ~ROM_Basis()
     {
@@ -535,6 +536,10 @@ public:
 
     MPI_Comm comm;
 
+    CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
+    CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
+    CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
+
 private:
     const bool hyperreduce;
     const bool offsetInit;
@@ -634,7 +639,8 @@ protected:
 
     const bool use_qdeim;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
+                             const std::vector<double> *timesteps);
 
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
@@ -649,6 +655,7 @@ private:
                                            const int rdim) const;
 
     // Space-time data
+    const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     const bool spaceTime;
     int temporalSize = 0;
     const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
@@ -659,6 +666,11 @@ private:
     CAROM::Matrix* tbasisE = 0;
     CAROM::Matrix* tbasisFv = 0;
     CAROM::Matrix* tbasisFe = 0;
+
+    CAROM::Matrix* PiVtransPiFv = 0;
+    CAROM::Matrix* PiEtransPiFe = 0;
+
+    // TODO: delete the new pointers added for space-time
 
     std::vector<int> timeSamples;  // merged V and E time samples
 
@@ -688,6 +700,18 @@ public:
 
     int GetNumSampledTimes() const {
         return b->timeSamples.size();
+    }
+
+    int GetNumSamplesV() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return b->numSamplesV * GetNumSampledTimes();
+    }
+
+    int GetNumSamplesE() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return b->numSamplesE * GetNumSampledTimes();
     }
 
     int GetTotalNumSamples() const {
