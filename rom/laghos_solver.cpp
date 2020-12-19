@@ -834,7 +834,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
 /// Trace of a square matrix
 template<int H, int W, typename T>
-//MFEM_HOST_DEVICE inline
+MFEM_HOST_DEVICE inline
 double Trace(const T * __restrict__ data)
 {
     double t = 0.0;
@@ -845,7 +845,7 @@ double Trace(const T * __restrict__ data)
 }
 
 template<int H, int W, typename T>
-//MFEM_HOST_DEVICE static inline
+MFEM_HOST_DEVICE static inline
 void SFNorm(double &scale_factor, double &scaled_fnorm2,
             const T * __restrict__ data)
 {
@@ -890,7 +890,7 @@ double FNorm(const T * __restrict__ data)
 }
 
 template<int DIM>
-//MFEM_HOST_DEVICE static inline
+MFEM_HOST_DEVICE static inline
 void QUpdateBody(const int NE, const int e,
                  const int NQ, const int q,
                  const bool use_viscosity,
