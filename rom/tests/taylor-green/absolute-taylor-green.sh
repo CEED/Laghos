@@ -1,8 +1,8 @@
 NUM_PARALLEL_PROCESSORS=8
 testNames=(offline romhr)
 absoluteFOMOptions="-p 0 -rs 2 -iv -cfl 0.1 -tf 0.02 -pa"
-absoluteFOMTol="1e-7"
-absoluteFOMTolParallel="1e-7"
+absoluteFOMTol="1e-2"
+absoluteFOMTolParallel="1e-2"
 absoluteRelErrorTol="1e-1"
 absoluteRelErrorTolParallel="1e-1"
 speedupTol="0.8"

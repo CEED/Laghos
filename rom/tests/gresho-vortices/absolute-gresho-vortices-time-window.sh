@@ -3,8 +3,8 @@ testNames=(offline romhr)
 absoluteFOMOptions="-p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7"
 absoluteFOMTol="1e-7"
 absoluteFOMTolParallel="1e-7"
-absoluteRelErrorTol="2.5e-1"
-absoluteRelErrorTolParallel="2.5e-1"
+absoluteRelErrorTol="3.0e-1"
+absoluteRelErrorTolParallel="3.0e-1"
 speedupTol="0.8"
 case $subTestNum in
   1)
