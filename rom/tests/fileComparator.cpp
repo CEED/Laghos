@@ -30,7 +30,13 @@ void compareFiles(ifstream &baselineFile, ifstream &targetFile, double errorBoun
         stripped = targetLine.substr(posOfData != string::npos ? posOfData : 0);
         targetNum = stod(stripped);
         double diff = baselineNum - targetNum;
-        double error = abs(baselineNum - targetNum) / baselineNum;
+        double error;
+        if (baselineNum == 0.0) {
+          error = abs(baselineNum - targetNum);
+        }
+        else {
+          error = abs(baselineNum - targetNum) / baselineNum;
+        }
 
         if (error > errorBound) {
             cerr << "baseline = " << baselineNum << ", diff = " << diff << endl;

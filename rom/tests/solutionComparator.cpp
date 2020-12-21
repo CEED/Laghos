@@ -72,7 +72,13 @@ between the solution vectors." << endl;
     }
     double baselineNormL2 = baseline.Norml2();
     double diffNormL2 = diff.Norml2();
-    double error = diffNormL2 / baselineNormL2;
+    double error;
+    if (baselineNormL2 == 0.0) {
+      error = diffNormL2;
+    }
+    else {
+      error = diffNormL2 / baselineNormL2;
+    }
 
     // Test whether l2 norm is smaller than error bound
     if (error > errorBound) {

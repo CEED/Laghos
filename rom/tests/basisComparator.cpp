@@ -83,7 +83,13 @@ between the basis matrices in the following files: " << baselineFile << " and " 
             baselineNormL2 += sqrt(reducedVecNormL2[i]);
             diffNormL2 += sqrt(reducedDiffVecNormL2[i]);
         }
-        double error = diffNormL2 / baselineNormL2;
+        double error;
+        if (baselineNormL2 == 0.0) {
+            error = diffNormL2;
+        }
+        else {
+            error = diffNormL2 / baselineNormL2;
+        }
 
         // Test whether l2 norm is smaller than error bound
         if (error > errorBound) {
