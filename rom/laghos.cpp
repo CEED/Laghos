@@ -1230,6 +1230,7 @@ int main(int argc, char *argv[])
                             else
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
+                        delete samplerLast;
                         samplerLast = NULL;
                         tOverlapMidpoint = 0.0;
                     }
@@ -1252,6 +1253,7 @@ int main(int argc, char *argv[])
                             else
                                 outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
                         }
+                        delete sampler;
                         sampler = NULL;
                     }
 
