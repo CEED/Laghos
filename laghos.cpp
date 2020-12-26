@@ -724,33 +724,29 @@ int main(int argc, char *argv[])
          if (gfprint)
          {
             std::ostringstream mesh_name, rho_name, v_name, e_name;
-            mesh_name << basename << "_" << ti
-                      << "_mesh." << std::setfill('0') << std::setw(6) << myid;
-            rho_name  << basename << "_" << ti
-                      << "_rho." << std::setfill('0') << std::setw(6) << myid;
-            v_name << basename << "_" << ti
-                   << "_v." << std::setfill('0') << std::setw(6) << myid;
-            e_name << basename << "_" << ti
-                   << "_e." << std::setfill('0') << std::setw(6) << myid;
+            mesh_name << basename << "_" << ti << "_mesh";
+            rho_name  << basename << "_" << ti << "_rho";
+            v_name << basename << "_" << ti << "_v";
+            e_name << basename << "_" << ti << "_e";
 
             std::ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
-            pmesh->Print(mesh_ofs);
+            pmesh->PrintAsOne(mesh_ofs);
             mesh_ofs.close();
 
             std::ofstream rho_ofs(rho_name.str().c_str());
             rho_ofs.precision(8);
-            rho_gf.Save(rho_ofs);
+            rho_gf.SaveAsOne(rho_ofs);
             rho_ofs.close();
 
             std::ofstream v_ofs(v_name.str().c_str());
             v_ofs.precision(8);
-            v_gf.Save(v_ofs);
+            v_gf.SaveAsOne(v_ofs);
             v_ofs.close();
 
             std::ofstream e_ofs(e_name.str().c_str());
             e_ofs.precision(8);
-            e_gf.Save(e_ofs);
+            e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
       }

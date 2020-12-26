@@ -136,7 +136,7 @@ cln clean: clean-build clean-exec clean-tests
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM
 clean-exec:
-	rm -rf ./results
+	rm -rf ./results/*
 clean-tests:
 	rm -rf BASELINE.dat RUN.dat RESULTS.dat
 distclean: clean
