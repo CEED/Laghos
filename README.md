@@ -201,31 +201,60 @@ download and building of hypre, METIS and MFEM.
 
 #### Sedov blast
 
-The main problem of interest for Laghos is the Sedov blast wave (`-p 1`) with
-partial assembly option (`-pa`).
+The 3D Sedov blast wave problem can be runned with `-p 1`.
 
-Some sample runs in 2D and 3D respectively are:
+A sample run of the offline stage is:
 ```sh
-mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
-mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.0 -rpar 0
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.2 -rpar 1
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 0.8 -rpar 2
+./merge ./merge -nset 3 -ef 0.9999 -rhs -romos -rostype interpolate -nwinsamp 6
+```
+
+A sample run of the full order model is:
+```sh
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -bef 1.1 -writesol
+```
+A corresponding sample run of the reduce order model is:
+```sh
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 120 -sface 120 -soldiff -romgs -romsrhs -bef 1.1 -nwin 118 -twp twpTemp.csv
 ```
 
 The latter produces the following density plot (notice the `-vis` option)
 
 ![Sedov blast image](data/sedov.png)
 
-#### Taylor-Green and Gresho vortices
+#### Gresho vortex
 
-Laghos includes also smooth test problems that expose all the principal
-computational kernels of the problem except for the artificial viscosity
-evaluation. (Viscosity can still be activated for these problems with the
-`--impose-viscosity` option.)
+The 2D Gresho vortex problem can be runned with `-p 4`.
 
-Some sample runs in 2D and 3D respectively are:
+A sample run of the offline stage and the full order model is:
 ```sh
-mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.5 -pa
-mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.25 -pa
-mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
+mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 5 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -romsvds -ef 0.9999 -nwinsamp 10 -romos -rostype load -romsrhs -writesol
+```
+The corresponding run of the reduce order model is:
+```sh
+mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 5 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhr -sfacv 160 -sface 160 -romsvds -nwin 336 -twp twpTemp.csv -romos -rostype load -romsrhs -romgs -soldiff
+```
+
+The latter produce the following velocity magnitude plots (notice the `-vis` option)
+
+<table border="0">
+<td> <img src="data/tg.png">
+<td> <img src="data/gresho.png">
+</table>
+
+#### Taylor-Green vortex
+
+The 3D Taylor-Green vortex problem can be runned with `-p 0`.
+
+A sample run of the offline stage and the full order model is:
+```sh
+mpirun -np 8 ./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -offline -romsvds -ef 0.9999 -writesol -romos -rostype load -romsrhs -nwinsamp 10
+```
+The corresponding run of the reduce order model is:
+```sh
+mpirun -np 8 ./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -online -soldiff -romsvds -romos -rostype load -romhr -romsrhs -romgs -sfacv 120 -sface 120 -twp twpTemp.csv -nwin 90
 ```
 
 The latter produce the following velocity magnitude plots (notice the `-vis` option)
@@ -237,13 +266,15 @@ The latter produce the following velocity magnitude plots (notice the `-vis` opt
 
 #### Triple-point problem
 
-This is a well known three-material problem that combines shock waves and
-vorticity, thus examining the complex computational abilities of Laghos.
+The 3D triple-point problem can be runned with `-p 3`.
 
-Some sample runs in 2D and 3D respectively are:
+A sample run of the offline stage and the full order model is:
 ```sh
-mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 3 -tf 0.1 -cfl 0.05 -pa -offline -writesol -visit - romsvds -romos -rostype load -romsrhs -ef 0.9999 -nwinsamp 10
+```
+The corresponding run of the reduce order model is:
+```sh
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 3 -tf 0.1 -cfl 0.05 -online -soldiff -nwin 28 -romhr -twp twpTemp.csv -romsvds -romos -rostype load -sfacv 2400 -sface 2400 -romgs -romsrhs
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
