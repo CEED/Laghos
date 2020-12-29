@@ -14,58 +14,39 @@
 
 ## Purpose
 
-**Laghos** (LAGrangian High-Order Solver) is a miniapp that solves the
-time-dependent Euler equations of compressible gas dynamics in a moving
-Lagrangian frame using unstructured high-order finite element spatial
-discretization and explicit high-order time-stepping.
+**LaghosROM** (LAGrangian High-Order Solver Reduced Order Model) is a miniapp
+that accelerates the time-dependent Euler equations of compressible gas
+dynamics in a moving Lagrangian frame using unstructured high-order finite
+element spatial discretization and explicit high-order time-stepping.
 
-Laghos is based on the discretization method described in the following article:
+The main version of LaghosROM is in the Laghos/rom subdirectory. The purpose of
+the LaghosROM is to demonstrate the efficiency and accuracy of reduced order
+modeling with hyperreduction for hydrodynamics in LaghosROM. Various options
+are available for the user to apply to several model problems. In particular,
+time-windowing is supported, to keep reduced basis dimensions small. Parametric
+ROM capabilities allow for building ROM bases from offline training simulations
+using multiple PDE parameter samples.
 
-> V. Dobrev, Tz. Kolev and R. Rieben <br>
-> [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672) <br>
-> *SIAM Journal on Scientific Computing*, (34) 2012, pp. B606–B641.
+LaghosROM is based on the following article:
 
-Laghos captures the basic structure of many compressible shock hydrocodes,
-including the [BLAST code](http://llnl.gov/casc/blast) at [Lawrence Livermore
-National Laboratory](http://llnl.gov). The miniapp is built on top of a general
-discretization library, [MFEM](http://mfem.org), thus separating the pointwise
-physics from finite element and meshing concerns.
+> D. Copeland, K. Huynh, S.W. Cheung, and Y. Choi <br>
+> [Reduced order models for Lagrangian hydrodynamics]() <br>
+> *In Preparation*, 2021.
 
-The Laghos miniapp is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
-a collection of software benchmarks, miniapps, libraries and APIs for
-efficient exascale discretizations based on high-order finite element
-and spectral element methods. See http://github.com/ceed for more
-information and source code availability.
-
-The CEED research is supported by the [Exascale Computing Project](https://exascaleproject.org/exascale-computing-project)
-(17-SC-20-SC), a collaborative effort of two U.S. Department of Energy
-organizations (Office of Science and the National Nuclear Security
-Administration) responsible for the planning and preparation of a
-[capable exascale ecosystem](https://exascaleproject.org/what-is-exascale),
-including software, applications, hardware, advanced system engineering and early
-testbed platforms, in support of the nation’s exascale computing imperative.
-
-The main version of Laghos is in the Laghos directory, and the ROM version is
-in the Laghos/rom subdirectory. The purpose of the ROM version is to demonstrate
-the efficiency and accuracy of reduced order modeling with hyperreduction for
-hydrodynamics in Laghos. Various options are available for the user to apply to
-several model problems. In particular, time-windowing is supported, to keep
-reduced basis dimensions small. Parametric ROM capabilities allow for building
-ROM bases from offline training simulations using multiple PDE parameter
-samples.
+To see the purpose of **Laghos**, please see README.md in Laghos directory.
 
 ## Characteristics
 
-The problem that Laghos is solving is formulated as a big (block) system of
+The problem that LaghosROM is solving is formulated as a big (block) system of
 ordinary differential equations (ODEs) for the unknown (high-order) velocity,
 internal energy and mesh nodes (position). The left-hand side of this system of
 ODEs is controlled by *mass matrices* (one for velocity and one for energy),
 while the right-hand side is constructed from a *force matrix*.
 
-Laghos supports two options for deriving and solving the ODE system, namely the
-*full assembly* and the *partial assembly* methods. Partial assembly is the main
-algorithm of interest for high orders. For low orders (e.g. 2nd order in 3D),
-both algorithms are of interest.
+LaghosROM supports two options for deriving and solving the ODE system, namely
+the *full assembly* and the *partial assembly* methods. Partial assembly is the
+main algorithm of interest for high orders. For low orders (e.g. 2nd order in
+3D), both algorithms are of interest.
 
 The full assembly option relies on constructing and utilizing global mass and
 force matrices stored in compressed sparse row (CSR) format.  In contrast, the
@@ -116,6 +97,8 @@ obviating the need to compute the action of the mass matrix inverses.
 Some features not yet available in the ROM version are parallel computation (the
 online ROM simulation is small and runs on only one MPI process) and GPU
 acceleration. Support for these is planned as future work.
+
+To see the characteristics of **Laghos**, please see README.md in Laghos directory.
 
 ## Code Structure
 
