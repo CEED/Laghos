@@ -42,6 +42,15 @@ Administration) responsible for the planning and preparation of a
 including software, applications, hardware, advanced system engineering and early
 testbed platforms, in support of the nation’s exascale computing imperative.
 
+The main version of Laghos is in the Laghos directory, and the ROM version is
+in the Laghos/rom subdirectory. The purpose of the ROM version is to demonstrate
+the efficiency and accuracy of reduced order modeling with hyperreduction for
+hydrodynamics in Laghos. Various options are available for the user to apply to
+several model problems. In particular, time-windowing is supported, to keep
+reduced basis dimensions small. Parametric ROM capabilities allow for building
+ROM bases from offline training simulations using multiple PDE parameter
+samples.
+
 ## Characteristics
 
 The problem that Laghos is solving is formulated as a big (block) system of
@@ -89,6 +98,21 @@ Other computational motives in Laghos include the following:
 - Domain-decomposed MPI parallelism.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
   for visualization and data analysis with [VisIt](http://visit.llnl.gov).
+
+The ROM version with hyperreduction uses the same code as the full-order version
+on a sample mesh constructed to contain sampled degrees of freedom.
+Consequently, many of the full-order Laghos features can also be used in the ROM
+version, e.g. unstructured meshes, various time integrators, high-order finite
+element spaces, and partial assembly.
+
+One additional feature in the ROM version is the option to use Gram-Schmidt to
+orthogonalize the ROM bases for velocity and energy with respect to the
+corresponding mass matrices. This reduces the mass matrices to identity,
+obviating the need to compute the action of the mass matrix inverses.
+
+Some features not yet available in the ROM version are parallel computation (the
+online ROM simulation is small and runs on only one MPI process) and GPU
+acceleration. Support for these is planned as future work.
 
 ## Code Structure
 
