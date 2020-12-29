@@ -206,8 +206,8 @@ partial assembly option (`-pa`).
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa
-mpirun -np 8 laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -vis -pa
+mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
+mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
 ```
 
 The latter produces the following density plot (notice the `-vis` option)
@@ -242,8 +242,8 @@ vorticity, thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
-mpirun -np 8 laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -vis -pa
+mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
