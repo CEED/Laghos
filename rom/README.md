@@ -131,21 +131,7 @@ To see the characteristics of **Laghos**, please see README.md in Laghos directo
 
 ## Building
 
-Laghos has the following external dependencies:
-
-- *hypre*, used for parallel linear algebra, version 2.11.2<br>
-   https://computation.llnl.gov/casc/hypre/software.html
-
-- ParMETIS, used for parallel domain decomposition, version 4.0.3<br>
-  http://glaros.dtc.umn.edu/gkhome/metis/parmetis/download
-
-- MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
-  https://github.com/mfem/mfem
-
-- libROM, used for computing proper orthogonal decomposition-based reduced order models (POD-based ROMs), its GitHub master branch <br>
-  https://github.com/LLNL/libROM
-
-To build the miniapp, build the dependencies of the rom version of Laghos.
+To build the dependencies of LaghosROM: 
 ```sh
 ~> cd Laghos/rom
 ~/Laghos/rom> make setup
@@ -163,7 +149,7 @@ The easiest way to visualize Laghos results is to have GLVis running in a
 separate terminal. Then the `-vis` option in Laghos will stream results directly
 to the GLVis socket.
 
-Build the rom version of Laghos
+Build the LaghosROM
 ```sh
 ~> cd Laghos/rom
 ~/Laghos/rom> make
@@ -171,6 +157,8 @@ Build the rom version of Laghos
 ```
 This can be followed by `make test` and `make install` to check and install the
 build respectively. See `make help` for additional options.
+
+To see the building instruction of **Laghos**, please see README.md in Laghos directory.
 
 ## Running
 
