@@ -1241,10 +1241,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
     if (mergeXV)
     {
         const int max_model_dim = basisX->numColumns() + basisV->numColumns();
-        CAROM::StaticSVDOptions static_x_options(tH1size, max_model_dim);
-        static_x_options.max_time_intervals = 1;
-
-        CAROM::StaticSVDBasisGenerator generator_XV(static_x_options);
+        CAROM::Options static_x_options(tH1size, max_model_dim, 1);
+        CAROM::BasisGenerator generator_XV(static_x_options, false);
 
         Vector Bej(basisX->numRows());  // owns its data
         MFEM_VERIFY(Bej.Size() == tH1size, "");

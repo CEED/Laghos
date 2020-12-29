@@ -3,8 +3,7 @@
 
 #include "mfem.hpp"
 
-#include "StaticSVDBasisGenerator.h"
-#include "IncrementalSVDBasisGenerator.h"
+#include "BasisGenerator.h"
 #include "BasisReader.h"
 
 #include "laghos_solver.hpp"
@@ -98,7 +97,7 @@ struct ROM_Options
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
 
-    bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
+    bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
@@ -125,88 +124,50 @@ public:
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
-        if (input.staticSVD)
+        CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1);
+        CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
+        if (!input.staticSVD)
         {
-            CAROM::StaticSVDOptions static_x_options(
-                tH1size,
-                max_model_dim
-            );
-            static_x_options.max_time_intervals = 1;
-            CAROM::StaticSVDOptions static_e_options(
-                tL2size,
-                max_model_dim
-            );
-            static_e_options.max_time_intervals = 1;
-            generator_X = new CAROM::StaticSVDBasisGenerator(
-                static_x_options,
-                BasisFileName(basename, VariableName::X, window, parameterID));
-            generator_V = new CAROM::StaticSVDBasisGenerator(
-                static_x_options,
-                BasisFileName(basename, VariableName::V, window, parameterID));
-            generator_E = new CAROM::StaticSVDBasisGenerator(
-                static_e_options,
-                BasisFileName(basename, VariableName::E, window, parameterID));
+          x_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                        input.initial_dt,
+                        input.incSVD_sampling_tol,
+                        input.t_final,
+                        true);
+          x_options.setMaxBasisDimension(max_model_dim);
+          x_options.setSingularValueTol(input.incSVD_singular_value_tol);
 
-            if (sampleF)
-            {
-                generator_Fv = new CAROM::StaticSVDBasisGenerator(
-                    static_x_options,
-                    BasisFileName(basename, VariableName::Fv, window, parameterID));
-                generator_Fe = new CAROM::StaticSVDBasisGenerator(
-                    static_e_options,
-                    BasisFileName(basename, VariableName::Fe, window, parameterID));
-            }
+          e_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                        input.initial_dt,
+                        input.incSVD_sampling_tol,
+                        input.t_final,
+                        true);
+          e_options.setMaxBasisDimension(max_model_dim);
+          e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
-        else
+
+        generator_X = new CAROM::BasisGenerator(
+            x_options,
+            !input.staticSVD,
+            input.staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+        generator_V = new CAROM::BasisGenerator(
+            x_options,
+            !input.staticSVD,
+            input.staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+        generator_E = new CAROM::BasisGenerator(
+          e_options,
+          !input.staticSVD,
+          input.staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+
+        if (sampleF)
         {
-            CAROM::IncrementalSVDOptions inc_x_options(
-                tH1size,
-                max_model_dim,
-                input.incSVD_linearity_tol,
-                max_model_dim,
-                input.initial_dt,
-                input.incSVD_sampling_tol,
-                input.t_final,
-                false,
-                true
-            );
-            inc_x_options.singular_value_tol = input.incSVD_singular_value_tol;
-            inc_x_options.max_time_intervals = 1;
-            CAROM::IncrementalSVDOptions inc_e_options(
-                tL2size,
-                max_model_dim,
-                input.incSVD_linearity_tol,
-                max_model_dim,
-                input.initial_dt,
-                input.incSVD_sampling_tol,
-                input.t_final,
-                false,
-                true
-            );
-            inc_e_options.singular_value_tol = input.incSVD_singular_value_tol;
-            inc_e_options.max_time_intervals = 1;
-            generator_X = new CAROM::IncrementalSVDBasisGenerator(
-                inc_x_options,
-                basename + "/" + ROMBasisName::X + std::to_string(window));
-
-            generator_V = new CAROM::IncrementalSVDBasisGenerator(
-                inc_x_options,
-                basename + "/" + ROMBasisName::V + std::to_string(window));
-
-            generator_E = new CAROM::IncrementalSVDBasisGenerator(
-                inc_e_options,
-                basename + "/" + ROMBasisName::E + std::to_string(window));
-
-            if (sampleF)
-            {
-                generator_Fv = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_x_options,
-                    basename + "/" + ROMBasisName::Fv + std::to_string(window));
-
-                generator_Fe = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_e_options,
-                    basename + "/" + ROMBasisName::Fe + std::to_string(window));
-            }
+            generator_Fv = new CAROM::BasisGenerator(
+              x_options,
+              !input.staticSVD,
+              input.staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+            generator_Fe = new CAROM::BasisGenerator(
+              e_options,
+              !input.staticSVD,
+              input.staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
         }
 
         SetStateVariables(S_init);
@@ -288,7 +249,7 @@ private:
 
     std::string basename = "run";
 
-    CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
+    CAROM::BasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 

@@ -1,7 +1,7 @@
 #include "mfem.hpp"
 #include "laghos_utils.hpp"
 
-#include "StaticSVDBasisGenerator.h"
+#include "BasisGenerator.h"
 #include "BasisReader.h"
 
 using namespace std;
@@ -12,10 +12,9 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
                              const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
-    std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator;
-    CAROM::StaticSVDOptions static_svd_options(dim, totalSamples);
-    static_svd_options.max_time_intervals = 1;
-    basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
+    std::unique_ptr<CAROM::BasisGenerator> basis_generator;
+    CAROM::Options static_svd_options(dim, totalSamples, 1);
+    basis_generator.reset(new CAROM::BasisGenerator(static_svd_options, false, basis_filename));
 
     if (usingWindows)
     {
@@ -56,9 +55,8 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
-    std::unique_ptr<CAROM::SVDBasisGenerator> basis_generator, window_basis_generator;
-    CAROM::StaticSVDOptions static_svd_options(dim, totalSamples);
-    static_svd_options.max_time_intervals = 1;
+    std::unique_ptr<CAROM::BasisGenerator> basis_generator, window_basis_generator;
+    CAROM::Options static_svd_options(dim, totalSamples, 1);
 
     int windowSamples = 0;
     for (int paramID=0; paramID<nsets; ++paramID)
@@ -69,15 +67,15 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
         windowSamples += col_ub - col_lb - offsetInit;
     }
 
-    CAROM::StaticSVDOptions window_static_svd_options(dim, windowSamples);
-    window_basis_generator.reset(new CAROM::StaticSVDBasisGenerator(window_static_svd_options, basis_filename));
+    CAROM::Options window_static_svd_options(dim, windowSamples);
+    window_basis_generator.reset(new CAROM::BasisGenerator(window_static_svd_options, false, basis_filename));
 
     cout << "Loading snapshots for " << varName << " in basis time window " << basisWindow << endl;
 
     for (int paramID=0; paramID<nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0_snapshot";
-        basis_generator.reset(new CAROM::StaticSVDBasisGenerator(static_svd_options, basis_filename));
+        basis_generator.reset(new CAROM::BasisGenerator(static_svd_options, false, basis_filename));
         basis_generator->loadSamples(snapshot_filename,"snapshot");
 
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
