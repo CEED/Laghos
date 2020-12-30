@@ -1060,7 +1060,7 @@ int main(int argc, char *argv[])
     else if (rom_online && romOptions.spaceTime)
     {
         //Vector stSol(S);
-        romOper[0]->SolveSpaceTime();
+        romOper[0]->SolveSpaceTime(romS);
     }
     else
     {
@@ -1423,7 +1423,7 @@ int main(int argc, char *argv[])
 
     if (romOptions.hyperreduce)
     {
-        if (romOptions.GramSchmidt)
+        if (romOptions.GramSchmidt && !romOptions.spaceTime)
         {
             romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
         }

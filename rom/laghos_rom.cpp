@@ -1267,10 +1267,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     delete sp_H1_space;
     delete sp_L2_space;
 
-    // TODO: keep 1 of the following
-    MFEM_VERIFY(!spaceTime || !useGramSchmidt, "");
     if (spaceTime)
-        return;
+        return;  // TODO: can this be removed?
 
     if (!useGramSchmidt)
     {
@@ -1280,7 +1278,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
 void ROM_Basis::ComputeReducedMatrices()
 {
-    if (RHSbasis && rank == 0)
+    if (RHSbasis && !spaceTime && rank == 0)
     {
         // Compute reduced matrix BsinvX = BXsp^T BVsp
         BsinvX = BXsp->transposeMult(BVsp);
@@ -1938,14 +1936,14 @@ void ROM_Basis::ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut)
     MFEM_VERIFY(tbasisV->numRows() + VTos == temporalSize, "");  // TODO: remove?
     MFEM_VERIFY(tbasisE->numRows() == temporalSize, "");  // TODO: remove?
 
-    MFEM_VERIFY(t < temporalSize, "");
+    MFEM_VERIFY(0 <= t && t < temporalSize, "");
 
     for (int i=0; i<rdimx; ++i)
         ut[i] = tbasisX->item(t, i) * u[i];
 
     int os = rdimx;
     for (int i=0; i<rdimv; ++i)
-        ut[os + i] = (t == 0) ? 0.0 : tbasisV->item(t, i) * u[os + i];  // Assuming v=0 at t=0, which is not sampled.
+        ut[os + i] = (t == 0) ? 0.0 : tbasisV->item(t - VTos, i) * u[os + i];  // Assuming v=0 at t=0, which is not sampled.
 
     os += rdimv;
     for (int i=0; i<rdime; ++i)
@@ -2090,6 +2088,42 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
     }
 }
 
+void ROM_Operator::GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S)
+{
+    if (hyperreduce && rank == 0)
+    {
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to Q are
+        // obtained by d = Rc.
+        for (int i=0; i<rdim; ++i)
+        {
+            S[offset+i] *= (*R)(i,i);
+            for (int j=i+1; j<rdim; ++j)
+            {
+                S[offset+i] += (*R)(i,j)*S[offset+j]; // triangular update
+            }
+        }
+    }
+}
+
+void ROM_Operator::GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S)
+{
+    if (hyperreduce && rank == 0)
+    {
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to X is
+        // obtained from c = R\d.
+        for (int i=rdim-1; i>-1; --i)
+        {
+            for (int j = rdim-1; j>i; --j)
+            {
+                S[offset+i] -= (*R)(i,j)*S[offset+j]; // backward substitution
+            }
+            S[offset+i] /= (*R)(i,i);
+        }
+    }
+}
+
 void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
     if (hyperreduce && rank == 0)
@@ -2122,6 +2156,8 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
             X = basis->GetBEsp();
             R = &CoordinateBEsp;
         }
+        else
+            MFEM_VERIFY(false, "Invalid variable index");
 
         InducedInnerProduct(0, 0, var, spdim, factor);
         (*R)(0,0) = sqrt(factor);
@@ -2149,18 +2185,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
             }
         }
 
-        // With solution representation by s = Xc = Qd,
-        // the coefficients of s with respect to Q is
-        // obtained by d = Rc.
-        for (int i=0; i<rdim; ++i)
-        {
-            S[offset+i] *= (*R)(i,i);
-            for (int j=i+1; j<rdim; ++j)
-            {
-                S[offset+i] += (*R)(i,j)*S[offset+j]; // triangular update
-            }
-        }
-
+        GramSchmidtTransformation(offset, rdim, R, S);
     }
     else if (!hyperreduce)
     {
@@ -2195,6 +2220,8 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             X = basis->GetBEsp();
             R = &CoordinateBEsp;
         }
+        else
+            MFEM_VERIFY(false, "Invalid variable index");
 
         for (int j=rdim-1; j>-1; --j)
         {
@@ -2211,19 +2238,8 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             }
         }
 
-        // With solution representation by s = Xc = Qd,
-        // the coefficients of s with respect to X is
-        // obtained from c = R\d.
-        for (int i=rdim-1; i>-1; --i)
-        {
-            for (int j = rdim-1; j>i; --j)
-            {
-                S[offset+i] -= (*R)(i,j)*S[offset+j]; // backward substitution
-            }
-            S[offset+i] /= (*R)(i,i);
-        }
+        GramSchmidtInverseTransformation(offset, rdim, R, S);
         (*R).Clear();
-
     }
     else if (!hyperreduce)
     {
@@ -2273,8 +2289,6 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     MFEM_VERIFY(u.Size() == GetTotalNumSamples(), "");
     MFEM_VERIFY(w.Size() == b->TotalSize(), "");
     MFEM_VERIFY(b->numSamplesX == 0, "");
-
-    // TODO: are mass matrices applied to the RHS in space-time? Should they be? If not, how should EvalSpaceTimeResidual_RK4 be changed?
 
     int os = 0;
     // The X equation is linear and has no hyperreduction, just a linear operator multiplication against the vector of V ROM coefficients.
@@ -2468,16 +2482,118 @@ void ROM_Basis::GetSpaceTimeInitialGuess(Vector& st) const
     st = st0;
 }
 
-void ROM_Operator::SolveSpaceTime() const
+void ROM_Operator::SolveSpaceTime(Vector &S)
 {
-    Vector sol;
-    basis->GetSpaceTimeInitialGuess(sol);
+    Vector x;
+    basis->GetSpaceTimeInitialGuess(x);
 
-    Vector res(sol.Size());
+    MFEM_VERIFY(S.Size() == x.Size(), "");
 
-    EvalSpaceTimeResidual_RK4(sol, res);
+    if (useGramSchmidt)
+        InducedGramSchmidtInitialize(x); // TODO: this assumes 1 temporal basis vector per spatial basis vector and needs to be generalized.
 
-    cout << "Space time residual norm " << res.Norml2() << endl;
+    Vector c(x.Size());
+    Vector r(x.Size());
+    DenseMatrix jac(x.Size());
+
+    MFEM_VERIFY(rank == 0, "Space-time solver is serial");
+
+    // Newton's method, with zero RHS.
+    int it;
+    double norm0, norm, norm_goal;
+    const double rel_tol = 1.0e-8;
+    const double abs_tol = 1.0e-12;
+    const int print_level = 0;
+    const int max_iter = 5; //12
+
+    EvalSpaceTimeResidual_RK4(x, r);
+
+    // TODO: in parallel, replace Norml2 with sqrt(InnerProduct(comm,...), see vector.hpp.
+    norm0 = norm = r.Norml2();
+    norm_goal = std::max(rel_tol*norm, abs_tol);
+
+    // x_{i+1} = x_i - [DF(x_i)]^{-1} [F(x_i)-b]
+    for (it = 0; true; it++)
+    {
+        MFEM_VERIFY(IsFinite(norm), "norm = " << norm);
+        cout << "Newton iteration " << it << endl;  // TODO: remove
+        if (print_level >= 0)
+        {
+            mfem::out << "Newton iteration " << setw(2) << it
+                      << " : ||r|| = " << norm;
+            if (it > 0)
+            {
+                mfem::out << ", ||r||/||r_0|| = " << norm/norm0;
+            }
+            mfem::out << '\n';
+        }
+
+        if (norm <= norm_goal)
+            break;
+
+        if (it >= max_iter)
+            break;
+
+        EvalSpaceTimeJacobian_RK4(x, jac);
+
+        c = r;  // TODO: eliminate c?
+        LinearSolve(jac, c.GetData());
+
+        const double c_scale = 0.5; //ComputeScalingFactor(x, b);
+        if (c_scale == 0.0)
+            break;
+
+        add(x, -c_scale, c, x);
+
+        x.Print();
+
+        EvalSpaceTimeResidual_RK4(x, r);
+
+        norm = r.Norml2();
+    }  // end of Newton iteration
+
+    if (it >= max_iter)
+        mfem::out << "ERROR: Newton failed to converge" << endl;
+
+    if (useGramSchmidt)
+        InducedGramSchmidtFinalize(x);
+
+    // Scale by the temporal basis at the final time.
+    basis->ScaleByTemporalBasis(basis->GetTemporalSize() - 1, x, S);
+}
+
+void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const
+{
+    J = 0.0;
+
+    const int n = J.Size();
+    MFEM_VERIFY(J.Size() == basis->TotalSize() && J.Size() == S.Size(), "");
+
+    Vector r(n);
+    Vector rp(n);
+    Vector Sp(n);
+
+    EvalSpaceTimeResidual_RK4(S, r);
+
+    const double eps = 1.0e-4;
+
+    for (int j=0; j<n; ++j)
+    {
+        Sp = S;
+        Sp[j] += eps;
+        EvalSpaceTimeResidual_RK4(Sp, rp);
+        rp -= r;
+        rp /= eps;
+
+        for (int i=0; i<n; ++i)
+            J(i,j) = rp[i];
+    }
+
+    /*
+    ofstream jfile("stjac.txt");
+    J.Print(jfile);
+    jfile.close();
+    */
 }
 
 void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const

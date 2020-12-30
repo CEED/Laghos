@@ -534,6 +534,12 @@ public:
     void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
     void GetSpaceTimeInitialGuess(Vector& st) const;
 
+    // TODO: should these be public?
+    int GetTemporalSize() const {
+        return temporalSize;
+    }
+    void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
+
     MPI_Comm comm;
 
     CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
@@ -646,7 +652,6 @@ protected:
     std::vector<double> coeff_list;
 
 private:
-    void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
     void SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
                                            ParFiniteElementSpace *fespace,
                                            const CAROM::Matrix* basis,
@@ -782,7 +787,9 @@ public:
 
     // TODO: should the following space time functions be refactored into a new space time ROM operator class?
     void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
-    void SolveSpaceTime() const;
+    void EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const;  // TODO: private function?
+
+    void SolveSpaceTime(Vector &S);
 
     ~ROM_Operator()
     {
@@ -840,10 +847,12 @@ private:
     void ComputeReducedMe();
 
     const bool useGramSchmidt;
-    DenseMatrix CoordinateBVsp, CoordinateBEsp;
+    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
     void UndoInducedGramSchmidt(const int var, Vector &S);
+    void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+    void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
 };
 
 #endif // MFEM_LAGHOS_ROM
