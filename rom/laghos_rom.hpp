@@ -155,19 +155,6 @@ public:
             e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
 
-        generator_X = new CAROM::BasisGenerator(
-            x_options,
-            !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
-        generator_V = new CAROM::BasisGenerator(
-            x_options,
-            !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
-        generator_E = new CAROM::BasisGenerator(
-            e_options,
-            !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
-
         if (sampleF)
         {
             generator_Fv = new CAROM::BasisGenerator(

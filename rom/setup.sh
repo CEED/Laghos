@@ -54,6 +54,7 @@ if [ ! -d "mfem" ]; then
   git clone https://github.com/mfem/mfem.git
 fi
 cd mfem
+git pull
 if [[ "debug" == $1 ]]; then
   make pdebug -j MFEM_USE_MPI=YES MFEM_USE_METIS=YES MFEM_USE_METIS_5=YES METIS_DIR="$METIS_DIR" METIS_OPT="$METIS_OPT" METIS_LIB="$METIS_LIB"
 else
@@ -68,6 +69,7 @@ if [ ! -d "libROM" ]; then
   ./scripts/laghos_compile.sh
 fi
 cd libROM
+git pull
 if [[ "debug" == $1 ]]; then
   ./scripts/laghos_compile.sh -DCMAKE_BUILD_TYPE=Debug
 else
