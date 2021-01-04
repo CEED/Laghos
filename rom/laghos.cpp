@@ -281,6 +281,9 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM hyperreduction.");
     args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
+    args.AddOption(&romOptions.randomizedSVD, "-romsvdrm", "--romsvdrandom", "-no-romsvdrm", "--no-romsvdrm",
+                   "Enable or disable ROM randomized SVD.");
+    args.AddOption(&romOptions.randomizedSVD_subspace_dim, "--rmsubspace_dim", "-rmsubdim", "The randomized SVD model randomized subspace dimension.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
