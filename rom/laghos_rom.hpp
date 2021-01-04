@@ -130,12 +130,13 @@ public:
 
         CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1);
         CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
+        bool staticSVD = (input.staticSVD || input.randomizedSVD);
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randomizedSVD_subspace_dim);
             e_options.setRandomizedSVD(true, input.randomizedSVD_subspace_dim);
         }
-        if (!input.staticSVD && !input.randomizedSVD)
+        if (!staticSVD)
         {
             x_options.setIncrementalSVD(input.incSVD_linearity_tol,
                                         input.initial_dt,
@@ -156,27 +157,27 @@ public:
 
         generator_X = new CAROM::BasisGenerator(
             x_options,
-            !input.staticSVD,
-            input.staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
         generator_V = new CAROM::BasisGenerator(
             x_options,
-            !input.staticSVD,
-            input.staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
         generator_E = new CAROM::BasisGenerator(
             e_options,
-            !input.staticSVD,
-            input.staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
 
         if (sampleF)
         {
             generator_Fv = new CAROM::BasisGenerator(
                 x_options,
-                !input.staticSVD,
-                input.staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
             generator_Fe = new CAROM::BasisGenerator(
                 e_options,
-                !input.staticSVD,
-                input.staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
         }
 
         SetStateVariables(S_init);
