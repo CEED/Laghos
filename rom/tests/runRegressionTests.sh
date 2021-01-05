@@ -20,7 +20,7 @@ useUserAsBaseline=false
 ${skipSetup:=false}
 
 # Get options
-while getopts ":ah:i:e:th:dh:fh" o;
+while getopts ":ah:i:l:e:th:dh:fh" o;
 do
 	case "${o}" in
 		a)
@@ -29,6 +29,9 @@ do
 		i)
 			i=${OPTARG}
       ;;
+		l)
+			BASELINE_LIBS_DIR=${OPTARG}
+	     ;;
     e)
       e=${OPTARG}
       ;;
@@ -136,6 +139,10 @@ fi
 
 # Get LIBS_DIR
 LIBS_DIR="$BASE_DIR/dependencies"
+if [ -z ${BASELINE_LIBS_DIR+x} ]; then
+	BASELINE_LIBS_DIR=$LIBS_DIR
+fi
+
 
 # If skipping setup, don't do make
 if [[ "$skipSetup" == "false" ]];
@@ -223,10 +230,11 @@ then
 
 	# Build the baseline Laghos executable
 	echo "Building the baseline branch" >> $setupLogFile 2>&1
+	echo "Using $BASELINE_LIBS_DIR as the baseline libs directory." >> $setupLogFile 2>&1
 	if [[ "$absolute" == "false" ]]; then
-		make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+		make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 	else
-		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$LIBS_DIR/mfem" >> $setupLogFile 2>&1
+		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$BASELINE_LIBS_DIR/mfem" >> $setupLogFile 2>&1
 	fi
 
 	# Check if make built correctly
@@ -238,7 +246,7 @@ then
 
 	if [[ "$absolute" == "false" ]]; then
 		# Build merge
-		make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+		make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 
 		# Check if make built correctly
 		if [[ $? -ne 0 ]];
