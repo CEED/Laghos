@@ -64,7 +64,7 @@ struct ROM_Options
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
-    bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
+    bool staticSVD = false; // true: use StaticSVD
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
@@ -82,7 +82,7 @@ struct ROM_Options
     int dimFe = -1;
 
     // Randomized SVD options
-    bool randomizedSVD = false;
+    bool randomizedSVD = false; // true: use RandomizedSVD
     int randomizedSVD_subspace_dim = -1;
 
     // Incremental SVD options
