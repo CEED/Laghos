@@ -20,12 +20,12 @@ dynamics in a moving Lagrangian frame using unstructured high-order finite
 element spatial discretization and explicit high-order time-stepping.
 
 The main version of LaghosROM is in the Laghos/rom subdirectory. The purpose of
-the LaghosROM is to demonstrate the efficiency and accuracy of reduced order
-modeling with hyperreduction for hydrodynamics in LaghosROM. Various options
-are available for the user to apply to several model problems. In particular,
-time-windowing is supported, to keep reduced basis dimensions small. Parametric
-ROM capabilities allow for building ROM bases from offline training simulations
-using multiple PDE parameter samples.
+LaghosROM is to demonstrate the efficiency and accuracy of reduced order
+modeling (ROM) with hyperreduction for hydrodynamics in LaghosROM. Various
+options are available for the user to apply to several model problems. In
+particular, time-windowing is supported, to keep reduced basis dimensions small.
+Parametric ROM capabilities allow for building ROM bases from offline training
+simulations using multiple PDE parameter samples.
 
 LaghosROM is based on the following article:
 
@@ -37,68 +37,23 @@ To see the purpose of **Laghos**, please see README.md in Laghos directory.
 
 ## Characteristics
 
-The problem that LaghosROM is solving is formulated as a big (block) system of
-ordinary differential equations (ODEs) for the unknown (high-order) velocity,
-internal energy and mesh nodes (position). The left-hand side of this system of
-ODEs is controlled by *mass matrices* (one for velocity and one for energy),
-while the right-hand side is constructed from a *force matrix*.
+LaghosROM with hyperreduction uses the same code as the full-order version on a
+sample mesh constructed to contain sampled degrees of freedom. Consequently,
+many of the full-order Laghos features can also be used in LaghosROM, e.g.
+unstructured meshes, various time integrators, high-order finite element spaces,
+and partial assembly.
 
-LaghosROM supports two options for deriving and solving the ODE system, namely
-the *full assembly* and the *partial assembly* methods. Partial assembly is the
-main algorithm of interest for high orders. For low orders (e.g. 2nd order in
-3D), both algorithms are of interest.
-
-The full assembly option relies on constructing and utilizing global mass and
-force matrices stored in compressed sparse row (CSR) format.  In contrast, the
-[partial assembly](http://ceed.exascaleproject.org/ceed-code) option defines
-only the local action of those matrices, which is then used to perform all
-necessary operations. As the local action is defined by utilizing the tensor
-structure of the finite element spaces, the amount of data storage, memory
-transfers, and FLOPs are lower (especially for higher orders).
-
-Other computational motives in Laghos include the following:
-
-- Support for unstructured meshes, in 2D and 3D, with quadrilateral and
-  hexahedral elements (triangular and tetrahedral elements can also be used, but
-  with the less efficient full assembly option). Serial and parallel mesh
-  refinement options can be set via a command-line flag.
-- Explicit time-stepping loop with a variety of time integrator options. Laghos
-  supports Runge-Kutta ODE solvers of orders 1, 2, 3, 4 and 6, as well as a
-  specialized Runge-Kutta method of order 2 that ensures exact energy
-  conservation on fully discrete level (RK2Avg).
-- Continuous and discontinuous high-order finite element discretization spaces
-  of runtime-specified order.
-- Moving (high-order) meshes.
-- Separation between the assembly and the quadrature point-based computations.
-- Point-wise definition of mesh size, time-step estimate and artificial
-  viscosity coefficient.
-- Constant-in-time velocity mass operator that is inverted iteratively on
-  each time step. This is an example of an operator that is prepared once (fully
-  or partially assembled), but is applied many times. The application cost is
-  dominant for this operator.
-- Time-dependent force matrix that is prepared every time step (fully or
-  partially assembled) and is applied just twice per "assembly". Both the
-  preparation and the application costs are important for this operator.
-- Domain-decomposed MPI parallelism.
-- Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
-  for visualization and data analysis with [VisIt](http://visit.llnl.gov).
-
-The ROM version with hyperreduction uses the same code as the full-order version
-on a sample mesh constructed to contain sampled degrees of freedom.
-Consequently, many of the full-order Laghos features can also be used in the ROM
-version, e.g. unstructured meshes, various time integrators, high-order finite
-element spaces, and partial assembly.
-
-One additional feature in the ROM version is the option to use Gram-Schmidt to
+One additional feature in LaghosROM is the option to use Gram-Schmidt to
 orthogonalize the ROM bases for velocity and energy with respect to the
 corresponding mass matrices. This reduces the mass matrices to identity,
 obviating the need to compute the action of the mass matrix inverses.
 
-Some features not yet available in the ROM version are parallel computation (the
+Some features not yet available in LaghosROM are parallel computation (the
 online ROM simulation is small and runs on only one MPI process) and GPU
 acceleration. Support for these is planned as future work.
 
-To see the characteristics of **Laghos**, please see README.md in Laghos directory.
+To see the characteristics of **Laghos**, please see README.md in the Laghos
+directory.
 
 ## Code Structure
 
