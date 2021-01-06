@@ -183,7 +183,7 @@ A corresponding sample run of the reduce order model is:
 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.1 -nwin 27 -twp twpTemp.csv -vis
 ```
 
-The commands produce the following density plots (notice the `-vis` option)
+The commands produce the following velocity magnitude plots (notice the `-vis` option)
 
 <table border="0">
 <td> <img src="data/sedov-fom.png">
