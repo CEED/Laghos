@@ -12,6 +12,8 @@
 //using namespace CAROM;
 using namespace mfem;
 
+#define STXV
+
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
 void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
@@ -516,6 +518,14 @@ public:
         return rdime;
     }
 
+    int GetDimFv() const {
+        return rdimfv;
+    }
+
+    int GetDimFe() const {
+        return rdimfe;
+    }
+
     void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
 
     void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
@@ -659,6 +669,8 @@ private:
                                            const int nt,
                                            const int rdim) const;
 
+    void SampleMeshAddInitialState(Vector &usp) const;
+
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     const bool spaceTime;
@@ -751,6 +763,7 @@ private:
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     std::vector<double> *timesteps; // Positive timestep times (excluding initial time which is assumed to be zero).
 
+    const bool GaussNewton = true; // TODO: eliminate this
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -790,6 +803,7 @@ public:
     void EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const;  // TODO: private function?
 
     void SolveSpaceTime(Vector &S);
+    void SolveSpaceTimeGN(Vector &S);
 
     ~ROM_Operator()
     {
@@ -853,6 +867,8 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S);
     void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
     void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+
+    const bool GaussNewton = true; // TODO: eliminate this
 };
 
 #endif // MFEM_LAGHOS_ROM

@@ -398,12 +398,15 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (offsetInit)
+    if (offsetInit || spaceTime)
     {
         initX = new CAROM::Vector(tH1size, true);
         initV = new CAROM::Vector(tH1size, true);
         initE = new CAROM::Vector(tL2size, true);
+    }
 
+    if (offsetInit)
+    {
         std::string path_init = basename + "/ROMoffset/init";
 
         if (input.restore || input.offsetType == saveLoadOffset)
@@ -520,7 +523,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
+    if ((offsetInit || spaceTime) && !(input.restore || input.offsetType == saveLoadOffset) &&
+            input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
     {
         std::string path_init = basename + "/ROMoffset/init";
 
@@ -557,12 +561,15 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
             (*initE)(i) = E[i];
         }
 
-        initX->write(path_init + "X" + std::to_string(input.window));
-        initV->write(path_init + "V" + std::to_string(input.window));
-        initE->write(path_init + "E" + std::to_string(input.window));
+        if (!spaceTime)
+        {
+            initX->write(path_init + "X" + std::to_string(input.window));
+            initV->write(path_init + "V" + std::to_string(input.window));
+            initE->write(path_init + "E" + std::to_string(input.window));
+        }
     }
 
-    if (offsetInit && hyperreduce)
+    if ((offsetInit || spaceTime) && hyperreduce)
     {
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
@@ -856,6 +863,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         int cnt = 0;
         for (auto s : mergedTimeSamples)
         {
+            mfem::out << rank << ": Time sample " << cnt << ": " << s << '\n';
             timeSamples[cnt++] = s;
         }
 
@@ -879,11 +887,20 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                 RK4scaling[i] = h * (1.0 + (0.5 * h) + (h * h / 6.0) + (h * h * h / 24.0));
             }
 
+#ifdef STXV
+            PiXtransPiV = SpaceTimeProduct(basisV, tbasisV, basisV, tbasisV, &RK4scaling, true, true, true);
+#else
             PiXtransPiV = SpaceTimeProduct(basisX, tbasisX, basisV, tbasisV, &RK4scaling, false, true, true);
+#endif
         }
 
+#ifdef STXV
+        PiXtransPiX = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, false, true);
+        PiXtransPiXlag = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, true, false);
+#else
         PiXtransPiX = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, false, true);
         PiXtransPiXlag = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, true, false);
+#endif
 
         PiVtransPiFv = SpaceTimeProduct(basisV, tbasisV, basisFv, tbasisFv, NULL, true, false);
         PiEtransPiFe = SpaceTimeProduct(basisE, tbasisE, basisFe, tbasisFe, NULL, false, true);
@@ -1576,6 +1593,25 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
         {
             //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
             usp[(2*size_H1_sp) + i] = offsetInit ? (*initEsp)(i) + (*spE)(i) : (*spE)(i);
+        }
+    }
+}
+
+void ROM_Basis::SampleMeshAddInitialState(Vector &usp) const
+{
+    MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
+
+    if (rank == 0)
+    {
+        for (int i=0; i<size_H1_sp; ++i)
+        {
+            usp[i] += (*initXsp)(i);
+            usp[size_H1_sp + i] += (*initVsp)(i);
+        }
+
+        for (int i=0; i<size_L2_sp; ++i)
+        {
+            usp[(2*size_H1_sp) + i] += (*initEsp)(i);
         }
     }
 }
@@ -2282,18 +2318,41 @@ void STROM_Basis::LiftToSampleMesh(const int ti, Vector const& u, Vector &usp) c
     MFEM_VERIFY(u.Size() == u_ti.Size(), "");
     b->ScaleByTemporalBasis(ti, u, u_ti);
     b->LiftToSampleMesh(u_ti, usp);
+
+    if (ti == 0)
+    {
+        // At initial time, replace basis approximation with exact initial state on the sample mesh.
+        usp = 0.0;
+        b->SampleMeshAddInitialState(usp);
+    }
 }
 
 void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &w) const
 {
     MFEM_VERIFY(u.Size() == GetTotalNumSamples(), "");
-    MFEM_VERIFY(w.Size() == b->TotalSize(), "");
+    if (GaussNewton)
+    {
+#ifdef STXV
+        MFEM_VERIFY(w.Size() == b->rdimv + b->rdimfv + b->rdimfe, "");
+#else
+        MFEM_VERIFY(w.Size() == b->rdimx + b->rdimfv + b->rdimfe, "");
+#endif
+    }
+    else
+    {
+        MFEM_VERIFY(w.Size() == b->TotalSize(), "");
+    }
+
     MFEM_VERIFY(b->numSamplesX == 0, "");
 
     int os = 0;
     // The X equation is linear and has no hyperreduction, just a linear operator multiplication against the vector of V ROM coefficients.
 
+#ifdef STXV
+    os += b->rdimv;
+#else
     os += b->rdimx;
+#endif
 
     // The V RHS has hyperreduced term Fv.
 
@@ -2318,12 +2377,22 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     // TODO: store the product STbasisV^T STbasis_Fv BsinvV^T
 
     b->BsinvV->transposeMult(uV, BuV);
-    b->PiVtransPiFv->mult(BuV, wV);
+    if (GaussNewton)
+    {
+        for (int i=0; i<b->rdimfv; ++i)
+            w[os + i] = BuV.item(i);
 
-    for (int i=0; i<b->rdimv; ++i)
-        w[os + i] = wV.item(i);
+        os += b->rdimfv;
+    }
+    else
+    {
+        b->PiVtransPiFv->mult(BuV, wV);
 
-    os += b->rdimv;
+        for (int i=0; i<b->rdimv; ++i)
+            w[os + i] = wV.item(i);
+
+        os += b->rdimv;
+    }
 
     // The E RHS has hyperreduced term Fe.
 
@@ -2347,12 +2416,23 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     // TODO: store the product STbasisE^T STbasis_Fe BsinvE^T
 
     b->BsinvE->transposeMult(uE, BuE);
-    b->PiEtransPiFe->mult(BuE, wE);
 
-    for (int i=0; i<b->rdime; ++i)
-        w[os + i] = wE.item(i);
+    if (GaussNewton)
+    {
+        for (int i=0; i<b->rdimfe; ++i)
+            w[os + i] = BuE.item(i);
 
-    MFEM_VERIFY(w.Size() == os + b->rdime, "");
+        MFEM_VERIFY(w.Size() == os + b->rdimfe, "");
+    }
+    else
+    {
+        b->PiEtransPiFe->mult(BuE, wE);
+
+        for (int i=0; i<b->rdime; ++i)
+            w[os + i] = wE.item(i);
+
+        MFEM_VERIFY(w.Size() == os + b->rdime, "");
+    }
 }
 
 // Select sample indices from xsp and set the corresponding values in x.
@@ -2494,7 +2574,13 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
 
     Vector c(x.Size());
     Vector r(x.Size());
-    DenseMatrix jac(x.Size());
+
+    const int n = basis->TotalSize();
+    const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+
+    MFEM_VERIFY(n == x.Size(), "");
+
+    DenseMatrix jac(m, n);
 
     MFEM_VERIFY(rank == 0, "Space-time solver is serial");
 
@@ -2504,13 +2590,16 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
     const double rel_tol = 1.0e-8;
     const double abs_tol = 1.0e-12;
     const int print_level = 0;
-    const int max_iter = 5; //12
+    const int max_iter = 12;
 
     EvalSpaceTimeResidual_RK4(x, r);
 
     // TODO: in parallel, replace Norml2 with sqrt(InnerProduct(comm,...), see vector.hpp.
     norm0 = norm = r.Norml2();
     norm_goal = std::max(rel_tol*norm, abs_tol);
+
+    mfem::out << "Newton initial norm " << norm << '\n';
+    x.Print();
 
     // x_{i+1} = x_i - [DF(x_i)]^{-1} [F(x_i)-b]
     for (it = 0; true; it++)
@@ -2539,7 +2628,7 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
         c = r;  // TODO: eliminate c?
         LinearSolve(jac, c.GetData());
 
-        const double c_scale = 0.5; //ComputeScalingFactor(x, b);
+        const double c_scale = 0.25; //ComputeScalingFactor(x, b);
         if (c_scale == 0.0)
             break;
 
@@ -2562,15 +2651,118 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
     basis->ScaleByTemporalBasis(basis->GetTemporalSize() - 1, x, S);
 }
 
+void ROM_Operator::SolveSpaceTimeGN(Vector &S)
+{
+    MFEM_VERIFY(GaussNewton, "");
+    Vector x;
+    basis->GetSpaceTimeInitialGuess(x);
+
+    MFEM_VERIFY(S.Size() == x.Size(), "");
+
+    if (useGramSchmidt)
+        InducedGramSchmidtInitialize(x); // TODO: this assumes 1 temporal basis vector per spatial basis vector and needs to be generalized.
+
+    const int n = basis->TotalSize();
+#ifdef STXV
+    const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
+#else
+    const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+#endif
+
+    Vector c(n);
+    Vector r(m);
+
+    MFEM_VERIFY(n == x.Size(), "");
+
+    DenseMatrix jac(m, n);
+    DenseMatrix jacNormal(n, n);
+
+    MFEM_VERIFY(rank == 0, "Space-time solver is serial");
+
+    // Newton's method, with zero RHS.
+    int it;
+    double norm0, norm, norm_goal;
+    const double rel_tol = 1.0e-8;
+    const double abs_tol = 1.0e-12;
+    const int print_level = 0;
+    const int max_iter = 10;
+
+    EvalSpaceTimeResidual_RK4(x, r);
+
+    // TODO: in parallel, replace Norml2 with sqrt(InnerProduct(comm,...), see vector.hpp.
+    norm0 = norm = r.Norml2();
+    norm_goal = std::max(rel_tol*norm, abs_tol);
+
+    mfem::out << "Gauss-Newton initial norm " << norm << '\n';
+    x.Print();
+
+    // x_{i+1} = x_i - [DF(x_i)]^{-1} [F(x_i)-b]
+    for (it = 0; true; it++)
+    {
+        MFEM_VERIFY(IsFinite(norm), "norm = " << norm);
+        cout << "Newton iteration " << it << endl;  // TODO: remove
+        if (print_level >= 0)
+        {
+            mfem::out << "Newton iteration " << setw(2) << it
+                      << " : ||r|| = " << norm;
+            if (it > 0)
+            {
+                mfem::out << ", ||r||/||r_0|| = " << norm/norm0;
+            }
+            mfem::out << '\n';
+        }
+
+        if (norm <= norm_goal)
+            break;
+
+        if (it >= max_iter)
+            break;
+
+        EvalSpaceTimeJacobian_RK4(x, jac);
+
+        //c = r;  // TODO: eliminate c?
+        jac.MultTranspose(r, c);
+        MultAtB(jac, jac, jacNormal);
+
+        LinearSolve(jacNormal, c.GetData());  // TODO: use a more stable least-squares solver?
+
+        const double c_scale = 1.0; //ComputeScalingFactor(x, b);
+        //if (c_scale == 0.0)
+        //break;
+
+        add(x, -c_scale, c, x);
+
+        x.Print();
+
+        EvalSpaceTimeResidual_RK4(x, r);
+
+        norm = r.Norml2();
+    }  // end of Newton iteration
+
+    if (it >= max_iter)
+        mfem::out << "ERROR: Newton failed to converge" << endl;
+
+    if (useGramSchmidt)
+        InducedGramSchmidtFinalize(x);
+
+    // Scale by the temporal basis at the final time.
+    basis->ScaleByTemporalBasis(basis->GetTemporalSize() - 1, x, S);
+}
+
 void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const
 {
+    const int n = basis->TotalSize();
+#ifdef STXV
+    const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
+#else
+    const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+#endif
+    MFEM_VERIFY(J.Height() == m && J.Width() == n, "");
+
     J = 0.0;
 
-    const int n = J.Size();
-    MFEM_VERIFY(J.Size() == basis->TotalSize() && J.Size() == S.Size(), "");
-
-    Vector r(n);
-    Vector rp(n);
+    Vector r(m);
+    Vector rp(m);
     Vector Sp(n);
 
     EvalSpaceTimeResidual_RK4(S, r);
@@ -2580,12 +2772,13 @@ void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) co
     for (int j=0; j<n; ++j)
     {
         Sp = S;
-        Sp[j] += eps;
+        const double eps_j = std::max(eps, eps * fabs(Sp[j]));
+        Sp[j] += eps_j;
         EvalSpaceTimeResidual_RK4(Sp, rp);
         rp -= r;
-        rp /= eps;
+        rp /= eps_j;
 
-        for (int i=0; i<n; ++i)
+        for (int i=0; i<m; ++i)
             J(i,j) = rp[i];
     }
 
@@ -2598,7 +2791,23 @@ void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) co
 
 void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 {
-    MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && S.Size() == f.Size(), "");
+    const int rdimx = basis->GetDimX();
+    const int rdimv = basis->GetDimV();
+    const int rdimfv = basis->GetDimFv();
+    const int rdimfe = basis->GetDimFe();
+
+    if (GaussNewton)
+    {
+#ifdef STXV
+        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimv, "");
+#else
+        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimx, "");
+#endif
+    }
+    else
+    {
+        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && S.Size() == f.Size(), "");
+    }
 
     MFEM_VERIFY(hyperreduce, "");
 
@@ -2615,6 +2824,17 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         // Note: the time index ti corresponds to a time t_n, and we now compute the RK4 residual
         // w(t_{n+1}) - w(t_n) - dt/6 (k1 + 2k2 + 2k3 + k4)
         STbasis->LiftToSampleMesh(ti, S, fx);  // Set fx = w(t_n)
+
+        {   // Update sample mesh nodes
+            // TODO: remove this? Is it redundant?
+            MFEM_VERIFY(xsp_gf->Size() == Vsize_h1sp, "");  // Since the sample mesh is serial (only on rank 0).
+
+            for (int j=0; j<Vsize_h1sp; ++j)
+                (*xsp_gf)[j] = fx[j];
+
+            spmesh->NewNodes(*xsp_gf, false);
+        }
+
         ST_ode_solver->Step(fx, t, dt);
 
         MFEM_VERIFY(fabs(t - t0 - dt) < 1.0e-12, "");
@@ -2634,7 +2854,11 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     // Evaluate X equations without sampling
     {
         CAROM::Vector v(basis->GetDimV(), false);
+#ifdef STXV
+        CAROM::Vector xv(basis->GetDimV(), false);
+#else
         CAROM::Vector xv(basis->GetDimX(), false);
+#endif
         CAROM::Vector x(basis->GetDimX(), false);
 
         for (int i=0; i<basis->GetDimX(); ++i)
@@ -2643,6 +2867,26 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         for (int i=0; i<basis->GetDimV(); ++i)
             v.item(i) = S[basis->GetDimX() + i];
 
+        // TODO: since the V basis is larger than the X, would it be more accurate to multiply the X equation by Pi_V^T rather than Pi_X^T?
+        // Or should the X and V bases be merged into one XV basis? Maybe the V basis would be sufficient.
+
+        // Note that PiXtransPiV contains the RK4 scaling.
+
+#ifdef STXV
+        basis->PiXtransPiV->mult(v, xv);
+        for (int i=0; i<basis->GetDimV(); ++i)
+            f[i] = -xv.item(i);
+
+        // TODO: store PiXtransPiX - PiXtransPiXlag?
+
+        basis->PiXtransPiX->mult(x, xv);
+        for (int i=0; i<basis->GetDimV(); ++i)
+            f[i] += xv.item(i);
+
+        basis->PiXtransPiXlag->mult(x, xv);
+        for (int i=0; i<basis->GetDimV(); ++i)
+            f[i] -= xv.item(i);
+#else
         basis->PiXtransPiV->mult(v, xv);
         for (int i=0; i<basis->GetDimX(); ++i)
             f[i] = -xv.item(i);
@@ -2656,6 +2900,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         basis->PiXtransPiXlag->mult(x, xv);
         for (int i=0; i<basis->GetDimX(); ++i)
             f[i] -= xv.item(i);
+#endif
     }
 }
 

@@ -1060,7 +1060,8 @@ int main(int argc, char *argv[])
     else if (rom_online && romOptions.spaceTime)
     {
         //Vector stSol(S);
-        romOper[0]->SolveSpaceTime(romS);
+        //romOper[0]->SolveSpaceTime(romS);
+        romOper[0]->SolveSpaceTimeGN(romS);
     }
     else
     {
