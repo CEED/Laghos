@@ -2662,11 +2662,16 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     if (useGramSchmidt)
         InducedGramSchmidtInitialize(x); // TODO: this assumes 1 temporal basis vector per spatial basis vector and needs to be generalized.
 
+#ifdef COLL_LSPG
+    const int n = STbasis->SolutionSizeST();
+    const int m = STbasis->GetTotalNumSamples();
+#else
     const int n = basis->TotalSize();
 #ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else
     const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+#endif
 #endif
 
     Vector c(n);
@@ -2685,7 +2690,11 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     const double rel_tol = 1.0e-8;
     const double abs_tol = 1.0e-12;
     const int print_level = 0;
+#ifdef COLL_LSPG
+    const int max_iter = 3;
+#else
     const int max_iter = 10;
+#endif
 
     EvalSpaceTimeResidual_RK4(x, r);
 
@@ -2751,11 +2760,16 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
 
 void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const
 {
+#ifdef COLL_LSPG
+    const int n = STbasis->SolutionSizeST();
+    const int m = STbasis->GetTotalNumSamples();
+#else
     const int n = basis->TotalSize();
 #ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else
     const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+#endif
 #endif
     MFEM_VERIFY(J.Height() == m && J.Width() == n, "");
 
@@ -2767,7 +2781,7 @@ void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) co
 
     EvalSpaceTimeResidual_RK4(S, r);
 
-    const double eps = 1.0e-4;
+    const double eps = 1.0e-8;
 
     for (int j=0; j<n; ++j)
     {
@@ -2796,6 +2810,9 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     const int rdimfv = basis->GetDimFv();
     const int rdimfe = basis->GetDimFe();
 
+#ifdef COLL_LSPG
+    MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == STbasis->GetTotalNumSamples(), "");
+#else
     if (GaussNewton)
     {
 #ifdef STXV
@@ -2808,6 +2825,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     {
         MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && S.Size() == f.Size(), "");
     }
+#endif
 
     MFEM_VERIFY(hyperreduce, "");
 
@@ -2848,6 +2866,11 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 
         STbasis->RestrictFromSampleMesh(i, fy, Sr);
     }
+
+#ifdef COLL_LSPG
+    f = Sr;
+    return;
+#endif
 
     STbasis->ApplySpaceTimeHyperreductionInverses(Sr, f);
 

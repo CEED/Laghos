@@ -13,6 +13,7 @@
 using namespace mfem;
 
 #define STXV
+#define COLL_LSPG
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
