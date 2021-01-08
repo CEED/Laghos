@@ -117,7 +117,6 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   Coefficient &gamma_coeff;
    const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -170,7 +169,6 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
-                           Coefficient &mat_gf_coeff,
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,

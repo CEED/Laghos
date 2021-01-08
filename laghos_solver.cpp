@@ -94,7 +94,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
-                                                 Coefficient &gamma_coeff,
                                                  ParGridFunction &gamma_gf,
                                                  const int source,
                                                  const double cfl,
@@ -126,7 +125,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    use_vorticity(vort),
    p_assembly(p_assembly),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
-   gamma_coeff(gamma_coeff),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
@@ -703,7 +701,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr_b[z](q).Det();
             min_detJ = fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
-            gamma_b[idx] = gamma_coeff.Eval(*T, ip);
+            // Assuming piecewise constant gamma that moves with the mesh.
+            gamma_b[idx] = gamma_gf(z_id);
             rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = fmax(0.0, e_vals(q));
          }
