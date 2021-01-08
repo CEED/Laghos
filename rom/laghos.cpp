@@ -865,7 +865,7 @@ int main(int argc, char *argv[])
     int steps = 0;
     BlockVector S_old(S);
 
-    StopWatch samplerTimer;
+    StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
@@ -1419,10 +1419,12 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         samplerTimer.Start();
+        basisConstructionTimer.Start();
         if (samplerLast)
             samplerLast->Finalize(t, dt, S, cutoff);
         else if (sampler)
             sampler->Finalize(t, dt, S, cutoff);
+        basisConstructionTimer.Stop();
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
@@ -1540,6 +1542,7 @@ int main(int argc, char *argv[])
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
         if(rom_restore) cout << "Elapsed time for restore phase: " << restoreTimer.RealTime() << " sec\n";
         if(rom_offline) cout << "Elapsed time for sampling in the offline phase: " << samplerTimer.RealTime() << " sec\n";
+        if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
     }
