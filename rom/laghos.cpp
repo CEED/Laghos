@@ -283,11 +283,11 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM static SVD.");
     args.AddOption(&romOptions.randomizedSVD, "-romsvdrm", "--romsvdrandom", "-no-romsvdrm", "--no-romsvdrm",
                    "Enable or disable ROM randomized SVD.");
-     args.AddOption(&romOptions.randdimX, "-randdimx", "--rand_dimx", "Randomized SVD subspace dimension for X.");
-     args.AddOption(&romOptions.randdimV, "-randdimv", "--rand_dimv", "Randomized SVD subspace dimension for V.");
-     args.AddOption(&romOptions.randdimE, "-randdime", "--rand_dime", "Randomized SVD subspace dimension for E.");
-     args.AddOption(&romOptions.randdimFv, "-randdimfv", "--rand_dimfv", "Randomized SVD subspace dimension for Fv.");
-     args.AddOption(&romOptions.randdimFe, "-randdimfe", "--rand_dimfe", "Randomized SVD subspace dimension for Fe.");
+    args.AddOption(&romOptions.randdimX, "-randdimx", "--rand_dimx", "Randomized SVD subspace dimension for X.");
+    args.AddOption(&romOptions.randdimV, "-randdimv", "--rand_dimv", "Randomized SVD subspace dimension for V.");
+    args.AddOption(&romOptions.randdimE, "-randdime", "--rand_dime", "Randomized SVD subspace dimension for E.");
+    args.AddOption(&romOptions.randdimFv, "-randdimfv", "--rand_dimfv", "Randomized SVD subspace dimension for Fv.");
+    args.AddOption(&romOptions.randdimFe, "-randdimfe", "--rand_dimfe", "Randomized SVD subspace dimension for Fe.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
