@@ -83,7 +83,11 @@ struct ROM_Options
 
     // Randomized SVD options
     bool randomizedSVD = false; // true: use RandomizedSVD
-    int randomizedSVD_subspace_dim = -1;
+    int randdimX = -1;
+    int randdimV = -1;
+    int randdimE = -1;
+    int randdimFv = -1;
+    int randdimFe = -1;
 
     // Incremental SVD options
     double incSVD_linearity_tol = 1.e-7;
@@ -131,11 +135,6 @@ public:
         CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1);
         CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
         bool staticSVD = (input.staticSVD || input.randomizedSVD);
-        if (input.randomizedSVD)
-        {
-            x_options.setRandomizedSVD(true, input.randomizedSVD_subspace_dim);
-            e_options.setRandomizedSVD(true, input.randomizedSVD_subspace_dim);
-        }
         if (!staticSVD)
         {
             x_options.setIncrementalSVD(input.incSVD_linearity_tol,
@@ -154,26 +153,44 @@ public:
             e_options.setMaxBasisDimension(max_model_dim);
             e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
-
+        if (input.randomizedSVD)
+        {
+            x_options.setRandomizedSVD(true, input.randdimX);
+        }
         generator_X = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            x_options.setRandomizedSVD(true, input.randdimV);
+        }
         generator_V = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            e_options.setRandomizedSVD(true, input.randdimE);
+        }
         generator_E = new CAROM::BasisGenerator(
             e_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
-
         if (sampleF)
         {
+            if (input.randomizedSVD)
+            {
+                x_options.setRandomizedSVD(true, input.randdimFv);
+            }
             generator_Fv = new CAROM::BasisGenerator(
                 x_options,
                 !staticSVD,
                 staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+            if (input.randomizedSVD)
+            {
+                e_options.setRandomizedSVD(true, input.randdimFe);
+            }
             generator_Fe = new CAROM::BasisGenerator(
                 e_options,
                 !staticSVD,
