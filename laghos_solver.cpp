@@ -635,7 +635,8 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
     auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
     const int NQ = ir.GetNPoints(); 
-   Vector e_vector(NE*NQ), eintQ(NE*NQ);
+    const int ND = L2.GetFE(0)->GetDof();
+   Vector e_vector(NE*ND), eintQ(NE*NQ);
 
     // Get internal energy at the quadrature points
     L2r->Mult(gf, e_vector);
@@ -657,7 +658,8 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
     h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
     auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
     const int NQ = ir.GetNPoints(); 
-   Vector e_vector(dim*NE*NQ), ekinQ(dim*NE*NQ);
+    const int ND = H1.GetFE(0)->GetDof();
+   Vector e_vector(dim*NE*ND), ekinQ(dim*NE*NQ);
 
     // Get internal energy at the quadrature points
     H1r->Mult(v, e_vector);
