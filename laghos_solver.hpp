@@ -89,7 +89,9 @@ public:
       q2(L2.GetQuadratureInterpolator(ir)),
       gamma_gf(gamma_gf) { }
 
-   void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
+   void UpdateQuadratureData(const Vector &S,
+                             QuadratureData &qdata,
+                             Vector&,Vector&);
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -101,23 +103,31 @@ protected:
    mutable ParFiniteElementSpace H1c;
    ParMesh *pmesh;
    // FE spaces local and global sizes
-   const int H1Vsize;
-   const int H1TVSize;
-   const HYPRE_Int H1GTVSize;
-   const int L2Vsize;
-   const int L2TVSize;
-   const HYPRE_Int L2GTVSize;
+   int H1Vsize;
+   int H1TVSize;
+   HYPRE_Int H1GTVSize;
+   int L2Vsize;
+   int L2TVSize;
+   HYPRE_Int L2GTVSize;
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
-   const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
+   int NE;
+   const int dim;
+   int l2dofs_cnt, h1dofs_cnt;
+   const int source_type;
    const double cfl;
-   const bool use_viscosity, use_vorticity, p_assembly;
+   const bool use_viscosity, use_vorticity, p_assembly, amr;
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
    const ParGridFunction &gamma_gf;
+
+   ParGridFunction &rho0;
+   ParGridFunction x0_gf; // copy of initial mesh position
+   GridFunctionCoefficient rho0_coeff; // TODO: remove when Mv update improved
+
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
@@ -147,6 +157,7 @@ protected:
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
+   mutable Vector zone_max_visc, zone_vgrad;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -172,7 +183,8 @@ public:
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,
-                           const bool visc, const bool vort, const bool pa,
+                           const bool visc, const bool vort,
+                           const bool p_assembly, const bool amr,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
@@ -202,6 +214,14 @@ public:
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
+
+   void SetH0(double h0) { qdata.h0 = h0; }
+   double GetH0() const { return qdata.h0; }
+
+   Vector& GetZoneMaxVisc() { return zone_max_visc; }
+   Vector& GetZoneVGrad() { return zone_vgrad; }
+
+   void AMRUpdate(const Vector&, const bool quick);
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

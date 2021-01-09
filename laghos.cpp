@@ -81,6 +81,19 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
+// AMR addon
+void AMRUpdate(BlockVector&, BlockVector&, Array<int>&,
+               ParGridFunction&, ParGridFunction&, ParGridFunction&);
+void GetZeroBCDofs(ParMesh*, ParFiniteElementSpace&, const int,
+                   Array<int>&, Array<int>&);
+
+void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                            const double size, Array<int> &elements);
+
+void GetPerElementMinMax(const GridFunction &gf,
+                         Vector &elem_min, Vector &elem_max,
+                         int int_order = -1);
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -121,8 +134,13 @@ int main(int argc, char *argv[])
    bool fom = false;
    bool gpu_aware_mpi = false;
    int dev = 0;
+   bool amr = false;
+   double amr_ref_threshold = 2e-4;
+   double amr_deref_threshold = 0.75;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
+   const double amr_blast_size = 1e-10;
+   const int amr_nc_limit = 1;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -192,13 +210,27 @@ int main(int argc, char *argv[])
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
+   args.AddOption(&amr, "-amr", "--enable-amr", "-no-amr", "--disable-amr",
+                  "Experimental adaptive mesh refinement (problem 1 only).");
+   args.AddOption(&amr_ref_threshold, "-rt", "--ref-threshold",
+                  "AMR refinement threshold.");
+   args.AddOption(&amr_deref_threshold, "-dt", "--deref-threshold",
+                  "AMR derefinement threshold (0 = no derefinement).");
    args.Parse();
    if (!args.Good())
    {
       if (mpi.Root()) { args.PrintUsage(cout); }
       return 1;
    }
+
    if (mpi.Root()) { args.PrintOptions(cout); }
+
+   if (amr && problem != 1)
+   {
+      if (mpi.Root()) { cout << "AMR only supported for problem 1." << endl; }
+      return 0;
+   }
+
 
    // Configure the device from the command line options
    Device backend;
@@ -257,7 +289,22 @@ int main(int argc, char *argv[])
    }
 
    // Refine the mesh in serial to increase the resolution.
-   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   if (!amr)
+   {
+      for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   }
+   else
+   {
+      // Initial refinement for AMR demo on Sedov
+      mesh->EnsureNCMesh();
+      for (int lev = 0; lev < rs_levels; lev++)
+      {
+         mesh->RefineAtVertex(Vertex(blast_position[0], blast_position[1],
+                                     blast_position[2]),
+                              amr_blast_size);
+      }
+   }
+
    const int mesh_NE = mesh->GetNE();
    if (mpi.Root())
    {
@@ -403,6 +450,8 @@ int main(int argc, char *argv[])
    if (myid == 0)
    { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
 
+   const int amr_max_level = rs_levels + rp_levels;
+
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
@@ -414,20 +463,8 @@ int main(int argc, char *argv[])
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs, ess_vdofs;
-   {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-      for (int d = 0; d < pmesh->Dimension(); d++)
-      {
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-         // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-         ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-         ess_tdofs.Append(dofs_list);
-         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-         ess_vdofs.Append(dofs_list);
-      }
-   }
+   const int bdr_attr_max = pmesh->bdr_attributes.Max();
+   GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
 
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
@@ -504,26 +541,28 @@ int main(int argc, char *argv[])
    // time evolution.
    ParGridFunction rho0_gf(&L2FESpace);
    FunctionCoefficient rho0_coeff(rho0);
-   L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
-   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
-   rho0_gf.ProjectGridFunction(l2_rho0_gf);
-   if (problem == 1)
    {
-      // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                               blast_position[2], blast_energy);
-      l2_e.ProjectCoefficient(e_coeff);
+      L2_FECollection l2_fec(order_e, pmesh->Dimension());
+      ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+      ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
+      l2_rho0_gf.ProjectCoefficient(rho0_coeff);
+      rho0_gf.ProjectGridFunction(l2_rho0_gf);
+      if (problem == 1)
+      {
+         // For the Sedov test, we use a delta function at the origin.
+         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                                  blast_position[2], blast_energy);
+         l2_e.ProjectCoefficient(e_coeff);
+      }
+      else
+      {
+         FunctionCoefficient e_coeff(e0);
+         l2_e.ProjectCoefficient(e_coeff);
+      }
+      e_gf.ProjectGridFunction(l2_e);
+      // Sync the data location of e_gf with its base, S
+      e_gf.SyncAliasMemory(S);
    }
-   else
-   {
-      FunctionCoefficient e_coeff(e0);
-      l2_e.ProjectCoefficient(e_coeff);
-   }
-   e_gf.ProjectGridFunction(l2_e);
-   // Sync the data location of e_gf with its base, S
-   e_gf.SyncAliasMemory(S);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
@@ -553,9 +592,19 @@ int main(int argc, char *argv[])
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
-                                                visc, vorticity, p_assembly,
+                                                visc, vorticity,
+                                                p_assembly, amr,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
+
+   if (amr)
+   {
+      // set a base for h0, this will be further divided in UpdateQuadratureData
+      // TODO: for AMR, the treatment of h0 needs more work
+      const double elem_size = 0.5; // coarse element size (TODO calculate)
+      const double h0 = elem_size / order_v;
+      hydro.SetH0(h0);
+   }
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -611,7 +660,7 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
-   long mem=0, mmax=0, msum=0;
+   long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
 
    for (int ti = 1; !last_step; ti++)
@@ -750,6 +799,96 @@ int main(int argc, char *argv[])
          }
       }
 
+      if (amr)
+      {
+         Vector &error_est = hydro.GetZoneMaxVisc();
+         Vector v_max, v_min;
+         GetPerElementMinMax(v_gf, v_min, v_max);
+         bool mesh_changed = false;
+
+         // make a list of elements to refine
+         Array<int> refs;
+         for (int i = 0; i < pmesh->GetNE(); i++)
+         {
+            if (error_est(i) > amr_ref_threshold
+                && pmesh->pncmesh->GetElementDepth(i) < amr_max_level
+                && (v_min(i) < 1e-3 || ti < 50) // only refine the still area
+               )
+            {
+               refs.Append(i);
+            }
+         }
+
+         const int nref = pmesh->ReduceInt(refs.Size());
+         if (nref)
+         {
+            pmesh->GeneralRefinement(refs, 1, amr_nc_limit);
+            mesh_changed = true;
+            if (myid == 0)
+            {
+               std::cout << "Refined " << nref << " elements." << std::endl;
+            }
+         }
+         else if (amr_deref_threshold)
+         {
+            hydro.ComputeDensity(rho_gf);
+
+            Vector rho_max, rho_min;
+            GetPerElementMinMax(rho_gf, rho_min, rho_max);
+
+            // simple derefinement based on zone maximum rho in post-shock region
+            const double rho_max_max = rho_max.Size() ? rho_max.Max() : 0.0;
+            double threshold, loc_threshold = amr_deref_threshold * rho_max_max;
+            MPI_Allreduce(&loc_threshold, &threshold, 1, MPI_DOUBLE, MPI_MAX,
+                          pmesh->GetComm());
+
+            // make sure the blast point is never derefined
+            Array<int> elements;
+            FindElementsWithVertex(pmesh, Vertex(blast_position[0],
+                                                 blast_position[1],
+                                                 blast_position[2]),
+                                   amr_blast_size, elements);
+            for (int i = 0; i < elements.Size(); i++)
+            {
+               int index = elements[i];
+               if (index >= 0) { rho_max(index) = 1e10; }
+            }
+
+            // also, only derefine where the mesh is in motion, i.e. after the shock
+            for (int i = 0; i < pmesh->GetNE(); i++)
+            {
+               if (v_min(i) < 0.1) { rho_max(i) = 1e10; }
+            }
+
+            const int op = 2; // maximum value of fine elements
+            mesh_changed = pmesh->DerefineByError(rho_max, threshold,
+                                                  amr_nc_limit, op);
+            if (mesh_changed && myid == 0)
+            {
+               std::cout << "Derefined, threshold = " << threshold << std::endl;
+            }
+         }
+
+         if (mesh_changed)
+         {
+            // update state and operator
+            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+            hydro.AMRUpdate(S, true);
+
+            pmesh->Rebalance();
+
+            // update state and operator
+            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+            hydro.AMRUpdate(S, false);
+
+            GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
+
+            ode_solver->Init(hydro);
+
+            H1FESpace.PrintPartitionStats();
+         }
+      }
+
       // Problems checks
       if (check)
       {
@@ -830,6 +969,120 @@ int main(int argc, char *argv[])
    delete pmesh;
 
    return 0;
+}
+
+void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
+                   const int bdr_attr_max,
+                   Array<int> &ess_tdofs,
+                   Array<int> &ess_vdofs)
+{
+   Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
+   for (int d = 0; d < pmesh->Dimension(); d++)
+   {
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+      // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+      ess_bdr = 0; ess_bdr[d] = 1;
+      H1.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+      ess_tdofs.Append(dofs_list);
+      H1.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+      ess_vdofs.Append(dofs_list);
+   }
+}
+
+void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
+               Array<int> &true_offset,
+               ParGridFunction &x_gf,
+               ParGridFunction &v_gf,
+               ParGridFunction &e_gf)
+{
+   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
+   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
+   H1FESpace->Update();
+   L2FESpace->Update();
+   const int Vsize_h1 = H1FESpace->GetVSize();
+   const int Vsize_l2 = L2FESpace->GetVSize();
+   true_offset[0] = 0;
+   true_offset[1] = true_offset[0] + Vsize_h1;
+   true_offset[2] = true_offset[1] + Vsize_h1;
+   true_offset[3] = true_offset[2] + Vsize_l2;
+   S_tmp = S;
+   S.Update(true_offset);
+   const Operator* H1Update = H1FESpace->GetUpdateOperator();
+   const Operator* L2Update = L2FESpace->GetUpdateOperator();
+   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
+   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
+   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
+   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
+   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
+   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
+   S_tmp.Update(true_offset);
+}
+
+void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                            const double size, Array<int> &elements)
+{
+   Array<int> v;
+
+   for (int i = 0; i < mesh->GetNE(); i++)
+   {
+      mesh->GetElementVertices(i, v);
+      for (int j = 0; j < v.Size(); j++)
+      {
+         double dist = 0.0;
+         for (int l = 0; l < mesh->SpaceDimension(); l++)
+         {
+            double d = vert(l) - mesh->GetVertex(v[j])[l];
+            dist += d*d;
+         }
+         if (dist <= size*size) { elements.Append(i); break; }
+      }
+   }
+}
+
+static void Pow(Vector &vec, double p)
+{
+   for (int i = 0; i < vec.Size(); i++)
+   {
+      vec(i) = std::pow(vec(i), p);
+   }
+}
+
+void GetPerElementMinMax(const GridFunction &gf,
+                         Vector &elem_min, Vector &elem_max,
+                         int int_order)
+{
+   const FiniteElementSpace *space = gf.FESpace();
+   int ne = space->GetNE();
+
+   if (int_order < 0) { int_order = space->GetOrder(0) + 1; }
+
+   elem_min.SetSize(ne);
+   elem_max.SetSize(ne);
+
+   Vector vals, tmp;
+   for (int i = 0; i < ne; i++)
+   {
+      int geom = space->GetFE(i)->GetGeomType();
+      const IntegrationRule &ir = IntRules.Get(geom, int_order);
+
+      gf.GetValues(i, ir, vals);
+
+      if (space->GetVDim() > 1)
+      {
+         Pow(vals, 2.0);
+         for (int vd = 1; vd < space->GetVDim(); vd++)
+         {
+            gf.GetValues(i, ir, tmp, vd+1);
+            Pow(tmp, 2.0);
+            vals += tmp;
+         }
+         Pow(vals, 0.5);
+      }
+
+      elem_min(i) = vals.Min();
+      elem_max(i) = vals.Max();
+   }
 }
 
 double rho0(const Vector &x)
