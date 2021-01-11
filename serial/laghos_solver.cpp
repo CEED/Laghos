@@ -718,7 +718,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr_b[z](q).Det();
             min_detJ = fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
-            gamma_b[idx] = gamma_coeff.Eval(*T, ip);
+            // Assuming piecewise constant gamma that moves with the mesh.
+            gamma_b[idx] = gamma_gf(z_id);
             rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = fmax(0.0, e_vals(q));
          }
