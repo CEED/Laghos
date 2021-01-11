@@ -59,7 +59,7 @@ static int problem;
 // Forward declarations.
 double e0(const Vector &);
 double rho0(const Vector &);
-double gamma(const Vector &);
+double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
 static long GetMaxRssMB();
@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
    L2_FECollection mat_fec(0, mesh->Dimension());
    FiniteElementSpace mat_fes(mesh, &mat_fec);
    GridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(gamma);
+   FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
 
    // Additional details, depending on the problem.
@@ -629,7 +629,7 @@ double rho0(const Vector &x)
    }
 }
 
-double gamma(const Vector &x)
+double gamma_func(const Vector &x)
 {
    switch (problem)
    {
@@ -725,10 +725,10 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma(x) - 1.0)
-                        : 0.1 / rho0(x) / (gamma(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma(x) - 1.0);
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
+                        : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
+                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
@@ -747,7 +747,7 @@ double e0(const Vector &x)
       }
       case 5:
       {
-         const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
+         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
@@ -757,7 +757,7 @@ double e0(const Vector &x)
       }
       case 6:
       {
-         const double irg = 1.0 / rho0(x) / (gamma(x) - 1.0);
+         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
