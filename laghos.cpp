@@ -663,7 +663,27 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
-
+//   const double internal_energy = hydro.InternalEnergy(e_gf);
+//   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+//   if (mpi.Root())
+//   {
+//      cout << std::fixed;
+//      cout << "step " << std::setw(5) << 0
+//            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+//            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+//            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+//            << internal_energy
+//            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+//            << kinetic_energy
+//            << ",\t|E| = " << std::setprecision(10) << std::scientific
+//            << kinetic_energy+internal_energy;
+//      cout << std::fixed;
+//      if (mem_usage)
+//      {
+//         cout << ", mem: " << mmax << "/" << msum << " MB";
+//      }
+//      cout << endl;
+//   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -721,15 +741,24 @@ int main(int argc, char *argv[])
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
+         // const double internal_energy = hydro.InternalEnergy(e_gf);
+         // const double kinetic_energy = hydro.KineticEnergy(v_gf);
          if (mpi.Root())
          {
             const double sqrt_norm = sqrt(norm);
+
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
                  << ",\tt = " << std::setw(5) << std::setprecision(4) << t
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
+                 //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
+                 //  << internal_energy
+                 //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
+                 //  << kinetic_energy
+                 //   << ",\t|E| = " << std::setprecision(10) << std::scientific
+                 //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             if (mem_usage)
             {
@@ -931,11 +960,8 @@ int main(int argc, char *argv[])
    if (mpi.Root())
    {
       cout << endl;
-      if (!p_assembly)
-      {
-         cout << "Energy  diff: " << std::scientific << std::setprecision(2)
-              << fabs(energy_init - energy_final) << endl;
-      }
+      cout << "Energy  diff: " << std::scientific << std::setprecision(2)
+           << fabs(energy_init - energy_final) << endl;
       if (mem_usage)
       {
          cout << "Maximum memory resident set size: "
