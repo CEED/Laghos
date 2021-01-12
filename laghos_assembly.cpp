@@ -17,9 +17,6 @@
 #include "laghos_assembly.hpp"
 #include <unordered_map>
 
-#define MFEM_DEBUG_COLOR 226
-#include "general/debug.hpp"
-
 namespace mfem
 {
 

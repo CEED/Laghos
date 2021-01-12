@@ -19,9 +19,6 @@
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 
-#define MFEM_DEBUG_COLOR 198
-#include "general/debug.hpp"
-
 #ifdef MFEM_USE_MPI
 
 namespace mfem
@@ -313,74 +310,37 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
 {
-   dbg("%s AMR update", quick ? "QUICK" : "THOROUGH");
-   dbg("S:%d, NE:%d", width, NE);
    width = height = S.Size();
+   H1c.Update();
    pmesh = H1.GetParMesh();
-   pmesh->DeleteGeometricFactors();
    H1Vsize = H1.GetVSize();
    H1TVSize = H1.TrueVSize();
    H1GTVSize = H1.GlobalTrueVSize();
    L2Vsize = L2.GetVSize();
    L2TVSize = L2.TrueVSize();
    L2GTVSize = L2.GlobalTrueVSize();
-
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
    block_offsets[3] = block_offsets[2] + L2Vsize;
-   this->x_gf.Update();
-   // ess_tdofs
    NE = pmesh->GetNE();
-   // dim
    l2dofs_cnt = (L2.GetFE(0)->GetDof());
    h1dofs_cnt = (H1.GetFE(0)->GetDof());
-   // source_type
-   // cfl
-   // use_viscosity
-   // use_vorticity
-   // p_assembly
-   // amr
-   // cg_rel_tol
-   // cg_max_iter
-   // ftz_tol
-   gamma_gf.Update();
    rho0_gf.Update();
    x0_gf.Update();
-   // Mv_spmat_copy
-   //Me.SetSize(l2dofs_cnt, l2dofs_cnt, NE);
-   //Me_inv.SetSize(l2dofs_cnt, l2dofs_cnt, NE);
-   // ir
-   // Q1D
    qdata.Resize(dim, NE, ir.GetNPoints());
    qdata_is_current = false;
    forcemat_is_assembled = false;
-   Force.Update();
    delete ForcePA; ForcePA = nullptr;
    delete VMassPA; VMassPA = nullptr;
    delete EMassPA; EMassPA = nullptr;
    delete VMassPA_Jprec; VMassPA_Jprec = nullptr;
-   // CG_VMass
-   // CG_EMass
-   // timer // to update with new sizes
    delete qupdate; qupdate = nullptr;
-   X.SetSize(H1c.GetTrueVSize());
-   B.SetSize(H1c.GetTrueVSize());
-
    one.SetSize(L2Vsize);
-   one.UseDevice(true);
    one = 1.0;
-
    rhs.SetSize(H1Vsize);
    e_rhs.SetSize(L2Vsize);
 
-   H1c.Update();
-   //rhs_c_gf.Update();
-   //dvc_gf.Update();
-   // c_tdofs
-   // zone_max_visc, zone_vgrad
-
-   ///////////////////////
    if (quick) { return; }
 
    // go back to initial mesh configuration temporarily
@@ -390,6 +350,8 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
 
    if (p_assembly)
    {
+      gamma_gf.Update();
+      pmesh->DeleteGeometricFactors();
       qupdate = new QUpdate(dim, NE, Q1D, use_viscosity, use_vorticity, cfl,
                             &timer, gamma_gf, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
@@ -411,16 +373,37 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
          H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
          c_tdofs[c].Read();
       }
+      X.SetSize(H1c.GetTrueVSize());
+      B.SetSize(H1c.GetTrueVSize());
       X.UseDevice(true);
       B.UseDevice(true);
       rhs.UseDevice(true);
       e_rhs.UseDevice(true);
+
+      // Setup the preconditioner of the velocity mass operator.
+      // BC are handled by the VMassPA, so ess_tdofs here can be empty.
+      Array<int> ess_tdofs;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      CG_VMass.SetPreconditioner(*VMassPA_Jprec);
+
+      CG_VMass.SetOperator(*VMassPA);
+      CG_VMass.SetRelTol(cg_rel_tol);
+      CG_VMass.SetAbsTol(0.0);
+      CG_VMass.SetMaxIter(cg_max_iter);
+      CG_VMass.SetPrintLevel(-1);
+
+      CG_EMass.SetOperator(*EMassPA);
+      CG_EMass.iterative_mode = false;
+      CG_EMass.SetRelTol(cg_rel_tol);
+      CG_EMass.SetAbsTol(0.0);
+      CG_EMass.SetMaxIter(cg_max_iter);
+      CG_EMass.SetPrintLevel(-1);
    }
    else
    {
-      // update mass matrix
-      // TODO: do this better too
-      // TODO: don't reassemble everything!
+      Force.Update();
+      Force.Assemble(0);
+      Force.Finalize(0);
       Mv.Update();
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
@@ -436,14 +419,7 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
          inv.Factor();
          inv.GetInverseMatrix(Me_inv(e));
       }
-      // Standard assembly for the velocity mass matrix.
-      //VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-      //Mv.AddDomainIntegrator(vmi);
-      //Mv.Assemble();
-      //Mv_spmat_copy = Mv.SpMat();
    }
-
-
    // update 'rho0DetJ0' and 'Jac0inv' at all quadrature points
    // TODO: remove code duplication
    int Ne, ne = NE;
@@ -484,46 +460,13 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
       default: MFEM_ABORT("Unknown zone type!");
    }
    qdata.h0 /= (double) H1.GetOrder(0);
-   dbg("h0:%.15e", qdata.h0);
 
    // swap back to deformed mesh configuration
    pmesh->SwapNodes(x_gf, own_nodes);
-
-   if (p_assembly)
-   {
-      // Setup the preconditioner of the velocity mass operator.
-      // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> ess_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
-      CG_VMass.SetPreconditioner(*VMassPA_Jprec);
-
-      CG_VMass.SetOperator(*VMassPA);
-      CG_VMass.SetRelTol(cg_rel_tol);
-      CG_VMass.SetAbsTol(0.0);
-      CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(-1);
-
-      CG_EMass.SetOperator(*EMassPA);
-      CG_EMass.iterative_mode = false;
-      CG_EMass.SetRelTol(cg_rel_tol);
-      CG_EMass.SetAbsTol(0.0);
-      CG_EMass.SetMaxIter(cg_max_iter);
-      CG_EMass.SetPrintLevel(-1);
-   }
-   else
-   {
-      //ForceIntegrator *fi = new ForceIntegrator(qdata);
-      //fi->SetIntRule(&ir);
-      //Force.AddDomainIntegrator(fi);
-      // Make a dummy assembly to figure out the sparsity.
-      Force.Assemble(0);
-      Force.Finalize(0);
-   }
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   dbg("S:%.15e", S*S);
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
@@ -534,16 +477,12 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction v;
    const int VsizeH1 = H1.GetVSize();
    v.MakeRef(&H1, *sptr, VsizeH1);
-   dbg("v:%.15e", v*v);
    // Set dx_dt = v (explicit).
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
-   dbg("dx:%.15e", dx*dx);
    SolveVelocity(S, dS_dt);
-   dbg("dS_dt:%.15e", dS_dt*dS_dt);
    SolveEnergy(S, v, dS_dt);
-   dbg("dS_dt:%.15e", dS_dt*dS_dt);
    qdata_is_current = false;
 }
 
@@ -642,7 +581,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
    }
-   dbg("S:%.15e dv:%.15e", S*S, dv*dv);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -702,7 +640,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          de.SetSubVector(l2dofs, loc_de);
       }
    }
-   dbg("v:%.15e de:%.15e", v*v, de*de);
    delete e_source;
 }
 
@@ -1301,11 +1238,6 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
                const double J21 = J(q,0,1,e);
                const double J22 = J(q,1,1,e);
                const double det = detJ(q,e);
-               /*if (e==0 && q == 0)
-               {
-                  dbg("%.15e %.15e %.15e %.15e =  %.15e",
-                  J11, J12, J21, J22, det);
-               }*/
                V(q,e) =  W[q] * R(q,e) * det;
                const double r_idetJ = 1.0 / det;
                invJ(0,0,q,e) =  J22 * r_idetJ;

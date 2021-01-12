@@ -63,7 +63,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
-#include "general/debug.hpp"
 
 using std::cout;
 using std::endl;
@@ -82,18 +81,19 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
-// AMR addon
-void AMRUpdate(BlockVector&, BlockVector&, Array<int>&,
-               ParGridFunction&, ParGridFunction&, ParGridFunction&);
-void GetZeroBCDofs(ParMesh*, ParFiniteElementSpace&, const int,
-                   Array<int>&, Array<int>&);
+static void AMRUpdate(BlockVector&, BlockVector&, Array<int>&,
+                      ParGridFunction&, ParGridFunction&,
+                      ParGridFunction&, ParGridFunction&);
 
-void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
-                            const double size, Array<int> &elements);
+static void GetZeroBCDofs(ParMesh*, ParFiniteElementSpace&, const int,
+                          Array<int>&, Array<int>&);
 
-void GetPerElementMinMax(const GridFunction &gf,
-                         Vector &elem_min, Vector &elem_max,
-                         int int_order = -1);
+static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                                   const double size, Array<int> &elements);
+
+static void GetPerElementMinMax(const GridFunction &gf,
+                                Vector &elem_min, Vector &elem_max,
+                                int int_order = -1);
 
 int main(int argc, char *argv[])
 {
@@ -135,14 +135,14 @@ int main(int argc, char *argv[])
    bool fom = false;
    bool gpu_aware_mpi = false;
    int dev = 0;
+   double blast_energy = 0.25;
+   double blast_position[] = {0.0, 0.0, 0.0};
    bool amr = false;
    double amr_ref_threshold = 2e-4;
    double amr_deref_threshold = 0.75;
-   double blast_energy = 0.25;
-   double blast_position[] = {0.0, 0.0, 0.0};
    const double amr_blast_size = 1e-10;
    const int amr_nc_limit = 1;
-   dbg();
+
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -211,11 +211,12 @@ int main(int argc, char *argv[])
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
+
    args.AddOption(&amr, "-amr", "--enable-amr", "-no-amr", "--disable-amr",
                   "Experimental adaptive mesh refinement (problem 1 only).");
-   args.AddOption(&amr_ref_threshold, "-rt", "--ref-threshold",
+   args.AddOption(&amr_ref_threshold, "-ar", "--amr-ref-threshold",
                   "AMR refinement threshold.");
-   args.AddOption(&amr_deref_threshold, "-dt", "--deref-threshold",
+   args.AddOption(&amr_deref_threshold, "-ad", "--amr-deref-threshold",
                   "AMR derefinement threshold (0 = no derefinement).");
    args.Parse();
    if (!args.Good())
@@ -238,9 +239,9 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
 
-   // On all processors, use the default builtin 1D/2D/3D mesh or read the
-   // serial one given on the command line.
-   Mesh *mesh;
+   // On all processors, use the default builtin 1D/2D/3D mesh
+   // or read the serial one given on the command line.
+   Mesh *mesh = nullptr;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
       mesh = new Mesh(mesh_file, true, true);
@@ -295,7 +296,6 @@ int main(int argc, char *argv[])
    }
    else
    {
-      dbg("Initial refinement for AMR demo on Sedov");
       mesh->EnsureNCMesh();
       for (int lev = 0; lev < rs_levels; lev++)
       {
@@ -502,14 +502,12 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
-   dbg("Init: Vsize_h1:%d Vsize_l2:%d", Vsize_h1,Vsize_l2);
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset, Device::GetMemoryType());
-   dbg("Init: S:%d", S.Size());
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
@@ -570,9 +568,9 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
+   ParGridFunction m_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
-   mat_gf.ProjectCoefficient(mat_coeff);
+   m_gf.ProjectCoefficient(mat_coeff);
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
@@ -594,7 +592,7 @@ int main(int argc, char *argv[])
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                mat_gf, source, cfl,
+                                                m_gf, source, cfl,
                                                 visc, vorticity,
                                                 p_assembly, amr,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -602,7 +600,7 @@ int main(int argc, char *argv[])
 
    /*if (amr)
    {
-      dbg("set a base for h0, this will be further divided in UpdateQuadratureData");
+      // Set a base for h0, this will be further divided in UpdateQuadratureData
       // TODO: for AMR, the treatment of h0 needs more work
       const double elem_size = 0.5; // coarse element size (TODO calculate)
       const double h0 = elem_size / order_v;
@@ -628,19 +626,18 @@ int main(int argc, char *argv[])
       vis_e.precision(8);
       int Wx = 0, Wy = 0; // window position
       const int Ww = 350, Wh = 350; // window size
-      //int offx = Ww+10; // window offsets
+      int offx = Ww + 10; // window offsets
       if (problem != 0 && problem != 4)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                        "Density", Wx, Wy, Ww, Wh);
-      }/*
+      }
       Wx += offx;
       hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
                                     "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
-*/
    }
 
    // Save data for VisIt visualization.
@@ -686,7 +683,6 @@ int main(int argc, char *argv[])
 
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);
-      dbg("dt_est:%.8e, dt:%.8e", dt_est,dt);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -751,12 +747,12 @@ int main(int argc, char *argv[])
          {
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
-            //int offx = Ww+10; // window offsets
+            int offx = Ww + 10; // window offsets
             if (problem != 0 && problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                              "Density", Wx, Wy, Ww, Wh);
-            }/*
+            }
             Wx += offx;
             hydrodynamics::VisualizeField(vis_v, vishost, visport,
                                           v_gf, "Velocity", Wx, Wy, Ww, Wh);
@@ -764,17 +760,17 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
-            Wx += offx;*/
+            Wx += offx;
          }
 
-         /*if (visit)
+         if (visit)
          {
             visit_dc.SetCycle(ti);
             visit_dc.SetTime(t);
             visit_dc.Save();
-         }*/
+         }
 
-         /*if (gfprint)
+         if (gfprint)
          {
             std::ostringstream mesh_name, rho_name, v_name, e_name;
             mesh_name << basename << "_" << ti << "_mesh";
@@ -801,15 +797,14 @@ int main(int argc, char *argv[])
             e_ofs.precision(8);
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
-         }*/
+         }
       } // last_step
 
       if (amr)
       {
-         Vector &error_est = hydro.GetZoneMaxVisc();
-
          Vector v_max, v_min;
          GetPerElementMinMax(v_gf, v_min, v_max);
+         Vector &error_est = hydro.GetZoneMaxVisc();
 
          bool mesh_changed = false;
 
@@ -823,7 +818,6 @@ int main(int argc, char *argv[])
                )
             {
                refs.Append(i);
-               dbg("Refine #%d",i);
             }
          }
 
@@ -844,7 +838,7 @@ int main(int argc, char *argv[])
             Vector rho_max, rho_min;
             GetPerElementMinMax(rho_gf, rho_min, rho_max);
 
-            // simple derefinement based on zone maximum rho in post-shock region
+            // Derefinement based on zone maximum rho in post-shock region
             const double rho_max_max = rho_max.Size() ? rho_max.Max() : 0.0;
             double threshold, loc_threshold = amr_deref_threshold * rho_max_max;
             MPI_Allreduce(&loc_threshold, &threshold, 1, MPI_DOUBLE, MPI_MAX,
@@ -862,7 +856,7 @@ int main(int argc, char *argv[])
                if (index >= 0) { rho_max(index) = 1e10; }
             }
 
-            // also, only derefine where the mesh is in motion, i.e. after the shock
+            // only derefine where the mesh is in motion, i.e. after the shock
             for (int i = 0; i < pmesh->GetNE(); i++)
             {
                if (v_min(i) < 0.1) { rho_max(i) = 1e10; }
@@ -879,44 +873,19 @@ int main(int argc, char *argv[])
 
          if (mesh_changed)
          {
-            // update state and operator
-            {
-               AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
-               mat_fes.Update();
-               mat_gf.Update();
-               mat_gf.ProjectCoefficient(mat_coeff);
-            }
+            constexpr bool quick = true;
 
-            hydro.UpdateMesh(S);
-            hydro.AMRUpdate(S, true); // quick
+            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
+            hydro.AMRUpdate(S, quick);
 
             pmesh->Rebalance();
 
-            // update state and operator
-            {
-               AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
-               mat_fes.Update();
-               mat_gf.Update();
-               mat_gf.ProjectCoefficient(mat_coeff);
-            }
-
-            hydro.UpdateMesh(S);
-            hydro.AMRUpdate(S, false); // thorough
+            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
+            hydro.AMRUpdate(S, !quick);
 
             GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
-            /*{
-               v_gf.ProjectCoefficient(v_coeff);
-               for (int i = 0; i < ess_vdofs.Size(); i++)
-               {
-                  v_gf(ess_vdofs[i]) = 0.0;
-               }
-               // Sync the data location of v_gf with its base, S
-               v_gf.SyncAliasMemory(S);
-            }*/
-
             ode_solver->Init(hydro);
-
-            H1FESpace.PrintPartitionStats();
+            //H1FESpace.PrintPartitionStats();
          }
       }
 
@@ -1027,13 +996,16 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
                Array<int> &true_offset,
                ParGridFunction &x_gf,
                ParGridFunction &v_gf,
-               ParGridFunction &e_gf)
+               ParGridFunction &e_gf,
+               ParGridFunction &m_gf)
 {
    ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
    ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
+   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
 
    H1FESpace->Update();
    L2FESpace->Update();
+   MEFESpace->Update();
 
    const int Vsize_h1 = H1FESpace->GetVSize();
    const int Vsize_l2 = L2FESpace->GetVSize();
@@ -1059,6 +1031,7 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    e_gf.SyncAliasMemory(S);
 
    S_tmp.Update(true_offset);
+   m_gf.Update();
 }
 
 void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
