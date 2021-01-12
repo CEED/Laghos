@@ -32,10 +32,10 @@ void compareFiles(ifstream &baselineFile, ifstream &targetFile, double errorBoun
         double diff = baselineNum - targetNum;
         double error;
         if (baselineNum == 0.0) {
-          error = abs(baselineNum - targetNum);
+            error = abs(baselineNum - targetNum);
         }
         else {
-          error = abs(baselineNum - targetNum) / baselineNum;
+            error = abs(baselineNum - targetNum) / baselineNum;
         }
 
         if (error > errorBound) {

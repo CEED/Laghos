@@ -2234,28 +2234,32 @@ void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::
     romglob2 = romloc2;
     diffglob2 = diffloc2;
     */
-    switch(normtype)
-    {
-    case l1norm:
-        cout << "L1 norm error:" << endl;
-        break;
-    case l2norm:
-        cout << "L2 norm error:" << endl;
-        break;
-    case maxnorm:
-        cout << "MAX norm error:" << endl;
-        break;
-    }
 
     double FOMnorm = sqrt(fomglob2);
     double ROMnorm = sqrt(romglob2);
     double DIFFnorm = sqrt(diffglob2);
     double relDIFFnorm = sqrt(diffglob2)/sqrt(fomglob2);
 
-    cout << rank << ": " << name << " FOM norm " << FOMnorm << endl;
-    cout << rank << ": " << name << " ROM norm " << ROMnorm << endl;
-    cout << rank << ": " << name << " DIFF norm " << DIFFnorm << endl;
-    cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
+    if (rank == 0)
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            cout << "L1 norm error:" << endl;
+            break;
+        case l2norm:
+            cout << "L2 norm error:" << endl;
+            break;
+        case maxnorm:
+            cout << "MAX norm error:" << endl;
+            break;
+        }
+
+        cout << rank << ": " << name << " FOM norm " << FOMnorm << endl;
+        cout << rank << ": " << name << " ROM norm " << ROMnorm << endl;
+        cout << rank << ": " << name << " DIFF norm " << DIFFnorm << endl;
+        cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
+    }
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
