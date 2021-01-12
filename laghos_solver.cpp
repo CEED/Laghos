@@ -315,6 +315,7 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
    width = height = S.Size();
    H1c.Update();
    pmesh = H1.GetParMesh();
+   pmesh->DeleteGeometricFactors();
    H1Vsize = H1.GetVSize();
    H1TVSize = H1.TrueVSize();
    H1GTVSize = H1.GlobalTrueVSize();
@@ -437,13 +438,13 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
    // TODO: remove code duplication
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-   /*if (dim > 1 && p_assembly)
+   if (dim > 1 && p_assembly)
    {
       Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol);
       dbg("vol: %.15e",vol);
       MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,"");
    }
-   else*/
+   else
    {
       // update 'rho0DetJ0' and 'Jac0inv' at all quadrature points
       // TODO: remove code duplication
@@ -467,7 +468,7 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
       }
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
       dbg("vol: %.15e",vol);
-      //MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,"");
+      MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,"");
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
