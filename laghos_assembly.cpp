@@ -92,7 +92,6 @@ MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
    ess_tdofs_count(0),
    ess_tdofs(0)
 {
-   dbg();
    pabf.SetAssemblyLevel(AssemblyLevel::PARTIAL);
    pabf.AddDomainIntegrator(new mfem::MassIntegrator(Q, &ir));
    pabf.Assemble();
@@ -144,11 +143,7 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    L2sz(L2.GetFE(0)->GetDof() * NE),
    L2D2Q(&L2.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    H1D2Q(&H1.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
-   X(L2sz), Y(H1sz)
-{
-   dbg("NE:%d H1:%d L2:%d",NE, H1.GetVSize(), L2.GetVSize());
-   dbg("H1sz:%d L2sz:%d", H1sz, L2sz);
-}
+   X(L2sz), Y(H1sz) { }
 
 template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
 void ForceMult2D(const int NE,
@@ -561,18 +556,11 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
 
 void ForcePAOperator::Mult(const Vector &x, Vector &y) const
 {
-   //dbg("x:%d X:%d Y:%d y:%d", x.Size(), X.Size(), Y.Size(), y.Size());
-   if (L2R)
-   {
-      //dbg("x:%d, X:%d", x.Size(), X.Size());
-      L2R->Mult(x, X);
-   }
+   if (L2R) { L2R->Mult(x, X); }
    else { X = x; }
-   //dbg("ForceMult");
    ForceMult(dim, D1D, Q1D, L1D, D1D, NE,
              L2D2Q->B, H1D2Q->Bt, H1D2Q->Gt,
              qdata.stressJinvT, X, Y);
-   //dbg("H1R->MultTranspose");
    H1R->MultTranspose(Y, y);
 }
 

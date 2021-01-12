@@ -628,7 +628,7 @@ int main(int argc, char *argv[])
       vis_e.precision(8);
       int Wx = 0, Wy = 0; // window position
       const int Ww = 350, Wh = 350; // window size
-      int offx = Ww+10; // window offsets
+      //int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -751,7 +751,7 @@ int main(int argc, char *argv[])
          {
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
-            int offx = Ww+10; // window offsets
+            //int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -887,6 +887,7 @@ int main(int argc, char *argv[])
                mat_gf.ProjectCoefficient(mat_coeff);
             }
 
+            hydro.UpdateMesh(S);
             hydro.AMRUpdate(S, true); // quick
 
             pmesh->Rebalance();
@@ -899,6 +900,7 @@ int main(int argc, char *argv[])
                mat_gf.ProjectCoefficient(mat_coeff);
             }
 
+            hydro.UpdateMesh(S);
             hydro.AMRUpdate(S, false); // thorough
 
             GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
@@ -1043,10 +1045,8 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
 
    S_tmp = S;
    S.Update(true_offset);
-
    const Operator* H1Update = H1FESpace->GetUpdateOperator();
    const Operator* L2Update = L2FESpace->GetUpdateOperator();
-
    H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
    H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
    L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
@@ -1054,6 +1054,9 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    x_gf.MakeRef(H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(L2FESpace, S, true_offset[2]);
+   x_gf.SyncAliasMemory(S);
+   v_gf.SyncAliasMemory(S);
+   e_gf.SyncAliasMemory(S);
 
    S_tmp.Update(true_offset);
 }
