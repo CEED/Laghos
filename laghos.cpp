@@ -63,6 +63,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "general/debug.hpp"
 
 using std::cout;
 using std::endl;
@@ -141,7 +142,7 @@ int main(int argc, char *argv[])
    double blast_position[] = {0.0, 0.0, 0.0};
    const double amr_blast_size = 1e-10;
    const int amr_nc_limit = 1;
-
+   dbg();
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -295,7 +296,7 @@ int main(int argc, char *argv[])
    }
    else
    {
-      // Initial refinement for AMR demo on Sedov
+      dbg("Initial refinement for AMR demo on Sedov");
       mesh->EnsureNCMesh();
       for (int lev = 0; lev < rs_levels; lev++)
       {
@@ -502,12 +503,14 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
+   dbg("Init: Vsize_h1:%d Vsize_l2:%d", Vsize_h1,Vsize_l2);
    Array<int> true_offset(4);
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset, Device::GetMemoryType());
+   dbg("Init: S:%d", S.Size());
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
@@ -589,7 +592,8 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-                                                H1FESpace, L2FESpace, ess_tdofs,
+                                                H1FESpace, L2FESpace,
+                                                ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
@@ -599,7 +603,7 @@ int main(int argc, char *argv[])
 
    if (amr)
    {
-      // set a base for h0, this will be further divided in UpdateQuadratureData
+      dbg("set a base for h0, this will be further divided in UpdateQuadratureData");
       // TODO: for AMR, the treatment of h0 needs more work
       const double elem_size = 0.5; // coarse element size (TODO calculate)
       const double h0 = elem_size / order_v;
@@ -662,6 +666,61 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
+
+   ////////////////////////////////////////////////////////////////////////
+   bool fake = true;
+   if (fake && amr && NE==4)
+   {
+      fake = false;
+      dbg("\033[7mFake AMR prefix");
+      // fake AMR
+      MFEM_VERIFY(NE == 4, "NE");
+      Array<int> refs;
+      refs.Append(0); // Append all 4 elements
+      refs.Append(1); // Append all 4 elements
+      refs.Append(2); // Append all 4 elements
+      refs.Append(3); // Append all 4 elements
+
+      const int nref = pmesh->ReduceInt(refs.Size());
+      MFEM_VERIFY(nref, "nref");
+
+      dbg("Refined %d elements", nref);
+      pmesh->GeneralRefinement(refs, 1, amr_nc_limit);
+
+      AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+      dbg("mat_fes");
+      mat_fes.Update();
+      dbg("mat_gf update");
+      mat_gf.Update();
+      dbg("mat_gf ProjectCoefficient");
+      mat_gf.ProjectCoefficient(mat_coeff);
+
+      hydro.AMRUpdate(S, true); // quick
+
+      dbg("Rebalance");
+      pmesh->Rebalance();
+
+      dbg("Re: AMRUpdate/mat_fes/mat_gf");
+      AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+      mat_fes.Update();
+      mat_gf.Update();
+      mat_gf.ProjectCoefficient(mat_coeff);
+      hydro.AMRUpdate(S, false); // thorough
+
+      dbg("GetZeroBCDofs");
+      GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
+
+      dbg("PrintPartitionStats");
+      H1FESpace.PrintPartitionStats();
+
+      dbg("ode_solver->Init");
+      ode_solver->Init(hydro);
+      hydro.ResetTimeStepEstimate();
+      dt = hydro.GetTimeStepEstimate(S);
+      S_old = S;
+   } //////////////////////////////////////////////////////////////////////
+
+
 
    for (int ti = 1; !last_step; ti++)
    {
@@ -872,13 +931,24 @@ int main(int argc, char *argv[])
          if (mesh_changed)
          {
             // update state and operator
-            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+            {
+               AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+               mat_fes.Update();
+               mat_gf.Update();
+               mat_gf.ProjectCoefficient(mat_coeff);
+            }
+
             hydro.AMRUpdate(S, true);
 
             pmesh->Rebalance();
 
             // update state and operator
-            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+            {
+               AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
+               mat_fes.Update();
+               mat_gf.Update();
+               mat_gf.ProjectCoefficient(mat_coeff);
+            }
             hydro.AMRUpdate(S, false);
 
             GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
@@ -976,6 +1046,8 @@ void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
                    Array<int> &ess_tdofs,
                    Array<int> &ess_vdofs)
 {
+   ess_tdofs.SetSize(0);
+   ess_vdofs.SetSize(0);
    Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
    for (int d = 0; d < pmesh->Dimension(); d++)
    {
@@ -998,24 +1070,41 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
 {
    ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
    ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
+   dbg("\033[33mPre-update: Vsize_h1:%d Vsize_l2:%d",
+       H1FESpace->GetVSize(),
+       L2FESpace->GetVSize());
+
    H1FESpace->Update();
    L2FESpace->Update();
+
    const int Vsize_h1 = H1FESpace->GetVSize();
    const int Vsize_l2 = L2FESpace->GetVSize();
+   dbg("\033[33mVsize_h1:%d Vsize_l2:%d", Vsize_h1, Vsize_l2);
+
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
+   dbg("\033[33mS_tmp:%d, S:%d", S_tmp.Size(), S.Size());
+
    S_tmp = S;
+   dbg("\033[33mS.Update");
    S.Update(true_offset);
+
+   dbg("\033[33mS_tmp:%d, S:%d", S_tmp.Size(), S.Size());
    const Operator* H1Update = H1FESpace->GetUpdateOperator();
    const Operator* L2Update = L2FESpace->GetUpdateOperator();
+
+   dbg("\033[33mH1Update->Mult");
    H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
    H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
    L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
+
    x_gf.MakeRef(H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(L2FESpace, S, true_offset[2]);
+
+   dbg("\033[33mS_tmp.Update");
    S_tmp.Update(true_offset);
 }
 
