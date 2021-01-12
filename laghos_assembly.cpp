@@ -561,18 +561,18 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
 
 void ForcePAOperator::Mult(const Vector &x, Vector &y) const
 {
-   dbg("x:%d X:%d Y:%d y:%d", x.Size(), X.Size(), Y.Size(), y.Size());
+   //dbg("x:%d X:%d Y:%d y:%d", x.Size(), X.Size(), Y.Size(), y.Size());
    if (L2R)
    {
-      dbg("x:%d, X:%d", x.Size(), X.Size());
+      //dbg("x:%d, X:%d", x.Size(), X.Size());
       L2R->Mult(x, X);
    }
    else { X = x; }
-   dbg("ForceMult");
+   //dbg("ForceMult");
    ForceMult(dim, D1D, Q1D, L1D, D1D, NE,
              L2D2Q->B, H1D2Q->Bt, H1D2Q->Gt,
              qdata.stressJinvT, X, Y);
-   dbg("H1R->MultTranspose");
+   //dbg("H1R->MultTranspose");
    H1R->MultTranspose(Y, y);
 }
 
@@ -973,7 +973,6 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
 
 void ForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
 {
-   dbg("x:%d, Y:%d, X:%d, y:%d", x.Size(), Y.Size(), X.Size(), y.Size());
    H1R->Mult(x, Y);
    ForceMultTranspose(dim, D1D, Q1D, L1D, NE,
                       L2D2Q->Bt, H1D2Q->B, H1D2Q->G,

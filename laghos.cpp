@@ -232,7 +232,6 @@ int main(int argc, char *argv[])
       return 0;
    }
 
-
    // Configure the device from the command line options
    Device backend;
    backend.Configure(device, dev);
@@ -601,14 +600,14 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
-   if (amr)
+   /*if (amr)
    {
       dbg("set a base for h0, this will be further divided in UpdateQuadratureData");
       // TODO: for AMR, the treatment of h0 needs more work
       const double elem_size = 0.5; // coarse element size (TODO calculate)
       const double h0 = elem_size / order_v;
       hydro.SetH0(h0);
-   }
+   }*/
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -634,13 +633,14 @@ int main(int argc, char *argv[])
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                        "Density", Wx, Wy, Ww, Wh);
-      }
+      }/*
       Wx += offx;
       hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
                                     "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
+*/
    }
 
    // Save data for VisIt visualization.
@@ -667,61 +667,6 @@ int main(int argc, char *argv[])
    long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
 
-   ////////////////////////////////////////////////////////////////////////
-   bool fake = true;
-   if (fake && amr && NE==4)
-   {
-      fake = false;
-      dbg("\033[7mFake AMR prefix");
-      // fake AMR
-      MFEM_VERIFY(NE == 4, "NE");
-      Array<int> refs;
-      refs.Append(0); // Append all 4 elements
-      refs.Append(1); // Append all 4 elements
-      refs.Append(2); // Append all 4 elements
-      refs.Append(3); // Append all 4 elements
-
-      const int nref = pmesh->ReduceInt(refs.Size());
-      MFEM_VERIFY(nref, "nref");
-
-      dbg("Refined %d elements", nref);
-      pmesh->GeneralRefinement(refs, 1, amr_nc_limit);
-
-      AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
-      dbg("mat_fes");
-      mat_fes.Update();
-      dbg("mat_gf update");
-      mat_gf.Update();
-      dbg("mat_gf ProjectCoefficient");
-      mat_gf.ProjectCoefficient(mat_coeff);
-
-      hydro.AMRUpdate(S, true); // quick
-
-      dbg("Rebalance");
-      pmesh->Rebalance();
-
-      dbg("Re: AMRUpdate/mat_fes/mat_gf");
-      AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf);
-      mat_fes.Update();
-      mat_gf.Update();
-      mat_gf.ProjectCoefficient(mat_coeff);
-      hydro.AMRUpdate(S, false); // thorough
-
-      dbg("GetZeroBCDofs");
-      GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
-
-      dbg("PrintPartitionStats");
-      H1FESpace.PrintPartitionStats();
-
-      dbg("ode_solver->Init");
-      ode_solver->Init(hydro);
-      hydro.ResetTimeStepEstimate();
-      dt = hydro.GetTimeStepEstimate(S);
-      S_old = S;
-   } //////////////////////////////////////////////////////////////////////
-
-
-
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -741,6 +686,7 @@ int main(int argc, char *argv[])
 
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);
+      dbg("dt_est:%.8e, dt:%.8e", dt_est,dt);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
@@ -810,7 +756,7 @@ int main(int argc, char *argv[])
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                              "Density", Wx, Wy, Ww, Wh);
-            }
+            }/*
             Wx += offx;
             hydrodynamics::VisualizeField(vis_v, vishost, visport,
                                           v_gf, "Velocity", Wx, Wy, Ww, Wh);
@@ -818,17 +764,17 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
-            Wx += offx;
+            Wx += offx;*/
          }
 
-         if (visit)
+         /*if (visit)
          {
             visit_dc.SetCycle(ti);
             visit_dc.SetTime(t);
             visit_dc.Save();
-         }
+         }*/
 
-         if (gfprint)
+         /*if (gfprint)
          {
             std::ostringstream mesh_name, rho_name, v_name, e_name;
             mesh_name << basename << "_" << ti << "_mesh";
@@ -855,14 +801,16 @@ int main(int argc, char *argv[])
             e_ofs.precision(8);
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
-         }
-      }
+         }*/
+      } // last_step
 
       if (amr)
       {
          Vector &error_est = hydro.GetZoneMaxVisc();
+
          Vector v_max, v_min;
          GetPerElementMinMax(v_gf, v_min, v_max);
+
          bool mesh_changed = false;
 
          // make a list of elements to refine
@@ -871,10 +819,11 @@ int main(int argc, char *argv[])
          {
             if (error_est(i) > amr_ref_threshold
                 && pmesh->pncmesh->GetElementDepth(i) < amr_max_level
-                && (v_min(i) < 1e-3 || ti < 50) // only refine the still area
+                && (v_min(i) < 1e-3 /*|| ti < 50*/) // only refine the still area
                )
             {
                refs.Append(i);
+               dbg("Refine #%d",i);
             }
          }
 
@@ -938,7 +887,7 @@ int main(int argc, char *argv[])
                mat_gf.ProjectCoefficient(mat_coeff);
             }
 
-            hydro.AMRUpdate(S, true);
+            hydro.AMRUpdate(S, true); // quick
 
             pmesh->Rebalance();
 
@@ -949,9 +898,19 @@ int main(int argc, char *argv[])
                mat_gf.Update();
                mat_gf.ProjectCoefficient(mat_coeff);
             }
-            hydro.AMRUpdate(S, false);
+
+            hydro.AMRUpdate(S, false); // thorough
 
             GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
+            /*{
+               v_gf.ProjectCoefficient(v_coeff);
+               for (int i = 0; i < ess_vdofs.Size(); i++)
+               {
+                  v_gf(ess_vdofs[i]) = 0.0;
+               }
+               // Sync the data location of v_gf with its base, S
+               v_gf.SyncAliasMemory(S);
+            }*/
 
             ode_solver->Init(hydro);
 
@@ -1070,32 +1029,24 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
 {
    ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
    ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
-   dbg("\033[33mPre-update: Vsize_h1:%d Vsize_l2:%d",
-       H1FESpace->GetVSize(),
-       L2FESpace->GetVSize());
 
    H1FESpace->Update();
    L2FESpace->Update();
 
    const int Vsize_h1 = H1FESpace->GetVSize();
    const int Vsize_l2 = L2FESpace->GetVSize();
-   dbg("\033[33mVsize_h1:%d Vsize_l2:%d", Vsize_h1, Vsize_l2);
 
    true_offset[0] = 0;
    true_offset[1] = true_offset[0] + Vsize_h1;
    true_offset[2] = true_offset[1] + Vsize_h1;
    true_offset[3] = true_offset[2] + Vsize_l2;
-   dbg("\033[33mS_tmp:%d, S:%d", S_tmp.Size(), S.Size());
 
    S_tmp = S;
-   dbg("\033[33mS.Update");
    S.Update(true_offset);
 
-   dbg("\033[33mS_tmp:%d, S:%d", S_tmp.Size(), S.Size());
    const Operator* H1Update = H1FESpace->GetUpdateOperator();
    const Operator* L2Update = L2FESpace->GetUpdateOperator();
 
-   dbg("\033[33mH1Update->Mult");
    H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
    H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
    L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
@@ -1104,7 +1055,6 @@ void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
    v_gf.MakeRef(H1FESpace, S, true_offset[1]);
    e_gf.MakeRef(L2FESpace, S, true_offset[2]);
 
-   dbg("\033[33mS_tmp.Update");
    S_tmp.Update(true_offset);
 }
 

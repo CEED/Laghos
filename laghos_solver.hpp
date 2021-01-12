@@ -122,11 +122,12 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   const ParGridFunction &gamma_gf;
+   ParGridFunction &gamma_gf;
 
-   ParGridFunction &rho0;
+   ParGridFunction rho0_gf;
    ParGridFunction x0_gf; // copy of initial mesh position
-   GridFunctionCoefficient rho0_coeff; // TODO: remove when Mv update improved
+   Coefficient &rho0_coeff;
+   GridFunctionCoefficient rho0_gf_coeff; // TODO: remove when Mv update improved
 
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
