@@ -442,7 +442,7 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
    {
       Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol);
       dbg("vol: %.15e",vol);
-      MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,"");
+      // MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,""); // only in serial
    }
    else
    {
@@ -467,8 +467,6 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
          }
       }
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
-      dbg("vol: %.15e",vol);
-      MFEM_VERIFY(fabs(vol - 1.0)<1.e-14,"");
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
