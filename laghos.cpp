@@ -64,6 +64,9 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 
+#define MFEM_DEBUG_COLOR 199
+#include "general/debug.hpp"
+
 using std::cout;
 using std::endl;
 using namespace mfem;
@@ -138,8 +141,11 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
    bool amr = false;
+   int amr_estimator = 0;
    double amr_ref_threshold = 2e-4;
+   double amr_jac_threshold = 0.92;
    double amr_deref_threshold = 0.75;
+   int amr_max_level = rs_levels + rp_levels;
    const double amr_blast_size = 1e-10;
    const int amr_nc_limit = 1;
 
@@ -216,8 +222,14 @@ int main(int argc, char *argv[])
                   "Experimental adaptive mesh refinement (problem 1 only).");
    args.AddOption(&amr_ref_threshold, "-ar", "--amr-ref-threshold",
                   "AMR refinement threshold.");
+   args.AddOption(&amr_jac_threshold, "-aj", "--amr-jac-threshold",
+                  "AMR Jacobian refinement threshold.");
    args.AddOption(&amr_deref_threshold, "-ad", "--amr-deref-threshold",
                   "AMR derefinement threshold (0 = no derefinement).");
+   args.AddOption(&amr_estimator, "-ae", "--amr-estimator",
+                  "AMR estimator: 0:vgrad/visc 1:Jacobians");
+   args.AddOption(&amr_max_level, "-am", "--amr-max-level",
+                  "AMR max refined level (default to 'rs_levels + rp_levels')");
    args.Parse();
    if (!args.Good())
    {
@@ -225,13 +237,15 @@ int main(int argc, char *argv[])
       return 1;
    }
 
+   amr_max_level = std::max(amr_max_level, rs_levels + rp_levels);
+
    if (mpi.Root()) { args.PrintOptions(cout); }
 
-   if (amr && problem != 1)
+   /*if (amr && problem != 1)
    {
       if (mpi.Root()) { cout << "AMR only supported for problem 1." << endl; }
       return 0;
-   }
+   }*/
 
    // Configure the device from the command line options
    Device backend;
@@ -254,7 +268,7 @@ int main(int argc, char *argv[])
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
-      if (dim == 2)
+      else if (dim == 2)
       {
          mesh = new Mesh(2, 2, Element::QUADRILATERAL, true);
          const int NBE = mesh->GetNBE();
@@ -265,7 +279,7 @@ int main(int argc, char *argv[])
             bel->SetAttribute(attr);
          }
       }
-      if (dim == 3)
+      else if (dim == 3)
       {
          mesh = new Mesh(2, 2, 2, Element::HEXAHEDRON, true);
          const int NBE = mesh->GetNBE();
@@ -276,6 +290,7 @@ int main(int argc, char *argv[])
             bel->SetAttribute(attr);
          }
       }
+      else { MFEM_ABORT("Dimension should be set"); }
    }
    dim = mesh->Dimension();
 
@@ -299,9 +314,8 @@ int main(int argc, char *argv[])
       mesh->EnsureNCMesh();
       for (int lev = 0; lev < rs_levels; lev++)
       {
-         mesh->RefineAtVertex(Vertex(blast_position[0], blast_position[1],
-                                     blast_position[2]),
-                              amr_blast_size);
+         Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
+         mesh->RefineAtVertex(blast, amr_blast_size);
       }
    }
 
@@ -404,7 +418,7 @@ int main(int argc, char *argv[])
    }
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
+   const bool cartesian_partitioning = (cxyz.Size() > 0)?true:false;
    if (product == num_tasks || cartesian_partitioning)
    {
       if (cartesian_partitioning)
@@ -449,8 +463,6 @@ int main(int argc, char *argv[])
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
    if (myid == 0)
    { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
-
-   const int amr_max_level = rs_levels + rp_levels;
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -523,14 +535,10 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
-   // Initialize the velocity.
+   // Initialize the velocity and sync the data of v_gf with its base, S
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   for (int i = 0; i < ess_vdofs.Size(); i++)
-   {
-      v_gf(ess_vdofs[i]) = 0.0;
-   }
-   // Sync the data location of v_gf with its base, S
+   for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
    v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
@@ -598,15 +606,6 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
-   /*if (amr)
-   {
-      // Set a base for h0, this will be further divided in UpdateQuadratureData
-      // TODO: for AMR, the treatment of h0 needs more work
-      const double elem_size = 0.5; // coarse element size (TODO calculate)
-      const double h0 = elem_size / order_v;
-      hydro.SetH0(h0);
-   }*/
-
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -663,27 +662,27 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
-//   const double internal_energy = hydro.InternalEnergy(e_gf);
-//   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-//   if (mpi.Root())
-//   {
-//      cout << std::fixed;
-//      cout << "step " << std::setw(5) << 0
-//            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-//            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-//            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-//            << internal_energy
-//            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy
-//            << ",\t|E| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy+internal_energy;
-//      cout << std::fixed;
-//      if (mem_usage)
-//      {
-//         cout << ", mem: " << mmax << "/" << msum << " MB";
-//      }
-//      cout << endl;
-//   }
+   //   const double internal_energy = hydro.InternalEnergy(e_gf);
+   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   if (mpi.Root())
+   //   {
+   //      cout << std::fixed;
+   //      cout << "step " << std::setw(5) << 0
+   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+   //            << internal_energy
+   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy
+   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy+internal_energy;
+   //      cout << std::fixed;
+   //      if (mem_usage)
+   //      {
+   //         cout << ", mem: " << mmax << "/" << msum << " MB";
+   //      }
+   //      cout << endl;
+   //   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -753,12 +752,6 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
-                 //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
-                 //  << internal_energy
-                 //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy
-                 //   << ",\t|E| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             if (mem_usage)
             {
@@ -789,7 +782,6 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
-            Wx += offx;
          }
 
          if (visit)
@@ -832,35 +824,82 @@ int main(int argc, char *argv[])
       if (amr)
       {
          Vector v_max, v_min;
-         GetPerElementMinMax(v_gf, v_min, v_max);
-         Vector &error_est = hydro.GetZoneMaxVisc();
-
+         Array<Refinement> refs;
          bool mesh_changed = false;
+         const int NE = pmesh->GetNE();
+         constexpr double NL_DMAX = std::numeric_limits<double>::max();
 
-         // make a list of elements to refine
-         Array<int> refs;
-         for (int i = 0; i < pmesh->GetNE(); i++)
+         GetPerElementMinMax(v_gf, v_min, v_max);
+
+         switch (amr_estimator)
          {
-            if (error_est(i) > amr_ref_threshold
-                && pmesh->pncmesh->GetElementDepth(i) < amr_max_level
-                && (v_min(i) < 1e-3 /*|| ti < 50*/) // only refine the still area
-               )
+            case 0:
             {
-               refs.Append(i);
+               Vector &error_est = hydro.GetZoneMaxVisc();
+               for (int e = 0; e < NE; e++)
+               {
+                  if (error_est(e) > amr_ref_threshold &&
+                      pmesh->pncmesh->GetElementDepth(e) < amr_max_level &&
+                      (v_min(e) < 1e-3)) // only refine the still area
+                  {
+                     refs.Append(Refinement(e));
+                  }
+               }
+               break;
             }
+            case 1:
+            {
+               const double art = amr_ref_threshold;
+               const int order = H1FESpace.GetOrder(0) + 1;
+               DenseMatrix Jadjt, Jadj(dim, pmesh->SpaceDimension());
+               MFEM_VERIFY(art >= 0.0, "AMR threshold should be positive");
+               for (int e = 0; e < NE; e++)
+               {
+                  double minW = +NL_DMAX;
+                  double maxW = -NL_DMAX;
+                  const int depth = pmesh->pncmesh->GetElementDepth(e);
+                  ElementTransformation *eTr = pmesh->GetElementTransformation(e);
+                  const Geometry::Type &type = pmesh->GetElement(e)->GetGeometryType();
+                  const IntegrationRule *ir = &IntRules.Get(type, order);
+                  const int NQ = ir->GetNPoints();
+                  for (int q = 0; q < NQ; q++)
+                  {
+                     eTr->SetIntPoint(&ir->IntPoint(q));
+                     const DenseMatrix &J = eTr->Jacobian();
+                     CalcAdjugate(J, Jadj);
+                     Jadjt = Jadj;
+                     Jadjt.Transpose();
+                     const double w = Jadjt.Weight();
+                     minW = std::fmin(minW, w);
+                     maxW = std::fmax(maxW, w);
+                  }
+                  if (std::fabs(maxW) != 0.0)
+                  {
+                     const double rho = minW / maxW;
+                     MFEM_VERIFY(rho <= 1.0, "");
+                     if (rho < amr_jac_threshold && depth < amr_max_level)
+                     {
+                        refs.Append(Refinement(e));
+                     }
+                  }
+               }
+               break;
+            }
+            default: MFEM_ABORT("Unknown AMR estimator (should be 0 or 1)!");
          }
 
          const int nref = pmesh->ReduceInt(refs.Size());
          if (nref)
          {
-            pmesh->GeneralRefinement(refs, 1, amr_nc_limit);
+            constexpr int non_conforming = 1;
+            pmesh->GeneralRefinement(refs, non_conforming, amr_nc_limit);
             mesh_changed = true;
             if (myid == 0)
             {
                std::cout << "Refined " << nref << " elements." << std::endl;
             }
          }
-         else if (amr_deref_threshold)
+         else if (amr_estimator == 0 && amr_deref_threshold >= 0.0)
          {
             hydro.ComputeDensity(rho_gf);
 
@@ -882,13 +921,13 @@ int main(int argc, char *argv[])
             for (int i = 0; i < elements.Size(); i++)
             {
                int index = elements[i];
-               if (index >= 0) { rho_max(index) = 1e10; }
+               if (index >= 0) { rho_max(index) = NL_DMAX; }
             }
 
             // only derefine where the mesh is in motion, i.e. after the shock
             for (int i = 0; i < pmesh->GetNE(); i++)
             {
-               if (v_min(i) < 0.1) { rho_max(i) = 1e10; }
+               if (v_min(i) < 0.1) { rho_max(i) = NL_DMAX; }
             }
 
             const int op = 2; // maximum value of fine elements
