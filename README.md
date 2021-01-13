@@ -93,6 +93,9 @@ Other computational motives in Laghos include the following:
   partially assembled) and is applied just twice per "assembly". Both the
   preparation and the application costs are important for this operator.
 - Domain-decomposed MPI parallelism.
+- Automatic mesh refinement (AMR) with parallel partitioning and load balancing
+  based on MFEM's non-conforming mesh algorithm that partitions a space-filling 
+  curve. Only the Sedov problem (#1) is supported.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
   for visualization and data analysis with [VisIt](http://visit.llnl.gov).
 
@@ -249,6 +252,25 @@ mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
 The latter produces the following specific internal energy plot (notice the `-vis` option)
 
 ![Triple-point image](data/tp.png)
+
+#### AMR Sedov problem
+The AMR version only runs with problem 1 (Sedov blast). New parameters are:
+
+- `-amr`: turn on AMR mode
+- `-rt` or `--ref-threshold`: tweak the refinement threshold
+- `-dt` or `--deref-threshold`: tweak the derefinement threshold
+
+One of the sample runs is:
+```sh
+mpirun -np 8 laghos -p 1 -m ../data/cube01_hex.mesh -rs 4 -tf 0.6 -rt 1e-3 -amr
+```
+
+This produces the following plots:
+
+<table border="0">
+<td><img src="data/sedov-amr-900.png">
+<td><img src="data/sedov-amr-2463.png">
+</table>
 
 ## Verification of Results
 
