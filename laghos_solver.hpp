@@ -18,12 +18,193 @@
 #define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-#include "laghos_assembly.hpp"
+#include "laghos_assembly.hpp" // QuadratureData
 
 #ifdef MFEM_USE_MPI
 
 namespace mfem
 {
+
+// Choice for the problem setup, statically used in functions below.
+static int problem;
+
+static double gamma_func(const Vector &x)
+{
+   switch (problem)
+   {
+      case 0: return 5.0 / 3.0;
+      case 1: return 1.4;
+      case 2: return 1.4;
+      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 4: return 5.0 / 3.0;
+      case 5: return 1.4;
+      case 6: return 1.4;
+      case 7: return 5.0 / 3.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   }
+}
+
+static double rho0(const Vector &x)
+{
+   switch (problem)
+   {
+      case 0: return 1.0;
+      case 1: return 1.0;
+      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
+      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+      case 4: return 1.0;
+      case 5:
+      {
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; }
+         return 1.0;
+      }
+      case 6:
+      {
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
+         return 1.0;
+      }
+      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   }
+}
+
+static double radius(double x, double y) { return sqrt(x*x + y*y); }
+
+static double e0(const Vector &x)
+{
+   switch (problem)
+   {
+      case 0:
+      {
+         const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+         double val;
+         if (x.Size() == 2)
+         {
+            val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+         }
+         else
+         {
+            val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                           (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+         }
+         return val/denom;
+      }
+      case 1: return 0.0; // This case in initialized in main().
+      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
+                        : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
+      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
+                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+      case 4:
+      {
+         const double r = radius(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
+         const double gamma = 5.0 / 3.0;
+         if (r < 0.2)
+         {
+            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
+         }
+         else if (r < 0.4)
+         {
+            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
+            const double t2 = 20.0 * r - 4.0 * log(r);
+            return (t1 - t2) / (gamma - 1.0);
+         }
+         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+      }
+      case 5:
+      {
+         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         MFEM_ABORT("Error in problem 5!");
+         return 0.0;
+      }
+      case 6:
+      {
+         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
+         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         MFEM_ABORT("Error in problem 5!");
+         return 0.0;
+      }
+      case 7:
+      {
+         const double rho = rho0(x), gamma = gamma_func(x);
+         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+      }
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+   }
+}
+
+static void v0(const Vector &x, Vector &v)
+{
+   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+   switch (problem)
+   {
+      case 0:
+         v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
+         v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+         if (x.Size() == 3)
+         {
+            v(0) *= cos(M_PI*x(2));
+            v(1) *= cos(M_PI*x(2));
+            v(2) = 0.0;
+         }
+         break;
+      case 1: v = 0.0; break;
+      case 2: v = 0.0; break;
+      case 3: v = 0.0; break;
+      case 4:
+      {
+         v = 0.0;
+         const double r = radius(x(0), x(1));
+         if (r < 0.2)
+         {
+            v(0) =  5.0 * x(1);
+            v(1) = -5.0 * x(0);
+         }
+         else if (r < 0.4)
+         {
+            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
+            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+         }
+         else { }
+         break;
+      }
+      case 5:
+      {
+         v = 0.0;
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
+         MFEM_ABORT("Error in problem 5!");
+         return;
+      }
+      case 6:
+      {
+         v = 0.0;
+         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
+         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
+         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
+         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
+         MFEM_ABORT("Error in problem 6!");
+         return;
+      }
+      case 7:
+      {
+         v = 0.0;
+         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         break;
+      }
+      default: MFEM_ABORT("Bad number given for problem id!");
+   }
+}
 
 namespace hydrodynamics
 {
@@ -55,44 +236,7 @@ struct TimingData
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
 };
 
-class QUpdate
-{
-private:
-   const int dim, vdim, NQ, NE, Q1D;
-   const bool use_viscosity, use_vorticity;
-   const double cfl;
-   TimingData *timer;
-   const IntegrationRule &ir;
-   ParFiniteElementSpace &H1, &L2;
-   const Operator *H1R;
-   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
-   const QuadratureInterpolator *q1,*q2;
-   const ParGridFunction &gamma_gf;
-public:
-   QUpdate(const int d, const int ne, const int q1d,
-           const bool visc, const bool vort,
-           const double cfl, TimingData *t,
-           const ParGridFunction &gamma_gf,
-           const IntegrationRule &ir,
-           ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d), vdim(h1.GetVDim()),
-      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
-      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
-      timer(t), ir(ir), H1(h1), L2(l2),
-      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-      q_dt_est(NE*NQ),
-      q_e(NE*NQ),
-      e_vec(NQ*NE*vdim),
-      q_dx(NQ*NE*vdim*vdim),
-      q_dv(NQ*NE*vdim*vdim),
-      q1(H1.GetQuadratureInterpolator(ir)),
-      q2(L2.GetQuadratureInterpolator(ir)),
-      gamma_gf(gamma_gf) { }
-
-   void UpdateQuadratureData(const Vector &S,
-                             QuadratureData &qdata,
-                             Vector&,Vector&);
-};
+class QUpdate;
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -225,6 +369,43 @@ public:
    void AMRUpdate(const Vector&, const bool quick);
 };
 
+class QUpdate
+{
+private:
+   const int dim, vdim, NQ, NE, Q1D;
+   const bool use_viscosity, use_vorticity;
+   const double cfl;
+   TimingData *timer;
+   const IntegrationRule &ir;
+   ParFiniteElementSpace &H1, &L2;
+   const Operator *H1R;
+   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
+   const QuadratureInterpolator *q1,*q2;
+   const ParGridFunction &gamma_gf;
+public:
+   QUpdate(const int d, const int ne, const int q1d,
+           const bool visc, const bool vort,
+           const double cfl, TimingData *t,
+           const ParGridFunction &gamma_gf,
+           const IntegrationRule &ir,
+           ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
+      dim(d), vdim(h1.GetVDim()),
+      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
+      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
+      timer(t), ir(ir), H1(h1), L2(l2),
+      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
+      q_dt_est(NE*NQ),
+      q_e(NE*NQ),
+      e_vec(NQ*NE*vdim),
+      q_dx(NQ*NE*vdim*vdim),
+      q_dv(NQ*NE*vdim*vdim),
+      q1(H1.GetQuadratureInterpolator(ir)),
+      q2(L2.GetQuadratureInterpolator(ir)),
+      gamma_gf(gamma_gf) { }
+
+   void UpdateQuadratureData(const Vector&, QuadratureData&, Vector&, Vector&);
+};
+
 // TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
@@ -252,6 +433,140 @@ public:
 };
 
 } // namespace hydrodynamics
+
+namespace amr
+{
+
+static void Update(BlockVector &S, BlockVector &S_tmp,
+                   Array<int> &true_offset,
+                   ParGridFunction &x_gf,
+                   ParGridFunction &v_gf,
+                   ParGridFunction &e_gf,
+                   ParGridFunction &m_gf)
+{
+   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
+   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
+   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
+
+   H1FESpace->Update();
+   L2FESpace->Update();
+   MEFESpace->Update();
+
+   const int Vsize_h1 = H1FESpace->GetVSize();
+   const int Vsize_l2 = L2FESpace->GetVSize();
+
+   true_offset[0] = 0;
+   true_offset[1] = true_offset[0] + Vsize_h1;
+   true_offset[2] = true_offset[1] + Vsize_h1;
+   true_offset[3] = true_offset[2] + Vsize_l2;
+
+   S_tmp = S;
+   S.Update(true_offset);
+   const Operator* H1Update = H1FESpace->GetUpdateOperator();
+   const Operator* L2Update = L2FESpace->GetUpdateOperator();
+   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
+   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
+   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
+
+   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
+   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
+   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
+   x_gf.SyncAliasMemory(S);
+   v_gf.SyncAliasMemory(S);
+   e_gf.SyncAliasMemory(S);
+
+   S_tmp.Update(true_offset);
+   m_gf.Update();
+}
+
+} // amr namesapce
+
+static void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
+                          const int bdr_attr_max,
+                          Array<int> &ess_tdofs,
+                          Array<int> &ess_vdofs)
+{
+   ess_tdofs.SetSize(0);
+   ess_vdofs.SetSize(0);
+   Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
+   for (int d = 0; d < pmesh->Dimension(); d++)
+   {
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+      // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+      ess_bdr = 0; ess_bdr[d] = 1;
+      H1.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+      ess_tdofs.Append(dofs_list);
+      H1.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+      ess_vdofs.Append(dofs_list);
+   }
+}
+
+static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                                   const double size, Array<int> &elements)
+{
+   Array<int> v;
+
+   for (int i = 0; i < mesh->GetNE(); i++)
+   {
+      mesh->GetElementVertices(i, v);
+      for (int j = 0; j < v.Size(); j++)
+      {
+         double dist = 0.0;
+         for (int l = 0; l < mesh->SpaceDimension(); l++)
+         {
+            double d = vert(l) - mesh->GetVertex(v[j])[l];
+            dist += d*d;
+         }
+         if (dist <= size*size) { elements.Append(i); break; }
+      }
+   }
+}
+
+static void Pow(Vector &vec, double p)
+{
+   for (int i = 0; i < vec.Size(); i++)
+   {
+      vec(i) = std::pow(vec(i), p);
+   }
+}
+
+static void GetPerElementMinMax(const GridFunction &gf,
+                                Vector &elem_min, Vector &elem_max,
+                                int int_order = -1)
+{
+   const FiniteElementSpace *space = gf.FESpace();
+   int ne = space->GetNE();
+
+   if (int_order < 0) { int_order = space->GetOrder(0) + 1; }
+
+   elem_min.SetSize(ne);
+   elem_max.SetSize(ne);
+
+   Vector vals, tmp;
+   for (int i = 0; i < ne; i++)
+   {
+      int geom = space->GetFE(i)->GetGeomType();
+      const IntegrationRule &ir = IntRules.Get(geom, int_order);
+
+      gf.GetValues(i, ir, vals);
+
+      if (space->GetVDim() > 1)
+      {
+         Pow(vals, 2.0);
+         for (int vd = 1; vd < space->GetVDim(); vd++)
+         {
+            gf.GetValues(i, ir, tmp, vd+1);
+            Pow(tmp, 2.0);
+            vals += tmp;
+         }
+         Pow(vals, 0.5);
+      }
+
+      elem_min(i) = vals.Min();
+      elem_max(i) = vals.Max();
+   }
+}
 
 class HydroODESolver : public ODESolver
 {

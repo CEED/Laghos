@@ -60,40 +60,26 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include <fstream>
+#include <iostream>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 
-using std::cout;
-using std::endl;
 using namespace mfem;
 
-// Choice for the problem setup.
-static int problem;
-
-// Forward declarations.
-double e0(const Vector &);
-double rho0(const Vector &);
-double gamma_func(const Vector &);
-void v0(const Vector &, Vector &);
-
 static long GetMaxRssMB();
-static void display_banner(std::ostream&);
-static void Checks(const int dim, const int ti, const double norm, int &checks);
-
-static void AMRUpdate(BlockVector&, BlockVector&, Array<int>&,
-                      ParGridFunction&, ParGridFunction&,
-                      ParGridFunction&, ParGridFunction&);
-
-static void GetZeroBCDofs(ParMesh*, ParFiniteElementSpace&, const int,
-                          Array<int>&, Array<int>&);
-
-static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
-                                   const double size, Array<int> &elements);
-
-static void GetPerElementMinMax(const GridFunction &gf,
-                                Vector &elem_min, Vector &elem_max,
-                                int int_order = -1);
+static void Checks(const int, const int, const double, int&);
+static void display_banner(std::ostream &os)
+{
+   os << std::endl
+      << "       __                __                 " << std::endl
+      << "      / /   ____  ____  / /_  ____  _____   " << std::endl
+      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << std::endl
+      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << std::endl
+      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << std::endl
+      << "               /____/                       " << std::endl
+      << std::endl;
+}
 
 int main(int argc, char *argv[])
 {
@@ -102,7 +88,7 @@ int main(int argc, char *argv[])
    const int myid = mpi.WorldRank();
 
    // Print the banner.
-   if (mpi.Root()) { display_banner(cout); }
+   if (mpi.Root()) { display_banner(std::cout); }
 
    // Parse command-line options.
    problem = 1;
@@ -230,19 +216,20 @@ int main(int argc, char *argv[])
    args.Parse();
    if (!args.Good())
    {
-      if (mpi.Root()) { args.PrintUsage(cout); }
+      if (mpi.Root()) { args.PrintUsage(std::cout); }
       return 1;
    }
 
    amr_max_level = std::max(amr_max_level, rs_levels + rp_levels);
 
-   if (mpi.Root()) { args.PrintOptions(cout); }
+   if (mpi.Root()) { args.PrintOptions(std::cout); }
 
-   /*if (amr && problem != 1)
+   if (amr && problem != 1)
    {
-      if (mpi.Root()) { cout << "AMR only supported for problem 1." << endl; }
+      if (mpi.Root())
+      { std::cout << "AMR only supported for problem 1." << std::endl; }
       return 0;
-   }*/
+   }
 
    // Configure the device from the command line options
    Device backend;
@@ -287,7 +274,7 @@ int main(int argc, char *argv[])
             bel->SetAttribute(attr);
          }
       }
-      else { MFEM_ABORT("Dimension should be set"); }
+      else { MFEM_ABORT("Dimension should be set"); mesh = new Mesh(); }
    }
    dim = mesh->Dimension();
 
@@ -297,7 +284,8 @@ int main(int argc, char *argv[])
       p_assembly = false;
       if (mpi.Root())
       {
-         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+         std::cout << "Laghos does not support PA in 1D. Switching to FA."
+                   << std::endl;
       }
    }
 
@@ -319,7 +307,7 @@ int main(int argc, char *argv[])
    const int mesh_NE = mesh->GetNE();
    if (mpi.Root())
    {
-      cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
+      std::cout << "Number of zones in the serial mesh: " << mesh_NE << std::endl;
    }
 
    // Parallel partitioning of the mesh.
@@ -407,7 +395,7 @@ int main(int argc, char *argv[])
       default:
          if (myid == 0)
          {
-            cout << "Unknown partition type: " << partition_type << '\n';
+            std::cout << "Unknown partition type: " << partition_type << '\n';
          }
          delete mesh;
          MPI_Finalize();
@@ -415,7 +403,7 @@ int main(int argc, char *argv[])
    }
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   const bool cartesian_partitioning = (cxyz.Size() > 0)?true:false;
+   const bool cartesian_partitioning = (cxyz.Size() > 0) ? true : false;
    if (product == num_tasks || cartesian_partitioning)
    {
       if (cartesian_partitioning)
@@ -438,7 +426,7 @@ int main(int argc, char *argv[])
    {
       if (myid == 0)
       {
-         cout << "Non-Cartesian partitioning through METIS will be used.\n";
+         std::cout << "Non-Cartesian partitioning through METIS will be used.\n";
 #ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;
@@ -459,7 +447,7 @@ int main(int argc, char *argv[])
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
    if (myid == 0)
-   { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
+   { std::cout << "Zones min/max: " << ne_min << " " << ne_max << std::endl; }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -488,7 +476,7 @@ int main(int argc, char *argv[])
       default:
          if (myid == 0)
          {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+            std::cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
          }
          delete pmesh;
          MPI_Finalize();
@@ -499,10 +487,10 @@ int main(int argc, char *argv[])
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
    if (mpi.Root())
    {
-      cout << "Number of kinematic (position, velocity) dofs: "
-           << glob_size_h1 << endl;
-      cout << "Number of specific internal energy dofs: "
-           << glob_size_l2 << endl;
+      std::cout << "Number of kinematic (position, velocity) dofs: "
+                << glob_size_h1 << '\n';
+      std::cout << "Number of specific internal energy dofs: "
+                << glob_size_l2 << '\n';
    }
 
    // The monolithic BlockVector stores unknown fields as:
@@ -659,27 +647,7 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem = 0, mmax = 0, msum = 0;
    int checks = 0;
-   //   const double internal_energy = hydro.InternalEnergy(e_gf);
-   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-   //   if (mpi.Root())
-   //   {
-   //      cout << std::fixed;
-   //      cout << "step " << std::setw(5) << 0
-   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-   //            << internal_energy
-   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-   //            << kinetic_energy
-   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
-   //            << kinetic_energy+internal_energy;
-   //      cout << std::fixed;
-   //      if (mem_usage)
-   //      {
-   //         cout << ", mem: " << mmax << "/" << msum << " MB";
-   //      }
-   //      cout << endl;
-   //   }
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -709,7 +677,7 @@ int main(int argc, char *argv[])
          t = t_old;
          S = S_old;
          hydro.ResetQuadratureData();
-         if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
+         if (mpi.Root()) { std::cout << "Repeating step " << ti << '\n'; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
@@ -737,24 +705,22 @@ int main(int argc, char *argv[])
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
-         // const double internal_energy = hydro.InternalEnergy(e_gf);
-         // const double kinetic_energy = hydro.KineticEnergy(v_gf);
          if (mpi.Root())
          {
             const double sqrt_norm = sqrt(norm);
 
-            cout << std::fixed;
-            cout << "step " << std::setw(5) << ti
-                 << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-                 << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-                 << ",\t|e| = " << std::setprecision(10) << std::scientific
-                 << sqrt_norm;
-            cout << std::fixed;
+            std::cout << std::fixed;
+            std::cout << "step " << std::setw(5) << ti
+                      << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+                      << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+                      << ",\t|e| = " << std::setprecision(10) << std::scientific
+                      << sqrt_norm;
+            std::cout << std::fixed;
             if (mem_usage)
             {
-               cout << ", mem: " << mmax << "/" << msum << " MB";
+               std::cout << ", mem: " << mmax << "/" << msum << " MB";
             }
-            cout << endl;
+            std::cout << std::endl;
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
@@ -940,12 +906,12 @@ int main(int argc, char *argv[])
          {
             constexpr bool quick = true;
 
-            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
+            amr::Update(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
             hydro.AMRUpdate(S, quick);
 
             pmesh->Rebalance();
 
-            AMRUpdate(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
+            amr::Update(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
             hydro.AMRUpdate(S, !quick);
 
             GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
@@ -995,13 +961,13 @@ int main(int argc, char *argv[])
                                hydro.KineticEnergy(v_gf);
    if (mpi.Root())
    {
-      cout << endl;
-      cout << "Energy  diff: " << std::scientific << std::setprecision(2)
-           << fabs(energy_init - energy_final) << endl;
+      std::cout << std::endl;
+      std::cout << "Energy  diff: " << std::scientific << std::setprecision(2)
+                << fabs(energy_init - energy_final) << std::endl;
       if (mem_usage)
       {
-         cout << "Maximum memory resident set size: "
-              << mmax << "/" << msum << " MB" << endl;
+         std::cout << "Maximum memory resident set size: "
+                   << mmax << "/" << msum << " MB" << std::endl;
       }
    }
 
@@ -1014,9 +980,9 @@ int main(int argc, char *argv[])
                    error_l2  = v_gf.ComputeL2Error(v_coeff);
       if (mpi.Root())
       {
-         cout << "L_inf  error: " << error_max << endl
-              << "L_1    error: " << error_l1 << endl
-              << "L_2    error: " << error_l2 << endl;
+         std::cout << "L_inf  error: " << error_max << std::endl
+                   << "L_1    error: " << error_l1 << std::endl
+                   << "L_2    error: " << error_l2 << std::endl;
       }
    }
 
@@ -1033,337 +999,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
-                   const int bdr_attr_max,
-                   Array<int> &ess_tdofs,
-                   Array<int> &ess_vdofs)
-{
-   ess_tdofs.SetSize(0);
-   ess_vdofs.SetSize(0);
-   Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
-   for (int d = 0; d < pmesh->Dimension(); d++)
-   {
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-      // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-      ess_bdr = 0; ess_bdr[d] = 1;
-      H1.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-      ess_tdofs.Append(dofs_list);
-      H1.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-      ess_vdofs.Append(dofs_list);
-   }
-}
-
-void AMRUpdate(BlockVector &S, BlockVector &S_tmp,
-               Array<int> &true_offset,
-               ParGridFunction &x_gf,
-               ParGridFunction &v_gf,
-               ParGridFunction &e_gf,
-               ParGridFunction &m_gf)
-{
-   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
-   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
-   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
-
-   H1FESpace->Update();
-   L2FESpace->Update();
-   MEFESpace->Update();
-
-   const int Vsize_h1 = H1FESpace->GetVSize();
-   const int Vsize_l2 = L2FESpace->GetVSize();
-
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-
-   S_tmp = S;
-   S.Update(true_offset);
-   const Operator* H1Update = H1FESpace->GetUpdateOperator();
-   const Operator* L2Update = L2FESpace->GetUpdateOperator();
-   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
-   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
-   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
-
-   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
-   x_gf.SyncAliasMemory(S);
-   v_gf.SyncAliasMemory(S);
-   e_gf.SyncAliasMemory(S);
-
-   S_tmp.Update(true_offset);
-   m_gf.Update();
-}
-
-void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
-                            const double size, Array<int> &elements)
-{
-   Array<int> v;
-
-   for (int i = 0; i < mesh->GetNE(); i++)
-   {
-      mesh->GetElementVertices(i, v);
-      for (int j = 0; j < v.Size(); j++)
-      {
-         double dist = 0.0;
-         for (int l = 0; l < mesh->SpaceDimension(); l++)
-         {
-            double d = vert(l) - mesh->GetVertex(v[j])[l];
-            dist += d*d;
-         }
-         if (dist <= size*size) { elements.Append(i); break; }
-      }
-   }
-}
-
-static void Pow(Vector &vec, double p)
-{
-   for (int i = 0; i < vec.Size(); i++)
-   {
-      vec(i) = std::pow(vec(i), p);
-   }
-}
-
-void GetPerElementMinMax(const GridFunction &gf,
-                         Vector &elem_min, Vector &elem_max,
-                         int int_order)
-{
-   const FiniteElementSpace *space = gf.FESpace();
-   int ne = space->GetNE();
-
-   if (int_order < 0) { int_order = space->GetOrder(0) + 1; }
-
-   elem_min.SetSize(ne);
-   elem_max.SetSize(ne);
-
-   Vector vals, tmp;
-   for (int i = 0; i < ne; i++)
-   {
-      int geom = space->GetFE(i)->GetGeomType();
-      const IntegrationRule &ir = IntRules.Get(geom, int_order);
-
-      gf.GetValues(i, ir, vals);
-
-      if (space->GetVDim() > 1)
-      {
-         Pow(vals, 2.0);
-         for (int vd = 1; vd < space->GetVDim(); vd++)
-         {
-            gf.GetValues(i, ir, tmp, vd+1);
-            Pow(tmp, 2.0);
-            vals += tmp;
-         }
-         Pow(vals, 0.5);
-      }
-
-      elem_min(i) = vals.Min();
-      elem_max(i) = vals.Max();
-   }
-}
-
-double rho0(const Vector &x)
-{
-   switch (problem)
-   {
-      case 0: return 1.0;
-      case 1: return 1.0;
-      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-      case 4: return 1.0;
-      case 5:
-      {
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; }
-         return 1.0;
-      }
-      case 6:
-      {
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
-         return 1.0;
-      }
-      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
-   }
-}
-
-double gamma_func(const Vector &x)
-{
-   switch (problem)
-   {
-      case 0: return 5.0 / 3.0;
-      case 1: return 1.4;
-      case 2: return 1.4;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
-      case 4: return 5.0 / 3.0;
-      case 5: return 1.4;
-      case 6: return 1.4;
-      case 7: return 5.0 / 3.0;
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
-   }
-}
-
-static double rad(double x, double y) { return sqrt(x*x + y*y); }
-
-void v0(const Vector &x, Vector &v)
-{
-   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
-   switch (problem)
-   {
-      case 0:
-         v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
-         v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
-         if (x.Size() == 3)
-         {
-            v(0) *= cos(M_PI*x(2));
-            v(1) *= cos(M_PI*x(2));
-            v(2) = 0.0;
-         }
-         break;
-      case 1: v = 0.0; break;
-      case 2: v = 0.0; break;
-      case 3: v = 0.0; break;
-      case 4:
-      {
-         v = 0.0;
-         const double r = rad(x(0), x(1));
-         if (r < 0.2)
-         {
-            v(0) =  5.0 * x(1);
-            v(1) = -5.0 * x(0);
-         }
-         else if (r < 0.4)
-         {
-            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
-            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
-         }
-         else { }
-         break;
-      }
-      case 5:
-      {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
-         MFEM_ABORT("Error in problem 5!");
-         return;
-      }
-      case 6:
-      {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
-         MFEM_ABORT("Error in problem 6!");
-         return;
-      }
-      case 7:
-      {
-         v = 0.0;
-         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
-         break;
-      }
-      default: MFEM_ABORT("Bad number given for problem id!");
-   }
-}
-
-double e0(const Vector &x)
-{
-   switch (problem)
-   {
-      case 0:
-      {
-         const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-         double val;
-         if (x.Size() == 2)
-         {
-            val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
-         }
-         else
-         {
-            val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                           (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
-         }
-         return val/denom;
-      }
-      case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-      case 4:
-      {
-         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
-         const double gamma = 5.0 / 3.0;
-         if (r < 0.2)
-         {
-            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
-         }
-         else if (r < 0.4)
-         {
-            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
-            const double t2 = 20.0 * r - 4.0 * log(r);
-            return (t1 - t2) / (gamma - 1.0);
-         }
-         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
-      }
-      case 5:
-      {
-         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         MFEM_ABORT("Error in problem 5!");
-         return 0.0;
-      }
-      case 6:
-      {
-         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         MFEM_ABORT("Error in problem 5!");
-         return 0.0;
-      }
-      case 7:
-      {
-         const double rho = rho0(x), gamma = gamma_func(x);
-         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
-      }
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
-   }
-}
-
-static void display_banner(std::ostream &os)
-{
-   os << endl
-      << "       __                __                 " << endl
-      << "      / /   ____  ____  / /_  ____  _____   " << endl
-      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << endl
-      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
-      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
-      << "               /____/                       " << endl << endl;
-}
-
-static long GetMaxRssMB()
-{
-   struct rusage usage;
-   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
-#ifndef __APPLE__
-   const long unit = 1024; // kilo
-#else
-   const long unit = 1024*1024; // mega
-#endif
-   return usage.ru_maxrss/unit; // mega bytes
-}
-
-static bool rerr(const double a, const double v, const double eps)
+static bool Check(const double a, const double v, const double eps)
 {
    MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
    const double err_a = fabs((a-v)/a);
@@ -1378,72 +1014,85 @@ static void Checks(const int dim, const int ti, const double nrm, int &chk)
    printf("%.15e\n",nrm);
    if (dim==2)
    {
-      const double p0_05 = 6.54653862453438e+00;
-      const double p0_27 = 7.58857635779292e+00;
-      if (pb==0 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==27) {chk++; MFEM_VERIFY(rerr(nrm,p0_27,eps),"P0, #27");}
-      const double p1_05 = 3.50825494522579e+00;
-      const double p1_15 = 2.75644459682321e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==15) {chk++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
-      const double p2_05 = 1.02074579565124e+01;
-      const double p2_59 = 1.72159020590190e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-      const double p3_05 = 8.0;
-      const double p3_16 = 8.0;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 3.446324942352448e+01;
-      const double p4_18 = 3.446844033767240e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
-      const double p5_05 = 1.030899557252528e+01;
-      const double p5_36 = 1.057362418574309e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-      const double p6_05 = 8.039707010835693e+00;
-      const double p6_36 = 8.316970976817373e+00;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-      const double p7_05 = 1.514929259650760e+01;
-      const double p7_25 = 1.514931278155159e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(rerr(nrm,p7_25,eps),"P7, #25");}
+      constexpr double p0_05 = 6.54653862453438e+00;
+      constexpr double p0_27 = 7.58857635779292e+00;
+      if (pb==0 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p0_05,eps),"P0, #05");}
+      if (pb==0 && ti==27) {chk++; MFEM_VERIFY(Check(nrm,p0_27,eps),"P0, #27");}
+      constexpr double p1_05 = 3.50825494522579e+00;
+      constexpr double p1_15 = 2.75644459682321e+00;
+      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p1_05,eps),"P1, #05");}
+      if (pb==1 && ti==15) {chk++; MFEM_VERIFY(Check(nrm,p1_15,eps),"P1, #15");}
+      constexpr double p2_05 = 1.02074579565124e+01;
+      constexpr double p2_59 = 1.72159020590190e+01;
+      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p2_05,eps),"P2, #05");}
+      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(Check(nrm,p2_59,eps),"P2, #59");}
+      constexpr double p3_05 = 8.0;
+      constexpr double p3_16 = 8.0;
+      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p3_05,eps),"P3, #05");}
+      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(Check(nrm,p3_16,eps),"P3, #16");}
+      constexpr double p4_05 = 3.446324942352448e+01;
+      constexpr double p4_18 = 3.446844033767240e+01;
+      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p4_05,eps),"P4, #05");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(Check(nrm,p4_18,eps),"P4, #18");}
+      constexpr double p5_05 = 1.030899557252528e+01;
+      constexpr double p5_36 = 1.057362418574309e+01;
+      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p5_05,eps),"P5, #05");}
+      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p5_36,eps),"P5, #36");}
+      constexpr double p6_05 = 8.039707010835693e+00;
+      constexpr double p6_36 = 8.316970976817373e+00;
+      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p6_05,eps),"P6, #05");}
+      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p6_36,eps),"P6, #36");}
+      constexpr double p7_05 = 1.514929259650760e+01;
+      constexpr double p7_25 = 1.514931278155159e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(Check(nrm,p7_25,eps),"P7, #25");}
    }
    if (dim==3)
    {
-      const double  p0_05 = 1.198510951452527e+03;
-      const double p0_188 = 1.199384410059154e+03;
-      if (pb==0 && ti==005) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==188) {chk++; MFEM_VERIFY(rerr(nrm,p0_188,eps),"P0, #188");}
-      const double p1_05 = 1.33916371859257e+01;
-      const double p1_28 = 7.52107367739800e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==28) {chk++; MFEM_VERIFY(rerr(nrm,p1_28,eps),"P1, #28");}
-      const double p2_05 = 2.041491591302486e+01;
-      const double p2_59 = 3.443180411803796e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-      const double p3_05 = 1.600000000000000e+01;
-      const double p3_16 = 1.600000000000000e+01;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 6.892649884704898e+01;
-      const double p4_18 = 6.893688067534482e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
-      const double p5_05 = 2.061984481890964e+01;
-      const double p5_36 = 2.114519664792607e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-      const double p6_05 = 1.607988713996459e+01;
-      const double p6_36 = 1.662736010353023e+01;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-      const double p7_05 = 3.029858112572883e+01;
-      const double p7_24 = 3.029858832743707e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(rerr(nrm,p7_24,eps),"P7, #24");}
+      constexpr double  p0_05 = 1.198510951452527e+03;
+      constexpr double p0_188 = 1.199384410059154e+03;
+      if (pb==0 && ti==005) {chk++; MFEM_VERIFY(Check(nrm,p0_05,eps),"P0, #05");}
+      if (pb==0 && ti==188) {chk++; MFEM_VERIFY(Check(nrm,p0_188,eps),"P0, #188");}
+      constexpr double p1_05 = 1.33916371859257e+01;
+      constexpr double p1_28 = 7.52107367739800e+00;
+      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p1_05,eps),"P1, #05");}
+      if (pb==1 && ti==28) {chk++; MFEM_VERIFY(Check(nrm,p1_28,eps),"P1, #28");}
+      constexpr double p2_05 = 2.041491591302486e+01;
+      constexpr double p2_59 = 3.443180411803796e+01;
+      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p2_05,eps),"P2, #05");}
+      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(Check(nrm,p2_59,eps),"P2, #59");}
+      constexpr double p3_05 = 1.600000000000000e+01;
+      constexpr double p3_16 = 1.600000000000000e+01;
+      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p3_05,eps),"P3, #05");}
+      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(Check(nrm,p3_16,eps),"P3, #16");}
+      constexpr double p4_05 = 6.892649884704898e+01;
+      constexpr double p4_18 = 6.893688067534482e+01;
+      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p4_05,eps),"P4, #05");}
+      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(Check(nrm,p4_18,eps),"P4, #18");}
+      constexpr double p5_05 = 2.061984481890964e+01;
+      constexpr double p5_36 = 2.114519664792607e+01;
+      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p5_05,eps),"P5, #05");}
+      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p5_36,eps),"P5, #36");}
+      constexpr double p6_05 = 1.607988713996459e+01;
+      constexpr double p6_36 = 1.662736010353023e+01;
+      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p6_05,eps),"P6, #05");}
+      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p6_36,eps),"P6, #36");}
+      constexpr double p7_05 = 3.029858112572883e+01;
+      constexpr double p7_24 = 3.029858832743707e+01;
+      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p7_05,eps),"P7, #05");}
+      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(Check(nrm,p7_24,eps),"P7, #24");}
    }
+}
+
+// Get current process information: max resident set size
+static long GetMaxRssMB()
+{
+   struct rusage usage;
+   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
+#ifndef __APPLE__
+   constexpr long unit = 1024;
+#else
+   constexpr long unit = 1024*1024;
+#endif
+   return usage.ru_maxrss / unit;
 }

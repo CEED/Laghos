@@ -18,8 +18,6 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "general/forall.hpp"
-#include "linalg/dtensor.hpp"
 
 namespace mfem
 {
@@ -67,6 +65,20 @@ struct QuadratureData
       rho0DetJ0w.SetSize(NE * NQ);
    }
 };
+
+double ComputeVolumeIntegral(const int DIM, const int NE, const int NQ,
+                             const int Q1D, const int VDIM,
+                             const double ln_norm,
+                             const mfem::Vector& mass,
+                             const mfem::Vector& f);
+
+void Rho0DetJ0Vol(const int dim, const int NE,
+                  const IntegrationRule &ir,
+                  ParMesh *pmesh,
+                  ParFiniteElementSpace &L2,
+                  const ParGridFunction &rho0,
+                  QuadratureData &qdata,
+                  double &volume);
 
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2

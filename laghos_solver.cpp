@@ -14,10 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "general/forall.hpp"
-#include "laghos_solver.hpp"
-#include "linalg/kernels.hpp"
+#include <iostream>
 #include <unordered_map>
+#include "laghos_solver.hpp"
+#include "general/forall.hpp"
+#include "linalg/kernels.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -79,14 +80,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    }
    while (connection_failed);
 }
-
-static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *pmesh,
-                         ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
-                         QuadratureData &qdata,
-                         double &volume);
 
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
@@ -689,113 +682,55 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 }
 
 
-
-double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,const int Q1D,const int VDIM,const double ln_norm,
-const mfem::Vector& mass, const mfem::Vector& f)
-{
-    
-    auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
-    mfem::Vector integrand(NE*NQ); 
-    auto I = Reshape(integrand.Write(), NQ, NE);
-
-   if (DIM == 1){
-      for (int e=0; e < NE; ++e){
-         for (int q = 0; q < NQ; ++q) {
-               double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
-                  vmag += pow(f_vals(k,q,e),ln_norm);
-               }
-               I(q,e) = vmag;
-         }
-      }
-   }
-   else if (DIM == 2){
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               const int q = qx + qy * Q1D;
-               double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
-                  vmag += pow(f_vals(k,q,e),ln_norm);
-               }
-               I(q,e) = vmag;
-            }
-         }
-      });
-   }
-   else if (DIM == 3){
-    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-      {
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  const int q = qx + (qy + qz * Q1D) * Q1D;
-                  double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
-                  vmag += pow(f_vals(k,q,e),ln_norm);
-               }
-               I(q,e) = vmag;
-               }
-            }
-         }
-      });
-   
-}
-   const double integral = integrand * mass;
-return integral; 
-
-}
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
-   
-    // get the restriction and interpolator objects 
-    const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(ir);
-    l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-    auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-    const int NQ = ir.GetNPoints(); 
-    const int ND = L2.GetFE(0)->GetDof();
+
+   // get the restriction and interpolator objects
+   const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(
+                                                      ir);
+   l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+   auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+   const int NQ = ir.GetNPoints();
+   const int ND = L2.GetFE(0)->GetDof();
    Vector e_vector(NE*ND), eintQ(NE*NQ);
 
-    // Get internal energy at the quadrature points
-    L2r->Mult(gf, e_vector);
-    l2_interpolator->Values(e_vector, eintQ);
+   // Get internal energy at the quadrature points
+   L2r->Mult(gf, e_vector);
+   l2_interpolator->Values(e_vector, eintQ);
 
-   double internal_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,1,1.0,qdata.rho0DetJ0w,eintQ); 
-    
-   MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, L2.GetParMesh()->GetComm());
+   const double internal_energy =
+      ComputeVolumeIntegral(dim, NE, NQ, Q1D, 1, 1.0, qdata.rho0DetJ0w,eintQ);
+
+   MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
+                 L2.GetParMesh()->GetComm());
 
    return glob_ie;
 }
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-  double glob_ke = 0.0;
-   
-    // get the restriction and interpolator objects 
-    const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(ir);
-    h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-    auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-    const int NQ = ir.GetNPoints(); 
-    const int ND = H1.GetFE(0)->GetDof();
+   double glob_ke = 0.0;
+
+   // get the restriction and interpolator objects
+   const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(
+                                                      ir);
+   h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+   auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+   const int NQ = ir.GetNPoints();
+   const int ND = H1.GetFE(0)->GetDof();
    Vector e_vector(dim*NE*ND), ekinQ(dim*NE*NQ);
 
-    // Get internal energy at the quadrature points
-    H1r->Mult(v, e_vector);
-    h1_interpolator->Values(e_vector, ekinQ);
+   // Get internal energy at the quadrature points
+   H1r->Mult(v, e_vector);
+   h1_interpolator->Values(e_vector, ekinQ);
 
-    // Get the IE, initial weighted mass 
-
-   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,qdata.rho0DetJ0w,ekinQ); 
-    
-   MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM, H1.GetParMesh()->GetComm());
-
+   // Get the IE, initial weighted mass
+   double kinetic_energy =
+      hydrodynamics::ComputeVolumeIntegral(dim, NE, NQ, Q1D, dim, 2.0,
+                                           qdata.rho0DetJ0w, ekinQ);
+   MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
+                 H1.GetParMesh()->GetComm());
    return 0.5*glob_ke;
 }
 
@@ -819,7 +754,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
 
    if (IamRoot)
    {
-      using namespace std;
       // FOM = (FOM1 * T1 + FOM2 * T2 + FOM3 * T3) / (T1 + T2 + T3)
       const HYPRE_Int H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
       const double FOM1 = 1e-6 * H1GTVSize * H1iter / T[0];
@@ -827,57 +761,57 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       const double FOM3 = 1e-6 * alldata[1] * ir.GetNPoints() / T[3];
       const double FOM = (FOM1 * T[0] + FOM2 * T[2] + FOM3 * T[3]) / T[4];
       const double FOM0 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[4];
-      cout << endl;
-      cout << "CG (H1) total time: " << T[0] << endl;
-      cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << FOM1 << endl;
-      cout << endl;
-      cout << "CG (L2) total time: " << T[1] << endl;
-      cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / T[1] << endl;
-      cout << endl;
-      cout << "Forces total time: " << T[2] << endl;
-      cout << "Forces rate (megadofs x timesteps / second): "
-           << FOM2 << endl;
-      cout << endl;
-      cout << "UpdateQuadData total time: " << T[3] << endl;
-      cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << FOM3 << endl;
-      cout << endl;
-      cout << "Major kernels total time (seconds): " << T[4] << endl;
-      cout << "Major kernels total rate (megadofs x time steps / second): "
-           << FOM << endl;
+      std::cout << std::endl;
+      std::cout << "CG (H1) total time: " << T[0] << std::endl;
+      std::cout << "CG (H1) rate (megadofs x cg_iterations / second): "
+                << FOM1 << std::endl;
+      std::cout << std::endl;
+      std::cout << "CG (L2) total time: " << T[1] << std::endl;
+      std::cout << "CG (L2) rate (megadofs x cg_iterations / second): "
+                << 1e-6 * alldata[0] / T[1] << std::endl;
+      std::cout << std::endl;
+      std::cout << "Forces total time: " << T[2] << std::endl;
+      std::cout << "Forces rate (megadofs x timesteps / second): "
+                << FOM2 << std::endl;
+      std::cout << std::endl;
+      std::cout << "UpdateQuadData total time: " << T[3] << std::endl;
+      std::cout << "UpdateQuadData rate (megaquads x timesteps / second): "
+                << FOM3 << std::endl;
+      std::cout << std::endl;
+      std::cout << "Major kernels total time (seconds): " << T[4] << std::endl;
+      std::cout << "Major kernels total rate (megadofs x time steps / second): "
+                << FOM << std::endl;
       if (!fom) { return; }
       const int QPT = ir.GetNPoints();
       const HYPRE_Int GNZones = alldata[2];
       const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
-      cout << endl;
-      cout << "| Ranks " << "| Zones   "
-           << "| H1 dofs " << "| L2 dofs "
-           << "| QP "      << "| N dofs   "
-           << "| FOM0   "
-           << "| FOM1   " << "| T1   "
-           << "| FOM2   " << "| T2   "
-           << "| FOM3   " << "| T3   "
-           << "| FOM    " << "| TT   "
-           << "|" << endl;
-      cout << setprecision(3);
-      cout << "| " << setw(6) << H1.GetNRanks()
-           << "| " << setw(8) << GNZones
-           << "| " << setw(8) << H1GTVSize
-           << "| " << setw(8) << L2GTVSize
-           << "| " << setw(3) << QPT
-           << "| " << setw(9) << ndofs
-           << "| " << setw(7) << FOM0
-           << "| " << setw(7) << FOM1
-           << "| " << setw(5) << T[0]
-           << "| " << setw(7) << FOM2
-           << "| " << setw(5) << T[2]
-           << "| " << setw(7) << FOM3
-           << "| " << setw(5) << T[3]
-           << "| " << setw(7) << FOM
-           << "| " << setw(5) << T[4]
-           << "| " << endl;
+      std::cout << std::endl;
+      std::cout << "| Ranks " << "| Zones   "
+                << "| H1 dofs " << "| L2 dofs "
+                << "| QP "      << "| N dofs   "
+                << "| FOM0   "
+                << "| FOM1   " << "| T1   "
+                << "| FOM2   " << "| T2   "
+                << "| FOM3   " << "| T3   "
+                << "| FOM    " << "| TT   "
+                << "|" << std::endl;
+      std::cout << std::setprecision(3);
+      std::cout << "| " << std::setw(6) << H1.GetNRanks()
+                << "| " << std::setw(8) << GNZones
+                << "| " << std::setw(8) << H1GTVSize
+                << "| " << std::setw(8) << L2GTVSize
+                << "| " << std::setw(3) << QPT
+                << "| " << std::setw(9) << ndofs
+                << "| " << std::setw(7) << FOM0
+                << "| " << std::setw(7) << FOM1
+                << "| " << std::setw(5) << T[0]
+                << "| " << std::setw(7) << FOM2
+                << "| " << std::setw(5) << T[2]
+                << "| " << std::setw(7) << FOM3
+                << "| " << std::setw(5) << T[3]
+                << "| " << std::setw(7) << FOM
+                << "| " << std::setw(5) << T[4]
+                << "| " << std::endl;
    }
 }
 
@@ -1268,99 +1202,6 @@ void QUpdateBody(const int NE, const int e,
    // !!! Race !!!
    d_el_max_visc[e] = fmax(visc_coeff, d_el_max_visc[e]);
    d_el_max_vgrad[e] = fmax(fabs(det_v_grad), d_el_max_vgrad[e]);
-}
-
-static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *pmesh,
-                         ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
-                         QuadratureData &qdata,
-                         double &volume)
-{
-   const int NQ = ir.GetNPoints();
-   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
-   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
-   Vector rho0Q(NQ*NE);
-   rho0Q.UseDevice(true);
-   Vector j, detj;
-   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
-   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
-   const auto W = ir.GetWeights().Read();
-   const auto R = Reshape(rho0Q.Read(), NQ, NE);
-   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
-   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
-   auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
-   Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
-   const MemoryClass mc = Device::GetMemoryClass();
-   const int Ji_total_size = qdata.Jac0inv.TotalSize();
-   auto invJ = Reshape(Jinv_m.Write(mc, Ji_total_size), dim, dim, NQ, NE);
-   Vector vol(NE*NQ), one(NE*NQ);
-   auto A = Reshape(vol.Write(), NQ, NE);
-   auto O = Reshape(one.Write(), NQ, NE);
-   MFEM_ASSERT(dim==2 || dim==3, "");
-   if (dim==2)
-   {
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               const int q = qx + qy * Q1D;
-               const double J11 = J(q,0,0,e);
-               const double J12 = J(q,1,0,e);
-               const double J21 = J(q,0,1,e);
-               const double J22 = J(q,1,1,e);
-               const double det = detJ(q,e);
-               V(q,e) =  W[q] * R(q,e) * det;
-               const double r_idetJ = 1.0 / det;
-               invJ(0,0,q,e) =  J22 * r_idetJ;
-               invJ(1,0,q,e) = -J12 * r_idetJ;
-               invJ(0,1,q,e) = -J21 * r_idetJ;
-               invJ(1,1,q,e) =  J11 * r_idetJ;
-               A(q,e) = W[q] * det;
-               O(q,e) = 1.0;
-            }
-         }
-      });
-   }
-   else
-   {
-      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-      {
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  const int q = qx + (qy + qz * Q1D) * Q1D;
-                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
-                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
-                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
-                  const double det = detJ(q,e);
-                  V(q,e) = W[q] * R(q,e) * det;
-                  const double r_idetJ = 1.0 / det;
-                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
-                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
-                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
-                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
-                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
-                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
-                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
-                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
-                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
-                  A(q,e) = W[q] * det;
-                  O(q,e) = 1.0;
-               }
-            }
-         }
-      });
-   }
-   qdata.rho0DetJ0w.HostRead();
-   volume = vol * one;
 }
 
 template<int DIM, int Q1D> static inline
