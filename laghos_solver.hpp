@@ -304,6 +304,7 @@ protected:
    mutable Array<int> c_tdofs[3];
    mutable Vector zone_max_visc, zone_vgrad;
 
+
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -437,6 +438,8 @@ public:
 namespace amr
 {
 
+enum estimator: int { std = 0, rho = 1, zz = 2, kelly = 3 };
+
 static void Update(BlockVector &S, BlockVector &S_tmp,
                    Array<int> &true_offset,
                    ParGridFunction &x_gf,
@@ -477,6 +480,10 @@ static void Update(BlockVector &S, BlockVector &S_tmp,
 
    S_tmp.Update(true_offset);
    m_gf.Update();
+
+   //H1FESpace->UpdatesFinished();
+   //L2FESpace->UpdatesFinished();
+   //MEFESpace->UpdatesFinished();
 }
 
 } // amr namesapce

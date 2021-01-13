@@ -63,7 +63,12 @@
 #include <iostream>
 #include <sys/time.h>
 #include <sys/resource.h>
+
 #include "laghos_solver.hpp"
+
+#undef MFEM_DEBUG_COLOR
+#define MFEM_DEBUG_COLOR 199
+#include "general/debug.hpp"
 
 using namespace mfem;
 
@@ -124,13 +129,13 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
    bool amr = false;
-   int amr_estimator = 0;
+   int amr_estimator = amr::estimator::std;
    double amr_ref_threshold = 2e-4;
    double amr_jac_threshold = 0.92;
    double amr_deref_threshold = 0.75;
    int amr_max_level = rs_levels + rp_levels;
    const double amr_blast_size = 1e-10;
-   const int amr_nc_limit = 1;
+   const int amr_nc_limit = 1; // maximum level of hanging nodes
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -292,10 +297,12 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    if (!amr)
    {
+      dbg("Refine the mesh in serial to increase the resolution");
       for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
    }
    else
    {
+      dbg("RefineAtVertex BLAST");
       mesh->EnsureNCMesh();
       for (int lev = 0; lev < rs_levels; lev++)
       {
@@ -591,6 +598,55 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
+   // AMR estimator setup
+   L2_FECollection *flux_fec;
+   RT_FECollection *smooth_flux_fec;
+
+   ErrorEstimator *estimator = nullptr;
+   ThresholdRefiner *refiner = nullptr;
+   ThresholdDerefiner *derefiner = nullptr;
+   EstimatorIntegrator ei;
+
+   if (amr)
+   {
+      const int order = 3;
+      const int sdim = pmesh->SpaceDimension();
+
+      dbg("AMR estimator #%d", amr_estimator);
+
+      flux_fec = new L2_FECollection(order, dim);
+      auto flux_fes = new ParFiniteElementSpace(pmesh, flux_fec, sdim);
+
+      if (amr_estimator == amr::estimator::zz)
+      {
+         dbg("ZZ estimator init");
+         smooth_flux_fec = new RT_FECollection(order-1, dim);
+         auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
+         estimator = new L2ZienkiewiczZhuEstimator(ei, x_gf, flux_fes,
+                                                   smooth_flux_fes);
+      }
+
+      if (amr_estimator == amr::estimator::kelly)
+      {
+         dbg("Kelly estimator init");
+         estimator = new KellyErrorEstimator(ei, x_gf, flux_fes);
+      }
+
+      if (estimator)
+      {
+         const double max_elem_error = 1.0e-4;
+         refiner = new ThresholdRefiner(*estimator);
+         refiner->SetTotalErrorFraction(0.75);
+         refiner->PreferConformingRefinement();
+         refiner->SetNCLimit(amr_nc_limit);
+
+         const double hysteresis = 0.9; // derefinement safety coefficient
+         derefiner = new ThresholdDerefiner(*estimator);
+         derefiner->SetThreshold(hysteresis * max_elem_error);
+         derefiner->SetNCLimit(amr_nc_limit);
+      }
+   }
+
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -659,6 +715,12 @@ int main(int argc, char *argv[])
       S_old = S;
       t_old = t;
       hydro.ResetTimeStepEstimate();
+
+      if (amr && refiner && derefiner)
+      {
+         refiner->Reset();
+         derefiner->Reset();
+      }
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
@@ -788,7 +850,7 @@ int main(int argc, char *argv[])
       {
          Vector v_max, v_min;
          Array<Refinement> refs;
-         bool mesh_changed = false;
+         bool mesh_refined = false;
          const int NE = pmesh->GetNE();
          constexpr double NL_DMAX = std::numeric_limits<double>::max();
 
@@ -796,7 +858,7 @@ int main(int argc, char *argv[])
 
          switch (amr_estimator)
          {
-            case 0:
+            case amr::estimator::std:
             {
                Vector &error_est = hydro.GetZoneMaxVisc();
                for (int e = 0; e < NE; e++)
@@ -810,7 +872,7 @@ int main(int argc, char *argv[])
                }
                break;
             }
-            case 1:
+            case amr::estimator::rho:
             {
                const double art = amr_ref_threshold;
                const int order = H1FESpace.GetOrder(0) + 1;
@@ -848,22 +910,37 @@ int main(int argc, char *argv[])
                }
                break;
             }
-            default: MFEM_ABORT("Unknown AMR estimator (should be 0 or 1)!");
+            case amr::estimator::zz:
+            case amr::estimator::kelly:
+            {
+               dbg("AMR estimator Apply");
+               refiner->Apply(*pmesh);
+               if (refiner->Refined()) { mesh_refined = true; }
+               MFEM_VERIFY(!refiner->Derefined(),"");
+               MFEM_VERIFY(!refiner->Rebalanced(),"");
+               /*if (refiner->Stop() && myid == 0)
+               { std::cout << "Stopping criterion satisfied. Stop.\n"; }*/
+               break;
+            }
+            default: MFEM_ABORT("Unknown AMR estimator!");
          }
 
          const int nref = pmesh->ReduceInt(refs.Size());
-         if (nref)
+         if (nref && !mesh_refined)
          {
+            dbg("GeneralRefinement");
             constexpr int non_conforming = 1;
             pmesh->GeneralRefinement(refs, non_conforming, amr_nc_limit);
-            mesh_changed = true;
+            mesh_refined = true;
             if (myid == 0)
             {
                std::cout << "Refined " << nref << " elements." << std::endl;
             }
          }
-         else if (amr_estimator == 0 && amr_deref_threshold >= 0.0)
+         else if (amr_estimator == amr::estimator::std &&
+                  amr_deref_threshold >= 0.0)
          {
+            dbg("STD Derefinement");
             hydro.ComputeDensity(rho_gf);
 
             Vector rho_max, rho_min;
@@ -894,16 +971,33 @@ int main(int argc, char *argv[])
             }
 
             const int op = 2; // maximum value of fine elements
-            mesh_changed = pmesh->DerefineByError(rho_max, threshold,
+            mesh_refined = pmesh->DerefineByError(rho_max, threshold,
                                                   amr_nc_limit, op);
-            if (mesh_changed && myid == 0)
+            if (mesh_refined && myid == 0)
             {
                std::cout << "Derefined, threshold = " << threshold << std::endl;
             }
          }
-
-         if (mesh_changed)
+         /*else if ((amr_estimator == amr::estimator::zz ||
+                   amr_estimator == amr::estimator::kelly) &&
+                  !mesh_refined)
          {
+            dbg("ZZ/KL Derefinement");
+            MFEM_VERIFY(derefiner,"");
+            if (derefiner->Apply(*pmesh))
+            {
+               if (myid == 0)
+               {
+                  std::cout << "\nDerefined elements." << std::endl;
+               }
+            }
+            if (derefiner->Derefined()) { mesh_refined = true; }
+         }*/
+         else { /* nothing to do */ }
+
+         if (mesh_refined)
+         {
+            dbg("\033[7mmesh_changed");
             constexpr bool quick = true;
 
             amr::Update(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);

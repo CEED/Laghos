@@ -23,6 +23,93 @@ using namespace mfem;
 namespace mfem
 {
 
+static void ComputeElementFlux0(const FiniteElement &el,
+                                ElementTransformation &Trans,
+                                const Vector &u,
+                                const FiniteElement &fluxelem,
+                                Vector &flux)
+{
+   const int dof = el.GetDof();
+   const int dim = el.GetDim();
+   const int sdim = Trans.GetSpaceDim();
+
+   DenseMatrix dshape(dof, dim);
+   DenseMatrix invdfdx(dim, sdim);
+   Vector vec(dim), pointflux(sdim);
+
+   const IntegrationRule &ir = fluxelem.GetNodes();
+   const int NQ = ir.GetNPoints();
+   flux.SetSize(NQ * sdim);
+
+   for (int q = 0; q < NQ; q++)
+   {
+      const IntegrationPoint &ip = ir.IntPoint(q);
+      el.CalcDShape(ip, dshape);
+      dshape.MultTranspose(u, vec);
+
+      Trans.SetIntPoint (&ip);
+      CalcInverse(Trans.Jacobian(), invdfdx);
+      invdfdx.MultTranspose(vec, pointflux);
+
+      for (int d = 0; d < sdim; d++)
+      {
+         flux(NQ*d+q) = pointflux(d);
+      }
+   }
+}
+
+static void ComputeElementFlux1(const FiniteElement &el,
+                                ElementTransformation &Trans,
+                                const FiniteElement &fluxelem,
+                                Vector &flux)
+{
+   const int dim = el.GetDim();
+   const int sdim = Trans.GetSpaceDim();
+
+   DenseMatrix Jadjt(dim, sdim), Jadj(dim, sdim);
+
+   const IntegrationRule &ir = fluxelem.GetNodes();
+   const int NQ = ir.GetNPoints();
+   flux.SetSize(NQ * sdim);
+
+   constexpr double NL_DMAX = std::numeric_limits<double>::max();
+   double minW = +NL_DMAX;
+   double maxW = -NL_DMAX;
+
+   for (int q = 0; q < NQ; q++)
+   {
+      const IntegrationPoint &ip = ir.IntPoint(q);
+      Trans.SetIntPoint(&ip);
+      CalcAdjugate(Trans.Jacobian(), Jadj);
+      Jadjt = Jadj;
+      Jadjt.Transpose();
+      const double w = Jadjt.Weight();
+      minW = std::fmin(minW, w);
+      maxW = std::fmax(maxW, w);
+      MFEM_VERIFY(std::fabs(maxW) > 1e-13, "");
+      const double rho = minW / maxW;
+      MFEM_VERIFY(rho <= 1.0, "");
+      constexpr double amr_jac_threshold = 0.98;
+      for (int d = 0; d < sdim; d++)
+      {
+         const double value = (rho > amr_jac_threshold) ? 0.0: rho;
+         flux(NQ*d+q) = value;
+      }
+   }
+}
+
+void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
+                                             ElementTransformation &Trans,
+                                             Vector &u,
+                                             const FiniteElement &fluxelem,
+                                             Vector &flux,
+                                             bool with_coef)
+{
+   // ZZ comes with with_coef set to true, not Kelly
+   // ComputeElementFlux0(el, Trans, u, fluxelem, flux);
+   ComputeElementFlux1(el, Trans, fluxelem, flux);
+}
+
 namespace hydrodynamics
 {
 

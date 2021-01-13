@@ -17,10 +17,33 @@
 #ifndef MFEM_LAGHOS_ASSEMBLY
 #define MFEM_LAGHOS_ASSEMBLY
 
+#define MFEM_DEBUG_COLOR 226
+#include "general/debug.hpp"
+
 #include "mfem.hpp"
 
 namespace mfem
 {
+
+class EstimatorIntegrator: public BilinearFormIntegrator
+{
+public:
+   EstimatorIntegrator() { dbg(); }
+
+   void AssemblePA(const FiniteElementSpace &fes) {dbg();}
+
+   double ComputeFluxEnergy(const FiniteElement &fluxelem,
+                            ElementTransformation &Trans,
+                            Vector &flux, Vector *d_energy = NULL)
+   { dbg(); return 0.0; }
+
+   virtual void ComputeElementFlux(const FiniteElement &el,
+                                   ElementTransformation &Trans,
+                                   Vector &u,
+                                   const FiniteElement &fluxelem,
+                                   Vector &flux,
+                                   bool with_coef = true);
+};
 
 namespace hydrodynamics
 {
