@@ -64,9 +64,6 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 
-#define MFEM_DEBUG_COLOR 199
-#include "general/debug.hpp"
-
 using std::cout;
 using std::endl;
 using namespace mfem;
