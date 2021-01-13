@@ -613,27 +613,27 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
    int checks = 0;
-//   const double internal_energy = hydro.InternalEnergy(e_gf);
-//   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-//   if (mpi.Root())
-//   {
-//      cout << std::fixed;
-//      cout << "step " << std::setw(5) << 0
-//            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-//            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-//            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-//            << internal_energy
-//            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy
-//            << ",\t|E| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy+internal_energy;
-//      cout << std::fixed;
-//      if (mem_usage)
-//      {
-//         cout << ", mem: " << mmax << "/" << msum << " MB";
-//      }
-//      cout << endl;
-//   }
+   //   const double internal_energy = hydro.InternalEnergy(e_gf);
+   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   if (mpi.Root())
+   //   {
+   //      cout << std::fixed;
+   //      cout << "step " << std::setw(5) << 0
+   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+   //            << internal_energy
+   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy
+   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy+internal_energy;
+   //      cout << std::fixed;
+   //      if (mem_usage)
+   //      {
+   //         cout << ", mem: " << mmax << "/" << msum << " MB";
+   //      }
+   //      cout << endl;
+   //   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -703,12 +703,12 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
-                 //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
-                 //  << internal_energy
-                 //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy
-                 //   << ",\t|E| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy+internal_energy;
+            //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
+            //  << internal_energy
+            //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy
+            //   << ",\t|E| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             if (mem_usage)
             {
@@ -866,8 +866,8 @@ double rho0(const Vector &x)
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
       case 3: return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-                                : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-                                  (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+                        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+                                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
       case 4: return 1.0;
       case 5:
       {
