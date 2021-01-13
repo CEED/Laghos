@@ -263,6 +263,7 @@ To make sure the results are correct, we tabulate reference final iterations
 6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
 7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
 8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
+9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -vis -fa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
@@ -274,6 +275,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  6. | 2872 | 0.000064 | 5.6547039096e+01 |
 |  7. |  528 | 0.000180 | 5.6505348812e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
+|  9. | 2462 | 0.000050 | 1.1792848684e+02 |
 
 Similar GPU runs using the MFEM CUDA *device* can be run as follows:
 
