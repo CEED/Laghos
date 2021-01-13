@@ -248,7 +248,7 @@ mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 5.0 -pa
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
 
-![Triple-point image](data/tp.png)
+<img src="data/tp.png" width="500" height="500">
 
 ## Verification of Results
 
