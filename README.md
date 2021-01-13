@@ -243,7 +243,7 @@ vorticity, thus examining the complex computational abilities of Laghos.
 Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 5.0 -pa
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
