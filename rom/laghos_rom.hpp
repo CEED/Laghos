@@ -12,8 +12,10 @@
 //using namespace CAROM;
 using namespace mfem;
 
-#define STXV
+//#define STXV
 #define COLL_LSPG
+
+//#define XLSPG  // use LSPG even for the linear equation of motion
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
@@ -713,7 +715,15 @@ public:
     }
 
     int GetNumSpatialSamples() const {
+#ifdef XLSPG
+        return b->numSamplesV + b->numSamplesV + b->numSamplesE;  // use V samples for X
+#else
+#ifdef COLL_LSPG
+        return b->numSamplesV + b->numSamplesV + b->numSamplesE;  // use V samples for X
+#else
         return b->numSamplesX + b->numSamplesV + b->numSamplesE;
+#endif
+#endif
     }
 
     int GetNumSampledTimes() const {
