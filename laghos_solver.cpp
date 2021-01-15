@@ -252,8 +252,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    {
       // Setup the preconditioner of the velocity mass operator.
       // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> ess_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      Array<int> empty_tdofs;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty_tdofs);
       CG_VMass.SetPreconditioner(*VMassPA_Jprec);
 
       CG_VMass.SetOperator(*VMassPA);
