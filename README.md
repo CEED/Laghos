@@ -212,7 +212,7 @@ mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
 
 The latter produces the following density plot (notice the `-vis` option)
 
-![Sedov blast image](data/sedov.png)
+[![Sedov blast image](data/sedov.png)](https://glvis.org/live/?stream=../data/laghos.saved)
 
 #### Taylor-Green and Gresho vortices
 
