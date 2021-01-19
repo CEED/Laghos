@@ -206,6 +206,27 @@ static void v0(const Vector &x, Vector &v)
    }
 }
 
+static void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
+                          const int bdr_attr_max,
+                          Array<int> &ess_tdofs,
+                          Array<int> &ess_vdofs)
+{
+   ess_tdofs.SetSize(0);
+   ess_vdofs.SetSize(0);
+   Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
+   for (int d = 0; d < pmesh->Dimension(); d++)
+   {
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+      // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+      ess_bdr = 0; ess_bdr[d] = 1;
+      H1.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+      ess_tdofs.Append(dofs_list);
+      H1.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+      ess_vdofs.Append(dofs_list);
+   }
+}
+
 namespace hydrodynamics
 {
 
@@ -303,7 +324,6 @@ protected:
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
    mutable Vector zone_max_visc, zone_vgrad;
-
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -434,146 +454,6 @@ public:
 };
 
 } // namespace hydrodynamics
-
-namespace amr
-{
-
-enum estimator: int { std = 0, rho = 1, zz = 2, kelly = 3 };
-
-static void Update(BlockVector &S, BlockVector &S_tmp,
-                   Array<int> &true_offset,
-                   ParGridFunction &x_gf,
-                   ParGridFunction &v_gf,
-                   ParGridFunction &e_gf,
-                   ParGridFunction &m_gf)
-{
-   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
-   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
-   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
-
-   H1FESpace->Update();
-   L2FESpace->Update();
-   MEFESpace->Update();
-
-   const int Vsize_h1 = H1FESpace->GetVSize();
-   const int Vsize_l2 = L2FESpace->GetVSize();
-
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-
-   S_tmp = S;
-   S.Update(true_offset);
-   const Operator* H1Update = H1FESpace->GetUpdateOperator();
-   const Operator* L2Update = L2FESpace->GetUpdateOperator();
-   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
-   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
-   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
-
-   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
-   x_gf.SyncAliasMemory(S);
-   v_gf.SyncAliasMemory(S);
-   e_gf.SyncAliasMemory(S);
-
-   S_tmp.Update(true_offset);
-   m_gf.Update();
-
-   //H1FESpace->UpdatesFinished();
-   //L2FESpace->UpdatesFinished();
-   //MEFESpace->UpdatesFinished();
-}
-
-} // amr namesapce
-
-static void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
-                          const int bdr_attr_max,
-                          Array<int> &ess_tdofs,
-                          Array<int> &ess_vdofs)
-{
-   ess_tdofs.SetSize(0);
-   ess_vdofs.SetSize(0);
-   Array<int> ess_bdr(bdr_attr_max), dofs_marker, dofs_list;
-   for (int d = 0; d < pmesh->Dimension(); d++)
-   {
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-      // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-      ess_bdr = 0; ess_bdr[d] = 1;
-      H1.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-      ess_tdofs.Append(dofs_list);
-      H1.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-      ess_vdofs.Append(dofs_list);
-   }
-}
-
-static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
-                                   const double size, Array<int> &elements)
-{
-   Array<int> v;
-
-   for (int i = 0; i < mesh->GetNE(); i++)
-   {
-      mesh->GetElementVertices(i, v);
-      for (int j = 0; j < v.Size(); j++)
-      {
-         double dist = 0.0;
-         for (int l = 0; l < mesh->SpaceDimension(); l++)
-         {
-            double d = vert(l) - mesh->GetVertex(v[j])[l];
-            dist += d*d;
-         }
-         if (dist <= size*size) { elements.Append(i); break; }
-      }
-   }
-}
-
-static void Pow(Vector &vec, double p)
-{
-   for (int i = 0; i < vec.Size(); i++)
-   {
-      vec(i) = std::pow(vec(i), p);
-   }
-}
-
-static void GetPerElementMinMax(const GridFunction &gf,
-                                Vector &elem_min, Vector &elem_max,
-                                int int_order = -1)
-{
-   const FiniteElementSpace *space = gf.FESpace();
-   int ne = space->GetNE();
-
-   if (int_order < 0) { int_order = space->GetOrder(0) + 1; }
-
-   elem_min.SetSize(ne);
-   elem_max.SetSize(ne);
-
-   Vector vals, tmp;
-   for (int i = 0; i < ne; i++)
-   {
-      int geom = space->GetFE(i)->GetGeomType();
-      const IntegrationRule &ir = IntRules.Get(geom, int_order);
-
-      gf.GetValues(i, ir, vals);
-
-      if (space->GetVDim() > 1)
-      {
-         Pow(vals, 2.0);
-         for (int vd = 1; vd < space->GetVDim(); vd++)
-         {
-            gf.GetValues(i, ir, tmp, vd+1);
-            Pow(tmp, 2.0);
-            vals += tmp;
-         }
-         Pow(vals, 0.5);
-      }
-
-      elem_min(i) = vals.Min();
-      elem_max(i) = vals.Max();
-   }
-}
 
 class HydroODESolver : public ODESolver
 {

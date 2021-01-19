@@ -64,6 +64,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include "laghos_amr.hpp"
 #include "laghos_solver.hpp"
 
 #undef MFEM_DEBUG_COLOR
@@ -598,54 +599,17 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
-   // AMR estimator setup
-   L2_FECollection *flux_fec;
-   RT_FECollection *smooth_flux_fec;
-
-   ErrorEstimator *estimator = nullptr;
-   ThresholdRefiner *refiner = nullptr;
-   ThresholdDerefiner *derefiner = nullptr;
-   EstimatorIntegrator ei;
-
-   if (amr)
-   {
-      const int order = 3;
-      const int sdim = pmesh->SpaceDimension();
-
-      dbg("AMR estimator #%d", amr_estimator);
-
-      flux_fec = new L2_FECollection(order, dim);
-      auto flux_fes = new ParFiniteElementSpace(pmesh, flux_fec, sdim);
-
-      if (amr_estimator == amr::estimator::zz)
-      {
-         dbg("ZZ estimator init");
-         smooth_flux_fec = new RT_FECollection(order-1, dim);
-         auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
-         estimator = new L2ZienkiewiczZhuEstimator(ei, x_gf, flux_fes,
-                                                   smooth_flux_fes);
-      }
-
-      if (amr_estimator == amr::estimator::kelly)
-      {
-         dbg("Kelly estimator init");
-         estimator = new KellyErrorEstimator(ei, x_gf, flux_fes);
-      }
-
-      if (estimator)
-      {
-         const double max_elem_error = 1.0e-4;
-         refiner = new ThresholdRefiner(*estimator);
-         refiner->SetTotalErrorFraction(0.75);
-         refiner->PreferConformingRefinement();
-         refiner->SetNCLimit(amr_nc_limit);
-
-         const double hysteresis = 0.9; // derefinement safety coefficient
-         derefiner = new ThresholdDerefiner(*estimator);
-         derefiner->SetThreshold(hysteresis * max_elem_error);
-         derefiner->SetNCLimit(amr_nc_limit);
-      }
-   }
+   amr::Operator *AMR =  amr ? new amr::Operator(pmesh,
+                                                 amr_estimator,
+                                                 amr_ref_threshold,
+                                                 amr_jac_threshold,
+                                                 amr_deref_threshold,
+                                                 amr_max_level,
+                                                 amr_blast_size,
+                                                 amr_nc_limit,
+                                                 blast_energy,
+                                                 blast_position) : nullptr;
+   if (amr) { AMR->Setup(x_gf); }
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -716,11 +680,7 @@ int main(int argc, char *argv[])
       t_old = t;
       hydro.ResetTimeStepEstimate();
 
-      if (amr && refiner && derefiner)
-      {
-         refiner->Reset();
-         derefiner->Reset();
-      }
+      if (amr) { AMR->Reset(); }
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance.
@@ -848,170 +808,11 @@ int main(int argc, char *argv[])
 
       if (amr)
       {
-         Vector v_max, v_min;
-         Array<Refinement> refs;
-         bool mesh_refined = false;
-         const int NE = pmesh->GetNE();
-         constexpr double NL_DMAX = std::numeric_limits<double>::max();
-
-         GetPerElementMinMax(v_gf, v_min, v_max);
-
-         switch (amr_estimator)
-         {
-            case amr::estimator::std:
-            {
-               Vector &error_est = hydro.GetZoneMaxVisc();
-               for (int e = 0; e < NE; e++)
-               {
-                  if (error_est(e) > amr_ref_threshold &&
-                      pmesh->pncmesh->GetElementDepth(e) < amr_max_level &&
-                      (v_min(e) < 1e-3)) // only refine the still area
-                  {
-                     refs.Append(Refinement(e));
-                  }
-               }
-               break;
-            }
-            case amr::estimator::rho:
-            {
-               const double art = amr_ref_threshold;
-               const int order = H1FESpace.GetOrder(0) + 1;
-               DenseMatrix Jadjt, Jadj(dim, pmesh->SpaceDimension());
-               MFEM_VERIFY(art >= 0.0, "AMR threshold should be positive");
-               for (int e = 0; e < NE; e++)
-               {
-                  double minW = +NL_DMAX;
-                  double maxW = -NL_DMAX;
-                  const int depth = pmesh->pncmesh->GetElementDepth(e);
-                  ElementTransformation *eTr = pmesh->GetElementTransformation(e);
-                  const Geometry::Type &type = pmesh->GetElement(e)->GetGeometryType();
-                  const IntegrationRule *ir = &IntRules.Get(type, order);
-                  const int NQ = ir->GetNPoints();
-                  for (int q = 0; q < NQ; q++)
-                  {
-                     eTr->SetIntPoint(&ir->IntPoint(q));
-                     const DenseMatrix &J = eTr->Jacobian();
-                     CalcAdjugate(J, Jadj);
-                     Jadjt = Jadj;
-                     Jadjt.Transpose();
-                     const double w = Jadjt.Weight();
-                     minW = std::fmin(minW, w);
-                     maxW = std::fmax(maxW, w);
-                  }
-                  if (std::fabs(maxW) != 0.0)
-                  {
-                     const double rho = minW / maxW;
-                     MFEM_VERIFY(rho <= 1.0, "");
-                     if (rho < amr_jac_threshold && depth < amr_max_level)
-                     {
-                        refs.Append(Refinement(e));
-                     }
-                  }
-               }
-               break;
-            }
-            case amr::estimator::zz:
-            case amr::estimator::kelly:
-            {
-               dbg("AMR estimator Apply");
-               refiner->Apply(*pmesh);
-               if (refiner->Refined()) { mesh_refined = true; }
-               MFEM_VERIFY(!refiner->Derefined(),"");
-               MFEM_VERIFY(!refiner->Rebalanced(),"");
-               /*if (refiner->Stop() && myid == 0)
-               { std::cout << "Stopping criterion satisfied. Stop.\n"; }*/
-               break;
-            }
-            default: MFEM_ABORT("Unknown AMR estimator!");
-         }
-
-         const int nref = pmesh->ReduceInt(refs.Size());
-         if (nref && !mesh_refined)
-         {
-            dbg("GeneralRefinement");
-            constexpr int non_conforming = 1;
-            pmesh->GeneralRefinement(refs, non_conforming, amr_nc_limit);
-            mesh_refined = true;
-            if (myid == 0)
-            {
-               std::cout << "Refined " << nref << " elements." << std::endl;
-            }
-         }
-         else if (amr_estimator == amr::estimator::std &&
-                  amr_deref_threshold >= 0.0)
-         {
-            dbg("STD Derefinement");
-            hydro.ComputeDensity(rho_gf);
-
-            Vector rho_max, rho_min;
-            GetPerElementMinMax(rho_gf, rho_min, rho_max);
-
-            // Derefinement based on zone maximum rho in post-shock region
-            const double rho_max_max = rho_max.Size() ? rho_max.Max() : 0.0;
-            double threshold, loc_threshold = amr_deref_threshold * rho_max_max;
-            MPI_Allreduce(&loc_threshold, &threshold, 1, MPI_DOUBLE, MPI_MAX,
-                          pmesh->GetComm());
-
-            // make sure the blast point is never derefined
-            Array<int> elements;
-            FindElementsWithVertex(pmesh, Vertex(blast_position[0],
-                                                 blast_position[1],
-                                                 blast_position[2]),
-                                   amr_blast_size, elements);
-            for (int i = 0; i < elements.Size(); i++)
-            {
-               int index = elements[i];
-               if (index >= 0) { rho_max(index) = NL_DMAX; }
-            }
-
-            // only derefine where the mesh is in motion, i.e. after the shock
-            for (int i = 0; i < pmesh->GetNE(); i++)
-            {
-               if (v_min(i) < 0.1) { rho_max(i) = NL_DMAX; }
-            }
-
-            const int op = 2; // maximum value of fine elements
-            mesh_refined = pmesh->DerefineByError(rho_max, threshold,
-                                                  amr_nc_limit, op);
-            if (mesh_refined && myid == 0)
-            {
-               std::cout << "Derefined, threshold = " << threshold << std::endl;
-            }
-         }
-         /*else if ((amr_estimator == amr::estimator::zz ||
-                   amr_estimator == amr::estimator::kelly) &&
-                  !mesh_refined)
-         {
-            dbg("ZZ/KL Derefinement");
-            MFEM_VERIFY(derefiner,"");
-            if (derefiner->Apply(*pmesh))
-            {
-               if (myid == 0)
-               {
-                  std::cout << "\nDerefined elements." << std::endl;
-               }
-            }
-            if (derefiner->Derefined()) { mesh_refined = true; }
-         }*/
-         else { /* nothing to do */ }
-
-         if (mesh_refined)
-         {
-            dbg("\033[7mmesh_changed");
-            constexpr bool quick = true;
-
-            amr::Update(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
-            hydro.AMRUpdate(S, quick);
-
-            pmesh->Rebalance();
-
-            amr::Update(S, S_old, true_offset, x_gf, v_gf, e_gf, m_gf);
-            hydro.AMRUpdate(S, !quick);
-
-            GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
-            ode_solver->Init(hydro);
-            //H1FESpace.PrintPartitionStats();
-         }
+         AMR->Update(S, S_old,
+                     x_gf,v_gf,e_gf,m_gf,
+                     true_offset,
+                     hydro, ode_solver,
+                     bdr_attr_max, ess_tdofs, ess_vdofs);
       }
 
       // Problems checks
