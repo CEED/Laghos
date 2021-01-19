@@ -74,8 +74,8 @@
 using namespace mfem;
 
 static long GetMaxRssMB();
-static void Checks(const int, const int, const double, int&);
-static void display_banner(std::ostream &os)
+static void NonRegressionTests(const int, const int, const double, int&);
+static void DisplayBanner(std::ostream &os)
 {
    os << std::endl
       << "       __                __                 " << std::endl
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
    const int myid = mpi.WorldRank();
 
    // Print the banner.
-   if (mpi.Root()) { display_banner(std::cout); }
+   if (mpi.Root()) { DisplayBanner(std::cout); }
 
    // Parse command-line options.
    problem = 1;
@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
    bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
+   int vis_windows = 3;
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
@@ -180,6 +181,8 @@ int main(int argc, char *argv[])
                   "Enable or disable GLVis visualization.");
    args.AddOption(&vis_steps, "-vs", "--visualization-steps",
                   "Visualize every n-th timestep.");
+   args.AddOption(&vis_windows, "-vw", "--visualization-windows",
+                  "Number of visualization windows to open: 1~3");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
@@ -230,6 +233,7 @@ int main(int argc, char *argv[])
 
    if (mpi.Root()) { args.PrintOptions(std::cout); }
 
+   // Check AMR configuration: only Sedov problem (#1) is supported for now
    if (amr && problem != 1)
    {
       if (mpi.Root())
@@ -305,9 +309,9 @@ int main(int argc, char *argv[])
    {
       dbg("RefineAtVertex BLAST");
       mesh->EnsureNCMesh();
+      Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
       for (int lev = 0; lev < rs_levels; lev++)
       {
-         Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
          mesh->RefineAtVertex(blast, amr_blast_size);
       }
    }
@@ -472,7 +476,7 @@ int main(int argc, char *argv[])
    GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
 
    // Define the explicit ODE solver used for time integration.
-   ODESolver *ode_solver = NULL;
+   ODESolver *ode_solver = nullptr;
    switch (ode_solver_type)
    {
       case 1: ode_solver = new ForwardEulerSolver; break;
@@ -589,6 +593,7 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   // Time dependent hydro operator
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs,
@@ -598,18 +603,22 @@ int main(int argc, char *argv[])
                                                 p_assembly, amr,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
-
-   amr::Operator *AMR =  amr ? new amr::Operator(pmesh,
-                                                 amr_estimator,
-                                                 amr_ref_threshold,
-                                                 amr_jac_threshold,
-                                                 amr_deref_threshold,
-                                                 amr_max_level,
-                                                 amr_blast_size,
-                                                 amr_nc_limit,
-                                                 blast_energy,
-                                                 blast_position) : nullptr;
-   if (amr) { AMR->Setup(x_gf); }
+   // AMR operator
+   amr::Operator *AMR =nullptr;
+   if (amr)
+   {
+      AMR = new amr::Operator(pmesh,
+                              amr_estimator,
+                              amr_ref_threshold,
+                              amr_jac_threshold,
+                              amr_deref_threshold,
+                              amr_max_level,
+                              amr_nc_limit,
+                              amr_blast_size,
+                              blast_energy,
+                              blast_position);
+      AMR->Setup(x_gf);
+   }
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -636,12 +645,18 @@ int main(int argc, char *argv[])
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                        "Density", Wx, Wy, Ww, Wh);
       }
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
-                                    "Velocity", Wx, Wy, Ww, Wh);
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                    "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      if (vis_windows > 1)
+      {
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
+                                       "Velocity", Wx, Wy, Ww, Wh);
+      }
+      if (vis_windows > 2)
+      {
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                       "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      }
    }
 
    // Save data for VisIt visualization.
@@ -680,6 +695,7 @@ int main(int argc, char *argv[])
       t_old = t;
       hydro.ResetTimeStepEstimate();
 
+      // Reset the associated refiner and derefiner
       if (amr) { AMR->Reset(); }
 
       // S is the vector of dofs, t is the current time, and dt is the time step
@@ -760,13 +776,19 @@ int main(int argc, char *argv[])
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                              "Density", Wx, Wy, Ww, Wh);
             }
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                          v_gf, "Velocity", Wx, Wy, Ww, Wh);
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                          "Specific Internal Energy",
-                                          Wx, Wy, Ww,Wh);
+            if (vis_windows > 1)
+            {
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_v, vishost, visport,
+                                             v_gf, "Velocity", Wx, Wy, Ww, Wh);
+            }
+            if (vis_windows > 2)
+            {
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                             "Specific Internal Energy",
+                                             Wx, Wy, Ww,Wh);
+            }
          }
 
          if (visit)
@@ -804,15 +826,13 @@ int main(int argc, char *argv[])
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
-      } // last_step
+      } // last_step or vis_steps
 
+      // AMR update
       if (amr)
       {
-         AMR->Update(S, S_old,
-                     x_gf,v_gf,e_gf,m_gf,
-                     true_offset,
-                     hydro, ode_solver,
-                     bdr_attr_max, ess_tdofs, ess_vdofs);
+         AMR->Update(hydro, ode_solver, S, S_old, x_gf, v_gf, e_gf, m_gf,
+                     true_offset, bdr_attr_max, ess_tdofs, ess_vdofs);
       }
 
       // Problems checks
@@ -829,7 +849,7 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(cfl==0.5, "check: cfl");
          MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
          MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         Checks(dim, ti, e_norm, checks);
+         NonRegressionTests(dim, ti, e_norm, checks);
       }
    }
    MFEM_VERIFY(!check || checks == 2, "Check error!");
@@ -902,7 +922,8 @@ static bool Check(const double a, const double v, const double eps)
    return fmax(err_a, err_v) < eps;
 }
 
-static void Checks(const int dim, const int ti, const double nrm, int &chk)
+static void NonRegressionTests(const int dim, const int ti, const double nrm,
+                               int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;

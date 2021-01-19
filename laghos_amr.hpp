@@ -28,6 +28,17 @@ namespace amr
 
 enum estimator: int { std = 0, rho = 1, zz = 2, kelly = 3 };
 
+static const char *Estimator(const int est)
+{
+   switch (static_cast<amr::estimator>(est))
+   {
+      case amr::estimator::std: return "Custom Sedov Estimator";
+      case amr::estimator::rho: return "RHO Estimator";
+      case amr::estimator::zz: return "ZZ Estimator";
+      case amr::estimator::kelly: return "Kelly Estimator";
+      default: MFEM_ABORT("Unknown estimator!");
+   }
+}
 
 static void Update(BlockVector &S, BlockVector &S_tmp,
                    Array<int> &true_offset,
@@ -171,11 +182,22 @@ public:
                                    bool with_coef = false);
 };
 
+// AMR operator
 class Operator
 {
    const int order = 3;
    ParMesh *pmesh;
    const int myid, dim, sdim;
+
+   L2_FECollection flux_fec;
+   ParFiniteElementSpace flux_fes;
+
+   RT_FECollection *smooth_flux_fec = nullptr;
+   ErrorEstimator *estimator = nullptr;
+   ThresholdRefiner *refiner = nullptr;
+   ThresholdDerefiner *derefiner = nullptr;
+   amr::EstimatorIntegrator *ei = nullptr;
+
    const struct Options
    {
       int estimator;
@@ -183,28 +205,18 @@ class Operator
       double jac_threshold;
       double deref_threshold;
       int max_level;
-      double blast_size;
       int nc_limit;
+      double blast_size;
       double blast_energy;
       Vertex blast_position;
    } opt;
-
-   // AMR estimator setup
-   L2_FECollection *flux_fec;
-   RT_FECollection *smooth_flux_fec;
-
-   ErrorEstimator *estimator = nullptr;
-   ThresholdRefiner *refiner = nullptr;
-   ThresholdDerefiner *derefiner = nullptr;
-   amr::EstimatorIntegrator *ei = nullptr;
 
 public:
    Operator(ParMesh *pmesh,
             int estimator,
             double ref_t, double jac_t, double deref_t,
-            int max_level,
-            const double blast_size, const int nc_limit,
-            const double blast_energy, const double *blast_position);
+            int max_level, int nc_limit,
+            double blast_size, double blast_energy, double *blast_position);
 
    ~Operator();
 
@@ -212,15 +224,15 @@ public:
 
    void Reset();
 
-   void Update(BlockVector &S,
+   void Update(hydrodynamics::LagrangianHydroOperator &hydro,
+               ODESolver *ode_solver,
+               BlockVector &S,
                BlockVector &S_old,
                ParGridFunction &x,
                ParGridFunction &v,
                ParGridFunction &e,
                ParGridFunction &m,
                Array<int> &true_offset,
-               hydrodynamics::LagrangianHydroOperator&,
-               ODESolver*,
                const int bdr_attr_max,
                Array<int> &ess_tdofs,
                Array<int> &ess_vdofs);

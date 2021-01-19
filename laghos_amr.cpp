@@ -131,8 +131,8 @@ void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
    }
 }
 
-void Eval(const ParGridFunction &v_gf, const double threshold,
-          ParMesh &pmesh, Array<Refinement> &refs)
+static void Eval(const ParGridFunction &v_gf, const double threshold,
+                 ParMesh &pmesh, Array<Refinement> &refs)
 {
    Vector val;
    IntegrationPoint ip;
@@ -167,31 +167,27 @@ Operator::Operator(ParMesh *pmesh,
                    double jac_t,
                    double deref_t,
                    int max_level,
-                   const double blast_size,
-                   const int nc_limit,
-                   const double blast_energy,
-                   const double *blast_xyz):
+                   int nc_limit,
+                   double size_b,
+                   double energy_b,
+                   double *xyz_b):
    pmesh(pmesh),
    myid(pmesh->GetMyRank()),
    dim(pmesh->Dimension()),
    sdim(pmesh->SpaceDimension()),
+   flux_fec(order, dim),
+   flux_fes(pmesh, &flux_fec, sdim),
    opt(
 {
-   estimator, ref_t, jac_t, deref_t, max_level, blast_size, nc_limit,
-              blast_energy, Vertex(blast_xyz[0], blast_xyz[1], blast_xyz[2])
-})
-{
-   dbg();
-}
+   estimator, ref_t, jac_t, deref_t, max_level, nc_limit,
+              size_b, energy_b, Vertex(xyz_b[0], xyz_b[1], xyz_b[2])
+}) { dbg(); }
 
 Operator::~Operator() { dbg(); }
 
-void Operator::Setup(ParGridFunction &u)
+void Operator::Setup(ParGridFunction &x_gf)
 {
-   dbg("AMR estimator #%d", opt.estimator);
-
-   flux_fec = new L2_FECollection(order, dim);
-   auto flux_fes = new ParFiniteElementSpace(pmesh, flux_fec, sdim);
+   dbg("AMR Setup #%d", opt.estimator);
 
    if (opt.estimator == amr::estimator::zz)
    {
@@ -199,7 +195,7 @@ void Operator::Setup(ParGridFunction &u)
       ei = new amr::EstimatorIntegrator();
       smooth_flux_fec = new RT_FECollection(order-1, dim);
       auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
-      estimator = new L2ZienkiewiczZhuEstimator(*ei, u, flux_fes,
+      estimator = new L2ZienkiewiczZhuEstimator(*ei, x_gf, &flux_fes,
                                                 smooth_flux_fes);
    }
 
@@ -207,7 +203,7 @@ void Operator::Setup(ParGridFunction &u)
    {
       dbg("Kelly estimator init");
       ei = new amr::EstimatorIntegrator();
-      estimator = new KellyErrorEstimator(*ei, u, flux_fes);
+      estimator = new KellyErrorEstimator(*ei, x_gf, flux_fes);
    }
 
    if (estimator)
@@ -227,20 +223,19 @@ void Operator::Setup(ParGridFunction &u)
 
 void Operator::Reset()
 {
-   if (!(refiner && derefiner)) { return; }
-   refiner->Reset();
-   derefiner->Reset();
+   if (refiner) { refiner->Reset(); }
+   if (derefiner) { derefiner->Reset(); }
 }
 
-void Operator::Update(BlockVector &S,
+void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
+                      ODESolver *ode_solver,
+                      BlockVector &S,
                       BlockVector &S_old,
                       ParGridFunction &x,
                       ParGridFunction &v,
                       ParGridFunction &e,
                       ParGridFunction &m,
                       Array<int> &true_offset,
-                      hydrodynamics::LagrangianHydroOperator &hydro,
-                      ODESolver *ode_solver,
                       const int bdr_attr_max,
                       Array<int> &ess_tdofs,
                       Array<int> &ess_vdofs)
