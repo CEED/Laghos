@@ -672,6 +672,7 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
+    // TODO: do not construct the FOM operator in the online ROM case?
     LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
                                  ess_tdofs, rho, source, cfl, mat_gf_coeff,
                                  visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
@@ -814,6 +815,7 @@ int main(int argc, char *argv[])
     bool use_dt_old = false;
     bool last_step = false;
     int steps = 0;
+    int unique_steps = 0;
     BlockVector S_old(S);
 
     StopWatch samplerTimer;
@@ -1176,6 +1178,8 @@ int main(int argc, char *argv[])
                 dt *= 1.02;
             }
 
+            unique_steps++;
+
             if (outputTimes) outfile_time << t << "\n";
 
             if (outputSpaceTimeSolution)
@@ -1443,7 +1447,7 @@ int main(int argc, char *argv[])
         {
             outfile_time.close();
             MFEM_VERIFY(romOptions.window == 0, "Time windows not implemented in this case");
-            MFEM_VERIFY(steps + 1 == sampler->FinalNumberOfSamples(), "");
+            MFEM_VERIFY(unique_steps + 1 == sampler->FinalNumberOfSamples(), "");
             // TODO: for now, we just write out the simulation timestep times, not the ROM basis generator
             // snapshot times. So far, in our tests snapshots are taken on every timestep, so the timesteps
             // and snapshots coincide. In general, this needs to be extended to allow for snapshots on a
@@ -1479,6 +1483,14 @@ int main(int argc, char *argv[])
         ofs_STX.close();
         ofs_STV.close();
         ofs_STE.close();
+    }
+
+    if (visit) // Visualize at final time. TODO: do this in a better way
+    {
+        oper.ComputeDensity(rho_gf);
+        visit_dc.SetCycle(1000000);
+        visit_dc.SetTime(t_final);
+        visit_dc.Save();
     }
 
     if (writeSol)
@@ -1541,9 +1553,8 @@ int main(int argc, char *argv[])
     if (mpi.Root())
     {
         cout << endl;
-        cout << "Energy  diff: " << scientific << setprecision(2)
+        cout << "Energy diff: " << scientific << setprecision(2)
              << fabs(energy_init - energy_final) << endl;
-
     }
 
     PrintParGridFunction(myid, outputPath + "/x_gf", &x_gf);
