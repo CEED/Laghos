@@ -38,6 +38,7 @@ static const char *EstimatorName(const int est)
       case amr::estimator::kelly: return "Kelly";
       default: MFEM_ABORT("Unknown estimator!");
    }
+   return nullptr;
 }
 
 static void Update(BlockVector &S, BlockVector &S_tmp,

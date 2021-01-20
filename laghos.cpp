@@ -67,10 +67,6 @@
 #include "laghos_amr.hpp"
 #include "laghos_solver.hpp"
 
-#undef MFEM_DEBUG_COLOR
-#define MFEM_DEBUG_COLOR 199
-#include "general/debug.hpp"
-
 using namespace mfem;
 
 static long GetMaxRssMB();
@@ -302,12 +298,10 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    if (!amr)
    {
-      dbg("Refine the mesh in serial to increase the resolution");
       for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
    }
    else
    {
-      dbg("AMR for Sedov problem");
       mesh->EnsureNCMesh();
       Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
       for (int lev = 0; lev < rs_levels; lev++)

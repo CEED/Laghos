@@ -844,6 +844,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
+   qdata.rho0DetJ0w.HostRead();
    const int nqp = ir.GetNPoints();
    ParGridFunction x, v, e;
    Vector* sptr = const_cast<Vector*>(&S);
@@ -1198,7 +1199,7 @@ void QUpdateBody(const int NE, const int e,
       }
    }
    // Track maximum artificial viscosity per zone
-   // !!! Race !!!
+   // /!\ Race condition, only used with the custom amr estimator
    d_el_max_visc[e] = fmax(visc_coeff, d_el_max_visc[e]);
    d_el_max_vgrad[e] = fmax(fabs(det_v_grad), d_el_max_vgrad[e]);
 }
