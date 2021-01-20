@@ -131,12 +131,12 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
    bool amr = false;
-   int amr_estimator = amr::estimator::std;
+   int amr_estimator = amr::estimator::custom;
    double amr_ref_threshold = 2e-4;
    double amr_jac_threshold = 0.92;
    double amr_deref_threshold = 0.75;
    int amr_max_level = rs_levels + rp_levels;
-   const double amr_blast_size = 1e-10;
+   const double amr_blast_eps = 1e-10;
    const int amr_nc_limit = 1; // maximum level of hanging nodes
 
    OptionsParser args(argc, argv);
@@ -212,14 +212,14 @@ int main(int argc, char *argv[])
 
    args.AddOption(&amr, "-amr", "--enable-amr", "-no-amr", "--disable-amr",
                   "Experimental adaptive mesh refinement (problem 1 only).");
+   args.AddOption(&amr_estimator, "-ae", "--amr-estimator",
+                  "AMR estimator: 0:Custom, 1:Rho, 2:ZZ, 3:Kelly");
    args.AddOption(&amr_ref_threshold, "-ar", "--amr-ref-threshold",
-                  "AMR refinement threshold.");
-   args.AddOption(&amr_jac_threshold, "-aj", "--amr-jac-threshold",
                   "AMR Jacobian refinement threshold.");
    args.AddOption(&amr_deref_threshold, "-ad", "--amr-deref-threshold",
+                  "AMR refinement threshold.");
+   args.AddOption(&amr_jac_threshold, "-aj", "--amr-jac-threshold",
                   "AMR derefinement threshold (0 = no derefinement).");
-   args.AddOption(&amr_estimator, "-ae", "--amr-estimator",
-                  "AMR estimator: 0:vgrad/visc 1:Jacobians");
    args.AddOption(&amr_max_level, "-am", "--amr-max-level",
                   "AMR max refined level (default to 'rs_levels + rp_levels')");
    args.Parse();
@@ -307,12 +307,12 @@ int main(int argc, char *argv[])
    }
    else
    {
-      dbg("RefineAtVertex BLAST");
+      dbg("AMR for Sedov problem");
       mesh->EnsureNCMesh();
       Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
       for (int lev = 0; lev < rs_levels; lev++)
       {
-         mesh->RefineAtVertex(blast, amr_blast_size);
+         mesh->RefineAtVertex(blast, amr_blast_eps);
       }
    }
 
@@ -614,7 +614,7 @@ int main(int argc, char *argv[])
                               amr_deref_threshold,
                               amr_max_level,
                               amr_nc_limit,
-                              amr_blast_size,
+                              amr_blast_eps,
                               blast_energy,
                               blast_position);
       AMR->Setup(x_gf);

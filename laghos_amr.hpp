@@ -26,16 +26,16 @@ namespace mfem
 namespace amr
 {
 
-enum estimator: int { std = 0, rho = 1, zz = 2, kelly = 3 };
+enum estimator: int { custom = 0, jjt = 1, zz = 2, kelly = 3 };
 
-static const char *Estimator(const int est)
+static const char *EstimatorName(const int est)
 {
    switch (static_cast<amr::estimator>(est))
    {
-      case amr::estimator::std: return "Custom Sedov Estimator";
-      case amr::estimator::rho: return "RHO Estimator";
-      case amr::estimator::zz: return "ZZ Estimator";
-      case amr::estimator::kelly: return "Kelly Estimator";
+      case amr::estimator::custom: return "Custom";
+      case amr::estimator::jjt: return "JJt";
+      case amr::estimator::zz: return "ZZ";
+      case amr::estimator::kelly: return "Kelly";
       default: MFEM_ABORT("Unknown estimator!");
    }
 }
@@ -80,10 +80,6 @@ static void Update(BlockVector &S, BlockVector &S_tmp,
 
    S_tmp.Update(true_offset);
    m_gf.Update();
-
-   //H1FESpace->UpdatesFinished();
-   //L2FESpace->UpdatesFinished();
-   //MEFESpace->UpdatesFinished();
 }
 
 static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
@@ -154,12 +150,26 @@ static void GetPerElementMinMax(const GridFunction &gf,
 
 class EstimatorIntegrator: public DiffusionIntegrator
 {
+   int NE, e;
+   ParMesh *pmesh;
    enum class mode { diffusion, one, two };
    const mode flux_mode;
    ConstantCoefficient one {1.0};
+   const int max_level;
+   const double jac_threshold;
 public:
-   EstimatorIntegrator(const mode flux_mode = mode::diffusion):
-      DiffusionIntegrator(one), flux_mode(flux_mode) { }
+   EstimatorIntegrator(ParMesh *pmesh,
+                       const int max_level,
+                       const double jac_threshold,
+                       const mode flux_mode = mode::two):
+      DiffusionIntegrator(one),
+      NE(pmesh->GetNE()),
+      pmesh(pmesh),
+      flux_mode(flux_mode),
+      max_level(max_level),
+      jac_threshold(jac_threshold) { }
+
+   void Reset() { e = 0; NE = pmesh->GetNE(); }
 
    double ComputeFluxEnergy(const FiniteElement &fluxelem,
                             ElementTransformation &Trans,
@@ -180,12 +190,24 @@ public:
                                    const FiniteElement &fluxelem,
                                    Vector &flux,
                                    bool with_coef = false);
+private:
+   void ComputeElementFlux1(const FiniteElement &el,
+                            ElementTransformation &Trans,
+                            const Vector &u,
+                            const FiniteElement &fluxelem,
+                            Vector &flux);
+
+   void ComputeElementFlux2(const int e,
+                            const FiniteElement &el,
+                            ElementTransformation &Trans,
+                            const FiniteElement &fluxelem,
+                            Vector &flux);
 };
 
 // AMR operator
 class Operator
 {
-   const int order = 3;
+   const int order = 3; // should be computed
    ParMesh *pmesh;
    const int myid, dim, sdim;
 
@@ -196,7 +218,7 @@ class Operator
    ErrorEstimator *estimator = nullptr;
    ThresholdRefiner *refiner = nullptr;
    ThresholdDerefiner *derefiner = nullptr;
-   amr::EstimatorIntegrator *ei = nullptr;
+   amr::EstimatorIntegrator *integ = nullptr;
 
    const struct Options
    {

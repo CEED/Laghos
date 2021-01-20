@@ -26,11 +26,11 @@ namespace mfem
 namespace amr
 {
 
-static void ComputeElementFlux0(const FiniteElement &el,
-                                ElementTransformation &Trans,
-                                const Vector &u,
-                                const FiniteElement &fluxelem,
-                                Vector &flux)
+void EstimatorIntegrator::ComputeElementFlux1(const FiniteElement &el,
+                                              ElementTransformation &Trans,
+                                              const Vector &u,
+                                              const FiniteElement &fluxelem,
+                                              Vector &flux)
 {
    const int dof = el.GetDof();
    const int dim = el.GetDim();
@@ -61,10 +61,11 @@ static void ComputeElementFlux0(const FiniteElement &el,
    }
 }
 
-static void ComputeElementFlux1(const FiniteElement &el,
-                                ElementTransformation &Trans,
-                                const FiniteElement &fluxelem,
-                                Vector &flux)
+void EstimatorIntegrator::ComputeElementFlux2(const int e,
+                                              const FiniteElement &el,
+                                              ElementTransformation &Trans,
+                                              const FiniteElement &fluxelem,
+                                              Vector &flux)
 {
    const int dim = el.GetDim();
    const int sdim = Trans.GetSpaceDim();
@@ -79,6 +80,8 @@ static void ComputeElementFlux1(const FiniteElement &el,
    double minW = +NL_DMAX;
    double maxW = -NL_DMAX;
 
+   const int depth = pmesh->pncmesh->GetElementDepth(e);
+
    for (int q = 0; q < NQ; q++)
    {
       const IntegrationPoint &ip = ir.IntPoint(q);
@@ -92,11 +95,15 @@ static void ComputeElementFlux1(const FiniteElement &el,
       MFEM_VERIFY(std::fabs(maxW) > 1e-13, "");
       const double rho = minW / maxW;
       MFEM_VERIFY(rho <= 1.0, "");
-      constexpr double amr_jac_threshold = 0.98;
       for (int d = 0; d < sdim; d++)
       {
-         const double value = (rho > amr_jac_threshold) ? 0.0: rho;
-         flux(NQ*d+q) = value;
+         const int iq = NQ*d + q;
+         flux(iq) = 1.0 - rho;
+         //dbg("%f > %f", rho, jac_threshold);
+         if (rho > jac_threshold) { continue; }
+         //dbg("rho:%f, depth:%d", rho, depth);
+         if (depth > max_level) { continue; }
+         flux(iq) = rho;
       }
    }
 }
@@ -108,6 +115,8 @@ void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
                                              Vector &flux,
                                              bool with_coef)
 {
+   MFEM_VERIFY(NE == pmesh->GetNE(), "");
+   //dbg("NE:%d, e:%d", NE, e);
    // ZZ comes with with_coef set to true, not Kelly
    switch (flux_mode)
    {
@@ -119,12 +128,12 @@ void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
       }
       case mode::one:
       {
-         ComputeElementFlux0(el, Trans, u, fluxelem, flux);
+         ComputeElementFlux1(el, Trans, u, fluxelem, flux);
          break;
       }
       case mode::two:
       {
-         ComputeElementFlux1(el, Trans, fluxelem, flux);
+         ComputeElementFlux2(e++, el, Trans, fluxelem, flux);
          break;
       }
       default: MFEM_ABORT("Unknown mode!");
@@ -181,41 +190,51 @@ Operator::Operator(ParMesh *pmesh,
 {
    estimator, ref_t, jac_t, deref_t, max_level, nc_limit,
               size_b, energy_b, Vertex(xyz_b[0], xyz_b[1], xyz_b[2])
-}) { dbg(); }
+}) { dbg("%s", amr::EstimatorName(opt.estimator)); }
 
 Operator::~Operator() { dbg(); }
 
 void Operator::Setup(ParGridFunction &x_gf)
 {
-   dbg("AMR Setup #%d", opt.estimator);
+   dbg();
+   if (myid == 0)
+   {
+      std::cout << "AMR setup with "
+                << amr::EstimatorName(opt.estimator) << " estimator"
+                << std::endl;
+   }
 
    if (opt.estimator == amr::estimator::zz)
    {
       dbg("ZZ estimator init");
-      ei = new amr::EstimatorIntegrator();
+      integ = new amr::EstimatorIntegrator(pmesh, opt.max_level,
+                                           opt.jac_threshold);
       smooth_flux_fec = new RT_FECollection(order-1, dim);
       auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
-      estimator = new L2ZienkiewiczZhuEstimator(*ei, x_gf, &flux_fes,
+      estimator = new L2ZienkiewiczZhuEstimator(*integ, x_gf, &flux_fes,
                                                 smooth_flux_fes);
    }
 
    if (opt.estimator == amr::estimator::kelly)
    {
       dbg("Kelly estimator init");
-      ei = new amr::EstimatorIntegrator();
-      estimator = new KellyErrorEstimator(*ei, x_gf, flux_fes);
+      integ = new amr::EstimatorIntegrator(pmesh, opt.max_level,
+                                           opt.jac_threshold);
+      estimator = new KellyErrorEstimator(*integ, x_gf, flux_fes);
    }
 
    if (estimator)
    {
-      const double max_elem_error = 1.0e-4;
+      const double hysteresis = 0.25;
+      const double max_elem_error = 1.0e-6;
       refiner = new ThresholdRefiner(*estimator);
-      refiner->SetTotalErrorFraction(0.75);
+      refiner->SetTotalErrorFraction(0.0);
+      refiner->SetLocalErrorGoal(max_elem_error);
       refiner->PreferConformingRefinement();
       refiner->SetNCLimit(opt.nc_limit);
 
-      const double hysteresis = 0.9; // derefinement safety coefficient
       derefiner = new ThresholdDerefiner(*estimator);
+      derefiner->SetOp(2); // 0:min, 1:sum, 2:max
       derefiner->SetThreshold(hysteresis * max_elem_error);
       derefiner->SetNCLimit(opt.nc_limit);
    }
@@ -223,6 +242,7 @@ void Operator::Setup(ParGridFunction &x_gf)
 
 void Operator::Reset()
 {
+   if (integ) { integ->Reset(); }
    if (refiner) { refiner->Reset(); }
    if (derefiner) { derefiner->Reset(); }
 }
@@ -251,7 +271,7 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
 
    switch (opt.estimator)
    {
-      case amr::estimator::std:
+      case amr::estimator::custom:
       {
          Vector &error_est = hydro.GetZoneMaxVisc();
          for (int e = 0; e < NE; e++)
@@ -265,8 +285,10 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          }
          break;
       }
-      case amr::estimator::rho:
+
+      case amr::estimator::jjt:
       {
+         MFEM_VERIFY(dim == 2, "JJt estimator only available for 2D!");
          const double art = opt.ref_threshold;
          const int order = H1FESpace.GetOrder(0) + 1;
          DenseMatrix Jadjt, Jadj(dim, pmesh->SpaceDimension());
@@ -295,6 +317,7 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
             {
                const double rho = minW / maxW;
                MFEM_VERIFY(rho <= 1.0, "");
+               //dbg("%f", rho);
                if (rho < opt.jac_threshold && depth < opt.max_level)
                {
                   refs.Append(Refinement(e));
@@ -303,21 +326,21 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          }
          break;
       }
+
       case amr::estimator::zz:
       case amr::estimator::kelly:
       {
-         dbg("AMR estimator Apply");
+         //dbg("AMR estimator Apply");
          refiner->Apply(*pmesh);
-         if (refiner->Refined()) { mesh_refined = true; }
+         if (refiner->Refined()) { dbg("\033[1;32mREFINED!"); mesh_refined = true; }
          MFEM_VERIFY(!refiner->Derefined(),"");
          MFEM_VERIFY(!refiner->Rebalanced(),"");
-         /*if (refiner->Stop() && myid == 0)
-         { std::cout << "Stopping criterion satisfied. Stop.\n"; }*/
          break;
       }
       default: MFEM_ABORT("Unknown AMR estimator!");
    }
 
+   // custom and JJt uses refs, ZZ and Kelly will set mesh_refined
    const int nref = pmesh->ReduceInt(refs.Size());
    if (nref && !mesh_refined)
    {
@@ -330,14 +353,13 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          std::cout << "Refined " << nref << " elements." << std::endl;
       }
    }
-   else if (opt.estimator == amr::estimator::std &&
-            opt.deref_threshold >= 0.0)
+   else if (opt.estimator == amr::estimator::custom &&
+            opt.deref_threshold >= 0.0 && !mesh_refined)
    {
-      dbg("STD Derefinement");
+      //dbg("Derefinement");
       ParGridFunction rho_gf;
-      hydro.ComputeDensity(rho_gf);
-
       Vector rho_max, rho_min;
+      hydro.ComputeDensity(rho_gf);
       GetPerElementMinMax(rho_gf, rho_min, rho_max);
 
       // Derefinement based on zone maximum rho in post-shock region
@@ -370,26 +392,24 @@ void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          std::cout << "Derefined, threshold = " << threshold << std::endl;
       }
    }
-   /*else if ((amr_estimator == amr::estimator::zz ||
-             amr_estimator == amr::estimator::kelly) &&
-            !mesh_refined)
+   else if ((opt.estimator == amr::estimator::zz ||
+             opt.estimator == amr::estimator::kelly) && !mesh_refined)
    {
-      dbg("ZZ/KL Derefinement");
+      //dbg("ZZ/Kelly Derefinement");
       MFEM_VERIFY(derefiner,"");
       if (derefiner->Apply(*pmesh))
       {
          if (myid == 0)
          {
-            std::cout << "\nDerefined elements." << std::endl;
+            //std::cout << "\nDerefined elements." << std::endl;
          }
       }
-      if (derefiner->Derefined()) { mesh_refined = true; }
-   }*/
+      if (derefiner->Derefined()) {  dbg("\033[1;31mDEREFINED!"); mesh_refined = true; }
+   }
    else { /* nothing to do */ }
 
    if (mesh_refined)
    {
-      dbg("\033[7mmesh_changed");
       constexpr bool quick = true;
 
       amr::Update(S, S_old, true_offset, x, v, e, m);
