@@ -287,7 +287,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       gfH1(input.H1FESpace), gfL2(input.L2FESpace),
       rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
-      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), offsetInit(input.useOffset),
+      RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
@@ -456,14 +457,21 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         }
     }
 
-    if (hyperreduce)
+    if (hyperreduce_prep)
     {
         if(rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
         preprocessHyperreductionTymer.Stop();
-        if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
+        if (rank == 0) {
+          writeSP(input.window);
+          cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
+        }
+    }
+    else if (hyperreduce)
+    {
+      readSP(input.window);
     }
 }
 
@@ -1751,6 +1759,100 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     BEsp->mult(*rE, *spE);
     for (int i=0; i<size_L2_sp; ++i)
         e[i] = (*spE)(i);
+}
+
+void writeVec(vector<int> v, std::string file_name){
+	ofstream file;
+	file.open(file_name);
+	for(int i=0;i<v.size();++i){
+		file<<v[i]<<endl;
+	}
+	file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readVec(vector<int> &v, std::string file_name){
+	ifstream file;
+	file.open(file_name);
+	string line;
+	while(getline(file, line)){
+		v.push_back(stoi(line));
+	}
+	file.close();
+}
+
+void ROM_Basis::writeSP(const int window = 0) const
+{
+    writeVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
+    writeVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
+    writeVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ofstream outfile_romS(outfile_string.c_str());
+    sample_pmesh->PrintAsOne(outfile_romS);
+    writeVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
+    writeVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
+    writeVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
+
+    writeVec(sprows, basename + "/" + "sprows" + "_" + to_string(window));
+    writeVec(all_sprows, basename + "/" + "all_sprows" + "_" + to_string(window));
+
+    writeVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
+
+    BXsp->write(basename + "/" + "BXsp" + "_" + to_string(window));
+    BVsp->write(basename + "/" + "BVsp" + "_" + to_string(window));
+    BEsp->write(basename + "/" + "BEsp" + "_" + to_string(window));
+    if (RHSbasis)
+    {
+      BFvsp->write(basename + "/" + "BFvsp" + "_" + to_string(window));
+      BFesp->write(basename + "/" + "BFesp" + "_" + to_string(window));
+    }
+    spX->write(basename + "/" + "spX" + "_" + to_string(window));
+    spV->write(basename + "/" + "spV" + "_" + to_string(window));
+    spE->write(basename + "/" + "spE" + "_" + to_string(window));
+
+    if (offsetInit)
+    {
+      initXsp->write(basename + "/" + "initXsp" + "_" + to_string(window));
+      initVsp->write(basename + "/" + "initVsp" + "_" + to_string(window));
+      initEsp->write(basename + "/" + "initEsp" + "_" + to_string(window));
+    }
+}
+
+void ROM_Basis::readSP(const int window = 0)
+{
+    readVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
+    readVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
+    readVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ofstream outfile_romS(outfile_string.c_str());
+    sample_pmesh->PrintAsOne(outfile_romS);
+    readVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
+    readVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
+    readVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
+
+    readVec(sprows, basename + "/" + "sprows" + "_" + to_string(window));
+    readVec(all_sprows, basename + "/" + "all_sprows" + "_" + to_string(window));
+
+    readVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
+
+    BXsp->read(basename + "/" + "BXsp" + "_" + to_string(window));
+    BVsp->read(basename + "/" + "BVsp" + "_" + to_string(window));
+    BEsp->read(basename + "/" + "BEsp" + "_" + to_string(window));
+    if (RHSbasis)
+    {
+      BFvsp->read(basename + "/" + "BFvsp" + "_" + to_string(window));
+      BFesp->read(basename + "/" + "BFesp" + "_" + to_string(window));
+    }
+    spX->read(basename + "/" + "spX" + "_" + to_string(window));
+    spV->read(basename + "/" + "spV" + "_" + to_string(window));
+    spE->read(basename + "/" + "spE" + "_" + to_string(window));
+
+    if (offsetInit)
+    {
+      initXsp->read(basename + "/" + "initXsp" + "_" + to_string(window));
+      initVsp->read(basename + "/" + "initVsp" + "_" + to_string(window));
+      initEsp->read(basename + "/" + "initEsp" + "_" + to_string(window));
+    }
 }
 
 void ROM_Operator::ComputeReducedMv()

@@ -279,6 +279,8 @@ int main(int argc, char *argv[])
                    "Enable or disable solution difference norm computation.");
     args.AddOption(&romOptions.hyperreduce, "-romhr", "--romhr", "-no-romhr", "--no-romhr",
                    "Enable or disable ROM hyperreduction.");
+    args.AddOption(&romOptions.hyperreduce_prep, "-romhrprep", "--romhrprep", "-no-romhrprep", "--no-romhrprep",
+                   "Enable or disable ROM hyperreduction preprocessing.");
     args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
@@ -904,9 +906,11 @@ int main(int argc, char *argv[])
             {
                 SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-
-                romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                        visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                if (!romOptions.hyperreduce_prep)
+                {
+                  romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
+                          visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                }
             }
 
             romOptions.window = 0;
@@ -914,8 +918,20 @@ int main(int argc, char *argv[])
         else
         {
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+            if (!romOptions.hyperreduce_prep)
+            {
+              romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                            cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+            }
+        }
+
+        if (romOptions.hyperreduce_prep)
+        {
+          if (myid == 0)
+          {
+            cout << "Hyperreduction pre-processing completed. " << endl;
+          }
+          return 0;
         }
 
         basis[0]->Init(romOptions, S);
@@ -934,7 +950,6 @@ int main(int argc, char *argv[])
             cout << "Offset Style: " << offsetType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
-
 
         ode_solver->Init(*romOper[0]);
         onlinePreprocessTimer.Stop();

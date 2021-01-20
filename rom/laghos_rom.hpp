@@ -92,6 +92,7 @@ struct ROM_Options
     int sampE = 0;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
+    bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
@@ -432,6 +433,9 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
+    void writeSP(const int window) const;
+    void readSP(const int window);
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
@@ -469,6 +473,7 @@ public:
 
 private:
     const bool hyperreduce;
+    const bool hyperreduce_prep;
     const bool offsetInit;
     const bool RHSbasis;
     const bool useGramSchmidt;
