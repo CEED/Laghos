@@ -63,6 +63,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "laghos_tmop.hpp"
 
 using std::cout;
 using std::endl;
@@ -844,6 +845,12 @@ int main(int argc, char *argv[])
               << "L_2    error: " << error_l2 << endl;
       }
    }
+
+   // Finally, run a tmop mesh optimization.
+   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs);
+   e_gf = 1.0;
+   hydrodynamics::VisualizeField(vis_rho, vishost, visport, e_gf,
+                                 "Optimized Mesh", 400, 400, 600, 600);
 
    if (visualization)
    {
