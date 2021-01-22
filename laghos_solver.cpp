@@ -252,8 +252,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    {
       // Setup the preconditioner of the velocity mass operator.
       // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> ess_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      Array<int> empty_tdofs;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty_tdofs);
       CG_VMass.SetPreconditioner(*VMassPA_Jprec);
 
       CG_VMass.SetOperator(*VMassPA);
@@ -517,26 +517,32 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 
 
 
-double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,const int Q1D,const int VDIM,const double ln_norm,
-const mfem::Vector& mass, const mfem::Vector& f)
+double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
+                             const int Q1D,const int VDIM,const double ln_norm,
+                             const mfem::Vector& mass, const mfem::Vector& f)
 {
-    
-    auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
-    mfem::Vector integrand(NE*NQ); 
-    auto I = Reshape(integrand.Write(), NQ, NE);
 
-   if (DIM == 1){
-      for (int e=0; e < NE; ++e){
-         for (int q = 0; q < NQ; ++q) {
-               double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
-                  vmag += pow(f_vals(k,q,e),ln_norm);
-               }
-               I(q,e) = vmag;
+   auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
+   mfem::Vector integrand(NE*NQ);
+   auto I = Reshape(integrand.Write(), NQ, NE);
+
+   if (DIM == 1)
+   {
+      for (int e=0; e < NE; ++e)
+      {
+         for (int q = 0; q < NQ; ++q)
+         {
+            double vmag = 0;
+            for (int k = 0; k < VDIM; k++)
+            {
+               vmag += pow(f_vals(k,q,e),ln_norm);
+            }
+            I(q,e) = vmag;
          }
       }
    }
-   else if (DIM == 2){
+   else if (DIM == 2)
+   {
       MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
       {
          MFEM_FOREACH_THREAD(qy,y,Q1D)
@@ -544,8 +550,9 @@ const mfem::Vector& mass, const mfem::Vector& f)
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
                const int q = qx + qy * Q1D;
-               double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
+               double vmag = 0;
+               for (int k = 0; k < VDIM; k++)
+               {
                   vmag += pow(f_vals(k,q,e),ln_norm);
                }
                I(q,e) = vmag;
@@ -553,8 +560,9 @@ const mfem::Vector& mass, const mfem::Vector& f)
          }
       });
    }
-   else if (DIM == 3){
-    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+   else if (DIM == 3)
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
       {
          MFEM_FOREACH_THREAD(qz,z,Q1D)
          {
@@ -563,65 +571,72 @@ const mfem::Vector& mass, const mfem::Vector& f)
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
                   const int q = qx + (qy + qz * Q1D) * Q1D;
-                  double vmag = 0; 
-               for(int k = 0; k < VDIM; k++){
-                  vmag += pow(f_vals(k,q,e),ln_norm);
-               }
-               I(q,e) = vmag;
+                  double vmag = 0;
+                  for (int k = 0; k < VDIM; k++)
+                  {
+                     vmag += pow(f_vals(k,q,e),ln_norm);
+                  }
+                  I(q,e) = vmag;
                }
             }
          }
       });
-   
-}
+
+   }
    const double integral = integrand * mass;
-return integral; 
+   return integral;
 
 }
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
-   
-    // get the restriction and interpolator objects 
-    const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(ir);
-    l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-    auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-    const int NQ = ir.GetNPoints(); 
-    const int ND = L2.GetFE(0)->GetDof();
+
+   // get the restriction and interpolator objects
+   const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(
+                                                      ir);
+   l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+   auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+   const int NQ = ir.GetNPoints();
+   const int ND = L2.GetFE(0)->GetDof();
    Vector e_vector(NE*ND), eintQ(NE*NQ);
 
-    // Get internal energy at the quadrature points
-    L2r->Mult(gf, e_vector);
-    l2_interpolator->Values(e_vector, eintQ);
+   // Get internal energy at the quadrature points
+   L2r->Mult(gf, e_vector);
+   l2_interpolator->Values(e_vector, eintQ);
 
-   double internal_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,1,1.0,qdata.rho0DetJ0w,eintQ); 
-    
-   MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, L2.GetParMesh()->GetComm());
+   double internal_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,1,1.0,
+                                                  qdata.rho0DetJ0w,eintQ);
+
+   MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
+                 L2.GetParMesh()->GetComm());
 
    return glob_ie;
 }
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-  double glob_ke = 0.0;
-   
-    // get the restriction and interpolator objects 
-    const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(ir);
-    h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-    auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-    const int NQ = ir.GetNPoints(); 
-    const int ND = H1.GetFE(0)->GetDof();
+   double glob_ke = 0.0;
+
+   // get the restriction and interpolator objects
+   const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(
+                                                      ir);
+   h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+   auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
+   const int NQ = ir.GetNPoints();
+   const int ND = H1.GetFE(0)->GetDof();
    Vector e_vector(dim*NE*ND), ekinQ(dim*NE*NQ);
 
-    // Get internal energy at the quadrature points
-    H1r->Mult(v, e_vector);
-    h1_interpolator->Values(e_vector, ekinQ);
+   // Get internal energy at the quadrature points
+   H1r->Mult(v, e_vector);
+   h1_interpolator->Values(e_vector, ekinQ);
 
-    // Get the IE, initial weighted mass 
+   // Get the IE, initial weighted mass
 
-   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,qdata.rho0DetJ0w,ekinQ); 
-    
-   MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM, H1.GetParMesh()->GetComm());
+   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,
+                                                 qdata.rho0DetJ0w,ekinQ);
+
+   MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
+                 H1.GetParMesh()->GetComm());
 
    return 0.5*glob_ke;
 }

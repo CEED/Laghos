@@ -69,7 +69,7 @@ using std::endl;
 using namespace mfem;
 
 // Choice for the problem setup.
-static int problem;
+static int problem, dim;
 
 // Forward declarations.
 double e0(const Vector &);
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    problem = 1;
-   int dim = 3;
+   dim = 3;
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
@@ -465,21 +465,21 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
-   Array<int> true_offset(4);
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-   BlockVector S(true_offset, Device::GetMemoryType());
+   Array<int> offset(4);
+   offset[0] = 0;
+   offset[1] = offset[0] + Vsize_h1;
+   offset[2] = offset[1] + Vsize_h1;
+   offset[3] = offset[2] + Vsize_l2;
+   BlockVector S(offset, Device::GetMemoryType());
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
    ParGridFunction x_gf, v_gf, e_gf;
-   x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
+   x_gf.MakeRef(&H1FESpace, S, offset[0]);
+   v_gf.MakeRef(&H1FESpace, S, offset[1]);
+   e_gf.MakeRef(&L2FESpace, S, offset[2]);
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
@@ -613,27 +613,27 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
    int checks = 0;
-//   const double internal_energy = hydro.InternalEnergy(e_gf);
-//   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-//   if (mpi.Root())
-//   {
-//      cout << std::fixed;
-//      cout << "step " << std::setw(5) << 0
-//            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-//            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-//            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-//            << internal_energy
-//            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy
-//            << ",\t|E| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy+internal_energy;
-//      cout << std::fixed;
-//      if (mem_usage)
-//      {
-//         cout << ", mem: " << mmax << "/" << msum << " MB";
-//      }
-//      cout << endl;
-//   }
+   //   const double internal_energy = hydro.InternalEnergy(e_gf);
+   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   if (mpi.Root())
+   //   {
+   //      cout << std::fixed;
+   //      cout << "step " << std::setw(5) << 0
+   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+   //            << internal_energy
+   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy
+   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy+internal_energy;
+   //      cout << std::fixed;
+   //      if (mem_usage)
+   //      {
+   //         cout << ", mem: " << mmax << "/" << msum << " MB";
+   //      }
+   //      cout << endl;
+   //   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -703,12 +703,12 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
-                 //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
-                 //  << internal_energy
-                 //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy
-                 //   << ",\t|E| = " << std::setprecision(10) << std::scientific
-                 //  << kinetic_energy+internal_energy;
+            //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
+            //  << internal_energy
+            //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy
+            //   << ",\t|E| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             if (mem_usage)
             {
@@ -865,7 +865,9 @@ double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+      case 3: return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+                        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+                                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
       case 4: return 1.0;
       case 5:
       {
