@@ -82,6 +82,72 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
+double interface_rt(const Vector &x)
+{
+   return tanh(2.0*(x(1) - 0.0));
+}
+
+void SetInterfaces(const ParGridFunction &x, ParGridFunction &interfaces)
+{
+   // 0 - triple point; 1 - rayleigh-taylor.
+   const int interface_type = 1;
+   interfaces = 0.0;
+
+   const double eps = 1.0e-8;
+   ParFiniteElementSpace *x_pfes = x.ParFESpace(),
+                         *i_pfes = interfaces.ParFESpace();
+   ParMesh *pmesh = x_pfes->GetParMesh();
+   Array<int> vdofs, vdofs_i;
+   if (interface_type == 0)
+   {
+      for (int f = 0; f < pmesh->GetNumFaces(); f++)
+      {
+         x_pfes->GetFaceVDofs(f, vdofs);
+         i_pfes->GetFaceVDofs(f, vdofs_i);
+
+         const int size_i = vdofs_i.Size() / 2;
+         const int size_x = vdofs.Size() / 2;
+
+         // A little mismatch, but whatever.
+         for (int i = 0; i < size_i; i++)
+         {
+            if (fabs(x(vdofs[i]) - 1.0) < eps)
+            {
+               interfaces(vdofs_i[i]) = 1.0;
+            }
+            if (fabs(x(vdofs[i+size_x]) - 1.5) < eps && x(vdofs[i]) >= 1.0)
+            {
+               interfaces(vdofs_i[i]) = 1.0;
+            }
+         }
+      }
+   }
+   else
+   {
+      FunctionCoefficient coeff(interface_rt);
+      interfaces.ProjectCoefficient(coeff);
+   }
+}
+
+void PrintNewInterface(ParGridFunction &interfaces)
+{
+   ParMesh *pmesh = interfaces.ParFESpace()->GetParMesh();
+
+   std::ostringstream mesh_name, interface_name;
+   mesh_name << "interface.mesh";
+   interface_name  << "interface.gf";
+
+   std::ofstream mesh_ofs(mesh_name.str().c_str());
+   mesh_ofs.precision(8);
+   pmesh->PrintAsOne(mesh_ofs);
+   mesh_ofs.close();
+
+   std::ofstream interface_ofs(interface_name.str().c_str());
+   interface_ofs.precision(8);
+   interfaces.SaveAsOne(interface_ofs);
+   interface_ofs.close();
+}
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -534,6 +600,11 @@ int main(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
 
+   H1_FECollection interf_fec(order_v, pmesh->Dimension());
+   ParFiniteElementSpace interf_fes(pmesh, &interf_fec);
+   ParGridFunction interfaces(&interf_fes);
+   SetInterfaces(x_gf, interfaces);
+
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
    switch (problem)
@@ -808,6 +879,7 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
 
+   PrintNewInterface(interfaces);
    hydro.PrintTimingData(mpi.Root(), steps, fom);
 
    if (mem_usage)
@@ -847,10 +919,7 @@ int main(int argc, char *argv[])
    }
 
    // Finally, run a tmop mesh optimization.
-   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs);
-   e_gf = 1.0;
-   hydrodynamics::VisualizeField(vis_rho, vishost, visport, e_gf,
-                                 "Optimized Mesh", 400, 400, 600, 600);
+   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs, interfaces);
 
    if (visualization)
    {

@@ -25,7 +25,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
-void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs);
+void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
+                  ParGridFunction &interface_ls);
 
 } // namespace hydrodynamics
 
