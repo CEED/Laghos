@@ -1063,7 +1063,10 @@ int main(int argc, char *argv[])
     {
         //Vector stSol(S);
         //romOper[0]->SolveSpaceTime(romS);
-        romOper[0]->SolveSpaceTimeGN(romS);
+        if (myid == 0)
+            romOper[0]->SolveSpaceTimeGN(romS);
+
+        MPI_Bcast(romS.GetData(), romS.Size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
     else
     {

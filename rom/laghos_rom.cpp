@@ -2590,7 +2590,10 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
     for (int i=0; i<rdim-1; ++i)
         for (int j=i+1; j<rdim; ++j)
         {
-            MFEM_VERIFY(fabs(M(i,j)) < 1.0e-15, "");
+            if (fabs(M(i,j)) >= 1.0e-13)
+                mfem::out << "M " << M(i,j) << endl;
+
+            MFEM_VERIFY(fabs(M(i,j)) < 1.0e-13, "");
         }
 
     // TODO: remove the assertion that the mass matrix is diagonal?
@@ -2720,6 +2723,7 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
 
 void ROM_Operator::SolveSpaceTimeGN(Vector &S)
 {
+    MFEM_VERIFY(rank == 0, "Space-time solver is serial");
     MFEM_VERIFY(GaussNewton, "");
     Vector x;
     basis->GetSpaceTimeInitialGuess(x);
@@ -2749,8 +2753,6 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     DenseMatrix jac(m, n);
     DenseMatrix jacNormal(n, n);
 
-    MFEM_VERIFY(rank == 0, "Space-time solver is serial");
-
     // Newton's method, with zero RHS.
     int it;
     double norm0, norm, norm_goal;
@@ -2758,9 +2760,9 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     const double abs_tol = 1.0e-12;
     const int print_level = 0;
 #ifdef COLL_LSPG
-    const int max_iter = 5;
+    const int max_iter = 2;
 #else
-    const int max_iter = 5;
+    const int max_iter = 2;
 #endif
 
     EvalSpaceTimeResidual_RK4(x, r);
