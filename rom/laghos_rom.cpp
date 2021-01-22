@@ -401,6 +401,15 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
+    if (hyperreduce)
+    {
+      if (rank == 0)
+      {
+        readSP(input, input.window);
+      }
+      return;
+    }
+
     if (offsetInit)
     {
         initX = new CAROM::Vector(tH1size, true);
@@ -518,16 +527,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         preprocessHyperreductionTymer.Stop();
         cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
-    else if (hyperreduce)
-    {
-      if (rank == 0)
-      {
-        readSP(input.window);
-      }
-    }
 }
 
-void ROM_Basis::ProjectToNextWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
+void ROM_Basis::ProjectFromPreviousWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
 {
 
   BwinX = new CAROM::Matrix(rdimx, rdimxPrev, false);
@@ -572,18 +574,18 @@ void ROM_Basis::ProjectToNextWindow(Vector& romS, int window, int rdimxPrev, int
   }
 }
 
-void ROM_Basis::Init(ROM_Options const& input, Vector const& S, bool loadPrevious)
+void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
 
     if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
     {
-        Vector initsp(2 * size_H1_sp + size_L2_sp);
-        if (loadPrevious)
+        if (input.offsetType == usePreviousSolution && input.window > 0)
         {
-          LiftToSampleMesh(S, initsp);
+          Vector initsp(2 * size_H1_sp + size_L2_sp);
           initXsp = new CAROM::Vector(size_H1_sp, false);
           initVsp = new CAROM::Vector(size_H1_sp, false);
           initEsp = new CAROM::Vector(size_L2_sp, false);
+          LiftToSampleMesh(S, initsp);
           for (int i=0; i<tH1size; ++i)
           {
               (*initXsp)(i) = initsp[i];
@@ -642,7 +644,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S, bool loadPreviou
         }
     }
 
-    if (offsetInit && hyperreduce_prep && !loadPrevious)
+    if (offsetInit && hyperreduce_prep)
     {
       CAROM::Matrix FOMX0(tH1size, 2, true);
 
@@ -1891,9 +1893,8 @@ void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev)
     BwinE = basisE->transposeMult(basisPrev.basisE);
 }
 
-void ROM_Basis::writeSP(const int window) const
+void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
 {
-
     writeNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
     writeNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
     writeNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
@@ -1906,15 +1907,6 @@ void ROM_Basis::writeSP(const int window) const
     std::ofstream outfile_romS(outfile_string.c_str());
     sample_pmesh->ParPrint(outfile_romS);
 
-    writeVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
-    writeVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
-    writeVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
-
-    writeVec(sprows, basename + "/" + "sprows" + "_" + to_string(window));
-    writeVec(all_sprows, basename + "/" + "all_sprows" + "_" + to_string(window));
-
-    writeVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
-
     writeNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     writeNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
@@ -1924,7 +1916,6 @@ void ROM_Basis::writeSP(const int window) const
     }
     BsinvV->write(basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->write(basename + "/" + "BsinvE" + "_" + to_string(window));
-
     BXsp->write(basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->write(basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->write(basename + "/" + "BEsp" + "_" + to_string(window));
@@ -1938,8 +1929,7 @@ void ROM_Basis::writeSP(const int window) const
     spX->write(basename + "/" + "spX" + "_" + to_string(window));
     spV->write(basename + "/" + "spV" + "_" + to_string(window));
     spE->write(basename + "/" + "spE" + "_" + to_string(window));
-
-    if (offsetInit)
+    if (offsetInit && !(input.offsetType == usePreviousSolution && window > 0))
     {
       initXsp->write(basename + "/" + "initXsp" + "_" + to_string(window));
       initVsp->write(basename + "/" + "initVsp" + "_" + to_string(window));
@@ -1954,7 +1944,7 @@ void ROM_Basis::writeSP(const int window) const
     }
 }
 
-void ROM_Basis::readSP(const int window)
+void ROM_Basis::readSP(ROM_Options const& input, const int window)
 {
 
     readNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
@@ -1968,15 +1958,6 @@ void ROM_Basis::readSP(const int window)
     std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
     std::ifstream outfile_romS(outfile_string.c_str());
     sample_pmesh = new ParMesh(comm, outfile_romS);
-
-    readVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
-    readVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
-    readVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
-
-    readVec(sprows, basename + "/" + "sprows" + "_" + to_string(window));
-    readVec(all_sprows, basename + "/" + "all_sprows" + "_" + to_string(window));
-
-    readVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
 
     readNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -2020,7 +2001,7 @@ void ROM_Basis::readSP(const int window)
     spV->read(basename + "/" + "spV" + "_" + to_string(window));
     spE->read(basename + "/" + "spE" + "_" + to_string(window));
 
-    if (offsetInit)
+    if (offsetInit && !(input.offsetType == usePreviousSolution && window > 0))
     {
       initXsp = new CAROM::Vector(size_H1_sp, false);
       initVsp = new CAROM::Vector(size_H1_sp, false);

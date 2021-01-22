@@ -386,7 +386,7 @@ public:
         delete BEEinv;
     }
 
-    void Init(ROM_Options const& input, Vector const& S, bool loadPrevious = false);
+    void Init(ROM_Options const& input, Vector const& S);
 
     void ReadSolutionBases(const int window);
 
@@ -433,11 +433,11 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
-    void ProjectToNextWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
+    void ProjectFromPreviousWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
     void computeWindowProjection(const ROM_Basis& basisPrev);
 
-    void writeSP(const int window = 0) const;
-    void readSP(const int window = 0);
+    void writeSP(ROM_Options const& input, const int window = 0) const;
+    void readSP(ROM_Options const& input, const int window = 0);
 
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 

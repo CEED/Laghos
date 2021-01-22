@@ -930,16 +930,21 @@ int main(int argc, char *argv[])
         {
           basis[0]->Init(romOptions, S);
         }
-
         if (romOptions.hyperreduce_prep)
         {
-          for (int curr_window = 0; curr_window < numWindows; curr_window++) {
-            if (curr_window > 0)
+          if (myid == 0)
+          {
+            basis[0]->writeSP(romOptions, 0);
+          }
+          for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+            if (romOptions.offsetType != usePreviousSolution)
             {
-              basis[curr_window]->computeWindowProjection(*basis[curr_window - 1]);
+              basis[curr_window]->Init(romOptions, S);
             }
-            if (myid == 0) {
-              basis[curr_window]->writeSP(curr_window);
+            basis[curr_window]->computeWindowProjection(*basis[curr_window - 1]);
+            if (myid == 0)
+            {
+              basis[curr_window]->writeSP(romOptions, curr_window);
             }
           }
         }
@@ -1320,16 +1325,16 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce)
                     {
-                        basis[romOptions.window]->ProjectToNextWindow(romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
+                        basis[romOptions.window]->ProjectFromPreviousWindow(romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
                     }
 
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
-                    if (romOptions.hyperreduce)
+                    if (romOptions.hyperreduce && romOptions.offsetType == usePreviousSolution)
                     {
-                      basis[romOptions.window]->Init(romOptions, romS, true);
+                      basis[romOptions.window]->Init(romOptions, romS);
                     }
-                    else
+                    else if (!romOptions.hyperreduce)
                     {
                       basis[romOptions.window]->Init(romOptions, S);
                     }
@@ -1343,7 +1348,6 @@ int main(int argc, char *argv[])
                     {
                       romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     }
-
                     timeLoopTimer.Start();
 
                     if (!romOptions.hyperreduce)
