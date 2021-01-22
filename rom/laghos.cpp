@@ -337,6 +337,7 @@ int main(int argc, char *argv[])
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
+    MFEM_VERIFY(!(romOptions.hyperreduce && romOptions.hyperreduce_prep), "");
 
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
@@ -925,16 +926,23 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (romOptions.hyperreduce_prep)
+        if (!romOptions.hyperreduce)
         {
-          if (myid == 0)
-          {
-            cout << "Hyperreduction pre-processing completed. " << endl;
-          }
-          return 0;
+          basis[0]->Init(romOptions, S);
         }
 
-        basis[0]->Init(romOptions, S);
+        if (romOptions.hyperreduce_prep)
+        {
+          for (int curr_window = 0; curr_window < numWindows; curr_window++) {
+            if (curr_window > 0)
+            {
+              basis[curr_window]->computeWindowProjection(*basis[curr_window - 1]);
+            }
+            if (myid == 0) {
+              basis[curr_window]->writeSP(curr_window);
+            }
+          }
+        }
 
         if (romOptions.mergeXV)
         {
@@ -943,12 +951,38 @@ int main(int argc, char *argv[])
         }
 
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
-        basis[0]->ProjectFOMtoROM(S, romS);
+
+        if (!romOptions.hyperreduce)
+        {
+          basis[0]->ProjectFOMtoROM(S, romS);
+          if (romOptions.hyperreduce_prep && myid == 0)
+          {
+            std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+            std::ofstream outfile_romS(romS_outPath.c_str());
+            outfile_romS.precision(16);
+            romS.Print(outfile_romS, 1);
+          }
+        }
+        else
+        {
+          std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+          std::ifstream outfile_romS(romS_outPath.c_str());
+          romS.Load(outfile_romS, romS.Size());
+        }
 
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+        }
+
+        if (romOptions.hyperreduce_prep)
+        {
+          if (myid == 0)
+          {
+            cout << "Hyperreduction pre-processing completed. " << endl;
+          }
+          return 0;
         }
 
         ode_solver->Init(*romOper[0]);
@@ -1278,26 +1312,44 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
                     }
 
+                    int rdimxprev = romOptions.dimX;
+                    int rdimvprev = romOptions.dimV;
+                    int rdimeprev =  romOptions.dimE;
+
                     SetWindowParameters(twparam, romOptions);
 
                     if (romOptions.hyperreduce)
                     {
-                        basis[romOptions.window-1]->LiftROMtoFOM(romS, S);
+                        basis[romOptions.window]->ProjectToNextWindow(romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
                     }
+
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
-                    basis[romOptions.window]->Init(romOptions, S);
-
+                    if (romOptions.hyperreduce)
+                    {
+                      basis[romOptions.window]->Init(romOptions, romS, true);
+                    }
+                    else
+                    {
+                      basis[romOptions.window]->Init(romOptions, S);
+                    }
                     if (romOptions.mergeXV)
                     {
                         romOptions.dimX = basis[romOptions.window]->GetDimX();
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
-                    romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
+                    if (!romOptions.hyperreduce)
+                    {
+                      romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
+                    }
+
                     timeLoopTimer.Start();
 
-                    basis[romOptions.window]->ProjectFOMtoROM(S, romS);
+                    if (!romOptions.hyperreduce)
+                    {
+                      basis[romOptions.window]->ProjectFOMtoROM(S, romS);
+                    }
                     if (myid == 0)
                     {
                         cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
@@ -1421,7 +1473,10 @@ int main(int argc, char *argv[])
         {
             romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
         }
-        basis[romOptions.window]->LiftROMtoFOM(romS, S);
+        if (!rom_online)
+        {
+          basis[romOptions.window]->LiftROMtoFOM(romS, S);
+        }
     }
 
     if (rom_offline)
@@ -1515,7 +1570,6 @@ int main(int argc, char *argv[])
         cout << endl;
         cout << "Energy  diff: " << scientific << setprecision(2)
              << fabs(energy_init - energy_final) << endl;
-
     }
 
     PrintParGridFunction(myid, outputPath + "/x_gf", &x_gf);

@@ -281,6 +281,43 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
+void writeNum(int num, std::string file_name){
+	ofstream file;
+	file.open(file_name);
+	file<<num<<endl;
+	file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readNum(int& num, std::string file_name){
+	ifstream file;
+	file.open(file_name);
+	string line;
+	getline(file, line);
+	num = stoi(line);
+	file.close();
+}
+
+void writeVec(vector<int> v, std::string file_name){
+	ofstream file;
+	file.open(file_name);
+	for(int i=0;i<v.size();++i){
+		file<<v[i]<<endl;
+	}
+	file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readVec(vector<int> &v, std::string file_name){
+	ifstream file;
+	file.open(file_name);
+	string line;
+	while(getline(file, line)){
+		v.push_back(stoi(line));
+	}
+	file.close();
+}
+
 ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
       H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
@@ -329,7 +366,22 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     mfH1.SetSize(tH1size);
     mfL2.SetSize(tL2size);
 
-    ReadSolutionBases(input.window);
+    if (!hyperreduce)
+    {
+      ReadSolutionBases(input.window);
+      if (hyperreduce_prep && rank == 0)
+      {
+        writeNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
+        writeNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
+        writeNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
+      }
+    }
+    else if (rank == 0)
+    {
+      readNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
+      readNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
+      readNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
+    }
 
     if (mergeXV)
     {
@@ -464,103 +516,174 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         preprocessHyperreductionTymer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
         preprocessHyperreductionTymer.Stop();
-        if (rank == 0) {
-          writeSP(input.window);
-          cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
-        }
+        cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
     else if (hyperreduce)
     {
-      readSP(input.window);
+      if (rank == 0)
+      {
+        readSP(input.window);
+      }
     }
 }
 
-void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
+void ROM_Basis::ProjectToNextWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
 {
+
+  BwinX = new CAROM::Matrix(rdimx, rdimxPrev, false);
+  BwinV = new CAROM::Matrix(rdimv, rdimvPrev, false);
+  BwinE = new CAROM::Matrix(rdime, rdimePrev, false);
+
+  BwinX->read(basename + "/" + "BwinX" + "_" + to_string(window));
+  BwinV->read(basename + "/" + "BwinV" + "_" + to_string(window));
+  BwinE->read(basename + "/" + "BwinE" + "_" + to_string(window));
+
+  CAROM::Vector romS_oldX(rdimxPrev, false);
+  CAROM::Vector romS_oldV(rdimvPrev, false);
+  CAROM::Vector romS_oldE(rdimePrev, false);
+  CAROM::Vector romS_X(rdimx, false);
+  CAROM::Vector romS_V(rdimv, false);
+  CAROM::Vector romS_E(rdime, false);
+
+  if (rank == 0)
+  {
+      for (int i=0; i<rdimxPrev; ++i)
+          romS_oldX(i) = romS[i];
+
+      for (int i=0; i<rdimvPrev; ++i)
+          romS_oldV(i) = romS[rdimxPrev + i];
+
+      for (int i=0; i<rdimePrev; ++i)
+          romS_oldE(i) = romS[rdimxPrev + rdimvPrev + i];
+
+      BwinX->mult(romS_oldX, romS_X);
+      BwinV->mult(romS_oldV, romS_V);
+      BwinE->mult(romS_oldE, romS_E);
+      romS.SetSize(rdimx + rdimv + rdime);
+
+      for (int i=0; i<rdimx; ++i)
+          romS[i] = romS_X(i);
+
+      for (int i=0; i<rdimv; ++i)
+          romS[rdimx + i] = romS_V(i);
+
+      for (int i=0; i<rdime; ++i)
+          romS[rdimx + rdimv + i] = romS_E(i);
+  }
+}
+
+void ROM_Basis::Init(ROM_Options const& input, Vector const& S, bool loadPrevious)
+{
+
     if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
     {
-        std::string path_init = basename + "/ROMoffset/init";
+        Vector initsp(2 * size_H1_sp + size_L2_sp);
+        if (loadPrevious)
+        {
+          LiftToSampleMesh(S, initsp);
+          initXsp = new CAROM::Vector(size_H1_sp, false);
+          initVsp = new CAROM::Vector(size_H1_sp, false);
+          initEsp = new CAROM::Vector(size_L2_sp, false);
+          for (int i=0; i<tH1size; ++i)
+          {
+              (*initXsp)(i) = initsp[i];
+          }
 
-        // Compute and save offset in the online phase of previous mode or initial window of initial mode
-        Vector X, V, E;
+          for (int i=0; i<tH1size; ++i)
+          {
+              (*initVsp)(i) = initsp[i + tH1size];
+          }
 
-        for (int i=0; i<H1size; ++i)
-        {
-            gfH1[i] = S[i];
+          for (int i=0; i<tL2size; ++i)
+          {
+              (*initEsp)(i) = initsp[i + 2 * tH1size];
+          }
         }
-        gfH1.GetTrueDofs(X);
-        for (int i=0; i<tH1size; ++i)
+        else
         {
-            (*initX)(i) = X[i];
-        }
+          std::string path_init = basename + "/ROMoffset/init";
 
-        for (int i=0; i<H1size; ++i)
-        {
-            gfH1[i] = S[H1size+i];
-        }
-        gfH1.GetTrueDofs(V);
-        for (int i=0; i<tH1size; ++i)
-        {
-            (*initV)(i) = V[i];
-        }
+          // Compute and save offset in the online phase of previous mode or initial window of initial mode
+          Vector X, V, E;
 
-        for (int i=0; i<L2size; ++i)
-        {
-            gfL2[i] = S[2*H1size+i];
-        }
-        gfL2.GetTrueDofs(E);
-        for (int i=0; i<tL2size; ++i)
-        {
-            (*initE)(i) = E[i];
-        }
+          for (int i=0; i<H1size; ++i)
+          {
+              gfH1[i] = S[i];
+          }
+          gfH1.GetTrueDofs(X);
+          for (int i=0; i<tH1size; ++i)
+          {
+              (*initX)(i) = X[i];
+          }
 
-        initX->write(path_init + "X" + std::to_string(input.window));
-        initV->write(path_init + "V" + std::to_string(input.window));
-        initE->write(path_init + "E" + std::to_string(input.window));
+          for (int i=0; i<H1size; ++i)
+          {
+              gfH1[i] = S[H1size+i];
+          }
+          gfH1.GetTrueDofs(V);
+          for (int i=0; i<tH1size; ++i)
+          {
+              (*initV)(i) = V[i];
+          }
+
+          for (int i=0; i<L2size; ++i)
+          {
+              gfL2[i] = S[2*H1size+i];
+          }
+          gfL2.GetTrueDofs(E);
+          for (int i=0; i<tL2size; ++i)
+          {
+              (*initE)(i) = E[i];
+          }
+
+          initX->write(path_init + "X" + std::to_string(input.window));
+          initV->write(path_init + "V" + std::to_string(input.window));
+          initE->write(path_init + "E" + std::to_string(input.window));
+        }
     }
 
-    if (offsetInit && hyperreduce)
+    if (offsetInit && hyperreduce_prep && !loadPrevious)
     {
-        CAROM::Matrix FOMX0(tH1size, 2, true);
+      CAROM::Matrix FOMX0(tH1size, 2, true);
 
-        for (int i=0; i<tH1size; ++i)
-        {
-            FOMX0(i,0) = (*initX)(i);
-            FOMX0(i,1) = (*initV)(i);
-        }
+      for (int i=0; i<tH1size; ++i)
+      {
+          FOMX0(i,0) = (*initX)(i);
+          FOMX0(i,1) = (*initV)(i);
+      }
 
-        CAROM::Matrix FOME0(tL2size, 1, true);
+      CAROM::Matrix FOME0(tL2size, 1, true);
 
-        for (int i=0; i<tL2size; ++i)
-        {
-            FOME0(i,0) = (*initE)(i);
-        }
+      for (int i=0; i<tL2size; ++i)
+      {
+          FOME0(i,0) = (*initE)(i);
+      }
 
-        CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
-        CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
+      CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
+      CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
 #ifdef FULL_DOF_STENCIL
-        const int NR = input.H1FESpace->GetVSize();
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+      const int NR = input.H1FESpace->GetVSize();
+      GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #else
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
+      GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
 #endif
 
-        if (rank == 0)
-        {
-            initXsp = new CAROM::Vector(size_H1_sp, false);
-            initVsp = new CAROM::Vector(size_H1_sp, false);
-            initEsp = new CAROM::Vector(size_L2_sp, false);
-            for (int i=0; i<size_H1_sp; ++i)
-            {
-                (*initXsp)(i) = spX0mat(i,0);
-                (*initVsp)(i) = spX0mat(i,1);
-            }
-            for (int i=0; i<size_L2_sp; ++i)
-            {
-                (*initEsp)(i) = spE0mat(i,0);
-            }
-        }
+      if (rank == 0)
+      {
+          initXsp = new CAROM::Vector(size_H1_sp, false);
+          initVsp = new CAROM::Vector(size_H1_sp, false);
+          initEsp = new CAROM::Vector(size_L2_sp, false);
+          for (int i=0; i<size_H1_sp; ++i)
+          {
+              (*initXsp)(i) = spX0mat(i,0);
+              (*initVsp)(i) = spX0mat(i,1);
+          }
+          for (int i=0; i<size_L2_sp; ++i)
+          {
+              (*initEsp)(i) = spE0mat(i,0);
+          }
+      }
     }
 }
 
@@ -1761,34 +1884,28 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
         e[i] = (*spE)(i);
 }
 
-void writeVec(vector<int> v, std::string file_name){
-	ofstream file;
-	file.open(file_name);
-	for(int i=0;i<v.size();++i){
-		file<<v[i]<<endl;
-	}
-	file.close();
-}
-
-// read data from from text.txt and store it in vector v
-void readVec(vector<int> &v, std::string file_name){
-	ifstream file;
-	file.open(file_name);
-	string line;
-	while(getline(file, line)){
-		v.push_back(stoi(line));
-	}
-	file.close();
-}
-
-void ROM_Basis::writeSP(const int window = 0) const
+void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev)
 {
+    BwinX = basisX->transposeMult(basisPrev.basisX);
+    BwinV = basisV->transposeMult(basisPrev.basisV);
+    BwinE = basisE->transposeMult(basisPrev.basisE);
+}
+
+void ROM_Basis::writeSP(const int window) const
+{
+
+    writeNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
+    writeNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
+    writeNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
+
     writeVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
     writeVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
     writeVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+
     std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
     std::ofstream outfile_romS(outfile_string.c_str());
-    sample_pmesh->PrintAsOne(outfile_romS);
+    sample_pmesh->ParPrint(outfile_romS);
+
     writeVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
     writeVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
     writeVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
@@ -1798,14 +1915,26 @@ void ROM_Basis::writeSP(const int window = 0) const
 
     writeVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
 
+    writeNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
+    writeNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+    if (!RHSbasis)
+    {
+      BsinvX->write(basename + "/" + "BsinvX" + "_" + to_string(window));
+    }
+    BsinvV->write(basename + "/" + "BsinvV" + "_" + to_string(window));
+    BsinvE->write(basename + "/" + "BsinvE" + "_" + to_string(window));
+
     BXsp->write(basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->write(basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->write(basename + "/" + "BEsp" + "_" + to_string(window));
+
     if (RHSbasis)
     {
       BFvsp->write(basename + "/" + "BFvsp" + "_" + to_string(window));
       BFesp->write(basename + "/" + "BFesp" + "_" + to_string(window));
     }
+
     spX->write(basename + "/" + "spX" + "_" + to_string(window));
     spV->write(basename + "/" + "spV" + "_" + to_string(window));
     spE->write(basename + "/" + "spE" + "_" + to_string(window));
@@ -1816,16 +1945,30 @@ void ROM_Basis::writeSP(const int window = 0) const
       initVsp->write(basename + "/" + "initVsp" + "_" + to_string(window));
       initEsp->write(basename + "/" + "initEsp" + "_" + to_string(window));
     }
+
+    if (window > 0)
+    {
+      BwinX->write(basename + "/" + "BwinX" + "_" + to_string(window));
+      BwinV->write(basename + "/" + "BwinV" + "_" + to_string(window));
+      BwinE->write(basename + "/" + "BwinE" + "_" + to_string(window));
+    }
 }
 
-void ROM_Basis::readSP(const int window = 0)
+void ROM_Basis::readSP(const int window)
 {
+
+    readNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
+    readNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
+    readNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
+
     readVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
     readVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
     readVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+
     std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ofstream outfile_romS(outfile_string.c_str());
-    sample_pmesh->PrintAsOne(outfile_romS);
+    std::ifstream outfile_romS(outfile_string.c_str());
+    sample_pmesh = new ParMesh(comm, outfile_romS);
+
     readVec(st2sp, basename + "/" + "st2sp" + "_" + to_string(window));
     readVec(s2sp_H1, basename + "/" + "s2sp_H1" + "_" + to_string(window));
     readVec(s2sp_L2, basename + "/" + "s2sp_L2" + "_" + to_string(window));
@@ -1835,20 +1978,54 @@ void ROM_Basis::readSP(const int window = 0)
 
     readVec(s2sp, basename + "/" + "s2sp" + "_" + to_string(window));
 
+    readNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
+    readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+    BsinvX = RHSbasis ? NULL : new CAROM::Matrix(numSamplesX, rdimx, false);
+    BsinvV = new CAROM::Matrix(numSamplesV, RHSbasis ? rdimfv : rdimv, false);
+    BsinvE = new CAROM::Matrix(numSamplesE, RHSbasis ? rdimfe : rdime, false);
+
+    BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
+    BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
+    BEsp = new CAROM::Matrix(size_L2_sp, rdime, false);
+
+    spX = new CAROM::Vector(size_H1_sp, false);
+    spV = new CAROM::Vector(size_H1_sp, false);
+    spE = new CAROM::Vector(size_L2_sp, false);
+
+    sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
+    sV = new CAROM::Vector(numSamplesV, false);
+    sE = new CAROM::Vector(numSamplesE, false);
+
+    if (!RHSbasis)
+    {
+      BsinvX->read(basename + "/" + "BsinvX" + "_" + to_string(window));
+    }
+    BsinvV->read(basename + "/" + "BsinvV" + "_" + to_string(window));
+    BsinvE->read(basename + "/" + "BsinvE" + "_" + to_string(window));
+
     BXsp->read(basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->read(basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->read(basename + "/" + "BEsp" + "_" + to_string(window));
+
     if (RHSbasis)
     {
+      BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+      BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
       BFvsp->read(basename + "/" + "BFvsp" + "_" + to_string(window));
       BFesp->read(basename + "/" + "BFesp" + "_" + to_string(window));
     }
+
     spX->read(basename + "/" + "spX" + "_" + to_string(window));
     spV->read(basename + "/" + "spV" + "_" + to_string(window));
     spE->read(basename + "/" + "spE" + "_" + to_string(window));
 
     if (offsetInit)
     {
+      initXsp = new CAROM::Vector(size_H1_sp, false);
+      initVsp = new CAROM::Vector(size_H1_sp, false);
+      initEsp = new CAROM::Vector(size_L2_sp, false);
+
       initXsp->read(basename + "/" + "initXsp" + "_" + to_string(window));
       initVsp->read(basename + "/" + "initVsp" + "_" + to_string(window));
       initEsp->read(basename + "/" + "initEsp" + "_" + to_string(window));
