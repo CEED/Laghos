@@ -261,8 +261,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    {
       // Setup the preconditioner of the velocity mass operator.
       // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> ess_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      Array<int> empty_tdofs;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty_tdofs);
       CG_VMass.SetPreconditioner(*VMassPA_Jprec);
 
       CG_VMass.SetOperator(*VMassPA);
@@ -681,6 +681,77 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    }
 }
 
+double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
+                             const int Q1D,const int VDIM,const double ln_norm,
+                             const mfem::Vector& mass, const mfem::Vector& f)
+{
+
+   auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
+   mfem::Vector integrand(NE*NQ);
+   auto I = Reshape(integrand.Write(), NQ, NE);
+
+   if (DIM == 1)
+   {
+      for (int e=0; e < NE; ++e)
+      {
+         for (int q = 0; q < NQ; ++q)
+         {
+            double vmag = 0;
+            for (int k = 0; k < VDIM; k++)
+            {
+               vmag += pow(f_vals(k,q,e),ln_norm);
+            }
+            I(q,e) = vmag;
+         }
+      }
+   }
+   else if (DIM == 2)
+   {
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               double vmag = 0;
+               for (int k = 0; k < VDIM; k++)
+               {
+                  vmag += pow(f_vals(k,q,e),ln_norm);
+               }
+               I(q,e) = vmag;
+            }
+         }
+      });
+   }
+   else if (DIM == 3)
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  double vmag = 0;
+                  for (int k = 0; k < VDIM; k++)
+                  {
+                     vmag += pow(f_vals(k,q,e),ln_norm);
+                  }
+                  I(q,e) = vmag;
+               }
+            }
+         }
+      });
+
+   }
+   const double integral = integrand * mass;
+   return integral;
+
+}
+
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
@@ -725,11 +796,12 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
    h1_interpolator->Values(e_vector, ekinQ);
 
    // Get the IE, initial weighted mass
-   double kinetic_energy =
-      hydrodynamics::ComputeVolumeIntegral(dim, NE, NQ, Q1D, dim, 2.0,
-                                           qdata.rho0DetJ0w, ekinQ);
+   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,
+                                                 qdata.rho0DetJ0w,ekinQ);
+
    MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
                  H1.GetParMesh()->GetComm());
+
    return 0.5*glob_ke;
 }
 

@@ -215,7 +215,7 @@ mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
 
 The latter produces the following density plot (notice the `-vis` option)
 
-![Sedov blast image](data/sedov.png)
+[![Sedov blast image](data/sedov.png)](https://glvis.org/live/?stream=../data/laghos.saved)
 
 #### Taylor-Green and Gresho vortices
 
@@ -245,13 +245,13 @@ vorticity, thus examining the complex computational abilities of Laghos.
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5 -vis -pa
+mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa
+mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 5.0 -vis -pa
 ```
 
 The latter produces the following specific internal energy plot (notice the `-vis` option)
 
-![Triple-point image](data/tp.png)
+<img src="data/tp.png" width="500" height="500">
 
 #### AMR Sedov problem
 The AMR version only runs with problem 1 (Sedov blast). New parameters are:
@@ -286,9 +286,9 @@ To make sure the results are correct, we tabulate reference final iterations
 4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa`
 5. `mpirun -np 8 ./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa`
 6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa`
+7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa`
 8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
-9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -vis -fa`
+9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -fa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
@@ -298,7 +298,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  4. |  560 | 0.002449 | 1.3408616722e+02 |
 |  5. |  413 | 0.000470 | 3.2012077410e+01 |
 |  6. | 2872 | 0.000064 | 5.6547039096e+01 |
-|  7. |  528 | 0.000180 | 5.6505348812e+01 |
+|  7. |  858 | 0.000474 | 5.6691500623e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
 |  9. | 2462 | 0.000050 | 1.1792848684e+02 |
 
@@ -310,7 +310,7 @@ Similar GPU runs using the MFEM CUDA *device* can be run as follows:
 4. `./laghos -p 1 -dim 3 -rs 2 -tf 0.60 -pa -d cuda`
 5. `./laghos -p 2 -dim 1 -rs 5 -tf 0.20 -fa`
 6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d cuda`
-7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -cgt 1e-12 -d cuda`
+7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -cgt 1e-12 -d cuda`
 8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d cuda`
 
 An implementation is considered valid if the final energy values are all within
