@@ -101,12 +101,6 @@ jobs:
     - name: checks 2
       run: |
         cd laghos && make checks ranks=2
-    - name: 1
-      run: |
-        cd laghos && make 1
-    - name: 2
-      run: |
-        cd laghos && make 2
     - name: tests
       run: |
         cd laghos && make tests
