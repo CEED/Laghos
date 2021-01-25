@@ -88,7 +88,7 @@ jobs:
       if: steps.mfem-cache.outputs.cache-hit != 'true'
       uses: ./laghos/.github/actions/install-mfem
       with:
-        mfem-url: ${{ env.MFEM_REPO }}
+        mfem-repo: ${{ env.MFEM_REPO }}
         mfem-branch: ${{ env.MFEM_BRANCH }}
         mfem-dir: ${{ env.MFEM_TOP_DIR }}
 

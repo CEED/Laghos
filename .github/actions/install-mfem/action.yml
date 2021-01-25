@@ -19,7 +19,6 @@ runs:
       run: |
         git clone --single-branch --branch ${{ inputs.mfem-branch }} --depth 1 ${{ inputs.mfem-repo }};
         cd mfem;
-        make config MFEM_MPI_NP=2
-        make -j3 parallel;
+        make -j3 parallel MFEM_MPI_NP=2;
         make info;
       shell: bash
