@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubunut-latest
+    runs-on: ubuntu-latest
 
     steps:
     # Checkout Laghos in "laghos" subdirectory. Final path: /home/runner/work/ceed/laghos/laghos
