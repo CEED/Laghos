@@ -91,10 +91,10 @@ jobs:
         cd laghos && make -j
     - name: checks 1
       run: |
-        cd laghos && make checks ranks=3
+        cd laghos && make checks ranks=1
     - name: checks 2
       run: |
-        cd laghos && make checks ranks=3
+        cd laghos && make checks ranks=2
     - name: checks 3
       run: |
         cd laghos && make checks ranks=3
