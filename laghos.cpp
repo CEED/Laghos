@@ -826,7 +826,7 @@ int main(int argc, char *argv[])
       if (amr)
       {
          AMR->Update(hydro, ode_solver, S, S_old, x_gf, v_gf, e_gf, m_gf,
-                     true_offset, bdr_attr_max, ess_tdofs, ess_vdofs);
+                     offset, bdr_attr_max, ess_tdofs, ess_vdofs);
       }
 
       // Problems checks

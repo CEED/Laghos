@@ -26,7 +26,7 @@ namespace mfem
 {
 
 // Choice for the problem setup, statically used in functions below.
-static int problem;
+   static int problem, dim;
 
 static double gamma_func(const Vector &x)
 {
@@ -51,7 +51,10 @@ static double rho0(const Vector &x)
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+   case 3: return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+         : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+                          (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+
       case 4: return 1.0;
       case 5:
       {
