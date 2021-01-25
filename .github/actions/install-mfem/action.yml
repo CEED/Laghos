@@ -1,7 +1,7 @@
 name: install-mfem
 
 inputs:
-  mfem-url:
+  mfem-repo:
     description: 'Repo url for MFEM'
     required: false
     default: 'https://github.com/mfem/mfem.git'
@@ -17,7 +17,7 @@ runs:
   steps:
     - name: Install MFEM
       run: |
-        git clone --single-branch --branch ${{ inputs.mfem-branch }} --depth 1 ${{ inputs.mfem-url }};
+        git clone --single-branch --branch ${{ inputs.mfem-branch }} --depth 1 ${{ inputs.mfem-repo }};
         cd mfem;
         make -j3 parallel;
         make info;
