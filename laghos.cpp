@@ -1037,6 +1037,7 @@ void v0(const Vector &x, Vector &v)
       {
          v = 0.0;
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         if (x.Size() == 3) { v(1) *= cos(2*M_PI*x(2)); }
          break;
       }
       default: MFEM_ABORT("Bad number given for problem id!");

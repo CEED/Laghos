@@ -51,8 +51,8 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
-   const int    solver_type = 0,
-                solver_iter = 100;
+   const int    solver_type = 1,
+                solver_iter = 200;
    const double solver_rtol = 1e-6;
    const int max_lin_iter   = 100;
    const int quad_order = 8;
@@ -70,9 +70,12 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int dim = pfespace->GetMesh()->Dimension();
 
    // Metric.
-   TMOP_QualityMetric *metric  = new TMOP_Metric_009;
+   //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
+   //TMOP_QualityMetric *metric  = new TMOP_Metric_302;
+   TMOP_QualityMetric *metric  = new TMOP_Metric_321;
    // Target.
    auto ttype = TargetConstructor::IDEAL_SHAPE_GIVEN_SIZE;
+   //auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
    TargetConstructor *target_c = new TargetConstructor(ttype, MPI_COMM_WORLD);
    target_c->SetNodes(x0);
    // Integrator.
@@ -80,7 +83,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    he_nlf_integ->SetIntegrationRules(*irules, quad_order);
 
    // Surface fitting.
-
    L2_FECollection mat_coll(0, dim);
    H1_FECollection sigma_fec(mesh_poly_deg, dim);
    ParFiniteElementSpace sigma_fes(pmesh, &sigma_fec);
@@ -101,6 +103,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
          mat(i) = material_id(i, ls_0);
          pmesh->SetAttribute(i, mat(i) + 1);
       }
+      pmesh->SetAttributes();
 
       GridFunctionCoefficient coeff_mat(&mat);
       marker_gf.ProjectDiscCoefficient(coeff_mat, GridFunction::ARITHMETIC);
@@ -151,6 +154,16 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       coef_ls.constant   = surface_fit_const;
    }
 
+   // Print the initial mesh in a file.
+   {
+      std::ostringstream mesh_name;
+      mesh_name << "initial" << "_" << "mesh";
+      std::ofstream mesh_ofs(mesh_name.str().c_str());
+      mesh_ofs.precision(8);
+      pmesh->PrintAsOne(mesh_ofs);
+      mesh_ofs.close();
+   }
+
    // Linear solver.
    const double linsol_rtol = 1e-12;
    MINRESSolver *minres = new MINRESSolver(MPI_COMM_WORLD);
@@ -163,7 +176,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const IntegrationRule &ir =
       irules->Get(pfespace->GetFE(0)->GetGeomType(), quad_order);
    TMOPNewtonSolver solver(pfespace->GetComm(), ir, solver_type);
-   solver.SetPreconditioner(*minres);
+   if (solver_type == 0) { solver.SetPreconditioner(*minres); }
    solver.SetMaxIter(solver_iter);
    solver.SetRelTol(solver_rtol);
    solver.SetAbsTol(0.0);
@@ -207,6 +220,16 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
            << " + extra terms: " << fin_energy - fin_metric_energy << endl;
       cout << "The strain energy decreased by: "
            << (init_m_energy - fin_metric_energy) * 100.0 / init_m_energy << " %." << endl;
+   }
+
+   // Print the final mesh in a file.
+   {
+      std::ostringstream mesh_name;
+      mesh_name << "result" << "_" << "mesh";
+      std::ofstream mesh_ofs(mesh_name.str().c_str());
+      mesh_ofs.precision(8);
+      pmesh->PrintAsOne(mesh_ofs);
+      mesh_ofs.close();
    }
 }
 
