@@ -129,21 +129,21 @@ public:
         CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
         if (!input.staticSVD)
         {
-          x_options.setIncrementalSVD(input.incSVD_linearity_tol,
-                        input.initial_dt,
-                        input.incSVD_sampling_tol,
-                        input.t_final,
-                        true);
-          x_options.setMaxBasisDimension(max_model_dim);
-          x_options.setSingularValueTol(input.incSVD_singular_value_tol);
+            x_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            x_options.setMaxBasisDimension(max_model_dim);
+            x_options.setSingularValueTol(input.incSVD_singular_value_tol);
 
-          e_options.setIncrementalSVD(input.incSVD_linearity_tol,
-                        input.initial_dt,
-                        input.incSVD_sampling_tol,
-                        input.t_final,
-                        true);
-          e_options.setMaxBasisDimension(max_model_dim);
-          e_options.setSingularValueTol(input.incSVD_singular_value_tol);
+            e_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            e_options.setMaxBasisDimension(max_model_dim);
+            e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
 
         generator_X = new CAROM::BasisGenerator(
@@ -155,20 +155,20 @@ public:
             !input.staticSVD,
             input.staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
         generator_E = new CAROM::BasisGenerator(
-          e_options,
-          !input.staticSVD,
-          input.staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+            e_options,
+            !input.staticSVD,
+            input.staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
 
         if (sampleF)
         {
             generator_Fv = new CAROM::BasisGenerator(
-              x_options,
-              !input.staticSVD,
-              input.staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+                x_options,
+                !input.staticSVD,
+                input.staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
             generator_Fe = new CAROM::BasisGenerator(
-              e_options,
-              !input.staticSVD,
-              input.staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                e_options,
+                !input.staticSVD,
+                input.staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
         }
 
         SetStateVariables(S_init);
@@ -433,8 +433,8 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
-    void ProjectFromPreviousWindow(Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
-    void computeWindowProjection(const ROM_Basis& basisPrev);
+    void ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
+    void computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window);
 
     void writeSP(ROM_Options const& input, const int window = 0) const;
     void readSP(ROM_Options const& input, const int window = 0);
@@ -558,6 +558,10 @@ private:
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
     CAROM::Vector *BX0 = NULL;
+
+    CAROM::Vector *BtInitDiffX = 0;  // TODO: destructor
+    CAROM::Vector *BtInitDiffV = 0;
+    CAROM::Vector *BtInitDiffE = 0;
 
     int numSamplesX = 0;
     int numSamplesV = 0;

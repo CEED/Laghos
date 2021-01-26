@@ -909,8 +909,8 @@ int main(int argc, char *argv[])
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
-                  romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                          visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
+                            visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
 
@@ -921,32 +921,33 @@ int main(int argc, char *argv[])
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
             if (!romOptions.hyperreduce_prep)
             {
-              romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
-                                            cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
         }
 
         if (!romOptions.hyperreduce)
         {
-          basis[0]->Init(romOptions, S);
+            basis[0]->Init(romOptions, S);
         }
         if (romOptions.hyperreduce_prep)
         {
-          if (myid == 0)
-          {
-            basis[0]->writeSP(romOptions, 0);
-          }
-          for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-            if (romOptions.offsetType != usePreviousSolution)
-            {
-              basis[curr_window]->Init(romOptions, S);
-            }
-            basis[curr_window]->computeWindowProjection(*basis[curr_window - 1]);
             if (myid == 0)
             {
-              basis[curr_window]->writeSP(romOptions, curr_window);
+                basis[0]->writeSP(romOptions, 0);
             }
-          }
+            // TODO: use romOptions.window instead of curr_window?
+            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+                if (romOptions.offsetType != usePreviousSolution)
+                {
+                    basis[curr_window]->Init(romOptions, S);
+                }
+                basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
+                if (myid == 0)
+                {
+                    basis[curr_window]->writeSP(romOptions, curr_window);
+                }
+            }
         }
 
         if (romOptions.mergeXV)
@@ -959,20 +960,20 @@ int main(int argc, char *argv[])
 
         if (!romOptions.hyperreduce)
         {
-          basis[0]->ProjectFOMtoROM(S, romS);
-          if (romOptions.hyperreduce_prep && myid == 0)
-          {
-            std::string romS_outPath = outputPath + "/" + "romS" + "_0";
-            std::ofstream outfile_romS(romS_outPath.c_str());
-            outfile_romS.precision(16);
-            romS.Print(outfile_romS, 1);
-          }
+            basis[0]->ProjectFOMtoROM(S, romS);
+            if (romOptions.hyperreduce_prep && myid == 0)
+            {
+                std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+                std::ofstream outfile_romS(romS_outPath.c_str());
+                outfile_romS.precision(16);
+                romS.Print(outfile_romS, 1);
+            }
         }
         else
         {
-          std::string romS_outPath = outputPath + "/" + "romS" + "_0";
-          std::ifstream outfile_romS(romS_outPath.c_str());
-          romS.Load(outfile_romS, romS.Size());
+            std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+            std::ifstream outfile_romS(romS_outPath.c_str());
+            romS.Load(outfile_romS, romS.Size());
         }
 
         if (myid == 0)
@@ -983,11 +984,11 @@ int main(int argc, char *argv[])
 
         if (romOptions.hyperreduce_prep)
         {
-          if (myid == 0)
-          {
-            cout << "Hyperreduction pre-processing completed. " << endl;
-          }
-          return 0;
+            if (myid == 0)
+            {
+                cout << "Hyperreduction pre-processing completed. " << endl;
+            }
+            return 0;
         }
 
         ode_solver->Init(*romOper[0]);
@@ -1325,18 +1326,18 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce)
                     {
-                        basis[romOptions.window]->ProjectFromPreviousWindow(romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
+                        basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
                     }
 
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
                     if (romOptions.hyperreduce && romOptions.offsetType == usePreviousSolution)
                     {
-                      basis[romOptions.window]->Init(romOptions, romS);
+                        basis[romOptions.window]->Init(romOptions, romS);
                     }
                     else if (!romOptions.hyperreduce)
                     {
-                      basis[romOptions.window]->Init(romOptions, S);
+                        basis[romOptions.window]->Init(romOptions, S);
                     }
                     if (romOptions.mergeXV)
                     {
@@ -1346,13 +1347,13 @@ int main(int argc, char *argv[])
 
                     if (!romOptions.hyperreduce)
                     {
-                      romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
+                        romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     }
                     timeLoopTimer.Start();
 
                     if (!romOptions.hyperreduce)
                     {
-                      basis[romOptions.window]->ProjectFOMtoROM(S, romS);
+                        basis[romOptions.window]->ProjectFOMtoROM(S, romS);
                     }
                     if (myid == 0)
                     {
@@ -1479,7 +1480,7 @@ int main(int argc, char *argv[])
         }
         if (!rom_online)
         {
-          basis[romOptions.window]->LiftROMtoFOM(romS, S);
+            basis[romOptions.window]->LiftROMtoFOM(romS, S);
         }
     }
 
