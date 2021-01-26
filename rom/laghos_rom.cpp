@@ -425,7 +425,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
 
-            if (rank == 0) cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == interpolateOffset)
         {
@@ -505,7 +505,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
 
-            if (rank == 0) cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == useInitialState && input.window > 0)
         {
@@ -514,7 +514,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
 
-            if (rank == 0) cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
     }
 
