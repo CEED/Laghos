@@ -1,4 +1,4 @@
-name: build-laghos
+name: build-and-test-laghos
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
   MFEM_TOP_DIR: mfem
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,21 +25,21 @@ jobs:
       with:
         path: laghos
 
-    - name: Get MPI (Linux)
+    - name: get MPI (Linux)
       run: |
         sudo apt-get install mpich libmpich-dev
         export MAKE_CXX_FLAG="MPICXX=mpic++"
 
     # Get Hypre through cache, or install it.
     # Install will only run on cache miss.
-    - name: Cache Hypre Install
+    - name: cache Hypre install
       id: hypre-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.HYPRE_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v1
 
-    - name: Get Hypre
+    - name: install Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
       uses: ./laghos/.github/actions/install-hypre
       with:
@@ -48,14 +48,14 @@ jobs:
 
     # Get Metis through cache, or install it.
     # Install will only run on cache miss.
-    - name: Cache Metis Install
+    - name: cache Metis install
       id: metis-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.METIS_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v1
 
-    - name: Install Metis
+    - name: install Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
       uses: ./laghos/.github/actions/install-metis
       with:
@@ -77,14 +77,14 @@ jobs:
 
     # Get MFEM through cache, or install it.
     # Install will only run on cache miss.
-    - name: Cache MFEM Install
+    - name: cache MFEM install
       id: mfem-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.MFEM_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v2
 
-    - name: Install MFEM
+    - name: install MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
       uses: ./laghos/.github/actions/install-mfem
       with:
@@ -92,15 +92,15 @@ jobs:
         mfem-branch: ${{ env.MFEM_BRANCH }}
         mfem-dir: ${{ env.MFEM_TOP_DIR }}
 
-    - name: make
+    - name: build Laghos
       run: |
         cd laghos && make -j
-    - name: checks 1
+    - name: check Laghos 1 proc
       run: |
         cd laghos && make checks ranks=1
-    - name: checks 2
+    - name: check Laghos 2 procs
       run: |
         cd laghos && make checks ranks=2
-    - name: tests
+    - name: test Laghos
       run: |
         cd laghos && make tests
