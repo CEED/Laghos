@@ -3,7 +3,7 @@ name: build-and-test-laghos
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
       - master
