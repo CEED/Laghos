@@ -84,7 +84,7 @@ CFLAGS = -O3
 LDFLAGS =
 
 OPTIM_OPTS = -O3
-DEBUG_OPTS = -g -Wall
+DEBUG_OPTS = -g -Wall -std=c++11
 LAGHOS_DEBUG = $(MFEM_DEBUG)
 ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    ifeq ($(LAGHOS_DEBUG),YES)
@@ -97,12 +97,15 @@ endif
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 LAGHOS_LIBS = $(MFEM_LIBS)
 
+PYTHON_CFLAGS=$(shell /usr/bin/python3-config --includes)
+PYTHON_LDFLAGS=$(shell /usr/bin/python3-config --ldflags)
+
 ifeq ($(LAGHOS_DEBUG),YES)
    LAGHOS_FLAGS += -DLAGHOS_DEBUG
 endif
 
-LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
-CCC  = $(strip $(CXX) $(LAGHOS_FLAGS))
+LIBS = $(strip $(LAGHOS_LIBS) $(PYTHON_LDFLAGS) $(LDFLAGS))
+CCC  = $(strip $(CXX) $(LAGHOS_FLAGS) $(PYTHON_CFLAGS))
 Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp

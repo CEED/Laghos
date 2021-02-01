@@ -50,6 +50,11 @@
 #include <iostream>
 #include <fstream>
 
+// python embedding for rllib
+#include <Python.h>
+#include "numpy/arrayobject.h"
+
+
 using namespace std;
 using namespace mfem;
 using namespace mfem::hydrodynamics;
@@ -75,9 +80,56 @@ void GetPerElementMinMax(const GridFunction &gf,
                          Vector &elem_min, Vector &elem_max,
                          int int_order = -1);
 
+int PythonInit()
+{
+   Py_Initialize();
+   import_array(); // numpy init
+  
+   PyRun_SimpleString("import sys");
+
+   // This is necessary to pick up modules in pwd (like eval).
+   PyRun_SimpleString("sys.path.append('.')");
+
+   // This is a workaround for something in tensorflow that dies without it.
+   PyRun_SimpleString("if not hasattr(sys, 'argv'):\n"
+		      "  sys.argv  = ['']");
+
+   printf("importing module...\n");
+   PyObject* eval_mod = PyImport_ImportModule("eval");
+   if (eval_mod == 0) {
+      PyErr_Print();
+      exit(1);
+   }
+
+   printf("getting evaluator class...\n");
+   PyObject* eval_class = PyObject_GetAttrString(eval_mod, "Evaluator");
+   if (eval_class == 0) {
+      PyErr_Print();
+      exit(1);
+   }
+   Py_DECREF(eval_mod);
+
+   printf("making empty arg list...\n");
+   PyObject* args = Py_BuildValue("()");
+   if (args == 0) {
+      PyErr_Print();
+      exit(1);
+   }
+   
+   printf("instantiating eval object...\n");
+   PyObject* eval_obj = PyEval_CallObject(eval_class, args);
+   if (eval_obj == NULL) {
+     PyErr_Print();
+     exit(1);
+   }
+   exit(0);
+}
+
 
 int main(int argc, char *argv[])
 {
+   int err = PythonInit();
+  
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();

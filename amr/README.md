@@ -9,6 +9,17 @@
 
                        AMR version
 
+## rllib version
+
+This version of the AMR code uses an rllib trained policy to evaluate
+refinement and de-refinement criteria.
+
+To create the python environment that has the required python
+infrastructure for utilizing rllib:
+
+% virtualenv -p /usr/bin/python3 myenv
+% source myenv/bin/activate
+% pip3 install -r requirements.txt
 
 ## Overview
 
