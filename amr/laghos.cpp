@@ -80,11 +80,12 @@ void GetPerElementMinMax(const GridFunction &gf,
                          Vector &elem_min, Vector &elem_max,
                          int int_order = -1);
 
+
 int PythonInit()
 {
    Py_Initialize();
    import_array(); // numpy init
-  
+
    PyRun_SimpleString("import sys");
 
    // This is necessary to pick up modules in pwd (like eval).
@@ -94,6 +95,7 @@ int PythonInit()
    PyRun_SimpleString("if not hasattr(sys, 'argv'):\n"
 		      "  sys.argv  = ['']");
 
+#if 0
    printf("importing module...\n");
    PyObject* eval_mod = PyImport_ImportModule("eval");
    if (eval_mod == 0) {
@@ -115,21 +117,173 @@ int PythonInit()
       PyErr_Print();
       exit(1);
    }
-   
+
    printf("instantiating eval object...\n");
    PyObject* eval_obj = PyEval_CallObject(eval_class, args);
    if (eval_obj == NULL) {
      PyErr_Print();
      exit(1);
    }
-   exit(0);
+#endif
+
+   return 0;
+}
+
+// create element index lists for the patch surrounding each element
+std::map<int,Array<int>> el_patches;
+void FindElementPatches(Mesh* mesh, int patch_width, double dx)
+{
+   int patch_hwidth = patch_width/2;
+   int patch_size = patch_width*patch_width;
+
+   for (int i = 0; i < mesh->GetNE(); i++) {
+
+      bool skip = false;
+      Vector c;
+      mesh->GetElementCenter(i, c);
+
+      DenseMatrix p(2,patch_size);
+
+      int k = 0;
+      for (int iy = -patch_hwidth; iy <= +patch_hwidth; iy++) {
+         for (int ix = -patch_hwidth; ix <= +patch_hwidth; ix++) {
+            Vector pt(c);
+            pt(0) += dx*ix;
+            pt(1) += dx*iy;
+
+            // if one of the centers is outside the domain,
+            // don't try to build an index list
+            if (pt(0) < 0.0) skip = true;
+            if (pt(0) > 1.0) skip = true;
+            if (pt(1) < 0.0) skip = true;
+            if (pt(1) > 1.0) skip = true;
+
+            p.SetCol(k++,pt);
+         }
+      }
+
+      if (!skip) {
+         Array<int> elem_ids;
+         Array<IntegrationPoint> ips;
+         int nfound = mesh->FindPoints(p, elem_ids, ips);
+         MFEM_ASSERT(nfound == patch_size, "did not find all elements in patch");
+         el_patches[i] = elem_ids;
+      }
+   }
+}
+
+double GetScoreForObservation(Vector& image)
+{
+#if 0
+   // convert to numpy array
+   npy_intp dims[1];
+   dims[0] = image.Size();
+   PyObject *numpy_arr = PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, reinterpret_cast<void*>(image.GetData()));
+
+   PyObject* action = PyObject_CallFunctionObjArgs(eval_method,numpy_arr,NULL);
+   if (action == 0) {
+     PyErr_Print();
+     exit(1);
+   }
+
+   // parse integer return value
+   int action_val;
+   PyArg_Parse(action, "i", &action_val);
+   printf("action: %d\n", action_val);
+
+#endif
+   return 0.0;
+}
+
+void GetObservationAroundElement(int i, GridFunction& gf,
+                                 Vector &image, int image_width, double dx)
+{
+   Array<int> &patch_els = el_patches[i];
+
+   printf("image width = %d\n",image_width);
+
+   const int nw = image_width + 1;
+   const int nh = image_width + 1;
+
+   FiniteElementSpace* fespace = gf.FESpace();
+   Mesh *mesh = fespace->GetMesh();
+
+   GlobGeometryRefiner.SetType(Quadrature1D::OpenUniform);
+   constexpr Geometry::Type geom = Geometry::SQUARE;
+
+   // element i,j at "origin" of patch
+   int k = patch_els[0];
+   Array<int> vert;
+   mesh->GetElementVertices(k, vert);
+   const double *v0 = mesh->GetVertex(vert[0]);
+   int ipx = v0[0]/dx;
+   int ipy = v0[1]/dx;
+
+   for (int i = 0; i < patch_els.Size(); i++) {
+      int k = patch_els[i];
+
+      const int depth = mesh->ncmesh->GetElementDepth(k);
+      const int order = fespace->GetOrder(k);
+      const int times = 2*order - 1;
+
+      IntegrationRule &ir = GlobGeometryRefiner.Refine(geom, times)->RefPts;
+
+      Vector vals;
+      gf.GetValues(k, ir, vals);
+      int npts = times+1;
+
+      Array<int> vert;
+      mesh->GetElementVertices(k, vert);
+      const double *v = mesh->GetVertex(vert[0]);
+      int ix = v[0]/dx -ipx; // element i in patch coords
+      int iy = v[1]/dx -ipy; // element j in patch coords
+      int ox = ix*npts;
+      int oy = iy*npts;
+      for (int i = 0; i < npts; i++) {
+         for (int j = 0; j < npts; j++) {
+            const int kelem = i*npts+j;
+            const int kimg = (oy+i)*image_width+ox+j;
+            image(kimg) = vals(kelem);
+         }
+      }
+   }
+}
+
+double EvalPatchAroundElement(int i, GridFunction& gf, int obs_width, double dx)
+{
+   bool has_patch = el_patches.count(i);
+   if (has_patch) {
+      Vector image(obs_width*obs_width);
+      GetObservationAroundElement(i, gf, image, obs_width, dx);
+      double score = GetScoreForObservation(image);
+      return 1.0;
+   }
+   else {
+      return 0.0;
+   }
+}
+
+void GetDRLIndicators(int patch_width, double dx,
+                      ParGridFunction& e, Vector& indicators)
+{
+   const int order = 1;
+   const int npts = order+1;
+   const int obs_width = patch_width*npts;
+   const int obs_size = obs_width*obs_width;
+   Mesh *mesh = e.FESpace()->GetMesh();
+
+   for (int i = 0; i < mesh->GetNE(); i++) {
+      double val = EvalPatchAroundElement(i, e, obs_width, dx);
+      // todo: put value into indicator array
+   }
+
 }
 
 
 int main(int argc, char *argv[])
 {
    int err = PythonInit();
-  
+
    // Initialize MPI.
    MPI_Session mpi(argc, argv);
    int myid = mpi.WorldRank();
@@ -163,6 +317,11 @@ int main(int argc, char *argv[])
    const double blast_energy = 0.25;
    const double blast_position[] = {0.0, 0.0, 0.0};
    const double blast_amr_size = 1e-10;
+
+   // drl related
+   bool drl = false;
+   int patch_width = 3;
+   double domain_width = 1.0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -200,6 +359,9 @@ int main(int argc, char *argv[])
                   "AMR refinement threshold.");
    args.AddOption(&deref_threshold, "-dt", "--deref-threshold",
                   "AMR derefinement threshold (0 = no derefinement).");
+
+   args.AddOption(&drl, "-drl", "--enable-drl", "-no-drl", "--disable-drl",
+                  "Experimental adaptive mesh refinement (problem 1 only).");
 
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
@@ -241,14 +403,20 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    Mesh *mesh = new Mesh(mesh_file, 1, 1);
    const int dim = mesh->Dimension();
-   if (!amr)
+   for (int lev = 0; lev < rs_levels; lev++)
    {
-      for (int lev = 0; lev < rs_levels; lev++)
-      {
-         mesh->UniformRefinement();
-      }
+      mesh->UniformRefinement();
    }
-   else
+
+   // Determine "patches" on the uniform mesh
+   double dx = 1.0/sqrt(mesh->GetNE()); // assuming [0,1] mesh
+   FindElementPatches(mesh, patch_width, dx);
+
+   if (amr) {
+      mesh->EnsureNCMesh();
+   }
+
+   if (amr && !drl)
    {
       // Initial refinement for AMR demo on Sedov
       mesh->EnsureNCMesh();
@@ -259,6 +427,7 @@ int main(int argc, char *argv[])
                               blast_amr_size);
       }
    }
+
 
    if (p_assembly && dim == 1)
    {
@@ -338,7 +507,7 @@ int main(int argc, char *argv[])
    {
       int *partitioning = mesh->CartesianPartitioning(nxyz);
       pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete partitioning;
+      delete[] partitioning;
    }
    else
    {
@@ -680,6 +849,10 @@ int main(int argc, char *argv[])
       if (amr)
       {
          Vector &error_est = oper.GetZoneMaxVisc();
+
+	 if (drl) {
+            GetDRLIndicators(patch_width, dx, e_gf, error_est);
+	 }
 
          Vector v_max, v_min;
          GetPerElementMinMax(v_gf, v_min, v_max);
