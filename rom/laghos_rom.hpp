@@ -64,7 +64,7 @@ struct ROM_Options
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
-    bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
+    bool staticSVD = false; // true: use StaticSVD
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
@@ -80,6 +80,14 @@ struct ROM_Options
     int dimE = -1;
     int dimFv = -1;
     int dimFe = -1;
+
+    // Randomized SVD options
+    bool randomizedSVD = false; // true: use RandomizedSVD
+    int randdimX = -1;
+    int randdimV = -1;
+    int randdimE = -1;
+    int randdimFv = -1;
+    int randdimFe = -1;
 
     // Incremental SVD options
     double incSVD_linearity_tol = 1.e-7;
@@ -126,48 +134,67 @@ public:
 
         CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1);
         CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
-        if (!input.staticSVD)
+        bool staticSVD = (input.staticSVD || input.randomizedSVD);
+        if (!staticSVD)
         {
-          x_options.setIncrementalSVD(input.incSVD_linearity_tol,
-                        input.initial_dt,
-                        input.incSVD_sampling_tol,
-                        input.t_final,
-                        true);
-          x_options.setMaxBasisDimension(max_model_dim);
-          x_options.setSingularValueTol(input.incSVD_singular_value_tol);
+            x_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            x_options.setMaxBasisDimension(max_model_dim);
+            x_options.setSingularValueTol(input.incSVD_singular_value_tol);
 
-          e_options.setIncrementalSVD(input.incSVD_linearity_tol,
-                        input.initial_dt,
-                        input.incSVD_sampling_tol,
-                        input.t_final,
-                        true);
-          e_options.setMaxBasisDimension(max_model_dim);
-          e_options.setSingularValueTol(input.incSVD_singular_value_tol);
+            e_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            e_options.setMaxBasisDimension(max_model_dim);
+            e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
-
+        if (input.randomizedSVD)
+        {
+            x_options.setRandomizedSVD(true, input.randdimX);
+        }
         generator_X = new CAROM::BasisGenerator(
             x_options,
-            !input.staticSVD,
-            input.staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            x_options.setRandomizedSVD(true, input.randdimV);
+        }
         generator_V = new CAROM::BasisGenerator(
             x_options,
-            !input.staticSVD,
-            input.staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            e_options.setRandomizedSVD(true, input.randdimE);
+        }
         generator_E = new CAROM::BasisGenerator(
-          e_options,
-          !input.staticSVD,
-          input.staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
-
+            e_options,
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
         if (sampleF)
         {
+            if (input.randomizedSVD)
+            {
+                x_options.setRandomizedSVD(true, input.randdimFv);
+            }
             generator_Fv = new CAROM::BasisGenerator(
-              x_options,
-              !input.staticSVD,
-              input.staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+                x_options,
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+            if (input.randomizedSVD)
+            {
+                e_options.setRandomizedSVD(true, input.randdimFe);
+            }
             generator_Fe = new CAROM::BasisGenerator(
-              e_options,
-              !input.staticSVD,
-              input.staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                e_options,
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
         }
 
         SetStateVariables(S_init);
