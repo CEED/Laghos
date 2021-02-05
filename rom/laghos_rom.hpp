@@ -30,7 +30,6 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
-    usePreviousSolution,
     useInitialState,
     saveLoadOffset,
     interpolateOffset
@@ -40,7 +39,6 @@ static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"previous", usePreviousSolution},
         {"initial", useInitialState},
         {"load", saveLoadOffset},
         {"interpolate", interpolateOffset}
@@ -96,7 +94,7 @@ struct ROM_Options
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
+    offsetStyle offsetType = useInitialState; // type of offset in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -199,7 +197,7 @@ public:
             }
             else
             {
-                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
+                // Compute and save offsets for the current window in the offline phase
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
@@ -215,12 +213,9 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType != usePreviousSolution)
-                {
-                    initX->write(path_init + "X" + std::to_string(window));
-                    initV->write(path_init + "V" + std::to_string(window));
-                    initE->write(path_init + "E" + std::to_string(window));
-                }
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
             }
         }
     }

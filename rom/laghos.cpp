@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
-    const char *offsetType = "previous";
+    const char *offsetType = "initial";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -938,10 +938,7 @@ int main(int argc, char *argv[])
             }
             // TODO: use romOptions.window instead of curr_window?
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-                if (romOptions.offsetType != usePreviousSolution)
-                {
-                    basis[curr_window]->Init(romOptions, S);
-                }
+                basis[curr_window]->Init(romOptions, S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
                 {
@@ -1331,11 +1328,7 @@ int main(int argc, char *argv[])
 
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
-                    if (romOptions.hyperreduce && romOptions.offsetType == usePreviousSolution)
-                    {
-                        basis[romOptions.window]->Init(romOptions, romS);
-                    }
-                    else if (!romOptions.hyperreduce)
+                    if (!romOptions.hyperreduce)
                     {
                         basis[romOptions.window]->Init(romOptions, S);
                     }

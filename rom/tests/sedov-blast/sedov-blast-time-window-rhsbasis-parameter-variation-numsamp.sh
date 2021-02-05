@@ -2,11 +2,11 @@ NUM_PARALLEL_PROCESSORS=8
 testNames=(fom online)
 case $subTestNum in
   1)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -offline -romsvds -romos -rostype previous -romsrhs -bef 1.0 -rpar 0 -writesol
-    $MERGE -nset 1 -romos -rostype previous -rhs -nwinsamp 125 -nwinover 30
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.0 -rpar 0 -writesol
+    $MERGE -nset 1 -romos -rostype interpolate -rhs -nwinsamp 125 -nwinover 30
     ;;
   2)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhrprep -romos -rostype previous -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -nwin 2 -twp twpTemp.csv
-    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype previous -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -nwin 2 -twp twpTemp.csv
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhrprep -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -nwin 2 -twp twpTemp.csv
+    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.0 -nwin 2 -twp twpTemp.csv
     ;;
 esac

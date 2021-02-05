@@ -563,7 +563,7 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
         BwinV->mult(romS_oldV, romS_V);
         BwinE->mult(romS_oldE, romS_E);
 
-        if (offsetInit && input.offsetType == interpolateOffset)
+        if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
         {
             BtInitDiffX = new CAROM::Vector(rdimx, false);
             BtInitDiffV = new CAROM::Vector(rdimv, false);
@@ -593,72 +593,47 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-
+    // TODO: simplify this logic
     if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
     {
-        if (input.offsetType == usePreviousSolution && input.window > 0)
+        std::string path_init = basename + "/ROMoffset/init";
+
+        // Compute and save offset in the online phase for the initial window in the useInitialState mode
+        Vector X, V, E;
+
+        for (int i=0; i<H1size; ++i)
         {
-            Vector initsp(2 * size_H1_sp + size_L2_sp);
-            initXsp = new CAROM::Vector(size_H1_sp, false);
-            initVsp = new CAROM::Vector(size_H1_sp, false);
-            initEsp = new CAROM::Vector(size_L2_sp, false);
-            LiftToSampleMesh(S, initsp);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initXsp)(i) = initsp[i];
-            }
-
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initVsp)(i) = initsp[i + tH1size];
-            }
-
-            for (int i=0; i<tL2size; ++i)
-            {
-                (*initEsp)(i) = initsp[i + 2 * tH1size];
-            }
+            gfH1[i] = S[i];
         }
-        else
+        gfH1.GetTrueDofs(X);
+        for (int i=0; i<tH1size; ++i)
         {
-            std::string path_init = basename + "/ROMoffset/init";
-
-            // Compute and save offset in the online phase of previous mode or initial window of initial mode
-            Vector X, V, E;
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[i];
-            }
-            gfH1.GetTrueDofs(X);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initX)(i) = X[i];
-            }
-
-            for (int i=0; i<H1size; ++i)
-            {
-                gfH1[i] = S[H1size+i];
-            }
-            gfH1.GetTrueDofs(V);
-            for (int i=0; i<tH1size; ++i)
-            {
-                (*initV)(i) = V[i];
-            }
-
-            for (int i=0; i<L2size; ++i)
-            {
-                gfL2[i] = S[2*H1size+i];
-            }
-            gfL2.GetTrueDofs(E);
-            for (int i=0; i<tL2size; ++i)
-            {
-                (*initE)(i) = E[i];
-            }
-
-            initX->write(path_init + "X" + std::to_string(input.window));
-            initV->write(path_init + "V" + std::to_string(input.window));
-            initE->write(path_init + "E" + std::to_string(input.window));
+            (*initX)(i) = X[i];
         }
+
+        for (int i=0; i<H1size; ++i)
+        {
+            gfH1[i] = S[H1size+i];
+        }
+        gfH1.GetTrueDofs(V);
+        for (int i=0; i<tH1size; ++i)
+        {
+            (*initV)(i) = V[i];
+        }
+
+        for (int i=0; i<L2size; ++i)
+        {
+            gfL2[i] = S[2*H1size+i];
+        }
+        gfL2.GetTrueDofs(E);
+        for (int i=0; i<tL2size; ++i)
+        {
+            (*initE)(i) = E[i];
+        }
+
+        initX->write(path_init + "X" + std::to_string(input.window));
+        initV->write(path_init + "V" + std::to_string(input.window));
+        initE->write(path_init + "E" + std::to_string(input.window));
     }
 
     if (offsetInit && hyperreduce_prep)
@@ -1909,7 +1884,7 @@ void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options 
     BwinV = basisV->transposeMult(basisPrev.basisV);
     BwinE = basisE->transposeMult(basisPrev.basisE);
 
-    if (offsetInit && input.offsetType == interpolateOffset)
+    if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
     {
         CAROM::Vector dX(tH1size, true);
         CAROM::Vector dE(tL2size, true);
@@ -1968,7 +1943,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     spX->write(basename + "/" + "spX" + "_" + to_string(window));
     spV->write(basename + "/" + "spV" + "_" + to_string(window));
     spE->write(basename + "/" + "spE" + "_" + to_string(window));
-    if (offsetInit && !(input.offsetType == usePreviousSolution && window > 0))
+    if (offsetInit)
     {
         initXsp->write(basename + "/" + "initXsp" + "_" + to_string(window));
         initVsp->write(basename + "/" + "initVsp" + "_" + to_string(window));
@@ -2039,7 +2014,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     spV->read(basename + "/" + "spV" + "_" + to_string(window));
     spE->read(basename + "/" + "spE" + "_" + to_string(window));
 
-    if (offsetInit && !(input.offsetType == usePreviousSolution && window > 0))
+    if (offsetInit)
     {
         initXsp = new CAROM::Vector(size_H1_sp, false);
         initVsp = new CAROM::Vector(size_H1_sp, false);
