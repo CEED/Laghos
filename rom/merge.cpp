@@ -410,7 +410,7 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(std::stoi(words[1]) == trueOffsetType, "-romostype option does not match record.");
     MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
     MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-    MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
+    MFEM_VERIFY(std::strcmp(words[5].c_str(), twfile) == 0, "-tw option does not match record.");
     infile_offlineParam.close();
 
     Array<int> snapshotSize(nset);

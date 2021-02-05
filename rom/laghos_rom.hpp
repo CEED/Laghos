@@ -13,9 +13,9 @@
 using namespace mfem;
 
 //#define STXV
-#define COLL_LSPG
+//#define COLL_LSPG
 
-//#define XLSPG  // use LSPG even for the linear equation of motion
+#define XLSPG  // use LSPG even for the linear equation of motion
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
@@ -115,6 +115,8 @@ struct ROM_Options
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
 
     bool spaceTime = false;
+
+    bool VTos = false;
 };
 
 class ROM_Sampler
@@ -127,7 +129,7 @@ public:
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-          useXV(input.useXV), useVX(input.useVX)
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
         const int window = input.window;
 
@@ -252,6 +254,8 @@ public:
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
+
+                MFEM_VERIFY(VTos == 0, "");
             }
             else
             {
@@ -277,6 +281,11 @@ public:
                     initV->write(path_init + "V" + std::to_string(window));
                     initE->write(path_init + "E" + std::to_string(window));
                 }
+
+                const double Vnorm = initV->norm();
+                int osVT = (Vnorm == 0.0) ? 1 : 0;
+
+                MFEM_VERIFY(VTos == osVT, "");
             }
         }
     }
@@ -333,6 +342,8 @@ private:
     int finalNumSamples = 0;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
+
+    int VTos = 0; // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
 
     void SetStateVariables(Vector const& S)
     {
@@ -678,7 +689,7 @@ private:
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     const bool spaceTime;
     int temporalSize = 0;
-    const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+    int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
     // TODO: generalize for nonzero initial velocity.
 
     CAROM::Matrix* tbasisX = 0;

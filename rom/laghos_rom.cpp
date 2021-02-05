@@ -240,7 +240,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     finalNumSamples = generator_X->getTemporalBasis()->numRows();
 
     {
-        const int VTos = 1;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+        //const int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
         // TODO: generalize for nonzero initial velocity.
 
         // TODO: this is a lot of checks, for debugging. Maybe these should be removed later.
@@ -336,7 +336,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), spaceTime(input.spaceTime)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), spaceTime(input.spaceTime), VTos(input.VTos)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -441,7 +441,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
                 {
                     true_idx = coeff_list.size();
                 }
-                coeff = 1 / sqrt(coeff);
+                coeff = 1.0 / sqrt(coeff);
                 coeff_sum += coeff;
                 coeff_list.push_back(coeff);
             }
@@ -907,13 +907,22 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                 RK4scaling[i] = h * (1.0 + (0.5 * h) + (h * h / 6.0) + (h * h * h / 24.0));
             }
 
+#if defined COLL_LSPG || defined XLSPG
+            // TODO: remove these SpaceTimeProduct calls?
+#else
+            // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
             PiXtransPiV = SpaceTimeProduct(basisV, tbasisV, basisV, tbasisV, &RK4scaling, true, true, true);
 #else
             PiXtransPiV = SpaceTimeProduct(basisX, tbasisX, basisV, tbasisV, &RK4scaling, false, true, true);
 #endif
+#endif
         }
 
+#if defined COLL_LSPG || defined XLSPG
+        // TODO: remove these SpaceTimeProduct calls?
+#else
+        // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
         PiXtransPiX = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, false, true);
         PiXtransPiXlag = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, true, false);
@@ -927,6 +936,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
         MFEM_VERIFY(PiVtransPiFv->numRows() == rdimv && PiVtransPiFv->numColumns() == rdimfv, "");
         MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
+#endif
     }
     else if (RHSbasis)
     {

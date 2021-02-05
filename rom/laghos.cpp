@@ -604,6 +604,15 @@ int main(int argc, char *argv[])
     VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
     v_gf.ProjectCoefficient(v_coeff);
 
+    if (rom_offline) // Set VTos
+    {
+        Vector Vtdof(tVsize_h1);
+        v_gf.GetTrueDofs(Vtdof);
+        CAROM::Vector VtdofDist(Vtdof.GetData(), tVsize_h1, true, false);
+        const double vnorm = VtdofDist.norm();
+        romOptions.VTos = (vnorm == 0.0);
+    }
+
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
     // L2 projection to the positive basis in which we actually compute. The goal
@@ -761,6 +770,7 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << romOptions.offsetType << " ";
                 outfile_offlineParam << romOptions.RHSbasis << " ";
                 outfile_offlineParam << numWindows << " ";
+                outfile_offlineParam << romOptions.VTos << endl;
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
@@ -803,6 +813,7 @@ int main(int argc, char *argv[])
         split_line(line, words);
         MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
         MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
+        romOptions.VTos = std::stoi(words[4]);
         infile_offlineParam.close();
     }
 
