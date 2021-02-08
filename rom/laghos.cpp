@@ -383,165 +383,199 @@ int main(int argc, char *argv[])
 
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
-    Mesh *mesh = new Mesh(mesh_file, 1, 1);
-    const int dim = mesh->Dimension();
-    for (int lev = 0; lev < rs_levels; lev++) {
-        mesh->UniformRefinement();
-    }
-
-    if (p_assembly && dim == 1)
+    Mesh* mesh = NULL;
+    int dim;
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        p_assembly = false;
-        if (mpi.Root())
+        mesh = new Mesh(mesh_file, 1, 1);
+        dim = mesh->Dimension();
+        for (int lev = 0; lev < rs_levels; lev++) {
+            mesh->UniformRefinement();
+        }
+
+        if (p_assembly && dim == 1)
         {
-            cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+            p_assembly = false;
+            if (mpi.Root())
+            {
+                cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
+            }
         }
     }
 
     // Parallel partitioning of the mesh.
-    ParMesh *pmesh = NULL;
-    const int num_tasks = mpi.WorldSize();
-    int unit;
-    int *nxyz = new int[dim];
-    switch (partition_type)
+    ParMesh* pmesh = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
     {
-    case 0:
-        for (int d = 0; d < dim; d++) {
-            nxyz[d] = unit;
-        }
-        break;
-    case 11:
-    case 111:
-        unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
-        for (int d = 0; d < dim; d++) {
-            nxyz[d] = unit;
-        }
-        break;
-    case 21: // 2D
-        unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
-        nxyz[0] = 2 * unit;
-        nxyz[1] = unit;
-        break;
-    case 211: // 3D.
-        unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
-        nxyz[0] = 2 * unit;
-        nxyz[1] = unit;
-        nxyz[2] = unit;
-        break;
-    case 221: // 3D.
-        unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
-        nxyz[0] = 2 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = unit;
-        break;
-    case 311: // 3D.
-        unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
-        nxyz[0] = 3 * unit;
-        nxyz[1] = unit;
-        nxyz[2] = unit;
-        break;
-    case 321: // 3D.
-        unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
-        nxyz[0] = 3 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = unit;
-        break;
-    case 322: // 3D.
-        unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
-        nxyz[0] = 3 * unit / 2;
-        nxyz[1] = unit;
-        nxyz[2] = unit;
-        break;
-    case 432: // 3D.
-        unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
-        nxyz[0] = 2 * unit;
-        nxyz[1] = 3 * unit / 2;
-        nxyz[2] = unit;
-        break;
-    case 511: // 3D.
-        unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
-        nxyz[0] = 5 * unit;
-        nxyz[1] = unit;
-        nxyz[2] = unit;
-        break;
-    case 521: // 3D.
-        unit = floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2);
-        nxyz[0] = 5 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = unit;
-        break;
-    case 522: // 3D.
-        unit = floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2);
-        nxyz[0] = 5 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = 2 * unit;
-        break;
-    case 911: // 3D.
-        unit = floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2);
-        nxyz[0] = 9 * unit;
-        nxyz[1] = unit;
-        nxyz[2] = unit;
-        break;
-    case 921: // 3D.
-        unit = floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2);
-        nxyz[0] = 9 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = unit;
-        break;
-    case 922: // 3D.
-        unit = floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2);
-        nxyz[0] = 9 * unit;
-        nxyz[1] = 2 * unit;
-        nxyz[2] = 2 * unit;
-        break;
-    default:
-        if (myid == 0)
+        const int num_tasks = mpi.WorldSize();
+        int unit;
+        int *nxyz = new int[dim];
+        switch (partition_type)
         {
-            cout << "Unknown partition type: " << partition_type << '\n';
+        case 0:
+            for (int d = 0; d < dim; d++) {
+                nxyz[d] = unit;
+            }
+            break;
+        case 11:
+        case 111:
+            unit = floor(pow(num_tasks, 1.0 / dim) + 1e-2);
+            for (int d = 0; d < dim; d++) {
+                nxyz[d] = unit;
+            }
+            break;
+        case 21: // 2D
+            unit = floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2);
+            nxyz[0] = 2 * unit;
+            nxyz[1] = unit;
+            break;
+        case 211: // 3D.
+            unit = floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2);
+            nxyz[0] = 2 * unit;
+            nxyz[1] = unit;
+            nxyz[2] = unit;
+            break;
+        case 221: // 3D.
+            unit = floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2);
+            nxyz[0] = 2 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = unit;
+            break;
+        case 311: // 3D.
+            unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+            nxyz[0] = 3 * unit;
+            nxyz[1] = unit;
+            nxyz[2] = unit;
+            break;
+        case 321: // 3D.
+            unit = floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2);
+            nxyz[0] = 3 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = unit;
+            break;
+        case 322: // 3D.
+            unit = floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2);
+            nxyz[0] = 3 * unit / 2;
+            nxyz[1] = unit;
+            nxyz[2] = unit;
+            break;
+        case 432: // 3D.
+            unit = floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2);
+            nxyz[0] = 2 * unit;
+            nxyz[1] = 3 * unit / 2;
+            nxyz[2] = unit;
+            break;
+        case 511: // 3D.
+            unit = floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2);
+            nxyz[0] = 5 * unit;
+            nxyz[1] = unit;
+            nxyz[2] = unit;
+            break;
+        case 521: // 3D.
+            unit = floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2);
+            nxyz[0] = 5 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = unit;
+            break;
+        case 522: // 3D.
+            unit = floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2);
+            nxyz[0] = 5 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = 2 * unit;
+            break;
+        case 911: // 3D.
+            unit = floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2);
+            nxyz[0] = 9 * unit;
+            nxyz[1] = unit;
+            nxyz[2] = unit;
+            break;
+        case 921: // 3D.
+            unit = floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2);
+            nxyz[0] = 9 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = unit;
+            break;
+        case 922: // 3D.
+            unit = floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2);
+            nxyz[0] = 9 * unit;
+            nxyz[1] = 2 * unit;
+            nxyz[2] = 2 * unit;
+            break;
+        default:
+            if (myid == 0)
+            {
+                cout << "Unknown partition type: " << partition_type << '\n';
+            }
+            delete mesh;
+            MPI_Finalize();
+            return 3;
         }
+        int product = 1;
+        for (int d = 0; d < dim; d++) {
+            product *= nxyz[d];
+        }
+        if (product == num_tasks)
+        {
+            int *partitioning = mesh->CartesianPartitioning(nxyz);
+            pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
+            delete [] partitioning;
+        }
+        else
+        {
+            if (myid == 0)
+            {
+                cout << "Non-Cartesian partitioning through METIS will be used.\n";
+#ifndef MFEM_USE_METIS
+                cout << "MFEM was built without METIS. "
+                     << "Adjust the number of tasks to use a Cartesian split." << endl;
+#endif
+            }
+#ifndef MFEM_USE_METIS
+            return 1;
+#endif
+            pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
+        }
+        delete [] nxyz;
         delete mesh;
-        MPI_Finalize();
-        return 3;
-    }
-    int product = 1;
-    for (int d = 0; d < dim; d++) {
-        product *= nxyz[d];
-    }
-    if (product == num_tasks)
-    {
-        int *partitioning = mesh->CartesianPartitioning(nxyz);
-        pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-        delete [] partitioning;
-    }
-    else
-    {
+
+        // Refine the mesh further in parallel to increase the resolution.
+        for (int lev = 0; lev < rp_levels; lev++) {
+            pmesh->UniformRefinement();
+        }
+
+        int nzones = pmesh->GetNE(), nzones_min, nzones_max;
+        MPI_Reduce(&nzones, &nzones_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
+        MPI_Reduce(&nzones, &nzones_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
         if (myid == 0)
         {
-            cout << "Non-Cartesian partitioning through METIS will be used.\n";
-#ifndef MFEM_USE_METIS
-            cout << "MFEM was built without METIS. "
-                 << "Adjust the number of tasks to use a Cartesian split." << endl;
-#endif
+            cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl;
         }
-#ifndef MFEM_USE_METIS
-        return 1;
-#endif
-        pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
-    }
-    delete [] nxyz;
-    delete mesh;
-
-    // Refine the mesh further in parallel to increase the resolution.
-    for (int lev = 0; lev < rp_levels; lev++) {
-        pmesh->UniformRefinement();
     }
 
-    int nzones = pmesh->GetNE(), nzones_min, nzones_max;
-    MPI_Reduce(&nzones, &nzones_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
-    MPI_Reduce(&nzones, &nzones_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
-    if (myid == 0)
+    int source = 0;
+    double dt;
+
+    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    romOptions.offsetType = getOffsetStyle(offsetType);
+    if (rom_online)
     {
-        cout << "Zones min/max: " << nzones_min << " " << nzones_max << endl;
+        std::ifstream infile_offlineParam(offlineParam_outputPath);
+        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(infile_offlineParam, line);
+        split_line(line, words);
+        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
+        if (romOptions.hyperreduce)
+        {
+            std::getline(infile_offlineParam, line);
+            split_line(line, words);
+            dim = std::stoi(words[3]);
+            dt = std::stod(words[4]);
+            source = std::stoi(words[5]);
+        }
+        infile_offlineParam.close();
     }
 
     // Define the parallel finite element spaces. We use:
@@ -549,23 +583,31 @@ int main(int argc, char *argv[])
     // - L2 (Bernstein, discontinuous) for specific internal energy.
     L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
     H1_FECollection H1FEC(order_v, dim);
-    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+    ParFiniteElementSpace* L2FESpace = NULL;
+    ParFiniteElementSpace* H1FESpace = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        L2FESpace = new ParFiniteElementSpace(pmesh, &L2FEC);
+        H1FESpace = new ParFiniteElementSpace(pmesh, &H1FEC, pmesh->Dimension());
+    }
 
-    cout << myid << ": pmesh->bdr_attributes.Max() " << pmesh->bdr_attributes.Max() << endl;
     // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
     // that the boundaries are straight.
     Array<int> ess_tdofs;
+
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
-        for (int d = 0; d < pmesh->Dimension(); d++)
         {
-            // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
-            // enforce v_x/y/z = 0 for the velocity components.
-            ess_bdr = 0;
-            ess_bdr[d] = 1;
-            H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-            ess_tdofs.Append(tdofs1d);
+            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+            for (int d = 0; d < pmesh->Dimension(); d++)
+            {
+                // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
+                // enforce v_x/y/z = 0 for the velocity components.
+                ess_bdr = 0;
+                ess_bdr[d] = 1;
+                H1FESpace->GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
+                ess_tdofs.Append(tdofs1d);
+            }
         }
     }
 
@@ -589,7 +631,7 @@ int main(int argc, char *argv[])
         ode_solver = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver(rom_online, &H1FESpace, &L2FESpace);
+        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
         if (myid == 0)
@@ -603,22 +645,34 @@ int main(int argc, char *argv[])
 
     romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
-    HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-    HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-
-    if (mpi.Root())
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        cout << "Number of kinematic (position, velocity) dofs: "
-             << glob_size_h1 << endl;
-        cout << "Number of specific internal energy dofs: "
-             << glob_size_l2 << endl;
+
+        HYPRE_Int glob_size_l2 = L2FESpace->GlobalTrueVSize();
+        HYPRE_Int glob_size_h1 = H1FESpace->GlobalTrueVSize();
+
+        if (mpi.Root())
+        {
+            cout << "Number of kinematic (position, velocity) dofs: "
+                 << glob_size_h1 << endl;
+            cout << "Number of specific internal energy dofs: "
+                 << glob_size_l2 << endl;
+        }
     }
 
-    int Vsize_l2 = L2FESpace.GetVSize();
-    int Vsize_h1 = H1FESpace.GetVSize();
+    int Vsize_l2;
+    int Vsize_h1;
 
-    int tVsize_l2 = L2FESpace.GetTrueVSize();
-    int tVsize_h1 = H1FESpace.GetTrueVSize();
+    int tVsize_l2;
+    int tVsize_h1;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        Vsize_l2 = L2FESpace->GetVSize();
+        Vsize_h1 = H1FESpace->GetVSize();
+
+        tVsize_l2 = L2FESpace->GetTrueVSize();
+        tVsize_h1 = H1FESpace->GetTrueVSize();
+    }
 
     // The monolithic BlockVector stores unknown fields as:
     // - 0 -> position
@@ -626,27 +680,48 @@ int main(int argc, char *argv[])
     // - 2 -> specific internal energy
 
     Array<int> true_offset(4);
-    true_offset[0] = 0;
-    true_offset[1] = true_offset[0] + Vsize_h1;
-    true_offset[2] = true_offset[1] + Vsize_h1;
-    true_offset[3] = true_offset[2] + Vsize_l2;
-    BlockVector S(true_offset);
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        true_offset[0] = 0;
+        true_offset[1] = true_offset[0] + Vsize_h1;
+        true_offset[2] = true_offset[1] + Vsize_h1;
+        true_offset[3] = true_offset[2] + Vsize_l2;
+    }
+
+    BlockVector* S = NULL;
+
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        S = new BlockVector(true_offset);
+    }
 
     // Define GridFunction objects for the position, velocity and specific
     // internal energy.  There is no function for the density, as we can always
     // compute the density values given the current mesh position, using the
     // property of pointwise mass conservation.
-    ParGridFunction x_gf, v_gf, e_gf;
-    x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
-    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
-    e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
+    ParGridFunction* x_gf = NULL;
+    ParGridFunction* v_gf = NULL;
+    ParGridFunction* e_gf = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        x_gf = new ParGridFunction();
+        v_gf = new ParGridFunction();
+        e_gf = new ParGridFunction();
+        x_gf->MakeRef(H1FESpace, *S, true_offset[0]);
+        v_gf->MakeRef(H1FESpace, *S, true_offset[1]);
+        e_gf->MakeRef(L2FESpace, *S, true_offset[2]);
 
-    // Initialize x_gf using the starting mesh coordinates.
-    pmesh->SetNodalGridFunction(&x_gf);
+        // Initialize x_gf using the starting mesh coordinates.
+        pmesh->SetNodalGridFunction(x_gf);
+    }
 
     // Initialize the velocity.
-    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
-    v_gf.ProjectCoefficient(v_coeff);
+    VectorFunctionCoefficient* v_coeff = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        v_coeff = new VectorFunctionCoefficient(pmesh->Dimension(), v0);
+        v_gf->ProjectCoefficient(*v_coeff);
+    }
 
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
@@ -654,45 +729,55 @@ int main(int argc, char *argv[])
     // is to get a high-order representation of the initial condition. Note that
     // this density is a temporary function and it will not be updated during the
     // time evolution.
-    ParGridFunction rho(&L2FESpace);
+    ParGridFunction* rho = NULL;
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
-    L2_FECollection l2_fec(order_e, pmesh->Dimension());
-    ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-    ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
-    l2_rho.ProjectCoefficient(rho_coeff);
-    rho.ProjectGridFunction(l2_rho);
-    if (problem == 1)
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        // For the Sedov test, we use a delta function at the origin.
-        DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                                 blast_position[2], romOptions.blast_energyFactor*blast_energy);
-        l2_e.ProjectCoefficient(e_coeff);
+        rho = new ParGridFunction(L2FESpace);
+        L2_FECollection l2_fec(order_e, pmesh->Dimension());
+        ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+        ParGridFunction l2_rho(&l2_fes), l2_e(&l2_fes);
+        l2_rho.ProjectCoefficient(rho_coeff);
+        rho->ProjectGridFunction(l2_rho);
+        if (problem == 1)
+        {
+            // For the Sedov test, we use a delta function at the origin.
+            DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                                     blast_position[2], romOptions.blast_energyFactor*blast_energy);
+            l2_e.ProjectCoefficient(e_coeff);
+        }
+        else
+        {
+            FunctionCoefficient e_coeff(e0);
+            l2_e.ProjectCoefficient(e_coeff);
+        }
+        e_gf->ProjectGridFunction(l2_e);
     }
-    else
-    {
-        FunctionCoefficient e_coeff(e0);
-        l2_e.ProjectCoefficient(e_coeff);
-    }
-    e_gf.ProjectGridFunction(l2_e);
 
     // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
     // gamma values are projected on a function that stays constant on the moving
     // mesh.
-    L2_FECollection mat_fec(0, pmesh->Dimension());
-    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-    ParGridFunction mat_gf(&mat_fes);
+    L2_FECollection* mat_fec = NULL;
+    ParFiniteElementSpace* mat_fes = NULL;
+    ParGridFunction* mat_gf = NULL;
     FunctionCoefficient mat_coeff(gamma_func);
-    mat_gf.ProjectCoefficient(mat_coeff);
-    GridFunctionCoefficient *mat_gf_coeff = new GridFunctionCoefficient(&mat_gf);
+    GridFunctionCoefficient *mat_gf_coeff = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        mat_fec = new L2_FECollection(0, pmesh->Dimension());
+        mat_fes = new ParFiniteElementSpace(pmesh, mat_fec);
+        mat_gf = new ParGridFunction(mat_fes);
+        mat_gf->ProjectCoefficient(mat_coeff);
+        mat_gf_coeff = new GridFunctionCoefficient(mat_gf);
+    }
 
     // Additional details, depending on the problem.
-    int source = 0;
     bool visc = true;
     switch (problem)
     {
     case 0:
-        if (pmesh->Dimension() == 2) {
+        if (pmesh && pmesh->Dimension() == 2) {
             source = 1;
         }
         visc = false;
@@ -716,79 +801,118 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    LagrangianHydroOperator oper(S.Size(), H1FESpace, L2FESpace,
-                                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
-                                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                                 H1FEC.GetBasisType());
+    LagrangianHydroOperator* oper = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
+                                           ess_tdofs, *rho, source, cfl, mat_gf_coeff,
+                                           visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                                           H1FEC.GetBasisType());
+    }
 
-    socketstream vis_rho, vis_v, vis_e;
+    socketstream* vis_rho = NULL;
+    socketstream* vis_v = NULL;
+    socketstream* vis_e = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        vis_rho = new socketstream();
+        vis_v = new socketstream();
+        vis_e = new socketstream();
+    }
     char vishost[] = "localhost";
     int  visport   = 19916;
 
-    ParGridFunction rho_gf;
-    if (visualization || visit) {
-        oper.ComputeDensity(rho_gf);
-    }
-
-    const double energy_init = oper.InternalEnergy(e_gf) +
-                               oper.KineticEnergy(v_gf);
-
-    if (visualization)
+    ParGridFunction* rho_gf = NULL;
+    double energy_init;
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        // Make sure all MPI ranks have sent their 'v' solution before initiating
-        // another set of GLVis connections (one from each rank):
-        MPI_Barrier(pmesh->GetComm());
-
-        vis_rho.precision(8);
-        vis_v.precision(8);
-        vis_e.precision(8);
-
-        int Wx = 0, Wy = 0; // window position
-        const int Ww = 350, Wh = 350; // window size
-        int offx = Ww+10; // window offsets
-
-        if (problem != 0 && problem != 4)
-        {
-            VisualizeField(vis_rho, vishost, visport, rho_gf,
-                           "Density", Wx, Wy, Ww, Wh);
+        rho_gf = new ParGridFunction();
+        if (visualization || visit) {
+            oper->ComputeDensity(*rho_gf);
         }
 
-        Wx += offx;
-        VisualizeField(vis_v, vishost, visport, v_gf,
-                       "Velocity", Wx, Wy, Ww, Wh);
-        Wx += offx;
-        VisualizeField(vis_e, vishost, visport, e_gf,
-                       "Specific Internal Energy", Wx, Wy, Ww, Wh);
+        energy_init = oper->InternalEnergy(*e_gf) +
+                      oper->KineticEnergy(*v_gf);
+
+        if (visualization)
+        {
+            // Make sure all MPI ranks have sent their 'v' solution before initiating
+            // another set of GLVis connections (one from each rank):
+            MPI_Barrier(pmesh->GetComm());
+
+            vis_rho->precision(8);
+            vis_v->precision(8);
+            vis_e->precision(8);
+
+            int Wx = 0, Wy = 0; // window position
+            const int Ww = 350, Wh = 350; // window size
+            int offx = Ww+10; // window offsets
+
+            if (problem != 0 && problem != 4)
+            {
+                VisualizeField(*vis_rho, vishost, visport, *rho_gf,
+                               "Density", Wx, Wy, Ww, Wh);
+            }
+
+            Wx += offx;
+            VisualizeField(*vis_v, vishost, visport, *v_gf,
+                           "Velocity", Wx, Wy, Ww, Wh);
+            Wx += offx;
+            VisualizeField(*vis_e, vishost, visport, *e_gf,
+                           "Specific Internal Energy", Wx, Wy, Ww, Wh);
+        }
     }
 
     // Save data for VisIt visualization.
     string visit_outputName = outputPath + "/" + std::string(visit_basename);
     const char *visit_outputPath = visit_outputName.c_str();
-    VisItDataCollection visit_dc(visit_outputPath, pmesh);
-    if (visit)
+    VisItDataCollection* visit_dc = NULL;
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        if (rom_offline || rom_restore)
-            visit_dc.RegisterField("Position",  &x_gf);
+        visit_dc = new VisItDataCollection(visit_outputPath, pmesh);
+        if (visit)
+        {
+            if (rom_offline || rom_restore)
+                visit_dc->RegisterField("Position",  x_gf);
 
-        visit_dc.RegisterField("Density",  &rho_gf);
-        visit_dc.RegisterField("Velocity", &v_gf);
-        visit_dc.RegisterField("Specific Internal Energy", &e_gf);
-        visit_dc.SetCycle(0);
-        visit_dc.SetTime(0.0);
-        visit_dc.Save();
+            visit_dc->RegisterField("Density",  rho_gf);
+            visit_dc->RegisterField("Velocity", v_gf);
+            visit_dc->RegisterField("Specific Internal Energy", e_gf);
+            visit_dc->SetCycle(0);
+            visit_dc->SetTime(0.0);
+            visit_dc->Save();
+        }
+
+        cout << myid << ": pmesh number of elements " << pmesh->GetNE() << endl;
     }
 
-    cout << myid << ": pmesh number of elements " << pmesh->GetNE() << endl;
-
     romOptions.rank = myid;
-    romOptions.H1FESpace = &H1FESpace;
-    romOptions.L2FESpace = &L2FESpace;
+    romOptions.H1FESpace = H1FESpace;
+    romOptions.L2FESpace = L2FESpace;
     romOptions.window = 0;
-    romOptions.FOMoper = &oper;
+    romOptions.FOMoper = oper;
     romOptions.restore = rom_restore;
-    romOptions.offsetType = getOffsetStyle(offsetType);
 
-    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    // Perform time-integration (looping over the time iterations, ti, with a
+    // time-step dt). The object oper is of type LagrangianHydroOperator that
+    // defines the Mult() method that is used by the time integrators.
+    if (!rom_online) ode_solver->Init(*oper);
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        oper->ResetTimeStepEstimate();
+    }
+    double t = 0.0, t_old, dt_old;
+    bool use_dt_old = false;
+    bool last_step = false;
+    int steps = 0;
+    BlockVector* S_old = NULL;
+
+    if (!(rom_online && romOptions.hyperreduce))
+    {
+        dt = oper->GetTimeStepEstimate(*S);
+        S_old = new BlockVector(*S);
+    }
+
     if (rom_offline)
     {
         int err_rostype;
@@ -808,7 +932,10 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.blast_energyFactor << " ";
+                outfile_offlineParam << dim << " ";
+                outfile_offlineParam << dt << " ";
+                outfile_offlineParam << source << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -831,35 +958,14 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << endl;
+                outfile_offlineParam << romOptions.blast_energyFactor << " ";
+                outfile_offlineParam << dim << " ";
+                outfile_offlineParam << dt << " ";
+                outfile_offlineParam << source << endl;
                 outfile_offlineParam.close();
             }
         }
     }
-
-    if (rom_online)
-    {
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        infile_offlineParam.close();
-    }
-
-    // Perform time-integration (looping over the time iterations, ti, with a
-    // time-step dt). The object oper is of type LagrangianHydroOperator that
-    // defines the Mult() method that is used by the time integrators.
-    if (!rom_online) ode_solver->Init(oper);
-    oper.ResetTimeStepEstimate();
-    double t = 0.0, dt = oper.GetTimeStepEstimate(S), t_old, dt_old;
-    bool use_dt_old = false;
-    bool last_step = false;
-    int steps = 0;
-    BlockVector S_old(S);
 
     StopWatch samplerTimer;
     ROM_Sampler *sampler = NULL;
@@ -877,8 +983,8 @@ int main(int argc, char *argv[])
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
-        sampler = new ROM_Sampler(romOptions, S);
-        sampler->SampleSolution(0, 0, S);
+        sampler = new ROM_Sampler(romOptions, *S);
+        sampler->SampleSolution(0, 0, *S);
         samplerTimer.Stop();
     }
 
@@ -902,6 +1008,7 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
+
             // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
@@ -928,8 +1035,9 @@ int main(int argc, char *argv[])
 
         if (!romOptions.hyperreduce)
         {
-            basis[0]->Init(romOptions, S);
+            basis[0]->Init(romOptions, *S);
         }
+
         if (romOptions.hyperreduce_prep)
         {
             if (myid == 0)
@@ -938,7 +1046,7 @@ int main(int argc, char *argv[])
             }
             // TODO: use romOptions.window instead of curr_window?
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-                basis[curr_window]->Init(romOptions, S);
+                basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
                 {
@@ -957,7 +1065,7 @@ int main(int argc, char *argv[])
 
         if (!romOptions.hyperreduce)
         {
-            basis[0]->ProjectFOMtoROM(S, romS);
+            basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0)
             {
                 std::string romS_outPath = outputPath + "/" + "romS" + "_0";
@@ -1006,7 +1114,7 @@ int main(int argc, char *argv[])
         }
 
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-        basis[0]->Init(romOptions, S);
+        basis[0]->Init(romOptions, *S);
 
         if (romOptions.mergeXV)
         {
@@ -1041,14 +1149,14 @@ int main(int argc, char *argv[])
                     }
 
                     infile_romS.close();
-                    basis[romOptions.window]->LiftROMtoFOM(romS, S);
+                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
                     if (visit)
                     {
-                        oper.ComputeDensity(rho_gf);
-                        visit_dc.SetCycle(ti);
-                        visit_dc.SetTime(t);
-                        visit_dc.Save();
+                        oper->ComputeDensity(*rho_gf);
+                        visit_dc->SetCycle(ti);
+                        visit_dc->SetTime(t);
+                        visit_dc->Save();
                     }
                 }
             }
@@ -1065,10 +1173,10 @@ int main(int argc, char *argv[])
                 }
                 romOptions.window++;
                 SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window-1]->LiftROMtoFOM(romS, S);
+                basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                 delete basis[romOptions.window-1];
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-                basis[romOptions.window]->Init(romOptions, S);
+                basis[romOptions.window]->Init(romOptions, *S);
 
                 if (romOptions.mergeXV)
                 {
@@ -1089,16 +1197,15 @@ int main(int argc, char *argv[])
         {
             infile_romS >> romS(k);
         }
-
         infile_romS.close();
-        basis[romOptions.window]->LiftROMtoFOM(romS, S);
+        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
         if (visit)
         {
-            oper.ComputeDensity(rho_gf);
-            visit_dc.SetCycle(ti);
-            visit_dc.SetTime(t);
-            visit_dc.Save();
+            oper->ComputeDensity(*rho_gf);
+            visit_dc->SetCycle(ti);
+            visit_dc->SetTime(t);
+            visit_dc->Save();
         }
         restoreTimer.Stop();
         infile_tw_steps.close();
@@ -1142,9 +1249,12 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
-            if (!rom_online || !romOptions.hyperreduce) S_old = S;
+            if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
             t_old = t;
-            oper.ResetTimeStepEstimate();
+            if (!(rom_online && romOptions.hyperreduce))
+            {
+                oper->ResetTimeStepEstimate();
+            }
 
             // S is the vector of dofs, t is the current time, and dt is the time step
             // to advance.
@@ -1167,18 +1277,21 @@ int main(int argc, char *argv[])
                 outfile_romS.close();
 
                 if (!romOptions.hyperreduce)
-                    basis[romOptions.window]->LiftROMtoFOM(romS, S);
+                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
                 romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                if (!romOptions.hyperreduce) oper.ResetQuadratureData();  // Necessary for oper.GetTimeStepEstimate(S);
+                if (!(rom_online && romOptions.hyperreduce))
+                {
+                    oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
+                }
             }
             else
             {
                 if (myid == 0)
                     cout << "FOM simulation at t " << t << ", dt " << dt << endl;
 
-                ode_solver->Step(S, t, dt);
+                ode_solver->Step(*S, t, dt);
             }
 
             steps++;
@@ -1186,9 +1299,9 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper.GetTimeStepEstimate(S);
+            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
 
-            //const double dt_est = oper.GetTimeStepEstimate(S);
+            //const double dt_est = oper->GetTimeStepEstimate(*S);
             //cout << myid << ": dt_est " << dt_est << endl;
             if (dt_est < dt)
             {
@@ -1200,9 +1313,12 @@ int main(int argc, char *argv[])
                     MFEM_ABORT("The time step crashed!");
                 }
                 t = t_old;
-                if (!rom_online || !romOptions.hyperreduce) S = S_old;
+                if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
                 if (rom_online) romS = romS_old;
-                oper.ResetQuadratureData();
+                if (!(rom_online && romOptions.hyperreduce))
+                {
+                    oper->ResetQuadratureData();
+                }
                 if (mpi.Root()) {
                     cout << "Repeating step " << ti << endl;
                 }
@@ -1220,7 +1336,7 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
-                sampler->SampleSolution(t, last_dt, S);
+                sampler->SampleSolution(t, last_dt, *S);
 
                 bool endWindow = false;
                 if (usingWindows)
@@ -1237,13 +1353,13 @@ int main(int argc, char *argv[])
 
                 if (samplerLast)
                 {
-                    samplerLast->SampleSolution(t, last_dt, S);
+                    samplerLast->SampleSolution(t, last_dt, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                         tOverlapMidpoint = t;
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
-                        samplerLast->Finalize(t, last_dt, S, cutoff);
+                        samplerLast->Finalize(t, last_dt, *S, cutoff);
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
@@ -1274,7 +1390,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        sampler->Finalize(t, last_dt, S, cutoff);
+                        sampler->Finalize(t, last_dt, *S, cutoff);
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << t << ", ";
                             if (romOptions.RHSbasis)
@@ -1292,8 +1408,8 @@ int main(int argc, char *argv[])
                         romOptions.t_final = (usingWindows && windowNumSamples == 0) ? twep[romOptions.window] : t_final;
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
-                        sampler = new ROM_Sampler(romOptions, S);
-                        sampler->SampleSolution(t, dt, S);
+                        sampler = new ROM_Sampler(romOptions, *S);
+                        sampler->SampleSolution(t, dt, *S);
                     }
                 }
                 samplerTimer.Stop();
@@ -1320,7 +1436,6 @@ int main(int argc, char *argv[])
                     int rdimeprev =  romOptions.dimE;
 
                     SetWindowParameters(twparam, romOptions);
-
                     if (romOptions.hyperreduce)
                     {
                         basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
@@ -1328,10 +1443,12 @@ int main(int argc, char *argv[])
 
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
+
                     if (!romOptions.hyperreduce)
                     {
-                        basis[romOptions.window]->Init(romOptions, S);
+                        basis[romOptions.window]->Init(romOptions, *S);
                     }
+
                     if (romOptions.mergeXV)
                     {
                         romOptions.dimX = basis[romOptions.window]->GetDimX();
@@ -1346,7 +1463,7 @@ int main(int argc, char *argv[])
 
                     if (!romOptions.hyperreduce)
                     {
-                        basis[romOptions.window]->ProjectFOMtoROM(S, romS);
+                        basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
                     }
                     if (myid == 0)
                     {
@@ -1363,101 +1480,105 @@ int main(int argc, char *argv[])
                 }
             }
 
+            if (mpi.Root())
+            {
+                if (last_step) {
+                    std::ofstream outfile(outputPath + "/num_steps");
+                    outfile << ti;
+                    outfile.close();
+                }
+            }
+
             // Make sure that the mesh corresponds to the new solution state. This is
             // needed, because some time integrators use different S-type vectors
             // and the oper object might have redirected the mesh positions to those.
-            pmesh->NewNodes(x_gf, false);
-
-            if (last_step || (ti % vis_steps) == 0)
+            if (!(rom_online && romOptions.hyperreduce))
             {
-                double loc_norm = e_gf * e_gf, tot_norm;
-                MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
-                              pmesh->GetComm());
+                pmesh->NewNodes(*x_gf, false);
 
-                if (romOptions.hyperreduce)
-                    tot_norm = 0.0;  // e_gf is not updated in hyperreduction case
-
-                if (mpi.Root())
+                if (last_step || (ti % vis_steps) == 0)
                 {
-                    cout << fixed;
-                    cout << "step " << setw(5) << ti
-                         << ",\tt = " << setw(5) << setprecision(4) << t
-                         << ",\tdt = " << setw(5) << setprecision(6) << dt
-                         << ",\t|e| = " << setprecision(10)
-                         << sqrt(tot_norm) << endl;
-                    if (last_step) {
-                        std::ofstream outfile(outputPath + "/num_steps");
-                        outfile << ti;
-                        outfile.close();
-                    }
-                }
+                    double loc_norm = *e_gf * *e_gf, tot_norm;
+                    MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
+                                  pmesh->GetComm());
 
-                // Make sure all ranks have sent their 'v' solution before initiating
-                // another set of GLVis connections (one from each rank):
-                MPI_Barrier(pmesh->GetComm());
-
-                if (visualization || visit || gfprint) {
-                    oper.ComputeDensity(rho_gf);
-                }
-                if (visualization)
-                {
-                    int Wx = 0, Wy = 0; // window position
-                    int Ww = 350, Wh = 350; // window size
-                    int offx = Ww+10; // window offsets
-
-                    if (problem != 0 && problem != 4)
+                    if (mpi.Root())
                     {
-                        VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                       "Density", Wx, Wy, Ww, Wh);
+                        cout << fixed;
+                        cout << "step " << setw(5) << ti
+                             << ",\tt = " << setw(5) << setprecision(4) << t
+                             << ",\tdt = " << setw(5) << setprecision(6) << dt
+                             << ",\t|e| = " << setprecision(10)
+                             << sqrt(tot_norm) << endl;
                     }
 
-                    Wx += offx;
-                    VisualizeField(vis_v, vishost, visport,
-                                   v_gf, "Velocity", Wx, Wy, Ww, Wh);
-                    Wx += offx;
-                    VisualizeField(vis_e, vishost, visport, e_gf,
-                                   "Specific Internal Energy", Wx, Wy, Ww,Wh);
-                    Wx += offx;
-                }
+                    // Make sure all ranks have sent their 'v' solution before initiating
+                    // another set of GLVis connections (one from each rank):
+                    MPI_Barrier(pmesh->GetComm());
 
-                if (visit)
-                {
-                    visit_dc.SetCycle(ti);
-                    visit_dc.SetTime(t);
-                    visit_dc.Save();
-                }
+                    if (visualization || visit || gfprint) {
+                        oper->ComputeDensity(*rho_gf);
+                    }
+                    if (visualization)
+                    {
+                        int Wx = 0, Wy = 0; // window position
+                        int Ww = 350, Wh = 350; // window size
+                        int offx = Ww+10; // window offsets
 
-                if (gfprint)
-                {
-                    ostringstream mesh_name, rho_name, v_name, e_name;
-                    mesh_name << visit_outputPath << "_" << ti
-                              << "_mesh." << setfill('0') << setw(6) << myid;
-                    rho_name  << visit_outputPath << "_" << ti
-                              << "_rho." << setfill('0') << setw(6) << myid;
-                    v_name << visit_outputPath << "_" << ti
-                           << "_v." << setfill('0') << setw(6) << myid;
-                    e_name << visit_outputPath << "_" << ti
-                           << "_e." << setfill('0') << setw(6) << myid;
+                        if (problem != 0 && problem != 4)
+                        {
+                            VisualizeField(*vis_rho, vishost, visport, *rho_gf,
+                                           "Density", Wx, Wy, Ww, Wh);
+                        }
 
-                    ofstream mesh_ofs(mesh_name.str().c_str());
-                    mesh_ofs.precision(8);
-                    pmesh->Print(mesh_ofs);
-                    mesh_ofs.close();
+                        Wx += offx;
+                        VisualizeField(*vis_v, vishost, visport,
+                                       *v_gf, "Velocity", Wx, Wy, Ww, Wh);
+                        Wx += offx;
+                        VisualizeField(*vis_e, vishost, visport, *e_gf,
+                                       "Specific Internal Energy", Wx, Wy, Ww,Wh);
+                        Wx += offx;
+                    }
 
-                    ofstream rho_ofs(rho_name.str().c_str());
-                    rho_ofs.precision(8);
-                    rho_gf.Save(rho_ofs);
-                    rho_ofs.close();
+                    if (visit)
+                    {
+                        visit_dc->SetCycle(ti);
+                        visit_dc->SetTime(t);
+                        visit_dc->Save();
+                    }
 
-                    ofstream v_ofs(v_name.str().c_str());
-                    v_ofs.precision(8);
-                    v_gf.Save(v_ofs);
-                    v_ofs.close();
+                    if (gfprint)
+                    {
+                        ostringstream mesh_name, rho_name, v_name, e_name;
+                        mesh_name << visit_outputPath << "_" << ti
+                                  << "_mesh." << setfill('0') << setw(6) << myid;
+                        rho_name  << visit_outputPath << "_" << ti
+                                  << "_rho." << setfill('0') << setw(6) << myid;
+                        v_name << visit_outputPath << "_" << ti
+                               << "_v." << setfill('0') << setw(6) << myid;
+                        e_name << visit_outputPath << "_" << ti
+                               << "_e." << setfill('0') << setw(6) << myid;
 
-                    ofstream e_ofs(e_name.str().c_str());
-                    e_ofs.precision(8);
-                    e_gf.Save(e_ofs);
-                    e_ofs.close();
+                        ofstream mesh_ofs(mesh_name.str().c_str());
+                        mesh_ofs.precision(8);
+                        pmesh->Print(mesh_ofs);
+                        mesh_ofs.close();
+
+                        ofstream rho_ofs(rho_name.str().c_str());
+                        rho_ofs.precision(8);
+                        rho_gf->Save(rho_ofs);
+                        rho_ofs.close();
+
+                        ofstream v_ofs(v_name.str().c_str());
+                        v_ofs.precision(8);
+                        v_gf->Save(v_ofs);
+                        v_ofs.close();
+
+                        ofstream e_ofs(e_name.str().c_str());
+                        e_ofs.precision(8);
+                        e_gf->Save(e_ofs);
+                        e_ofs.close();
+                    }
                 }
             }
         } // usual time loop
@@ -1473,7 +1594,7 @@ int main(int argc, char *argv[])
         }
         if (!rom_online)
         {
-            basis[romOptions.window]->LiftROMtoFOM(romS, S);
+            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
         }
     }
 
@@ -1481,9 +1602,9 @@ int main(int argc, char *argv[])
     {
         samplerTimer.Start();
         if (samplerLast)
-            samplerLast->Finalize(t, dt, S, cutoff);
+            samplerLast->Finalize(t, dt, *S, cutoff);
         else if (sampler)
-            sampler->Finalize(t, dt, S, cutoff);
+            sampler->Finalize(t, dt, *S, cutoff);
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
@@ -1506,34 +1627,38 @@ int main(int argc, char *argv[])
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
-    if (writeSol)
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        PrintParGridFunction(myid, outputPath + "/Sol_Position", &x_gf);
-        PrintParGridFunction(myid, outputPath + "/Sol_Velocity", &v_gf);
-        PrintParGridFunction(myid, outputPath + "/Sol_Energy", &e_gf);
-    }
 
-    if (solDiff)
-    {
-        cout << "solDiff mode " << endl;
-        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", &x_gf);
-        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", &v_gf);
-        PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", &e_gf);
-    }
+        if (writeSol)
+        {
+            PrintParGridFunction(myid, outputPath + "/Sol_Position", x_gf);
+            PrintParGridFunction(myid, outputPath + "/Sol_Velocity", v_gf);
+            PrintParGridFunction(myid, outputPath + "/Sol_Energy", e_gf);
+        }
 
-    if (visitDiffCycle >= 0)
-    {
-        VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
-        dc.Load(visitDiffCycle);
-        cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
+        if (solDiff)
+        {
+            cout << "solDiff mode " << endl;
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
+        }
 
-        ParGridFunction *dcfx = dc.GetParField("Position");
-        ParGridFunction *dcfv = dc.GetParField("Velocity");
-        ParGridFunction *dcfe = dc.GetParField("Specific Internal Energy");
+        if (visitDiffCycle >= 0)
+        {
+            VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
+            dc.Load(visitDiffCycle);
+            cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
-        PrintNormsOfParGridFunctions(normtype, myid, "Position", dcfx, &x_gf, true);
-        PrintNormsOfParGridFunctions(normtype, myid, "Velocity", dcfv, &v_gf, true);
-        PrintNormsOfParGridFunctions(normtype, myid, "Energy", dcfe, &e_gf, true);
+            ParGridFunction *dcfx = dc.GetParField("Position");
+            ParGridFunction *dcfv = dc.GetParField("Velocity");
+            ParGridFunction *dcfe = dc.GetParField("Specific Internal Energy");
+
+            PrintNormsOfParGridFunctions(normtype, myid, "Position", dcfx, x_gf, true);
+            PrintNormsOfParGridFunctions(normtype, myid, "Velocity", dcfv, v_gf, true);
+            PrintNormsOfParGridFunctions(normtype, myid, "Energy", dcfe, e_gf, true);
+        }
     }
 
     if (rom_online)
@@ -1559,40 +1684,43 @@ int main(int argc, char *argv[])
     case 7:
         steps *= 2;
     }
-    oper.PrintTimingData(mpi.Root(), steps);
-
-    const double energy_final = oper.InternalEnergy(e_gf) +
-                                oper.KineticEnergy(v_gf);
-    if (mpi.Root())
+    if (!(rom_online && romOptions.hyperreduce))
     {
-        cout << endl;
-        cout << "Energy  diff: " << scientific << setprecision(2)
-             << fabs(energy_init - energy_final) << endl;
-    }
+        oper->PrintTimingData(mpi.Root(), steps);
 
-    PrintParGridFunction(myid, outputPath + "/x_gf", &x_gf);
-    PrintParGridFunction(myid, outputPath + "/v_gf", &v_gf);
-    PrintParGridFunction(myid, outputPath + "/e_gf", &e_gf);
-
-    // Print the error.
-    // For problems 0 and 4 the exact velocity is constant in time.
-    if (problem == 0 || problem == 4)
-    {
-        const double error_max = v_gf.ComputeMaxError(v_coeff),
-                     error_l1  = v_gf.ComputeL1Error(v_coeff),
-                     error_l2  = v_gf.ComputeL2Error(v_coeff);
+        const double energy_final = oper->InternalEnergy(*e_gf) +
+                                    oper->KineticEnergy(*v_gf);
         if (mpi.Root())
         {
-            cout << "L_inf  error: " << error_max << endl
-                 << "L_1    error: " << error_l1 << endl
-                 << "L_2    error: " << error_l2 << endl;
+            cout << endl;
+            cout << "Energy  diff: " << scientific << setprecision(2)
+                 << fabs(energy_init - energy_final) << endl;
         }
-    }
 
-    if (visualization)
-    {
-        vis_v.close();
-        vis_e.close();
+        PrintParGridFunction(myid, outputPath + "/x_gf", x_gf);
+        PrintParGridFunction(myid, outputPath + "/v_gf", v_gf);
+        PrintParGridFunction(myid, outputPath + "/e_gf", e_gf);
+
+        // Print the error.
+        // For problems 0 and 4 the exact velocity is constant in time.
+        if (problem == 0 || problem == 4)
+        {
+            const double error_max = v_gf->ComputeMaxError(*v_coeff),
+                         error_l1  = v_gf->ComputeL1Error(*v_coeff),
+                         error_l2  = v_gf->ComputeL2Error(*v_coeff);
+            if (mpi.Root())
+            {
+                cout << "L_inf  error: " << error_max << endl
+                     << "L_1    error: " << error_l1 << endl
+                     << "L_2    error: " << error_l2 << endl;
+            }
+        }
+
+        if (visualization)
+        {
+            vis_v->close();
+            vis_e->close();
+        }
     }
 
     totalTimer.Stop();
@@ -1605,9 +1733,26 @@ int main(int argc, char *argv[])
     }
 
     // Free the used memory.
-    delete ode_solver;
-    delete pmesh;
-    delete mat_gf_coeff;
+    if (ode_solver != nullptr) delete ode_solver;
+    if (pmesh != nullptr) delete pmesh;
+    if (oper != nullptr) delete oper;
+    if (rho != nullptr) delete rho;
+    if (mat_fec != nullptr) delete mat_fec;
+    if (mat_fes != nullptr) delete mat_fes;
+    if (mat_gf != nullptr) delete mat_gf;
+    if (mat_gf_coeff != nullptr) delete mat_gf_coeff;
+    if (L2FESpace != nullptr) delete L2FESpace;
+    if (H1FESpace != nullptr) delete H1FESpace;
+    if (S != nullptr) delete S;
+    if (S_old != nullptr) delete S_old;
+    if (x_gf != nullptr) delete x_gf;
+    if (v_gf != nullptr) delete v_gf;
+    if (e_gf != nullptr) delete e_gf;
+    if (rho_gf != nullptr) delete rho_gf;
+    if (vis_rho != nullptr) delete vis_rho;
+    if (vis_v != nullptr) delete vis_v;
+    if (vis_e != nullptr) delete vis_e;
+    if (visit_dc != nullptr) delete visit_dc;
 
     return 0;
 }

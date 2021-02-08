@@ -353,8 +353,11 @@ public:
         delete basisE;
         delete basisFv;
         delete basisFe;
-        delete fH1;
-        delete fL2;
+        if (!hyperreduce)
+        {
+            delete fH1;
+            delete fL2;
+        }
         delete spX;
         delete spV;
         delete spE;
@@ -379,6 +382,11 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        if (!hyperreduce)
+        {
+            delete gfH1;
+            delete gfL2;
+        }
     }
 
     void Init(ROM_Options const& input, Vector const& S);
@@ -482,10 +490,10 @@ private:
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
 
-    const int H1size;
-    const int L2size;
-    const int tH1size;
-    const int tL2size;
+    int H1size;
+    int L2size;
+    int tH1size;
+    int tL2size;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
@@ -499,7 +507,8 @@ private:
 
     Vector mfH1, mfL2;
 
-    ParGridFunction gfH1, gfL2;
+    ParGridFunction* gfH1;
+    ParGridFunction* gfL2;
 
     CAROM::Vector *rX = 0;
     CAROM::Vector *rV = 0;
