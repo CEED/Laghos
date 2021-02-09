@@ -562,7 +562,7 @@ int main(int argc, char *argv[])
     }
 
     int source = 0;
-    double dt;
+    double dt = 0.0;
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
@@ -909,6 +909,7 @@ int main(int argc, char *argv[])
     bool use_dt_old = false;
     bool last_step = false;
     int steps = 0;
+
     BlockVector* S_old = NULL;
 
     if (fom_data)
@@ -987,19 +988,8 @@ int main(int argc, char *argv[])
     // Perform time-integration (looping over the time iterations, ti, with a
     // time-step dt). The object oper is of type LagrangianHydroOperator that
     // defines the Mult() method that is used by the time integrators.
-    if (!rom_online) ode_solver->Init(oper);
-    if (fom_data) oper.ResetTimeStepEstimate();
-    double t = 0.0, t_old, dt_old;
-    bool use_dt_old = false;
-    bool last_step = false;
-    int steps = 0;
-    BlockVector *S_old = NULL;
-
-    if (fom_data)
-    {
-        dt = oper->GetTimeStepEstimate(*S);
-        S_old = new BlockVector(*S);
-    }
+    if (!rom_online) ode_solver->Init(*oper);
+    if (fom_data) oper->ResetTimeStepEstimate();
 
     StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;
