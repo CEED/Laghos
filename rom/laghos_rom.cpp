@@ -515,53 +515,49 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
     CAROM::Vector romS_V(rdimv, false);
     CAROM::Vector romS_E(rdime, false);
 
-    if (rank == 0) // TODO: remove?
+    for (int i=0; i<rdimxPrev; ++i)
+        romS_oldX(i) = romS[i];
+
+    for (int i=0; i<rdimvPrev; ++i)
+        romS_oldV(i) = romS[rdimxPrev + i];
+
+    for (int i=0; i<rdimePrev; ++i)
+        romS_oldE(i) = romS[rdimxPrev + rdimvPrev + i];
+
+    BwinX->mult(romS_oldX, romS_X);
+    BwinV->mult(romS_oldV, romS_V);
+    BwinE->mult(romS_oldE, romS_E);
+
+    if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
     {
-        for (int i=0; i<rdimxPrev; ++i)
-            romS_oldX(i) = romS[i];
+        BtInitDiffX = new CAROM::Vector(rdimx, false);
+        BtInitDiffV = new CAROM::Vector(rdimv, false);
+        BtInitDiffE = new CAROM::Vector(rdime, false);
 
-        for (int i=0; i<rdimvPrev; ++i)
-            romS_oldV(i) = romS[rdimxPrev + i];
+        BtInitDiffX->read(basename + "/" + "BtInitDiffX" + "_" + to_string(window));
+        BtInitDiffV->read(basename + "/" + "BtInitDiffV" + "_" + to_string(window));
+        BtInitDiffE->read(basename + "/" + "BtInitDiffE" + "_" + to_string(window));
 
-        for (int i=0; i<rdimePrev; ++i)
-            romS_oldE(i) = romS[rdimxPrev + rdimvPrev + i];
-
-        BwinX->mult(romS_oldX, romS_X);
-        BwinV->mult(romS_oldV, romS_V);
-        BwinE->mult(romS_oldE, romS_E);
-
-        if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
-        {
-            BtInitDiffX = new CAROM::Vector(rdimx, false);
-            BtInitDiffV = new CAROM::Vector(rdimv, false);
-            BtInitDiffE = new CAROM::Vector(rdime, false);
-
-            BtInitDiffX->read(basename + "/" + "BtInitDiffX" + "_" + to_string(window));
-            BtInitDiffV->read(basename + "/" + "BtInitDiffV" + "_" + to_string(window));
-            BtInitDiffE->read(basename + "/" + "BtInitDiffE" + "_" + to_string(window));
-
-            romS_X += *BtInitDiffX;
-            romS_V += *BtInitDiffV;
-            romS_E += *BtInitDiffE;
-        }
-
-        romS.SetSize(rdimx + rdimv + rdime);
-
-        for (int i=0; i<rdimx; ++i)
-            romS[i] = romS_X(i);
-
-        for (int i=0; i<rdimv; ++i)
-            romS[rdimx + i] = romS_V(i);
-
-        for (int i=0; i<rdime; ++i)
-            romS[rdimx + rdimv + i] = romS_E(i);
+        romS_X += *BtInitDiffX;
+        romS_V += *BtInitDiffV;
+        romS_E += *BtInitDiffE;
     }
+
+    romS.SetSize(rdimx + rdimv + rdime);
+
+    for (int i=0; i<rdimx; ++i)
+        romS[i] = romS_X(i);
+
+    for (int i=0; i<rdimv; ++i)
+        romS[rdimx + i] = romS_V(i);
+
+    for (int i=0; i<rdime; ++i)
+        romS[rdimx + rdimv + i] = romS_E(i);
 }
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    // TODO: simplify this logic
-    if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
+    if (offsetInit && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
         std::string path_init = basename + "/ROMoffset/init";
 

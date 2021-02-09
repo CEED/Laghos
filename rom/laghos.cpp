@@ -1067,7 +1067,6 @@ int main(int argc, char *argv[])
             {
                 basis[0]->writeSP(romOptions, 0);
             }
-            // TODO: use romOptions.window instead of curr_window?
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
