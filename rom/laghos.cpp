@@ -283,6 +283,13 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM hyperreduction preprocessing.");
     args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
+    args.AddOption(&romOptions.randomizedSVD, "-romsvdrm", "--romsvdrandom", "-no-romsvdrm", "--no-romsvdrm",
+                   "Enable or disable ROM randomized SVD.");
+    args.AddOption(&romOptions.randdimX, "-randdimx", "--rand_dimx", "Randomized SVD subspace dimension for X.");
+    args.AddOption(&romOptions.randdimV, "-randdimv", "--rand_dimv", "Randomized SVD subspace dimension for V.");
+    args.AddOption(&romOptions.randdimE, "-randdime", "--rand_dime", "Randomized SVD subspace dimension for E.");
+    args.AddOption(&romOptions.randdimFv, "-randdimfv", "--rand_dimfv", "Randomized SVD subspace dimension for Fv.");
+    args.AddOption(&romOptions.randdimFe, "-randdimfe", "--rand_dimfe", "Randomized SVD subspace dimension for Fe.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
@@ -964,7 +971,37 @@ int main(int argc, char *argv[])
         }
     }
 
-    StopWatch samplerTimer;
+    if (rom_online)
+    {
+        std::ifstream infile_offlineParam(offlineParam_outputPath);
+        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(infile_offlineParam, line);
+        split_line(line, words);
+        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
+        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
+        infile_offlineParam.close();
+    }
+
+    // Perform time-integration (looping over the time iterations, ti, with a
+    // time-step dt). The object oper is of type LagrangianHydroOperator that
+    // defines the Mult() method that is used by the time integrators.
+    if (!rom_online) ode_solver->Init(oper);
+    if (fom_data) oper.ResetTimeStepEstimate();
+    double t = 0.0, t_old, dt_old;
+    bool use_dt_old = false;
+    bool last_step = false;
+    int steps = 0;
+    BlockVector *S_old = NULL;
+
+    if (fom_data)
+    {
+        dt = oper->GetTimeStepEstimate(*S);
+        S_old = new BlockVector(*S);
+    }
+
+    StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp;
@@ -1597,10 +1634,12 @@ int main(int argc, char *argv[])
     if (rom_offline)
     {
         samplerTimer.Start();
+        basisConstructionTimer.Start();
         if (samplerLast)
             samplerLast->Finalize(t, dt, *S, cutoff);
         else if (sampler)
             sampler->Finalize(t, dt, *S, cutoff);
+        basisConstructionTimer.Stop();
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", ";
@@ -1723,6 +1762,7 @@ int main(int argc, char *argv[])
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
         if(rom_restore) cout << "Elapsed time for restore phase: " << restoreTimer.RealTime() << " sec\n";
         if(rom_offline) cout << "Elapsed time for sampling in the offline phase: " << samplerTimer.RealTime() << " sec\n";
+        if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
     }
