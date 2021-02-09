@@ -301,7 +301,6 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
     if (!hyperreduce)
     {
-
         tH1size = input.H1FESpace->GetTrueVSize();
         tL2size = input.L2FESpace->GetTrueVSize();
         H1size = input.H1FESpace->GetVSize();

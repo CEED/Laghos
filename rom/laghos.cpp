@@ -347,6 +347,8 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
+    const bool fom_data = !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
+
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
     {
@@ -384,8 +386,8 @@ int main(int argc, char *argv[])
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
     Mesh* mesh = NULL;
-    int dim;
-    if (!(rom_online && romOptions.hyperreduce))
+    int dim = 0;
+    if (fom_data)
     {
         mesh = new Mesh(mesh_file, 1, 1);
         dim = mesh->Dimension();
@@ -405,7 +407,7 @@ int main(int argc, char *argv[])
 
     // Parallel partitioning of the mesh.
     ParMesh* pmesh = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         const int num_tasks = mpi.WorldSize();
         int unit;
@@ -585,7 +587,7 @@ int main(int argc, char *argv[])
     H1_FECollection H1FEC(order_v, dim);
     ParFiniteElementSpace* L2FESpace = NULL;
     ParFiniteElementSpace* H1FESpace = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         L2FESpace = new ParFiniteElementSpace(pmesh, &L2FEC);
         H1FESpace = new ParFiniteElementSpace(pmesh, &H1FEC, pmesh->Dimension());
@@ -595,7 +597,7 @@ int main(int argc, char *argv[])
     // that the boundaries are straight.
     Array<int> ess_tdofs;
 
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         {
             Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
@@ -645,7 +647,7 @@ int main(int argc, char *argv[])
 
     romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
 
         HYPRE_Int glob_size_l2 = L2FESpace->GlobalTrueVSize();
@@ -660,12 +662,12 @@ int main(int argc, char *argv[])
         }
     }
 
-    int Vsize_l2;
-    int Vsize_h1;
+    int Vsize_l2 = 0;
+    int Vsize_h1 = 0;
 
-    int tVsize_l2;
-    int tVsize_h1;
-    if (!(rom_online && romOptions.hyperreduce))
+    int tVsize_l2 = 0;
+    int tVsize_h1 = 0;
+    if (fom_data)
     {
         Vsize_l2 = L2FESpace->GetVSize();
         Vsize_h1 = H1FESpace->GetVSize();
@@ -680,7 +682,7 @@ int main(int argc, char *argv[])
     // - 2 -> specific internal energy
 
     Array<int> true_offset(4);
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         true_offset[0] = 0;
         true_offset[1] = true_offset[0] + Vsize_h1;
@@ -688,12 +690,7 @@ int main(int argc, char *argv[])
         true_offset[3] = true_offset[2] + Vsize_l2;
     }
 
-    BlockVector* S = NULL;
-
-    if (!(rom_online && romOptions.hyperreduce))
-    {
-        S = new BlockVector(true_offset);
-    }
+    BlockVector* S = fom_data ? new BlockVector(true_offset) : NULL;
 
     // Define GridFunction objects for the position, velocity and specific
     // internal energy.  There is no function for the density, as we can always
@@ -702,7 +699,7 @@ int main(int argc, char *argv[])
     ParGridFunction* x_gf = NULL;
     ParGridFunction* v_gf = NULL;
     ParGridFunction* e_gf = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         x_gf = new ParGridFunction();
         v_gf = new ParGridFunction();
@@ -717,7 +714,7 @@ int main(int argc, char *argv[])
 
     // Initialize the velocity.
     VectorFunctionCoefficient* v_coeff = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         v_coeff = new VectorFunctionCoefficient(pmesh->Dimension(), v0);
         v_gf->ProjectCoefficient(*v_coeff);
@@ -732,7 +729,7 @@ int main(int argc, char *argv[])
     ParGridFunction* rho = NULL;
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         rho = new ParGridFunction(L2FESpace);
         L2_FECollection l2_fec(order_e, pmesh->Dimension());
@@ -763,7 +760,7 @@ int main(int argc, char *argv[])
     ParGridFunction* mat_gf = NULL;
     FunctionCoefficient mat_coeff(gamma_func);
     GridFunctionCoefficient *mat_gf_coeff = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         mat_fec = new L2_FECollection(0, pmesh->Dimension());
         mat_fes = new ParFiniteElementSpace(pmesh, mat_fec);
@@ -802,7 +799,7 @@ int main(int argc, char *argv[])
     }
 
     LagrangianHydroOperator* oper = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl, mat_gf_coeff,
@@ -813,7 +810,7 @@ int main(int argc, char *argv[])
     socketstream* vis_rho = NULL;
     socketstream* vis_v = NULL;
     socketstream* vis_e = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         vis_rho = new socketstream();
         vis_v = new socketstream();
@@ -824,7 +821,7 @@ int main(int argc, char *argv[])
 
     ParGridFunction* rho_gf = NULL;
     double energy_init;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         rho_gf = new ParGridFunction();
         if (visualization || visit) {
@@ -867,7 +864,7 @@ int main(int argc, char *argv[])
     string visit_outputName = outputPath + "/" + std::string(visit_basename);
     const char *visit_outputPath = visit_outputName.c_str();
     VisItDataCollection* visit_dc = NULL;
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         visit_dc = new VisItDataCollection(visit_outputPath, pmesh);
         if (visit)
@@ -897,7 +894,7 @@ int main(int argc, char *argv[])
     // time-step dt). The object oper is of type LagrangianHydroOperator that
     // defines the Mult() method that is used by the time integrators.
     if (!rom_online) ode_solver->Init(*oper);
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         oper->ResetTimeStepEstimate();
     }
@@ -907,7 +904,7 @@ int main(int argc, char *argv[])
     int steps = 0;
     BlockVector* S_old = NULL;
 
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         dt = oper->GetTimeStepEstimate(*S);
         S_old = new BlockVector(*S);
@@ -1008,7 +1005,6 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
-
             // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
@@ -1251,7 +1247,7 @@ int main(int argc, char *argv[])
 
             if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
             t_old = t;
-            if (!(rom_online && romOptions.hyperreduce))
+            if (fom_data)
             {
                 oper->ResetTimeStepEstimate();
             }
@@ -1281,7 +1277,7 @@ int main(int argc, char *argv[])
 
                 romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                if (!(rom_online && romOptions.hyperreduce))
+                if (fom_data)
                 {
                     oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
                 }
@@ -1315,7 +1311,7 @@ int main(int argc, char *argv[])
                 t = t_old;
                 if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
                 if (rom_online) romS = romS_old;
-                if (!(rom_online && romOptions.hyperreduce))
+                if (fom_data)
                 {
                     oper->ResetQuadratureData();
                 }
@@ -1492,13 +1488,13 @@ int main(int argc, char *argv[])
             // Make sure that the mesh corresponds to the new solution state. This is
             // needed, because some time integrators use different S-type vectors
             // and the oper object might have redirected the mesh positions to those.
-            if (!(rom_online && romOptions.hyperreduce))
+            if (fom_data)
             {
                 pmesh->NewNodes(*x_gf, false);
 
                 if (last_step || (ti % vis_steps) == 0)
                 {
-                    double loc_norm = *e_gf * *e_gf, tot_norm;
+                    double loc_norm = (*e_gf) * (*e_gf), tot_norm;
                     MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                                   pmesh->GetComm());
 
@@ -1627,9 +1623,8 @@ int main(int argc, char *argv[])
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
-
         if (writeSol)
         {
             PrintParGridFunction(myid, outputPath + "/Sol_Position", x_gf);
@@ -1684,7 +1679,7 @@ int main(int argc, char *argv[])
     case 7:
         steps *= 2;
     }
-    if (!(rom_online && romOptions.hyperreduce))
+    if (fom_data)
     {
         oper->PrintTimingData(mpi.Root(), steps);
 
@@ -1753,6 +1748,7 @@ int main(int argc, char *argv[])
     if (vis_v != nullptr) delete vis_v;
     if (vis_e != nullptr) delete vis_e;
     if (visit_dc != nullptr) delete visit_dc;
+    if (v_coeff != nullptr) delete v_coeff;
 
     return 0;
 }

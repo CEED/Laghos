@@ -353,11 +353,6 @@ public:
         delete basisE;
         delete basisFv;
         delete basisFe;
-        if (!hyperreduce)
-        {
-            delete fH1;
-            delete fL2;
-        }
         delete spX;
         delete spV;
         delete spE;
@@ -384,6 +379,8 @@ public:
         delete BEEinv;
         if (!hyperreduce)
         {
+            delete fH1;
+            delete fL2;
             delete gfH1;
             delete gfL2;
         }
