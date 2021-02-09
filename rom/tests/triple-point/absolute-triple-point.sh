@@ -11,6 +11,7 @@ case $subTestNum in
     $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.2 -cfl 0.05 -pa -offline -writesol -romsvds -rostype load
     ;;
   2)
-    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.2 -cfl 0.05 -pa -online -rdimx 3 -rdimv 7 -rdime 5 -romhr -nsamx 6 -nsamv 448 -nsame 10 -soldiff -rostype load
+    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.2 -cfl 0.05 -pa -online -rdimx 3 -rdimv 7 -rdime 5 -romhrprep -nsamx 6 -nsamv 448 -nsame 10 -soldiff -rostype load
+    $LAGHOS_SERIAL -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.2 -cfl 0.05 -pa -online -rdimx 3 -rdimv 7 -rdime 5 -romhr -nsamx 6 -nsamv 448 -nsame 10 -soldiff -rostype load
     ;;
 esac
