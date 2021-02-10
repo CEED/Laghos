@@ -84,7 +84,38 @@ static void Checks(const int dim, const int ti, const double norm, int &checks);
 
 double interface_rt(const Vector &x)
 {
-   return tanh(2.0*(x(1) - 0.0));
+   // 0 - Taylor-Green.
+   // 1 - Rayleigh-Taylor.
+   // 2 - 3point 2D.
+   const int type = 1;
+
+   // Taylor-Green.
+   if (type == 0) { return tanh(2.0*(x(1) - 0.5)); }
+
+   // Rayleigh-Taylor.
+   if (type == 1) { return tanh(2.0*(x(1) - 0.0)); }
+
+   // 3point.
+   if (type == 2)
+   {
+      return tanh(2.0*(x(1) - 1.5));
+   }
+}
+
+void FindDOFid(ParGridFunction &pos)
+{
+   // For 3point the point is (1.0, 1.5).
+   const double x = 1.0, y = 1.5;
+   const double eps = 1e-6;
+   const int size = pos.Size() / 2;
+   for (int i = 0; i < size; i++)
+   {
+      if (fabs(pos(i) - x) < eps && fabs(pos(size + i) - y) < eps)
+      {
+         std::cout << "Proc id: " << pos.ParFESpace()->GetMyRank() << std::endl;
+         std::cout << "Dof id: " << i << " " << i + size << std::endl;
+      }
+   }
 }
 
 void SetInterfaces(const ParGridFunction &x, ParGridFunction &interfaces)
@@ -552,6 +583,9 @@ int main(int argc, char *argv[])
    pmesh->SetNodalGridFunction(&x_gf);
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
+
+   FindDOFid(x_gf);
+   //MFEM_ABORT(");");
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);

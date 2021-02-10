@@ -51,13 +51,13 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
-   const int    solver_type = 1,
+   const int    solver_type = 0,
                 solver_iter = 200;
    const double solver_rtol = 1e-6;
    const int max_lin_iter   = 100;
    const int quad_order = 8;
-   const double surface_fit_const = 20000;
-   const bool   fix_interface     = true;
+   const double surface_fit_const = 1000.0;
+   const bool   fix_interface     = false;
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
    ParMesh *pmesh = pfespace->GetParMesh();
@@ -70,11 +70,15 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int dim = pfespace->GetMesh()->Dimension();
 
    // Metric.
+   TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
+   //TMOP_QualityMetric *metric  = new TMOP_Metric_002;
    //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
    //TMOP_QualityMetric *metric  = new TMOP_Metric_302;
-   TMOP_QualityMetric *metric  = new TMOP_Metric_321;
+   // 328, 333, 334
+   //TMOP_QualityMetric *metric  = new TMOP_Metric_334(0.5);
    // Target.
    auto ttype = TargetConstructor::IDEAL_SHAPE_GIVEN_SIZE;
+   //auto ttype = TargetConstructor::IDEAL_SHAPE_EQUAL_SIZE;
    //auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
    TargetConstructor *target_c = new TargetConstructor(ttype, MPI_COMM_WORLD);
    target_c->SetNodes(x0);
@@ -115,6 +119,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
             marker_gf(j) = 1.0;
             extra_vdofs.Append(j);
             extra_vdofs.Append(j + marker.Size());
+            if (dim == 3) { extra_vdofs.Append(j + 2 * marker.Size()); }
          }
          else
          {
@@ -138,10 +143,24 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
                                     900, 600, 300, 300);
    }
 
+   he_nlf_integ->ParEnableNormalization(x0);
+
    // Objective.
    ParNonlinearForm a(pfespace);
    a.AddDomainIntegrator(he_nlf_integ);
    if (fix_interface) { ess_vdofs.Append(extra_vdofs); }
+   /*
+   if (myid == 1)
+   {
+      ess_vdofs.Append(9);
+      ess_vdofs.Append(9 + marker.Size());
+   }
+   if (myid == 2)
+   {
+      ess_vdofs.Append(15);
+      ess_vdofs.Append(15 + marker.Size());
+   }
+   */
    a.SetEssentialVDofs(ess_vdofs);
 
    // Initial energy.
@@ -220,6 +239,31 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
            << " + extra terms: " << fin_energy - fin_metric_energy << endl;
       cout << "The strain energy decreased by: "
            << (init_m_energy - fin_metric_energy) * 100.0 / init_m_energy << " %." << endl;
+   }
+   double err_avg, err_max;
+   he_nlf_integ->GetSurfaceFittingErrors(err_avg, err_max);
+   if (myid == 0)
+   {
+      cout << "Fitting error max: " << err_max << endl
+           << "Fitting error avg: " << err_avg << endl;
+   }
+
+   // Visualize the displacement.
+   x0 -= x;
+   socketstream sock;
+   if (myid == 0)
+   {
+      sock.open("localhost", 19916);
+      sock << "solution\n";
+   }
+   pmesh->PrintAsOne(sock);
+   x0.SaveAsOne(sock);
+   if (myid == 0)
+   {
+      sock << "window_title 'Displacements'\n"
+              << "window_geometry "
+              << 300 << " " << 900 << " " << 300 << " " << 300 << "\n"
+              << "keys jRmclA" << endl;
    }
 
    // Print the final mesh in a file.
