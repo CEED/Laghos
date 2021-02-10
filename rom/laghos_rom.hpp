@@ -12,10 +12,8 @@
 //using namespace CAROM;
 using namespace mfem;
 
-//#define STXV
-//#define COLL_LSPG
 
-#define XLSPG  // use LSPG even for the linear equation of motion
+//#define STXV  // TODO: remove this?
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
@@ -52,7 +50,29 @@ static offsetStyle getOffsetStyle(const char* offsetType)
         {"interpolate", interpolateOffset}
     };
     auto iter = offsetMap.find(offsetType);
-    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input for offset type");
+    return iter->second;
+}
+
+enum SpaceTimeMethod
+{
+    no_space_time, // Default, spatial ROM
+    gnat_lspg,     // LSPG (least-squares Petrov-Galerkin) using GNAT for hyperreduction
+    coll_lspg,     // LSPG (least-squares Petrov-Galerkin) using collocation for hyperreduction
+    galerkin       // Galerkin space-time system (not recommended)  TODO: remove this option?
+};
+
+static SpaceTimeMethod getSpaceTimeMethod(const char* spaceTime)
+{
+    static std::unordered_map<std::string, SpaceTimeMethod> spaceTimeMap =
+    {
+        {"spatial", no_space_time},
+        {"gnat_lspg", gnat_lspg},
+        {"coll_lspg", coll_lspg},
+        {"galerkin", galerkin}
+    };
+    auto iter = spaceTimeMap.find(spaceTime);
+    MFEM_VERIFY(iter != std::end(spaceTimeMap), "Invalid input for space time method");
     return iter->second;
 }
 
@@ -114,7 +134,7 @@ struct ROM_Options
 
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
 
-    bool spaceTime = false;
+    SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
 };
@@ -142,7 +162,7 @@ public:
         if (input.staticSVD)
         {
             {
-                const bool output_rightSV = input.spaceTime;
+                const bool output_rightSV = (input.spaceTimeMethod != no_space_time);
 
                 CAROM::StaticSVDOptions static_x_options(
                     tH1size,
@@ -687,7 +707,8 @@ private:
 
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
-    const bool spaceTime;
+    const SpaceTimeMethod spaceTimeMethod;
+    const bool spaceTime;  // whether space-time is used
     int temporalSize = 0;
     int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
     // TODO: generalize for nonzero initial velocity.
@@ -714,7 +735,7 @@ class STROM_Basis
 public:
     //STROM_Basis(ROM_Options const& input, MPI_Comm comm_) : ROM_Basis(input, comm_)
     STROM_Basis(ROM_Options const& input, ROM_Basis *b_, std::vector<double> *timesteps_)
-        : b(b_), u_ti(b_->TotalSize()), timesteps(timesteps_)
+        : b(b_), u_ti(b_->TotalSize()), timesteps(timesteps_), spaceTimeMethod(input.spaceTimeMethod)
     {
         // TODO: I don't think this should be derived from ROM_Basis, since it reads the bases again.
         //MFEM_VERIFY(false, "");
@@ -726,15 +747,10 @@ public:
     }
 
     int GetNumSpatialSamples() const {
-#ifdef XLSPG
-        return b->numSamplesV + b->numSamplesV + b->numSamplesE;  // use V samples for X
-#else
-#ifdef COLL_LSPG
-        return b->numSamplesV + b->numSamplesV + b->numSamplesE;  // use V samples for X
-#else
-        return b->numSamplesX + b->numSamplesV + b->numSamplesE;
-#endif
-#endif
+        if (spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg)
+            return (2*b->numSamplesV) + b->numSamplesE;  // use V samples for X
+        else  // Galerkin case
+            return b->numSamplesX + b->numSamplesV + b->numSamplesE;
     }
 
     int GetNumSampledTimes() const {
@@ -784,6 +800,8 @@ private:
     mutable Vector u_ti;
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     std::vector<double> *timesteps; // Positive timestep times (excluding initial time which is assumed to be zero).
+
+    const SpaceTimeMethod spaceTimeMethod;
 
     const bool GaussNewton = true; // TODO: eliminate this
 };
@@ -889,6 +907,8 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S);
     void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
     void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+
+    const SpaceTimeMethod spaceTimeMethod;
 
     const bool GaussNewton = true; // TODO: eliminate this
 };

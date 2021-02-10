@@ -137,6 +137,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     const char *normtype_char = "l2";
     const char *offsetType = "previous";
+    const char *spaceTimeMethod = "spatial";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -240,8 +241,6 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM static SVD.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romos", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
-    args.AddOption(&romOptions.spaceTime, "-romst", "--romspacetime", "-no-romst", "--no-romspacetime",
-                   "Enable or disable ROM space-time.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
@@ -256,6 +255,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&spaceTimeMethod, "-romst", "--romspacetimetype",
+                   "Space-time method.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
                    "Enable or disable use of V basis for X-X0.");
     args.AddOption(&romOptions.useVX, "-romvx", "--romusevx", "-no-romvx", "--no-romusevx",
@@ -752,6 +753,7 @@ int main(int argc, char *argv[])
     romOptions.FOMoper = &oper;
     romOptions.restore = rom_restore;
     romOptions.offsetType = getOffsetStyle(offsetType);
+    romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     if (rom_offline)
@@ -833,10 +835,11 @@ int main(int argc, char *argv[])
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp, outfile_time;
-    const bool outputTimes = rom_offline && romOptions.spaceTime;
-    const bool outputSpaceTimeSolution = rom_offline && romOptions.spaceTime;
-    const bool inputTimes = rom_online && romOptions.spaceTime;
-    const bool readTimes = rom_online && romOptions.spaceTime;
+    const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
+    const bool outputTimes = rom_offline && spaceTime;
+    const bool outputSpaceTimeSolution = rom_offline && spaceTime;
+    const bool inputTimes = rom_online && spaceTime;
+    const bool readTimes = rom_online && spaceTime;
     Array<int> cutoff(5);
     if (rom_offline)
     {
@@ -926,7 +929,7 @@ int main(int argc, char *argv[])
         else
         {
             /*
-            if (romOptions.spaceTime)
+            if (spaceTime)
               basis[0] = NULL;
             else
               basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
@@ -1070,7 +1073,7 @@ int main(int argc, char *argv[])
         restoreTimer.Stop();
         infile_tw_steps.close();
     }
-    else if (rom_online && romOptions.spaceTime)
+    else if (rom_online && spaceTime)
     {
         //Vector stSol(S);
         //romOper[0]->SolveSpaceTime(romS);
@@ -1442,7 +1445,7 @@ int main(int argc, char *argv[])
 
     if (romOptions.hyperreduce)
     {
-        if (romOptions.GramSchmidt && !romOptions.spaceTime)
+        if (romOptions.GramSchmidt && !spaceTime)
         {
             romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
         }

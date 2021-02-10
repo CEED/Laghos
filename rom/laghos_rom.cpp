@@ -336,7 +336,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), spaceTime(input.spaceTime), VTos(input.VTos)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), spaceTimeMethod(input.spaceTimeMethod),
+      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -375,7 +376,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     mfL2.SetSize(tL2size);
 
     ReadSolutionBases(input.window);
-    if (input.spaceTime)
+    if (spaceTime)
     {
         ReadTemporalBases(input.window);
     }
@@ -515,7 +516,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         StopWatch preprocessHyperreductionTymer;
         preprocessHyperreductionTymer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps);
-        if (input.spaceTime) SetSpaceTimeInitialGuess(input);
+        if (spaceTime) SetSpaceTimeInitialGuess(input);
         preprocessHyperreductionTymer.Stop();
         if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
     }
@@ -846,17 +847,19 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                                  num_sample_dofs_per_procE.data(), sampledSpatialBasisE, rank, nprocs,
                                  numTimeSamplesE, numSamplesE, excludeFinalTimeSample);
 
-#ifdef XLSPG
-        std::vector<int> t_samples_X(numTimeSamplesV);
-        CAROM::Matrix sampledSpatialBasisX(numSamplesV, basisV->numColumns(), false); // TODO: distributed
-        sample_dofs_X.resize(numSamplesV);
-        CAROM::SpaceTimeSampling(basisV, tbasisV, rdimv, t_samples_X, sample_dofs_X.data(),
-                                 num_sample_dofs_per_procX.data(), sampledSpatialBasisX, rank, nprocs,
-                                 numTimeSamplesV, numSamplesV, excludeFinalTimeSample);
+        CAROM::Matrix *sampledSpatialBasisX = NULL;
+        if (spaceTimeMethod == gnat_lspg)
+        {
+            sampledSpatialBasisX = new CAROM::Matrix(numSamplesV, basisV->numColumns(), false); // TODO: distributed
+            std::vector<int> t_samples_X(numTimeSamplesV);
+            sample_dofs_X.resize(numSamplesV);
+            CAROM::SpaceTimeSampling(basisV, tbasisV, rdimv, t_samples_X, sample_dofs_X.data(),
+                                     num_sample_dofs_per_procX.data(), *sampledSpatialBasisX, rank, nprocs,
+                                     numTimeSamplesV, numSamplesV, excludeFinalTimeSample);
 
-        for (int i=0; i<nprocs; ++i)
-            num_sample_dofs_per_procX[i] = 0;
-#endif
+            for (int i=0; i<nprocs; ++i)
+                num_sample_dofs_per_procX[i] = 0;
+        }
 
         // Shift Fe time samples by VTos
         // TODO: should the shift be in t_samples_E or just mergedTimeSamples?
@@ -885,13 +888,15 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         GetSampledSpaceTimeBasis(timeSamples, tbasisFv, sampledSpatialBasisV, *BsinvV);
         GetSampledSpaceTimeBasis(timeSamples, tbasisFe, sampledSpatialBasisE, *BsinvE);
 
-#ifdef XLSPG
-        // Use V basis for hyperreduction of the RHS of the equation of motion dX/dt = V, although it is linear.
-        // Also use V samples, which are actually for Fv.
-        // TODO: can fewer samples be used here, or does it matter (would it improve speed)?
-        BsinvX = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false);
-        GetSampledSpaceTimeBasis(timeSamples, tbasisV, sampledSpatialBasisX, *BsinvX);
-#endif
+        if (spaceTimeMethod == gnat_lspg)
+        {
+            // Use V basis for hyperreduction of the RHS of the equation of motion dX/dt = V, although it is linear.
+            // Also use V samples, which are actually for Fv.
+            // TODO: can fewer samples be used here, or does it matter (would it improve speed)?
+            BsinvX = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false);
+            GetSampledSpaceTimeBasis(timeSamples, tbasisV, *sampledSpatialBasisX, *BsinvX);
+            delete sampledSpatialBasisX;
+        }
 
         // TODO: BsinvV and BsinvE are already set by CAROM::SpaceTimeSampling for their own time samples, which is useless
         // after merging time samples. Now we have to construct them for the merged time samples, so the initial computation
@@ -907,36 +912,36 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                 RK4scaling[i] = h * (1.0 + (0.5 * h) + (h * h / 6.0) + (h * h * h / 24.0));
             }
 
-#if defined COLL_LSPG || defined XLSPG
-            // TODO: remove these SpaceTimeProduct calls?
-#else
-            // TODO: set arguments based on whether VTos == 1
+            if (!(spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg))
+            {
+                // TODO: remove these SpaceTimeProduct calls?
+                // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
-            PiXtransPiV = SpaceTimeProduct(basisV, tbasisV, basisV, tbasisV, &RK4scaling, true, true, true);
+                PiXtransPiV = SpaceTimeProduct(basisV, tbasisV, basisV, tbasisV, &RK4scaling, true, true, true);
 #else
-            PiXtransPiV = SpaceTimeProduct(basisX, tbasisX, basisV, tbasisV, &RK4scaling, false, true, true);
+                PiXtransPiV = SpaceTimeProduct(basisX, tbasisX, basisV, tbasisV, &RK4scaling, false, true, true);
 #endif
-#endif
+            }
         }
 
-#if defined COLL_LSPG || defined XLSPG
-        // TODO: remove these SpaceTimeProduct calls?
-#else
-        // TODO: set arguments based on whether VTos == 1
+        if (!(spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg))
+        {
+            // TODO: remove these SpaceTimeProduct calls?
+            // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
-        PiXtransPiX = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, false, true);
-        PiXtransPiXlag = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, true, false);
+            PiXtransPiX = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, false, true);
+            PiXtransPiXlag = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, true, false);
 #else
-        PiXtransPiX = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, false, true);
-        PiXtransPiXlag = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, true, false);
+            PiXtransPiX = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, false, true);
+            PiXtransPiXlag = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, true, false);
 #endif
 
-        PiVtransPiFv = SpaceTimeProduct(basisV, tbasisV, basisFv, tbasisFv, NULL, true, false);
-        PiEtransPiFe = SpaceTimeProduct(basisE, tbasisE, basisFe, tbasisFe, NULL, false, true);
+            PiVtransPiFv = SpaceTimeProduct(basisV, tbasisV, basisFv, tbasisFv, NULL, true, false);
+            PiEtransPiFe = SpaceTimeProduct(basisE, tbasisE, basisFe, tbasisFe, NULL, false, true);
 
-        MFEM_VERIFY(PiVtransPiFv->numRows() == rdimv && PiVtransPiFv->numColumns() == rdimfv, "");
-        MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
-#endif
+            MFEM_VERIFY(PiVtransPiFv->numRows() == rdimv && PiVtransPiFv->numColumns() == rdimfv, "");
+            MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
+        }
     }
     else if (RHSbasis)
     {
@@ -1803,7 +1808,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            const double ftz_tol, H1_FECollection *H1fec,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
-      rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt)
+      rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
+      spaceTimeMethod(input.spaceTimeMethod)
       //basename(*input.basename)
 {
     MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
@@ -1884,7 +1890,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                 H1fec->GetBasisType(), (useReducedMv || useGramSchmidt), (useReducedMe || useGramSchmidt));
 
-        if (input.spaceTime)
+        if (input.spaceTimeMethod != no_space_time)
         {
             ST_ode_solver = new RK4Solver; // TODO: allow for other types of solvers
             ST_ode_solver->Init(*operSP);
@@ -2362,14 +2368,10 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     MFEM_VERIFY(u.Size() == GetTotalNumSamples(), "");
     if (GaussNewton)
     {
-#ifdef XLSPG
-        MFEM_VERIFY(w.Size() == b->rdimv + b->rdimfv + b->rdimfe, "");
-#else
 #ifdef STXV
         MFEM_VERIFY(w.Size() == b->rdimv + b->rdimfv + b->rdimfe, "");
 #else
-        MFEM_VERIFY(w.Size() == b->rdimx + b->rdimfv + b->rdimfe, "");
-#endif
+        MFEM_VERIFY(w.Size() == (spaceTimeMethod == gnat_lspg) ? b->rdimv + b->rdimfv + b->rdimfe : b->rdimx + b->rdimfv + b->rdimfe, "");
 #endif
     }
     else
@@ -2385,38 +2387,41 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     CAROM::Vector uV(GetNumSamplesV(), false);  // TODO: make this a member variable?
     CAROM::Vector wV(b->rdimv, false);  // TODO: make this a member variable?
 
-#ifdef XLSPG
-    // The X RHS has hyperreduced term V.
-
-    // BsinvX stores the transpose of the pseudo-inverse.
-    CAROM::Vector BuX(b->rdimv, false);  // TODO: make this a member variable?
-
-    // Set uV from u
-
-    for (int ti=0; ti<ntsamp; ++ti)
+    if (spaceTimeMethod == gnat_lspg)
     {
-        const int offset = ti * GetNumSpatialSamples();
-        for (int i=0; i<b->numSamplesV; ++i)
-            uV.item(ti + (i*ntsamp)) = u[offset + i];
+        // The X RHS has hyperreduced term V.
 
-        // Note that the ordering of uV must match that in GetSampledSpaceTimeBasis, since it will be multiplied by BsinvV^T.
+        // BsinvX stores the transpose of the pseudo-inverse.
+        CAROM::Vector BuX(b->rdimv, false);  // TODO: make this a member variable?
+
+        // Set uV from u
+
+        for (int ti=0; ti<ntsamp; ++ti)
+        {
+            const int offset = ti * GetNumSpatialSamples();
+            for (int i=0; i<b->numSamplesV; ++i)
+                uV.item(ti + (i*ntsamp)) = u[offset + i];
+
+            // Note that the ordering of uV must match that in GetSampledSpaceTimeBasis, since it will be multiplied by BsinvV^T.
+        }
+
+        // Multiply uV by BsinvX^T
+
+        b->BsinvX->transposeMult(uV, BuX);
+        for (int i=0; i<b->rdimv; ++i)
+            w[os + i] = BuX.item(i);
+
+        os += b->rdimv;
     }
-
-    // Multiply uV by BsinvX^T
-
-    b->BsinvX->transposeMult(uV, BuX);
-    for (int i=0; i<b->rdimv; ++i)
-        w[os + i] = BuX.item(i);
-
-    os += b->rdimv;
-#else
-    // The X equation is linear and has no hyperreduction, just a linear operator multiplication against the vector of V ROM coefficients.
+    else
+    {
+        // The X equation is linear and has no hyperreduction, just a linear operator multiplication against the vector of V ROM coefficients.
 #ifdef STXV
-    os += b->rdimv;
+        os += b->rdimv;
 #else
-    os += b->rdimx;
+        os += b->rdimx;
 #endif
-#endif
+    }
 
     // The V RHS has hyperreduced term Fv.
 
@@ -2428,11 +2433,7 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
 
     for (int ti=0; ti<ntsamp; ++ti)
     {
-#ifdef XLSPG
-        const int offset = (ti * GetNumSpatialSamples()) + b->numSamplesV;
-#else
-        const int offset = ti * GetNumSpatialSamples();
-#endif
+        const int offset = (ti * GetNumSpatialSamples()) + ((spaceTimeMethod == gnat_lspg) ? b->numSamplesV : 0);
         for (int i=0; i<b->numSamplesV; ++i)
             uV.item(ti + (i*ntsamp)) = u[offset + i];
 
@@ -2471,11 +2472,7 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
 
     for (int ti=0; ti<ntsamp; ++ti)
     {
-#ifdef XLSPG
-        const int offset = (ti * GetNumSpatialSamples()) + (2*b->numSamplesV);
-#else
-        const int offset = (ti * GetNumSpatialSamples()) + b->numSamplesV;
-#endif
+        const int offset = (ti * GetNumSpatialSamples()) + ((spaceTimeMethod == gnat_lspg) ? (2*b->numSamplesV) : b->numSamplesV);
         for (int i=0; i<b->numSamplesE; ++i)
             uE.item(ti + (i*ntsamp)) = u[offset + i];
 
@@ -2520,17 +2517,20 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
 
     // TODO: since the X RHS is linear, there should be no sampling of X! A linear operator (stored as a matrix) should simply be applied to the ROM coefficients, not the samples.
 
-#if defined COLL_LSPG || defined XLSPG  // use V samples for X
-    for (int i=0; i<b->numSamplesV; ++i)
-        u[offset + i] = usp[b->s2sp_V[i]];
+    if (spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg) // use V samples for X
+    {
+        for (int i=0; i<b->numSamplesV; ++i)
+            u[offset + i] = usp[b->s2sp_V[i]];
 
-    offset += b->numSamplesV;
-#else
-    MFEM_VERIFY(b->numSamplesX == 0, "");
-    //for (int i=0; i<b->numSamplesX; ++i)
-    //u[offset + i] = usp[b->s2sp_X[i]];
-    offset += b->numSamplesX;
-#endif
+        offset += b->numSamplesV;
+    }
+    else
+    {
+        MFEM_VERIFY(b->numSamplesX == 0, "");
+        //for (int i=0; i<b->numSamplesX; ++i)
+        //u[offset + i] = usp[b->s2sp_X[i]];
+        offset += b->numSamplesX;
+    }
 
     for (int i=0; i<b->numSamplesV; ++i)
         u[offset + i] = usp[b->size_H1_sp + b->s2sp_V[i]];
@@ -2743,16 +2743,14 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     if (useGramSchmidt)
         InducedGramSchmidtInitialize(x); // TODO: this assumes 1 temporal basis vector per spatial basis vector and needs to be generalized.
 
-#ifdef COLL_LSPG
-    const int n = STbasis->SolutionSizeST();
-    const int m = STbasis->GetTotalNumSamples();
-#else
-    const int n = basis->TotalSize();
-#if defined STXV || defined XLSPG
+    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->TotalSize();
+#ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else
-    const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
-#endif
+    // TODO: simplify this
+    const int m = (spaceTimeMethod == coll_lspg) ? STbasis->GetTotalNumSamples() :
+                  (GaussNewton ? ((spaceTimeMethod == gnat_lspg) ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe()
+                                  : basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe()) : n);
 #endif
 
     Vector c(n);
@@ -2769,11 +2767,7 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     const double rel_tol = 1.0e-8;
     const double abs_tol = 1.0e-12;
     const int print_level = 0;
-#ifdef COLL_LSPG
     const int max_iter = 2;
-#else
-    const int max_iter = 2;
-#endif
 
     EvalSpaceTimeResidual_RK4(x, r);
 
@@ -2839,17 +2833,16 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
 
 void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const
 {
-#ifdef COLL_LSPG
-    const int n = STbasis->SolutionSizeST();
-    const int m = STbasis->GetTotalNumSamples();
-#else
-    const int n = basis->TotalSize();
-#if defined STXV || defined XLSPG
+    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->TotalSize();
+#ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else
-    const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
+    // TODO: simplify this
+    const int m = (spaceTimeMethod == coll_lspg) ? STbasis->GetTotalNumSamples() :
+                  (GaussNewton ? ((spaceTimeMethod == gnat_lspg) ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe()
+                                  : basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe()) : n);
 #endif
-#endif
+
     MFEM_VERIFY(J.Height() == m && J.Width() == n, "");
 
     J = 0.0;
@@ -2889,22 +2882,32 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     const int rdimfv = basis->GetDimFv();
     const int rdimfe = basis->GetDimFe();
 
-#ifdef COLL_LSPG
-    MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == STbasis->GetTotalNumSamples(), "");
-#else
-    if (GaussNewton)
+    if (spaceTimeMethod == coll_lspg)
     {
-#if defined STXV || defined XLSPG
-        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimv, "");
-#else
-        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimx, "");
-#endif
+        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == STbasis->GetTotalNumSamples(), "");
     }
     else
     {
-        MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && S.Size() == f.Size(), "");
-    }
+        if (GaussNewton)
+        {
+#ifdef STXV
+            MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimv, "");
+#else
+            if (spaceTimeMethod == gnat_lspg)
+            {
+                MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimv, "");
+            }
+            else
+            {
+                MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && f.Size() == rdimfv + rdimfe + rdimx, "");
+            }
 #endif
+        }
+        else
+        {
+            MFEM_VERIFY(S.Size() == STbasis->SolutionSizeST() && S.Size() == f.Size(), "");
+        }
+    }
 
     MFEM_VERIFY(hyperreduce, "");
 
@@ -2946,16 +2949,16 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         STbasis->RestrictFromSampleMesh(i, fy, Sr);
     }
 
-#ifdef COLL_LSPG
-    f = Sr;
-    return;
-#endif
+    if (spaceTimeMethod == coll_lspg)
+    {
+        f = Sr;
+        return;
+    }
 
     STbasis->ApplySpaceTimeHyperreductionInverses(Sr, f);
 
-#ifdef XLSPG
-    return;
-#endif
+    if (spaceTimeMethod == gnat_lspg)
+        return;
 
     // Evaluate X equations without sampling
     {
