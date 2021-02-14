@@ -51,13 +51,15 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
-   const int    solver_type = 0,
-                solver_iter = 200;
-   const double solver_rtol = 1e-6;
-   const int max_lin_iter   = 100;
-   const int quad_order = 8;
-   const double surface_fit_const = 1000.0;
-   const bool   fix_interface     = false;
+   const int    solver_type  = 0,
+                solver_iter  = 1000;
+   const double solver_rtol  = 1e-6;
+   const int    precond      = 2;
+   const int    art_type     = 0;
+   const int    max_lin_iter = 100;
+   const int    quad_order   = 8;
+   const double surface_fit_const = 10000.0;
+   const bool   fix_interface     = true;
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
    ParMesh *pmesh = pfespace->GetParMesh();
@@ -113,7 +115,8 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       marker_gf.ProjectDiscCoefficient(coeff_mat, GridFunction::ARITHMETIC);
       for (int j = 0; j < marker.Size(); j++)
       {
-         if (marker_gf(j) > 0.1 && marker_gf(j) < 0.9)
+         //if (marker_gf(j) > 0.1 && marker_gf(j) < 0.9)
+         if (interface_ls(j) == 0.0)
          {
             marker[j] = true;
             marker_gf(j) = 1.0;
@@ -149,12 +152,12 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    ParNonlinearForm a(pfespace);
    a.AddDomainIntegrator(he_nlf_integ);
    if (fix_interface) { ess_vdofs.Append(extra_vdofs); }
-   /*
-   if (myid == 1)
+   if (myid == 0)
    {
-      ess_vdofs.Append(9);
-      ess_vdofs.Append(9 + marker.Size());
+      //ess_vdofs.Append(14);
+      //ess_vdofs.Append(14 + marker.Size());
    }
+   /*
    if (myid == 2)
    {
       ess_vdofs.Append(15);
@@ -195,11 +198,25 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const IntegrationRule &ir =
       irules->Get(pfespace->GetFE(0)->GetGeomType(), quad_order);
    TMOPNewtonSolver solver(pfespace->GetComm(), ir, solver_type);
-   if (solver_type == 0) { solver.SetPreconditioner(*minres); }
+   if (solver_type == 0)
+   {
+      solver.SetPreconditioner(*minres);
+      if (precond > 0)
+      {
+         HypreSmoother *hs = new HypreSmoother;
+         hs->SetType((precond == 1) ? HypreSmoother::Jacobi
+                                    : HypreSmoother::l1Jacobi, 1);
+         minres->SetPreconditioner(*hs);
+      }
+   }
    solver.SetMaxIter(solver_iter);
    solver.SetRelTol(solver_rtol);
    solver.SetAbsTol(0.0);
    solver.SetPrintLevel(1);
+   if (art_type > 0)
+   {
+      solver.SetAdaptiveLinRtol(art_type, 0.5, 0.9);
+   }
    solver.SetOperator(a);
 
    // Solve.

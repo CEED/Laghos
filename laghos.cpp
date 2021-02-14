@@ -85,20 +85,52 @@ static void Checks(const int dim, const int ti, const double norm, int &checks);
 double interface_rt(const Vector &x)
 {
    // 0 - Taylor-Green.
-   // 1 - Rayleigh-Taylor.
+   // 1 - Rayleigh-Taylor 2D and 3D.
    // 2 - 3point 2D.
+   // 3 - 3point 2D, left part.
+   // 4 - 3point 2D, right part.
    const int type = 1;
 
    // Taylor-Green.
    if (type == 0) { return tanh(2.0*(x(1) - 0.5)); }
 
    // Rayleigh-Taylor.
-   if (type == 1) { return tanh(2.0*(x(1) - 0.0)); }
+   if (type == 1) { return tanh(1.0*(x(1) - 0.0)); }
 
    // 3point.
    if (type == 2)
    {
-      return tanh(2.0*(x(1) - 1.5));
+      return tanh(0.1*(x(1) - 1.5));
+   }
+
+   // 3point left part
+   if (type == 3)
+   {
+      if (x(0) <= 1.0)
+      {
+         return fabs(x(1) - 1.5);
+      }
+      else
+      {
+         double a = x(0) - 1.0;
+         double b = x(1) - 1.5;
+         return sqrt(a*a + b*b);
+      }
+   }
+
+   // 3point right part
+   if (type == 4)
+   {
+      if (x(0) >= 1.0)
+      {
+         return fabs(x(1) - 1.5);
+      }
+      else
+      {
+         double a = x(0) - 1.0;
+         double b = x(1) - 1.5;
+         return sqrt(a*a + b*b);
+      }
    }
 }
 
