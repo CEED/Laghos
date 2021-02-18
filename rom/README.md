@@ -117,51 +117,43 @@ To see the building instruction of **Laghos**, please see README.md in Laghos di
 
 ## Running
 
-#### Sedov blast
-
-The 3D Sedov blast wave problem can be runned with `-p 1`.
-
-A sample run of the offline stage is:
-```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.0 -rpar 0
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.2 -rpar 1
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 0.8 -rpar 2
-./merge -nset 3 -ef 0.9999 -rhs -romos -rostype interpolate -nwinsamp 10
-```
-
-A sample run of the full order model is:
-```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -bef 1.1 -writesol
-```
-A corresponding sample run of the reduce order model is:
-```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.1 -nwin 27 -twp twpTemp.csv
-```
-
-#### Gresho vortex
+#### Gresho vortex problem
 
 The 2D Gresho vortex problem can be runned with `-p 4`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -romsvds -ef 0.9999 -nwinsamp 10 -romos -rostype load -romsrhs -writesol 
+./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhr -sfacv 32 -sface 32 -romsvds -nwin 76 -twp twpTemp.csv -romos -rostype load -romsrhs -romgs -soldiff
+./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 168 -twp twpTemp.csv -sfacv 60 -sface 30
 ```
 
-#### Taylor-Green vortex
+#### Sedov blast problem
+
+The 3D Sedov blast wave problem can be runned with `-p 1`.
+
+A sample run of the offline stage and the full order model is:
+```sh
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
+```
+The corresponding run of the reduce order model is:
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 71 -twp twpTemp.csv -sfacv 20 -sface 35
+```sh
+```
+
+#### Taylor-Green vortex problem
 
 The 3D Taylor-Green vortex problem can be runned with `-p 0`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -offline -romsvds -ef 0.9999 -writesol -romos -rostype load -romsrhs -nwinsamp 10 
+./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -online -soldiff -romsvds -romos -rostype load -romhr -romsrhs -romgs -sfacv 32 -sface 32 -twp twpTemp.csv -nwin 27 
+./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 90 -twp twpTemp.csv -sfacv 120 -sface 120
 ```
 
 #### Triple-point problem
@@ -170,25 +162,47 @@ The 3D triple-point problem can be runned with `-p 3`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -offline -writesol -romsvds -romos -rostype load -romsrhs -ef 0.9999 -nwinsamp 10 
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -online -soldiff -nwin 20 -romhr -twp twpTemp.csv -romsvds -romos -rostype load -sfacv 1024 -sface 1024 -romgs -romsrhs
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 20 -twp twpTemp.csv -sfacv 720 -sface 240
+```
+
+#### Parametric Sedov blast problem
+
+The 3D parametric Sedov blast wave problem can be runned with `-p 1` in the snapshot collection. The snapshot data is passed to `merge`. (Note the `-bef` and `-rpar` option.)
+
+A sample run of the offline stage is:
+```sh
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 1.0 -rpar 0
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 1.2 -rpar 1
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 0.8 -rpar 2
+./merge -nset 3 -ef 0.9999 -rhs -romos -rostype interpolate -nwinsamp 10
+```
+
+A sample run of the full order model is:
+```sh
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -writesol -bef 1.1 
+```
+A corresponding sample run of the reduce order model is:
+```sh
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype interpolate -nwin 27 -twp twpTemp.csv -sfacv 50 -sface 36 -bef 0.9
 ```
 
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final 
 L2 relative error for velocity (`E_v`), energy (`E_e`), position (`E_x`) 
-between the full order model and the reduced oder model (note the `-soldiff` option):
+between the full order model and the reduced order model (note the `-writesol` and `-soldiff` option):
 
 | `Problem` | `E_v` | `E_e` | `E_x` |
 | ----- | ------ | ---- | --- |
-| Sedov blast problem | 0.0739833401 | 0.0123365951 | 0.0008987601 |
-| Gresho vortex | 0.0208559023 | 0.0003741972 | 0.0010241196 |
-| Taylor-Green vortex | 0.0767346971 | 0.0023056170 | 0.0146010239 |
-| Triple-point problem | 0.0026771894 | 0.0004677332 | 0.0000684808 |
+| Gresho vortex | 0.0442954563 | 0.0116069954 | 0.0005619728 |
+| Sedov blast | 0.0096947945 | 0.0001539552 | 0.0001362571 |
+| Taylor-Green vortex | 0.0358874219 | 0.0028153373 | 0.0003168334 |
+| Triple-point | 0.0203094905 | 0.0290051342 | 0.0004656691 |
+| Parametric Sedov blast | 0.0475838078 | 0.020014503 | 0.0022553601 |
 
 The results are generated by an MacBook Air (13-inch, 2017) 
 equipped with 1.8 GHz Dual-Core Intel Core i5. 
