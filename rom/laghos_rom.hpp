@@ -30,7 +30,6 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
-    usePreviousSolution,
     useInitialState,
     saveLoadOffset,
     interpolateOffset
@@ -40,7 +39,6 @@ static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"previous", usePreviousSolution},
         {"initial", useInitialState},
         {"load", saveLoadOffset},
         {"interpolate", interpolateOffset}
@@ -100,10 +98,11 @@ struct ROM_Options
     int sampE = 0;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
+    bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
+    offsetStyle offsetType = useInitialState; // type of offset in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -225,7 +224,7 @@ public:
             }
             else
             {
-                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
+                // Compute and save offsets for the current window in the offline phase
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
@@ -241,12 +240,9 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType != usePreviousSolution)
-                {
-                    initX->write(path_init + "X" + std::to_string(window));
-                    initV->write(path_init + "V" + std::to_string(window));
-                    initE->write(path_init + "E" + std::to_string(window));
-                }
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
             }
         }
     }
@@ -384,8 +380,6 @@ public:
         delete basisE;
         delete basisFv;
         delete basisFe;
-        delete fH1;
-        delete fL2;
         delete spX;
         delete spV;
         delete spE;
@@ -410,6 +404,13 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        if (!hyperreduce)
+        {
+            delete fH1;
+            delete fL2;
+            delete gfH1;
+            delete gfL2;
+        }
     }
 
     void Init(ROM_Options const& input, Vector const& S);
@@ -459,6 +460,12 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
+    void ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
+    void computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window);
+
+    void writeSP(ROM_Options const& input, const int window = 0) const;
+    void readSP(ROM_Options const& input, const int window = 0);
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
@@ -496,6 +503,7 @@ public:
 
 private:
     const bool hyperreduce;
+    const bool hyperreduce_prep;
     const bool offsetInit;
     const bool RHSbasis;
     const bool useGramSchmidt;
@@ -506,10 +514,10 @@ private:
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
 
-    const int H1size;
-    const int L2size;
-    const int tH1size;
-    const int tL2size;
+    int H1size;
+    int L2size;
+    int tH1size;
+    int tL2size;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
@@ -523,7 +531,8 @@ private:
 
     Vector mfH1, mfL2;
 
-    ParGridFunction gfH1, gfL2;
+    ParGridFunction* gfH1;
+    ParGridFunction* gfL2;
 
     CAROM::Vector *rX = 0;
     CAROM::Vector *rV = 0;
@@ -566,6 +575,10 @@ private:
     CAROM::Matrix *BsinvV = NULL;
     CAROM::Matrix *BsinvE = NULL;
 
+    CAROM::Matrix *BwinX = NULL;
+    CAROM::Matrix *BwinV = NULL;
+    CAROM::Matrix *BwinE = NULL;
+
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
     CAROM::Vector *initE = 0;
@@ -573,6 +586,10 @@ private:
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
     CAROM::Vector *BX0 = NULL;
+
+    CAROM::Vector *BtInitDiffX = 0;  // TODO: destructor
+    CAROM::Vector *BtInitDiffV = 0;
+    CAROM::Vector *BtInitDiffE = 0;
 
     int numSamplesX = 0;
     int numSamplesV = 0;

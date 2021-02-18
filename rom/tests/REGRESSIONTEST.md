@@ -71,6 +71,8 @@ Only FOM solutions, ROM relative errors, and speed up are checked.
 
 ./runRegressionTests.sh -d -> Run all tests, but do not do comparisons. Failures only occur if the simulations do not run successfully.
 
+./runRegressionTests.sh -x -> Run all tests, but use the old regression test commands for the baseline and the new regression test commands for the user branch. This is useful if you would like to change the command-line for certain tests, but expect the same output. This can not be used with absolute tests.
+
 ./runRegressionTests.sh -i "sedov_blast gresho_vortices" -> Run sedov_blast and gresho_vortices.
 
 ./runRegressionTests.sh -e "taylor-green" -> Run all tests except taylor-green.
