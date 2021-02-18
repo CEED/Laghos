@@ -124,26 +124,19 @@ The 3D Sedov blast wave problem can be runned with `-p 1`.
 A sample run of the offline stage is:
 ```sh
 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.0 -rpar 0
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.5 -rpar 1
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 0.5 -rpar 2
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.2 -rpar 1
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -offline -romsvds -romos -rostype interpolate -romsrhs -bef 0.8 -rpar 2
 ./merge -nset 3 -ef 0.9999 -rhs -romos -rostype interpolate -nwinsamp 10
 ```
 
 A sample run of the full order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -bef 1.1 -writesol -vis
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -pa -bef 1.1 -writesol
 ```
 A corresponding sample run of the reduce order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.1 -nwin 27 -twp twpTemp.csv -vis
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.1 -online -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -soldiff -romgs -romsrhs -bef 1.1 -nwin 27 -twp twpTemp.csv
 ```
-
-The commands produce the following velocity magnitude plots (notice the `-vis` option)
-
-<table border="0">
-<td> <img src="data/sedov-fom.png">
-<td> <img src="data/sedov-rom.png">
-</table>
 
 #### Gresho vortex
 
@@ -151,19 +144,12 @@ The 2D Gresho vortex problem can be runned with `-p 4`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -romsvds -ef 0.9999 -nwinsamp 10 -romos -rostype load -romsrhs -writesol -vis
+./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -romsvds -ef 0.9999 -nwinsamp 10 -romos -rostype load -romsrhs -writesol 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhr -sfacv 32 -sface 32 -romsvds -nwin 76 -twp twpTemp.csv -romos -rostype load -romsrhs -romgs -soldiff -vis
+./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhr -sfacv 32 -sface 32 -romsvds -nwin 76 -twp twpTemp.csv -romos -rostype load -romsrhs -romgs -soldiff
 ```
-
-The commands produce the following velocity magnitude plots (notice the `-vis` option)
-
-<table border="0">
-<td> <img src="data/gresho-fom.png">
-<td> <img src="data/gresho-rom.png">
-</table>
 
 #### Taylor-Green vortex
 
@@ -171,19 +157,12 @@ The 3D Taylor-Green vortex problem can be runned with `-p 0`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.1 -pa -offline -romsvds -ef 0.9999 -writesol -romos -rostype load -romsrhs -nwinsamp 10 -vis
+./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -offline -romsvds -ef 0.9999 -writesol -romos -rostype load -romsrhs -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.1 -pa -online -soldiff -romsvds -romos -rostype load -romhr -romsrhs -romgs -sfacv 32 -sface 32 -twp twpTemp.csv -nwin 27 -vis
+./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -online -soldiff -romsvds -romos -rostype load -romhr -romsrhs -romgs -sfacv 32 -sface 32 -twp twpTemp.csv -nwin 27 
 ```
-
-The commands produce the following velocity magnitude plots (notice the `-vis` option)
-
-<table border="0">
-<td> <img src="data/tg-fom.png">
-<td> <img src="data/tg-rom.png">
-</table>
 
 #### Triple-point problem
 
@@ -191,19 +170,12 @@ The 3D triple-point problem can be runned with `-p 3`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -offline -writesol -romsvds -romos -rostype load -romsrhs -ef 0.9999 -nwinsamp 10 -vis
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -offline -writesol -romsvds -romos -rostype load -romsrhs -ef 0.9999 -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -online -soldiff -nwin 20 -romhr -twp twpTemp.csv -romsvds -romos -rostype load -sfacv 1024 -sface 1024 -romgs -romsrhs -vis
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -cfl 0.5 -pa -online -soldiff -nwin 20 -romhr -twp twpTemp.csv -romsvds -romos -rostype load -sfacv 1024 -sface 1024 -romgs -romsrhs
 ```
-
-The command produces the following specific internal energy plot (notice the `-vis` option)
-
-<table border="0">
-<td> <img src="data/tp-fom.png">
-<td> <img src="data/tp-rom.png">
-</table>
 
 ## Verification of Results
 
@@ -220,57 +192,6 @@ between the full order model and the reduced oder model (note the `-soldiff` opt
 
 The results are generated by an MacBook Air (13-inch, 2017) 
 equipped with 1.8 GHz Dual-Core Intel Core i5. 
-
-## Performance Timing and FOM
-
-Each time step in Laghos contains 3 major distinct computations:
-
-1. The inversion of the global kinematic mass matrix (CG H1).
-2. The force operator evaluation from degrees of freedom to quadrature points (Forces).
-3. The physics kernel in quadrature points (UpdateQuadData).
-
-By default Laghos is instrumented to report the total execution times and rates,
-in terms of millions of degrees of freedom per second (megadofs), for each of
-these computational phases. (The time for inversion of the local thermodynamic
-mass matrices (CG L2) is also reported, but that takes a small part of the
-overall computation.)
-
-Laghos also reports the total rate for these major kernels, which is a proposed
-**Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
-allocation, the FOM should be reported for different problem sizes and finite
-element orders, as illustrated in the sample scripts in the [timing](./timing)
-directory.
-
-A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
-machine at LLNL is:
-
-```
-srun -n 294912 laghos -pa -p 1 -tf 0.6 -pt 911 -m data/cube_922_hex.mesh \
-                      --ode-solver 7 --max-steps 4
-                      --cg-tol 0 --cg-max-iter 50 -ok 3 -ot 2 -rs 5 -rp 2
-```
-This is Q3-Q2 3D computation on 294,912 MPI ranks (18,432 nodes) that produces
-rates of approximately 125419, 55588, and 12674 megadofs, and a total FOM of
-about 2064 megadofs.
-
-To make the above run 8 times bigger, one can either weak scale by using 8 times
-as many MPI tasks and increasing the number of serial refinements: `srun -n
-2359296 ... -rs 6 -rp 2`, or use the same number of MPI tasks but increase the
-local problem on each of them by doing more parallel refinements: `srun -n
-294912 ... -rs 5 -rp 3`.
-
-## Versions
-
-In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
-the following versions of Laghos have been developed
-
-- **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **CUDA** version in the [cuda/](./cuda/README.md) directory. This version supports GPU acceleration.
-- **RAJA** version in the [raja/](./raja/README.md) directory. This version supports GPU acceleration. See [GitHub](https://software.llnl.gov/RAJA/) for more information about RAJA.
-- **OCCA** version in the [occa/](./occa/README.md) directory. This version supports GPU and OpenMP acceleration. See the OCCA [website](http://libocca.org/) for more information.
-- **AMR** version in the [amr/](./amr/README.md) directory. This version supports dynamic adaptive mesh refinement.
-- **MFEM/engines**-based version in the
-  [engines-kernels](https://github.com/CEED/Laghos/tree/engines-kernels) branch.
 
 ## Contact
 
