@@ -195,13 +195,13 @@ void split_line(const std::string &line, std::vector<std::string> &words)
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
 {
     const int w = romOptions.window;
-    romOptions.dimX = min(romOptions.dimX, twparam(w,0));
-    romOptions.dimV = min(romOptions.dimV, twparam(w,1));
-    romOptions.dimE = min(romOptions.dimE, twparam(w,2));
+    romOptions.dimX = min(romOptions.max_dimX, twparam(w,0));
+    romOptions.dimV = min(romOptions.max_dimV, twparam(w,1));
+    romOptions.dimE = min(romOptions.max_dimE, twparam(w,2));
     if (romOptions.RHSbasis)
     {
-        romOptions.dimFv = min(romOptions.dimFv, twparam(w,3));
-        romOptions.dimFe = min(romOptions.dimFe, twparam(w,4));
+        romOptions.dimFv = min(romOptions.max_dimFv, twparam(w,3));
+        romOptions.dimFe = min(romOptions.max_dimFe, twparam(w,4));
     }
     const int oss = romOptions.RHSbasis ? 5 : 3;
     romOptions.sampX = twparam(w,oss);

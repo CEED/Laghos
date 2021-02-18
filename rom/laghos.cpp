@@ -347,6 +347,11 @@ int main(int argc, char *argv[])
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
     {
+        romOptions.max_dimX = romOptions.dimX;
+        romOptions.max_dimV = romOptions.dimV;
+        romOptions.max_dimE = romOptions.dimE;
+        romOptions.max_dimFv = romOptions.dimFv;
+        romOptions.max_dimFe = romOptions.dimFe;
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
