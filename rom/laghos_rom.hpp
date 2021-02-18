@@ -80,11 +80,11 @@ struct ROM_Options
     int dimE = -1;
     int dimFv = -1;
     int dimFe = -1;
-    int max_dimX = -1;
-    int max_dimV = -1;
-    int max_dimE = -1;
-    int max_dimFv = -1;
-    int max_dimFe = -1;
+    int max_dimX = std::numeric_limits<int>::max();
+    int max_dimV = std::numeric_limits<int>::max();
+    int max_dimE = std::numeric_limits<int>::max();
+    int max_dimFv = std::numeric_limits<int>::max();
+    int max_dimFe = std::numeric_limits<int>::max();
 
     // Incremental SVD options
     double incSVD_linearity_tol = 1.e-7;
