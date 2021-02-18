@@ -139,8 +139,8 @@ A sample run of the offline stage and the full order model is:
 ./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
 ```
 The corresponding run of the reduce order model is:
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 71 -twp twpTemp.csv -sfacv 20 -sface 35
 ```sh
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 71 -twp twpTemp.csv -sfacv 20 -sface 35
 ```
 
 #### Taylor-Green vortex problem
