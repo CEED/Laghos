@@ -64,7 +64,8 @@ struct ROM_Options
     bool restore = false; // if true, restore phase
     bool staticSVD = false; // true: use StaticSVD
     bool useOffset = false; // if true, sample variables minus initial state as an offset
-    bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool RHSbasis = true; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool SNS = false; // if true, use sns
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -120,7 +121,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          energyFraction_X(input.energyFraction_X), sampleF(!input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX)
     {
@@ -497,7 +498,7 @@ public:
         return BEsp;
     }
 
-    void ComputeReducedMatrices();
+    void ComputeReducedMatrices(bool sns1);
 
     MPI_Comm comm;
 
@@ -506,6 +507,8 @@ private:
     const bool hyperreduce_prep;
     const bool offsetInit;
     const bool RHSbasis;
+    const bool use_sns;
+    hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -683,8 +686,9 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool useReducedMv = false;  // TODO: remove this?
-    bool useReducedMe = false;  // TODO: remove this?
+    bool sns1 = false;
+    bool noMsolve = false;
+    bool useReducedM = false;  // TODO: remove this?
 
     DenseMatrix invMvROM, invMeROM;
 

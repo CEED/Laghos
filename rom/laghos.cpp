@@ -299,6 +299,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
     args.AddOption(&romOptions.RHSbasis, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
                    "Sample RHS");
+    args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
+                   "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
@@ -1241,7 +1243,7 @@ int main(int argc, char *argv[])
             outfile_tw_steps.open(outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
-        if (romOptions.hyperreduce && romOptions.GramSchmidt)
+        if (romOptions.hyperreduce)
         {
             romOper[0]->InducedGramSchmidtInitialize(romS);
         }
@@ -1457,7 +1459,7 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    if (romOptions.hyperreduce)
                     {
                         romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
                     }
@@ -1503,7 +1505,7 @@ int main(int argc, char *argv[])
 
                     delete romOper[romOptions.window-1];
 
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    if (romOptions.hyperreduce)
                     {
                         romOper[romOptions.window]->InducedGramSchmidtInitialize(romS);
                     }
