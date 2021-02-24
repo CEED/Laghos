@@ -22,19 +22,4 @@ void split_line(const string &line, vector<string> &words);
 
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions);
 
-void writeNum(int num, std::string file_name);
-
-// read data from from text.txt and store it in vector v
-void readNum(int& num, std::string file_name);
-
-void writeDouble(double num, std::string file_name);
-
-// read data from from text.txt and store it in vector v
-void readDouble(double& num, std::string file_name);
-
-void writeVec(vector<int> v, std::string file_name);
-
-// read data from from text.txt and store it in vector v
-void readVec(vector<int> &v, std::string file_name);
-
 #endif // MFEM_LAGHOS_UTILS

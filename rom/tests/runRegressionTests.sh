@@ -14,14 +14,13 @@
 stopAtFailure=false
 absolute=false
 dryRun=false
-useOldTests=false
 useUserAsBaseline=false
 
 # Skip setup (git pull, make))
 ${skipSetup:=false}
 
 # Get options
-while getopts ":ah:i:l:e:xh:th:dh:fh" o;
+while getopts ":ah:i:l:e:th:dh:fh" o;
 do
 	case "${o}" in
 		a)
@@ -35,9 +34,6 @@ do
 	     ;;
     e)
       e=${OPTARG}
-      ;;
-		x)
-      useOldTests=true
       ;;
 		t)
       useUserAsBaseline=true
@@ -65,11 +61,6 @@ fi
 # If both useUserAsBaseline and absolute are set, fail
 if [[ "$useUserAsBaseline" == "true" ]] && [[ "$absolute" == "true" ]]; then
     echo "Choose only -t or -a, not both."
-		exit 1
-fi
-
-if [[ "$useOldTests" == "true" ]] && [[ "$absolute" == "true" ]]; then
-    echo "Choose only -x or -a, not both."
 		exit 1
 fi
 
@@ -274,10 +265,6 @@ if [[ -z "$SLURM" ]]; then
 		then
 			OPTIONS="$OPTIONS -f"
 		fi
-		if [[ "$useOldTests" == "true" ]];
-		then
-			OPTIONS="$OPTIONS -x"
-		fi
 		if [[ "$dryRun" == "true" ]];
 		then
 			OPTIONS="$OPTIONS -d"
@@ -324,10 +311,7 @@ do
 
       # Get script name without extension
 			scriptName=$(basename $script)
-			if [[ "$useOldTests" == "true" ]]; then
-				oldScript=${BASELINE_LAGHOS_DIR}/tests/${simulation}/$scriptName
-			fi
-	    scriptName="${scriptName%.*}"
+      scriptName="${scriptName%.*}"
 
 			if [[ "$absolute" == "true" ]] && [[ "$scriptName" != "absolute"* ]]; then
 				continue
@@ -364,10 +348,6 @@ do
 				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$LAGHOS')
 				if [[ $RAN_COMMAND == *"writesol"* ]]; then
 					testtype=fom
-				elif [[ $RAN_COMMAND == *"romhr"* ]]; then
-					testtype=romhr
-					rm -rf ${BASELINE_LAGHOS_DIR}/run/${OUTPUT_DIR}/ROMsol/*
-					rm -rf ${BASE_DIR}/run/${OUTPUT_DIR}/ROMsol/*
 				elif [[ $RAN_COMMAND == *"online"* ]]; then
 					testtype=online
 					rm -rf ${BASELINE_LAGHOS_DIR}/run/${OUTPUT_DIR}/ROMsol/*
@@ -441,18 +421,12 @@ do
 						echo "++ $LAGHOS $absoluteFOMOptions" >> $simulationLogFile 2>&1
 						(cd $BASELINE_LAGHOS_DIR && eval "$LAGHOS $absoluteFOMOptions" >> $simulationLogFile 2>&1)
 					fi
-
 				else
 					LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
-					LAGHOS_SERIAL="$COMMAND -n 1 laghos -o ${OUTPUT_DIR}"
 
 					# Run simulation from baseline branch
 					echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
-					if [[ "$useOldTests" == "true" ]]; then
-						(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$oldScript") >> $simulationLogFile 2>&1
-					else
-						(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
-					fi
+					(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 				fi
 
 				# Check if simulation failed
@@ -466,9 +440,8 @@ do
 					continue 1
 				fi
 
-				# Run simulation from current branch
+				# # Run simulation from current branch
 				LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
-				LAGHOS_SERIAL="$COMMAND -n 1 laghos -o ${OUTPUT_DIR}"
 				echo "Running new simulation for regression testing" >> $simulationLogFile 2>&1
 				(cd $BASE_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
@@ -535,10 +508,6 @@ do
 									[[ "$fileName" != "sVal"*".000000" ]]; then
 										continue 1
 									fi
-								elif [[ $testtype == "romhr" ]]; then
-									if [[ "$fileName" != "ROMsol" ]]; then
-										continue 1
-									fi
 								elif [[ $testtype == "online" ]]; then
 									if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
 										continue 1
@@ -579,7 +548,7 @@ do
 								check_fail
 
 							# Compare singular values and norms
-							elif [[ "$fileName" == "sVal"* ]] || [[ "$fileName" == *"norms"* ]]; then
+							elif [[ "$fileName" == "sVal"* ]] ||	[[ "$fileName" == *"norms"* ]]; then
 								echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
 								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 								check_exists
@@ -635,7 +604,7 @@ do
 									check_fail
 								fi
 							done
-						elif [[ "$testtype" == "online" ]] || [[ "$testtype" == "romhr" ]]; then
+						elif [[ "$testtype" == "online" ]]; then
 							onlineSpeed=$(sed -n -e 's/^.*Total time: //p' $simulationLogFile)
 
 							# After simulations complete, compare results
