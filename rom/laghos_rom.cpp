@@ -1310,15 +1310,18 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (!use_sns)
+    if (hyperreduce)
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
-    }
-    else
-    {
-        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
-        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+        if (!use_sns)
+        {
+            basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+            basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        }
+        else
+        {
+            basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
+            basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+        }
     }
 }
 

@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -809,7 +809,7 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath);
                 outfile_offlineParam << romOptions.useOffset << " ";
                 outfile_offlineParam << romOptions.offsetType << " ";
-                outfile_offlineParam << romOptions.RHSbasis << " ";
+                outfile_offlineParam << romOptions.SNS << " ";
                 outfile_offlineParam << numWindows << " ";
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
@@ -828,7 +828,7 @@ int main(int argc, char *argv[])
             split_line(line, words);
             MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
             MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-            MFEM_VERIFY(std::stoi(words[2]) == romOptions.RHSbasis, "-romsrhs option does not match record.");
+            MFEM_VERIFY(std::stoi(words[2]) == romOptions.SNS, "-romsns option does not match record.");
             MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
             MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
             infile_offlineParam.close();
@@ -897,8 +897,8 @@ int main(int argc, char *argv[])
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
-        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimFv;
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimFe;
     }
 
     StopWatch onlinePreprocessTimer;
@@ -1210,12 +1210,11 @@ int main(int argc, char *argv[])
 
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << tOverlapMidpoint << ", ";
-                            if (romOptions.RHSbasis)
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            outfile_twp << tOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            if (romOptions.SNS)
+                                outfile_twp << "\n";
                             else
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
                         }
                         delete samplerLast;
                         samplerLast = NULL;
@@ -1233,12 +1232,11 @@ int main(int argc, char *argv[])
                     {
                         sampler->Finalize(t, last_dt, S, cutoff);
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << t << ", ";
-                            if (romOptions.RHSbasis)
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            if (romOptions.SNS)
+                                outfile_twp << "\n";
                             else
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
                         }
                         delete sampler;
                     }
@@ -1426,13 +1424,12 @@ int main(int argc, char *argv[])
         basisConstructionTimer.Stop();
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            outfile_twp << t << ", ";
+            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
 
-            if (romOptions.RHSbasis)
-                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                            << cutoff[3] << ", " << cutoff[4] << "\n";
+            if (romOptions.SNS)
+                outfile_twp << "\n";
             else
-                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
         }
         if (samplerLast == sampler)
             delete sampler;
