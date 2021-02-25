@@ -281,9 +281,10 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-CAROM::Matrix* MultM(hydrodynamics::LagrangianHydroOperator *lhoper, const int var, const int N, const CAROM::Matrix* A)
+CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim, hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
 {
-    CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), std::min(N, A->numColumns()), A->distributed());
+    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, rowOS, dim);
+    CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
     Vector Bej(A->numRows());
     Vector MBej(A->numRows());
 
@@ -1404,8 +1405,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
     }
     else
     {
-        basisFv = MultM(lhoper, 1, rdimfv, basisV);
-        basisFe = MultM(lhoper, 2, rdimfe, basisE);
+        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
+        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
     }
 }
 
