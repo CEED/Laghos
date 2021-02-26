@@ -8,10 +8,10 @@ case $subTestNum in
     $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -soldiff -nwin 2 -twp twpTemp.csv
     ;;
   3)
-    $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhrprep -soldiff -nwin 2 -twp twpTemp.csv
-    $LAGHOS_SERIAL -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhr -soldiff -nwin 2 -twp twpTemp.csv
+    $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhrprep -nwin 2 -twp twpTemp.csv
+    $LAGHOS_SERIAL -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -online -romhr -nwin 2 -twp twpTemp.csv
     ;;
   4)
-    $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -restore -nwin 2 -twp twpTemp.csv
+    $LAGHOS -p 0 -rs 2 -iv -cfl 0.5 -tf 0.008 -pa -restore -nwin 2 -twp twpTemp.csv -soldiff
     ;;
 esac
