@@ -331,6 +331,7 @@ int main(int argc, char *argv[])
     bool useOffset = false;
     const char *offsetType = "previous";
     bool rhsBasis = false;
+    bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
 
@@ -346,6 +347,8 @@ int main(int argc, char *argv[])
                    "Offset type for initializing ROM windows.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
+    args.AddOption(&SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
+                   "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
@@ -367,6 +370,7 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
+    MFEM_VERIFY(!(rhsBasis && SNS), "-rhs and -romsns cannot both be set")
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
@@ -406,7 +410,7 @@ int main(int argc, char *argv[])
     split_line(line, words);
     MFEM_VERIFY(std::stoi(words[0]) == useOffset, "-romos option does not match record.");
     MFEM_VERIFY(std::stoi(words[1]) == trueOffsetType, "-romostype option does not match record.");
-    MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
+    MFEM_VERIFY(std::stoi(words[2]) == SNS, "-romsns option does not match record.");
     MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
     MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
     infile_offlineParam.close();
@@ -438,9 +442,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
-        MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
-        MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        //MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
+        //MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
+        //MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
 
         int totalSnapshotSize = snapshotSize[0];
         int totalSnapshotSizeFv = snapshotSizeFv[0];
