@@ -540,11 +540,11 @@ do
 										continue 1
 									fi
 								elif [[ $testtype == "online" ]]; then
-									if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
+									if [[ "$fileName" != "ROMsol" ]]; then
 										continue 1
 									fi
 								elif [[ $testtype == "restore" ]]; then
-									if [[ "$fileName" != *"_gf.000000" ]]; then
+									if [[ "$fileName" != *"_gf.000000" ]] && [[ "$fileName" != *"norms.000000" ]]; then
 										continue 1
 									fi
 								fi
