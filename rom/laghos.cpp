@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
     args.AddOption(&rom_build_database, "-build-database", "--build-database", "-no-build-database", "--no-build-database",
                    "Enable or disable ROM database building.");
     args.AddOption(&rom_use_database, "-use-database", "--use-database", "-no-use-database", "--no-use-database",
-                  "Enable or disable ROM database usage.");
+                   "Enable or disable ROM database usage.");
     args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
@@ -433,9 +433,17 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
         readVec(paramPoints, greedyfile);
-        int closestParameterPoint = CAROM::getNearestPoint(paramPoints, romOptions.blast_energyFactor);
+
+        std::vector<int> sampledPointIndices;
+        readVec(sampledPointIndices, outputPath + "/" + "sampled_points");
+        std::vector<double> sampledPoints;
+        for (int i = 0; i < sampledPointIndices.size(); i++) {
+            sampledPoints.push_back(paramPoints[sampledPointIndices[i]]);
+        }
+
+        int closestParameterPoint = CAROM::getNearestPoint(sampledPoints, romOptions.blast_energyFactor);
         MFEM_VERIFY(closestParameterPoint != -1, "No parameter points were found")
-        romOptions.basisIdentifier = "_" + to_string(paramPoints[closestParameterPoint]);
+        romOptions.basisIdentifier = "_" + to_string(sampledPoints[closestParameterPoint]);
     }
 
     do
@@ -1907,6 +1915,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
+                    parameterPointGreedySelector->printSampledPoints(outputPath + "/" + "sampled_points");
                     rom_build_database = false;
                 }
             }
