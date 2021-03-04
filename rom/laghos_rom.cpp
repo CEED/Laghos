@@ -167,7 +167,7 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     }
 }
 
-void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
+void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff, ROM_Options& input)
 {
     if (writeSnapshots)
     {
@@ -198,6 +198,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         {
             cout << "X basis summary output: ";
             BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
+            input.dimX = generator_X->getSpatialBasis()->numColumns();
             PrintSingularValues(rank, basename, "X", generator_X);
         }
 
@@ -205,20 +206,24 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         {
             cout << "V basis summary output: ";
             BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
+            input.dimV = generator_V->getSpatialBasis()->numColumns();
             PrintSingularValues(rank, basename, "V", generator_V);
         }
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
+        input.dimE = generator_E->getSpatialBasis()->numColumns();
         PrintSingularValues(rank, basename, "E", generator_E);
 
         if (sampleF)
         {
             cout << "Fv basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
+            input.dimFv = generator_Fv->getSpatialBasis()->numColumns();
 
             cout << "Fe basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+            input.dimFe = generator_Fe->getSpatialBasis()->numColumns();
         }
     }
 
@@ -288,7 +293,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -1308,22 +1313,22 @@ int ROM_Basis::SolutionSizeFOM() const
 void ROM_Basis::ReadSolutionBases(const int window)
 {
     if (!useVX)
-        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window)  + basisIdentifier, tH1size, 0, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window)  + basisIdentifier, tL2size, 0, rdime);
 
     if (useXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window)  + basisIdentifier, tH1size, 0, rdimx);
 
     if (useVX)
         basisV = basisX;
 
     if (RHSbasis)
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe);
     }
 
     if (mergeXV)

@@ -37,4 +37,6 @@ void writeVec(vector<int> v, std::string file_name);
 // read data from from text.txt and store it in vector v
 void readVec(vector<int> &v, std::string file_name);
 
+void readVec(vector<double> &v, std::string file_name);
+
 #endif // MFEM_LAGHOS_UTILS

@@ -56,6 +56,12 @@ struct ROM_Options
 
     std::string *basename = NULL;
 
+    std::string basisIdentifier = "";
+    double greedyTol = 1;
+    double greedySat = 1;
+    int greedySubsetSize = 0;
+    int greedyConvergenceSubsetSize = 0;
+
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     double rhoFactor = 1.0; // factor for scaling rho
@@ -159,7 +165,7 @@ public:
         generator_X = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::X + std::to_string(window) + input.basisIdentifier);
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randdimV);
@@ -167,7 +173,7 @@ public:
         generator_V = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::V + std::to_string(window) + input.basisIdentifier);
         if (input.randomizedSVD)
         {
             e_options.setRandomizedSVD(true, input.randdimE);
@@ -175,7 +181,7 @@ public:
         generator_E = new CAROM::BasisGenerator(
             e_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
         if (sampleF)
         {
             if (input.randomizedSVD)
@@ -185,7 +191,7 @@ public:
             generator_Fv = new CAROM::BasisGenerator(
                 x_options,
                 !staticSVD,
-                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fv + std::to_string(window) + input.basisIdentifier);
             if (input.randomizedSVD)
             {
                 e_options.setRandomizedSVD(true, input.randdimFe);
@@ -193,7 +199,7 @@ public:
             generator_Fe = new CAROM::BasisGenerator(
                 e_options,
                 !staticSVD,
-                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fe + std::to_string(window) + input.basisIdentifier);
         }
 
         SetStateVariables(S_init);
@@ -249,7 +255,7 @@ public:
 
     void SampleSolution(const double t, const double dt, Vector const& S);
 
-    void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff);
+    void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff, ROM_Options& input);
 
     int MaxNumSamples()
     {
@@ -333,7 +339,7 @@ private:
         }
     }
 
-    std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter)
+    std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter, const std::string basisIdentifier)
     {
         std::string fileName, path;
 
@@ -342,19 +348,19 @@ private:
         switch (v)
         {
         case VariableName::V:
-            fileName = "V" + std::to_string(window);
+            fileName = "V" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::E:
-            fileName = "E" + std::to_string(window);
+            fileName = "E" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::Fv:
-            fileName = "Fv" + std::to_string(window);
+            fileName = "Fv" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::Fe:
-            fileName = "Fe" + std::to_string(window);
+            fileName = "Fe" + std::to_string(window) + basisIdentifier;
             break;
         default:
-            fileName = "X" + std::to_string(window);
+            fileName = "X" + std::to_string(window) + basisIdentifier;
         }
 
         path = (parameter >= 0) ? basename + "/param" + std::to_string(parameter) + "_" : basename + "/";
@@ -518,6 +524,8 @@ private:
     int L2size;
     int tH1size;
     int tL2size;
+
+    std::string basisIdentifier;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
