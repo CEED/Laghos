@@ -1134,7 +1134,7 @@ int main(int argc, char *argv[])
             if (!romOptions.hyperreduce)
             {
                 basis[0]->ProjectFOMtoROM(*S, romS);
-                if (romOptions.hyperreduce_prep && myid == 0)
+                if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
                 {
                     std::string romS_outPath = outputPath + "/" + "romS" + "_0";
                     std::ofstream outfile_romS(romS_outPath.c_str());
@@ -1142,7 +1142,7 @@ int main(int argc, char *argv[])
                     romS.Print(outfile_romS, 1);
                 }
             }
-            else
+            else if (!rom_build_database)
             {
                 std::string romS_outPath = outputPath + "/" + "romS" + "_0";
                 std::ifstream outfile_romS(romS_outPath.c_str());
@@ -1338,11 +1338,14 @@ int main(int argc, char *argv[])
                     // TODO: it needs to be save in the format of HDF5 format
                     // TODO: how about parallel version? introduce rank in filename
                     // TODO: think about how to reuse "gfprint" option
-                    std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
-                    std::ofstream outfile_romS(filename.c_str());
-                    outfile_romS.precision(16);
-                    romS.Print(outfile_romS, 1);
-                    outfile_romS.close();
+                    if (!rom_build_database)
+                    {
+                        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                        std::ofstream outfile_romS(filename.c_str());
+                        outfile_romS.precision(16);
+                        romS.Print(outfile_romS, 1);
+                        outfile_romS.close();
+                    }
 
                     if (!romOptions.hyperreduce)
                     {
@@ -1709,17 +1712,17 @@ int main(int argc, char *argv[])
         {
             if (writeSol)
             {
-                PrintParGridFunction(myid, outputPath + "/Sol_Position", x_gf);
-                PrintParGridFunction(myid, outputPath + "/Sol_Velocity", v_gf);
-                PrintParGridFunction(myid, outputPath + "/Sol_Energy", e_gf);
+                PrintParGridFunction(myid, outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+                PrintParGridFunction(myid, outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+                PrintParGridFunction(myid, outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
             }
 
             if (solDiff)
             {
                 cout << "solDiff mode " << endl;
-                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
-                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
-                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
+                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+                PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
             }
 
             if (visitDiffCycle >= 0)
@@ -1783,9 +1786,9 @@ int main(int argc, char *argv[])
                      << fabs(energy_init - energy_final) << endl;
             }
 
-            PrintParGridFunction(myid, outputPath + "/x_gf", x_gf);
-            PrintParGridFunction(myid, outputPath + "/v_gf", v_gf);
-            PrintParGridFunction(myid, outputPath + "/e_gf", e_gf);
+            PrintParGridFunction(myid, outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
+            PrintParGridFunction(myid, outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
+            PrintParGridFunction(myid, outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
 
             // Print the error.
             // For problems 0 and 4 the exact velocity is constant in time.
