@@ -1343,7 +1343,16 @@ int main(int argc, char *argv[])
                         std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
                         std::ofstream outfile_romS(filename.c_str());
                         outfile_romS.precision(16);
-                        romS.Print(outfile_romS, 1);
+                        if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                        {
+                            Vector romCoord(romS);
+                            romOper[romOptions.window]->InducedGramSchmidtFinalize(romCoord, true);
+                            romCoord.Print(outfile_romS, 1);
+                        }
+                        else
+                        {
+                            romS.Print(outfile_romS, 1);
+                        }
                         outfile_romS.close();
                     }
 
