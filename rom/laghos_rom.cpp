@@ -192,13 +192,25 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
     }
 
+    if (!writeSnapshots)
+    {
+        if (!useXV)
+        {
+            input.dimX = generator_X->getSpatialBasis()->numColumns();
+        }
+        if (!useVX)
+        {
+            input.dimV = generator_V->getSpatialBasis()->numColumns();
+        }
+        input.dimE = generator_E->getSpatialBasis()->numColumns();
+    }
+
     if (rank == 0 && !writeSnapshots)
     {
         if (!useXV)
         {
             cout << "X basis summary output: ";
             BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
-            input.dimX = generator_X->getSpatialBasis()->numColumns();
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
@@ -206,13 +218,11 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         {
             cout << "V basis summary output: ";
             BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-            input.dimV = generator_V->getSpatialBasis()->numColumns();
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
-        input.dimE = generator_E->getSpatialBasis()->numColumns();
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (sampleF)
