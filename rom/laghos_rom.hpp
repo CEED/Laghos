@@ -57,8 +57,8 @@ struct ROM_Options
     std::string *basename = NULL;
 
     std::string basisIdentifier = "";
-    double greedyTol = 1;
-    double greedySat = 1;
+    double greedyTol = 1.0;
+    double greedySat = 1.0;
     int greedySubsetSize = 0;
     int greedyConvergenceSubsetSize = 0;
 

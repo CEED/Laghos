@@ -382,28 +382,6 @@ int main(int argc, char *argv[])
     const bool fom_data = !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
 
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
-    if (usingWindows)
-    {
-        if (rom_online || rom_restore)
-        {
-            double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
-            MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
-        }
-        else if (rom_offline && windowNumSamples == 0)
-        {
-            const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
-            MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        }
-    }
-    else  // not using windows
-    {
-        numWindows = 1;  // one window for the entire simulation
-    }
-
-    if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
-    MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
-    MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     StopWatch totalTimer;
     totalTimer.Start();
@@ -448,6 +426,29 @@ int main(int argc, char *argv[])
 
     do
     {
+
+        if (usingWindows)
+        {
+            if (rom_online || rom_restore)
+            {
+                double sFactor[]  = {sFactorX, sFactorV, sFactorE};
+                const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
+                MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+            }
+            else if (rom_offline && windowNumSamples == 0)
+            {
+                const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
+                MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
+            }
+        }
+        else  // not using windows
+        {
+            numWindows = 1;  // one window for the entire simulation
+        }
+
+        if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
+        MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
+        MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
         // Read the serial mesh from the given mesh file on all processors.
         // Refine the mesh in serial to increase the resolution.
