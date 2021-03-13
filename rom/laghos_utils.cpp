@@ -9,18 +9,18 @@ using namespace std;
 void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
+    const CAROM::Vector* sing_vals = bg->getSingularValues();
 
-    MFEM_VERIFY(rom_dim <= sing_vals->numColumns(), "");
+    MFEM_VERIFY(rom_dim <= sing_vals->dim(), "");
 
     double sum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        sum += (*sing_vals)(sv, sv);
+    for (int sv = 0; sv < sing_vals->dim(); ++sv) {
+        sum += (*sing_vals)(sv);
     }
 
     double partialSum = 0.0;
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        partialSum += (*sing_vals)(sv, sv);
+    for (int sv = 0; sv < sing_vals->dim(); ++sv) {
+        partialSum += (*sing_vals)(sv);
         if (partialSum / sum > energyFraction)
         {
             cutoff = sv+1;
@@ -28,12 +28,12 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
         }
     }
 
-    if (printout) cout << "Take first " << cutoff << " of " << sing_vals->numColumns() << " basis vectors" << endl;
+    if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;
 }
 
 void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows, const int window)
 {
-    const CAROM::Matrix* sing_vals = bg->getSingularValues();
+    const CAROM::Vector* sing_vals = bg->getSingularValues();
 
     char tmp[100];
     sprintf(tmp, ".%06d", rank);
@@ -43,8 +43,8 @@ void PrintSingularValues(const int rank, const std::string& basename, const std:
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
 
-    for (int sv = 0; sv < sing_vals->numColumns(); ++sv) {
-        ofs << (*sing_vals)(sv, sv) << endl;
+    for (int sv = 0; sv < sing_vals->dim(); ++sv) {
+        ofs << (*sing_vals)(sv) << endl;
     }
 
     ofs.close();
@@ -207,4 +207,58 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.sampX = twparam(w,oss);
     romOptions.sampV = twparam(w,oss+1);
     romOptions.sampE = twparam(w,oss+2);
+}
+
+void writeNum(int num, std::string file_name) {
+    ofstream file;
+    file.open(file_name);
+    file << num << endl;
+    file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readNum(int& num, std::string file_name) {
+    ifstream file;
+    file.open(file_name);
+    string line;
+    getline(file, line);
+    num = stoi(line);
+    file.close();
+}
+
+void writeDouble(double num, std::string file_name) {
+    ofstream file;
+    file.open(file_name);
+    file << std::fixed << std::setprecision(16) << num <<endl;
+    file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readDouble(double& num, std::string file_name) {
+    ifstream file;
+    file.open(file_name);
+    string line;
+    getline(file, line);
+    num = stod(line);
+    file.close();
+}
+
+void writeVec(vector<int> v, std::string file_name) {
+    ofstream file;
+    file.open(file_name);
+    for(int i=0; i<v.size(); ++i) {
+        file << v[i] << endl;
+    }
+    file.close();
+}
+
+// read data from from text.txt and store it in vector v
+void readVec(vector<int> &v, std::string file_name) {
+    ifstream file;
+    file.open(file_name);
+    string line;
+    while(getline(file, line)) {
+        v.push_back(stoi(line));
+    }
+    file.close();
 }

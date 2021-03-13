@@ -8,9 +8,10 @@ case $subTestNum in
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 3 -rdimv 7 -rdime 5 -nsamx 12 -nsamv 184 -nsame 30 -soldiff
     ;;
   3)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 3 -rdimv 7 -rdime 5 -romhr -nsamx 4 -nsamv 24 -nsame 32 -soldiff
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 3 -rdimv 7 -rdime 5 -romhrprep -nsamx 4 -nsamv 24 -nsame 32
+    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 3 -rdimv 7 -rdime 5 -romhr -nsamx 4 -nsamv 24 -nsame 32
     ;;
   4)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -restore -rdimx 3 -rdimv 7 -rdime 5
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -restore -rdimx 3 -rdimv 7 -rdime 5 -soldiff
     ;;
 esac
