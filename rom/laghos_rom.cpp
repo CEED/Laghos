@@ -2019,7 +2019,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
     }
 }
 
-void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
+void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data)
 {
     if (hyperreduce && rank == 0)
     {
@@ -2035,7 +2035,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             spdim = basis->SolutionSizeH1SP();
             rdim = basis->GetDimV();
             offset = basis->GetDimX();
-            X = basis->GetBVsp();
+            X = keep_data ? new CAROM::Matrix(*basis->GetBVsp()) : basis->GetBVsp();
             R = &CoordinateBVsp;
         }
         else if (var == 2) // energy
@@ -2043,7 +2043,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             spdim = basis->SolutionSizeL2SP();
             rdim = basis->GetDimE();
             offset = basis->GetDimX() + basis->GetDimV();
-            X = basis->GetBEsp();
+            X = keep_data ? new CAROM::Matrix(*basis->GetBEsp()) : basis->GetBEsp();
             R = &CoordinateBEsp;
         }
         else
@@ -2075,8 +2075,11 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             }
             S[offset+i] /= (*R)(i,i);
         }
-        (*R).Clear();
 
+        if (keep_data)
+            delete X;
+        else
+            (*R).Clear();
     }
     else if (!hyperreduce)
     {
@@ -2095,12 +2098,12 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
     basis->ComputeReducedMatrices(sns1);
 }
 
-void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
+void ROM_Operator::InducedGramSchmidtFinalize(Vector &S, bool keep_data)
 {
     if (useGramSchmidt && !sns1)
     {
-        UndoInducedGramSchmidt(1, S); // velocity
-        UndoInducedGramSchmidt(2, S); // energy
+        UndoInducedGramSchmidt(1, S, keep_data); // velocity
+        UndoInducedGramSchmidt(2, S, keep_data); // energy
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 }

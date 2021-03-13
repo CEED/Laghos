@@ -627,7 +627,7 @@ public:
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
     void InducedGramSchmidtInitialize(Vector &S);
-    void InducedGramSchmidtFinalize(Vector &S);
+    void InducedGramSchmidtFinalize(Vector &S, bool keep_data=false);
 
     ~ROM_Operator()
     {
@@ -682,8 +682,7 @@ private:
     DenseMatrix CoordinateBVsp, CoordinateBEsp;
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
-    void UndoInducedGramSchmidt(const int var, Vector &S);
-
+    void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 #endif // MFEM_LAGHOS_ROM
