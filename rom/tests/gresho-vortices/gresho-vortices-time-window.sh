@@ -8,9 +8,10 @@ case $subTestNum in
     $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -online -soldiff -romsvds -nwin 4 -twp twpTemp.csv
     ;;
   3)
-    $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -online -soldiff -romhr -romsvds -sfacx 50 -sfacv 50 -sface 50 -nwin 4 -twp twpTemp.csv
+    $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -online -romhrprep -romsvds -sfacx 50 -sfacv 50 -sface 50 -nwin 4 -twp twpTemp.csv
+    $LAGHOS_SERIAL -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -online -romhr -romsvds -sfacx 50 -sfacv 50 -sface 50 -nwin 4 -twp twpTemp.csv
     ;;
   4)
-    $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -restore -nwin 4 -twp twpTemp.csv
+    $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.1 -s 7 -restore -nwin 4 -twp twpTemp.csv -soldiff
     ;;
 esac
