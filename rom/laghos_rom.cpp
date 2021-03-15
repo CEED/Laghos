@@ -16,7 +16,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (sampleF)
+    if (!sns)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -91,7 +91,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             }
         }
 
-        if (sampleF)
+        if (!sns)
         {
             MFEM_VERIFY(gfH1.Size() == H1size, "");
             for (int i=0; i<H1size; ++i)
@@ -135,7 +135,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
-        if (sampleF)
+        if (!sns)
         {
             MFEM_VERIFY(gfL2.Size() == L2size, "");
             for (int i=0; i<L2size; ++i)
@@ -174,7 +174,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         if (!useXV) generator_X->writeSnapshot();
         if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
-        if (sampleF)
+        if (!sns)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
@@ -185,7 +185,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         if (!useXV) generator_X->endSamples();
         if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
-        if (sampleF)
+        if (!sns)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();
@@ -212,7 +212,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, basename, "E", generator_E);
 
-        if (sampleF)
+        if (!sns)
         {
             cout << "Fv basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
@@ -230,7 +230,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         printSnapshotTime(tSnapV, path_tSnap, "V");
         printSnapshotTime(tSnapE, path_tSnap, "E");
 
-        if (sampleF)
+        if (!sns)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv");
             printSnapshotTime(tSnapFe, path_tSnap, "Fe");
@@ -241,7 +241,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     delete generator_V;
     delete generator_E;
 
-    if (sampleF)
+    if (!sns)
     {
         delete generator_Fv;
         delete generator_Fe;
