@@ -521,7 +521,10 @@ do
 							set_fail
 							continue 1
 						fi
-						num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+
+						if [[ -f $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps ]]; then
+							num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+						fi
 
 						# After simulations complete, compare results
 						for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
