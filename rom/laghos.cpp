@@ -420,18 +420,15 @@ int main(int argc, char *argv[])
     if (rom_use_database)
     {
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-        readVec(paramPoints, greedyfile);
-
-        std::vector<int> sampledPointIndices;
-        readVec(sampledPointIndices, outputPath + "/" + "sampled_points");
-        std::vector<double> sampledPoints;
-        for (int i = 0; i < sampledPointIndices.size(); i++) {
-            sampledPoints.push_back(paramPoints[sampledPointIndices[i]]);
+        std::vector<CAROM::Vector> sampledPoints = CAROM::readSampledPoints(outputPath + "/" + "sampled_points");
+        for (int i = 0; i < sampledPoints.size(); i++)
+        {
+            paramPoints.push_back(sampledPoints[i].item(0));
         }
 
-        int closestParameterPoint = CAROM::getNearestPoint(sampledPoints, romOptions.blast_energyFactor);
+        int closestParameterPoint = CAROM::getNearestPoint(paramPoints, romOptions.blast_energyFactor);
         MFEM_VERIFY(closestParameterPoint != -1, "No parameter points were found")
-        romOptions.basisIdentifier = "_" + to_string(sampledPoints[closestParameterPoint]);
+        romOptions.basisIdentifier = "_" + to_string(paramPoints[closestParameterPoint]);
     }
 
     do
@@ -1934,7 +1931,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    parameterPointGreedySelector->printSampledPoints(outputPath + "/" + "sampled_points");
+                    parameterPointGreedySelector->writeSampledPoints(outputPath + "/" + "sampled_points");
                     rom_build_database = false;
                 }
             }
