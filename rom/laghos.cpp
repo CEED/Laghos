@@ -884,7 +884,7 @@ int main(int argc, char *argv[])
         socketstream* vis_rho = NULL;
         socketstream* vis_v = NULL;
         socketstream* vis_e = NULL;
-        if (fom_data)
+        if (fom_data && (!rom_build_database || !rom_online))
         {
             vis_rho = new socketstream();
             vis_v = new socketstream();
@@ -905,7 +905,7 @@ int main(int argc, char *argv[])
             energy_init = oper->InternalEnergy(*e_gf) +
                           oper->KineticEnergy(*v_gf);
 
-            if (visualization)
+            if (visualization && (!rom_build_database || !rom_online))
             {
                 // Make sure all MPI ranks have sent their 'v' solution before initiating
                 // another set of GLVis connections (one from each rank):
@@ -938,7 +938,7 @@ int main(int argc, char *argv[])
         string visit_outputName = outputPath + "/" + std::string(visit_basename);
         const char *visit_outputPath = visit_outputName.c_str();
         VisItDataCollection* visit_dc = NULL;
-        if (fom_data)
+        if (fom_data && (!rom_build_database || !rom_online))
         {
             visit_dc = new VisItDataCollection(visit_outputPath, pmesh);
             if (visit)
@@ -1057,6 +1057,7 @@ int main(int argc, char *argv[])
         // defines the Mult() method that is used by the time integrators.
         if (!rom_online) ode_solver->Init(*oper);
         if (fom_data) oper->ResetTimeStepEstimate();
+        if (rom_build_database) cout << "Blast energy factor: " << romOptions.blast_energyFactor << endl;
 
         StopWatch samplerTimer, basisConstructionTimer;
         ROM_Sampler *sampler = NULL;
@@ -1340,7 +1341,7 @@ int main(int argc, char *argv[])
 
                 if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
                 t_old = t;
-                if (fom_data)
+                if (fom_data && (!rom_build_database || last_step))
                 {
                     oper->ResetTimeStepEstimate();
                 }
@@ -1379,7 +1380,10 @@ int main(int argc, char *argv[])
 
                     if (!romOptions.hyperreduce)
                     {
-                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+                        if (!rom_build_database || last_step)
+                        {
+                            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+                        }
                         if (rom_build_database && last_step)
                         {
                             lastLiftedSolution = *S;
@@ -1390,7 +1394,7 @@ int main(int argc, char *argv[])
 
                     romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                    if (fom_data)
+                    if (fom_data && (!rom_build_database || last_step))
                     {
                         oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
                     }
@@ -1408,37 +1412,40 @@ int main(int argc, char *argv[])
                 const double last_dt = dt;
 
                 // Adaptive time step control.
-                const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
-
-                //const double dt_est = oper->GetTimeStepEstimate(*S);
-                //cout << myid << ": dt_est " << dt_est << endl;
-                if (dt_est < dt)
+                if (!rom_build_database || last_step)
                 {
-                    // Repeat (solve again) with a decreased time step - decrease of the
-                    // time estimate suggests appearance of oscillations.
-                    dt *= 0.85;
-                    if (dt < numeric_limits<double>::epsilon())
+                    const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
+
+                    //const double dt_est = oper->GetTimeStepEstimate(*S);
+                    //cout << myid << ": dt_est " << dt_est << endl;
+                    if (dt_est < dt)
                     {
-                        MFEM_ABORT("The time step crashed!");
+                        // Repeat (solve again) with a decreased time step - decrease of the
+                        // time estimate suggests appearance of oscillations.
+                        dt *= 0.85;
+                        if (dt < numeric_limits<double>::epsilon())
+                        {
+                            MFEM_ABORT("The time step crashed!");
+                        }
+                        t = t_old;
+                        if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
+                        if (rom_online) romS = romS_old;
+                        if (fom_data)
+                        {
+                            oper->ResetQuadratureData();
+                        }
+                        if (mpi.Root()) {
+                            cout << "Repeating step " << ti << endl;
+                        }
+                        if (steps < max_tsteps) {
+                            last_step = false;
+                        }
+                        ti--;
+                        continue;
                     }
-                    t = t_old;
-                    if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
-                    if (rom_online) romS = romS_old;
-                    if (fom_data)
-                    {
-                        oper->ResetQuadratureData();
+                    else if (dtc == 0.0 && dt_est > 1.25 * dt) {
+                        dt *= 1.02;
                     }
-                    if (mpi.Root()) {
-                        cout << "Repeating step " << ti << endl;
-                    }
-                    if (steps < max_tsteps) {
-                        last_step = false;
-                    }
-                    ti--;
-                    continue;
-                }
-                else if (dtc == 0.0 && dt_est > 1.25 * dt) {
-                    dt *= 1.02;
                 }
 
                 if (rom_offline)
@@ -1589,7 +1596,7 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                if (mpi.Root())
+                if (!rom_build_database && mpi.Root())
                 {
                     if (last_step) {
                         std::ofstream outfile(outputPath + "/num_steps");
@@ -1601,7 +1608,7 @@ int main(int argc, char *argv[])
                 // Make sure that the mesh corresponds to the new solution state. This is
                 // needed, because some time integrators use different S-type vectors
                 // and the oper object might have redirected the mesh positions to those.
-                if (fom_data)
+                if (fom_data && (!rom_build_database || !rom_online))
                 {
                     pmesh->NewNodes(*x_gf, false);
 
@@ -1738,7 +1745,7 @@ int main(int argc, char *argv[])
             if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
         }
 
-        if (fom_data)
+        if (fom_data && (!rom_build_database || !rom_online))
         {
             if (writeSol)
             {
@@ -1781,6 +1788,7 @@ int main(int argc, char *argv[])
                 Vector residualVec = Vector(lastLiftedSolution.Size());
                 subtract(lastLiftedSolution, *S, residualVec);
                 residual = residualVec.Norml2();
+                cout << "Residual: " << residual << endl;
             }
             delete basis[romOptions.window];
             delete romOper[romOptions.window];
@@ -1803,7 +1811,7 @@ int main(int argc, char *argv[])
         case 7:
             steps *= 2;
         }
-        if (fom_data)
+        if (fom_data && (!rom_build_database || !rom_online))
         {
             oper->PrintTimingData(mpi.Root(), steps);
 
