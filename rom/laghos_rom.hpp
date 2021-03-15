@@ -59,6 +59,9 @@ struct ROM_Options
     std::string basisIdentifier = "";
     double greedyTol = 1.0;
     double greedySat = 1.0;
+    double greedyParamSpaceMin = 0;
+    double greedyParamSpaceMax = 0;
+    int greedyParamSpaceSize = 0;
     int greedySubsetSize = 0;
     int greedyConvergenceSubsetSize = 0;
 

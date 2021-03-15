@@ -310,6 +310,9 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
+    args.AddOption(&romOptions.greedyParamSpaceMin, "-greedy-param-min", "--greedy-param-min", "The minimum value of the parameter point space.");
+    args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
+    args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
     args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
     args.AddOption(&romOptions.greedySat, "-greedysat", "--greedysat", "The greedy algorithm saturation constant.");
     args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
@@ -398,8 +401,15 @@ int main(int argc, char *argv[])
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
     if (rom_build_database)
     {
-        readVec(paramPoints, greedyfile);
-        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(paramPoints, romOptions.greedyTol, romOptions.greedySat, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
+        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+            romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
+            romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
+            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
+        std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getParameterPointDomain();
+        for (int i = 0; i < paramPointDomain.size(); i++)
+        {
+            paramPoints.push_back(paramPointDomain[i].item(0));
+        }
         int nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
         if (nextSampleParameterPoint != -1)
         {
