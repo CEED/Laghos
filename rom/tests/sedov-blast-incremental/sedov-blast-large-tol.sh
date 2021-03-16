@@ -5,11 +5,11 @@ case $subTestNum in
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -writesol -svtol 1e-3 -romsrhs
     ;;
   2)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -nsamx 12 -nsamv 184 -nsame 30 -soldiff -romsrhs
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -soldiff -romsrhs
     ;;
   3)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -romhrprep -nsamx 4 -nsamv 24 -nsame 32 -romsrhs
-    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -romhr -nsamx 4 -nsamv 24 -nsame 32 -romsrhs
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -rdimfv 9 -rdimfe 6 -romhrprep -nsamx 4 -nsamv 24 -nsame 32 -romsrhs
+    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 3 -rdimv 7 -rdime 5 -rdimfv 9 -rdimfe 6 -romhr -nsamx 4 -nsamv 24 -nsame 32 -romsrhs
     ;;
   4)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -restore -rdimx 3 -rdimv 7 -rdime 5 -soldiff -romsrhs
