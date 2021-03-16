@@ -309,7 +309,7 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
-      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE), use_sns(input.SNS),
+      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE), use_sns(input.SNS || !input.RHSbasis),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), offsetInit(input.useOffset),
       RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
@@ -1848,7 +1848,7 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 
 void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 {
-    if (use_sns || !RHSbasis) return;
+    if (use_sns) return;
 
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
@@ -1867,7 +1867,7 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 
 void ROM_Basis::HyperreduceRHS_E(Vector &e) const
 {
-    if (use_sns || !RHSbasis) return;
+    if (use_sns) return;
 
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
