@@ -575,6 +575,10 @@ int main(int argc, char *argv[])
     romOptions.offsetType = getOffsetStyle(offsetType);
     if (rom_online)
     {
+        std::string filename = outputPath + "/ROMsol/romS_1";
+        std::ifstream infile_romS(filename.c_str());
+        MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
+
         std::ifstream infile_offlineParam(offlineParam_outputPath);
         MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
         std::string line;
