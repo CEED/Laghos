@@ -192,19 +192,6 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         }
     }
 
-    if (!writeSnapshots)
-    {
-        if (!useXV)
-        {
-            input.dimX = generator_X->getSpatialBasis()->numColumns();
-        }
-        if (!useVX)
-        {
-            input.dimV = generator_V->getSpatialBasis()->numColumns();
-        }
-        input.dimE = generator_E->getSpatialBasis()->numColumns();
-    }
-
     if (rank == 0 && !writeSnapshots)
     {
         if (!useXV)
@@ -212,6 +199,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             cout << "X basis summary output: ";
             BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
+            writeNum(generator_X->getSpatialBasis()->numColumns(), basename + "/" + "rdimx");
         }
 
         if (!useVX)
@@ -219,21 +207,23 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
             cout << "V basis summary output: ";
             BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
+            writeNum(generator_V->getSpatialBasis()->numColumns(), basename + "/" + "rdimv");
         }
 
         cout << "E basis summary output: ";
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
+        writeNum(generator_E->getSpatialBasis()->numColumns(), basename + "/" + "rdime");
 
         if (sampleF)
         {
             cout << "Fv basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
-            input.dimFv = generator_Fv->getSpatialBasis()->numColumns();
+            writeNum(generator_Fv->getSpatialBasis()->numColumns(), basename + "/" + "rdimfv");
 
             cout << "Fe basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
-            input.dimFe = generator_Fe->getSpatialBasis()->numColumns();
+            writeNum(generator_Fe->getSpatialBasis()->numColumns(), basename + "/" + "rdimfe");
         }
     }
 
