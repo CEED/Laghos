@@ -182,12 +182,12 @@ void GetSnapshotTime(const int id, const std::string& basename, const std::strin
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
+void GetParametricTimeWindows(const int nset, const bool SNS, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
                               Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
-    const int numVar = (rhsBasis) ? 5 : 3;
+    const int numVar = (SNS) ? 3 : 5;
     std::vector<int> numSnap(nset*numVar);
     // The snapshot time vectors are placed in descending order, with the last element is when the first snapshot is taken
     for (int paramID = 0; paramID < nset; ++paramID)
@@ -205,7 +205,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         tSnapE.push_back(tVec);
         numSnap[paramID+nset*VariableName::E] = tVec.size();
 
-        if (rhsBasis)
+        if (!SNS)
         {
             GetSnapshotTime(paramID, basename, "Fv", tVec);
             reverse(tVec.begin(), tVec.end());
@@ -235,7 +235,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
             tTemp[paramID+nset*VariableName::V] = *(tSnapV[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapV[paramID].size()) - 1));
             tTemp[paramID+nset*VariableName::E] = *(tSnapE[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapE[paramID].size()) - 1));
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 tTemp[paramID+nset*VariableName::Fv] = *(tSnapFv[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFv[paramID].size()) - 1));
                 tTemp[paramID+nset*VariableName::Fe] = *(tSnapFe[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFe[paramID].size()) - 1));
@@ -269,7 +269,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
                     offsetCurrentWindow[paramID+nset*VariableName::E] += 1;
                 }
 
-                if (rhsBasis)
+                if (!SNS)
                 {
                     if (tSnapFv[paramID].back() < windowRight)
                     {
@@ -293,7 +293,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
             tTemp[paramID+nset*VariableName::V] = tSnapV[paramID].back();
             tTemp[paramID+nset*VariableName::E] = tSnapE[paramID].back();
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 tTemp[paramID+nset*VariableName::Fv] = tSnapFv[paramID].back();
                 tTemp[paramID+nset*VariableName::Fe] = tSnapFe[paramID].back();
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, rhsBasis, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
         outfile_twp.open(outputPath + "/twpTemp.csv");
     }
     else {
@@ -433,7 +433,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(0, outputPath, "E", sampleWindow, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 GetSnapshotDim(0, outputPath, "Fv", sampleWindow, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(paramID, outputPath, "E", sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 GetSnapshotDim(paramID, outputPath, "Fv", sampleWindow, dim, snapshotSizeFv[paramID]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[paramID] >= snapshotSize[paramID], "Inconsistent snapshot sizes");
@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
                 LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
@@ -489,7 +489,7 @@ int main(int argc, char *argv[])
             if (myid == 0 && usingWindows)
             {
                 outfile_twp << twep[basisWindow] << ", ";
-                if (rhsBasis)
+                if (!SNS)
                     outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
                                 << cutoff[3] << ", " << cutoff[4] << "\n";
                 else

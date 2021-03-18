@@ -1769,6 +1769,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
         sns1 = (input.SNS && input.dimV == input.dimFv && input.dimE == input.dimFe); // SNS type I
         noMsolve = (useReducedM || useGramSchmidt || sns1);
+        cout << "Window #" << input.window << ": sns1 = " << sns1 << endl;
 
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
