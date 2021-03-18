@@ -413,6 +413,8 @@ int main(int argc, char *argv[])
     std::vector<double> paramPoints;
 
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+
+    // If using the greedy algorithm, initialize the parameter point greedy selector.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
@@ -424,6 +426,7 @@ int main(int argc, char *argv[])
             parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
                 outputPath + "/greedy_algorithm_data");
 
+            // Get the dims outputted during the last iteration.
             readNum(romOptions.dimX, outputPath + "/" + "rdimx");
             readNum(romOptions.dimV, outputPath + "/" + "rdimv");
             readNum(romOptions.dimE, outputPath + "/" + "rdime");
@@ -440,6 +443,8 @@ int main(int argc, char *argv[])
                 romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
                 romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
         }
+
+        // Retrieve the parameter point domain from the last iteration.
         std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getParameterPointDomain();
         for (int i = 0; i < paramPointDomain.size(); i++)
         {
@@ -472,6 +477,8 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+    // Use the ROM database to run the parametric case on another parameter point.
     if (rom_use_database)
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
@@ -1425,10 +1432,14 @@ int main(int argc, char *argv[])
 
                 if (!romOptions.hyperreduce)
                 {
+
+                    // If using the greedy algorithm, only lift during the last step
                     if (!rom_build_database || last_step)
                     {
                         basis[romOptions.window]->LiftROMtoFOM(romS, *S);
                     }
+
+                    // If using the greedy algorithm, take only the last step in the FOM space
                     if (rom_build_database && last_step)
                     {
                         lastLiftedSolution = *S;
@@ -1827,6 +1838,9 @@ int main(int argc, char *argv[])
 
     if (rom_online)
     {
+
+        // If using the greedy algorithm, calculate the residual using the FOM lifted during
+        // the second to last step compared against the FOM lifted at the last step.
         if (rom_build_database)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
@@ -1895,6 +1909,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    // If using the greedy algorithm, save the residual and any information
+    // for use during the next iteration.
     if(rom_build_database)
     {
         if (rom_online)
