@@ -1013,7 +1013,8 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            outfile_twp.open(outputPath + twpfile);
+            //outfile_twp.open(outputPath + twpfile);
+            outfile_twp.open(outputPath + "twpTemp.csv");
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;

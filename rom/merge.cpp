@@ -390,12 +390,14 @@ int main(int argc, char *argv[])
         numBasisWindows = numWindows;
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        outfile_twp.open(outputPath + twpfile);
+        //outfile_twp.open(outputPath + twpfile);
+        outfile_twp.open(outputPath + "twpTemp.csv");
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
         GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
-        outfile_twp.open(outputPath + twpfile);
+        //outfile_twp.open(outputPath + twpfile);
+        outfile_twp.open(outputPath + "twpTemp.csv");
     }
     else {
         numWindows = 1;
