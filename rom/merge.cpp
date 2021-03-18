@@ -334,6 +334,7 @@ int main(int argc, char *argv[])
     bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
+    const char *twpfile = "twp.csv";
 
     OptionsParser args(argc, argv);
     args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge.");
@@ -353,6 +354,8 @@ int main(int argc, char *argv[])
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
+    args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
+                   "Name of the CSV file defining online time window parameters");
 
     args.Parse();
     if (!args.Good())
@@ -387,12 +390,12 @@ int main(int argc, char *argv[])
         numBasisWindows = numWindows;
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        outfile_twp.open(outputPath + "/twpTemp.csv");
+        outfile_twp.open(outputPath + twpfile);
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
         GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
-        outfile_twp.open(outputPath + "/twpTemp.csv");
+        outfile_twp.open(outputPath + twpfile);
     }
     else {
         numWindows = 1;
