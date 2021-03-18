@@ -201,11 +201,9 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.dimX = twparam(w,0);
     romOptions.dimV = twparam(w,1);
     romOptions.dimE = twparam(w,2);
-    if (romOptions.RHSbasis)
-    {
-        romOptions.dimFv = romOptions.SNS ? romOptions.dimV : twparam(w,3);
-        romOptions.dimFe = romOptions.SNS ? romOptions.dimE : twparam(w,4);
-    }
+    romOptions.dimFv = romOptions.SNS ? romOptions.dimV : twparam(w,3);
+    romOptions.dimFe = romOptions.SNS ? romOptions.dimE : twparam(w,4);
+
     const int oss = (romOptions.SNS) ? 3 : 5;
     romOptions.sampX = twparam(w,oss);
     romOptions.sampV = twparam(w,oss+1);
