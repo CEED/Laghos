@@ -166,7 +166,6 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
-    const char *greedyfile = "";
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
@@ -244,9 +243,6 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
-    args.AddOption(&greedyfile, "-greedyfile", "--greedyparamfilename",
-                   "Name of the CSV file defining the greedy algorithm parameter points.\n\t"
-                   "The algorithm currently only works with blast energy factor.\n\t");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
                    "Here x,y,z are relative task ratios in each direction.\n\t"
