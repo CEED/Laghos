@@ -57,13 +57,13 @@ struct ROM_Options
     std::string *basename = NULL;
 
     std::string basisIdentifier = "";
-    double greedyTol = 1.0;
-    double greedySat = 1.0;
-    double greedyParamSpaceMin = 0;
-    double greedyParamSpaceMax = 0;
-    int greedyParamSpaceSize = 0;
-    int greedySubsetSize = 0;
-    int greedyConvergenceSubsetSize = 0;
+    double greedyTol = 1.0; // error tolerance for the greedy algorithm
+    double greedySat = 1.0; // saturation constant for the greedy algorithm
+    double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
+    double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
+    int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space
+    int greedySubsetSize = 0; // subset size of parameter points whose residuals are checked during the greedy algorithm
+    int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
