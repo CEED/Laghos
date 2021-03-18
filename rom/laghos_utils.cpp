@@ -262,14 +262,3 @@ void readVec(vector<int> &v, std::string file_name) {
     }
     file.close();
 }
-
-// read data from from text.txt and store it in vector v
-void readVec(vector<double> &v, std::string file_name) {
-    ifstream file;
-    file.open(file_name);
-    string line;
-    while(getline(file, line)) {
-        v.push_back(stod(line));
-    }
-    file.close();
-}
