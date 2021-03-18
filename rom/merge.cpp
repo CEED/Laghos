@@ -488,12 +488,11 @@ int main(int argc, char *argv[])
 
             if (myid == 0 && usingWindows)
             {
-                outfile_twp << twep[basisWindow] << ", ";
-                if (!SNS)
-                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                << cutoff[3] << ", " << cutoff[4] << "\n";
+                outfile_twp << twep[basisWindow] << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                if (SNS)
+                    outfile_twp << "\n";
                 else
-                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                    outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
             }
         }
     }

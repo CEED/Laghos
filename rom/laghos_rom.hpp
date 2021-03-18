@@ -643,8 +643,8 @@ public:
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
-    void InducedGramSchmidtInitialize(Vector &S);
-    void InducedGramSchmidtFinalize(Vector &S, bool keep_data=false);
+    void ApplyHyperreduction(Vector &S);
+    void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
     ~ROM_Operator()
     {

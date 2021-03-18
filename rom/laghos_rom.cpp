@@ -281,7 +281,8 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
-CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim, hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
+CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim,
+                            hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
 {
     CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, rowOS, dim);
     CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
@@ -514,11 +515,11 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     if (hyperreduce_prep)
     {
         if (rank == 0) cout << "start preprocessing hyper-reduction\n";
-        StopWatch preprocessHyperreductionTymer;
-        preprocessHyperreductionTymer.Start();
+        StopWatch preprocessHyperreductionTimer;
+        preprocessHyperreductionTimer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
-        preprocessHyperreductionTymer.Stop();
-        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
+        preprocessHyperreductionTimer.Stop();
+        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
 }
 
@@ -2258,7 +2259,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_da
     }
 }
 
-void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
+void ROM_Operator::ApplyHyperreduction(Vector &S)
 {
     if (useGramSchmidt && !sns1)
     {
@@ -2269,7 +2270,7 @@ void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
     basis->ComputeReducedMatrices(sns1);
 }
 
-void ROM_Operator::InducedGramSchmidtFinalize(Vector &S, bool keep_data)
+void ROM_Operator::PostprocessHyperreduction(Vector &S, bool keep_data)
 {
     if (useGramSchmidt && !sns1)
     {

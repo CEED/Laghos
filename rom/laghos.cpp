@@ -1250,7 +1250,7 @@ int main(int argc, char *argv[])
         timeLoopTimer.Start();
         if (romOptions.hyperreduce)
         {
-            romOper[0]->InducedGramSchmidtInitialize(romS);
+            romOper[0]->ApplyHyperreduction(romS);
         }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
@@ -1305,7 +1305,7 @@ int main(int argc, char *argv[])
                 if (romOptions.hyperreduce && romOptions.GramSchmidt)
                 {
                     Vector romCoord(romS);
-                    romOper[romOptions.window]->InducedGramSchmidtFinalize(romCoord, true);
+                    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
                     romCoord.Print(outfile_romS, 1);
                 }
                 else
@@ -1464,7 +1464,7 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce)
                     {
-                        romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
+                        romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
                     int rdimxprev = romOptions.dimX;
@@ -1510,7 +1510,7 @@ int main(int argc, char *argv[])
 
                     if (romOptions.hyperreduce)
                     {
-                        romOper[romOptions.window]->InducedGramSchmidtInitialize(romS);
+                        romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
@@ -1626,7 +1626,7 @@ int main(int argc, char *argv[])
     {
         if (romOptions.GramSchmidt)
         {
-            romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
+            romOper[romOptions.window]->PostprocessHyperreduction(romS);
         }
         if (!rom_online)
         {
