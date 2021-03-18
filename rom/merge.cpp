@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
     std::string outputPath = "run";
-    if (basename != "") {
+    if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
 
