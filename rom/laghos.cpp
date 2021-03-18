@@ -476,6 +476,12 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
+
+        char tmp[100];
+        sprintf(tmp, ".%06d", myid);
+        ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+        MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
+
         parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
             outputPath + "/greedy_algorithm_data");
         std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getSampledParameterPoints();

@@ -356,6 +356,7 @@ do
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
 				MERGE="$HEADER ./merge -o ${OUTPUT_DIR}"
+				GREEDY="./scripts/laghos_greedy_alg_launcher.sh"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
