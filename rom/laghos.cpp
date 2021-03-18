@@ -376,6 +376,11 @@ int main(int argc, char *argv[])
     else  // not using windows
     {
         numWindows = 1;  // one window for the entire simulation
+        if (romOptions.SNS)
+        {
+            romOptions.dimFv = max(romOptions.dimFv, romOptions.dimV);
+            romOptions.dimFe = max(romOptions.dimFe, romOptions.dimE);
+        }
     }
 
     if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;

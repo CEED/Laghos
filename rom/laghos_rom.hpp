@@ -65,7 +65,7 @@ struct ROM_Options
     bool staticSVD = false; // true: use StaticSVD
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
-    bool SNS = false; // if true, use sns
+    bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -686,7 +686,7 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool sns1 = false;
+    bool sns1 = false; // Simplify calculation by Eq. (4.4) when using 1st choice of SNS.
     bool noMsolve = false;
     bool useReducedM = false;  // TODO: remove this?
 
