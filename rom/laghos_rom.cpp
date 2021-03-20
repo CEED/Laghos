@@ -412,7 +412,16 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
         std::string path_init = basename + "/ROMoffset/init";
 
-        if (input.restore || input.offsetType == saveLoadOffset)
+        if (input.offsetType == useInitialState)
+        {
+            // Read offset in the online phase of initial mode
+            initX->read(path_init + "X0");
+            initV->read(path_init + "V0");
+            initE->read(path_init + "E0");
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
+        else if (input.restore || input.offsetType == saveLoadOffset)
         {
             // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
@@ -500,15 +509,6 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initE->write(path_init + "E" + std::to_string(input.window));
 
             cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
-        }
-        else if (input.offsetType == useInitialState && input.window > 0)
-        {
-            // Read offset in the online phase of initial mode
-            initX->read(path_init + "X0");
-            initV->read(path_init + "V0");
-            initE->read(path_init + "E0");
-
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
     }
 
