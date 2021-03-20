@@ -448,8 +448,11 @@ int main(int argc, char *argv[])
         }
 
         MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
-        MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
-        MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        if (!SNS)
+        {
+            MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
+            MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        }
 
         int totalSnapshotSize = snapshotSize[0];
         int totalSnapshotSizeFv = snapshotSizeFv[0];
