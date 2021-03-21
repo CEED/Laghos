@@ -310,9 +310,9 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
 
 ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV)
     : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
-      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE), use_sns(input.SNS || !input.RHSbasis),
+      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE), use_sns(input.SNS),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), offsetInit(input.useOffset),
-      RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
+      useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
@@ -1209,7 +1209,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
-    MFEM_VERIFY(!RHSbasis, "");
 #endif
 
     delete sp_H1_space;

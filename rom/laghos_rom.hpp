@@ -64,7 +64,6 @@ struct ROM_Options
     bool restore = false; // if true, restore phase
     bool staticSVD = true; // true: use StaticSVD
     bool useOffset = true; // if true, sample variables minus initial state as an offset
-    bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
@@ -121,7 +120,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          energyFraction_X(input.energyFraction_X), sns(input.SNS || !input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX)
     {
@@ -506,7 +505,6 @@ private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
     const bool offsetInit;
-    const bool RHSbasis;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
