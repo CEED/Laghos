@@ -328,9 +328,8 @@ int main(int argc, char *argv[])
     int windowNumSamples = 0;
     int windowOverlapSamples = 0;
     double energyFraction = 0.9999;
-    bool useOffset = false;
-    const char *offsetType = "previous";
-    bool rhsBasis = false;
+    bool useOffset = true;
+    const char *offsetType = "initial";
     bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
@@ -346,8 +345,6 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
-    args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
-                   "Enable or disable merging of RHS bases for Fv and Fe.");
     args.AddOption(&SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&basename, "-o", "--outputfilename",
@@ -373,7 +370,6 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    MFEM_VERIFY(!(rhsBasis && SNS), "-rhs and -romsns cannot both be set")
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
