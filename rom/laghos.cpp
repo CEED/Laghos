@@ -1013,8 +1013,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            //outfile_twp.open(outputPath + "/" + std::string(twpfile));
-            outfile_twp.open(outputPath + "/twpTemp.csv");
+            outfile_twp.open(outputPath + "/" + std::string(twpfile));
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
