@@ -5,13 +5,13 @@ case $subTestNum in
     $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -offline -writesol -romsvds -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/triple-point/triple-point-time-window.csv
     ;;
   2)
-    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -soldiff -nwin 4 -twp twpTemp.csv
+    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -soldiff -nwin 4
     ;;
   3)
-    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -nwin 4 -romhrprep -twp twpTemp.csv
-    $LAGHOS_SERIAL -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -nwin 4 -romhr -twp twpTemp.csv
+    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -nwin 4 -romhrprep
+    $LAGHOS_SERIAL -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -online -romgs -nwin 4 -romhr
     ;;
   4)
-    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -restore -nwin 4 -twp twpTemp.csv -soldiff
+    $LAGHOS -p 3 -m data/box01_hex.mesh -rs 1 -tf 0.04 -cfl 0.05 -pa -restore -nwin 4 -soldiff
     ;;
 esac
