@@ -62,8 +62,8 @@ struct ROM_Options
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
-    bool staticSVD = false; // true: use StaticSVD
-    bool useOffset = false; // if true, sample variables minus initial state as an offset
+    bool staticSVD = true; // true: use StaticSVD
+    bool useOffset = true; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
