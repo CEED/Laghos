@@ -2,7 +2,7 @@ NUM_PARALLEL_PROCESSORS=8
 testNames=(offline online romhr qdeim restore)
 case $subTestNum in
   1)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -writesol -romsvds
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -writesol -romsvds -romsrhs
     ;;
   2)
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -rdimx 2 -rdimv 12 -rdime 6 -soldiff
