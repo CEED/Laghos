@@ -182,12 +182,12 @@ void GetSnapshotTime(const int id, const std::string& basename, const std::strin
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
+void GetParametricTimeWindows(const int nset, const bool SNS, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
                               Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
-    const int numVar = (rhsBasis) ? 5 : 3;
+    const int numVar = (SNS) ? 3 : 5;
     std::vector<int> numSnap(nset*numVar);
     // The snapshot time vectors are placed in descending order, with the last element is when the first snapshot is taken
     for (int paramID = 0; paramID < nset; ++paramID)
@@ -205,7 +205,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
         tSnapE.push_back(tVec);
         numSnap[paramID+nset*VariableName::E] = tVec.size();
 
-        if (rhsBasis)
+        if (!SNS)
         {
             GetSnapshotTime(paramID, basename, "Fv", tVec);
             reverse(tVec.begin(), tVec.end());
@@ -235,7 +235,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
             tTemp[paramID+nset*VariableName::V] = *(tSnapV[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapV[paramID].size()) - 1));
             tTemp[paramID+nset*VariableName::E] = *(tSnapE[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapE[paramID].size()) - 1));
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 tTemp[paramID+nset*VariableName::Fv] = *(tSnapFv[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFv[paramID].size()) - 1));
                 tTemp[paramID+nset*VariableName::Fe] = *(tSnapFe[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFe[paramID].size()) - 1));
@@ -269,7 +269,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
                     offsetCurrentWindow[paramID+nset*VariableName::E] += 1;
                 }
 
-                if (rhsBasis)
+                if (!SNS)
                 {
                     if (tSnapFv[paramID].back() < windowRight)
                     {
@@ -293,7 +293,7 @@ void GetParametricTimeWindows(const int nset, const bool rhsBasis, const std::st
             tTemp[paramID+nset*VariableName::V] = tSnapV[paramID].back();
             tTemp[paramID+nset*VariableName::E] = tSnapE[paramID].back();
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 tTemp[paramID+nset*VariableName::Fv] = tSnapFv[paramID].back();
                 tTemp[paramID+nset*VariableName::Fe] = tSnapFe[paramID].back();
@@ -331,8 +331,10 @@ int main(int argc, char *argv[])
     bool useOffset = false;
     const char *offsetType = "previous";
     bool rhsBasis = false;
+    bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
+    const char *twpfile = "twp.csv";
 
     OptionsParser args(argc, argv);
     args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge.");
@@ -346,10 +348,14 @@ int main(int argc, char *argv[])
                    "Offset type for initializing ROM windows.");
     args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
                    "Enable or disable merging of RHS bases for Fv and Fe.");
+    args.AddOption(&SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
+                   "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
+    args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
+                   "Name of the CSV file defining online time window parameters");
 
     args.Parse();
     if (!args.Good())
@@ -363,10 +369,11 @@ int main(int argc, char *argv[])
         args.PrintOptions(cout);
     }
     std::string outputPath = "run";
-    if (basename != "") {
+    if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
 
+    MFEM_VERIFY(!(rhsBasis && SNS), "-rhs and -romsns cannot both be set")
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
@@ -383,11 +390,13 @@ int main(int argc, char *argv[])
         numBasisWindows = numWindows;
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
+        //outfile_twp.open(outputPath + "/" + std::string(twpfile));
         outfile_twp.open(outputPath + "/twpTemp.csv");
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, rhsBasis, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        //outfile_twp.open(outputPath + "/" + std::string(twpfile));
         outfile_twp.open(outputPath + "/twpTemp.csv");
     }
     else {
@@ -406,7 +415,7 @@ int main(int argc, char *argv[])
     split_line(line, words);
     MFEM_VERIFY(std::stoi(words[0]) == useOffset, "-romos option does not match record.");
     MFEM_VERIFY(std::stoi(words[1]) == trueOffsetType, "-romostype option does not match record.");
-    MFEM_VERIFY(std::stoi(words[2]) == rhsBasis, "-romsrhs option does not match record.");
+    MFEM_VERIFY(std::stoi(words[2]) == SNS, "-romsns option does not match record.");
     MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
     MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
     infile_offlineParam.close();
@@ -429,7 +438,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(0, outputPath, "E", sampleWindow, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 GetSnapshotDim(0, outputPath, "Fv", sampleWindow, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
@@ -439,8 +448,11 @@ int main(int argc, char *argv[])
         }
 
         MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
-        MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
-        MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        if (!SNS)
+        {
+            MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
+            MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
+        }
 
         int totalSnapshotSize = snapshotSize[0];
         int totalSnapshotSizeFv = snapshotSizeFv[0];
@@ -456,7 +468,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(paramID, outputPath, "E", sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 GetSnapshotDim(paramID, outputPath, "Fv", sampleWindow, dim, snapshotSizeFv[paramID]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[paramID] >= snapshotSize[paramID], "Inconsistent snapshot sizes");
@@ -476,7 +488,7 @@ int main(int argc, char *argv[])
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
             LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
-            if (rhsBasis)
+            if (!SNS)
             {
                 LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
                 LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
@@ -484,12 +496,11 @@ int main(int argc, char *argv[])
 
             if (myid == 0 && usingWindows)
             {
-                outfile_twp << twep[basisWindow] << ", ";
-                if (rhsBasis)
-                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                << cutoff[3] << ", " << cutoff[4] << "\n";
+                outfile_twp << twep[basisWindow] << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                if (SNS)
+                    outfile_twp << "\n";
                 else
-                    outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                    outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
             }
         }
     }
