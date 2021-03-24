@@ -180,6 +180,7 @@ int main(int argc, char *argv[])
     bool writeSol = false;
     bool solDiff = false;
     bool match_end_time = false;
+    bool dummy = false;
     const char *normtype_char = "l2";
     const char *offsetType = "initial";
     Array<double> twep;
@@ -314,6 +315,8 @@ int main(int argc, char *argv[])
                    "Enable or disable merging of X-X0 and V bases.");
     args.AddOption(&romOptions.qdeim, "-qdeim", "--romuseqdeim", "-no-qdeim", "--no-romuseqdeim",
                    "Enable or disable use of QDEIM.");
+    args.AddOption(&dummy, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
+                   "Dummy boolean variable for the unused tag.");
     args.Parse();
     if (!args.Good())
     {
