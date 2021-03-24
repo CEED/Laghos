@@ -5,13 +5,13 @@ case $subTestNum in
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -ef 0.9999 -nwin 4 -tw "$BASE_DIR"/tests/sedov-blast/sedov-blast-time-window.csv -writesol -romsvds -romsrhs
     ;;
   2)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -nwin 4 -soldiff
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -nwin 4 -twp twpTemp.csv -soldiff -romsrhs
     ;;
   3)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -romhrprep -nwin 4
-    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -romhr -nwin 4
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -romhrprep -nwin 4 -twp twpTemp.csv -romsrhs
+    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -romgs -romhr -nwin 4 -twp twpTemp.csv -romsrhs
     ;;
   4)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -nwin 4 -soldiff
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -nwin 4 -twp twpTemp.csv -soldiff -romsrhs
     ;;
 esac
