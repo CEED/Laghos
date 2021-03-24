@@ -370,7 +370,6 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    MFEM_VERIFY(!(rhsBasis && SNS), "-rhs and -romsns cannot both be set")
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
