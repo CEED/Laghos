@@ -12,6 +12,6 @@ case $subTestNum in
     $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.025 -online -romsvds -romos -rostype load -sfacx 10 -sfacv 10 -sface 10 -nwin 2 -romsns -romhr -twp twpTemp.csv
     ;;
   4)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -nwin 2 -soldiff -romos -rostype load -romsns
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -nwin 2 -soldiff -romos -rostype load -romsns -twp twpTemp.csv
     ;;
 esac
