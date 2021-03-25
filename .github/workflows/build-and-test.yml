@@ -32,32 +32,32 @@ jobs:
         sudo apt-get install mpich libmpich-dev
         export MAKE_CXX_FLAG="MPICXX=mpic++"
 
-    # Get Hypre through cache, or install it.
+    # Get Hypre through cache, or build it.
     # Install will only run on cache miss.
-    - name: cache Hypre install
+    - name: cache Hypre
       id: hypre-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.HYPRE_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v1
 
-    - name: install Hypre
+    - name: build Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
       uses: mfem/mfem-actions/build-hypre@master
       with:
         hypre-archive: ${{ env.HYPRE_ARCHIVE }}
         hypre-dir: ${{ env.HYPRE_TOP_DIR }}
 
-    # Get Metis through cache, or install it.
+    # Get Metis through cache, or build it.
     # Install will only run on cache miss.
-    - name: cache Metis install
+    - name: cache Metis
       id: metis-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.METIS_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v1
 
-    - name: install Metis
+    - name: build Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
       uses: mfem/mfem-actions/build-metis@master
       with:
@@ -69,16 +69,16 @@ jobs:
       run: |
         echo "MFEM_COMMIT=$(git ls-remote --heads https://github.com/mfem/mfem.git master | awk '{print $1;}')" >> $GITHUB_ENV
 
-    # Get MFEM through cache, or install it.
+    # Get MFEM through cache, or build it.
     # Install will only run on cache miss.
-    - name: cache MFEM install
+    - name: cache MFEM
       id: mfem-cache
       uses: actions/cache@v2
       with:
         path: ${{ env.MFEM_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v2
 
-    - name: install MFEM
+    - name: build MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
       uses: mfem/mfem-actions/build-mfem@master
       with:
