@@ -11,11 +11,8 @@ on:
 env:
   HYPRE_ARCHIVE: v2.11.2.tar.gz
   HYPRE_TOP_DIR: hypre-2.11.2
-  METIS_URL: http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD
   METIS_ARCHIVE: metis-4.0.3.tar.gz
   METIS_TOP_DIR: metis-4.0.3
-  MFEM_REPO: https://github.com/mfem/mfem.git
-  MFEM_BRANCH: master
   MFEM_TOP_DIR: mfem
 
 jobs:
@@ -46,7 +43,7 @@ jobs:
 
     - name: install Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
-      uses: ./laghos/.github/actions/install-hypre
+      uses: mfem/mfem-actions/build-hypre@master
       with:
         hypre-archive: ${{ env.HYPRE_ARCHIVE }}
         hypre-dir: ${{ env.HYPRE_TOP_DIR }}
@@ -62,23 +59,15 @@ jobs:
 
     - name: install Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
-      uses: ./laghos/.github/actions/install-metis
+      uses: mfem/mfem-actions/build-metis@master
       with:
         metis-url: ${{ env.METIS_URL }}
         metis-archive: ${{ env.METIS_ARCHIVE }}
         metis-dir: ${{ env.METIS_TOP_DIR }}
 
-    # make generic links to libraries for MFEM install
-    - name: configure links
-      run: |
-        echo "Hypre symlink:"
-        ln -s $HYPRE_TOP_DIR hypre;
-        echo "Metis symlink:"
-        ln -s $METIS_TOP_DIR metis-4.0;
-
     - name: MFEM master commit
       run: |
-        echo "MFEM_COMMIT=$(git ls-remote --heads ${{ env.MFEM_REPO }} ${{ env.MFEM_BRANCH }} | awk '{print $1;}')" >> $GITHUB_ENV
+        echo "MFEM_COMMIT=$(git ls-remote --heads https://github.com/mfem/mfem.git master | awk '{print $1;}')" >> $GITHUB_ENV
 
     # Get MFEM through cache, or install it.
     # Install will only run on cache miss.
@@ -91,10 +80,11 @@ jobs:
 
     - name: install MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
-      uses: ./laghos/.github/actions/install-mfem
+      uses: mfem/mfem-actions/build-mfem@master
       with:
-        mfem-repo: ${{ env.MFEM_REPO }}
-        mfem-branch: ${{ env.MFEM_BRANCH }}
+        os: ${{ runner.os }}
+        hypre-dir: ${{ env.HYPRE_TOP_DIR }}
+        metis-dir: ${{ env.METIS_TOP_DIR }}
         mfem-dir: ${{ env.MFEM_TOP_DIR }}
 
     - name: build Laghos
