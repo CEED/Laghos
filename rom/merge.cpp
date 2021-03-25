@@ -330,7 +330,6 @@ int main(int argc, char *argv[])
     double energyFraction = 0.9999;
     bool useOffset = true;
     const char *offsetType = "initial";
-    bool dummy = false;
     bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
@@ -354,8 +353,6 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
-    args.AddOption(&dummy, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
-                   "Enable or disable merging of RHS bases for Fv and Fe.");
 
     args.Parse();
     if (!args.Good())
