@@ -1801,8 +1801,6 @@ void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 
 void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 {
-    if (use_sns) return;
-
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
 
@@ -1820,8 +1818,6 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 
 void ROM_Basis::HyperreduceRHS_E(Vector &e) const
 {
-    if (use_sns) return;
-
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
 
