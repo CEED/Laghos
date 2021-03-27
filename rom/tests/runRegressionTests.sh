@@ -553,10 +553,11 @@ do
 
 							# Compare last timestep of ROMSol solutions
 							if [[ -d "$baselineTestFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
-									echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
-									targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$num_steps"
+									last_rom_step=$(ls $baselineTestFile -1 | sed -e s/[^0-9]//g | sort -nr | head -n1)
+									echo "Comparing: "$fileName"/romS_$last_rom_step" >> $simulationLogFile 2>&1
+									targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$last_rom_step"
 									check_exists
-									baselineTestFile="$baselineTestFile/romS_$num_steps"
+									baselineTestFile="$baselineTestFile/romS_$last_rom_step"
 									if [[ "$parallel" == "true" ]]; then
 										$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 									else
