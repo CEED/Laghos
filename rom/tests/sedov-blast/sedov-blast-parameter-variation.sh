@@ -1,13 +1,16 @@
 NUM_PARALLEL_PROCESSORS=8
-testNames=(fom online)
+testNames=(fom romhr restore)
 case $subTestNum in
   1)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -romsvds -romos -rostype interpolate -romsrhs -bef 1.0 -rpar 0
-    $MERGE -nset 1 -romos -rostype interpolate -rhs
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -offline -romsvds -romos -rostype interpolate -no-romsns -bef 1.0 -rpar 0
+    $MERGE -nset 1 -romos -rostype interpolate -no-romsns
     $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -bef 0.5 -writesol
     ;;
   2)
-    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 7 -rdimv 12 -rdime 6 -rdimfv 15 -rdimfe 9 -romhrprep -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -romgs -romsrhs -bef 1.0
-    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 7 -rdimv 12 -rdime 6 -rdimfv 15 -rdimfe 9 -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -romgs -romsrhs -bef 1.0
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 7 -rdimv 12 -rdime 6 -rdimfv 15 -rdimfe 9 -romhrprep -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -romgs -no-romsns -bef 0.5
+    $LAGHOS_SERIAL -m data/cube01_hex.mesh -pt 211 -tf 0.01 -online -rdimx 7 -rdimv 12 -rdime 6 -rdimfv 15 -rdimfe 9 -romhr -romos -rostype interpolate -sfacx 1 -sfacv 32 -sface 32 -romgs -no-romsns -bef 0.5
+    ;;
+  3)
+    $LAGHOS -m data/cube01_hex.mesh -pt 211 -restore -rdimx 7 -rdimv 12 -rdime 6 -soldiff -romos -rostype interpolate
     ;;
 esac

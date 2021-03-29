@@ -328,9 +328,8 @@ int main(int argc, char *argv[])
     int windowNumSamples = 0;
     int windowOverlapSamples = 0;
     double energyFraction = 0.9999;
-    bool useOffset = false;
-    const char *offsetType = "previous";
-    bool rhsBasis = false;
+    bool useOffset = true;
+    const char *offsetType = "initial";
     bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
@@ -346,8 +345,6 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
-    args.AddOption(&rhsBasis, "-rhs", "--rhsbasis", "-no-rhs", "--no-rhsbasis",
-                   "Enable or disable merging of RHS bases for Fv and Fe.");
     args.AddOption(&SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&basename, "-o", "--outputfilename",
@@ -373,7 +370,6 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    MFEM_VERIFY(!(rhsBasis && SNS), "-rhs and -romsns cannot both be set")
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
@@ -390,14 +386,12 @@ int main(int argc, char *argv[])
         numBasisWindows = numWindows;
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        //outfile_twp.open(outputPath + "/" + std::string(twpfile));
-        outfile_twp.open(outputPath + "/twpTemp.csv");
+        outfile_twp.open(outputPath + "/" + std::string(twpfile));
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
         GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
-        //outfile_twp.open(outputPath + "/" + std::string(twpfile));
-        outfile_twp.open(outputPath + "/twpTemp.csv");
+        outfile_twp.open(outputPath + "/" + std::string(twpfile));
     }
     else {
         numWindows = 1;
