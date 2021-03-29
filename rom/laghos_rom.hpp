@@ -30,7 +30,6 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
-    usePreviousSolution,
     useInitialState,
     saveLoadOffset,
     interpolateOffset
@@ -40,7 +39,6 @@ static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"previous", usePreviousSolution},
         {"initial", useInitialState},
         {"load", saveLoadOffset},
         {"interpolate", interpolateOffset}
@@ -67,6 +65,7 @@ struct ROM_Options
     bool staticSVD = false; // true: use StaticSVD
     bool useOffset = false; // if true, sample variables minus initial state as an offset
     bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -105,10 +104,11 @@ struct ROM_Options
     int sampE = 0;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
+    bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
+    offsetStyle offsetType = useInitialState; // type of offset in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -126,7 +126,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          energyFraction_X(input.energyFraction_X), sns(input.SNS || !input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX)
     {
@@ -182,7 +182,7 @@ public:
             e_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
-        if (sampleF)
+        if (!sns)
         {
             if (input.randomizedSVD)
             {
@@ -230,7 +230,7 @@ public:
             }
             else
             {
-                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
+                // Compute and save offsets for the current window in the offline phase
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
@@ -246,12 +246,9 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType != usePreviousSolution)
-                {
-                    initX->write(path_init + "X" + std::to_string(window));
-                    initV->write(path_init + "V" + std::to_string(window));
-                    initE->write(path_init + "E" + std::to_string(window));
-                }
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
             }
         }
     }
@@ -292,7 +289,7 @@ private:
 
     ParGridFunction gfH1, gfL2;
 
-    const bool sampleF;
+    const bool sns;
 
     const bool Voffset;
     const bool useXV;
@@ -389,8 +386,6 @@ public:
         delete basisE;
         delete basisFv;
         delete basisFe;
-        delete fH1;
-        delete fL2;
         delete spX;
         delete spV;
         delete spE;
@@ -415,6 +410,13 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        if (!hyperreduce)
+        {
+            delete fH1;
+            delete fL2;
+            delete gfH1;
+            delete gfL2;
+        }
     }
 
     void Init(ROM_Options const& input, Vector const& S);
@@ -464,6 +466,12 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
+    void ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
+    void computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window);
+
+    void writeSP(ROM_Options const& input, const int window = 0) const;
+    void readSP(ROM_Options const& input, const int window = 0);
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
@@ -495,14 +503,17 @@ public:
         return BEsp;
     }
 
-    void ComputeReducedMatrices();
+    void ComputeReducedMatrices(bool sns1);
 
     MPI_Comm comm;
 
 private:
     const bool hyperreduce;
+    const bool hyperreduce_prep;
     const bool offsetInit;
     const bool RHSbasis;
+    const bool use_sns;
+    hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -511,10 +522,10 @@ private:
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
 
-    const int H1size;
-    const int L2size;
-    const int tH1size;
-    const int tL2size;
+    int H1size;
+    int L2size;
+    int tH1size;
+    int tL2size;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
@@ -528,7 +539,8 @@ private:
 
     Vector mfH1, mfL2;
 
-    ParGridFunction gfH1, gfL2;
+    ParGridFunction* gfH1;
+    ParGridFunction* gfL2;
 
     CAROM::Vector *rX = 0;
     CAROM::Vector *rV = 0;
@@ -571,6 +583,10 @@ private:
     CAROM::Matrix *BsinvV = NULL;
     CAROM::Matrix *BsinvE = NULL;
 
+    CAROM::Matrix *BwinX = NULL;
+    CAROM::Matrix *BwinV = NULL;
+    CAROM::Matrix *BwinE = NULL;
+
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
     CAROM::Vector *initE = 0;
@@ -578,6 +594,10 @@ private:
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
     CAROM::Vector *BX0 = NULL;
+
+    CAROM::Vector *BtInitDiffX = 0;  // TODO: destructor
+    CAROM::Vector *BtInitDiffV = 0;
+    CAROM::Vector *BtInitDiffE = 0;
 
     int numSamplesX = 0;
     int numSamplesV = 0;
@@ -628,8 +648,8 @@ public:
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
-    void InducedGramSchmidtInitialize(Vector &S);
-    void InducedGramSchmidtFinalize(Vector &S);
+    void ApplyHyperreduction(Vector &S);
+    void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
     ~ROM_Operator()
     {
@@ -671,8 +691,9 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool useReducedMv = false;  // TODO: remove this?
-    bool useReducedMe = false;  // TODO: remove this?
+    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
+    bool noMsolve = false;
+    bool useReducedM = false;  // TODO: remove this?
 
     DenseMatrix invMvROM, invMeROM;
 
@@ -683,7 +704,7 @@ private:
     DenseMatrix CoordinateBVsp, CoordinateBEsp;
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
-    void UndoInducedGramSchmidt(const int var, Vector &S);
+    void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 #endif // MFEM_LAGHOS_ROM

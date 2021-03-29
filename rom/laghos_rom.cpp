@@ -16,7 +16,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (sampleF)
+    if (!sns)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -91,7 +91,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             }
         }
 
-        if (sampleF)
+        if (!sns)
         {
             MFEM_VERIFY(gfH1.Size() == H1size, "");
             for (int i=0; i<H1size; ++i)
@@ -135,7 +135,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
-        if (sampleF)
+        if (!sns)
         {
             MFEM_VERIFY(gfL2.Size() == L2size, "");
             for (int i=0; i<L2size; ++i)
@@ -174,7 +174,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         if (!useXV) generator_X->writeSnapshot();
         if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
-        if (sampleF)
+        if (!sns)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
@@ -185,7 +185,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         if (!useXV) generator_X->endSamples();
         if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
-        if (sampleF)
+        if (!sns)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();
@@ -212,7 +212,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
         PrintSingularValues(rank, basename, "E", generator_E);
 
-        if (sampleF)
+        if (!sns)
         {
             cout << "Fv basis summary output: ";
             BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
@@ -230,7 +230,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
         printSnapshotTime(tSnapV, path_tSnap, "V");
         printSnapshotTime(tSnapE, path_tSnap, "E");
 
-        if (sampleF)
+        if (!sns)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv");
             printSnapshotTime(tSnapFe, path_tSnap, "Fe");
@@ -241,7 +241,7 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     delete generator_V;
     delete generator_E;
 
-    if (sampleF)
+    if (!sns)
     {
         delete generator_Fv;
         delete generator_Fe;
@@ -281,13 +281,38 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basisCopy;
 }
 
+CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim,
+                            hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
+{
+    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, rowOS, dim);
+    CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
+    Vector Bej(A->numRows());
+    Vector MBej(A->numRows());
+
+    for (int j=0; j<S->numColumns(); ++j)
+    {
+        for (int i=0; i<S->numRows(); ++i)
+            Bej[i] = (*A)(i,j);
+
+        if (var == 1)
+            lhoper->MultMv(Bej, MBej);
+        else if (var == 2)
+            lhoper->MultMe(Bej, MBej);
+        else
+            MFEM_VERIFY(false, "Invalid input");
+
+        for (int i=0; i<S->numRows(); ++i)
+            (*S)(i,j) = MBej[i];
+    }
+
+    return S;
+}
+
 ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV)
-    : comm(comm_), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
-      H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
-      gfH1(input.H1FESpace), gfL2(input.L2FESpace),
-      rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
-      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
-      hyperreduce(input.hyperreduce), offsetInit(input.useOffset), RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt),
+    : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
+      numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE), use_sns(input.SNS || !input.RHSbasis),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), offsetInit(input.useOffset),
+      RHSbasis(input.RHSbasis), useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim)
@@ -299,36 +324,58 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
     MPI_Comm_size(comm, &nprocs);
     MPI_Comm_rank(comm, &rank);
-
-    Array<int> osH1(nprocs+1);
     Array<int> nH1(nprocs);
-    Array<int> osL2(nprocs+1);
-    MPI_Allgather(&tH1size, 1, MPI_INT, osH1.GetData(), 1, MPI_INT, comm);
-    MPI_Allgather(&tL2size, 1, MPI_INT, osL2.GetData(), 1, MPI_INT, comm);
 
-    for (int i=nprocs-1; i>=0; --i)
+    if (!hyperreduce)
     {
-        nH1[i] = osH1[i];
-        osH1[i+1] = osH1[i];
-        osL2[i+1] = osL2[i];
+        tH1size = input.H1FESpace->GetTrueVSize();
+        tL2size = input.L2FESpace->GetTrueVSize();
+        H1size = input.H1FESpace->GetVSize();
+        L2size = input.L2FESpace->GetVSize();
+        gfH1 = new ParGridFunction(input.H1FESpace);
+        gfL2 = new ParGridFunction(input.L2FESpace);
+
+        Array<int> osH1(nprocs+1);
+        Array<int> osL2(nprocs+1);
+        MPI_Allgather(&tH1size, 1, MPI_INT, osH1.GetData(), 1, MPI_INT, comm);
+        MPI_Allgather(&tL2size, 1, MPI_INT, osL2.GetData(), 1, MPI_INT, comm);
+
+        for (int i=nprocs-1; i>=0; --i)
+        {
+            nH1[i] = osH1[i];
+            osH1[i+1] = osH1[i];
+            osL2[i+1] = osL2[i];
+        }
+
+        osH1[0] = 0;
+        osL2[0] = 0;
+
+        osH1.PartialSum();
+        osL2.PartialSum();
+
+        rowOffsetH1 = osH1[rank];
+        rowOffsetL2 = osL2[rank];
+
+        fH1 = new CAROM::Vector(tH1size, true);
+        fL2 = new CAROM::Vector(tL2size, true);
+
+        mfH1.SetSize(tH1size);
+        mfL2.SetSize(tL2size);
+
+        ReadSolutionBases(input.window);
+        if (hyperreduce_prep && rank == 0)
+        {
+            writeNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
+            writeNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
+            writeNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
+        }
     }
-
-    osH1[0] = 0;
-    osL2[0] = 0;
-
-    osH1.PartialSum();
-    osL2.PartialSum();
-
-    rowOffsetH1 = osH1[rank];
-    rowOffsetL2 = osL2[rank];
-
-    fH1 = new CAROM::Vector(tH1size, true);
-    fL2 = new CAROM::Vector(tL2size, true);
-
-    mfH1.SetSize(tH1size);
-    mfL2.SetSize(tL2size);
-
-    ReadSolutionBases(input.window);
+    else if (rank == 0)
+    {
+        readNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
+        readNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
+        readNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
+    }
 
     if (mergeXV)
     {
@@ -348,6 +395,15 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
+    if (hyperreduce)
+    {
+        if (rank == 0)
+        {
+            readSP(input, input.window);
+        }
+        return;
+    }
+
     if (offsetInit)
     {
         initX = new CAROM::Vector(tH1size, true);
@@ -356,7 +412,16 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
         std::string path_init = basename + "/ROMoffset/init";
 
-        if (input.restore || input.offsetType == saveLoadOffset)
+        if (input.offsetType == useInitialState)
+        {
+            // Read offset in the online phase of initial mode
+            initX->read(path_init + "X0");
+            initV->read(path_init + "V0");
+            initE->read(path_init + "E0");
+
+            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+        }
+        else if (input.restore || input.offsetType == saveLoadOffset)
         {
             // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
@@ -445,42 +510,92 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
             cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
-        else if (input.offsetType == useInitialState && input.window > 0)
-        {
-            // Read offset in the online phase of initial mode
-            initX->read(path_init + "X0");
-            initV->read(path_init + "V0");
-            initE->read(path_init + "E0");
-
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
-        }
     }
 
-    if (hyperreduce)
+    if (hyperreduce_prep)
     {
-        if(rank == 0) cout << "start preprocessing hyper-reduction\n";
-        StopWatch preprocessHyperreductionTymer;
-        preprocessHyperreductionTymer.Start();
+        if (rank == 0) cout << "start preprocessing hyper-reduction\n";
+        StopWatch preprocessHyperreductionTimer;
+        preprocessHyperreductionTimer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window);
-        preprocessHyperreductionTymer.Stop();
-        if(rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTymer.RealTime() << " sec\n";
+        preprocessHyperreductionTimer.Stop();
+        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
+}
+
+void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
+{
+    MFEM_VERIFY(rank == 0 && window > 0, "");
+
+    BwinX = new CAROM::Matrix(rdimx, rdimxPrev, false);
+    BwinV = new CAROM::Matrix(rdimv, rdimvPrev, false);
+    BwinE = new CAROM::Matrix(rdime, rdimePrev, false);
+
+    BwinX->read(basename + "/" + "BwinX" + "_" + to_string(window));
+    BwinV->read(basename + "/" + "BwinV" + "_" + to_string(window));
+    BwinE->read(basename + "/" + "BwinE" + "_" + to_string(window));
+
+    CAROM::Vector romS_oldX(rdimxPrev, false);
+    CAROM::Vector romS_oldV(rdimvPrev, false);
+    CAROM::Vector romS_oldE(rdimePrev, false);
+    CAROM::Vector romS_X(rdimx, false);
+    CAROM::Vector romS_V(rdimv, false);
+    CAROM::Vector romS_E(rdime, false);
+
+    for (int i=0; i<rdimxPrev; ++i)
+        romS_oldX(i) = romS[i];
+
+    for (int i=0; i<rdimvPrev; ++i)
+        romS_oldV(i) = romS[rdimxPrev + i];
+
+    for (int i=0; i<rdimePrev; ++i)
+        romS_oldE(i) = romS[rdimxPrev + rdimvPrev + i];
+
+    BwinX->mult(romS_oldX, romS_X);
+    BwinV->mult(romS_oldV, romS_V);
+    BwinE->mult(romS_oldE, romS_E);
+
+    if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
+    {
+        BtInitDiffX = new CAROM::Vector(rdimx, false);
+        BtInitDiffV = new CAROM::Vector(rdimv, false);
+        BtInitDiffE = new CAROM::Vector(rdime, false);
+
+        BtInitDiffX->read(basename + "/" + "BtInitDiffX" + "_" + to_string(window));
+        BtInitDiffV->read(basename + "/" + "BtInitDiffV" + "_" + to_string(window));
+        BtInitDiffE->read(basename + "/" + "BtInitDiffE" + "_" + to_string(window));
+
+        romS_X += *BtInitDiffX;
+        romS_V += *BtInitDiffV;
+        romS_E += *BtInitDiffE;
+    }
+
+    romS.SetSize(rdimx + rdimv + rdime);
+
+    for (int i=0; i<rdimx; ++i)
+        romS[i] = romS_X(i);
+
+    for (int i=0; i<rdimv; ++i)
+        romS[rdimx + i] = romS_V(i);
+
+    for (int i=0; i<rdime; ++i)
+        romS[rdimx + rdimv + i] = romS_E(i);
 }
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    if (offsetInit && !(input.restore || input.offsetType == saveLoadOffset) && input.offsetType != interpolateOffset && !(input.offsetType == useInitialState && input.window > 0))
+    if (offsetInit && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
         std::string path_init = basename + "/ROMoffset/init";
 
-        // Compute and save offset in the online phase of previous mode or initial window of initial mode
+        // Compute and save offset in the online phase for the initial window in the useInitialState mode
         Vector X, V, E;
 
         for (int i=0; i<H1size; ++i)
         {
-            gfH1[i] = S[i];
+            (*gfH1)(i) = S[i];
         }
-        gfH1.GetTrueDofs(X);
+        gfH1->GetTrueDofs(X);
         for (int i=0; i<tH1size; ++i)
         {
             (*initX)(i) = X[i];
@@ -488,9 +603,9 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 
         for (int i=0; i<H1size; ++i)
         {
-            gfH1[i] = S[H1size+i];
+            (*gfH1)(i) = S[H1size+i];
         }
-        gfH1.GetTrueDofs(V);
+        gfH1->GetTrueDofs(V);
         for (int i=0; i<tH1size; ++i)
         {
             (*initV)(i) = V[i];
@@ -498,9 +613,9 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 
         for (int i=0; i<L2size; ++i)
         {
-            gfL2[i] = S[2*H1size+i];
+            (*gfL2)(i) = S[2*H1size+i];
         }
-        gfL2.GetTrueDofs(E);
+        gfL2->GetTrueDofs(E);
         for (int i=0; i<tL2size; ++i)
         {
             (*initE)(i) = E[i];
@@ -511,7 +626,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         initE->write(path_init + "E" + std::to_string(input.window));
     }
 
-    if (offsetInit && hyperreduce)
+    if (offsetInit && hyperreduce_prep)
     {
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
@@ -739,84 +854,51 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     const int fomH1size = H1FESpace->GlobalTrueVSize();
     const int fomL2size = L2FESpace->GlobalTrueVSize();
 
-    numSamplesX = RHSbasis ? 0 : std::min(fomH1size, numSamplesX);
+    numSamplesX = 0;
     vector<int> sample_dofs_X(numSamplesX);
     vector<int> num_sample_dofs_per_procX(nprocs);
-    BsinvX = RHSbasis ? NULL : new CAROM::Matrix(numSamplesX, rdimx, false);
+    BsinvX = NULL;
 
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = new CAROM::Matrix(numSamplesV, RHSbasis ? rdimfv : rdimv, false);
+    BsinvV = new CAROM::Matrix(numSamplesV, rdimfv, false);
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
-    BsinvE = new CAROM::Matrix(numSamplesE, RHSbasis ? rdimfe : rdime, false);
-    if(rank == 0)
+    BsinvE = new CAROM::Matrix(numSamplesE, rdimfe, false);
+    if (rank == 0)
     {
-        cout << "number of samples for position: " << numSamplesX << "\n";
         cout << "number of samples for velocity: " << numSamplesV << "\n";
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
     // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
-    if (RHSbasis)
+    if (use_qdeim)
     {
-        if (use_qdeim)
-        {
-            CAROM::QDEIM(basisFv,
-                         rdimfv,
-                         sample_dofs_V.data(),
-                         num_sample_dofs_per_procV.data(),
-                         *BsinvV,
-                         rank,
-                         nprocs,
-                         numSamplesV);
+        CAROM::QDEIM(basisFv,
+                     rdimfv,
+                     sample_dofs_V.data(),
+                     num_sample_dofs_per_procV.data(),
+                     *BsinvV,
+                     rank,
+                     nprocs,
+                     numSamplesV);
 
-            CAROM::QDEIM(basisFe,
-                         rdimfe,
-                         sample_dofs_E.data(),
-                         num_sample_dofs_per_procE.data(),
-                         *BsinvE,
-                         rank,
-                         nprocs,
-                         numSamplesE);
-        }
-        else
-        {
-            CAROM::GNAT(basisFv,
-                        rdimfv,
-                        sample_dofs_V.data(),
-                        num_sample_dofs_per_procV.data(),
-                        *BsinvV,
-                        rank,
-                        nprocs,
-                        numSamplesV);
-
-            CAROM::GNAT(basisFe,
-                        rdimfe,
-                        sample_dofs_E.data(),
-                        num_sample_dofs_per_procE.data(),
-                        *BsinvE,
-                        rank,
-                        nprocs,
-                        numSamplesE);
-        }
+        CAROM::QDEIM(basisFe,
+                     rdimfe,
+                     sample_dofs_E.data(),
+                     num_sample_dofs_per_procE.data(),
+                     *BsinvE,
+                     rank,
+                     nprocs,
+                     numSamplesE);
     }
     else
     {
-        CAROM::GNAT(basisX,
-                    rdimx,
-                    sample_dofs_X.data(),
-                    num_sample_dofs_per_procX.data(),
-                    *BsinvX,
-                    rank,
-                    nprocs,
-                    numSamplesX);
-
-        CAROM::GNAT(basisV,
-                    rdimv,
+        CAROM::GNAT(basisFv,
+                    rdimfv,
                     sample_dofs_V.data(),
                     num_sample_dofs_per_procV.data(),
                     *BsinvV,
@@ -824,8 +906,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                     nprocs,
                     numSamplesV);
 
-        CAROM::GNAT(basisE,
-                    rdime,
+        CAROM::GNAT(basisFe,
+                    rdimfe,
                     sample_dofs_E.data(),
                     num_sample_dofs_per_procE.data(),
                     *BsinvE,
@@ -1111,11 +1193,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         sV = new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
 
-        if (RHSbasis)
-        {
-            BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
-            BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
-        }
+        BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+        BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
@@ -1125,8 +1204,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
     GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
 
-    if (RHSbasis)
-        GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
+    GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
 #else
     GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
     // TODO: this redundantly gathers BEsp again, but only once per simulation.
@@ -1136,16 +1214,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     delete sp_H1_space;
     delete sp_L2_space;
-
-    if (!useGramSchmidt)
-    {
-        ComputeReducedMatrices();
-    }
 }
 
-void ROM_Basis::ComputeReducedMatrices()
+void ROM_Basis::ComputeReducedMatrices(bool sns1)
 {
-    if (RHSbasis && rank == 0)
+    if (rank == 0)
     {
         // Compute reduced matrix BsinvX = BXsp^T BVsp
         BsinvX = BXsp->transposeMult(BVsp);
@@ -1156,23 +1229,26 @@ void ROM_Basis::ComputeReducedMatrices()
             MFEM_VERIFY(BX0->dim() == rdimx, "");
         }
 
-        // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
-        CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
-        CAROM::Matrix *prod2 = BsinvV->mult(prod1);
+        if (!sns1)
+        {
+            // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
+            CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
+            CAROM::Matrix *prod2 = BsinvV->mult(prod1);
 
-        delete prod1;
-        delete BsinvV;
+            delete prod1;
+            delete BsinvV;
 
-        BsinvV = prod2;
+            BsinvV = prod2;
 
-        // Compute reduced matrix BsinvE = (BEsp^T BFesp BsinvE^T)^T = BsinvE BFesp^T BEsp
-        prod1 = BFesp->transposeMult(BEsp);
-        prod2 = BsinvE->mult(prod1);
+            // Compute reduced matrix BsinvE = (BEsp^T BFesp BsinvE^T)^T = BsinvE BFesp^T BEsp
+            prod1 = BFesp->transposeMult(BEsp);
+            prod2 = BsinvE->mult(prod1);
 
-        delete prod1;
-        delete BsinvE;
+            delete prod1;
+            delete BsinvE;
 
-        BsinvE = prod2;
+            BsinvE = prod2;
+        }
 
         if (RK2AvgFormulation)
         {
@@ -1232,12 +1308,6 @@ void ROM_Basis::ReadSolutionBases(const int window)
     if (useVX)
         basisV = basisX;
 
-    if (RHSbasis)
-    {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
-    }
-
     if (mergeXV)
     {
         const int max_model_dim = basisX->numColumns() + basisV->numColumns();
@@ -1291,6 +1361,17 @@ void ROM_Basis::ReadSolutionBases(const int window)
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
     }
+
+    if (use_sns)
+    {
+        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
+        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+    }
+    else
+    {
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+    }
 }
 
 // f is a full vector, not a true vector
@@ -1302,9 +1383,9 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     const bool useOffset = offsetInit && (!timeDerivative);
 
     for (int i=0; i<H1size; ++i)
-        gfH1[i] = f[i];
+        (*gfH1)(i) = f[i];
 
-    gfH1.GetTrueDofs(mfH1);
+    gfH1->GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
         (*fH1)(i) = useOffset ? mfH1[i] - (*initX)(i) : mfH1[i];
@@ -1312,9 +1393,9 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     basisX->transposeMult(*fH1, *rX);
 
     for (int i=0; i<H1size; ++i)
-        gfH1[i] = f[H1size + i];
+        (*gfH1)(i) = f[H1size + i];
 
-    gfH1.GetTrueDofs(mfH1);
+    gfH1->GetTrueDofs(mfH1);
 
     for (int i=0; i<tH1size; ++i)
         (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
@@ -1322,9 +1403,9 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     basisV->transposeMult(*fH1, *rV);
 
     for (int i=0; i<L2size; ++i)
-        gfL2[i] = f[(2*H1size) + i];
+        (*gfL2)(i) = f[(2*H1size) + i];
 
-    gfL2.GetTrueDofs(mfL2);
+    gfL2->GetTrueDofs(mfL2);
 
     for (int i=0; i<tL2size; ++i)
         (*fL2)(i) = useOffset ? mfL2[i] - (*initE)(i) : mfL2[i];
@@ -1361,30 +1442,30 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
     for (int i=0; i<tH1size; ++i)
         mfH1[i] = offsetInit ? (*initX)(i) + (*fH1)(i) : (*fH1)(i);
 
-    gfH1.SetFromTrueDofs(mfH1);
+    gfH1->SetFromTrueDofs(mfH1);
 
     for (int i=0; i<H1size; ++i)
-        f[i] = gfH1[i];
+        f[i] = (*gfH1)(i);
 
     basisV->mult(*rV, *fH1);
 
     for (int i=0; i<tH1size; ++i)
         mfH1[i] = (offsetInit && Voffset) ? (*initV)(i) + (*fH1)(i) : (*fH1)(i);
 
-    gfH1.SetFromTrueDofs(mfH1);
+    gfH1->SetFromTrueDofs(mfH1);
 
     for (int i=0; i<H1size; ++i)
-        f[H1size + i] = gfH1[i];
+        f[H1size + i] = (*gfH1)(i);
 
     basisE->mult(*rE, *fL2);
 
     for (int i=0; i<tL2size; ++i)
         mfL2[i] = offsetInit ? (*initE)(i) + (*fL2)(i) : (*fL2)(i);
 
-    gfL2.SetFromTrueDofs(mfL2);
+    gfL2->SetFromTrueDofs(mfL2);
 
     for (int i=0; i<L2size; ++i)
-        f[(2*H1size) + i] = gfL2[i];
+        f[(2*H1size) + i] = (*gfL2)(i);
 }
 
 void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
@@ -1428,7 +1509,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
 
-    if (RK2AvgFormulation && RHSbasis)
+    if (RK2AvgFormulation)
     {
         ProjectFromSampleMesh(usp, u, timeDerivative);
         return;
@@ -1448,13 +1529,6 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
-
-    if (!RHSbasis)
-    {
-        BsinvX->transposeMult(*sX, *rX);
-        for (int i=0; i<rdimx; ++i)
-            u[i] = (*rX)(i);
-    }
 
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
@@ -1580,8 +1654,6 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
     : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt)
 {
-    MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
-
     if (hyperreduce && rank == 0)
     {
         const int spsize = basis->SolutionSizeSP();
@@ -1652,18 +1724,22 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         mat_gf->ProjectCoefficient(mat_coeff);
         mat_gf_coeff = new GridFunctionCoefficient(mat_gf);
 
+        sns1 = (input.SNS && input.dimV == input.dimFv && input.dimE == input.dimFe); // SNS type I
+        noMsolve = (useReducedM || useGramSchmidt || sns1);
+
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType(), (useReducedMv || useGramSchmidt), (useReducedMe || useGramSchmidt));
+                H1fec->GetBasisType(), noMsolve, noMsolve);
     }
     else if (!hyperreduce)
     {
+        MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
         fx.SetSize(input.FOMoper->Height());
         fy.SetSize(input.FOMoper->Height());
     }
 
-    if (useReducedMv)
+    if (useReducedM)
     {
         ComputeReducedMv();
         ComputeReducedMe();
@@ -1682,7 +1758,13 @@ void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tH1size, "");
-        MFEM_VERIFY(false, "TODO");
+        CAROM::Vector ej(rdimv, false);
+        CAROM::Vector CBej(tH1size, true);
+        ej = 0.0;
+        ej(id) = 1.0;
+        basisV->mult(ej, CBej);
+        for (int i=0; i<tH1size; ++i)
+            v[i] = CBej(i);
     }
 }
 
@@ -1698,26 +1780,29 @@ void ROM_Basis::GetBasisVectorE(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tL2size, "");
-        MFEM_VERIFY(false, "TODO");
+        CAROM::Vector ej(rdime, false);
+        CAROM::Vector CBej(tL2size, true);
+        ej = 0.0;
+        ej(id) = 1.0;
+        basisE->mult(ej, CBej);
+        for (int i=0; i<tL2size; ++i)
+            v[i] = CBej(i);
     }
 }
 
 void ROM_Basis::Set_dxdt_Reduced(const Vector &x, Vector &y) const
 {
-    if (RHSbasis)
-    {
-        for (int i=0; i<rdimv; ++i)
-            (*rV)(i) = x[rdimx + i];
+    for (int i=0; i<rdimv; ++i)
+        (*rV)(i) = x[rdimx + i];
 
-        BsinvX->mult(*rV, *rX);
-        for (int i=0; i<rdimx; ++i)
-            y[i] = offsetInit ? (*rX)(i) + (*BX0)(i) : (*rX)(i);
-    }
+    BsinvX->mult(*rV, *rX);
+    for (int i=0; i<rdimx; ++i)
+        y[i] = offsetInit ? (*rX)(i) + (*BX0)(i) : (*rX)(i);
 }
 
 void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 {
-    if (!RHSbasis) return;
+    if (use_sns) return;
 
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
@@ -1736,7 +1821,7 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
 
 void ROM_Basis::HyperreduceRHS_E(Vector &e) const
 {
-    if (!RHSbasis) return;
+    if (use_sns) return;
 
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
@@ -1751,6 +1836,140 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     BEsp->mult(*rE, *spE);
     for (int i=0; i<size_L2_sp; ++i)
         e[i] = (*spE)(i);
+}
+
+void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window)
+{
+    BwinX = basisX->transposeMult(basisPrev.basisX);
+    BwinV = basisV->transposeMult(basisPrev.basisV);
+    BwinE = basisE->transposeMult(basisPrev.basisE);
+
+    if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
+    {
+        CAROM::Vector dX(tH1size, true);
+        CAROM::Vector dE(tL2size, true);
+
+        CAROM::Vector Btd(basisX->numColumns(), false);
+
+        basisPrev.initX->minus(*initX, dX);  // dX = basisPrev.initX - initX
+        basisX->transposeMult(dX, Btd);
+        Btd.write(basename + "/" + "BtInitDiffX" + "_" + to_string(window));
+
+        Btd.setSize(basisV->numColumns());
+        basisPrev.initV->minus(*initV, dX);  // dX = basisPrev.initV - initV
+        basisV->transposeMult(dX, Btd);
+        Btd.write(basename + "/" + "BtInitDiffV" + "_" + to_string(window));
+
+        Btd.setSize(basisE->numColumns());
+        basisPrev.initE->minus(*initE, dE);  // dE = basisPrev.initE - initE
+        basisE->transposeMult(dE, Btd);
+        Btd.write(basename + "/" + "BtInitDiffE" + "_" + to_string(window));
+    }
+}
+
+void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
+{
+    writeNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
+    writeNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
+    writeNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
+
+    writeVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
+    writeVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
+    writeVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+
+    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ofstream outfile_romS(outfile_string.c_str());
+    sample_pmesh->ParPrint(outfile_romS);
+
+    writeNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
+    writeNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+    BsinvV->write(basename + "/" + "BsinvV" + "_" + to_string(window));
+    BsinvE->write(basename + "/" + "BsinvE" + "_" + to_string(window));
+    BXsp->write(basename + "/" + "BXsp" + "_" + to_string(window));
+    BVsp->write(basename + "/" + "BVsp" + "_" + to_string(window));
+    BEsp->write(basename + "/" + "BEsp" + "_" + to_string(window));
+
+    BFvsp->write(basename + "/" + "BFvsp" + "_" + to_string(window));
+    BFesp->write(basename + "/" + "BFesp" + "_" + to_string(window));
+
+    spX->write(basename + "/" + "spX" + "_" + to_string(window));
+    spV->write(basename + "/" + "spV" + "_" + to_string(window));
+    spE->write(basename + "/" + "spE" + "_" + to_string(window));
+    if (offsetInit)
+    {
+        initXsp->write(basename + "/" + "initXsp" + "_" + to_string(window));
+        initVsp->write(basename + "/" + "initVsp" + "_" + to_string(window));
+        initEsp->write(basename + "/" + "initEsp" + "_" + to_string(window));
+    }
+
+    if (window > 0)
+    {
+        BwinX->write(basename + "/" + "BwinX" + "_" + to_string(window));
+        BwinV->write(basename + "/" + "BwinV" + "_" + to_string(window));
+        BwinE->write(basename + "/" + "BwinE" + "_" + to_string(window));
+    }
+}
+
+void ROM_Basis::readSP(ROM_Options const& input, const int window)
+{
+    readNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
+    readNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
+    readNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
+
+    readVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
+    readVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
+    readVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
+
+    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ifstream outfile_romS(outfile_string.c_str());
+    sample_pmesh = new ParMesh(comm, outfile_romS);
+
+    readNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
+    readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+    BsinvX = NULL;
+    BsinvV = new CAROM::Matrix(numSamplesV, rdimfv, false);
+    BsinvE = new CAROM::Matrix(numSamplesE, rdimfe, false);
+
+    BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
+    BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
+    BEsp = new CAROM::Matrix(size_L2_sp, rdime, false);
+
+    spX = new CAROM::Vector(size_H1_sp, false);
+    spV = new CAROM::Vector(size_H1_sp, false);
+    spE = new CAROM::Vector(size_L2_sp, false);
+
+    sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
+    sV = new CAROM::Vector(numSamplesV, false);
+    sE = new CAROM::Vector(numSamplesE, false);
+
+    BsinvV->read(basename + "/" + "BsinvV" + "_" + to_string(window));
+    BsinvE->read(basename + "/" + "BsinvE" + "_" + to_string(window));
+
+    BXsp->read(basename + "/" + "BXsp" + "_" + to_string(window));
+    BVsp->read(basename + "/" + "BVsp" + "_" + to_string(window));
+    BEsp->read(basename + "/" + "BEsp" + "_" + to_string(window));
+
+    BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+    BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
+    BFvsp->read(basename + "/" + "BFvsp" + "_" + to_string(window));
+    BFesp->read(basename + "/" + "BFesp" + "_" + to_string(window));
+
+    spX->read(basename + "/" + "spX" + "_" + to_string(window));
+    spV->read(basename + "/" + "spV" + "_" + to_string(window));
+    spE->read(basename + "/" + "spE" + "_" + to_string(window));
+
+    if (offsetInit)
+    {
+        initXsp = new CAROM::Vector(size_H1_sp, false);
+        initVsp = new CAROM::Vector(size_H1_sp, false);
+        initEsp = new CAROM::Vector(size_L2_sp, false);
+
+        initXsp->read(basename + "/" + "initXsp" + "_" + to_string(window));
+        initVsp->read(basename + "/" + "initVsp" + "_" + to_string(window));
+        initEsp->read(basename + "/" + "initEsp" + "_" + to_string(window));
+    }
 }
 
 void ROM_Operator::ComputeReducedMv()
@@ -1833,7 +2052,6 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 {
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
-    MFEM_VERIFY((useReducedMv && useReducedMe) || (!useReducedMv && !useReducedMe), "");
 
     if (hyperreduce)
     {
@@ -1842,7 +2060,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
             basis->LiftToSampleMesh(x, fx);
 
             operSP->Mult(fx, fy);
-            basis->RestrictFromSampleMesh(fy, y, true, (useReducedMv && !useGramSchmidt), &invMvROM, &invMeROM);
+            basis->RestrictFromSampleMesh(fy, y, true, (useReducedM && !useGramSchmidt && !sns1), &invMvROM, &invMeROM);
             basis->Set_dxdt_Reduced(x, y);
 
             operSP->ResetQuadratureData();
@@ -1879,6 +2097,8 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
             basis->GetBasisVectorE(hyperreduce, id2, xi_sp);
             operSP->MultMe(xj_sp, Mxj_sp);
         }
+        else
+            MFEM_VERIFY(false, "Invalid input");
 
         for (int k=0; k<dim; ++k)
         {
@@ -1923,6 +2143,8 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
             X = basis->GetBEsp();
             R = &CoordinateBEsp;
         }
+        else
+            MFEM_VERIFY(false, "Invalid input");
 
         InducedInnerProduct(0, 0, var, spdim, factor);
         (*R)(0,0) = sqrt(factor);
@@ -1969,7 +2191,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
     }
 }
 
-void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
+void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data)
 {
     if (hyperreduce && rank == 0)
     {
@@ -1985,7 +2207,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             spdim = basis->SolutionSizeH1SP();
             rdim = basis->GetDimV();
             offset = basis->GetDimX();
-            X = basis->GetBVsp();
+            X = keep_data ? new CAROM::Matrix(*basis->GetBVsp()) : basis->GetBVsp();
             R = &CoordinateBVsp;
         }
         else if (var == 2) // energy
@@ -1993,9 +2215,11 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             spdim = basis->SolutionSizeL2SP();
             rdim = basis->GetDimE();
             offset = basis->GetDimX() + basis->GetDimV();
-            X = basis->GetBEsp();
+            X = keep_data ? new CAROM::Matrix(*basis->GetBEsp()) : basis->GetBEsp();
             R = &CoordinateBEsp;
         }
+        else
+            MFEM_VERIFY(false, "Invalid input");
 
         for (int j=rdim-1; j>-1; --j)
         {
@@ -2023,8 +2247,11 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
             }
             S[offset+i] /= (*R)(i,i);
         }
-        (*R).Clear();
 
+        if (keep_data)
+            delete X;
+        else
+            (*R).Clear();
     }
     else if (!hyperreduce)
     {
@@ -2032,30 +2259,23 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S)
     }
 }
 
-void ROM_Operator::InducedGramSchmidtInitialize(Vector &S)
+void ROM_Operator::ApplyHyperreduction(Vector &S)
 {
-    InducedGramSchmidt(1, S); // velocity
-    InducedGramSchmidt(2, S); // energy
-    basis->ComputeReducedMatrices();
-    if (useReducedMv)
+    if (useGramSchmidt && !sns1)
     {
-        ComputeReducedMv();
-        ComputeReducedMe();
-    }
-
-    if (hyperreduce)
-    {
+        InducedGramSchmidt(1, S); // velocity
+        InducedGramSchmidt(2, S); // energy
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
+    basis->ComputeReducedMatrices(sns1);
 }
 
-void ROM_Operator::InducedGramSchmidtFinalize(Vector &S)
+void ROM_Operator::PostprocessHyperreduction(Vector &S, bool keep_data)
 {
-    UndoInducedGramSchmidt(1, S); // velocity
-    UndoInducedGramSchmidt(2, S); // energy
-
-    if (hyperreduce)
+    if (useGramSchmidt && !sns1)
     {
+        UndoInducedGramSchmidt(1, S, keep_data); // velocity
+        UndoInducedGramSchmidt(2, S, keep_data); // energy
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 }
@@ -2120,7 +2340,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         add(S0, dt, dS_dt, fx);
         hydro_oper->ResetQuadratureData();
 
-        MFEM_VERIFY(!useReducedMv, "TODO");
+        MFEM_VERIFY(!useReducedM, "TODO");
 
         if (hyperreduce)
             basis->RestrictFromSampleMesh(fx, S, false);
