@@ -414,64 +414,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        char tmp[100];
-        sprintf(tmp, ".%06d", myid);
-        ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
-        if (f.good())
-        {
-            parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
-                outputPath + "/greedy_algorithm_data");
-
-            // Get the dims outputted during the last iteration.
-            readNum(romOptions.dimX, outputPath + "/" + "rdimx");
-            readNum(romOptions.dimV, outputPath + "/" + "rdimv");
-            readNum(romOptions.dimE, outputPath + "/" + "rdime");
-            if (romOptions.RHSbasis)
-            {
-                readNum(romOptions.dimFv, outputPath + "/" + "rdimfv");
-                readNum(romOptions.dimFe, outputPath + "/" + "rdimfe");
-            }
-        }
-        else
-        {
-            parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
-                romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
-                romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
-                romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
-        }
-
-        // Retrieve the parameter point domain from the last iteration.
-        std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getParameterPointDomain();
-        for (int i = 0; i < paramPointDomain.size(); i++)
-        {
-            paramPoints.push_back(paramPointDomain[i].item(0));
-        }
-
-        // First check if we need to compute another residual
-        int pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
-        if (pointRequiringResidual != -1)
-        {
-            int nearestROM = parameterPointGreedySelector->getNearestROM(pointRequiringResidual);
-            romOptions.basisIdentifier = "_" + to_string(paramPoints[nearestROM]);
-            romOptions.blast_energyFactor = paramPoints[pointRequiringResidual];
-            rom_online = true;
-        }
-        else
-        {
-            // Next check if we need to run FOM for another parameter point
-            int nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
-            if (nextSampleParameterPoint != -1)
-            {
-                romOptions.basisIdentifier = "_" + to_string(paramPoints[nextSampleParameterPoint]);
-                romOptions.blast_energyFactor = paramPoints[nextSampleParameterPoint];
-                rom_offline = true;
-            }
-            else
-            {
-                // The greedy algorithm procedure has ended
-                MFEM_ABORT("The greedy algorithm procedure has ended!");
-            }
-        }
+        parameterPointGreedySelector = BuildROMDatabase(romOptions, paramPoints, myid, outputPath, rom_offline, rom_online);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -479,23 +422,7 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-
-        char tmp[100];
-        sprintf(tmp, ".%06d", myid);
-        ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
-        MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
-
-        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
-            outputPath + "/greedy_algorithm_data");
-        std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getSampledParameterPoints();
-        for (int i = 0; i < paramPointDomain.size(); i++)
-        {
-            paramPoints.push_back(paramPointDomain[i].item(0));
-        }
-
-        int closestParameterPoint = CAROM::getNearestPoint(paramPoints, romOptions.blast_energyFactor);
-        MFEM_VERIFY(closestParameterPoint != -1, "No parameter points were found");
-        romOptions.basisIdentifier = "_" + to_string(paramPoints[closestParameterPoint]);
+        parameterPointGreedySelector = LoadROMDatabase(romOptions, paramPoints, myid, outputPath);
     }
 
     // Read the serial mesh from the given mesh file on all processors.
@@ -1105,7 +1032,6 @@ int main(int argc, char *argv[])
     // defines the Mult() method that is used by the time integrators.
     if (!rom_online) ode_solver->Init(*oper);
     if (fom_data) oper->ResetTimeStepEstimate();
-    if (rom_build_database) cout << "Blast energy factor: " << romOptions.blast_energyFactor << endl;
 
     StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;

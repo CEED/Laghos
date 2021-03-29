@@ -2577,3 +2577,96 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
+
+CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
+                      bool& rom_offline, bool& rom_online)
+{
+
+    CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", myid);
+    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    if (f.good())
+    {
+        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+            outputPath + "/greedy_algorithm_data");
+
+        // Get the dims outputted during the last iteration.
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx");
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv");
+        readNum(romOptions.dimE, outputPath + "/" + "rdime");
+        if (romOptions.RHSbasis)
+        {
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv");
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe");
+        }
+    }
+    else
+    {
+        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+            romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
+            romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
+            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
+    }
+
+    // Retrieve the parameter point domain from the last iteration.
+    std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getParameterPointDomain();
+    for (int i = 0; i < paramPointDomain.size(); i++)
+    {
+        paramPoints.push_back(paramPointDomain[i].item(0));
+    }
+
+    // First check if we need to compute another residual
+    int pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
+    if (pointRequiringResidual != -1)
+    {
+        int nearestROM = parameterPointGreedySelector->getNearestROM(pointRequiringResidual);
+        romOptions.basisIdentifier = "_" + to_string(paramPoints[nearestROM]);
+        romOptions.blast_energyFactor = paramPoints[pointRequiringResidual];
+        rom_online = true;
+    }
+    else
+    {
+        // Next check if we need to run FOM for another parameter point
+        int nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
+        if (nextSampleParameterPoint != -1)
+        {
+            romOptions.basisIdentifier = "_" + to_string(paramPoints[nextSampleParameterPoint]);
+            romOptions.blast_energyFactor = paramPoints[nextSampleParameterPoint];
+            rom_offline = true;
+        }
+        else
+        {
+            // The greedy algorithm procedure has ended
+            MFEM_ABORT("The greedy algorithm procedure has ended!");
+        }
+    }
+
+    return parameterPointGreedySelector;
+}
+
+CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath)
+{
+
+    CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", myid);
+    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
+
+    parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+        outputPath + "/greedy_algorithm_data");
+    std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getSampledParameterPoints();
+    for (int i = 0; i < paramPointDomain.size(); i++)
+    {
+        paramPoints.push_back(paramPointDomain[i].item(0));
+    }
+
+    int closestParameterPoint = CAROM::getNearestPoint(paramPoints, romOptions.blast_energyFactor);
+    MFEM_VERIFY(closestParameterPoint != -1, "No parameter points were found");
+    romOptions.basisIdentifier = "_" + to_string(paramPoints[closestParameterPoint]);
+
+    return parameterPointGreedySelector;
+}
