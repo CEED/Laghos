@@ -72,9 +72,9 @@ struct ROM_Options
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
-    bool staticSVD = false; // true: use StaticSVD
-    bool useOffset = false; // if true, sample variables minus initial state as an offset
-    bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool staticSVD = true; // true: use StaticSVD
+    bool useOffset = true; // if true, sample variables minus initial state as an offset
+    bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -109,7 +109,7 @@ struct ROM_Options
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
-    bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
+    bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = useInitialState; // type of offset in time windows
@@ -130,7 +130,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX)
     {
@@ -186,7 +186,7 @@ public:
             e_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
-        if (sampleF)
+        if (!sns)
         {
             if (input.randomizedSVD)
             {
@@ -293,7 +293,7 @@ private:
 
     ParGridFunction gfH1, gfL2;
 
-    const bool sampleF;
+    const bool sns;
 
     const bool Voffset;
     const bool useXV;
@@ -507,7 +507,7 @@ public:
         return BEsp;
     }
 
-    void ComputeReducedMatrices();
+    void ComputeReducedMatrices(bool sns1);
 
     MPI_Comm comm;
 
@@ -515,7 +515,8 @@ private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
     const bool offsetInit;
-    const bool RHSbasis;
+    const bool use_sns;
+    hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -652,8 +653,8 @@ public:
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
-    void InducedGramSchmidtInitialize(Vector &S);
-    void InducedGramSchmidtFinalize(Vector &S, bool keep_data=false);
+    void ApplyHyperreduction(Vector &S);
+    void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
     ~ROM_Operator()
     {
@@ -695,8 +696,9 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool useReducedMv = false;  // TODO: remove this?
-    bool useReducedMe = false;  // TODO: remove this?
+    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
+    bool noMsolve = false;
+    bool useReducedM = false;  // TODO: remove this?
 
     DenseMatrix invMvROM, invMeROM;
 

@@ -105,7 +105,7 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
     return 0;
 }
 
-int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs)
+int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool sns)
 {
     if (printStatus) cout << "Reading time window parameters from file " << twfile << endl;
 
@@ -119,7 +119,7 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
 
     // Parameters to read for each time window:
     // end time, rdimx, rdimv, rdime
-    const int nparamRead = rhs ? 6 : 4; // number of parameters to read for each time window
+    const int nparamRead = sns ? 4 : 6; // number of parameters to read for each time window
 
     // Add 3 more parameters for nsamx, nsamv, nsame
     const int nparam = nparamRead + 3;
@@ -157,16 +157,19 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
 
         // Setting nsamx, nsamv, nsame
         twparam(count, nparamRead-1) = sFactor[0] * twparam(count, 0);
-        twparam(count, nparamRead)   = sFactor[1] * twparam(count, rhs ? 3 : 1);
-        twparam(count, nparamRead+1) = sFactor[2] * twparam(count, rhs ? 4 : 2);
+        twparam(count, nparamRead)   = sFactor[1] * twparam(count, sns ? 1 : 3);
+        twparam(count, nparamRead+1) = sFactor[2] * twparam(count, sns ? 2 : 4);
 
-        if (rhs && printStatus) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
-                                         << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", rdimfv " << twparam(count,3)
-                                         << ", rdimfe " << twparam(count,4) << ", nsamx " << twparam(count,5)
-                                         << ", nsamv " << twparam(count,6) << ", nsame " << twparam(count,7) << endl;
-        else if (printStatus) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
-                                       << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", nsamx " << twparam(count,3)
-                                       << ", nsamv " << twparam(count,4) << ", nsame " << twparam(count,5) << endl;
+        if (printStatus)
+        {
+            if (sns) cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
+                              << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", nsamx " << twparam(count,3)
+                              << ", nsamv " << twparam(count,4) << ", nsame " << twparam(count,5) << endl;
+            else cout << "Using time window " << count << " with end time " << twep[count] << ", rdimx " << twparam(count,0)
+                          << ", rdimv " << twparam(count,1) << ", rdime " << twparam(count,2) << ", rdimfv " << twparam(count,3)
+                          << ", rdimfe " << twparam(count,4) << ", nsamx " << twparam(count,5)
+                          << ", nsamv " << twparam(count,6) << ", nsame " << twparam(count,7) << endl;
+        }
 
         count++;
     }
@@ -198,12 +201,10 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.dimX = twparam(w,0);
     romOptions.dimV = twparam(w,1);
     romOptions.dimE = twparam(w,2);
-    if (romOptions.RHSbasis)
-    {
-        romOptions.dimFv = twparam(w,3);
-        romOptions.dimFe = twparam(w,4);
-    }
-    const int oss = romOptions.RHSbasis ? 5 : 3;
+    romOptions.dimFv = romOptions.SNS ? romOptions.dimV : twparam(w,3);
+    romOptions.dimFe = romOptions.SNS ? romOptions.dimE : twparam(w,4);
+
+    const int oss = (romOptions.SNS) ? 3 : 5;
     romOptions.sampX = twparam(w,oss);
     romOptions.sampV = twparam(w,oss+1);
     romOptions.sampE = twparam(w,oss+2);

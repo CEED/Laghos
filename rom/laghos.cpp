@@ -313,8 +313,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedySat, "-greedysat", "--greedysat", "The greedy algorithm saturation constant.");
     args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
     args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
-    args.AddOption(&romOptions.RHSbasis, "-romsrhs", "--romsamplerhs", "-no-romsrhs", "--no-romsamplerhs",
-                   "Sample RHS");
+    args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
+                   "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.RHSbasis);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -390,6 +390,11 @@ int main(int argc, char *argv[])
     else  // not using windows
     {
         numWindows = 1;  // one window for the entire simulation
+        if (romOptions.SNS)
+        {
+            romOptions.dimFv = max(romOptions.dimFv, romOptions.dimV);
+            romOptions.dimFe = max(romOptions.dimFe, romOptions.dimE);
+        }
     }
 
     if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
@@ -603,6 +608,10 @@ int main(int argc, char *argv[])
     romOptions.offsetType = getOffsetStyle(offsetType);
     if (rom_online)
     {
+        std::string filename = outputPath + "/ROMsol/romS_1";
+        std::ifstream infile_romS(filename.c_str());
+        MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
+
         std::ifstream infile_offlineParam(offlineParam_outputPath);
         MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
         std::string line;
@@ -974,7 +983,7 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath);
                 outfile_offlineParam << romOptions.useOffset << " ";
                 outfile_offlineParam << romOptions.offsetType << " ";
-                outfile_offlineParam << romOptions.RHSbasis << " ";
+                outfile_offlineParam << romOptions.SNS << " ";
                 outfile_offlineParam << numWindows << " ";
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
@@ -996,7 +1005,7 @@ int main(int argc, char *argv[])
             split_line(line, words);
             MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
             MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-            MFEM_VERIFY(std::stoi(words[2]) == romOptions.RHSbasis, "-romsrhs option does not match record.");
+            MFEM_VERIFY(std::stoi(words[2]) == romOptions.SNS, "-romsns option does not match record.");
             MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
             MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
             infile_offlineParam.close();
@@ -1044,7 +1053,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            outfile_twp.open(outputPath + "/twpTemp.csv");
+            outfile_twp.open(outputPath + "/" + std::string(twpfile));
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
@@ -1063,8 +1072,8 @@ int main(int argc, char *argv[])
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * (romOptions.RHSbasis ? romOptions.dimFv : romOptions.dimV);
-        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * (romOptions.RHSbasis ? romOptions.dimFe : romOptions.dimE);
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimFv;
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimFe;
     }
 
     StopWatch onlinePreprocessTimer;
@@ -1283,9 +1292,9 @@ int main(int argc, char *argv[])
             outfile_tw_steps.open(outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
-        if (romOptions.hyperreduce && romOptions.GramSchmidt)
+        if (romOptions.hyperreduce)
         {
-            romOper[0]->InducedGramSchmidtInitialize(romS);
+            romOper[0]->ApplyHyperreduction(romS);
         }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
@@ -1342,7 +1351,7 @@ int main(int argc, char *argv[])
                     if (romOptions.hyperreduce && romOptions.GramSchmidt)
                     {
                         Vector romCoord(romS);
-                        romOper[romOptions.window]->InducedGramSchmidtFinalize(romCoord, true);
+                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
                         romCoord.Print(outfile_romS, 1);
                     }
                     else
@@ -1463,12 +1472,11 @@ int main(int argc, char *argv[])
 
                         MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << tOverlapMidpoint << ", ";
-                            if (romOptions.RHSbasis)
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            outfile_twp << tOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            if (romOptions.SNS)
+                                outfile_twp << "\n";
                             else
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
                         }
                         delete samplerLast;
                         samplerLast = NULL;
@@ -1486,12 +1494,11 @@ int main(int argc, char *argv[])
                     {
                         sampler->Finalize(t, last_dt, *S, cutoff, romOptions);
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << t << ", ";
-                            if (romOptions.RHSbasis)
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                                            << cutoff[3] << ", " << cutoff[4] << "\n";
+                            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            if (romOptions.SNS)
+                                outfile_twp << "\n";
                             else
-                                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
                         }
                         delete sampler;
                     }
@@ -1520,9 +1527,9 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    if (romOptions.hyperreduce)
                     {
-                        romOper[romOptions.window-1]->InducedGramSchmidtFinalize(romS);
+                        romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
                     int rdimxprev = romOptions.dimX;
@@ -1566,9 +1573,9 @@ int main(int argc, char *argv[])
 
                     delete romOper[romOptions.window-1];
 
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    if (romOptions.hyperreduce)
                     {
-                        romOper[romOptions.window]->InducedGramSchmidtInitialize(romS);
+                        romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
@@ -1684,7 +1691,7 @@ int main(int argc, char *argv[])
     {
         if (romOptions.GramSchmidt)
         {
-            romOper[romOptions.window]->InducedGramSchmidtFinalize(romS);
+            romOper[romOptions.window]->PostprocessHyperreduction(romS);
         }
         if (!rom_online)
         {
@@ -1703,13 +1710,12 @@ int main(int argc, char *argv[])
         basisConstructionTimer.Stop();
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            outfile_twp << t << ", ";
+            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
 
-            if (romOptions.RHSbasis)
-                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << ", "
-                            << cutoff[3] << ", " << cutoff[4] << "\n";
+            if (romOptions.SNS)
+                outfile_twp << "\n";
             else
-                outfile_twp << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2] << "\n";
+                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
         }
         if (samplerLast == sampler)
             delete sampler;
