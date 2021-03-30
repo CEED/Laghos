@@ -360,8 +360,8 @@ int main(int argc, char *argv[])
     if (usingWindows)
     {
         if (romOptions.dimX  > 0) romOptions.max_dimX  = romOptions.dimX;
-        if (romOptions.dimX  > 0) romOptions.max_dimV  = romOptions.dimV;
-        if (romOptions.dimX  > 0) romOptions.max_dimE  = romOptions.dimE;
+        if (romOptions.dimV  > 0) romOptions.max_dimV  = romOptions.dimV;
+        if (romOptions.dimE  > 0) romOptions.max_dimE  = romOptions.dimE;
         if (romOptions.dimFv > 0) romOptions.max_dimFv = romOptions.dimFv;
         if (romOptions.dimFe > 0) romOptions.max_dimFe = romOptions.dimFe;
         if (rom_online || rom_restore)
