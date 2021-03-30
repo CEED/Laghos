@@ -124,6 +124,7 @@ private:
 public:
    MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
    virtual void Mult(const Vector&, Vector&) const;
+   void MultFull(const Vector &x, Vector &y) const { mass->Mult(x, y); }
    virtual void SetEssentialTrueDofs(Array<int>&);
    virtual void EliminateRHS(Vector&) const;
    const ParBilinearForm &GetBF() const { return pabf; }
