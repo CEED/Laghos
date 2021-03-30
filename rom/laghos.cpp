@@ -359,11 +359,11 @@ int main(int argc, char *argv[])
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
     {
-        romOptions.max_dimX = romOptions.dimX;
-        romOptions.max_dimV = romOptions.dimV;
-        romOptions.max_dimE = romOptions.dimE;
-        romOptions.max_dimFv = romOptions.dimFv;
-        romOptions.max_dimFe = romOptions.dimFe;
+        if (romOptions.dimX  > 0) romOptions.max_dimX  = romOptions.dimX;
+        if (romOptions.dimX  > 0) romOptions.max_dimV  = romOptions.dimV;
+        if (romOptions.dimX  > 0) romOptions.max_dimE  = romOptions.dimE;
+        if (romOptions.dimFv > 0) romOptions.max_dimFv = romOptions.dimFv;
+        if (romOptions.dimFe > 0) romOptions.max_dimFe = romOptions.dimFe;
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
