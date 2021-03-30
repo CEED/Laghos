@@ -253,11 +253,16 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM online computations and output.");
     args.AddOption(&rom_restore, "-restore", "--restore", "-no-restore", "--no-restore",
                    "Enable or disable ROM restoration phase where ROM solution is lifted to FOM size.");
-    args.AddOption(&romOptions.dimX, "-rdimx", "--rom_dimx", "ROM dimension for X.");
-    args.AddOption(&romOptions.dimV, "-rdimv", "--rom_dimv", "ROM dimension for V.");
-    args.AddOption(&romOptions.dimE, "-rdime", "--rom_dime", "ROM dimension for E.");
-    args.AddOption(&romOptions.dimFv, "-rdimfv", "--rom_dimfv", "ROM dimension for Fv.");
-    args.AddOption(&romOptions.dimFe, "-rdimfe", "--rom_dimfe", "ROM dimension for Fe.");
+    args.AddOption(&romOptions.dimX, "-rdimx", "--rom_dimx", "ROM dimension for X.\n\t"
+                   "Ceiling ROM dimension for X over all time windows.");
+    args.AddOption(&romOptions.dimV, "-rdimv", "--rom_dimv", "ROM dimension for V.\n\t"
+                   "Ceiling ROM dimension for V over all time windows.");
+    args.AddOption(&romOptions.dimE, "-rdime", "--rom_dime", "ROM dimension for E.\n\t"
+                   "Ceiling ROM dimension for E over all time windows.");
+    args.AddOption(&romOptions.dimFv, "-rdimfv", "--rom_dimfv", "ROM dimension for Fv.\n\t"
+                   "Ceiling ROM dimension for Fv over all time windows.");
+    args.AddOption(&romOptions.dimFe, "-rdimfe", "--rom_dimfe", "ROM dimension for Fe.\n\t"
+                   "Ceiling ROM dimension for Fe over all time windows.");
     args.AddOption(&romOptions.sampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&romOptions.sampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&romOptions.sampE, "-nsame", "--numsamplee", "number of samples for E.");
