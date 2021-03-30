@@ -2594,6 +2594,12 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
         paramPoints.push_back(paramPointDomain[i].item(0));
     }
 
+    if (parameterPointGreedySelector->isComplete())
+    {
+        // The greedy algorithm procedure has ended
+        MFEM_ABORT("The greedy algorithm procedure has completed!");
+    }
+
     // First check if we need to compute another residual
     int pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
     if (pointRequiringResidual != -1)
@@ -2616,7 +2622,7 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
         else
         {
             // The greedy algorithm procedure has ended
-            MFEM_ABORT("The greedy algorithm procedure has ended!");
+            MFEM_ABORT("The greedy algorithm procedure has failed!");
         }
     }
 

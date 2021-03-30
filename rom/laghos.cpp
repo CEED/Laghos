@@ -354,8 +354,6 @@ int main(int argc, char *argv[])
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((outputPath + "/ROMsol").c_str(), 0777);
-
-        args.PrintOptions(cout);
     }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
@@ -401,9 +399,6 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
     MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
-    StopWatch totalTimer;
-    totalTimer.Start();
-
     static std::map<std::string, NormType> localmap;
     localmap["l2"] = l2norm;
     localmap["l1"] = l1norm;
@@ -429,6 +424,14 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
         parameterPointGreedySelector = LoadROMDatabase(romOptions, paramPoints, myid, outputPath);
     }
+
+    if (mpi.Root())
+    {
+        args.PrintOptions(cout);
+    }
+
+    StopWatch totalTimer;
+    totalTimer.Start();
 
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
@@ -1775,7 +1778,6 @@ int main(int argc, char *argv[])
             Vector residualVec = Vector(lastLiftedSolution.Size());
             subtract(lastLiftedSolution, *S, residualVec);
             residual = residualVec.Norml2();
-            cout << "Residual: " << residual << endl;
         }
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
@@ -1841,11 +1843,26 @@ int main(int argc, char *argv[])
     // for use during the next iteration.
     if(rom_build_database)
     {
+        std::ofstream database_history;
+        database_history.open(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
+
         if (rom_online)
         {
             parameterPointGreedySelector->setPointResidual(residual, myid, nprocs);
+            database_history << "Residual at blast energy factor " << romOptions.blast_energyFactor << " is: " << residual << endl;
         }
+        else
+        {
+            database_history << "ROM constucted at blast energy factor: " << romOptions.blast_energyFactor << endl;
+        }
+        database_history.close();
         parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");
+
+        if (parameterPointGreedySelector->isComplete())
+        {
+            // The greedy algorithm procedure has ended
+            MFEM_ABORT("The greedy algorithm procedure has completed!");
+        }
     }
 
     totalTimer.Stop();
