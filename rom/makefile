@@ -64,7 +64,9 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-LIBS_DIR ?= dependencies
+MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+ROM_DIR := $(dir $(MAKEFILE_PATH))
+LIBS_DIR ?= $(ROM_DIR)/dependencies
 DEBUG := NO
 MFEM_DIR = $(LIBS_DIR)/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
