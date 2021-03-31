@@ -782,6 +782,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     {
                         v.GetVectorGradient(*T, sgrad_v);
                     }
+
+                    double vorticity_coeff = 1.0;
+                    if (use_vorticity)
+                    {
+                        const double grad_norm = sgrad_v.FNorm();
+                        const double div_v = fabs(sgrad_v.Trace());
+                        vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+                    }
+
                     sgrad_v.Symmetrize();
                     double eig_val_data[3], eig_vec_data[9];
                     if (dim==1)
@@ -809,7 +818,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     // eps must be scaled appropriately if a different unit system is
                     // being used.
                     const double eps = 1e-12;
-                    visc_coeff += 0.5 * rho * h * sound_speed *
+                    visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
                                   (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
 
                     stress.Add(visc_coeff, sgrad_v);
