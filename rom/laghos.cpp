@@ -1839,32 +1839,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    // If using the greedy algorithm, save the residual and any information
-    // for use during the next iteration.
-    if(rom_build_database)
-    {
-        std::ofstream database_history;
-        database_history.open(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
-
-        if (rom_online)
-        {
-            parameterPointGreedySelector->setPointResidual(residual, myid, nprocs);
-            database_history << "Residual at blast energy factor " << romOptions.blast_energyFactor << " is: " << residual << endl;
-        }
-        else
-        {
-            database_history << "ROM constucted at blast energy factor: " << romOptions.blast_energyFactor << endl;
-        }
-        database_history.close();
-        parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");
-
-        if (parameterPointGreedySelector->isComplete())
-        {
-            // The greedy algorithm procedure has ended
-            MFEM_ABORT("The greedy algorithm procedure has completed!");
-        }
-    }
-
     totalTimer.Stop();
     if (mpi.Root()) {
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
@@ -1873,6 +1847,13 @@ int main(int argc, char *argv[])
         if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
+    }
+
+    // If using the greedy algorithm, save the residual and any information
+    // for use during the next iteration.
+    if(rom_build_database)
+    {
+        SaveROMDatabase(parameterPointGreedySelector, romOptions, rom_online, residual, myid, nprocs, outputPath);
     }
 
     // Free the used memory.

@@ -2653,3 +2653,28 @@ CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, st
 
     return parameterPointGreedySelector;
 }
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySelector, ROM_Options& romOptions, const bool rom_online, const double residual,
+                     const int myid, const int nprocs, const std::string outputPath)
+{
+    std::ofstream database_history;
+    database_history.open(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
+
+    if (rom_online)
+    {
+        parameterPointGreedySelector->setPointResidual(residual, myid, nprocs);
+        database_history << "Residual at blast energy factor " << romOptions.blast_energyFactor << " is: " << residual << endl;
+    }
+    else
+    {
+        database_history << "ROM constucted at blast energy factor: " << romOptions.blast_energyFactor << endl;
+    }
+    database_history.close();
+    parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");
+
+    if (parameterPointGreedySelector->isComplete())
+    {
+        // The greedy algorithm procedure has ended
+        MFEM_ABORT("The greedy algorithm procedure has completed!");
+    }
+}
