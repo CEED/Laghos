@@ -365,39 +365,7 @@ int main(int argc, char *argv[])
 
     romOptions.basename = &outputPath;
 
-    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
-    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
-
     const bool fom_data = !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
-
-    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
-    if (usingWindows)
-    {
-        if (rom_online || rom_restore)
-        {
-            double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
-            MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
-        }
-        else if (rom_offline && windowNumSamples == 0)
-        {
-            const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
-            MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        }
-    }
-    else  // not using windows
-    {
-        numWindows = 1;  // one window for the entire simulation
-        if (romOptions.SNS)
-        {
-            romOptions.dimFv = max(romOptions.dimFv, romOptions.dimV);
-            romOptions.dimFe = max(romOptions.dimFe, romOptions.dimE);
-        }
-    }
-
-    if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
-    MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
-    MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     static std::map<std::string, NormType> localmap;
     localmap["l2"] = l2norm;
@@ -429,6 +397,38 @@ int main(int argc, char *argv[])
     {
         args.PrintOptions(cout);
     }
+
+    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
+    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
+
+    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
+    if (usingWindows)
+    {
+        if (rom_online || rom_restore)
+        {
+            double sFactor[]  = {sFactorX, sFactorV, sFactorE};
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
+            MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+        }
+        else if (rom_offline && windowNumSamples == 0)
+        {
+            const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
+            MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
+        }
+    }
+    else  // not using windows
+    {
+        numWindows = 1;  // one window for the entire simulation
+        if (romOptions.SNS)
+        {
+            romOptions.dimFv = max(romOptions.dimFv, romOptions.dimV);
+            romOptions.dimFe = max(romOptions.dimFe, romOptions.dimE);
+        }
+    }
+
+    if (windowNumSamples > 0) romOptions.max_dim = windowNumSamples + windowOverlapSamples + 2;
+    MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
+    MFEM_VERIFY(windowOverlapSamples <= windowNumSamples, "Too many ROM window overlap samples.");
 
     StopWatch totalTimer;
     totalTimer.Start();
