@@ -817,7 +817,9 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 7:
-        visc = true; vort = true; source = 2;
+        visc = true;
+        vort = true;
+        source = 2;
         break;
     default:
         MFEM_ABORT("Wrong problem specification!");
@@ -1821,9 +1823,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-        // return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-        //        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-        //                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    // return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:

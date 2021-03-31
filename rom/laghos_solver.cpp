@@ -101,7 +101,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
       h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
       source_type(source_type_), cfl(cfl_),
-      use_viscosity(visc), use_vorticity(vort), 
+      use_viscosity(visc), use_vorticity(vort),
       p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
       noMvSolve(noMvSolve_), noMeSolve(noMeSolve_),
@@ -258,6 +258,16 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
     dv = 0.0;
 
+
+    ParGridFunction accel_src_gf;
+    if (source_type == 2)
+    {
+        accel_src_gf.SetSpace(&H1FESpace);
+        RTCoefficient accel_coeff(dim);
+        accel_src_gf.ProjectCoefficient(accel_coeff);
+        accel_src_gf.Read();
+    }
+
     Vector one(VsizeL2), rhs(VsizeH1), B, X;
     one = 1.0;
     if (p_assembly)
@@ -276,6 +286,17 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         }
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (source_type == 2)
+        {
+            Operator *cVMassPA;
+            VMassPA.FormSystemOperator(ess_tdofs, cVMassPA);
+            Vector AC(H1FESpace.GetTrueVSize()), BA(H1FESpace.GetTrueVSize());
+            accel_src_gf.GetTrueDofs(AC);
+            cVMassPA->Mult(AC, BA);
+            rhs += BA;
+            delete cVMassPA;
+        }
 
         if (noMvSolve)
         {
@@ -311,6 +332,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         Force.Mult(one, rhs);
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (source_type == 2)
+        {
+            Vector rhs_accel(rhs.Size());
+            Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
+            rhs += rhs_accel;
+        }
 
         if (noMvSolve)
         {

@@ -181,13 +181,14 @@ class TaylorCoefficient : public Coefficient
 class RTCoefficient : public VectorCoefficient
 {
 public:
-   RTCoefficient(int dim) : VectorCoefficient(dim) { }
-   using VectorCoefficient::Eval;
-   virtual void Eval(Vector &V, ElementTransformation &T,
-                     const IntegrationPoint &ip)
-   {
-      V = 0.0; V(1) = -1.0;
-   }
+    RTCoefficient(int dim) : VectorCoefficient(dim) { }
+    using VectorCoefficient::Eval;
+    virtual void Eval(Vector &V, ElementTransformation &T,
+                      const IntegrationPoint &ip)
+    {
+        V = 0.0;
+        V(1) = -1.0;
+    }
 };
 
 } // namespace hydrodynamics
