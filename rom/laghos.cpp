@@ -789,7 +789,7 @@ int main(int argc, char *argv[])
     }
 
     // Additional details, depending on the problem.
-    bool visc = true;
+    bool visc = true, vort = false;
     switch (problem)
     {
     case 0:
@@ -817,7 +817,7 @@ int main(int argc, char *argv[])
         visc = true;
         break;
     case 7:
-        visc = true;
+        visc = true; vort = true; source = 2;
         break;
     default:
         MFEM_ABORT("Wrong problem specification!");
@@ -831,7 +831,7 @@ int main(int argc, char *argv[])
     {
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl, mat_gf_coeff,
-                                           visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                                           visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType());
     }
 
@@ -1061,7 +1061,7 @@ int main(int argc, char *argv[])
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                            visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
 
@@ -1072,7 +1072,7 @@ int main(int argc, char *argv[])
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
             if (!romOptions.hyperreduce_prep)
             {
-                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
                                               cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
         }
