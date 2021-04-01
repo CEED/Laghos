@@ -713,7 +713,7 @@ private:
 };
 
 CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
-                      bool& rom_offline, bool& rom_online);
+        bool& rom_offline, bool& rom_online);
 
 CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath);
 
