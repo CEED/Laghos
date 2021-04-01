@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -1056,7 +1056,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            outfile_twp.open(outputPath + "/" + std::string(twpfile));
+            outfile_twp.open(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
@@ -1765,7 +1765,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    double residual;
+    double residual = 0.0;
+    int residualVecSize = 0;
 
     if (rom_online)
     {
@@ -1778,6 +1779,7 @@ int main(int argc, char *argv[])
             Vector residualVec = Vector(lastLiftedSolution.Size());
             subtract(lastLiftedSolution, *S, residualVec);
             residual = residualVec.Norml2();
+            residualVecSize = residualVec.Size();
         }
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
@@ -1853,7 +1855,7 @@ int main(int argc, char *argv[])
     // for use during the next iteration.
     if(rom_build_database)
     {
-        SaveROMDatabase(parameterPointGreedySelector, romOptions, rom_online, residual, myid, nprocs, outputPath);
+        SaveROMDatabase(parameterPointGreedySelector, romOptions, rom_online, residual, residualVecSize, outputPath);
     }
 
     // Free the used memory.

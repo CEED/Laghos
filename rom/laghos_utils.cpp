@@ -6,7 +6,7 @@
 
 using namespace std;
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout)
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Vector* sing_vals = bg->getSingularValues();
@@ -18,14 +18,38 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
         sum += (*sing_vals)(sv);
     }
 
+    vector<double> energy_fractions = {0.9999, 0.999, 0.99, 0.9};
+    bool reached_cutoff = false;
+
     double partialSum = 0.0;
     for (int sv = 0; sv < sing_vals->dim(); ++sv) {
         partialSum += (*sing_vals)(sv);
-        if (partialSum / sum > energyFraction)
+        if (printout)
+        {
+            for (int i = energy_fractions.size() - 1; i >= 0; i--)
+            {
+                if (partialSum / sum > energy_fractions[i])
+                {
+                    cout << "For energy fraction: " << energy_fractions[i] << ", take first "
+                        << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
+                    energy_fractions.pop_back();
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        if (!reached_cutoff && partialSum / sum > energyFraction)
         {
             cutoff = sv+1;
-            break;
+            reached_cutoff = true;
         }
+    }
+
+    if (cutoffOutputPath != "")
+    {
+        writeNum(cutoff, cutoffOutputPath);
     }
 
     if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;

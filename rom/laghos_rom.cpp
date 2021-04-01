@@ -196,34 +196,29 @@ void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Arr
     {
         if (!useXV)
         {
-            cout << "X basis summary output: ";
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
+            cout << "X basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimx" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
-            writeNum(generator_X->getSpatialBasis()->numColumns(), basename + "/" + "rdimx");
         }
 
         if (!useVX)
         {
-            cout << "V basis summary output: ";
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
+            cout << "V basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimv" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
-            writeNum(generator_V->getSpatialBasis()->numColumns(), basename + "/" + "rdimv");
         }
 
-        cout << "E basis summary output: ";
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
+        cout << "E basis summary output: " << endl;
+        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdime" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
-        writeNum(generator_E->getSpatialBasis()->numColumns(), basename + "/" + "rdime");
 
         if (!sns)
         {
-            cout << "Fv basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
-            writeNum(generator_Fv->getSpatialBasis()->numColumns(), basename + "/" + "rdimfv");
+            cout << "Fv basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimfv" + input.basisIdentifier);
 
-            cout << "Fe basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
-            writeNum(generator_Fe->getSpatialBasis()->numColumns(), basename + "/" + "rdimfe");
+            cout << "Fe basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimfe" + input.basisIdentifier);
         }
     }
 
@@ -1349,7 +1344,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 0.0;
         }
 
-        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, false);
+        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, "", false);
         rdimv = rdimx;
 
         cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
@@ -2567,24 +2562,16 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
     if (f.good())
     {
         parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
-            outputPath + "/greedy_algorithm_data");
-
-        // Get the dims outputted during the last iteration.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx");
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv");
-        readNum(romOptions.dimE, outputPath + "/" + "rdime");
-        if (!romOptions.SNS)
-        {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv");
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe");
-        }
+            outputPath + "/greedy_algorithm_data",
+            outputPath + "/greedy_algorithm_log.txt");
     }
     else
     {
         parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
             romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
-            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize);
+            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
+            outputPath + "/greedy_algorithm_log.txt");
     }
 
     // Retrieve the parameter point domain from the last iteration.
@@ -2607,6 +2594,17 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
         int nearestROM = parameterPointGreedySelector->getNearestROM(pointRequiringResidual);
         romOptions.basisIdentifier = "_" + to_string(paramPoints[nearestROM]);
         romOptions.blast_energyFactor = paramPoints[pointRequiringResidual];
+
+        // Get the rdim for the basis used.
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier);
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier);
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier);
+        if (!romOptions.SNS)
+        {
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier);
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier);
+        }
+
         rom_online = true;
     }
     else
@@ -2655,21 +2653,13 @@ CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, st
 }
 
 void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySelector, ROM_Options& romOptions, const bool rom_online, const double residual,
-                     const int myid, const int nprocs, const std::string outputPath)
+                     const int residualVecSize, const std::string outputPath)
 {
-    std::ofstream database_history;
-    database_history.open(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
-
     if (rom_online)
     {
-        parameterPointGreedySelector->setPointResidual(residual, myid, nprocs);
-        database_history << "Residual at blast energy factor " << romOptions.blast_energyFactor << " is: " << residual << endl;
+        double relativeResidual = parameterPointGreedySelector->setPointResidual(residual, residualVecSize);
     }
-    else
-    {
-        database_history << "ROM constucted at blast energy factor: " << romOptions.blast_energyFactor << endl;
-    }
-    database_history.close();
+
     parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");
 
     if (parameterPointGreedySelector->isComplete())
