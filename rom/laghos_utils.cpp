@@ -31,7 +31,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
                 if (partialSum / sum > energy_fractions[i])
                 {
                     cout << "For energy fraction: " << energy_fractions[i] << ", take first "
-                        << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
+                         << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
                     energy_fractions.pop_back();
                 }
                 else
