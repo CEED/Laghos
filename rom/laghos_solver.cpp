@@ -61,7 +61,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
             const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
                                ? "mAcRjl" : "mmaaAcl";
 
-
             sock << "window_title '" << title << "'\n"
                  << "window_geometry "
                  << x << " " << y << " " << w << " " << h << "\n"

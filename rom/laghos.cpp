@@ -614,20 +614,23 @@ int main(int argc, char *argv[])
 
     // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
     // that the boundaries are straight.
-    Array<int> ess_tdofs;
+    Array<int> ess_tdofs, ess_vdofs;
 
     if (fom_data)
     {
         {
-            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
             for (int d = 0; d < pmesh->Dimension(); d++)
             {
                 // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
                 // enforce v_x/y/z = 0 for the velocity components.
-                ess_bdr = 0;
+                ess_bdr = 0; 
                 ess_bdr[d] = 1;
-                H1FESpace->GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-                ess_tdofs.Append(tdofs1d);
+                H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+                ess_tdofs.Append(dofs_list);
+                H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
+                FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+                ess_vdofs.Append(dofs_list);
             }
         }
     }
@@ -737,6 +740,10 @@ int main(int argc, char *argv[])
     {
         v_coeff = new VectorFunctionCoefficient(pmesh->Dimension(), v0);
         v_gf->ProjectCoefficient(*v_coeff);
+        for (int i = 0; i < ess_vdofs.Size(); i++)
+        {
+            (*v_gf)(ess_vdofs[i]) = 0.0;
+        }
     }
 
     // Initialize density and specific internal energy values. We interpolate in
