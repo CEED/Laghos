@@ -78,6 +78,11 @@ struct ROM_Options
     int dimE = -1;
     int dimFv = -1;
     int dimFe = -1;
+    int max_dimX = std::numeric_limits<int>::max();
+    int max_dimV = std::numeric_limits<int>::max();
+    int max_dimE = std::numeric_limits<int>::max();
+    int max_dimFv = std::numeric_limits<int>::max();
+    int max_dimFe = std::numeric_limits<int>::max();
 
     // Randomized SVD options
     bool randomizedSVD = false; // true: use RandomizedSVD
