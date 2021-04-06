@@ -624,7 +624,7 @@ int main(int argc, char *argv[])
             {
                 // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
                 // enforce v_x/y/z = 0 for the velocity components.
-                ess_bdr = 0; 
+                ess_bdr = 0;
                 ess_bdr[d] = 1;
                 H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
                 ess_tdofs.Append(dofs_list);
