@@ -62,7 +62,6 @@ jobs:
       if: steps.metis-cache.outputs.cache-hit != 'true'
       uses: mfem/mfem-actions/build-metis@master
       with:
-        metis-url: ${{ env.METIS_URL }}
         metis-archive: ${{ env.METIS_ARCHIVE }}
         metis-dir: ${{ env.METIS_TOP_DIR }}
 
