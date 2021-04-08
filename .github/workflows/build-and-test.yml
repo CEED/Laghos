@@ -40,7 +40,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ env.HYPRE_TOP_DIR }}
-        key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v1
+        key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v2
 
     - name: build Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
@@ -56,7 +56,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ env.METIS_TOP_DIR }}
-        key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v1
+        key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v2
 
     - name: build Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
@@ -85,7 +85,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ env.MFEM_TOP_DIR }}
-        key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v2
+        key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v3
 
     - name: build MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
