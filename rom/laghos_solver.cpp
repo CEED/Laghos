@@ -258,7 +258,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
     dv = 0.0;
 
-
     ParGridFunction accel_src_gf;
     if (source_type == 2)
     {
@@ -274,6 +273,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     {
         timer.sw_force.Start();
         ForcePA.Mult(one, rhs);
+
         if (ftz_tol>0.0)
         {
             for (int i = 0; i < VsizeH1; i++)
@@ -287,15 +287,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         timer.sw_force.Stop();
         rhs.Neg();
 
-        if (source_type == 2)
+        if (source_type == 2) // 2D Rayleigh-Taylor
         {
-            Operator *cVMassPA;
-            VMassPA.FormSystemOperator(ess_tdofs, cVMassPA);
-            Vector AC(H1FESpace.GetTrueVSize()), BA(H1FESpace.GetTrueVSize());
-            accel_src_gf.GetTrueDofs(AC);
-            cVMassPA->Mult(AC, BA);
-            rhs += BA;
-            delete cVMassPA;
+            Vector rhs_accel(rhs.Size());
+            VMassPA.Mult(accel_src_gf, rhs_accel);
+            rhs += rhs_accel;
         }
 
         if (noMvSolve)
