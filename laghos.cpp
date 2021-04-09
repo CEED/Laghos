@@ -217,14 +217,13 @@ int main(int argc, char *argv[])
    {
       if (dim == 1)
       {
-         mesh = new Mesh(Mesh::MakeCartesian1D(2));
+         mesh = new Mesh(2);
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
-                                               true));
+         mesh = new Mesh(2, 2, Element::QUADRILATERAL,true);
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
@@ -235,8 +234,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 3)
       {
-         mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
-                                               true));
+         mesh = new Mesh(2, 2, 2, Element::HEXAHEDRON, true);
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
