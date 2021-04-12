@@ -1409,7 +1409,7 @@ int main(int argc, char *argv[])
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
-                        samplerLast->Finalize(t, last_dt, *S, cutoff);
+                        samplerLast->Finalize(cutoff);
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
@@ -1439,7 +1439,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        sampler->Finalize(t, last_dt, *S, cutoff);
+                        sampler->Finalize(cutoff);
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
@@ -1651,9 +1651,9 @@ int main(int argc, char *argv[])
         samplerTimer.Start();
         basisConstructionTimer.Start();
         if (samplerLast)
-            samplerLast->Finalize(t, dt, *S, cutoff);
+            samplerLast->Finalize(cutoff);
         else if (sampler)
-            sampler->Finalize(t, dt, *S, cutoff);
+            sampler->Finalize(cutoff);
         basisConstructionTimer.Stop();
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
