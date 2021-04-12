@@ -84,6 +84,11 @@ if [ ! -d "astyle" ]; then
         ;;
   esac
   tar -zxvf astyle_2.05.1.tar.gz
-  cd astyle/build/gcc
+  cd astyle/build
+  if [ -d "gcc" ]; then
+    cd gcc
+  elif [ -d "mac" ]; then
+    cd mac
+  fi
   make
 fi
