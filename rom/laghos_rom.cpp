@@ -167,7 +167,7 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     }
 }
 
-void ROM_Sampler::Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff)
+void ROM_Sampler::Finalize(Array<int> &cutoff)
 {
     if (writeSnapshots)
     {
@@ -304,6 +304,8 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
         for (int i=0; i<S->numRows(); ++i)
             (*S)(i,j) = MBej[i];
     }
+
+    delete A;
 
     return S;
 }
