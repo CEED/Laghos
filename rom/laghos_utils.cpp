@@ -32,6 +32,10 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
                 {
                     cout << "For energy fraction: " << energy_fractions[i] << ", take first "
                          << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
+                    if (cutoffOutputPath != "")
+                    {
+                        writeNum(sv+1, cutoffOutputPath + "_" + to_string(energy_fractions[i]));
+                    }
                     energy_fractions.pop_back();
                 }
                 else
@@ -45,11 +49,6 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
             cutoff = sv+1;
             reached_cutoff = true;
         }
-    }
-
-    if (cutoffOutputPath != "")
-    {
-        writeNum(cutoff, cutoffOutputPath);
     }
 
     if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;

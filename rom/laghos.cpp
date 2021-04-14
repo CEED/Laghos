@@ -169,6 +169,7 @@ int main(int argc, char *argv[])
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
+    double dt_factor = 1.0;
     bool rom_build_database = false;
     bool rom_use_database = false;
     bool rom_offline = false;
@@ -187,6 +188,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     const char *normtype_char = "l2";
     const char *offsetType = "initial";
+    const char *greedyResidualType = "useLastLifted";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -280,6 +282,7 @@ int main(int argc, char *argv[])
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
+    args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -313,6 +316,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedySat, "-greedysat", "--greedysat", "The greedy algorithm saturation constant.");
     args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
     args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
+    args.AddOption(&greedyResidualType, "-greedyrestype", "--greedyresidualtype",
+                   "Residual type for the gredy algorithm.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
@@ -382,7 +387,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySelector = BuildROMDatabase(romOptions, paramPoints, myid, outputPath, rom_offline, rom_online);
+        parameterPointGreedySelector = BuildROMDatabase(romOptions, dt_factor, paramPoints, myid, outputPath, rom_offline, rom_online, greedyResidualType);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -968,7 +973,7 @@ int main(int argc, char *argv[])
 
     if (fom_data)
     {
-        dt = oper->GetTimeStepEstimate(*S);
+        dt = oper->GetTimeStepEstimate(*S) * dt_factor;
         S_old = new BlockVector(*S);
     }
 
@@ -1374,7 +1379,7 @@ int main(int argc, char *argv[])
                     }
 
                     // If using the greedy algorithm, take only the last step in the FOM space
-                    if (rom_build_database && last_step)
+                    if (rom_build_database && last_step && romOptions.greedyResidualType == useLastLiftedSolution)
                     {
                         lastLiftedSolution = *S;
                         ode_solver_dat->Init(*oper);
@@ -1766,6 +1771,7 @@ int main(int argc, char *argv[])
     }
 
     double residual = 0.0;
+    bool residualComputed = false;
     int residualVecSize = 0;
 
     if (rom_online)
@@ -1776,10 +1782,55 @@ int main(int argc, char *argv[])
         if (rom_build_database)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-            Vector residualVec = Vector(lastLiftedSolution.Size());
-            subtract(lastLiftedSolution, *S, residualVec);
-            residual = residualVec.Norml2();
-            residualVecSize = residualVec.Size();
+            Vector residualVec;
+            if (romOptions.greedyResidualType == useLastLiftedSolution)
+            {
+                residualVec = Vector(lastLiftedSolution.Size());
+                subtract(lastLiftedSolution, *S, residualVec);
+
+                residual = residualVec.Norml2();
+                residualVecSize = residualVec.Size();
+                residualComputed = true;
+            }
+            else if (romOptions.greedyResidualType == varyTimeStep ||
+                romOptions.greedyResidualType == varyBasisSize)
+            {
+
+                Vector finalSolution = *S;
+
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    Vector previousFinalSolution;
+                    previousFinalSolution.Load(checkfile, finalSolution.Size());
+
+                    residualVec = Vector(finalSolution.Size());
+                    subtract(finalSolution, previousFinalSolution, residualVec);
+
+                    residual = residualVec.Norml2();
+                    residualVecSize = residualVec.Size();
+
+                    checkfile.close();
+                    remove(fullname.c_str());
+
+                    residualComputed = true;
+                }
+                else
+                {
+                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                    ofs.precision(16);
+
+                    for (int i=0; i<finalSolution.Size(); ++i)
+                        ofs << finalSolution[i] << std::endl;
+
+                    ofs.close();
+                }
+            }
         }
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
@@ -1853,7 +1904,7 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the residual and any information
     // for use during the next iteration.
-    if(rom_build_database)
+    if(rom_build_database && (!rom_online || residualComputed))
     {
         SaveROMDatabase(parameterPointGreedySelector, romOptions, rom_online, residual, residualVecSize, outputPath);
     }

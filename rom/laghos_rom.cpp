@@ -2550,11 +2550,12 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online)
+CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& dt_factor, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, const char* greedyResidualType)
 {
-
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+
+    romOptions.greedyResidualType = getResidualType(greedyResidualType);
 
     char tmp[100];
     sprintf(tmp, ".%06d", myid);
@@ -2569,9 +2570,14 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
     {
         parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
-            romOptions.greedyParamSpaceSize, romOptions.greedyTol, romOptions.greedySat,
+            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedySat,
             romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
             outputPath + "/greedy_algorithm_log.txt");
+
+        ofstream o(outputPath + "/greedy_algorithm_log.txt");
+        o << "Parameter considered: initial blast energy" << std::endl;
+        o << "Error indicator: " << greedyResidualType << std::endl;
+        o.close();
     }
 
     // Retrieve the parameter point domain from the last iteration.
@@ -2595,14 +2601,34 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, s
         romOptions.basisIdentifier = "_" + to_string(paramPoints[nearestROM]);
         romOptions.blast_energyFactor = paramPoints[pointRequiringResidual];
 
+        double residualEnergyFraction = 0.9999;
+
+        char tmp[100];
+        sprintf(tmp, ".%06d", myid);
+
+        std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
+
+        std::ifstream checkfile(fullname);
+        if (!checkfile.good())
+        {
+            if (romOptions.greedyResidualType == varyTimeStep)
+            {
+                dt_factor = 1.0;
+            }
+            else if (romOptions.greedyResidualType == varyBasisSize)
+            {
+                residualEnergyFraction = 0.99;
+            }
+        }
+
         // Get the rdim for the basis used.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier);
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier);
-        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier);
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
         if (!romOptions.SNS)
         {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier);
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier);
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
         }
 
         rom_online = true;

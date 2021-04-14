@@ -36,6 +36,13 @@ enum offsetStyle
     interpolateOffset
 };
 
+enum residualType
+{
+    useLastLiftedSolution,
+    varyTimeStep,
+    varyBasisSize
+};
+
 static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
@@ -46,6 +53,19 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     };
     auto iter = offsetMap.find(offsetType);
     MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    return iter->second;
+}
+
+static residualType getResidualType(const char* residual)
+{
+    static std::unordered_map<std::string, residualType> residualMap =
+    {
+        {"useLastLifted", useLastLiftedSolution},
+        {"varyTimeStep", varyTimeStep},
+        {"varyBasisSize", varyBasisSize}
+    };
+    auto iter = residualMap.find(residual);
+    MFEM_VERIFY(iter != std::end(residualMap), "Invalid input of residual type");
     return iter->second;
 }
 
@@ -65,6 +85,7 @@ struct ROM_Options
     int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space
     int greedySubsetSize = 0; // subset size of parameter points whose residuals are checked during the greedy algorithm
     int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
+    residualType greedyResidualType = useLastLiftedSolution; // residual type for the greedy algorithm
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
@@ -712,8 +733,8 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online);
+CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& dt_factor, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, const char* greedyResidualType);
 
 CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath);
 
