@@ -310,6 +310,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&romOptions.rt_rhoFactor, "-rtf", "--rtfactor", "Factor for scaling Rayleigh-Taylor density ratio.");
     args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -764,7 +765,10 @@ int main(int argc, char *argv[])
     // time evolution.
     ParGridFunction* rho = NULL;
     FunctionCoefficient rho_coeff0(rho0);
-    ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
+    SumCoefficient rho_coeff1(-1.0, rho_coeff0,
+                              (problem == 7) ? romOptions.rt_rhoFactor - 2.0: 0.0,
+                              (problem == 7) ? romOptions.rt_rhoFactor - 1.0: 1.0);
+    ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff1);
     if (fom_data)
     {
         rho = new ParGridFunction(L2FESpace);
@@ -977,6 +981,7 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
+                outfile_offlineParam << romOptions.rt_rhoFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";
@@ -1003,6 +1008,7 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
+                outfile_offlineParam << romOptions.rt_rhoFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";

@@ -59,6 +59,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     double rhoFactor = 1.0; // factor for scaling rho
+    double rt_rhoFactor = 2.0; // factor for scaling the Rayleigh-Taylor density ratio
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
