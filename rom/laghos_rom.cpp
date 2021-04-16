@@ -1363,8 +1363,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (use_sns)
     {
-        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
-        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
+        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
     }
     else
     {
