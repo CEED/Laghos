@@ -1749,9 +1749,9 @@ int main(int argc, char *argv[])
         if (solDiff)
         {
             cout << "solDiff mode " << endl;
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
+            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
         }
 
         if (visitDiffCycle >= 0)
@@ -1790,6 +1790,7 @@ int main(int argc, char *argv[])
 
                 residual = residualVec.Norml2();
                 residualVecSize = residualVec.Size();
+
                 residualComputed = true;
             }
             else if (romOptions.greedyResidualType == varyTimeStep ||
