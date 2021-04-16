@@ -39,6 +39,9 @@
 //    p = 2  --> 1D Sod shock tube.
 //    p = 3  --> Triple point.
 //    p = 4  --> Gresho vortex (smooth problem).
+//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
+//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
+//    p = 7  --> 2D Rayleigh-Taylor instability problem.//
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
@@ -74,7 +77,7 @@ using namespace mfem;
 using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
-int problem;
+static int problem, dim;
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
@@ -408,7 +411,7 @@ int main(int argc, char *argv[])
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
     Mesh* mesh = NULL;
-    int dim = 0;
+    dim = 0;
     if (fom_data)
     {
         mesh = new Mesh(mesh_file, 1, 1);
@@ -621,20 +624,23 @@ int main(int argc, char *argv[])
 
     // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
     // that the boundaries are straight.
-    Array<int> ess_tdofs;
+    Array<int> ess_tdofs, ess_vdofs;
 
     if (fom_data)
     {
         {
-            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), tdofs1d;
+            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
             for (int d = 0; d < pmesh->Dimension(); d++)
             {
                 // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
                 // enforce v_x/y/z = 0 for the velocity components.
                 ess_bdr = 0;
                 ess_bdr[d] = 1;
-                H1FESpace->GetEssentialTrueDofs(ess_bdr, tdofs1d, d);
-                ess_tdofs.Append(tdofs1d);
+                H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+                ess_tdofs.Append(dofs_list);
+                H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
+                FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+                ess_vdofs.Append(dofs_list);
             }
         }
     }
@@ -744,6 +750,10 @@ int main(int argc, char *argv[])
     {
         v_coeff = new VectorFunctionCoefficient(pmesh->Dimension(), v0);
         v_gf->ProjectCoefficient(*v_coeff);
+        for (int i = 0; i < ess_vdofs.Size(); i++)
+        {
+            (*v_gf)(ess_vdofs[i]) = 0.0;
+        }
     }
 
     // Initialize density and specific internal energy values. We interpolate in
@@ -796,7 +806,7 @@ int main(int argc, char *argv[])
     }
 
     // Additional details, depending on the problem.
-    bool visc = true;
+    bool visc = true, vort = false;
     switch (problem)
     {
     case 0:
@@ -817,6 +827,17 @@ int main(int argc, char *argv[])
     case 4:
         visc = false;
         break;
+    case 5:
+        visc = true;
+        break;
+    case 6:
+        visc = true;
+        break;
+    case 7:
+        visc = true;
+        vort = true;
+        source = 2;
+        break;
     default:
         MFEM_ABORT("Wrong problem specification!");
     }
@@ -829,7 +850,7 @@ int main(int argc, char *argv[])
     {
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl, mat_gf_coeff,
-                                           visc, p_assembly, cg_tol, cg_max_iter, ftz_tol,
+                                           visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType());
     }
 
@@ -1059,7 +1080,7 @@ int main(int argc, char *argv[])
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                            visc, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
 
@@ -1070,7 +1091,7 @@ int main(int argc, char *argv[])
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
             if (!romOptions.hyperreduce_prep)
             {
-                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, cfl, p_assembly,
+                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
                                               cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
         }
@@ -1819,8 +1840,33 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+    // return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
+    case 5:
+    {
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 0.5313;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 0.8;
+        }
+        return 1.0;
+    }
+    case 6:
+    {
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 2.0;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 3.0;
+        }
+        return 1.0;
+    }
+    case 7:
+        return x(1) >= 0.0 ? 2.0 : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -1832,7 +1878,7 @@ double gamma_func(const Vector &x)
     switch (problem)
     {
     case 0:
-        return 5./3.;
+        return 5.0 / 3.0;
     case 1:
         return 1.4;
     case 2:
@@ -1840,6 +1886,12 @@ double gamma_func(const Vector &x)
     case 3:
         return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
     case 4:
+        return 5.0 / 3.0;
+    case 5:
+        return 1.4;
+    case 6:
+        return 1.4;
+    case 7:
         return 5.0 / 3.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
@@ -1893,6 +1945,58 @@ void v0(const Vector &x, Vector &v)
         }
         break;
     }
+    case 5:
+    {
+        const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+        v = 0.0;
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            v(0)=0.0*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            v(0)=0.7276*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            v(0)=0.0*atn, v(1)=0.0*atn;
+            return;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            v(0)=0.0*atn, v(1)=0.7276*atn;
+            return;
+        }
+        MFEM_ABORT("Error in problem 5!");
+        return;
+    }
+    case 6:
+    {
+        const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+        v = 0.0;
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            v(0)=+0.75*atn, v(1)=-0.5*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            v(0)=+0.75*atn, v(1)=+0.5*atn;
+            return;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            v(0)=-0.75*atn, v(1)=+0.5*atn;
+            return;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            v(0)=-0.75*atn, v(1)=-0.5*atn;
+            return;
+        }
+        MFEM_ABORT("Error in problem 6!");
+        return;
+    }
+    case 7:
+    {
+        v = 0.0;
+        v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+        break;
+    }
     default:
         MFEM_ABORT("Bad number given for problem id!");
     }
@@ -1942,6 +2046,47 @@ double e0(const Vector &x)
         else {
             return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0);
         }
+    }
+    case 5:
+    {
+        const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 0.4 * irg;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        MFEM_ABORT("Error in problem 5!");
+        return 0.0;
+    }
+    case 6:
+    {
+        const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+        if (x(0) >= 0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) >= 0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) <  0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        if (x(0) >= 0.5 && x(1) <  0.5) {
+            return 1.0 * irg;
+        }
+        MFEM_ABORT("Error in problem 5!");
+        return 0.0;
+    }
+    case 7:
+    {
+        const double rho = rho0(x), gamma = gamma_func(x);
+        return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");
