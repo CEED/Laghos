@@ -766,7 +766,8 @@ int main(int argc, char *argv[])
     // time evolution.
     ParGridFunction* rho = NULL;
     rho_ratio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor);
-    FunctionCoefficient rho_coeff(rho0);
+    FunctionCoefficient rho_coeff0(rho0);
+    ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     if (fom_data)
     {
         rho = new ParGridFunction(L2FESpace);
