@@ -78,7 +78,7 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
-static double rho_ratio; // For Rayleigh-Taylor instability problem
+static double rhoRatio; // For Rayleigh-Taylor instability problem
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
@@ -765,7 +765,7 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction* rho = NULL;
-    rho_ratio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor);
+    rhoRatio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor);
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     if (fom_data)
@@ -785,7 +785,8 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FunctionCoefficient e_coeff(e0);
+            FunctionCoefficient e_coeff0(e0);
+            ProductCoefficient e_coeff(1.0 / romOptions.rhoFactor, e_coeff0);
             l2_e.ProjectCoefficient(e_coeff);
         }
         e_gf->ProjectGridFunction(l2_e);
@@ -1870,7 +1871,7 @@ double rho0(const Vector &x)
         return 1.0;
     }
     case 7:
-        return x(1) >= 0.0 ? rho_ratio : 1.0;
+        return x(1) >= 0.0 ? rhoRatio : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -2090,7 +2091,7 @@ double e0(const Vector &x)
     case 7:
     {
         const double rho = rho0(x), gamma = gamma_func(x);
-        return (4.0 + rho_ratio - rho * x(1)) / (gamma - 1.0) / rho;
+        return (4.0 + rhoRatio - rho * x(1)) / (gamma - 1.0) / rho;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");
