@@ -78,6 +78,7 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
+static double rho_ratio; // For Rayleigh-Taylor instability problem
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
@@ -310,7 +311,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
-    args.AddOption(&romOptions.rt_rhoFactor, "-rtf", "--rtfactor", "Factor for scaling Rayleigh-Taylor density ratio.");
+    args.AddOption(&romOptions.atwoodFactor, "-af", "--atwoodfactor", "Factor for Atwood number in Rayleigh-Taylor instability problem.");
     args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -764,11 +765,8 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction* rho = NULL;
-    FunctionCoefficient rho_coeff0(rho0);
-    SumCoefficient rho_coeff1(-1.0, rho_coeff0,
-                              (problem == 7) ? romOptions.rt_rhoFactor - 2.0 : 0.0,
-                              (problem == 7) ? romOptions.rt_rhoFactor - 1.0 : 1.0);
-    ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff1);
+    rho_ratio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor);
+    FunctionCoefficient rho_coeff(rho0);
     if (fom_data)
     {
         rho = new ParGridFunction(L2FESpace);
@@ -786,9 +784,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FunctionCoefficient e_coeff0(e0);
-            ProductCoefficient e_coeff1(e_coeff0, rho_coeff0);
-            RatioCoefficient e_coeff(e_coeff1, rho_coeff1);
+            FunctionCoefficient e_coeff(e0);
             l2_e.ProjectCoefficient(e_coeff);
         }
         e_gf->ProjectGridFunction(l2_e);
@@ -983,7 +979,7 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.rt_rhoFactor << " ";
+                outfile_offlineParam << romOptions.atwoodFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";
@@ -1010,7 +1006,7 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.rt_rhoFactor << " ";
+                outfile_offlineParam << romOptions.atwoodFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";
@@ -1873,7 +1869,7 @@ double rho0(const Vector &x)
         return 1.0;
     }
     case 7:
-        return x(1) >= 0.0 ? 2.0 : 1.0;
+        return x(1) >= 0.0 ? rho_ratio : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -2093,7 +2089,7 @@ double e0(const Vector &x)
     case 7:
     {
         const double rho = rho0(x), gamma = gamma_func(x);
-        return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+        return (4.0 + rho_ratio - rho * x(1)) / (gamma - 1.0) / rho;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");
