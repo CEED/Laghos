@@ -766,8 +766,8 @@ int main(int argc, char *argv[])
     ParGridFunction* rho = NULL;
     FunctionCoefficient rho_coeff0(rho0);
     SumCoefficient rho_coeff1(-1.0, rho_coeff0,
-                              (problem == 7) ? romOptions.rt_rhoFactor - 2.0: 0.0,
-                              (problem == 7) ? romOptions.rt_rhoFactor - 1.0: 1.0);
+                              (problem == 7) ? romOptions.rt_rhoFactor - 2.0 : 0.0,
+                              (problem == 7) ? romOptions.rt_rhoFactor - 1.0 : 1.0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff1);
     if (fom_data)
     {
@@ -786,7 +786,9 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FunctionCoefficient e_coeff(e0);
+            FunctionCoefficient e_coeff0(e0);
+            ProductCoefficient e_coeff1(e_coeff0, rho_coeff0);
+            RatioCoefficient e_coeff(e_coeff1, rho_coeff1);
             l2_e.ProjectCoefficient(e_coeff);
         }
         e_gf->ProjectGridFunction(l2_e);
