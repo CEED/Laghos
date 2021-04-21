@@ -1,0 +1,111 @@
+name: build-and-test-laghos
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+env:
+  HYPRE_ARCHIVE: v2.11.2.tar.gz
+  HYPRE_TOP_DIR: hypre-2.11.2
+  METIS_URL: http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD
+  METIS_ARCHIVE: metis-4.0.3.tar.gz
+  METIS_TOP_DIR: metis-4.0.3
+  MFEM_REPO: https://github.com/mfem/mfem.git
+  MFEM_BRANCH: master
+  MFEM_TOP_DIR: mfem
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout Laghos in "laghos" subdirectory. Final path: /home/runner/work/ceed/laghos/laghos
+    # Note: it must be done now to access "install-hypre", "install-metis" and "install-mfem" actions.
+    - name: checkout Laghos
+      uses: actions/checkout@v2
+      with:
+        path: laghos
+
+    - name: get MPI (Linux)
+      run: |
+        sudo apt-get install mpich libmpich-dev
+        export MAKE_CXX_FLAG="MPICXX=mpic++"
+
+    # Get Hypre through cache, or install it.
+    # Install will only run on cache miss.
+    - name: cache Hypre install
+      id: hypre-cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.HYPRE_TOP_DIR }}
+        key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v1
+
+    - name: install Hypre
+      if: steps.hypre-cache.outputs.cache-hit != 'true'
+      uses: ./laghos/.github/actions/install-hypre
+      with:
+        hypre-archive: ${{ env.HYPRE_ARCHIVE }}
+        hypre-dir: ${{ env.HYPRE_TOP_DIR }}
+
+    # Get Metis through cache, or install it.
+    # Install will only run on cache miss.
+    - name: cache Metis install
+      id: metis-cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.METIS_TOP_DIR }}
+        key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v1
+
+    - name: install Metis
+      if: steps.metis-cache.outputs.cache-hit != 'true'
+      uses: ./laghos/.github/actions/install-metis
+      with:
+        metis-url: ${{ env.METIS_URL }}
+        metis-archive: ${{ env.METIS_ARCHIVE }}
+        metis-dir: ${{ env.METIS_TOP_DIR }}
+
+    # make generic links to libraries for MFEM install
+    - name: configure links
+      run: |
+        echo "Hypre symlink:"
+        ln -s $HYPRE_TOP_DIR hypre;
+        echo "Metis symlink:"
+        ln -s $METIS_TOP_DIR metis-4.0;
+
+    - name: MFEM master commit
+      run: |
+        echo "MFEM_COMMIT=$(git ls-remote --heads ${{ env.MFEM_REPO }} ${{ env.MFEM_BRANCH }} | awk '{print $1;}')" >> $GITHUB_ENV
+
+    # Get MFEM through cache, or install it.
+    # Install will only run on cache miss.
+    - name: cache MFEM install
+      id: mfem-cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.MFEM_TOP_DIR }}
+        key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v2
+
+    - name: install MFEM
+      if: steps.mfem-cache.outputs.cache-hit != 'true'
+      uses: ./laghos/.github/actions/install-mfem
+      with:
+        mfem-repo: ${{ env.MFEM_REPO }}
+        mfem-branch: ${{ env.MFEM_BRANCH }}
+        mfem-dir: ${{ env.MFEM_TOP_DIR }}
+
+    - name: build Laghos
+      run: |
+        cd laghos && make -j
+    - name: check Laghos 1 proc
+      run: |
+        cd laghos && make checks ranks=1
+    - name: check Laghos 2 procs
+      run: |
+        cd laghos && make checks ranks=2
+    - name: test Laghos
+      run: |
+        cd laghos && make tests

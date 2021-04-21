@@ -3,8 +3,7 @@
 
 #include "mfem.hpp"
 
-#include "StaticSVDBasisGenerator.h"
-#include "IncrementalSVDBasisGenerator.h"
+#include "BasisGenerator.h"
 #include "BasisReader.h"
 
 #include "laghos_solver.hpp"
@@ -34,7 +33,6 @@ enum VariableName { X, V, E, Fv, Fe };
 
 enum offsetStyle
 {
-    usePreviousSolution,
     useInitialState,
     saveLoadOffset,
     interpolateOffset
@@ -44,7 +42,6 @@ static offsetStyle getOffsetStyle(const char* offsetType)
 {
     static std::unordered_map<std::string, offsetStyle> offsetMap =
     {
-        {"previous", usePreviousSolution},
         {"initial", useInitialState},
         {"load", saveLoadOffset},
         {"interpolate", interpolateOffset}
@@ -90,9 +87,9 @@ struct ROM_Options
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
-    bool staticSVD = false; // true: use StaticSVDBasisGenerator; false: use IncrementalSVDBasisGenerator
-    bool useOffset = false; // if true, sample variables minus initial state as an offset
-    bool RHSbasis = false; // if true, use bases for nonlinear RHS terms without mass matrix inverses applied
+    bool staticSVD = true; // true: use StaticSVD
+    bool useOffset = true; // if true, sample variables minus initial state as an offset
+    bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -106,6 +103,19 @@ struct ROM_Options
     int dimE = -1;
     int dimFv = -1;
     int dimFe = -1;
+    int max_dimX = std::numeric_limits<int>::max();
+    int max_dimV = std::numeric_limits<int>::max();
+    int max_dimE = std::numeric_limits<int>::max();
+    int max_dimFv = std::numeric_limits<int>::max();
+    int max_dimFe = std::numeric_limits<int>::max();
+
+    // Randomized SVD options
+    bool randomizedSVD = false; // true: use RandomizedSVD
+    int randdimX = -1;
+    int randdimV = -1;
+    int randdimE = -1;
+    int randdimFv = -1;
+    int randdimFe = -1;
 
     // Incremental SVD options
     double incSVD_linearity_tol = 1.e-7;
@@ -122,12 +132,13 @@ struct ROM_Options
     int tsampE = 1;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
-    bool GramSchmidt = false; // whether to use Gram-Schmidt with respect to mass matrices
+    bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
+    bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
-    offsetStyle offsetType = usePreviousSolution; // types of offset in time windows
+    offsetStyle offsetType = useInitialState; // type of offset in time windows
 
-    bool mergeXV = false; // If true, merge bases for V and X-X0 by using SVDBasisGenerator on normalized basis vectors for V and X-X0.
+    bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
@@ -147,7 +158,7 @@ public:
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
-          energyFraction_X(input.energyFraction_X), sampleF(input.RHSbasis), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
+          energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
@@ -159,94 +170,73 @@ public:
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
-        if (input.staticSVD)
+        const bool output_rightSV = (input.spaceTimeMethod != no_space_time);
+
+        CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1, output_rightSV);
+        CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1, output_rightSV);
+        bool staticSVD = (input.staticSVD || input.randomizedSVD);
+        if (!staticSVD)
         {
-            {
-                const bool output_rightSV = (input.spaceTimeMethod != no_space_time);
+            x_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            x_options.setMaxBasisDimension(max_model_dim);
+            x_options.setSingularValueTol(input.incSVD_singular_value_tol);
 
-                CAROM::StaticSVDOptions static_x_options(
-                    tH1size,
-                    max_model_dim,
-                    output_rightSV
-                );
-                static_x_options.max_time_intervals = 1; // TODO: can this be in the constructor?
-                CAROM::StaticSVDOptions static_e_options(
-                    tL2size,
-                    max_model_dim,
-                    output_rightSV
-                );
-                static_e_options.max_time_intervals = 1; // TODO: can this be in the constructor?
-                generator_X = new CAROM::StaticSVDBasisGenerator(
-                    static_x_options,
-                    BasisFileName(basename, VariableName::X, window, parameterID));
-                generator_V = new CAROM::StaticSVDBasisGenerator(
-                    static_x_options,
-                    BasisFileName(basename, VariableName::V, window, parameterID));
-                generator_E = new CAROM::StaticSVDBasisGenerator(
-                    static_e_options,
-                    BasisFileName(basename, VariableName::E, window, parameterID));
-
-                if (sampleF)
-                {
-                    generator_Fv = new CAROM::StaticSVDBasisGenerator(
-                        static_x_options,
-                        BasisFileName(basename, VariableName::Fv, window, parameterID));
-                    generator_Fe = new CAROM::StaticSVDBasisGenerator(
-                        static_e_options,
-                        BasisFileName(basename, VariableName::Fe, window, parameterID));
-                }
-            }
+            e_options.setIncrementalSVD(input.incSVD_linearity_tol,
+                                        input.initial_dt,
+                                        input.incSVD_sampling_tol,
+                                        input.t_final,
+                                        true);
+            e_options.setMaxBasisDimension(max_model_dim);
+            e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
-        else  // Incremental version
+        if (input.randomizedSVD)
         {
-            CAROM::IncrementalSVDOptions inc_x_options(
-                tH1size,
-                max_model_dim,
-                input.incSVD_linearity_tol,
-                max_model_dim,
-                input.initial_dt,
-                input.incSVD_sampling_tol,
-                input.t_final,
-                false,
-                true
-            );
-            inc_x_options.singular_value_tol = input.incSVD_singular_value_tol;
-            inc_x_options.max_time_intervals = 1;
-            CAROM::IncrementalSVDOptions inc_e_options(
-                tL2size,
-                max_model_dim,
-                input.incSVD_linearity_tol,
-                max_model_dim,
-                input.initial_dt,
-                input.incSVD_sampling_tol,
-                input.t_final,
-                false,
-                true
-            );
-            inc_e_options.singular_value_tol = input.incSVD_singular_value_tol;
-            inc_e_options.max_time_intervals = 1;
-            generator_X = new CAROM::IncrementalSVDBasisGenerator(
-                inc_x_options,
-                basename + "/" + ROMBasisName::X + std::to_string(window));
+            x_options.setRandomizedSVD(true, input.randdimX);
+        }
 
-            generator_V = new CAROM::IncrementalSVDBasisGenerator(
-                inc_x_options,
-                basename + "/" + ROMBasisName::V + std::to_string(window));
 
-            generator_E = new CAROM::IncrementalSVDBasisGenerator(
-                inc_e_options,
-                basename + "/" + ROMBasisName::E + std::to_string(window));
-
-            if (sampleF)
+        generator_X = new CAROM::BasisGenerator(
+            x_options,
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            x_options.setRandomizedSVD(true, input.randdimV);
+        }
+        generator_V = new CAROM::BasisGenerator(
+            x_options,
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+        if (input.randomizedSVD)
+        {
+            e_options.setRandomizedSVD(true, input.randdimE);
+        }
+        generator_E = new CAROM::BasisGenerator(
+            e_options,
+            !staticSVD,
+            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+        if (!sns)
+        {
+            if (input.randomizedSVD)
             {
-                generator_Fv = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_x_options,
-                    basename + "/" + ROMBasisName::Fv + std::to_string(window));
-
-                generator_Fe = new CAROM::IncrementalSVDBasisGenerator(
-                    inc_e_options,
-                    basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                x_options.setRandomizedSVD(true, input.randdimFv);
             }
+            generator_Fv = new CAROM::BasisGenerator(
+                x_options,
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+            if (input.randomizedSVD)
+            {
+                e_options.setRandomizedSVD(true, input.randdimFe);
+            }
+            generator_Fe = new CAROM::BasisGenerator(
+                e_options,
+                !staticSVD,
+                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
         }
 
         SetStateVariables(S_init);
@@ -279,7 +269,7 @@ public:
             }
             else
             {
-                // Compute (and save unless using previous mode) offsets for the current window in the offline phase
+                // Compute and save offsets for the current window in the offline phase
                 for (int i=0; i<tH1size; ++i)
                 {
                     (*initX)(i) = X[i];
@@ -295,12 +285,9 @@ public:
                     (*initE)(i) = E[i];
                 }
 
-                if (input.offsetType != usePreviousSolution)
-                {
-                    initX->write(path_init + "X" + std::to_string(window));
-                    initV->write(path_init + "V" + std::to_string(window));
-                    initE->write(path_init + "E" + std::to_string(window));
-                }
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
 
                 const double Vnorm = initV->norm();
                 int osVT = (Vnorm == 0.0) ? 1 : 0;
@@ -312,7 +299,7 @@ public:
 
     void SampleSolution(const double t, const double dt, Vector const& S);
 
-    void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff);
+    void Finalize(Array<int> &cutoff);
 
     int MaxNumSamples()
     {
@@ -341,7 +328,7 @@ private:
 
     std::string basename = "run";
 
-    CAROM::SVDBasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
+    CAROM::BasisGenerator *generator_X, *generator_V, *generator_E, *generator_Fv, *generator_Fe;
 
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
@@ -352,7 +339,7 @@ private:
 
     ParGridFunction gfH1, gfL2;
 
-    const bool sampleF;
+    const bool sns;
 
     const bool Voffset;
     const bool useXV;
@@ -458,8 +445,6 @@ public:
         delete basisE;
         delete basisFv;
         delete basisFe;
-        delete fH1;
-        delete fL2;
         delete spX;
         delete spV;
         delete spE;
@@ -484,6 +469,13 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        if (!hyperreduce)
+        {
+            delete fH1;
+            delete fL2;
+            delete gfH1;
+            delete gfL2;
+        }
     }
 
     void Init(ROM_Options const& input, Vector const& S);
@@ -534,6 +526,12 @@ public:
     void HyperreduceRHS_V(Vector &v) const;
     void HyperreduceRHS_E(Vector &e) const;
 
+    void ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev);
+    void computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window);
+
+    void writeSP(ROM_Options const& input, const int window = 0) const;
+    void readSP(ROM_Options const& input, const int window = 0);
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
@@ -573,7 +571,7 @@ public:
         return BEsp;
     }
 
-    void ComputeReducedMatrices();
+    void ComputeReducedMatrices(bool sns1);
 
     void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
     void GetSpaceTimeInitialGuess(Vector& st) const;
@@ -592,8 +590,10 @@ public:
 
 private:
     const bool hyperreduce;
+    const bool hyperreduce_prep;
     const bool offsetInit;
-    const bool RHSbasis;
+    const bool use_sns;
+    hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
     int rdimx, rdimv, rdime, rdimfv, rdimfe;
     int nprocs, rank, rowOffsetH1, rowOffsetL2;
@@ -602,10 +602,10 @@ private:
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
 
-    const int H1size;
-    const int L2size;
-    const int tH1size;
-    const int tL2size;
+    int H1size;
+    int L2size;
+    int tH1size;
+    int tL2size;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
@@ -619,7 +619,8 @@ private:
 
     Vector mfH1, mfL2;
 
-    ParGridFunction gfH1, gfL2;
+    ParGridFunction* gfH1;
+    ParGridFunction* gfL2;
 
     CAROM::Vector *rX = 0;
     CAROM::Vector *rV = 0;
@@ -663,6 +664,10 @@ protected:
     CAROM::Matrix *BsinvV = NULL;
     CAROM::Matrix *BsinvE = NULL;
 
+    CAROM::Matrix *BwinX = NULL;
+    CAROM::Matrix *BwinV = NULL;
+    CAROM::Matrix *BwinE = NULL;
+
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
     CAROM::Vector *initE = 0;
@@ -670,6 +675,10 @@ protected:
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
     CAROM::Vector *BX0 = NULL;
+
+    CAROM::Vector *BtInitDiffX = 0;  // TODO: destructor
+    CAROM::Vector *BtInitDiffV = 0;
+    CAROM::Vector *BtInitDiffE = 0;
 
     int numSamplesX = 0;
     int numSamplesV = 0;
@@ -811,7 +820,7 @@ class ROM_Operator : public TimeDependentOperator
 public:
     ROM_Operator(ROM_Options const& input, ROM_Basis *b, Coefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
-                 const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
+                 const bool visc, const bool vort, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol,
                  H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
                  std::vector<double> *timesteps = NULL);
@@ -835,8 +844,8 @@ public:
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
-    void InducedGramSchmidtInitialize(Vector &S);
-    void InducedGramSchmidtFinalize(Vector &S);
+    void ApplyHyperreduction(Vector &S);
+    void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
     // TODO: should the following space time functions be refactored into a new space time ROM operator class?
     void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
@@ -892,8 +901,9 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool useReducedMv = false;  // TODO: remove this?
-    bool useReducedMe = false;  // TODO: remove this?
+    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
+    bool noMsolve = false;
+    bool useReducedM = false;  // TODO: remove this?
 
     DenseMatrix invMvROM, invMeROM;
 
@@ -904,13 +914,17 @@ private:
     DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
-    void UndoInducedGramSchmidt(const int var, Vector &S);
-    void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
-    void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+
+    /*
+      void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+      void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
+    */
 
     const SpaceTimeMethod spaceTimeMethod;
 
     const bool GaussNewton = true; // TODO: eliminate this
+
+    void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 #endif // MFEM_LAGHOS_ROM

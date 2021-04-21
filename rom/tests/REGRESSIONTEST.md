@@ -59,11 +59,19 @@ Here are some example runs and results:
 
 ./runRegressionTests.sh -> Run all tests.
 
+./runRegressionTests.sh -l "[LIB_PATH]" -> Run tests using different directory containing mfem and libROM for baseline.
+
 ./runRegressionTests.sh -f -> Run all tests, stopping at the first test failure on each processor.
 
 ./runRegressionTests.sh -t -> Run all tests, but uses the current user branch (as on the Github repo) as the baseline to verify new tests or uncommitted local changes.
 
+./runRegressionTests.sh -a -> Run all absolute* tests, but compare the local branch to
+the master branch as the baseline to verify new tests or uncommitted local changes.
+Only FOM solutions, ROM relative errors, and speed up are checked.
+
 ./runRegressionTests.sh -d -> Run all tests, but do not do comparisons. Failures only occur if the simulations do not run successfully.
+
+./runRegressionTests.sh -x -> Run all tests, but use the old regression test commands for the baseline and the new regression test commands for the user branch. This is useful if you would like to change the command-line for certain tests, but expect the same output. This can not be used with absolute tests.
 
 ./runRegressionTests.sh -i "sedov_blast gresho_vortices" -> Run sedov_blast and gresho_vortices.
 

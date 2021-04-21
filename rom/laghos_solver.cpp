@@ -59,7 +59,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
         if (myid == 0 && newly_opened)
         {
             const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
-                               ? "mAcRjlPPPPPPPP" : "maaAcl";
+                               ? "mAcRjl" : "mmaaAcl";
 
             sock << "window_title '" << title << "'\n"
                  << "window_geometry "
@@ -87,7 +87,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         ParGridFunction &rho0,
         int source_type_, double cfl_,
         Coefficient *material_,
-        bool visc, bool pa,
+        bool visc, bool vort, bool pa,
         double cgt, int cgiter,
         double ftz,
         int h1_basis_type,
@@ -101,7 +101,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       l2dofs_cnt(l2_fes.GetFE(0)->GetDof()),
       h1dofs_cnt(h1_fes.GetFE(0)->GetDof()),
       source_type(source_type_), cfl(cfl_),
-      use_viscosity(visc), p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
+      use_viscosity(visc), use_vorticity(vort),
+      p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
       noMvSolve(noMvSolve_), noMeSolve(noMeSolve_),
       material_pcf(material_),
@@ -257,12 +258,22 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     dv.MakeRef(&H1FESpace, dS_dt, VsizeH1);
     dv = 0.0;
 
+    ParGridFunction accel_src_gf;
+    if (source_type == 2)
+    {
+        accel_src_gf.SetSpace(&H1FESpace);
+        RTCoefficient accel_coeff(dim);
+        accel_src_gf.ProjectCoefficient(accel_coeff);
+        accel_src_gf.Read();
+    }
+
     Vector one(VsizeL2), rhs(VsizeH1), B, X;
     one = 1.0;
     if (p_assembly)
     {
         timer.sw_force.Start();
         ForcePA.Mult(one, rhs);
+
         if (ftz_tol>0.0)
         {
             for (int i = 0; i < VsizeH1; i++)
@@ -275,6 +286,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         }
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (source_type == 2) // 2D Rayleigh-Taylor
+        {
+            Vector rhs_accel(rhs.Size());
+            VMassPA.Mult(accel_src_gf, rhs_accel);
+            rhs += rhs_accel;
+        }
 
         if (noMvSolve)
         {
@@ -310,6 +328,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         Force.Mult(one, rhs);
         timer.sw_force.Stop();
         rhs.Neg();
+
+        if (source_type == 2)
+        {
+            Vector rhs_accel(rhs.Size());
+            Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
+            rhs += rhs_accel;
+        }
 
         if (noMvSolve)
         {
@@ -753,6 +778,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     {
                         v.GetVectorGradient(*T, sgrad_v);
                     }
+
+                    double vorticity_coeff = 1.0;
+                    if (use_vorticity)
+                    {
+                        const double grad_norm = sgrad_v.FNorm();
+                        const double div_v = fabs(sgrad_v.Trace());
+                        vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+                    }
+
                     sgrad_v.Symmetrize();
                     double eig_val_data[3], eig_vec_data[9];
                     if (dim==1)
@@ -780,7 +814,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     // eps must be scaled appropriately if a different unit system is
                     // being used.
                     const double eps = 1e-12;
-                    visc_coeff += 0.5 * rho * h * sound_speed *
+                    visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
                                   (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
 
                     stress.Add(visc_coeff, sgrad_v);

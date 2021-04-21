@@ -23,13 +23,10 @@ mkdir -p $LIB_DIR
 # Install HYPRE
 cd $LIB_DIR
 if [ ! -d "hypre" ]; then
-  wget https://computing.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods/download/hypre-2.11.2.tar.gz
-  tar -zxvf hypre-2.11.2.tar.gz
-  cd hypre-2.11.2/src
+  git clone https://github.com/hypre-space/hypre.git
+  cd hypre/src
   ./configure --disable-fortran
   make -j
-  cd $LIB_DIR
-  mv hypre-2.11.2 hypre
 fi
 
 # Install PARMETIS 4.0.3
@@ -54,6 +51,7 @@ if [ ! -d "mfem" ]; then
   git clone https://github.com/mfem/mfem.git
 fi
 cd mfem
+git pull
 if [[ "debug" == $1 ]]; then
   make pdebug -j MFEM_USE_MPI=YES MFEM_USE_METIS=YES MFEM_USE_METIS_5=YES METIS_DIR="$METIS_DIR" METIS_OPT="$METIS_OPT" METIS_LIB="$METIS_LIB"
 else
@@ -64,10 +62,9 @@ fi
 cd $LIB_DIR
 if [ ! -d "libROM" ]; then
   git clone https://github.com/LLNL/libROM.git
-  cd libROM
-  ./scripts/laghos_compile.sh
 fi
 cd libROM
+git pull
 if [[ "debug" == $1 ]]; then
   ./scripts/laghos_compile.sh -DCMAKE_BUILD_TYPE=Debug
 else
@@ -87,6 +84,11 @@ if [ ! -d "astyle" ]; then
         ;;
   esac
   tar -zxvf astyle_2.05.1.tar.gz
-  cd astyle/build/gcc
+  cd astyle/build
+  if [ -d "gcc" ]; then
+    cd gcc
+  elif [ -d "mac" ]; then
+    cd mac
+  fi
   make
 fi

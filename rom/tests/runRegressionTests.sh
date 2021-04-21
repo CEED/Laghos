@@ -9,27 +9,35 @@
 ###############################################################################
 # SET UP
 ###############################################################################
-usage() {
-	echo "Unknown option. Refer to REGRESSIONTEST.md"
-	exit 1
-}
 
 # Stop at failure
 stopAtFailure=false
+absolute=false
 dryRun=false
+useOldTests=false
 useUserAsBaseline=false
 
 # Skip setup (git pull, make))
 ${skipSetup:=false}
+
 # Get options
-while getopts ":i:e:th:dh:fh" o;
+while getopts ":ah:i:l:e:xh:th:dh:fh" o;
 do
 	case "${o}" in
+		a)
+			absolute=true
+			;;
 		i)
 			i=${OPTARG}
       ;;
+		l)
+			BASELINE_LIBS_DIR=${OPTARG}
+	     ;;
     e)
       e=${OPTARG}
+      ;;
+		x)
+      useOldTests=true
       ;;
 		t)
       useUserAsBaseline=true
@@ -41,7 +49,8 @@ do
 			stopAtFailure=true
 			;;
     *)
-      usage
+			echo "Unknown option. Refer to REGRESSIONTEST.md"
+			exit 1
       ;;
     esac
 done
@@ -49,7 +58,18 @@ shift $((OPTIND-1))
 
 # If both include and exclude are set, fail
 if [[ -n "${i}" ]] && [[ -n "${e}" ]]; then
-    usage
+    echo "Choose only include or exclude, not both."
+		exit 1
+fi
+
+# If both useUserAsBaseline and absolute are set, fail
+if [[ "$useUserAsBaseline" == "true" ]] && [[ "$absolute" == "true" ]]; then
+    echo "Choose only -t or -a, not both."
+		exit 1
+fi
+
+if [[ "$useOldTests" == "true" ]] && [[ "$absolute" == "true" ]]; then
+    echo "Choose only -x or -a, not both."
 		exit 1
 fi
 
@@ -100,6 +120,19 @@ done
 # COMPILATION
 ###############################################################################
 
+# Check machine
+case "$(uname -s)" in
+    Linux*)
+		  COMMAND="srun -p pdebug"
+			MACHINE="Linux";;
+    Darwin*)
+		  COMMAND="mpirun -oversubscribe"
+			MACHINE="Darwin";;
+    *)
+			echo "The regression tests can only run on Linux and MAC."
+			exit 1
+esac
+
 # Create results directory
 RESULTS_DIR=$DIR/results
 
@@ -107,10 +140,18 @@ RESULTS_DIR=$DIR/results
 BASE_DIR=$DIR/..
 
 # Save directory of the baseline Laghos executable
-BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
+if [[ "$absolute" == "true" ]]; then
+	BASELINE_LAGHOS_DIR=$DIR/Laghos
+else
+	BASELINE_LAGHOS_DIR=$DIR/Laghos/rom
+fi
 
 # Get LIBS_DIR
 LIBS_DIR="$BASE_DIR/dependencies"
+if [ -z ${BASELINE_LIBS_DIR+x} ]; then
+	BASELINE_LIBS_DIR=$LIBS_DIR
+fi
+
 
 # If skipping setup, don't do make
 if [[ "$skipSetup" == "false" ]];
@@ -135,7 +176,7 @@ then
 	echo "Cleaned the regression test directory and user branch build" >> $setupLogFile 2>&1
 
 	# Compile the C++ comparators
-	echo "Compiling the file, basis, and solution comparators" >> $setupLogFile 2>&1
+	echo "Compiling the comparator files" >> $setupLogFile 2>&1
 	make regtest --directory=$BASE_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
 
 	# Check if make built correctly
@@ -152,6 +193,13 @@ then
 		# Clone and compile user branch as baseline
 		echo "Cloning $(git branch | sed -n '/\* /s///p') as the baseline branch" >> $setupLogFile 2>&1
 		git -C $DIR clone -b "$(git branch | sed -n '/\* /s///p')" https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+	elif [[ "$absolute" == "true" ]]; then
+
+		# Clone and compile master as branch
+		echo "Cloning master as the baseline branch" >> $setupLogFile 2>&1
+		git -C $DIR clone https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
+		sed '/using namespace mfem;/r PrintParGridFunction.txt' Laghos/laghos.cpp | sed '/MFEM_VERIFY(!check || checks == 2, "Check error!");/r PrintParGridFunctionCall.txt' > temp.cpp && mv temp.cpp Laghos/laghos.cpp
+
 	else
 
 		# Clone and compile rom branch of Laghos as baseline
@@ -159,8 +207,11 @@ then
 		git -C $DIR clone -b rom https://github.com/CEED/Laghos.git >> $setupLogFile 2>&1
 	fi
 
+	# Safety check
+	rm -rf $BASELINE_LAGHOS_DIR/.git
+
 	# Check that rom branch of Laghos is present
-	if [ ! -d $BASE_LAGHOS_DIR ]; then
+	if [ ! -d $BASELINE_LAGHOS_DIR ]; then
 		echo "Baseline Laghos directory could not be cloned" | tee -a $setupLogFile
 		exit 1
 	fi
@@ -188,7 +239,12 @@ then
 
 	# Build the baseline Laghos executable
 	echo "Building the baseline branch" >> $setupLogFile 2>&1
-	make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	echo "Using $BASELINE_LIBS_DIR as the baseline libs directory." >> $setupLogFile 2>&1
+	if [[ "$absolute" == "false" ]]; then
+		make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
+	else
+		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$BASELINE_LIBS_DIR/mfem" >> $setupLogFile 2>&1
+	fi
 
 	# Check if make built correctly
 	if [[ $? -ne 0 ]];
@@ -197,40 +253,44 @@ then
 	  exit 1
 	fi
 
-	# Build merge
-	make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$LIBS_DIR" >> $setupLogFile 2>&1
+	if [[ "$absolute" == "false" ]]; then
+		# Build merge
+		make merge --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 
-	# Check if make built correctly
-	if [[ $? -ne 0 ]];
-	then
-		echo "The baseline branch merge executable failed to build." | tee -a $setupLogFile
-		exit 1
+		# Check if make built correctly
+		if [[ $? -ne 0 ]];
+		then
+			echo "The baseline branch merge executable failed to build." | tee -a $setupLogFile
+			exit 1
+		fi
 	fi
 fi
 
 # If running on slurm, parallelize the tests.
 if [[ -z "$SLURM" ]]; then
 	if [[ $0 == *"slurm"* ]]; then
+		OPTIONS=""
+		if [[ "$stopAtFailure" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -f"
+		fi
+		if [[ "$useOldTests" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -x"
+		fi
+		if [[ "$dryRun" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -d"
+		fi
+		if [[ "$absolute" == "true" ]];
+		then
+			OPTIONS="$OPTIONS -a"
+		fi
 		SLURM=true
 		for simulation in "${testsToRun[@]}"
 		do
 			echo "Forking child. Check ${RESULTS_DIR}/${simulation}-results.log for immediate results."
-			if [[ "$stopAtFailure" == "true" ]];
-			then
-				if [[ "$dryRun" == "true" ]];
-				then
-					skipSetup=true SLURM=true $DIR/runRegressionTests.sh -f -d -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-				else
-					skipSetup=true SLURM=true $DIR/runRegressionTests.sh -f -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-				fi
-			else
-				if [[ "$dryRun" == "true" ]];
-				then
-					skipSetup=true SLURM=true $DIR/runRegressionTests.sh -d -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-				else
-					skipSetup=true SLURM=true $DIR/runRegressionTests.sh -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
-				fi
-			fi
+			skipSetup=true SLURM=true $DIR/runRegressionTests.sh $OPTIONS -i $simulation >> ${RESULTS_DIR}/${simulation}-results.log 2>&1 &
 		done
 		echo "After all processes are finished, results will be concatenated and outputted to ${RESULTS_DIR}/sbatch-results.log."
 		wait
@@ -245,17 +305,6 @@ fi
 ###############################################################################
 # RUN TESTS
 ###############################################################################
-
-# Check machine
-case "$(uname -s)" in
-    Linux*)
-		  COMMAND="srun -p pdebug";;
-    Darwin*)
-		  COMMAND="mpirun -oversubscribe";;
-    *)
-			echo "The regression tests can only run on Linux and MAC."
-			exit 1
-esac
 
 # Test number counter
 testNum=0
@@ -275,7 +324,16 @@ do
 
       # Get script name without extension
 			scriptName=$(basename $script)
-      scriptName="${scriptName%.*}"
+			if [[ "$useOldTests" == "true" ]]; then
+				oldScript=${BASELINE_LAGHOS_DIR}/tests/${simulation}/$scriptName
+			fi
+	    scriptName="${scriptName%.*}"
+
+			if [[ "$absolute" == "true" ]] && [[ "$scriptName" != "absolute"* ]]; then
+				continue
+			elif [[ "$absolute" == "false" ]] && [[ "$scriptName" == "absolute"* ]]; then
+				continue
+			fi
 
 			subTestNum=0
 			parallel=false
@@ -298,7 +356,6 @@ do
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
 				MERGE="$HEADER ./merge -o ${OUTPUT_DIR}"
-				LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
@@ -307,12 +364,22 @@ do
 				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$LAGHOS')
 				if [[ $RAN_COMMAND == *"writesol"* ]]; then
 					testtype=fom
+				elif [[ $RAN_COMMAND == *"romhr"* ]]; then
+					testtype=romhr
+					rm -rf ${BASELINE_LAGHOS_DIR}/run/${OUTPUT_DIR}/ROMsol/*
+					rm -rf ${BASE_DIR}/run/${OUTPUT_DIR}/ROMsol/*
 				elif [[ $RAN_COMMAND == *"online"* ]]; then
 					testtype=online
 					rm -rf ${BASELINE_LAGHOS_DIR}/run/${OUTPUT_DIR}/ROMsol/*
 					rm -rf ${BASE_DIR}/run/${OUTPUT_DIR}/ROMsol/*
 				elif [[ $RAN_COMMAND == *"restore"* ]]; then
-					testtype=restore
+
+					# If absolute, restore can be skipped
+					if [[ "$absolute" == "false" ]]; then
+						testtype=restore
+					else
+						continue
+					fi
 				else
 					if [[ "$parallel" == "false" ]] && [[ $NUM_PARALLEL_PROCESSORS -ne 0 ]];
 					then
@@ -362,22 +429,46 @@ do
 					echo -n "$testNum. ${scriptName}-${testName}: RUNNING"
 				fi
 
-				# Run simulation from rom branch
-				echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
-				(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
+				if [[ "$absolute" == "true" ]]; then
+
+					# Absolute on master branch requires different options for running Laghos
+					if [[ "$testtype" == "fom" ]]; then
+						mkdir -p $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}
+						LAGHOS="$HEADER laghos -k run/${OUTPUT_DIR}/Laghos"
+
+						# Run simulation from master branch
+						echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
+						echo "++ $LAGHOS $absoluteFOMOptions" >> $simulationLogFile 2>&1
+						(cd $BASELINE_LAGHOS_DIR && eval "$LAGHOS $absoluteFOMOptions" >> $simulationLogFile 2>&1)
+					fi
+
+				else
+					LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
+					LAGHOS_SERIAL="$COMMAND -n 1 laghos -o ${OUTPUT_DIR}"
+
+					# Run simulation from baseline branch
+					echo "Running baseline simulation for comparison" >> $simulationLogFile 2>&1
+					if [[ "$useOldTests" == "true" ]]; then
+						(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$oldScript") >> $simulationLogFile 2>&1
+					else
+						(cd $BASELINE_LAGHOS_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
+					fi
+				fi
 
 				# Check if simulation failed
 				if [[ "$?" -ne 0 ]];
 				then
 					echo "Something went wrong running the baseline simulation with the
-					test script: $scriptName. Try running 'make clean' and 'make'." >> $simulationLogFile 2>&1
+					test script: $scriptName." >> $simulationLogFile 2>&1
 					set_fail
 
 					# Skip to next test
 					continue 1
 				fi
 
-				# # Run simulation from current branch
+				# Run simulation from current branch
+				LAGHOS="$HEADER laghos -o ${OUTPUT_DIR}"
+				LAGHOS_SERIAL="$COMMAND -n 1 laghos -o ${OUTPUT_DIR}"
 				echo "Running new simulation for regression testing" >> $simulationLogFile 2>&1
 				(cd $BASE_DIR && set -o xtrace && . "$script") >> $simulationLogFile 2>&1
 
@@ -392,143 +483,200 @@ do
 					continue 1
 				fi
 
+				# Necessary for now, mkdir in C++ does something weird where bash can't find the file
+				ls $BASELINE_LAGHOS_DIR/run > /dev/null
+				ls $BASE_DIR/run > /dev/null
+
 				# If doing dry run, skip comparisons
 				if [[ "$dryRun" == "false" ]]; then
 
-					# Necessary for now, mkdir in C++ does something weird where this bash can't find the file
-					ls $BASELINE_LAGHOS_DIR/run > /dev/null
-					ls $BASE_DIR/run > /dev/null
+					# Check if comparison failed
+					check_fail() {
+						if [[ "${PIPESTATUS[0]}" -ne 0 ]];
+						then
+							set_fail
 
-					# Find number of steps simulation took in rom to compare final timestep later
-					cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
-					if [[ $? -eq 1 ]]; then
-						echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
-						set_fail
-						continue 1
-					fi
-					num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+							# Skip to next test
+							break 1
+						fi
+					}
 
-					# After simulations complete, compare results
-					for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
-					do
-						fileName="$(basename "$baselineTestFile")"
+					# Check if a file exists on the user branch
+					check_exists() {
+						if [ ! -f $targetTestFile ]; then
+							echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
+							set_fail
 
-						# Skip if not correct file type to compare
-						check_file_type() {
-							if [[ $testtype == "fom" ]]; then
-								if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
-								[[ "$fileName" != "sVal"*".000000" ]]; then
-									continue 1
+							# Skip to next test
+							break 1
+						fi
+					}
+
+					if [[ "$absolute" == "false" ]]; then
+
+						# Find number of steps simulation took in rom-dev to compare final timestep later
+						cmp -s "$BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps" "$BASE_DIR/run/${OUTPUT_DIR}/num_steps" > /dev/null
+						if [[ $? -eq 1 ]]; then
+							echo "The number of time steps are different from the baseline." >> $simulationLogFile 2>&1
+							set_fail
+							continue 1
+						fi
+						num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+
+						# After simulations complete, compare results
+						for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
+						do
+							fileName="$(basename "$baselineTestFile")"
+
+							# Skip if not correct file type to compare
+							check_file_type() {
+								if [[ $testtype == "fom" ]]; then
+									if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
+									[[ "$fileName" != "sVal"*".000000" ]]; then
+										continue 1
+									fi
+								elif [[ $testtype == "romhr" ]]; then
+									if [[ "$fileName" != "ROMsol" ]]; then
+										continue 1
+									fi
+								elif [[ $testtype == "online" ]]; then
+									if [[ "$fileName" != "ROMsol" ]]; then
+										continue 1
+									fi
+								elif [[ $testtype == "restore" ]]; then
+									if [[ "$fileName" != *"_gf.000000" ]] && [[ "$fileName" != *"norms.000000" ]]; then
+										continue 1
+									fi
 								fi
-							elif [[ $testtype == "online" ]]; then
-								if [[ "$fileName" != *"norms.000000" ]] && [[ "$fileName" != "ROMsol" ]]; then
-									continue 1
-								fi
-							elif [[ $testtype == "restore" ]]; then
-								if [[ "$fileName" != *"_gf.000000" ]]; then
-									continue 1
-								fi
-							fi
-						}
-						check_file_type
+							}
+							check_file_type
 
-						# Check if comparison failed
-						check_fail() {
-							if [[ "${PIPESTATUS[0]}" -ne 0 ]];
-							then
-								set_fail
+							# Compare last timestep of ROMSol solutions
+							if [[ -d "$baselineTestFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
+									last_rom_step=$(ls $baselineTestFile -1 | sed -e s/[^0-9]//g | sort -nr | head -n1)
+									echo "Comparing: "$fileName"/romS_$last_rom_step" >> $simulationLogFile 2>&1
+									targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$last_rom_step"
+									check_exists
+									baselineTestFile="$baselineTestFile/romS_$last_rom_step"
+									if [[ "$parallel" == "true" ]]; then
+										$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
+									else
+										$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
+									fi
+									check_fail
 
-								# Skip to next test
-								break 1
-							fi
-						}
-
-						# Check if a file exists on the user branch
-						check_exists() {
-							if [ ! -f $targetTestFile ]; then
-								echo "${fileName} exists on the baseline branch, but not on the user branch." >> $simulationLogFile 2>&1
-								set_fail
-
-								# Skip to next test
-								break 1
-							fi
-						}
-
-						# Compare last timestep of ROMSol solutions
-						if [[ -d "$baselineTestFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
-								echo "Comparing: "$fileName"/romS_$num_steps" >> $simulationLogFile 2>&1
-								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName/romS_$num_steps"
+							# Compare FOM basis
+							elif [[ "$fileName" == "basis"* ]]; then
+								echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
 								check_exists
-								baselineTestFile="$baselineTestFile/romS_$num_steps"
+								baselineTestFile="${baselineTestFile%.*}"
+								targetTestFile="${targetTestFile%.*}"
 								if [[ "$parallel" == "true" ]]; then
-									$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
+									$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+								else
+									$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
+								fi
+								check_fail
+
+							# Compare singular values and norms
+							elif [[ "$fileName" == "sVal"* ]] || [[ "$fileName" == *"norms"* ]]; then
+								echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+								check_exists
+								if [[ "$parallel" == "true" ]]; then
+									$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
+								else
+									$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
+								fi
+								check_fail
+
+							# Compare solutions
+							elif [[ "$fileName" == "Sol"* ]] ; then
+								echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+								check_exists
+								if [[ "$parallel" == "true" ]]; then
+									$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+								else
+									$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
+								fi
+								check_fail
+
+							# Compare _gf
+							elif [[ "$fileName" == *"_gf"* ]] ; then
+								echo "Comparing: $fileName" >> $simulationLogFile 2>&1
+								targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+								check_exists
+								if [[ "$parallel" == "true" ]]; then
+									$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
 								else
 									$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
 								fi
 								check_fail
-
-						# Compare FOM basis
-						elif [[ "$fileName" == "basis"* ]]; then
-							echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
-							targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
-							check_exists
-							baselineTestFile="${baselineTestFile%.*}"
-							targetTestFile="${targetTestFile%.*}"
-							if [[ "$parallel" == "true" ]]; then
-								$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
-							else
-								$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
 							fi
-							check_fail
+						done
+					else
+						if [[ "$testtype" == "fom" ]]; then
+							offlineSpeed=$(sed -n -e 's/^.*Total time: //p' $simulationLogFile)
+							# After simulations complete, compare results
+							for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*
+							do
+								fileName="$(basename "$baselineTestFile")"
 
-						# Compare singular values and norms
-					elif [[ "$fileName" == "sVal"* ]] ||	[[ "$fileName" == *"norms"* ]]; then
-							echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
-							targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
-							check_exists
-							if [[ "$parallel" == "true" ]]; then
-								$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
-							else
-								$($DIR/./fileComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" >> $simulationLogFile 2>&1)
-							fi
-							check_fail
+								if [[ "$fileName" == "Sol"*".000000" ]]; then
+									echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
+									targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
+									check_exists
+									if [[ "$parallel" == "true" ]]; then
+										$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "$absoluteFOMTolParallel" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+									else
+										$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "$absoluteFOMTol" "1" >> $simulationLogFile 2>&1)
+									fi
+									check_fail
+								fi
+							done
+						elif [[ "$testtype" == "online" ]] || [[ "$testtype" == "romhr" ]]; then
+							onlineSpeed=$(sed -n -e 's/^.*Total time: //p' $simulationLogFile)
 
-						# Compare solutions
-						elif [[ "$fileName" == "Sol"* ]] ; then
-							echo "Comparing: ${fileName%.*}" >> $simulationLogFile 2>&1
-							targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
-							check_exists
-							if [[ "$parallel" == "true" ]]; then
-								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
-							else
-								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
-							fi
-							check_fail
+							# After simulations complete, compare results
+							for targetTestFile in $BASE_DIR/run/${OUTPUT_DIR}/*
+							do
+								fileName="$(basename "$targetTestFile")"
 
-						# Compare _gf
-					elif [[ "$fileName" == *"_gf"* ]] ; then
-							echo "Comparing: $fileName" >> $simulationLogFile 2>&1
-							targetTestFile="$BASE_DIR/run/${OUTPUT_DIR}/$fileName"
-							check_exists
-							if [[ "$parallel" == "true" ]]; then
-								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
-							else
-								$($DIR/./solutionComparator "$baselineTestFile" "$targetTestFile" "1.0e-5" "1" >> $simulationLogFile 2>&1)
+								# Compare singular values and norms
+								if [[ "$fileName" == *"norms.000000" ]]; then
+									echo "Checking norms: ${fileName%.*}" >> $simulationLogFile 2>&1
+									relErrorNorm=$(sed -n -e 's/^.*Rel. DIFF norm //p' $targetTestFile)
+									if [[ "$parallel" == "true" ]]; then
+										$($DIR/./checkError "$relErrorNorm" "$absoluteRelErrorTolParallel" >> $simulationLogFile 2>&1)
+									else
+										$($DIR/./checkError "$relErrorNorm" "$absoluteRelErrorTol" >> $simulationLogFile 2>&1)
+									fi
+									check_fail
+								fi
+							done
+							if [[ "$testFailed" == "false" ]] && [[ "$parallel" == "false" ]]; then
+								echo "Checking speedup" >> $simulationLogFile 2>&1
+								$($DIR/./computeSpeedup "$offlineSpeed" "$onlineSpeed" "$speedupTol" >> $simulationLogFile 2>&1)
+								if [[ "${PIPESTATUS[0]}" -ne 0 ]];
+								then
+									set_fail
+								fi
 							fi
-							check_fail
 						fi
-					done
-
+					fi
 				fi
 
 				# Passed
-				if [[ "$testFailed" == false ]]; then
+				if [[ "$testFailed" == "false" ]]; then
 					set_pass
 				fi
 			done
 		fi
 	done
 done
+
 
 
 echo "${testNumPass} passed, ${testNumFail} failed out of ${testNum} tests"

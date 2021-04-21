@@ -1,8 +1,7 @@
 #ifndef MFEM_LAGHOS_UTILS
 #define MFEM_LAGHOS_UTILS
 
-#include "StaticSVDBasisGenerator.h"
-#include "IncrementalSVDBasisGenerator.h"
+#include "BasisGenerator.h"
 
 #include "mfem.hpp"
 
@@ -11,9 +10,9 @@
 using namespace std;
 using namespace mfem;
 
-void BasisGeneratorFinalSummary(CAROM::SVDBasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout=true);
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout=true);
 
-void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::SVDBasisGenerator* bg, const bool usingWindows = false, const int window = -1);
+void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows = false, const int window = -1);
 
 int ReadTimesteps(std::string const& path, std::vector<double>& time);
 
@@ -28,5 +27,20 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions);
 void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf);
 void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf);
 void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf);
+
+void writeNum(int num, std::string file_name);
+
+// read data from from text.txt and store it in vector v
+void readNum(int& num, std::string file_name);
+
+void writeDouble(double num, std::string file_name);
+
+// read data from from text.txt and store it in vector v
+void readDouble(double& num, std::string file_name);
+
+void writeVec(vector<int> v, std::string file_name);
+
+// read data from from text.txt and store it in vector v
+void readVec(vector<int> &v, std::string file_name);
 
 #endif // MFEM_LAGHOS_UTILS
