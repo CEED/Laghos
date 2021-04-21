@@ -850,11 +850,17 @@ int main(int argc, char *argv[])
     }
 
     // Rayleigh-Taylor penetration distance
-    int pd_vdof = -1;
+    int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7)
-        for (int i=0; pd_vdof < 0; ++i)
-            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0) // pmesh->Dimension() = 2
-                pd_vdof = Vsize_h1/2+i;
+    {
+        for (int i = 0; pd1_vdof < 0 || pd2_vdof < 0; ++i)
+        {
+            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0) // pmesh->Dimension() = 2
+                pd1_vdof = Vsize_h1/2+i;
+            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
+                pd2_vdof = Vsize_h1/2+i;
+        }
+    }
 
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
@@ -1798,6 +1804,18 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Rayleigh-Taylor penetration distance
+        if (problem == 7)
+        {
+            double my_pd[2], pd_max[2];
+            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
+            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (mpi.Root())
+                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
+        }
+
+
         if (visualization)
         {
             vis_v->close();
@@ -1813,10 +1831,6 @@ int main(int argc, char *argv[])
         if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
-
-        // Rayleigh-Taylor penetration distance
-        if (problem == 7)
-            cout << "Penetration distance: " << -(*S)(pd_vdof) << endl;
     }
 
     // Free the used memory.
