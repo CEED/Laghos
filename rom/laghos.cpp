@@ -849,6 +849,15 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
+    // Rayleigh-Taylor penetration distance
+    std::vector<int> interface_vdof; 
+    if (problem == 7)
+    {
+        for (int i=0; i<Vsize_h1; ++i)
+            if ((*S)(Vsize_h1+i) == 0.0)
+                interface_vdof.push_back(i);
+    }
+
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
@@ -1806,6 +1815,15 @@ int main(int argc, char *argv[])
         if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
+
+        // Rayleigh-Taylor penetration distance
+        if (problem == 7)
+        {
+            double min_y = 0.0;
+            for (int i=0; i<interface_vdof.size(); i++)
+                min_y = min(min_y, (*S)(Vsize_h1+interface_vdof[i]));
+            cout << "Penetration distance: " << -min_y << endl;
+        }
     }
 
     // Free the used memory.
