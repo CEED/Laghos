@@ -765,7 +765,7 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction* rho = NULL;
-    rhoRatio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor);
+    rhoRatio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor); // Rayleigh-Taylor initial density
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     if (fom_data)
@@ -850,13 +850,11 @@ int main(int argc, char *argv[])
     }
 
     // Rayleigh-Taylor penetration distance
-    std::vector<int> interface_vdof; 
+    int pd_vdof = -1;
     if (problem == 7)
-    {
-        for (int i=0; i<Vsize_h1; ++i)
-            if ((*S)(Vsize_h1+i) == 0.0)
-                interface_vdof.push_back(i);
-    }
+        for (int i=0; pd_vdof < 0; ++i)
+            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0) // pmesh->Dimension() = 2
+                pd_vdof = Vsize_h1/2+i;
 
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
@@ -1818,12 +1816,7 @@ int main(int argc, char *argv[])
 
         // Rayleigh-Taylor penetration distance
         if (problem == 7)
-        {
-            double min_y = 0.0;
-            for (int i=0; i<interface_vdof.size(); i++)
-                min_y = min(min_y, (*S)(Vsize_h1+interface_vdof[i]));
-            cout << "Penetration distance: " << -min_y << endl;
-        }
+            cout << "Penetration distance: " << -(*S)(pd_vdof) << endl;
     }
 
     // Free the used memory.
