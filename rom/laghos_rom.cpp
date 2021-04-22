@@ -584,23 +584,6 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     {
         // TODO: include in preprocessHyperreductionTimer?
         SetSpaceTimeInitialGuess(input);
-
-        {
-            // Read timeSamples from file
-            std::string filename = basename + "/timeSamples.csv";
-            std::ifstream infile(filename);
-
-            MFEM_VERIFY(infile.is_open(), "Time sample file does not exist.");
-            std::string line;
-            std::vector<std::string> words;
-            while (std::getline(infile, line))
-            {
-                split_line(line, words);
-                timeSamples.push_back(std::stoi(words[0]));
-            }
-
-            infile.close();
-        }
     }
 }
 
@@ -2190,6 +2173,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     writeNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
+    if (spaceTimeMethod == gnat_lspg) BsinvX->write(basename + "/" + "BsinvX" + "_" + to_string(window));
     BsinvV->write(basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->write(basename + "/" + "BsinvE" + "_" + to_string(window));
     BXsp->write(basename + "/" + "BXsp" + "_" + to_string(window));
@@ -2219,6 +2203,24 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
 
 void ROM_Basis::readSP(ROM_Options const& input, const int window)
 {
+    if (spaceTime)
+    {
+        // Read timeSamples from file
+        std::string filename = basename + "/timeSamples.csv";
+        std::ifstream infile(filename);
+
+        MFEM_VERIFY(infile.is_open(), "Time sample file does not exist.");
+        std::string line;
+        std::vector<std::string> words;
+        while (std::getline(infile, line))
+        {
+            split_line(line, words);
+            timeSamples.push_back(std::stoi(words[0]));
+        }
+
+        infile.close();
+    }
+
     readNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
     readNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
     readNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
@@ -2235,8 +2237,8 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
     BsinvX = NULL;
-    BsinvV = new CAROM::Matrix(numSamplesV, rdimfv, false);
-    BsinvE = new CAROM::Matrix(numSamplesE, rdimfe, false);
+    BsinvV = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimfv, false);
+    BsinvE = new CAROM::Matrix(timeSamples.size() * numSamplesE, rdimfe, false);
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
     BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -2249,6 +2251,12 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
     sV = new CAROM::Vector(numSamplesV, false);
     sE = new CAROM::Vector(numSamplesE, false);
+
+    if (spaceTimeMethod == gnat_lspg)
+    {
+        BsinvX = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false);
+        BsinvX->read(basename + "/" + "BsinvX" + "_" + to_string(window));
+    }
 
     BsinvV->read(basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->read(basename + "/" + "BsinvE" + "_" + to_string(window));
