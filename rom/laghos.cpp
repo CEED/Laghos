@@ -851,7 +851,7 @@ int main(int argc, char *argv[])
 
     // Rayleigh-Taylor penetration distance
     int pd1_vdof = -1, pd2_vdof = -1;
-    if (problem == 7)
+    if (problem == 7 && fom_data)
     {
         for (int i = 0; pd1_vdof < 0 || pd2_vdof < 0; ++i)
         {
@@ -994,11 +994,11 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.atwoodFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
+                outfile_offlineParam << source << " ";
+                outfile_offlineParam << romOptions.atwoodFactor << " ";
                 outfile_offlineParam.close();
             }
         }
@@ -1021,11 +1021,11 @@ int main(int argc, char *argv[])
                 std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.atwoodFactor << " ";
                 outfile_offlineParam << romOptions.blast_energyFactor << " ";
                 outfile_offlineParam << dim << " ";
                 outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
+                outfile_offlineParam << source << " ";
+                outfile_offlineParam << romOptions.atwoodFactor << endl;
                 outfile_offlineParam.close();
             }
         }
@@ -1805,7 +1805,7 @@ int main(int argc, char *argv[])
         }
 
         // Rayleigh-Taylor penetration distance
-        if (problem == 7)
+        if (problem == 7 && fom_data)
         {
             double my_pd[2], pd_max[2];
             my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
