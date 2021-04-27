@@ -849,13 +849,13 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    // Rayleigh-Taylor penetration distance
+    // 2D Rayleigh-Taylor penetration distance
     int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7 && fom_data)
     {
-        for (int i = 0; pd1_vdof < 0 || pd2_vdof < 0; ++i)
+        for (int i = 0; i < Vsize_h1/2; ++i)
         {
-            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0) // pmesh->Dimension() = 2
+            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
                 pd1_vdof = Vsize_h1/2+i;
             if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
                 pd2_vdof = Vsize_h1/2+i;
@@ -1804,7 +1804,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Rayleigh-Taylor penetration distance
+        // 2D Rayleigh-Taylor penetration distance
         if (problem == 7 && fom_data)
         {
             double my_pd[2], pd_max[2];
