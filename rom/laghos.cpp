@@ -66,6 +66,7 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 #include <fstream>
+#include <limits.h>
 
 #ifndef _WIN32
 #include <sys/stat.h>  // mkdir
@@ -1211,6 +1212,7 @@ int main(int argc, char *argv[])
     }
 
     StopWatch restoreTimer, timeLoopTimer;
+    bool converged = true;
     if (rom_restore)
     {
         // -restore phase
@@ -1373,6 +1375,11 @@ int main(int argc, char *argv[])
                 if (myid == 0)
                     cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
 
+                if (rom_build_database && !std::isfinite(romS.Norml2()))
+                {
+                    converged = false;
+                    break;
+                }
                 romS_old = romS;
                 ode_solver->Step(romS, t, dt);
 
@@ -1799,7 +1806,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    double residual = 0.0;
+    double residual = INT_MAX;
     bool residualComputed = false;
     int residualVecSize = 0;
 
@@ -1811,23 +1818,22 @@ int main(int argc, char *argv[])
         if (rom_build_database)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-            Vector residualVec;
             if (romOptions.greedyResidualType == useLastLiftedSolution)
             {
-                residualVec = Vector(lastLiftedSolution.Size());
-                subtract(lastLiftedSolution, *S, residualVec);
+                if (converged)
+                {
+                    Vector residualVec = Vector(lastLiftedSolution.Size());
+                    subtract(lastLiftedSolution, *S, residualVec);
 
-                residual = residualVec.Norml2();
-                residualVecSize = residualVec.Size();
+                    residual = residualVec.Norml2();
+                    residualVecSize = residualVec.Size();
+                }
 
                 residualComputed = true;
             }
             else if (romOptions.greedyResidualType == varyTimeStep ||
                 romOptions.greedyResidualType == varyBasisSize)
             {
-
-                Vector finalSolution = *S;
-
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);
 
@@ -1836,14 +1842,18 @@ int main(int argc, char *argv[])
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
                 {
-                    Vector previousFinalSolution;
-                    previousFinalSolution.Load(checkfile, finalSolution.Size());
+                    if (converged)
+                    {
+                        Vector finalSolution = *S;
+                        Vector previousFinalSolution;
+                        previousFinalSolution.Load(checkfile, finalSolution.Size());
 
-                    residualVec = Vector(finalSolution.Size());
-                    subtract(finalSolution, previousFinalSolution, residualVec);
+                        Vector residualVec = Vector(finalSolution.Size());
+                        subtract(finalSolution, previousFinalSolution, residualVec);
 
-                    residual = residualVec.Norml2();
-                    residualVecSize = residualVec.Size();
+                        residual = residualVec.Norml2();
+                        residualVecSize = residualVec.Size();
+                    }
 
                     checkfile.close();
                     remove(fullname.c_str());
@@ -1852,13 +1862,22 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-                    ofs.precision(16);
+                    if (converged)
+                    {
+                        Vector finalSolution = *S;
 
-                    for (int i=0; i<finalSolution.Size(); ++i)
-                        ofs << finalSolution[i] << std::endl;
+                        std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                        ofs.precision(16);
 
-                    ofs.close();
+                        for (int i=0; i<finalSolution.Size(); ++i)
+                            ofs << finalSolution[i] << std::endl;
+
+                        ofs.close();
+                    }
+                    else
+                    {
+                        residualComputed = true;
+                    }
                 }
             }
         }
