@@ -66,9 +66,9 @@ fi
 cd libROM
 git pull
 if [[ "debug" == $1 ]]; then
-  ./scripts/laghos_compile.sh -DCMAKE_BUILD_TYPE=Debug
+  ./scripts/compile.sh -DCMAKE_BUILD_TYPE=Debug
 else
-  ./scripts/laghos_compile.sh
+  ./scripts/compile.sh
 fi
 
 #Install astyle
