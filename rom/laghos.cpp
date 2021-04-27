@@ -1815,7 +1815,6 @@ int main(int argc, char *argv[])
                 cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
         }
 
-
         if (visualization)
         {
             vis_v->close();
