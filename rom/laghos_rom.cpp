@@ -2606,7 +2606,7 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
         std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
 
         if (romOptions.greedyResidualType == varyTimeStep ||
-            romOptions.greedyResidualType == varyBasisSize)
+                romOptions.greedyResidualType == varyBasisSize)
         {
             t_final = 0.001;
         }

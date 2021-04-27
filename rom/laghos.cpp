@@ -1832,7 +1832,7 @@ int main(int argc, char *argv[])
                 residualComputed = true;
             }
             else if (romOptions.greedyResidualType == varyTimeStep ||
-                romOptions.greedyResidualType == varyBasisSize)
+                     romOptions.greedyResidualType == varyBasisSize)
             {
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);
