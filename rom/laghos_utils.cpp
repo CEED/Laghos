@@ -221,11 +221,11 @@ void split_line(const std::string &line, std::vector<std::string> &words)
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
 {
     const int w = romOptions.window;
-    romOptions.dimX = twparam(w,0);
-    romOptions.dimV = twparam(w,1);
-    romOptions.dimE = twparam(w,2);
-    romOptions.dimFv = romOptions.SNS ? romOptions.dimV : twparam(w,3);
-    romOptions.dimFe = romOptions.SNS ? romOptions.dimE : twparam(w,4);
+    romOptions.dimX = min(romOptions.max_dimX, twparam(w,0));
+    romOptions.dimV = min(romOptions.max_dimV, twparam(w,1));
+    romOptions.dimE = min(romOptions.max_dimE, twparam(w,2));
+    romOptions.dimFv = romOptions.SNS ? romOptions.dimV : min(romOptions.max_dimFv, twparam(w,3));
+    romOptions.dimFe = romOptions.SNS ? romOptions.dimE : min(romOptions.max_dimFe, twparam(w,4));
 
     const int oss = (romOptions.SNS) ? 3 : 5;
     romOptions.sampX = twparam(w,oss);

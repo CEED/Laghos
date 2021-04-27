@@ -136,7 +136,7 @@ cln clean: clean-build clean-exec clean-tests
 clean-build:
 	rm -rf laghos *.o *~ *.dSYM
 clean-exec:
-	rm -rf ./results
+	rm -rf ./results/*
 clean-tests:
 	rm -rf BASELINE.dat RUN.dat RESULTS.dat
 distclean: clean
@@ -169,7 +169,7 @@ ECHO=echo
 SED=sed -e
 ranks=1
 dims=2 3
-problems=0 1 2 3 4 5 6
+problems=0 1 2 3 4 5 6 7
 OPTS=-cgt 1.e-14 -rs 0 --checks
 USE_CUDA := $(MFEM_USE_CUDA:NO=)
 optioni=1 2$(if $(USE_CUDA), 3)
@@ -197,25 +197,26 @@ checks: |$(foreach p,$(problems), $(foreach d,$(dims), $(foreach o,$(optioni), $
 1:;@$(MAKE) -j $(NPROC) checks ranks=1
 2:;@$(MAKE) -j 8 checks ranks=2
 3:;@$(MAKE) -j 4 checks ranks=3
+4:;@$(MAKE) -j 2 checks ranks=4
 
 # Laghos run tests
 tests:
 	cat << EOF > RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 20 | head -n 1 | \
+	cat RUN.dat | tail -n 21 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 20 | head -n 1 | \
+	cat RUN.dat | tail -n 21 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 17 | head -n 1 | \
+	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 17 | head -n 1 | \
+	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa -vs 100 | tee RUN.dat
@@ -223,16 +224,16 @@ tests:
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 17 | head -n 1 | \
+	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 3.0 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 17 | head -n 1 | \
+	./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -vs 100 | tee RUN.dat
+	cat RUN.dat | tail -n 18 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
 	./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 \
 	         -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
-	cat RUN.dat | tail -n 20 | head -n 1 | \
+	cat RUN.dat | tail -n 21 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(shell cat << EOF > BASELINE.dat)
 	$(shell echo 'step = 0339, dt = 0.000702, |e| = 4.9695537349e+01' >> BASELINE.dat)
@@ -241,7 +242,7 @@ tests:
 	$(shell echo 'step = 0560, dt = 0.002449, |e| = 1.3408616722e+02' >> BASELINE.dat)
 	$(shell echo 'step = 0413, dt = 0.000470, |e| = 3.2012077410e+01' >> BASELINE.dat)
 	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
-	$(shell echo 'step = 0528, dt = 0.000180, |e| = 5.6505348812e+01' >> BASELINE.dat)
+	$(shell echo 'step = 0858, dt = 0.000474, |e| = 5.6691500623e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
 	diff --report-identical-files RESULTS.dat BASELINE.dat
 

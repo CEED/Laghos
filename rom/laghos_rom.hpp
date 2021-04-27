@@ -109,6 +109,11 @@ struct ROM_Options
     int dimE = -1;
     int dimFv = -1;
     int dimFe = -1;
+    int max_dimX = std::numeric_limits<int>::max();
+    int max_dimV = std::numeric_limits<int>::max();
+    int max_dimE = std::numeric_limits<int>::max();
+    int max_dimFv = std::numeric_limits<int>::max();
+    int max_dimFe = std::numeric_limits<int>::max();
 
     // Randomized SVD options
     bool randomizedSVD = false; // true: use RandomizedSVD
@@ -280,7 +285,7 @@ public:
 
     void SampleSolution(const double t, const double dt, Vector const& S);
 
-    void Finalize(const double t, const double dt, Vector const& S, Array<int> &cutoff, ROM_Options& input);
+    void Finalize(Array<int> &cutoff, ROM_Options& input);
 
     int MaxNumSamples()
     {
@@ -651,7 +656,7 @@ class ROM_Operator : public TimeDependentOperator
 public:
     ROM_Operator(ROM_Options const& input, ROM_Basis *b, Coefficient& rho_coeff,
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
-                 const bool visc, const double cfl, const bool p_assembly, const double cg_tol,
+                 const bool visc, const bool vort, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol,
                  H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
 
