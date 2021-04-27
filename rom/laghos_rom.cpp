@@ -1363,8 +1363,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (use_sns)
     {
-        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
-        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
+        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
     }
     else
     {
@@ -2550,7 +2550,7 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& dt_factor, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
+CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, const char* greedyResidualType)
 {
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
@@ -2580,13 +2580,6 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
         o.close();
     }
 
-    // Retrieve the parameter point domain from the last iteration.
-    std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getParameterPointDomain();
-    for (int i = 0; i < paramPointDomain.size(); i++)
-    {
-        paramPoints.push_back(paramPointDomain[i].item(0));
-    }
-
     if (parameterPointGreedySelector->isComplete())
     {
         // The greedy algorithm procedure has ended
@@ -2594,12 +2587,13 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
     }
 
     // First check if we need to compute another residual
-    int pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
-    if (pointRequiringResidual != -1)
+    struct CAROM::GreedyResidualPoint pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
+    CAROM::Vector* pointData = pointRequiringResidual.point.get();
+    if (pointData != NULL)
     {
-        int nearestROM = parameterPointGreedySelector->getNearestROM(pointRequiringResidual);
-        romOptions.basisIdentifier = "_" + to_string(paramPoints[nearestROM]);
-        romOptions.blast_energyFactor = paramPoints[pointRequiringResidual];
+        CAROM::Vector* localROM = pointRequiringResidual.localROM.get();
+        romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
+        romOptions.blast_energyFactor = pointData->item(0);
 
         double residualEnergyFraction = 0.9999;
 
@@ -2607,6 +2601,12 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
         sprintf(tmp, ".%06d", myid);
 
         std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
+
+        if (romOptions.greedyResidualType == varyTimeStep ||
+            romOptions.greedyResidualType == varyBasisSize)
+        {
+            t_final = 0.001;
+        }
 
         std::ifstream checkfile(fullname);
         if (!checkfile.good())
@@ -2636,11 +2636,12 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
     else
     {
         // Next check if we need to run FOM for another parameter point
-        int nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
-        if (nextSampleParameterPoint != -1)
+        std::shared_ptr<CAROM::Vector> nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
+        CAROM::Vector* pointData = nextSampleParameterPoint.get();
+        if (pointData != NULL)
         {
-            romOptions.basisIdentifier = "_" + to_string(paramPoints[nextSampleParameterPoint]);
-            romOptions.blast_energyFactor = paramPoints[nextSampleParameterPoint];
+            romOptions.basisIdentifier = "_" + to_string(pointData->item(0));
+            romOptions.blast_energyFactor = pointData->item(0);
             rom_offline = true;
         }
         else
@@ -2653,7 +2654,7 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
     return parameterPointGreedySelector;
 }
 
-CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath)
+CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath)
 {
 
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
@@ -2665,15 +2666,15 @@ CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, st
 
     parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
         outputPath + "/greedy_algorithm_data");
-    std::vector<CAROM::Vector> paramPointDomain = parameterPointGreedySelector->getSampledParameterPoints();
-    for (int i = 0; i < paramPointDomain.size(); i++)
-    {
-        paramPoints.push_back(paramPointDomain[i].item(0));
-    }
 
-    int closestParameterPoint = CAROM::getNearestPoint(paramPoints, romOptions.blast_energyFactor);
-    MFEM_VERIFY(closestParameterPoint != -1, "No parameter points were found");
-    romOptions.basisIdentifier = "_" + to_string(paramPoints[closestParameterPoint]);
+    CAROM::Vector parameter_point(1, false);
+    parameter_point.item(0) = romOptions.blast_energyFactor;
+
+    std::shared_ptr<CAROM::Vector> nearestROM = parameterPointGreedySelector->getNearestROM(parameter_point);
+    CAROM::Vector* pointData = nearestROM.get();
+
+    MFEM_VERIFY(pointData != NULL, "No parameter points were found");
+    romOptions.basisIdentifier = "_" + to_string(pointData->item(0));
 
     return parameterPointGreedySelector;
 }
@@ -2683,7 +2684,7 @@ void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySe
 {
     if (rom_online)
     {
-        double relativeResidual = parameterPointGreedySelector->setPointResidual(residual, residualVecSize);
+        parameterPointGreedySelector->setPointResidual(residual, residualVecSize);
     }
 
     parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");

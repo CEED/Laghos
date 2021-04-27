@@ -379,15 +379,13 @@ int main(int argc, char *argv[])
 
     NormType normtype = localmap[normtype_char];
 
-    std::vector<double> paramPoints;
-
     CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
 
     // If using the greedy algorithm, initialize the parameter point greedy selector.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySelector = BuildROMDatabase(romOptions, dt_factor, paramPoints, myid, outputPath, rom_offline, rom_online, greedyResidualType);
+        parameterPointGreedySelector = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online, greedyResidualType);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -395,7 +393,7 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-        parameterPointGreedySelector = LoadROMDatabase(romOptions, paramPoints, myid, outputPath);
+        parameterPointGreedySelector = LoadROMDatabase(romOptions, myid, outputPath);
     }
 
     if (mpi.Root())

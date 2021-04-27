@@ -733,10 +733,10 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& dt_factor, std::vector<double>& paramPoints, const int myid, const std::string outputPath,
+CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, const char* greedyResidualType);
 
-CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, std::vector<double>& paramPoints, const int myid, const std::string outputPath);
+CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath);
 
 void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySelector, ROM_Options& romOptions, const bool rom_online, const double residual,
                      const int residualVecSize, const std::string outputPath);
