@@ -564,7 +564,7 @@ int main(int argc, char *argv[])
         romOptions.VTos = std::stoi(words[4]);
         if (romOptions.hyperreduce)
         {
-            std::getline(infile_offlineParam, line); // twfile
+            //std::getline(infile_offlineParam, line); // twfile
             std::getline(infile_offlineParam, line);
             split_line(line, words);
             dim = std::stoi(words[3]);
@@ -949,7 +949,7 @@ int main(int argc, char *argv[])
                 outfile_offlineParam << romOptions.offsetType << " ";
                 outfile_offlineParam << romOptions.SNS << " ";
                 outfile_offlineParam << numWindows << " ";
-                outfile_offlineParam << romOptions.VTos << endl;
+                outfile_offlineParam << romOptions.VTos << " ";
                 outfile_offlineParam << twfile << endl;
                 outfile_offlineParam << romOptions.parameterID << " ";
                 outfile_offlineParam << romOptions.rhoFactor << " ";
@@ -1106,13 +1106,6 @@ int main(int argc, char *argv[])
         }
         else
         {
-            /*
-            if (spaceTime)
-              basis[0] = NULL;
-            else
-              basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-            */
-
             basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
@@ -1299,8 +1292,6 @@ int main(int argc, char *argv[])
     }
     else if (rom_online && spaceTime)
     {
-        //Vector stSol(S);
-        //romOper[0]->SolveSpaceTime(romS);
         if (myid == 0)
             romOper[0]->SolveSpaceTimeGN(romS);
 
@@ -1762,14 +1753,6 @@ int main(int argc, char *argv[])
         ofs_STX.close();
         ofs_STV.close();
         ofs_STE.close();
-    }
-
-    if (visit) // Visualize at final time. TODO: do this in a better way
-    {
-        oper->ComputeDensity(*rho_gf);
-        visit_dc->SetCycle(1000000);
-        visit_dc->SetTime(t_final);
-        visit_dc->Save();
     }
 
     if (fom_data)

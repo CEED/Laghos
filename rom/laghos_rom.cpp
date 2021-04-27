@@ -237,12 +237,9 @@ void ROM_Sampler::Finalize(Array<int> &cutoff)
         }
     }
 
-    finalNumSamples = generator_X->getTemporalBasis()->numRows();
-
+    if (spaceTime)
     {
-        //const int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
-        // TODO: generalize for nonzero initial velocity.
-
+        finalNumSamples = generator_X->getTemporalBasis()->numRows();
         // TODO: this is a lot of checks, for debugging. Maybe these should be removed later.
         MFEM_VERIFY(finalNumSamples == MaxNumSamples(), "bug");
         MFEM_VERIFY(finalNumSamples == generator_V->getTemporalBasis()->numRows() + VTos, "bug");
@@ -450,11 +447,11 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (hyperreduce) // && !spaceTime)
+    if (hyperreduce)
     {
         if (rank == 0)
         {
-            readSP(input, input.window); // TODO: hangs in parallel!
+            readSP(input, input.window); // TODO: in space-time case, hangs in parallel!
         }
         if (!spaceTime) return;
     }
@@ -1416,16 +1413,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     delete sp_H1_space;
     delete sp_L2_space;
-
-    /* TODO
-    if (spaceTime)
-        return;  // TODO: can this be removed?
-
-    if (!useGramSchmidt)
-    {
-        ComputeReducedMatrices();
-    }
-    */
 }
 
 void ROM_Basis::ComputeReducedMatrices(bool sns1)
@@ -1908,7 +1895,6 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
     : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
       spaceTimeMethod(input.spaceTimeMethod)
-      //basename(*input.basename)
 {
     if (hyperreduce && rank == 0)
     {
@@ -1917,7 +1903,6 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         fx.SetSize(spsize);
         fy.SetSize(spsize);
 
-        //if (!input.spaceTime) spmesh = b->GetSampleMesh(); // TODO
         spmesh = b->GetSampleMesh();
 
         // The following code is copied from laghos.cpp to define a LagrangianHydroOperator on spmesh.
@@ -1994,7 +1979,6 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
             ST_ode_solver = new RK4Solver; // TODO: allow for other types of solvers
             ST_ode_solver->Init(*operSP);
 
-            // TODO: should ROM_basis *b be an input to this constructor in the spaceTime case?
             STbasis = new STROM_Basis(input, b, timesteps);
             Sr.SetSize(STbasis->GetTotalNumSamples());
         }
@@ -2236,9 +2220,11 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     readNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
+    const int ntsamp = spaceTime ? timeSamples.size() : 1;
+
     BsinvX = NULL;
-    BsinvV = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimfv, false);
-    BsinvE = new CAROM::Matrix(timeSamples.size() * numSamplesE, rdimfe, false);
+    BsinvV = new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
+    BsinvE = new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false);
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
     BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -2424,44 +2410,6 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
         MFEM_ABORT("TODO");
     }
 }
-
-/*
-void ROM_Operator::GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S)
-{
-    if (hyperreduce && rank == 0)
-    {
-        // With solution representation by s = Xc = Qd,
-        // the coefficients of s with respect to Q are
-        // obtained by d = Rc.
-        for (int i=0; i<rdim; ++i)
-        {
-            S[offset+i] *= (*R)(i,i);
-            for (int j=i+1; j<rdim; ++j)
-            {
-                S[offset+i] += (*R)(i,j)*S[offset+j]; // triangular update
-            }
-        }
-    }
-}
-
-void ROM_Operator::GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S)
-{
-    if (hyperreduce && rank == 0)
-    {
-        // With solution representation by s = Xc = Qd,
-        // the coefficients of s with respect to X is
-        // obtained from c = R\d.
-        for (int i=rdim-1; i>-1; --i)
-        {
-            for (int j = rdim-1; j>i; --j)
-            {
-                S[offset+i] -= (*R)(i,j)*S[offset+j]; // backward substitution
-            }
-            S[offset+i] /= (*R)(i,i);
-        }
-    }
-}
-*/
 
 void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
@@ -3389,201 +3337,3 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     t += dt;
 }
 
-void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                  const bool scalar)
-{
-    ConstantCoefficient zero(0.0);
-    Vector zerov(3);
-    zerov = 0.0;
-    VectorConstantCoefficient vzero(zerov);
-
-    double fomloc, romloc, diffloc;
-
-    // TODO: why does ComputeL2Error call the local GridFunction version rather than the global ParGridFunction version?
-    // Only f2->ComputeL2Error calls the ParGridFunction version.
-    if (scalar)
-    {
-        switch(normtype)
-        {
-        case l1norm:
-            fomloc = f1->ComputeL1Error(zero);
-            romloc = f2->ComputeL1Error(zero);
-            break;
-        case l2norm:
-            fomloc = f1->ComputeL2Error(zero);
-            romloc = f2->ComputeL2Error(zero);
-            break;
-        case maxnorm:
-            fomloc = f1->ComputeMaxError(zero);
-            romloc = f2->ComputeMaxError(zero);
-            break;
-        }
-    }
-    else
-    {
-        switch(normtype)
-        {
-        case l1norm:
-            fomloc = f1->ComputeL1Error(vzero);
-            romloc = f2->ComputeL1Error(vzero);
-            break;
-        case l2norm:
-            fomloc = f1->ComputeL2Error(vzero);
-            romloc = f2->ComputeL2Error(vzero);
-            break;
-        case maxnorm:
-            fomloc = f1->ComputeMaxError(vzero);
-            romloc = f2->ComputeMaxError(vzero);
-            break;
-        }
-    }
-
-    *f1 -= *f2;  // works because GridFunction is derived from Vector
-
-    if (scalar)
-    {
-        switch(normtype)
-        {
-        case l1norm:
-            diffloc = f1->ComputeL1Error(zero);
-            break;
-        case l2norm:
-            diffloc = f1->ComputeL2Error(zero);
-            break;
-        case maxnorm:
-            diffloc = f1->ComputeMaxError(zero);
-            break;
-        }
-    }
-    else
-    {
-        switch(normtype)
-        {
-        case l1norm:
-            diffloc = f1->ComputeL1Error(vzero);
-            break;
-        case l2norm:
-            diffloc = f1->ComputeL2Error(vzero);
-            break;
-        case maxnorm:
-            diffloc = f1->ComputeMaxError(vzero);
-            break;
-        }
-    }
-
-    double fomloc2 = fomloc*fomloc;
-    double romloc2 = romloc*romloc;
-    double diffloc2 = diffloc*diffloc;
-
-    double fomglob2, romglob2, diffglob2;
-
-    // TODO: is this right? The "loc" norms should be global, but they are not.
-    MPI_Allreduce(&fomloc2, &fomglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(&romloc2, &romglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(&diffloc2, &diffglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-    /*
-    fomglob2 = fomloc2;
-    romglob2 = romloc2;
-    diffglob2 = diffloc2;
-    */
-
-    double FOMnorm = sqrt(fomglob2);
-    double ROMnorm = sqrt(romglob2);
-    double DIFFnorm = sqrt(diffglob2);
-    double relDIFFnorm = sqrt(diffglob2)/sqrt(fomglob2);
-
-    if (rank == 0)
-    {
-        switch(normtype)
-        {
-        case l1norm:
-            cout << "L1 norm error:" << endl;
-            break;
-        case l2norm:
-            cout << "L2 norm error:" << endl;
-            break;
-        case maxnorm:
-            cout << "MAX norm error:" << endl;
-            break;
-        }
-
-        cout << rank << ": " << name << " FOM norm " << FOMnorm << endl;
-        cout << rank << ": " << name << " ROM norm " << ROMnorm << endl;
-        cout << rank << ": " << name << " DIFF norm " << DIFFnorm << endl;
-        cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
-    }
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + "_norms" + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    ofs << "FOM norm " << FOMnorm << endl;
-    ofs << "ROM norm " << ROMnorm << endl;
-    ofs << "DIFF norm " << DIFFnorm << endl;
-    ofs << "Rel. DIFF norm " << relDIFFnorm << endl;
-
-    ofs.close();
-
-}
-
-void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                    const bool scalar)
-{
-    ConstantCoefficient zero(0.0);
-    Vector zerov(3);
-    zerov = 0.0;
-    VectorConstantCoefficient vzero(zerov);
-
-    double fomloc, romloc, diffloc;
-
-    // TODO: why does ComputeL2Error call the local GridFunction version rather than the global ParGridFunction version?
-    // Only f2->ComputeL2Error calls the ParGridFunction version.
-    if (scalar)
-    {
-        fomloc = f1->ComputeL2Error(zero);
-        romloc = f2->ComputeL2Error(zero);
-    }
-    else
-    {
-        fomloc = f1->ComputeL2Error(vzero);
-        romloc = f2->ComputeL2Error(vzero);
-    }
-
-    *f1 -= *f2;  // works because GridFunction is derived from Vector
-
-    if (scalar)
-    {
-        diffloc = f1->ComputeL2Error(zero);
-    }
-    else
-    {
-        diffloc = f1->ComputeL2Error(vzero);
-    }
-
-    double fomloc2 = fomloc*fomloc;
-    double romloc2 = romloc*romloc;
-    double diffloc2 = diffloc*diffloc;
-
-    double fomglob2, romglob2, diffglob2;
-
-    // TODO: is this right? The "loc" norms should be global, but they are not.
-    MPI_Allreduce(&fomloc2, &fomglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(&romloc2, &romglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(&diffloc2, &diffglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-    /*
-    fomglob2 = fomloc2;
-    romglob2 = romloc2;
-    diffglob2 = diffloc2;
-    */
-
-    cout << rank << ": " << name << " FOM norm " << sqrt(fomglob2) << endl;
-    cout << rank << ": " << name << " ROM norm " << sqrt(romglob2) << endl;
-    cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
-    cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
-}

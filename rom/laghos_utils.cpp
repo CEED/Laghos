@@ -378,3 +378,202 @@ void readVec(vector<int> &v, std::string file_name) {
     }
     file.close();
 }
+
+void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+                                  const bool scalar)
+{
+    ConstantCoefficient zero(0.0);
+    Vector zerov(3);
+    zerov = 0.0;
+    VectorConstantCoefficient vzero(zerov);
+
+    double fomloc, romloc, diffloc;
+
+    // TODO: why does ComputeL2Error call the local GridFunction version rather than the global ParGridFunction version?
+    // Only f2->ComputeL2Error calls the ParGridFunction version.
+    if (scalar)
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            fomloc = f1->ComputeL1Error(zero);
+            romloc = f2->ComputeL1Error(zero);
+            break;
+        case l2norm:
+            fomloc = f1->ComputeL2Error(zero);
+            romloc = f2->ComputeL2Error(zero);
+            break;
+        case maxnorm:
+            fomloc = f1->ComputeMaxError(zero);
+            romloc = f2->ComputeMaxError(zero);
+            break;
+        }
+    }
+    else
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            fomloc = f1->ComputeL1Error(vzero);
+            romloc = f2->ComputeL1Error(vzero);
+            break;
+        case l2norm:
+            fomloc = f1->ComputeL2Error(vzero);
+            romloc = f2->ComputeL2Error(vzero);
+            break;
+        case maxnorm:
+            fomloc = f1->ComputeMaxError(vzero);
+            romloc = f2->ComputeMaxError(vzero);
+            break;
+        }
+    }
+
+    *f1 -= *f2;  // works because GridFunction is derived from Vector
+
+    if (scalar)
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            diffloc = f1->ComputeL1Error(zero);
+            break;
+        case l2norm:
+            diffloc = f1->ComputeL2Error(zero);
+            break;
+        case maxnorm:
+            diffloc = f1->ComputeMaxError(zero);
+            break;
+        }
+    }
+    else
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            diffloc = f1->ComputeL1Error(vzero);
+            break;
+        case l2norm:
+            diffloc = f1->ComputeL2Error(vzero);
+            break;
+        case maxnorm:
+            diffloc = f1->ComputeMaxError(vzero);
+            break;
+        }
+    }
+
+    double fomloc2 = fomloc*fomloc;
+    double romloc2 = romloc*romloc;
+    double diffloc2 = diffloc*diffloc;
+
+    double fomglob2, romglob2, diffglob2;
+
+    // TODO: is this right? The "loc" norms should be global, but they are not.
+    MPI_Allreduce(&fomloc2, &fomglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&romloc2, &romglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&diffloc2, &diffglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    /*
+    fomglob2 = fomloc2;
+    romglob2 = romloc2;
+    diffglob2 = diffloc2;
+    */
+
+    double FOMnorm = sqrt(fomglob2);
+    double ROMnorm = sqrt(romglob2);
+    double DIFFnorm = sqrt(diffglob2);
+    double relDIFFnorm = sqrt(diffglob2)/sqrt(fomglob2);
+
+    if (rank == 0)
+    {
+        switch(normtype)
+        {
+        case l1norm:
+            cout << "L1 norm error:" << endl;
+            break;
+        case l2norm:
+            cout << "L2 norm error:" << endl;
+            break;
+        case maxnorm:
+            cout << "MAX norm error:" << endl;
+            break;
+        }
+
+        cout << rank << ": " << name << " FOM norm " << FOMnorm << endl;
+        cout << rank << ": " << name << " ROM norm " << ROMnorm << endl;
+        cout << rank << ": " << name << " DIFF norm " << DIFFnorm << endl;
+        cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
+    }
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", rank);
+
+    std::string fullname = name + "_norms" + tmp;
+
+    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+    ofs.precision(16);
+
+    ofs << "FOM norm " << FOMnorm << endl;
+    ofs << "ROM norm " << ROMnorm << endl;
+    ofs << "DIFF norm " << DIFFnorm << endl;
+    ofs << "Rel. DIFF norm " << relDIFFnorm << endl;
+
+    ofs.close();
+
+}
+
+void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+                                    const bool scalar)
+{
+    ConstantCoefficient zero(0.0);
+    Vector zerov(3);
+    zerov = 0.0;
+    VectorConstantCoefficient vzero(zerov);
+
+    double fomloc, romloc, diffloc;
+
+    // TODO: why does ComputeL2Error call the local GridFunction version rather than the global ParGridFunction version?
+    // Only f2->ComputeL2Error calls the ParGridFunction version.
+    if (scalar)
+    {
+        fomloc = f1->ComputeL2Error(zero);
+        romloc = f2->ComputeL2Error(zero);
+    }
+    else
+    {
+        fomloc = f1->ComputeL2Error(vzero);
+        romloc = f2->ComputeL2Error(vzero);
+    }
+
+    *f1 -= *f2;  // works because GridFunction is derived from Vector
+
+    if (scalar)
+    {
+        diffloc = f1->ComputeL2Error(zero);
+    }
+    else
+    {
+        diffloc = f1->ComputeL2Error(vzero);
+    }
+
+    double fomloc2 = fomloc*fomloc;
+    double romloc2 = romloc*romloc;
+    double diffloc2 = diffloc*diffloc;
+
+    double fomglob2, romglob2, diffglob2;
+
+    // TODO: is this right? The "loc" norms should be global, but they are not.
+    MPI_Allreduce(&fomloc2, &fomglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&romloc2, &romglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&diffloc2, &diffglob2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    /*
+    fomglob2 = fomloc2;
+    romglob2 = romloc2;
+    diffglob2 = diffloc2;
+    */
+
+    cout << rank << ": " << name << " FOM norm " << sqrt(fomglob2) << endl;
+    cout << rank << ": " << name << " ROM norm " << sqrt(romglob2) << endl;
+    cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
+    cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
+}

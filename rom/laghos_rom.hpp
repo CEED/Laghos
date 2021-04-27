@@ -160,7 +160,7 @@ public:
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time)
     {
         const int window = input.window;
 
@@ -170,7 +170,7 @@ public:
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
-        const bool output_rightSV = (input.spaceTimeMethod != no_space_time);
+        const bool output_rightSV = spaceTime;
 
         CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1, output_rightSV);
         CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1, output_rightSV);
@@ -264,8 +264,6 @@ public:
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
-
-                MFEM_VERIFY(VTos == 0, "");
             }
             else
             {
@@ -347,6 +345,8 @@ private:
 
     bool finalized = false;
     int finalNumSamples = 0;
+
+    const bool spaceTime;
 
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
@@ -738,16 +738,12 @@ private:
     Vector st0;
 };
 
-//class STROM_Basis : public ROM_Basis
 class STROM_Basis
 {
 public:
-    //STROM_Basis(ROM_Options const& input, MPI_Comm comm_) : ROM_Basis(input, comm_)
     STROM_Basis(ROM_Options const& input, ROM_Basis *b_, std::vector<double> *timesteps_)
         : b(b_), u_ti(b_->TotalSize()), timesteps(timesteps_), spaceTimeMethod(input.spaceTimeMethod)
     {
-        // TODO: I don't think this should be derived from ROM_Basis, since it reads the bases again.
-        //MFEM_VERIFY(false, "");
     }
 
     int SolutionSizeST() const {
@@ -879,8 +875,6 @@ private:
     ODESolver *ST_ode_solver = 0;
     mutable Vector Sr;
 
-    //std::string basename = "run";
-
     mutable Vector fx, fy;
 
     const bool hyperreduce;
@@ -914,11 +908,6 @@ private:
     DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
-
-    /*
-      void GramSchmidtTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
-      void GramSchmidtInverseTransformation(const int offset, const int rdim, DenseMatrix *R, Vector &S);  // TODO: necessary?
-    */
 
     const SpaceTimeMethod spaceTimeMethod;
 
