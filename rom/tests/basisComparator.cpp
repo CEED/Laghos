@@ -29,7 +29,8 @@ void compareBasis(string &baselineFile, string &targetFile, double errorBound, i
     CAROM::Matrix *baselineBasis = (CAROM::Matrix*) baselineReader.getSpatialBasis(0.0);
     CAROM::BasisReader targetReader(targetFile);
     CAROM::Matrix *targetBasis = (CAROM::Matrix*) targetReader.getSpatialBasis(0.0);
-    CAROM::Matrix *diffBasis = (CAROM::Matrix*) baselineReader.getSpatialBasis(0.0);
+    CAROM::BasisReader diffReader(baselineFile);
+    CAROM::Matrix *diffBasis = (CAROM::Matrix*) diffReader.getSpatialBasis(0.0);
 
     // Get basis dimensions
     int baselineNumRows = baselineBasis->numRows();
@@ -66,8 +67,8 @@ between the basis matrices in the following files: " << baselineFile << " and " 
     // Compute l2-norm
     for (unsigned int i = 0; i < baselineNumColumns; i++) {
         for (unsigned int j = 0; j < baselineNumRows; j++) {
-            vecNormL2[i] += pow(baselineBasis->operator()(j,i), 2);
-            diffVecNormL2[i] += pow(diffBasis->operator()(j,i), 2);
+            vecNormL2[i] += pow(baselineBasis->item(j,i), 2);
+            diffVecNormL2[i] += pow(diffBasis->item(j,i), 2);
         }
     }
 
