@@ -1840,7 +1840,7 @@ void ROM_Basis::RestrictFromSampleMesh_E(const Vector &usp, Vector &u) const
 void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
                                       const bool timeDerivative) const
 {
-    MFEM_VERIFY(u.Size() == TotalSize(), "");
+    MFEM_VERIFY(u.Size() == SolutionSize(), "");
     MFEM_VERIFY(usp.Size() == (2*size_H1_sp) + size_L2_sp, "");
 
     const bool useOffset = offsetInit && (!timeDerivative);
@@ -1892,7 +1892,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            const bool p_assembly, const double cg_tol, const int cg_max_iter,
                            const double ftz_tol, H1_FECollection *H1fec,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
-    : TimeDependentOperator(b->TotalSize()), operFOM(input.FOMoper), basis(b),
+    : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
       spaceTimeMethod(input.spaceTimeMethod)
 {
@@ -2088,7 +2088,7 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
 // t is a time sample, ranging from 0 to temporalSize-1.
 void ROM_Basis::ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut)
 {
-    MFEM_VERIFY(u.Size() == TotalSize() && ut.Size() == u.Size(), "");
+    MFEM_VERIFY(u.Size() == SolutionSize() && ut.Size() == u.Size(), "");
     MFEM_VERIFY(tbasisX->numColumns() == rdimx && basisX->numColumns() == rdimx, "");
     MFEM_VERIFY(tbasisV->numColumns() == rdimv && basisV->numColumns() == rdimv, "");
     MFEM_VERIFY(tbasisE->numColumns() == rdime && basisE->numColumns() == rdime, "");
@@ -2612,7 +2612,7 @@ void STROM_Basis::ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &
     }
     else
     {
-        MFEM_VERIFY(w.Size() == b->TotalSize(), "");
+        MFEM_VERIFY(w.Size() == b->SolutionSize(), "");
     }
 
     MFEM_VERIFY(b->numSamplesX == 0, "");
@@ -2856,7 +2856,7 @@ void ROM_Basis::SetSpaceTimeInitialGuess(ROM_Options const& input)
     // TODO: this assumes 1 temporal basis vector for each spatial vector. Generalize to allow for multiple temporal basis vectors per spatial vector.
 
     //st0.SetSize(SolutionSizeST());
-    st0.SetSize(TotalSize());
+    st0.SetSize(SolutionSize());
     st0 = 0.0; // TODO
 
     // For now, we simply test the reproductive case by projecting the known FOM solution.
@@ -2894,7 +2894,7 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
     Vector c(x.Size());
     Vector r(x.Size());
 
-    const int n = basis->TotalSize();
+    const int n = basis->SolutionSize();
     const int m = GaussNewton ? basis->GetDimX() + basis->GetDimFv() + basis->GetDimFe() : n;
 
     MFEM_VERIFY(n == x.Size(), "");
@@ -2988,7 +2988,7 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
         ApplyHyperreduction(x); // TODO: this assumes 1 temporal basis vector per spatial basis vector and needs to be generalized.
     }
 
-    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->TotalSize();
+    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->SolutionSize();
 #ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else
@@ -3081,7 +3081,7 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
 
 void ROM_Operator::EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const
 {
-    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->TotalSize();
+    const int n = (spaceTimeMethod == coll_lspg) ? STbasis->SolutionSizeST() : basis->SolutionSize();
 #ifdef STXV
     const int m = GaussNewton ? basis->GetDimV() + basis->GetDimFv() + basis->GetDimFe() : n;
 #else

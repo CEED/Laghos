@@ -488,9 +488,6 @@ public:
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
-    int TotalSize() const {
-        return rdimx + rdimv + rdime; // TODO: remove this function? It is the same as SolutionSize().
-    }
 
     ParMesh *GetSampleMesh() {
         return sample_pmesh;
@@ -744,13 +741,13 @@ class STROM_Basis
 {
 public:
     STROM_Basis(ROM_Options const& input, ROM_Basis *b_, std::vector<double> *timesteps_)
-        : b(b_), u_ti(b_->TotalSize()), timesteps(timesteps_), spaceTimeMethod(input.spaceTimeMethod)
+        : b(b_), u_ti(b_->SolutionSize()), timesteps(timesteps_), spaceTimeMethod(input.spaceTimeMethod)
     {
     }
 
     int SolutionSizeST() const {
         // TODO: this assumes 1 temporal basis vector for each spatial vector. Generalize to allow for multiple temporal basis vectors per spatial vector.
-        return b->TotalSize();
+        return b->SolutionSize();
     }
 
     int GetNumSpatialSamples() const {
