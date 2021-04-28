@@ -78,7 +78,7 @@ struct ROM_Options
     std::string *basename = NULL;
 
     std::string basisIdentifier = "";
-    double greedyTol = 0.0001; // error tolerance for the greedy algorithm
+    double greedyTol = 0.3; // error tolerance for the greedy algorithm
     double greedySat = 1.0; // saturation constant for the greedy algorithm
     double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
     double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
