@@ -198,7 +198,6 @@ public:
             x_options.setRandomizedSVD(true, input.randdimX);
         }
 
-
         generator_X = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
@@ -287,10 +286,13 @@ public:
                 initV->write(path_init + "V" + std::to_string(window));
                 initE->write(path_init + "E" + std::to_string(window));
 
-                const double Vnorm = initV->norm();
-                int osVT = (Vnorm == 0.0) ? 1 : 0;
+                if (window == 0)
+                {
+                    const double Vnorm = initV->norm();
+                    int osVT = (Vnorm == 0.0) ? 1 : 0;
 
-                MFEM_VERIFY(VTos == osVT, "");
+                    MFEM_VERIFY(VTos == osVT, "");
+                }
             }
         }
     }

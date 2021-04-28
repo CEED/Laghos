@@ -27,6 +27,7 @@ void compareBasis(string &baselineFile, string &targetFile, double errorBound, i
 
     CAROM::BasisReader baselineReader(baselineFile);
     CAROM::Matrix *baselineBasis = (CAROM::Matrix*) baselineReader.getSpatialBasis(0.0);
+    CAROM::Vector *baselineSV = (CAROM::Vector*) baselineReader.getSingularValues(0.0);
     CAROM::BasisReader targetReader(targetFile);
     CAROM::Matrix *targetBasis = (CAROM::Matrix*) targetReader.getSpatialBasis(0.0);
     CAROM::BasisReader diffReader(baselineFile);
@@ -49,6 +50,12 @@ are not equal in the following files: " << baselineFile << " and " << targetFile
 are not equal in the following file: " << baselineFile << " and " << targetFile << endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
+    if (baselineSV->dim() != baselineNumColumns)
+    {
+        cerr << "The number of singular values does not equal the \
+number of basis vectors in the following file: " << baselineFile << endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
 
     vecNormL2.resize(baselineNumColumns, 0.0);
     reducedVecNormL2.resize(baselineNumColumns, 0.0);
@@ -56,7 +63,7 @@ are not equal in the following file: " << baselineFile << " and " << targetFile 
     reducedDiffVecNormL2.resize(baselineNumColumns, 0.0);
 
     try {
-        *diffBasis -=(*targetBasis);
+        *diffBasis -= (*targetBasis);
     }
     catch (const exception& e) {
         cerr << "Something went wrong when calculating the difference \
@@ -72,18 +79,21 @@ between the basis matrices in the following files: " << baselineFile << " and " 
         }
     }
 
-    for (int i = 0; i < diffVecNormL2.size(); i++) {
-        MPI_Reduce(&vecNormL2[i], &reducedVecNormL2[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        MPI_Reduce(&diffVecNormL2[i], &reducedDiffVecNormL2[i], 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    }
+    MPI_Reduce(vecNormL2.data(), reducedVecNormL2.data(), baselineNumColumns, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(diffVecNormL2.data(), reducedDiffVecNormL2.data(), baselineNumColumns, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        double baselineNormL2 = 0;
-        double diffNormL2 = 0;
-        for (int i = 0; i < reducedDiffVecNormL2.size(); i++) {
-            baselineNormL2 += sqrt(reducedVecNormL2[i]);
-            diffNormL2 += sqrt(reducedDiffVecNormL2[i]);
+        double baselineNormL2 = 0.0;
+        double diffNormL2 = 0.0;
+        for (int i = 0; i < baselineNumColumns; i++) {
+            const double weight = (*baselineSV)(i) / (*baselineSV)(0);
+            baselineNormL2 += reducedVecNormL2[i];
+            diffNormL2 += weight * weight * reducedDiffVecNormL2[i];
         }
+
+        baselineNormL2 = sqrt(baselineNormL2);
+        diffNormL2 = sqrt(diffNormL2);
+
         double error;
         if (baselineNormL2 == 0.0) {
             error = diffNormL2;
