@@ -16,7 +16,7 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, 
+int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
     if (romOptions.parameterID <= 0)
@@ -50,8 +50,8 @@ int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
     }
 }
 
-int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions, 
-                      const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline)
+int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
+                       const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline)
 {
     std::ifstream opin(paramfile);
     MFEM_VERIFY(opin.is_open(), "Offline parameter record file does not exist.");

@@ -468,18 +468,18 @@ int main(int argc, char *argv[])
         int lastBasisWindow = (windowNumSamples > 0) ? numBasisWindows - 1 : sampleWindow;
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, usingWindows, windowNumSamples, windowOverlapSamples, 
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples, 
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples, 
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
             if (!romOptions.SNS)
             {
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples, 
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples, 
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
             }
 
