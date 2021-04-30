@@ -2354,7 +2354,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     t += dt;
 }
 
-void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                   const bool scalar)
 {
     ConstantCoefficient zero(0.0);
@@ -2494,6 +2494,8 @@ void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::
 
     ofs.close();
 
+    return relDIFFnorm;
+
 }
 
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
@@ -2553,10 +2555,11 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, const char* greedyResidualType)
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyResidualType, const char* greedySamplingType)
 {
-    CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    samplingType sampleType = getSamplingType(greedySamplingType);
 
     romOptions.greedyResidualType = getResidualType(greedyResidualType);
 
@@ -2565,38 +2568,41 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
     ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
     if (f.good())
     {
-        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
             outputPath + "/greedy_algorithm_data",
             outputPath + "/greedy_algorithm_log.txt");
     }
     else
     {
-        parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+        bool latin_hypercube = sampleType == latinHypercubeSampling;
+        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
-            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedySat,
-            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
+            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
+            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize, latin_hypercube,
             outputPath + "/greedy_algorithm_log.txt");
 
-        ofstream o(outputPath + "/greedy_algorithm_log.txt");
+        ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
         o << "Parameter considered: initial blast energy" << std::endl;
         o << "Error indicator: " << greedyResidualType << std::endl;
         o.close();
     }
 
-    if (parameterPointGreedySelector->isComplete())
+    if (parameterPointGreedySampler->isComplete())
     {
         // The greedy algorithm procedure has ended
         MFEM_ABORT("The greedy algorithm procedure has completed!");
     }
 
     // First check if we need to compute another residual
-    struct CAROM::GreedyResidualPoint pointRequiringResidual = parameterPointGreedySelector->getNextPointRequiringResidual();
-    CAROM::Vector* pointData = pointRequiringResidual.point.get();
-    if (pointData != NULL)
+    struct CAROM::GreedyResidualPoint pointRequiringResidual = parameterPointGreedySampler->getNextPointRequiringResidual();
+    CAROM::Vector* residualPointData = pointRequiringResidual.point.get();
+    struct CAROM::GreedyResidualPoint pointRequiringRelativeError = parameterPointGreedySampler->getNextPointRequiringRelativeError();
+    CAROM::Vector* samplePointData = pointRequiringRelativeError.point.get();
+    if (residualPointData != NULL)
     {
         CAROM::Vector* localROM = pointRequiringResidual.localROM.get();
         romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
-        romOptions.blast_energyFactor = pointData->item(0);
+        romOptions.blast_energyFactor = residualPointData->item(0);
 
         double residualEnergyFraction = 0.9999;
 
@@ -2606,7 +2612,7 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
         std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
 
         if (romOptions.greedyResidualType == varyTimeStep ||
-                romOptions.greedyResidualType == varyBasisSize)
+            romOptions.greedyResidualType == varyBasisSize)
         {
             t_final = 0.001;
         }
@@ -2636,15 +2642,36 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
 
         rom_online = true;
     }
+    else if (samplePointData != NULL)
+    {
+        CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
+        romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
+        romOptions.blast_energyFactor = samplePointData->item(0);
+
+        double residualEnergyFraction = 0.9999;
+
+        // Get the rdim for the basis used.
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        if (!romOptions.SNS)
+        {
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        }
+
+        rom_online = true;
+        rom_calc_rel_error = true;
+    }
     else
     {
         // Next check if we need to run FOM for another parameter point
-        std::shared_ptr<CAROM::Vector> nextSampleParameterPoint = parameterPointGreedySelector->getNextParameterPoint();
-        CAROM::Vector* pointData = nextSampleParameterPoint.get();
-        if (pointData != NULL)
+        std::shared_ptr<CAROM::Vector> nextSampleParameterPoint = parameterPointGreedySampler->getNextParameterPoint();
+        samplePointData = nextSampleParameterPoint.get();
+        if (samplePointData != NULL)
         {
-            romOptions.basisIdentifier = "_" + to_string(pointData->item(0));
-            romOptions.blast_energyFactor = pointData->item(0);
+            romOptions.basisIdentifier = "_" + to_string(samplePointData->item(0));
+            romOptions.blast_energyFactor = samplePointData->item(0);
             rom_offline = true;
         }
         else
@@ -2654,45 +2681,62 @@ CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, d
         }
     }
 
-    return parameterPointGreedySelector;
+    return parameterPointGreedySampler;
 }
 
-CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath)
+CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath)
 {
 
-    CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
 
     char tmp[100];
     sprintf(tmp, ".%06d", myid);
     ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
     MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
 
-    parameterPointGreedySelector = new CAROM::GreedyParameterPointSelector(
+    parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
         outputPath + "/greedy_algorithm_data");
 
     CAROM::Vector parameter_point(1, false);
     parameter_point.item(0) = romOptions.blast_energyFactor;
 
-    std::shared_ptr<CAROM::Vector> nearestROM = parameterPointGreedySelector->getNearestROM(parameter_point);
+    std::shared_ptr<CAROM::Vector> nearestROM = parameterPointGreedySampler->getNearestROM(parameter_point);
     CAROM::Vector* pointData = nearestROM.get();
 
     MFEM_VERIFY(pointData != NULL, "No parameter points were found");
     romOptions.basisIdentifier = "_" + to_string(pointData->item(0));
 
-    return parameterPointGreedySelector;
+    return parameterPointGreedySampler;
 }
 
-void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySelector, ROM_Options& romOptions, const bool rom_online, const double residual,
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double residual,
                      const int residualVecSize, const std::string outputPath)
 {
     if (rom_online)
     {
-        parameterPointGreedySelector->setPointResidual(residual, residualVecSize);
+        parameterPointGreedySampler->setPointResidual(residual, residualVecSize);
     }
 
-    parameterPointGreedySelector->save(outputPath + "/greedy_algorithm_data");
+    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
 
-    if (parameterPointGreedySelector->isComplete())
+    if (parameterPointGreedySampler->isComplete())
+    {
+        // The greedy algorithm procedure has ended
+        MFEM_ABORT("The greedy algorithm procedure has completed!");
+    }
+}
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
+                     const std::string outputPath)
+{
+    if (rom_online)
+    {
+        parameterPointGreedySampler->setPointRelativeError(relative_error);
+    }
+
+    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
+
+    if (parameterPointGreedySampler->isComplete())
     {
         // The greedy algorithm procedure has ended
         MFEM_ABORT("The greedy algorithm procedure has completed!");

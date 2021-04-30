@@ -59,7 +59,7 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
-#include "GreedyParameterPointSelector.h"
+#include "GreedyParameterPointRandomSampler.h"
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -108,7 +108,7 @@ void PrintParGridFunction(const int rank, const std::string& name, ParGridFuncti
 }
 
 
-void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
+double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
 {
     Vector tv(gf->ParFESpace()->GetTrueVSize());
 
@@ -131,7 +131,7 @@ void PrintDiffParGridFunction(NormType normtype, const int rank, const std::stri
     ParGridFunction rgf(gf->ParFESpace());
     rgf.SetFromTrueDofs(tv);
 
-    PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
+    return PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }
 
 int main(int argc, char *argv[])
@@ -192,6 +192,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     const char *normtype_char = "l2";
     const char *offsetType = "initial";
+    const char *greedySamplingType = "random";
     const char *greedyResidualType = "useLastLifted";
     Array<double> twep;
     Array2D<int> twparam;
@@ -322,11 +323,13 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
     args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
-    args.AddOption(&romOptions.greedySat, "-greedysat", "--greedysat", "The greedy algorithm saturation constant.");
+    args.AddOption(&romOptions.greedyAlpha, "-greedyalpha", "--greedyalpha", "The greedy algorithm alpha constant.");
     args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
     args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
+    args.AddOption(&greedySamplingType, "-greedysamptype", "--greedysamplingtype",
+                   "Sampling type for the greedy algorithm.");
     args.AddOption(&greedyResidualType, "-greedyrestype", "--greedyresidualtype",
-                   "Residual type for the gredy algorithm.");
+                   "Residual type for the greedy algorithm.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
@@ -388,13 +391,14 @@ int main(int argc, char *argv[])
 
     NormType normtype = localmap[normtype_char];
 
-    CAROM::GreedyParameterPointSelector* parameterPointGreedySelector = NULL;
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    bool rom_calc_rel_error = false;
 
-    // If using the greedy algorithm, initialize the parameter point greedy selector.
+    // If using the greedy algorithm, initialize the parameter point greedy sampler.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySelector = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online, greedyResidualType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyResidualType, greedySamplingType);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -402,7 +406,7 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-        parameterPointGreedySelector = LoadROMDatabase(romOptions, myid, outputPath);
+        parameterPointGreedySampler = LoadROMDatabase(romOptions, myid, outputPath);
     }
 
     if (mpi.Root())
@@ -1415,7 +1419,7 @@ int main(int argc, char *argv[])
                     }
 
                     // If using the greedy algorithm, take only the last step in the FOM space
-                    if (rom_build_database && last_step && romOptions.greedyResidualType == useLastLiftedSolution)
+                    if (rom_build_database && !rom_calc_rel_error && last_step && romOptions.greedyResidualType == useLastLiftedSolution)
                     {
                         lastLiftedSolution = *S;
                         ode_solver_dat->Init(*oper);
@@ -1773,6 +1777,15 @@ int main(int argc, char *argv[])
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
+    double relative_error = -1;
+
+    if (rom_build_database && rom_calc_rel_error)
+    {
+        relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+    }
+
     if (fom_data && (!rom_build_database || !rom_online))
     {
         if (writeSol)
@@ -1815,7 +1828,7 @@ int main(int argc, char *argv[])
 
         // If using the greedy algorithm, calculate the residual using the FOM lifted during
         // the second to last step compared against the FOM lifted at the last step.
-        if (rom_build_database)
+        if (rom_build_database && !rom_calc_rel_error)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
             if (romOptions.greedyResidualType == useLastLiftedSolution)
@@ -1832,7 +1845,7 @@ int main(int argc, char *argv[])
                 residualComputed = true;
             }
             else if (romOptions.greedyResidualType == varyTimeStep ||
-                     romOptions.greedyResidualType == varyBasisSize)
+                romOptions.greedyResidualType == varyBasisSize)
             {
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);
@@ -1953,9 +1966,16 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the residual and any information
     // for use during the next iteration.
-    if(rom_build_database && (!rom_online || residualComputed))
+    if(rom_build_database && (!rom_online || rom_calc_rel_error || residualComputed))
     {
-        SaveROMDatabase(parameterPointGreedySelector, romOptions, rom_online, residual, residualVecSize, outputPath);
+        if (rom_calc_rel_error)
+        {
+            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, relative_error, outputPath);
+        }
+        else
+        {
+            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, residual, residualVecSize, outputPath);
+        }
     }
 
     // Free the used memory.

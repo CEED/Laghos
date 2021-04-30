@@ -3,7 +3,7 @@
 
 #include "mfem.hpp"
 
-#include "GreedyParameterPointSelector.h"
+#include "GreedyParameterPointRandomSampler.h"
 #include "BasisGenerator.h"
 #include "BasisReader.h"
 
@@ -14,7 +14,7 @@ using namespace mfem;
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
-void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                   const bool scalar);
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                     const bool scalar);
@@ -36,6 +36,12 @@ enum offsetStyle
     interpolateOffset
 };
 
+enum samplingType
+{
+    randomSampling,
+    latinHypercubeSampling
+};
+
 enum residualType
 {
     useLastLiftedSolution,
@@ -53,6 +59,18 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     };
     auto iter = offsetMap.find(offsetType);
     MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    return iter->second;
+}
+
+static samplingType getSamplingType(const char* samp)
+{
+    static std::unordered_map<std::string, samplingType> sampMap =
+    {
+        {"random", randomSampling},
+        {"latin-hypercube", latinHypercubeSampling}
+    };
+    auto iter = sampMap.find(samp);
+    MFEM_VERIFY(iter != std::end(sampMap), "Invalid input of sampling type");
     return iter->second;
 }
 
@@ -78,13 +96,14 @@ struct ROM_Options
     std::string *basename = NULL;
 
     std::string basisIdentifier = "";
-    double greedyTol = 0.3; // error tolerance for the greedy algorithm
-    double greedySat = 1.0; // saturation constant for the greedy algorithm
+    double greedyTol = 0.1; // error indicator tolerance for the greedy algorithm
+    double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
     double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
     double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
     int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space
     int greedySubsetSize = 0; // subset size of parameter points whose residuals are checked during the greedy algorithm
     int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
+    samplingType greedySamplingType = randomSampling; // residual type for the greedy algorithm
     residualType greedyResidualType = useLastLiftedSolution; // residual type for the greedy algorithm
 
     double t_final = 0.0; // simulation final time
@@ -738,13 +757,15 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
-CAROM::GreedyParameterPointSelector* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, const char* greedyResidualType);
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyResidualType, const char* greedySamplingType);
 
-CAROM::GreedyParameterPointSelector* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath);
+CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath);
 
-void SaveROMDatabase(CAROM::GreedyParameterPointSelector* parameterPointGreedySelector, ROM_Options& romOptions, const bool rom_online, const double residual,
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double residual,
                      const int residualVecSize, const std::string outputPath);
 
+ void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
+                      const std::string outputPath);
 
 #endif // MFEM_LAGHOS_ROM
