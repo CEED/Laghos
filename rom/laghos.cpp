@@ -591,24 +591,7 @@ int main(int argc, char *argv[])
         std::string filename = outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
-
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        if (romOptions.hyperreduce)
-        {
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            dim = std::stoi(words[3]);
-            dt = std::stod(words[4]);
-            source = std::stoi(words[5]);
-        }
-        infile_offlineParam.close();
+        VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
     }
 
     // Define the parallel finite element spaces. We use:
@@ -982,66 +965,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
-        if (romOptions.parameterID <= 0)
-        {
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath);
-                outfile_offlineParam << romOptions.useOffset << " ";
-                outfile_offlineParam << romOptions.offsetType << " ";
-                outfile_offlineParam << romOptions.SNS << " ";
-                outfile_offlineParam << numWindows << " ";
-                outfile_offlineParam << twfile << endl;
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << " ";
-                outfile_offlineParam << romOptions.atwoodFactor << " ";
-                outfile_offlineParam.close();
-            }
-        }
-        else
-        {
-            std::ifstream infile_offlineParam(offlineParam_outputPath);
-            MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-            std::string line;
-            std::vector<std::string> words;
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-            MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-            MFEM_VERIFY(std::stoi(words[2]) == romOptions.SNS, "-romsns option does not match record.");
-            MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-            MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
-            infile_offlineParam.close();
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << " ";
-                outfile_offlineParam << romOptions.atwoodFactor << endl;
-                outfile_offlineParam.close();
-            }
-        }
-    }
-
-    if (rom_online)
-    {
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        infile_offlineParam.close();
+        WriteOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, myid == 0);
     }
 
     // Perform time-integration (looping over the time iterations, ti, with a
@@ -1870,9 +1794,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-        //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-        //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-        //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:
