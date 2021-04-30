@@ -2577,7 +2577,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         bool latin_hypercube = sampleType == latinHypercubeSampling;
         parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
-            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
+            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha, 2,
             romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize, latin_hypercube,
             outputPath + "/greedy_algorithm_log.txt");
 
