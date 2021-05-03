@@ -451,7 +451,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
                 double coeff = 0.0;
                 coeff += (input.rhoFactor - atof(words[1].c_str())) * (input.rhoFactor - atof(words[1].c_str()));
                 coeff += (input.blast_energyFactor - atof(words[2].c_str())) * (input.blast_energyFactor - atof(words[2].c_str()));
-                coeff += (input.atwoodFactor - atof(words[6].c_str())) * (input.atwoodFactor - atof(words[6].c_str()));
+                coeff += (input.atwoodFactor - atof(words[3].c_str())) * (input.atwoodFactor - atof(words[3].c_str()));
                 if (coeff == 0.0)
                 {
                     true_idx = coeff_list.size();
