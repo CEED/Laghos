@@ -39,15 +39,16 @@ int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, paramfile, true);
     }
 
-    std::ofstream opout(paramfile, std::fstream::app);
     if (printStatus)
     {
+        std::ofstream opout(paramfile, std::fstream::app);
         opout << romOptions.parameterID << " ";
         opout << romOptions.rhoFactor << " ";
         opout << romOptions.blast_energyFactor << " ";
         opout << romOptions.atwoodFactor << endl;
         opout.close();
     }
+    return 0;
 }
 
 int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
