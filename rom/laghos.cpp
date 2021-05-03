@@ -78,6 +78,7 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
+static double rhoRatio; // For Rayleigh-Taylor instability problem
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
@@ -268,6 +269,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&romOptions.atwoodFactor, "-af", "--atwoodfactor", "Factor for Atwood number in Rayleigh-Taylor instability problem.");
     args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -552,26 +554,7 @@ int main(int argc, char *argv[])
         std::string filename = outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
-
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        romOptions.VTos = std::stoi(words[4]);
-        if (romOptions.hyperreduce)
-        {
-            //std::getline(infile_offlineParam, line); // twfile
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            dim = std::stoi(words[3]);
-            dt = std::stod(words[4]);
-            source = std::stoi(words[5]);
-        }
-        infile_offlineParam.close();
+        VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
     }
 
     // Define the parallel finite element spaces. We use:
@@ -737,6 +720,7 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction* rho = NULL;
+    rhoRatio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor); // Rayleigh-Taylor initial density
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     if (fom_data)
@@ -756,7 +740,8 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FunctionCoefficient e_coeff(e0);
+            FunctionCoefficient e_coeff0(e0);
+            ProductCoefficient e_coeff(1.0 / romOptions.rhoFactor, e_coeff0);
             l2_e.ProjectCoefficient(e_coeff);
         }
         e_gf->ProjectGridFunction(l2_e);
@@ -817,6 +802,19 @@ int main(int argc, char *argv[])
     }
     if (impose_visc) {
         visc = true;
+    }
+
+    // 2D Rayleigh-Taylor penetration distance
+    int pd1_vdof = -1, pd2_vdof = -1;
+    if (problem == 7 && fom_data)
+    {
+        for (int i = 0; i < Vsize_h1/2; ++i)
+        {
+            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
+                pd1_vdof = Vsize_h1/2+i;
+            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
+                pd2_vdof = Vsize_h1/2+i;
+        }
     }
 
     LagrangianHydroOperator* oper = NULL;
@@ -940,66 +938,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
-        if (romOptions.parameterID <= 0)
-        {
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath);
-                outfile_offlineParam << romOptions.useOffset << " ";
-                outfile_offlineParam << romOptions.offsetType << " ";
-                outfile_offlineParam << romOptions.SNS << " ";
-                outfile_offlineParam << numWindows << " ";
-                outfile_offlineParam << romOptions.VTos << " ";
-                outfile_offlineParam << twfile << endl;
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
-                outfile_offlineParam.close();
-            }
-        }
-        else
-        {
-            std::ifstream infile_offlineParam(offlineParam_outputPath);
-            MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-            std::string line;
-            std::vector<std::string> words;
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-            MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-            MFEM_VERIFY(std::stoi(words[2]) == romOptions.SNS, "-romsns option does not match record.");
-            MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-            MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
-            infile_offlineParam.close();
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
-                outfile_offlineParam.close();
-            }
-        }
-    }
-
-    if (rom_online)
-    {
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        romOptions.VTos = std::stoi(words[4]);
-        infile_offlineParam.close();
+        WriteOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, myid == 0);
     }
 
     // Perform time-integration (looping over the time iterations, ti, with a
@@ -1843,6 +1782,17 @@ int main(int argc, char *argv[])
             }
         }
 
+        // 2D Rayleigh-Taylor penetration distance
+        if (problem == 7 && fom_data)
+        {
+            double my_pd[2], pd_max[2];
+            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
+            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (mpi.Root())
+                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
+        }
+
         if (visualization)
         {
             vis_v->close();
@@ -1898,9 +1848,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-    // return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-    //        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-    //                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:
@@ -1924,7 +1874,7 @@ double rho0(const Vector &x)
         return 1.0;
     }
     case 7:
-        return x(1) >= 0.0 ? 2.0 : 1.0;
+        return x(1) >= 0.0 ? rhoRatio : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -2144,7 +2094,7 @@ double e0(const Vector &x)
     case 7:
     {
         const double rho = rho0(x), gamma = gamma_func(x);
-        return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+        return (4.0 + rhoRatio - rho * x(1)) / (gamma - 1.0) / rho;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");

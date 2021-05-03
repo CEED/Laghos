@@ -6,6 +6,83 @@
 
 using namespace std;
 
+void split_line(const std::string &line, std::vector<std::string> &words)
+{
+    words.clear();
+    std::istringstream iss(line);
+    std::string new_word;
+    while (std::getline(iss, new_word, ' ')) {
+        words.push_back(new_word);
+    }
+}
+
+int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
+                      const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
+{
+    if (romOptions.parameterID <= 0)
+    {
+        if (printStatus)
+        {
+            std::ofstream opout(paramfile);
+            opout << dim << " ";
+            opout << dt << " ";
+            opout << romOptions.useOffset << " ";
+            opout << romOptions.offsetType << " ";
+            opout << romOptions.SNS << " ";
+            opout << numWindows << " ";
+            opout << romOptions.VTos << " ";
+            opout << twfile << endl;
+            opout.close();
+        }
+    }
+    else
+    {
+        VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, paramfile, true);
+    }
+
+    std::ofstream opout(paramfile, std::fstream::app);
+    if (printStatus)
+    {
+        opout << romOptions.parameterID << " ";
+        opout << romOptions.rhoFactor << " ";
+        opout << romOptions.blast_energyFactor << " ";
+        opout << romOptions.atwoodFactor << endl;
+        opout.close();
+    }
+}
+
+int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
+                       const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline)
+{
+    std::ifstream opin(paramfile);
+    MFEM_VERIFY(opin.is_open(), "Offline parameter record file does not exist.");
+
+    std::string line;
+    std::vector<std::string> words;
+    std::getline(opin, line);
+    split_line(line, words);
+
+    MFEM_VERIFY(std::stoi(words[2]) == romOptions.useOffset, "-romos option does not match record.");
+    MFEM_VERIFY(std::stoi(words[3]) == romOptions.offsetType, "-romostype option does not match record.");
+    MFEM_VERIFY(std::stoi(words[4]) == romOptions.SNS, "-romsns option does not match record.");
+
+    if (rom_offline)
+    {
+        MFEM_VERIFY(std::stoi(words[5]) == numWindows, "-nwin option does not match record.");
+        MFEM_VERIFY(std::strcmp(words[7].c_str(), twfile) == 0, "-tw option does not match record.");
+    }
+    else
+    {
+        dim = std::stoi(words[0]);
+        dt = std::stod(words[1]);
+        romOptions.VTos = std::stod(words[6]);
+    }
+
+    opin.close();
+
+    return 0;
+}
+
 void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
@@ -244,16 +321,6 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
     }
 
     return 0;
-}
-
-void split_line(const std::string &line, std::vector<std::string> &words)
-{
-    words.clear();
-    std::istringstream iss(line);
-    std::string new_word;
-    while (std::getline(iss, new_word, ' ')) {
-        words.push_back(new_word);
-    }
 }
 
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)

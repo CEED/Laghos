@@ -84,6 +84,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     double rhoFactor = 1.0; // factor for scaling rho
+    double atwoodFactor = 1.0 / 3.0; // factor for Atwood number in Rayleigh-Taylor instability problem
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase

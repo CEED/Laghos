@@ -327,25 +327,23 @@ int main(int argc, char *argv[])
     int numWindows = 0;
     int windowNumSamples = 0;
     int windowOverlapSamples = 0;
-    double energyFraction = 0.9999;
-    bool useOffset = true;
     const char *offsetType = "initial";
-    bool SNS = false;
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    ROM_Options romOptions;
 
     OptionsParser args(argc, argv);
     args.AddOption(&nset, "-nset", "--numsets", "Number of sample sets to merge.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
-    args.AddOption(&energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
-    args.AddOption(&useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
+    args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
+    args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
-    args.AddOption(&SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
+    args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
@@ -390,7 +388,7 @@ int main(int argc, char *argv[])
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        GetParametricTimeWindows(nset, romOptions.SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
         outfile_twp.open(outputPath + "/" + std::string(twpfile));
     }
     else {
@@ -398,21 +396,13 @@ int main(int argc, char *argv[])
         numBasisWindows = 1;
     }
 
-    offsetStyle trueOffsetType = getOffsetStyle(offsetType);
-    MFEM_VERIFY(trueOffsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM")
+    romOptions.offsetType = getOffsetStyle(offsetType);
+    MFEM_VERIFY(romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM")
 
-    std::ifstream infile_offlineParam(outputPath + "/offline_param.csv");
-    MFEM_VERIFY(infile_offlineParam.is_open(), "Parameter record file does not exist.");
-    std::string line;
-    std::vector<std::string> words;
-    std::getline(infile_offlineParam, line);
-    split_line(line, words);
-    MFEM_VERIFY(std::stoi(words[0]) == useOffset, "-romos option does not match record.");
-    MFEM_VERIFY(std::stoi(words[1]) == trueOffsetType, "-romostype option does not match record.");
-    MFEM_VERIFY(std::stoi(words[2]) == SNS, "-romsns option does not match record.");
-    MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-    MFEM_VERIFY(std::strcmp(words[5].c_str(), twfile) == 0, "-tw option does not match record.");
-    infile_offlineParam.close();
+    int dim; // dummy
+    double dt; // dummy
+    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, true);
 
     Array<int> snapshotSize(nset);
     Array<int> snapshotSizeFv(nset);
@@ -432,7 +422,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(0, outputPath, "E", sampleWindow, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
-            if (!SNS)
+            if (!romOptions.SNS)
             {
                 GetSnapshotDim(0, outputPath, "Fv", sampleWindow, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
@@ -442,7 +432,7 @@ int main(int argc, char *argv[])
         }
 
         MFEM_VERIFY(dimX == dimV, "Different sizes for X and V");
-        if (!SNS)
+        if (!romOptions.SNS)
         {
             MFEM_VERIFY(dimFv == dimV, "Different sizes for V and Fv");
             MFEM_VERIFY(dimFe == dimE, "Different sizes for E and Fe");
@@ -462,7 +452,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(paramID, outputPath, "E", sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 
-            if (!SNS)
+            if (!romOptions.SNS)
             {
                 GetSnapshotDim(paramID, outputPath, "Fv", sampleWindow, dim, snapshotSizeFv[paramID]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[paramID] >= snapshotSize[paramID], "Inconsistent snapshot sizes");
@@ -478,20 +468,25 @@ int main(int argc, char *argv[])
         int lastBasisWindow = (windowNumSamples > 0) ? numBasisWindows - 1 : sampleWindow;
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
-            LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::X, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
-            LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
-            LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, usingWindows, windowNumSamples, windowOverlapSamples,
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples,
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples,
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
-            if (!SNS)
+            if (!romOptions.SNS)
             {
-                LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
-                LoadSampleSets(myid, energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples, basisWindow, useOffset, trueOffsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples,
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples,
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
             }
 
             if (myid == 0 && usingWindows)
             {
                 outfile_twp << twep[basisWindow] << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
-                if (SNS)
+                if (romOptions.SNS)
                     outfile_twp << "\n";
                 else
                     outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
