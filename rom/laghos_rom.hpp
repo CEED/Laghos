@@ -66,6 +66,7 @@ struct ROM_Options
     bool staticSVD = true; // true: use StaticSVD
     bool useOffset = true; // if true, sample variables minus initial state as an offset
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
+    bool pd = false; // if true, use penetration distance based local ROM for Rayleigh-Taylor instability problem
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index

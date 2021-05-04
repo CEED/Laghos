@@ -182,11 +182,25 @@ void GetSnapshotTime(const int id, const std::string& basename, const std::strin
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool SNS, const std::string& basename, const int windowNumSamples, int &numBasisWindows,
-                              Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
+void GetSnapshotPenetrationDistance(const int id, const std::string& basename, std::vector<double> &pdSnap)
+{
+    std::string filename = basename + "/param" + std::to_string(id) + "_pdSnapX";
+    std::ifstream infile_pdSnap(filename);
+    MFEM_VERIFY(infile_pdSnap.is_open(), "Snapshot time input file does not exists.");
+
+    pdSnap.clear();
+    double pd = 0.0;
+    while (infile_pdSnap >> pd)
+    {
+        pdSnap.push_back(pd);
+    }
+}
+
+void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const int windowNumSamples, 
+                              int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
-    std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
+    std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe, pdSnap;
     const int numVar = (SNS) ? 3 : 5;
     std::vector<int> numSnap(nset*numVar);
     // The snapshot time vectors are placed in descending order, with the last element is when the first snapshot is taken
@@ -216,10 +230,18 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
             tSnapFe.push_back(tVec);
             numSnap[paramID+nset*VariableName::Fe] = tVec.size();
         }
+
+        if (pd)
+        {
+            GetSnapshotPenetrationDistance(paramID, basename, tVec);
+            reverse(tVec.begin(), tVec.end());
+            pdSnap.push_back(tVec);
+        }
     }
 
     bool lastBasisWindow = false;
-    std::vector<double> tTemp(nset*numVar, 0.0);
+    std::vector<bool> lastSnapshot(nset, false);
+    std::vector<double> tTemp((pd) ? nset : nset*numVar, 0.0);
     std::vector<int> offsetCurrentWindow(nset*numVar, 0);
 
     offsetAllWindows.push_back(offsetCurrentWindow);
@@ -231,17 +253,24 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
         // Find the smallest time, windowRight, such that at most windowNumSamples+1 new snapshots are counted for every variable and parameter
         for (int paramID = 0; paramID < nset; ++paramID)
         {
-            tTemp[paramID+nset*VariableName::X] = *(tSnapX[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapX[paramID].size()) - 1));
-            tTemp[paramID+nset*VariableName::V] = *(tSnapV[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapV[paramID].size()) - 1));
-            tTemp[paramID+nset*VariableName::E] = *(tSnapE[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapE[paramID].size()) - 1));
-
-            if (!SNS)
+            if (!pd)
             {
-                tTemp[paramID+nset*VariableName::Fv] = *(tSnapFv[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFv[paramID].size()) - 1));
-                tTemp[paramID+nset*VariableName::Fe] = *(tSnapFe[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFe[paramID].size()) - 1));
+                tTemp[paramID+nset*VariableName::X] = *(tSnapX[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapX[paramID].size()) - 1));
+                tTemp[paramID+nset*VariableName::V] = *(tSnapV[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapV[paramID].size()) - 1));
+                tTemp[paramID+nset*VariableName::E] = *(tSnapE[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapE[paramID].size()) - 1));
+
+                if (!SNS)
+                {
+                    tTemp[paramID+nset*VariableName::Fv] = *(tSnapFv[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFv[paramID].size()) - 1));
+                    tTemp[paramID+nset*VariableName::Fe] = *(tSnapFe[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(tSnapFe[paramID].size()) - 1));
+                }
+            }
+            else
+            {
+                tTemp[paramID] = lastSnapshot[paramID] ? std::numeric_limits<double>::max() : 
+                                                         *(pdSnap[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(pdSnap[paramID].size()) - 1));
             }
         }
-
         double windowRight = *min_element(tTemp.begin(), tTemp.end());
 
         // Record a vector, offsetCurrentWindow, of the largest snapshot index whose time taken is smaller than windowRight for every variable and parameter
@@ -251,19 +280,41 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
         // and the overlapping snapshot just taken at or after windowRight, making sure no data is missed by closing the basis window at or before windowRight
         for (int paramID = 0; paramID < nset; ++paramID)
         {
+            double tMax = -1.0; 
+            if (pd)
+            {
+                MFEM_VERIFY(tSnapX[paramID].size() == pdSnap[paramID].size(), "Did not read tMax correctly");
+                for (int t = 0; t < windowNumSamples + 2; ++t)
+                {
+                    if (~lastSnapshot[paramID] && pdSnap[paramID].back() < windowRight)
+                    {
+                        pdSnap[paramID].pop_back();
+                    }
+                    else
+                    {
+                        tMax = *(tSnapX[paramID].rbegin() + t);
+                        break;
+                    }
+                }
+                MFEM_VERIFY(tMax > 0.0, "Did not read tMax correctly");
+                lastSnapshot[paramID] = (pdSnap[paramID].size() == 1);
+            }
+            else
+                tMax = windowRight;
+
             for (int t = 0; t < windowNumSamples + 2; ++t)
             {
-                if (tSnapX[paramID].back() < windowRight)
+                if (tSnapX[paramID].back() < tMax)
                 {
                     tSnapX[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::X] += 1;
                 }
-                if (tSnapV[paramID].back() < windowRight)
+                if (tSnapV[paramID].back() < tMax)
                 {
                     tSnapV[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::V] += 1;
                 }
-                if (tSnapE[paramID].back() < windowRight)
+                if (tSnapE[paramID].back() < tMax)
                 {
                     tSnapE[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::E] += 1;
@@ -271,12 +322,12 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
 
                 if (!SNS)
                 {
-                    if (tSnapFv[paramID].back() < windowRight)
+                    if (tSnapFv[paramID].back() < tMax)
                     {
                         tSnapFv[paramID].pop_back();
                         offsetCurrentWindow[paramID+nset*VariableName::Fv] += 1;
                     }
-                    if (tSnapFe[paramID].back() < windowRight)
+                    if (tSnapFe[paramID].back() < tMax)
                     {
                         tSnapFe[paramID].pop_back();
                         offsetCurrentWindow[paramID+nset*VariableName::Fe] += 1;
@@ -289,14 +340,21 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
 
         for (int paramID = 0; paramID < nset; ++paramID)
         {
-            tTemp[paramID+nset*VariableName::X] = tSnapX[paramID].back();
-            tTemp[paramID+nset*VariableName::V] = tSnapV[paramID].back();
-            tTemp[paramID+nset*VariableName::E] = tSnapE[paramID].back();
-
-            if (!SNS)
+            if (!pd)
             {
-                tTemp[paramID+nset*VariableName::Fv] = tSnapFv[paramID].back();
-                tTemp[paramID+nset*VariableName::Fe] = tSnapFe[paramID].back();
+                tTemp[paramID+nset*VariableName::X] = tSnapX[paramID].back();
+                tTemp[paramID+nset*VariableName::V] = tSnapV[paramID].back();
+                tTemp[paramID+nset*VariableName::E] = tSnapE[paramID].back();
+
+                if (!SNS)
+                {
+                    tTemp[paramID+nset*VariableName::Fv] = tSnapFv[paramID].back();
+                    tTemp[paramID+nset*VariableName::Fe] = tSnapFe[paramID].back();
+                }
+            }
+            else
+            {
+                tTemp[paramID] = pdSnap[paramID].back();
             }
         }
 
@@ -309,19 +367,15 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
         lastBasisWindow = true;
         for (int i = 0; i < nset*numVar; ++i)
         {
-            if (numSnap[i] < offsetCurrentWindow[i]+1)
+            if (numSnap[i] > offsetCurrentWindow[i]+1)
             {
                 lastBasisWindow = false;
-                break;
             }
         }
 
         if (lastBasisWindow)
         {
-            for (int i = 0; i < nset*numVar; ++i)
-                MFEM_VERIFY(numSnap[i] == offsetCurrentWindow[i]+1, "Fail to merge since not all samples are used up");
             MFEM_VERIFY(windowLeft == windowRight, "Fail to merge since windowLeft is not equal to windowRight at the final time");
-            lastBasisWindow = true;
         }
     }
 }
@@ -355,6 +409,8 @@ int main(int argc, char *argv[])
                    "Offset type for initializing ROM windows.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
+    args.AddOption(&romOptions.pd, "-rompd", "--rompd", "-no-rompd", "--no-rompd",
+                   "Enable or disable penetration distance based local ROM for Rayleigh-Taylor instability problem.");
     args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
@@ -398,7 +454,7 @@ int main(int argc, char *argv[])
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, romOptions.SNS, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        GetParametricTimeWindows(nset, romOptions.SNS, romOptions.pd, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
         outfile_twp.open(outputPath + "/" + std::string(twpfile));
     }
     else {

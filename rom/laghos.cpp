@@ -308,6 +308,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
+    args.AddOption(&romOptions.pd, "-rompd", "--rompd", "-no-rompd", "--no-rompd",
+                   "Enable or disable penetration distance based local ROM for Rayleigh-Taylor instability problem.");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
