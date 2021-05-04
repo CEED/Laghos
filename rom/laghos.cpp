@@ -833,14 +833,15 @@ int main(int argc, char *argv[])
     }
 
     // 2D Rayleigh-Taylor penetration distance
+    int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7 && fom_data)
     {
         for (int i = 0; i < Vsize_h1/2; ++i)
         {
             if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
-                romOptions.pd1_vdof = Vsize_h1/2+i;
+                pd1_vdof = Vsize_h1/2+i;
             if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
-                romOptions.pd2_vdof = Vsize_h1/2+i;
+                pd2_vdof = Vsize_h1/2+i;
         }
     }
 
@@ -1731,8 +1732,8 @@ int main(int argc, char *argv[])
         if (problem == 7 && fom_data)
         {
             double my_pd[2], pd_max[2];
-            my_pd[0] = (romOptions.pd1_vdof > 0) ?  (*S)(romOptions.pd1_vdof) : 0.0;
-            my_pd[1] = (romOptions.pd2_vdof > 0) ? -(*S)(romOptions.pd2_vdof) : 0.0;
+            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
+            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
             MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
             if (mpi.Root())
                 cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
