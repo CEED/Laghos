@@ -116,6 +116,10 @@ struct ROM_Options
     bool useVX = false; // If true, use X-X0 basis for V.
 
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
+
+    // 2D Rayleigh-Taylor penetration distance
+    int pd1_vdof = -1; 
+    int pd2_vdof = -1;
 };
 
 class ROM_Sampler
@@ -275,6 +279,7 @@ private:
     const int parameterID;
     const bool writeSnapshots;
     std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
+    std::vector<double> pd1Snap, pd2Snap;
 
     std::string basename = "run";
 
