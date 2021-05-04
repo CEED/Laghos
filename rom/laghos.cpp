@@ -842,6 +842,8 @@ int main(int argc, char *argv[])
                 pd1_vdof = Vsize_h1/2+i;
             if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
                 pd2_vdof = Vsize_h1/2+i;
+            if (pd1_vdof >= 0 && pd2_vdof >= 0)
+                break;
         }
     }
 

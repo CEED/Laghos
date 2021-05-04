@@ -306,9 +306,19 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
         double overlapMidpoint = (windowLeft + windowRight) / 2;
         twep.Append(overlapMidpoint);
 
-        if (numSnap[0] == offsetCurrentWindow[0]+1)
+        lastBasisWindow = true;
+        for (int i = 0; i < nset*numVar; ++i)
         {
-            for (int i = 1; i < nset*numVar; ++i)
+            if (numSnap[i] < offsetCurrentWindow[i]+1)
+            {
+                lastBasisWindow = false;
+                break;
+            }
+        }
+
+        if (lastBasisWindow)
+        {
+            for (int i = 0; i < nset*numVar; ++i)
                 MFEM_VERIFY(numSnap[i] == offsetCurrentWindow[i]+1, "Fail to merge since not all samples are used up");
             MFEM_VERIFY(windowLeft == windowRight, "Fail to merge since windowLeft is not equal to windowRight at the final time");
             lastBasisWindow = true;
