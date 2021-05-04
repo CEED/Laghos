@@ -253,7 +253,7 @@ public:
         }
     }
 
-    void SampleSolution(const double t, const double dt, Vector const& S);
+    void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
 
     void Finalize(Array<int> &cutoff);
 
@@ -274,7 +274,7 @@ private:
 
     const int parameterID;
     const bool writeSnapshots;
-    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
+    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe, pdSnap;
 
     std::string basename = "run";
 

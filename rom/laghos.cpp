@@ -991,7 +991,7 @@ int main(int argc, char *argv[])
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
-        sampler->SampleSolution(0, 0, *S);
+        sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         samplerTimer.Stop();
     }
 
@@ -1350,7 +1350,14 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
-                sampler->SampleSolution(t, last_dt, *S);
+                // 2D Rayleigh-Taylor penetration distance
+                double proc_pd, real_pd = -1.0;
+                if (problem == 7)
+                {
+                    proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                    MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                }
+                sampler->SampleSolution(t, last_dt, real_pd, *S);
 
                 bool endWindow = false;
                 if (usingWindows)
@@ -1367,7 +1374,7 @@ int main(int argc, char *argv[])
 
                 if (samplerLast)
                 {
-                    samplerLast->SampleSolution(t, last_dt, *S);
+                    samplerLast->SampleSolution(t, last_dt, real_pd, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                         tOverlapMidpoint = t;
 
@@ -1421,7 +1428,7 @@ int main(int argc, char *argv[])
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
-                        sampler->SampleSolution(t, dt, *S);
+                        sampler->SampleSolution(t, dt, real_pd, *S);
                     }
                 }
                 samplerTimer.Stop();
@@ -1731,12 +1738,12 @@ int main(int argc, char *argv[])
         // 2D Rayleigh-Taylor penetration distance
         if (problem == 7 && fom_data)
         {
-            double my_pd[2], pd_max[2];
-            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
-            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            double proc_pd[2], real_pd[2];
+            proc_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
+            proc_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
             if (mpi.Root())
-                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
+                cout << "Penetration distance (upward, downward): " << real_pd[0] << ", " << real_pd[1] << endl;
         }
 
         if (visualization)
@@ -1794,9 +1801,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-        //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-        //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-        //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:

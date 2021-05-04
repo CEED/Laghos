@@ -8,7 +8,7 @@
 
 using namespace std;
 
-void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
+void ROM_Sampler::SampleSolution(const double t, const double dt, const double pd, Vector const& S)
 {
     SetStateVariables(S);
     SetStateVariableRates(dt);
@@ -50,6 +50,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         if (writeSnapshots && addSample)
         {
             tSnapX.push_back(t);
+            if (pd >= 0.0) pdSnap.push_back(pd);
         }
     }
 
@@ -234,6 +235,12 @@ void ROM_Sampler::Finalize(Array<int> &cutoff)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv");
             printSnapshotTime(tSnapFe, path_tSnap, "Fe");
+        }
+
+        if (pdSnap.size() > 0)
+        {
+            std::string path_pdSnap = basename + "/param" + std::to_string(parameterID) + "_pdSnap";
+            printSnapshotTime(pdSnap, path_pdSnap, "X");
         }
     }
 
