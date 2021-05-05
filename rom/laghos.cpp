@@ -1355,10 +1355,10 @@ int main(int argc, char *argv[])
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
                 // 2D Rayleigh-Taylor penetration distance
-                double proc_pd, real_pd = -1.0;
-                if (problem == 7)
+                double real_pd = -1.0;
+                if (problem == 7 && romOptions.pd)
                 {
-                    proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                    double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
                     MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
                 }
                 sampler->SampleSolution(t, last_dt, real_pd, *S);
@@ -1441,7 +1441,16 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                if (usingWindows && t >= twep[romOptions.window] && romOptions.window < numWindows-1)
+                double window_par;
+                if (problem == 7 && romOptions.pd)
+                {
+                    // 2D Rayleigh-Taylor penetration distance
+                    double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                    MPI_Reduce(&proc_pd, &window_par, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                }
+                else window_par = t;
+
+                if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
                     romOptions.window++;
                     outfile_tw_steps << ti << "\n";
