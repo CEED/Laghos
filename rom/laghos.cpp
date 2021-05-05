@@ -86,51 +86,6 @@ double e0(const Vector &);
 double gamma_func(const Vector &);
 void display_banner(ostream & os);
 
-void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-    gf->GetTrueDofs(tv);
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int i=0; i<tv.Size(); ++i)
-        ofs << tv[i] << std::endl;
-
-    ofs.close();
-}
-
-
-void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ifstream ifs(fullname.c_str());
-
-    for (int i=0; i<tv.Size(); ++i)
-    {
-        double d;
-        ifs >> d;
-        tv[i] = d;
-    }
-
-    ifs.close();
-
-    ParGridFunction rgf(gf->ParFESpace());
-    rgf.SetFromTrueDofs(tv);
-
-    PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
-}
 
 int main(int argc, char *argv[])
 {
@@ -185,6 +140,7 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
+    const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
     Array<double> twep;
     Array2D<int> twparam;
@@ -270,6 +226,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.sampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&romOptions.sampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&romOptions.sampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&romOptions.tsampV, "-ntsamv", "--numtsamplev", "number of time samples for V.");
+    args.AddOption(&romOptions.tsampE, "-ntsame", "--numtsamplee", "number of time samples for E.");
     args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
     args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
@@ -316,6 +274,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&spaceTimeMethod, "-romst", "--romspacetimetype",
+                   "Space-time method.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
                    "Enable or disable use of V basis for X-X0.");
     args.AddOption(&romOptions.useVX, "-romvx", "--romusevx", "-no-romvx", "--no-romusevx",
@@ -364,7 +324,10 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
-    const bool fom_data = !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
+    romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
+    const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
+
+    const bool fom_data = spaceTime || !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
 
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
@@ -741,6 +704,15 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (rom_offline) // Set VTos
+    {
+        Vector Vtdof(tVsize_h1);
+        v_gf->GetTrueDofs(Vtdof);
+        CAROM::Vector VtdofDist(Vtdof.GetData(), tVsize_h1, true, false);
+        const double vnorm = VtdofDist.norm();
+        romOptions.VTos = (vnorm == 0.0);
+    }
+
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
     // L2 projection to the positive basis in which we actually compute. The goal
@@ -949,6 +921,7 @@ int main(int argc, char *argv[])
     bool use_dt_old = false;
     bool last_step = false;
     int steps = 0;
+    int unique_steps = 0;
 
     BlockVector* S_old = NULL;
 
@@ -977,7 +950,11 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
-    std::ofstream outfile_twp;
+    std::ofstream outfile_twp, outfile_time;
+    const bool outputTimes = rom_offline && spaceTime;
+    const bool outputSpaceTimeSolution = rom_offline && spaceTime;
+    const bool inputTimes = rom_online && spaceTime;
+    const bool readTimes = rom_online && spaceTime;
     Array<int> cutoff(5);
     if (rom_offline)
     {
@@ -993,6 +970,43 @@ int main(int argc, char *argv[])
         sampler = new ROM_Sampler(romOptions, *S);
         sampler->SampleSolution(0, 0, *S);
         samplerTimer.Stop();
+    }
+
+    if (outputTimes)
+    {
+        outfile_time.open(outputPath + "/timesteps.csv");
+        outfile_time.precision(16);
+    }
+
+    std::ofstream ofs_STX, ofs_STV, ofs_STE;
+    if (outputSpaceTimeSolution)
+    {
+        // TODO: output FOM solution at every timestep, including initial state at t=0.
+        char fileExtension[100];
+        sprintf(fileExtension, ".%06d", myid);
+
+        std::string fullname = outputPath + "/ST_Sol_Position" + fileExtension;
+        ofs_STX.open(fullname.c_str(), std::ofstream::out);
+        ofs_STX.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Velocity" + fileExtension;
+        ofs_STV.open(fullname.c_str(), std::ofstream::out);
+        ofs_STV.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Energy" + fileExtension;
+        ofs_STE.open(fullname.c_str(), std::ofstream::out);
+        ofs_STE.precision(16);
+
+        AppendPrintParGridFunction(&ofs_STX, x_gf);
+        AppendPrintParGridFunction(&ofs_STV, v_gf);
+        AppendPrintParGridFunction(&ofs_STE, e_gf);
+    }
+
+    std::vector<double> timesteps;  // Used only for online space-time case.
+    if (inputTimes)
+    {
+        const int err = ReadTimesteps(outputPath, timesteps);
+        MFEM_VERIFY(err == 0, "Error in ReadTimesteps");
     }
 
     std::vector<ROM_Basis*> basis;
@@ -1031,11 +1045,11 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
-                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
             }
         }
 
@@ -1215,9 +1229,16 @@ int main(int argc, char *argv[])
         restoreTimer.Stop();
         infile_tw_steps.close();
     }
+    else if (rom_online && spaceTime)
+    {
+        if (myid == 0)
+            romOper[0]->SolveSpaceTimeGN(romS);
+
+        MPI_Bcast(romS.GetData(), romS.Size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
     else
     {
-        // usual time loop when rom_restore phase is false.
+        // Usual time loop when not in restore or online space-time phase.
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
@@ -1344,6 +1365,18 @@ int main(int argc, char *argv[])
             }
             else if (dtc == 0.0 && dt_est > 1.25 * dt) {
                 dt *= 1.02;
+            }
+
+            unique_steps++;
+
+            if (outputTimes) outfile_time << t << "\n";
+
+            if (outputSpaceTimeSolution)
+            {
+                // TODO: time this?
+                AppendPrintParGridFunction(&ofs_STX, x_gf);
+                AppendPrintParGridFunction(&ofs_STV, v_gf);
+                AppendPrintParGridFunction(&ofs_STE, e_gf);
             }
 
             if (rom_offline)
@@ -1600,11 +1633,11 @@ int main(int argc, char *argv[])
 
     if (romOptions.hyperreduce)
     {
-        if (romOptions.GramSchmidt)
+        if (romOptions.GramSchmidt && !spaceTime)
         {
             romOper[romOptions.window]->PostprocessHyperreduction(romS);
         }
-        if (!rom_online)
+        if (!rom_online || spaceTime)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
         }
@@ -1619,6 +1652,20 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(cutoff);
         basisConstructionTimer.Stop();
+
+        if (outputTimes)
+        {
+            outfile_time.close();
+            MFEM_VERIFY(romOptions.window == 0, "Time windows not implemented in this case");
+            MFEM_VERIFY(unique_steps + 1 == sampler->FinalNumberOfSamples(), "");
+            // TODO: for now, we just write out the simulation timestep times, not the ROM basis generator
+            // snapshot times. So far, in our tests snapshots are taken on every timestep, so the timesteps
+            // and snapshots coincide. In general, this needs to be extended to allow for snapshots on a
+            // subset of timesteps. Both the timesteps and snapshot times will be needed for space-time ROM.
+            // The timesteps are needed for time integration (which defines the space-time system), and the
+            // snapshot times are needed because the temporal bases and temporal samples are based on
+            // snapshots.
+        }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
@@ -1638,6 +1685,13 @@ int main(int argc, char *argv[])
 
         samplerTimer.Stop();
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
+    }
+
+    if (outputSpaceTimeSolution)
+    {
+        ofs_STX.close();
+        ofs_STV.close();
+        ofs_STE.close();
     }
 
     if (fom_data)
@@ -1705,7 +1759,7 @@ int main(int argc, char *argv[])
         if (mpi.Root())
         {
             cout << endl;
-            cout << "Energy  diff: " << scientific << setprecision(2)
+            cout << "Energy diff: " << scientific << setprecision(2)
                  << fabs(energy_init - energy_final) << endl;
         }
 
@@ -1794,9 +1848,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-        //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-        //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-        //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:

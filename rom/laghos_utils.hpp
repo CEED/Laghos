@@ -20,11 +20,17 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
 
 void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows = false, const int window = -1);
 
+int ReadTimesteps(std::string const& path, std::vector<double>& time);
+
 int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const bool printStatus);
 
 int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs);
 
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
+
+void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf);
+void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf);
+void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf);
 
 void writeNum(int num, std::string file_name);
 
