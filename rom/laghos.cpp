@@ -1445,8 +1445,9 @@ int main(int argc, char *argv[])
                 if (problem == 7 && romOptions.pd)
                 {
                     // 2D Rayleigh-Taylor penetration distance
-                    double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-                    MPI_Reduce(&proc_pd, &window_par, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    //double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                    //MPI_Reduce(&proc_pd, &window_par, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    window_par = 0.09 * romOptions.atwoodFactor * t * t;
                 }
                 else window_par = t;
 
