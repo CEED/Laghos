@@ -283,10 +283,11 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
             double tMax = -1.0; 
             if (pd)
             {
-                MFEM_VERIFY(tSnapX[paramID].size() == pdSnap[paramID].size(), "Did not read tMax correctly");
+                if (lastSnapshot[paramID]) continue;
+                MFEM_VERIFY(tSnapX[paramID].size() == pdSnap[paramID].size(), "pdSnap and tSnapX do not have the same number of elements");
                 for (int t = 0; t < windowNumSamples + 2; ++t)
                 {
-                    if (~lastSnapshot[paramID] && pdSnap[paramID].back() < windowRight)
+                    if (pdSnap[paramID].back() < windowRight)
                     {
                         pdSnap[paramID].pop_back();
                     }
