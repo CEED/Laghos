@@ -1004,6 +1004,7 @@ int main(int argc, char *argv[])
     Vector romS, romS_old;
     std::vector<ROM_Operator*> romOper;
     romOper.assign(std::max(numWindows, 1), nullptr);
+    std::vector<double> pd_weight;
 
     if (!usingWindows)
     {
@@ -1094,6 +1095,28 @@ int main(int argc, char *argv[])
         {
             cout << "Offset Style: " << offsetType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+        }
+
+        if (problem == 7 && romOptions.pd)
+        {
+            if (fom_data)
+            {
+                int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
+                for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
+                    basis[curr_window]->writePD(pd2_tdof, curr_window);
+                MPI_Barrier(pmesh->GetComm());
+            }
+            std::string pd_weight_outPath = outputPath + "/pd_weight0";
+            std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
+            MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+            pd_weight.clear();
+            double pd_w;
+            while (infile_pd_weight >> pd_w)
+            {
+                pd_weight.push_back(pd_w);
+            }
+            infile_pd_weight.close();
+            MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX(), "Number of weights do not match.")
         }
 
         if (romOptions.hyperreduce_prep)
@@ -1445,9 +1468,8 @@ int main(int argc, char *argv[])
                 if (problem == 7 && romOptions.pd)
                 {
                     // 2D Rayleigh-Taylor penetration distance
-                    //double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-                    //MPI_Reduce(&proc_pd, &window_par, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-                    window_par = 0.09 * romOptions.atwoodFactor * t * t;
+                    for (int i=0; i<pd_weight.size(); ++i)
+                        window_par += pd_weight[i]*romS[i];
                 }
                 else window_par = t;
 
@@ -1466,7 +1488,7 @@ int main(int argc, char *argv[])
 
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
-                    int rdimeprev =  romOptions.dimE;
+                    int rdimeprev = romOptions.dimE;
 
                     SetWindowParameters(twparam, romOptions);
                     if (romOptions.hyperreduce)
@@ -1509,6 +1531,22 @@ int main(int argc, char *argv[])
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
+
+                    if (problem == 7 && romOptions.pd)
+                    {
+                        std::string pd_weight_outPath = outputPath + "/pd_weight" + to_string(romOptions.window);
+                        std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
+                        MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+                        pd_weight.clear();
+                        double pd_w;
+                        while (infile_pd_weight >> pd_w)
+                        {
+                            pd_weight.push_back(pd_w);
+                        }
+                        infile_pd_weight.close();
+                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX(), "Number of weights do not match.")
+                    }
+
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
@@ -1756,6 +1794,7 @@ int main(int argc, char *argv[])
             proc_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
             proc_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
             MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
             if (mpi.Root())
                 cout << "Penetration distance (upward, downward): " << real_pd[0] << ", " << real_pd[1] << endl;
         }

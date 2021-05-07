@@ -196,7 +196,7 @@ void GetSnapshotPenetrationDistance(const int id, const std::string& basename, s
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const int windowNumSamples, 
+void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const int windowNumSamples,
                               int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
@@ -267,8 +267,8 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
             }
             else
             {
-                tTemp[paramID] = lastSnapshot[paramID] ? std::numeric_limits<double>::max() : 
-                                                         *(pdSnap[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(pdSnap[paramID].size()) - 1));
+                tTemp[paramID] = lastSnapshot[paramID] ? std::numeric_limits<double>::max() :
+                                 *(pdSnap[paramID].rbegin() + std::min(windowNumSamples + 1, static_cast<int>(pdSnap[paramID].size()) - 1));
             }
         }
         double windowRight = *min_element(tTemp.begin(), tTemp.end());
@@ -280,7 +280,7 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
         // and the overlapping snapshot just taken at or after windowRight, making sure no data is missed by closing the basis window at or before windowRight
         for (int paramID = 0; paramID < nset; ++paramID)
         {
-            double tMax = -1.0; 
+            double tMax = -1.0;
             if (pd)
             {
                 if (lastSnapshot[paramID]) continue;

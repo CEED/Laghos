@@ -1978,6 +1978,20 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     }
 }
 
+void ROM_Basis::writePD(const int id, const int window) const
+{
+    std::string pd_weight_outPath = basename + "/pd_weight" + to_string(window);
+    std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
+    if (id >= 0)
+    {
+        for (int i=0; i < rdimx; ++i)
+        {
+            outfile_pd_weight << (*basisX)(id,i) << endl;
+        }
+    }
+    outfile_pd_weight.close();
+}
+
 void ROM_Operator::ComputeReducedMv()
 {
     const int nv = basis->GetDimV();

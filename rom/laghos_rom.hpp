@@ -473,6 +473,8 @@ public:
     void writeSP(ROM_Options const& input, const int window = 0) const;
     void readSP(ROM_Options const& input, const int window = 0);
 
+    void writePD(const int id, const int window = 0) const;
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
