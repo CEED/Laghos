@@ -1464,12 +1464,12 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                double window_par;
+                double window_par = 0.0;
                 if (problem == 7 && romOptions.pd)
                 {
                     // 2D Rayleigh-Taylor penetration distance
                     for (int i=0; i<pd_weight.size(); ++i)
-                        window_par += pd_weight[i]*romS[i];
+                        window_par -= pd_weight[i]*romS[i];
                 }
                 else window_par = t;
 
