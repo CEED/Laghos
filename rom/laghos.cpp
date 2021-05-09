@@ -1116,7 +1116,7 @@ int main(int argc, char *argv[])
                 pd_weight.push_back(pd_w);
             }
             infile_pd_weight.close();
-            MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX(), "Number of weights do not match.")
+            MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+1, "Number of weights do not match.")
         }
 
         if (romOptions.hyperreduce_prep)
@@ -1464,11 +1464,12 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                double window_par = 0.0;
+                double window_par;
                 if (problem == 7 && romOptions.pd)
                 {
                     // 2D Rayleigh-Taylor penetration distance
-                    for (int i=0; i<pd_weight.size(); ++i)
+                    window_par = pd_weight[0];
+                    for (int i=1; i<pd_weight.size(); ++i)
                         window_par -= pd_weight[i]*romS[i];
                 }
                 else window_par = t;
