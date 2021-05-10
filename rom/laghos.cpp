@@ -1381,8 +1381,9 @@ int main(int argc, char *argv[])
                 double real_pd = -1.0;
                 if (problem == 7 && romOptions.pd)
                 {
-                    double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-                    MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    //double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                    //MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    real_pd = romOptions.atwoodFactor * t * t;
                 }
                 sampler->SampleSolution(t, last_dt, real_pd, *S);
 
@@ -1468,9 +1469,10 @@ int main(int argc, char *argv[])
                 if (problem == 7 && romOptions.pd)
                 {
                     // 2D Rayleigh-Taylor penetration distance
-                    window_par = pd_weight[0];
-                    for (int i=1; i<pd_weight.size(); ++i)
-                        window_par -= pd_weight[i]*romS[i];
+                    //window_par = pd_weight[0];
+                    //for (int i=1; i<pd_weight.size(); ++i)
+                    //    window_par -= pd_weight[i]*romS[i];
+                    window_par = romOptions.atwoodFactor * t * t;
                 }
                 else window_par = t;
 
