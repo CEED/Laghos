@@ -577,9 +577,9 @@ do
 								baselineTestFile="${baselineTestFile%.*}"
 								targetTestFile="${targetTestFile%.*}"
 								if [[ "$parallel" == "true" ]]; then
-									$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
+									$($HEADER $DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-14" "$NUM_PARALLEL_PROCESSORS" >> $simulationLogFile 2>&1)
 								else
-									$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-7" "1" >> $simulationLogFile 2>&1)
+									$($DIR/./basisComparator "$baselineTestFile" "$targetTestFile" "1.0e-14" "1" >> $simulationLogFile 2>&1)
 								fi
 								check_fail
 

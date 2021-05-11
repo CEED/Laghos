@@ -81,58 +81,13 @@ using namespace mfem::hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
+static double rhoRatio; // For Rayleigh-Taylor instability problem
 
 double rho0(const Vector &);
 void v0(const Vector &, Vector &);
 double e0(const Vector &);
 double gamma_func(const Vector &);
 void display_banner(ostream & os);
-
-void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-    gf->GetTrueDofs(tv);
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-    ofs.precision(16);
-
-    for (int i=0; i<tv.Size(); ++i)
-        ofs << tv[i] << std::endl;
-
-    ofs.close();
-}
-
-
-double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
-{
-    Vector tv(gf->ParFESpace()->GetTrueVSize());
-
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
-
-    std::ifstream ifs(fullname.c_str());
-
-    for (int i=0; i<tv.Size(); ++i)
-    {
-        double d;
-        ifs >> d;
-        tv[i] = d;
-    }
-
-    ifs.close();
-
-    ParGridFunction rgf(gf->ParFESpace());
-    rgf.SetFromTrueDofs(tv);
-
-    return PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
-}
 
 int main(int argc, char *argv[])
 {
@@ -191,7 +146,9 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
+    const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
+    const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
     Array<double> twep;
@@ -282,6 +239,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.sampX, "-nsamx", "--numsamplex", "number of samples for X.");
     args.AddOption(&romOptions.sampV, "-nsamv", "--numsamplev", "number of samples for V.");
     args.AddOption(&romOptions.sampE, "-nsame", "--numsamplee", "number of samples for E.");
+    args.AddOption(&romOptions.tsampV, "-ntsamv", "--numtsamplev", "number of time samples for V.");
+    args.AddOption(&romOptions.tsampE, "-ntsame", "--numtsamplee", "number of time samples for E.");
     args.AddOption(&sFactorX, "-sfacx", "--sfactorx", "sample factor for X.");
     args.AddOption(&sFactorV, "-sfacv", "--sfactorv", "sample factor for V.");
     args.AddOption(&sFactorE, "-sface", "--sfactore", "sample factor for E.");
@@ -319,6 +278,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
+    args.AddOption(&greedyParam, "-greedy-param", "--greedy-param", "The domain to parameterize.");
     args.AddOption(&romOptions.greedyParamSpaceMin, "-greedy-param-min", "--greedy-param-min", "The minimum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
@@ -336,10 +296,13 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
+    args.AddOption(&romOptions.atwoodFactor, "-af", "--atwoodfactor", "Factor for Atwood number in Rayleigh-Taylor instability problem.");
     args.AddOption(&romOptions.blast_energyFactor, "-bef", "--blastefactor", "Factor for scaling blast energy.");
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&spaceTimeMethod, "-romst", "--romspacetimetype",
+                   "Space-time method.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
                    "Enable or disable use of V basis for X-X0.");
     args.AddOption(&romOptions.useVX, "-romvx", "--romusevx", "-no-romvx", "--no-romusevx",
@@ -383,7 +346,10 @@ int main(int argc, char *argv[])
 
     romOptions.basename = &outputPath;
 
-    const bool fom_data = !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
+    romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
+    const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
+
+    const bool fom_data = spaceTime || !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
 
     static std::map<std::string, NormType> localmap;
     localmap["l2"] = l2norm;
@@ -399,7 +365,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -407,7 +373,7 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-        parameterPointGreedySampler = LoadROMDatabase(romOptions, myid, outputPath);
+        parameterPointGreedySampler = LoadROMDatabase(romOptions, myid, outputPath, greedyParam);
     }
 
     if (mpi.Root())
@@ -636,24 +602,7 @@ int main(int argc, char *argv[])
         std::string filename = outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
-
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        if (romOptions.hyperreduce)
-        {
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            dim = std::stoi(words[3]);
-            dt = std::stod(words[4]);
-            source = std::stoi(words[5]);
-        }
-        infile_offlineParam.close();
+        VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
     }
 
     // Define the parallel finite element spaces. We use:
@@ -810,6 +759,15 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (rom_offline) // Set VTos
+    {
+        Vector Vtdof(tVsize_h1);
+        v_gf->GetTrueDofs(Vtdof);
+        CAROM::Vector VtdofDist(Vtdof.GetData(), tVsize_h1, true, false);
+        const double vnorm = VtdofDist.norm();
+        romOptions.VTos = (vnorm == 0.0);
+    }
+
     // Initialize density and specific internal energy values. We interpolate in
     // a non-positive basis to get the correct values at the dofs.  Then we do an
     // L2 projection to the positive basis in which we actually compute. The goal
@@ -817,6 +775,7 @@ int main(int argc, char *argv[])
     // this density is a temporary function and it will not be updated during the
     // time evolution.
     ParGridFunction* rho = NULL;
+    rhoRatio = (1.0 + romOptions.atwoodFactor) / (1.0 - romOptions.atwoodFactor); // Rayleigh-Taylor initial density
     FunctionCoefficient rho_coeff0(rho0);
     ProductCoefficient rho_coeff(romOptions.rhoFactor, rho_coeff0);
     if (fom_data)
@@ -836,7 +795,8 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FunctionCoefficient e_coeff(e0);
+            FunctionCoefficient e_coeff0(e0);
+            ProductCoefficient e_coeff(1.0 / romOptions.rhoFactor, e_coeff0);
             l2_e.ProjectCoefficient(e_coeff);
         }
         e_gf->ProjectGridFunction(l2_e);
@@ -897,6 +857,19 @@ int main(int argc, char *argv[])
     }
     if (impose_visc) {
         visc = true;
+    }
+
+    // 2D Rayleigh-Taylor penetration distance
+    int pd1_vdof = -1, pd2_vdof = -1;
+    if (problem == 7 && fom_data)
+    {
+        for (int i = 0; i < Vsize_h1/2; ++i)
+        {
+            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
+                pd1_vdof = Vsize_h1/2+i;
+            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
+                pd2_vdof = Vsize_h1/2+i;
+        }
     }
 
     LagrangianHydroOperator* oper = NULL;
@@ -1003,6 +976,7 @@ int main(int argc, char *argv[])
     bool use_dt_old = false;
     bool last_step = false;
     int steps = 0;
+    int unique_steps = 0;
 
     BlockVector* S_old = NULL;
 
@@ -1019,64 +993,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
-        if (romOptions.parameterID <= 0)
-        {
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath);
-                outfile_offlineParam << romOptions.useOffset << " ";
-                outfile_offlineParam << romOptions.offsetType << " ";
-                outfile_offlineParam << romOptions.SNS << " ";
-                outfile_offlineParam << numWindows << " ";
-                outfile_offlineParam << twfile << endl;
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
-                outfile_offlineParam.close();
-            }
-        }
-        else
-        {
-            std::ifstream infile_offlineParam(offlineParam_outputPath);
-            MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-            std::string line;
-            std::vector<std::string> words;
-            std::getline(infile_offlineParam, line);
-            split_line(line, words);
-            MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-            MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-            MFEM_VERIFY(std::stoi(words[2]) == romOptions.SNS, "-romsns option does not match record.");
-            MFEM_VERIFY(std::stoi(words[3]) == numWindows, "-nwin option does not match record.");
-            MFEM_VERIFY(std::strcmp(words[4].c_str(), twfile) == 0, "-tw option does not match record.");
-            infile_offlineParam.close();
-            if (myid == 0)
-            {
-                std::ofstream outfile_offlineParam(offlineParam_outputPath, std::fstream::app);
-                outfile_offlineParam << romOptions.parameterID << " ";
-                outfile_offlineParam << romOptions.rhoFactor << " ";
-                outfile_offlineParam << romOptions.blast_energyFactor << " ";
-                outfile_offlineParam << dim << " ";
-                outfile_offlineParam << dt << " ";
-                outfile_offlineParam << source << endl;
-                outfile_offlineParam.close();
-            }
-        }
-    }
-
-    if (rom_online)
-    {
-        std::ifstream infile_offlineParam(offlineParam_outputPath);
-        MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
-        std::string line;
-        std::vector<std::string> words;
-        std::getline(infile_offlineParam, line);
-        split_line(line, words);
-        MFEM_VERIFY(std::stoi(words[0]) == romOptions.useOffset, "-romos option does not match record.");
-        MFEM_VERIFY(std::stoi(words[1]) == romOptions.offsetType, "-romostype option does not match record.");
-        infile_offlineParam.close();
+        WriteOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, myid == 0);
     }
 
     // Perform time-integration (looping over the time iterations, ti, with a
@@ -1088,7 +1005,11 @@ int main(int argc, char *argv[])
     StopWatch samplerTimer, basisConstructionTimer;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
-    std::ofstream outfile_twp;
+    std::ofstream outfile_twp, outfile_time;
+    const bool outputTimes = rom_offline && spaceTime;
+    const bool outputSpaceTimeSolution = rom_offline && spaceTime;
+    const bool inputTimes = rom_online && spaceTime;
+    const bool readTimes = rom_online && spaceTime;
     Array<int> cutoff(5);
     if (rom_offline)
     {
@@ -1104,6 +1025,43 @@ int main(int argc, char *argv[])
         sampler = new ROM_Sampler(romOptions, *S);
         sampler->SampleSolution(0, 0, *S);
         samplerTimer.Stop();
+    }
+
+    if (outputTimes)
+    {
+        outfile_time.open(outputPath + "/timesteps.csv");
+        outfile_time.precision(16);
+    }
+
+    std::ofstream ofs_STX, ofs_STV, ofs_STE;
+    if (outputSpaceTimeSolution)
+    {
+        // TODO: output FOM solution at every timestep, including initial state at t=0.
+        char fileExtension[100];
+        sprintf(fileExtension, ".%06d", myid);
+
+        std::string fullname = outputPath + "/ST_Sol_Position" + fileExtension;
+        ofs_STX.open(fullname.c_str(), std::ofstream::out);
+        ofs_STX.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Velocity" + fileExtension;
+        ofs_STV.open(fullname.c_str(), std::ofstream::out);
+        ofs_STV.precision(16);
+
+        fullname = outputPath + "/ST_Sol_Energy" + fileExtension;
+        ofs_STE.open(fullname.c_str(), std::ofstream::out);
+        ofs_STE.precision(16);
+
+        AppendPrintParGridFunction(&ofs_STX, x_gf);
+        AppendPrintParGridFunction(&ofs_STV, v_gf);
+        AppendPrintParGridFunction(&ofs_STE, e_gf);
+    }
+
+    std::vector<double> timesteps;  // Used only for online space-time case.
+    if (inputTimes)
+    {
+        const int err = ReadTimesteps(outputPath, timesteps);
+        MFEM_VERIFY(err == 0, "Error in ReadTimesteps");
     }
 
     std::vector<ROM_Basis*> basis;
@@ -1142,11 +1100,11 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
-                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
             }
         }
 
@@ -1327,9 +1285,16 @@ int main(int argc, char *argv[])
         restoreTimer.Stop();
         infile_tw_steps.close();
     }
+    else if (rom_online && spaceTime)
+    {
+        if (myid == 0)
+            romOper[0]->SolveSpaceTimeGN(romS);
+
+        MPI_Bcast(romS.GetData(), romS.Size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
     else
     {
-        // usual time loop when rom_restore phase is false.
+        // Usual time loop when not in restore or online space-time phase.
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
@@ -1482,6 +1447,18 @@ int main(int argc, char *argv[])
                 else if (dtc == 0.0 && dt_est > 1.25 * dt) {
                     dt *= 1.02;
                 }
+            }
+
+            unique_steps++;
+
+            if (outputTimes) outfile_time << t << "\n";
+
+            if (outputSpaceTimeSolution)
+            {
+                // TODO: time this?
+                AppendPrintParGridFunction(&ofs_STX, x_gf);
+                AppendPrintParGridFunction(&ofs_STV, v_gf);
+                AppendPrintParGridFunction(&ofs_STE, e_gf);
             }
 
             if (rom_offline)
@@ -1738,11 +1715,11 @@ int main(int argc, char *argv[])
 
     if (romOptions.hyperreduce)
     {
-        if (romOptions.GramSchmidt)
+        if (romOptions.GramSchmidt && !spaceTime)
         {
             romOper[romOptions.window]->PostprocessHyperreduction(romS);
         }
-        if (!rom_online)
+        if (!rom_online || spaceTime)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
         }
@@ -1757,6 +1734,20 @@ int main(int argc, char *argv[])
         else if (sampler)
             sampler->Finalize(cutoff, romOptions);
         basisConstructionTimer.Stop();
+
+        if (outputTimes)
+        {
+            outfile_time.close();
+            MFEM_VERIFY(romOptions.window == 0, "Time windows not implemented in this case");
+            MFEM_VERIFY(unique_steps + 1 == sampler->FinalNumberOfSamples(), "");
+            // TODO: for now, we just write out the simulation timestep times, not the ROM basis generator
+            // snapshot times. So far, in our tests snapshots are taken on every timestep, so the timesteps
+            // and snapshots coincide. In general, this needs to be extended to allow for snapshots on a
+            // subset of timesteps. Both the timesteps and snapshot times will be needed for space-time ROM.
+            // The timesteps are needed for time integration (which defines the space-time system), and the
+            // snapshot times are needed because the temporal bases and temporal samples are based on
+            // snapshots.
+        }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
             outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
@@ -1785,6 +1776,13 @@ int main(int argc, char *argv[])
         relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+    }
+
+    if (outputSpaceTimeSolution)
+    {
+        ofs_STX.close();
+        ofs_STV.close();
+        ofs_STE.close();
     }
 
     if (fom_data && (!rom_build_database || !rom_online))
@@ -1925,7 +1923,7 @@ int main(int argc, char *argv[])
         if (mpi.Root())
         {
             cout << endl;
-            cout << "Energy  diff: " << scientific << setprecision(2)
+            cout << "Energy diff: " << scientific << setprecision(2)
                  << fabs(energy_init - energy_final) << endl;
         }
 
@@ -1946,6 +1944,17 @@ int main(int argc, char *argv[])
                      << "L_1    error: " << error_l1 << endl
                      << "L_2    error: " << error_l2 << endl;
             }
+        }
+
+        // 2D Rayleigh-Taylor penetration distance
+        if (problem == 7 && fom_data)
+        {
+            double my_pd[2], pd_max[2];
+            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
+            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (mpi.Root())
+                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
         }
 
         if (visualization)
@@ -2017,9 +2026,9 @@ double rho0(const Vector &x)
         return (x(0) < 0.5) ? 1.0 : 0.1;
     case 3:
         return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
-    // return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-    //        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-    //                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+    //return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
+    //       : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
+    //                        (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
     case 4:
         return 1.0;
     case 5:
@@ -2043,7 +2052,7 @@ double rho0(const Vector &x)
         return 1.0;
     }
     case 7:
-        return x(1) >= 0.0 ? 2.0 : 1.0;
+        return x(1) >= 0.0 ? rhoRatio : 1.0;
     default:
         MFEM_ABORT("Bad number given for problem id!");
         return 0.0;
@@ -2263,7 +2272,7 @@ double e0(const Vector &x)
     case 7:
     {
         const double rho = rho0(x), gamma = gamma_func(x);
-        return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+        return (4.0 + rhoRatio - rho * x(1)) / (gamma - 1.0) / rho;
     }
     default:
         MFEM_ABORT("Bad number given for problem id!");

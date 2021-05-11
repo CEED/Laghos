@@ -12,6 +12,9 @@
 //using namespace CAROM;
 using namespace mfem;
 
+
+//#define STXV  // TODO: remove this?
+
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
 double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
@@ -58,7 +61,29 @@ static offsetStyle getOffsetStyle(const char* offsetType)
         {"interpolate", interpolateOffset}
     };
     auto iter = offsetMap.find(offsetType);
-    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input of offset type");
+    MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input for offset type");
+    return iter->second;
+}
+
+enum SpaceTimeMethod
+{
+    no_space_time, // Default, spatial ROM
+    gnat_lspg,     // LSPG (least-squares Petrov-Galerkin) using GNAT for hyperreduction
+    coll_lspg,     // LSPG (least-squares Petrov-Galerkin) using collocation for hyperreduction
+    galerkin       // Galerkin space-time system (not recommended)  TODO: remove this option?
+};
+
+static SpaceTimeMethod getSpaceTimeMethod(const char* spaceTime)
+{
+    static std::unordered_map<std::string, SpaceTimeMethod> spaceTimeMap =
+    {
+        {"spatial", no_space_time},
+        {"gnat_lspg", gnat_lspg},
+        {"coll_lspg", coll_lspg},
+        {"galerkin", galerkin}
+    };
+    auto iter = spaceTimeMap.find(spaceTime);
+    MFEM_VERIFY(iter != std::end(spaceTimeMap), "Invalid input for space time method");
     return iter->second;
 }
 
@@ -96,6 +121,7 @@ struct ROM_Options
     std::string *basename = NULL;
 
     std::string basisIdentifier = "";
+    std::string greedyParam = "bef";
     double greedyTol = 0.1; // error indicator tolerance for the greedy algorithm
     double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
     double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
@@ -110,6 +136,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     double rhoFactor = 1.0; // factor for scaling rho
+    double atwoodFactor = 1.0 / 3.0; // factor for Atwood number in Rayleigh-Taylor instability problem
     double blast_energyFactor = 1.0; // factor for scaling blast energy
 
     bool restore = false; // if true, restore phase
@@ -148,10 +175,14 @@ struct ROM_Options
     double incSVD_singular_value_tol = 1.e-14;
     double incSVD_sampling_tol = 1.e-7;
 
-    // Number of samples for each variable
+    // Number of spatial samples for each variable
     int sampX = 0;
     int sampV = 0;
     int sampE = 0;
+
+    // Number of temporal samples for each variable
+    int tsampV = 1;
+    int tsampE = 1;
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
@@ -166,7 +197,22 @@ struct ROM_Options
     bool useVX = false; // If true, use X-X0 basis for V.
 
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
+
+    SpaceTimeMethod spaceTimeMethod = no_space_time;
+
+    bool VTos = false;
 };
+
+static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
+{
+    static std::unordered_map<std::string, double*> paramMap =
+    {
+        {"bef", &romOptions.blast_energyFactor}
+    };
+    auto iter = paramMap.find(greedyParam);
+    MFEM_VERIFY(iter != std::end(paramMap), "Invalid input for greedy parameter.");
+    return iter->second;
+}
 
 class ROM_Sampler
 {
@@ -178,17 +224,20 @@ public:
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-          useXV(input.useXV), useVX(input.useVX)
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time)
     {
         const int window = input.window;
 
+        // TODO: update the following comment, since there should now be a maximum of 1 time interval now.
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
         const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
-        CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1);
-        CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1);
+        const bool output_rightSV = spaceTime;
+
+        CAROM::Options x_options = CAROM::Options(tH1size, max_model_dim, 1, output_rightSV);
+        CAROM::Options e_options = CAROM::Options(tL2size, max_model_dim, 1, output_rightSV);
         bool staticSVD = (input.staticSVD || input.randomizedSVD);
         if (!staticSVD)
         {
@@ -212,6 +261,7 @@ public:
         {
             x_options.setRandomizedSVD(true, input.randdimX);
         }
+
         generator_X = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
@@ -299,6 +349,14 @@ public:
                 initX->write(path_init + "X" + std::to_string(window));
                 initV->write(path_init + "V" + std::to_string(window));
                 initE->write(path_init + "E" + std::to_string(window));
+
+                if (window == 0)
+                {
+                    const double Vnorm = initV->norm();
+                    int osVT = (Vnorm == 0.0) ? 1 : 0;
+
+                    MFEM_VERIFY(VTos == osVT, "");
+                }
             }
         }
     }
@@ -310,6 +368,12 @@ public:
     int MaxNumSamples()
     {
         return std::max(std::max(generator_X->getNumSamples(), generator_V->getNumSamples()), generator_E->getNumSamples());
+    }
+
+    int FinalNumberOfSamples()
+    {
+        MFEM_VERIFY(finalized, "ROM_Sampler not finalized");
+        return finalNumSamples;
     }
 
 private:
@@ -345,7 +409,14 @@ private:
     const bool useXV;
     const bool useVX;
 
+    bool finalized = false;
+    int finalNumSamples = 0;
+
+    const bool spaceTime;
+
     hydrodynamics::LagrangianHydroOperator *lhoper;
+
+    int VTos = 0; // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
 
     void SetStateVariables(Vector const& S)
     {
@@ -420,8 +491,12 @@ private:
 
 class ROM_Basis
 {
+    friend class STROM_Basis;
+
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV);
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
+              const double sFactorX=1.0, const double sFactorV=1.0,
+              const std::vector<double> *timesteps=NULL);
 
     ~ROM_Basis()
     {
@@ -472,13 +547,11 @@ public:
     void Init(ROM_Options const& input, Vector const& S);
 
     void ReadSolutionBases(const int window);
+    void ReadTemporalBases(const int window);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
     void LiftROMtoFOM(Vector const& r, Vector & f);
-    int TotalSize() const {
-        return rdimx + rdimv + rdime;
-    }
 
     ParMesh *GetSampleMesh() {
         return sample_pmesh;
@@ -540,6 +613,14 @@ public:
         return rdime;
     }
 
+    int GetDimFv() const {
+        return rdimfv;
+    }
+
+    int GetDimFe() const {
+        return rdimfe;
+    }
+
     void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
 
     void GetBasisVectorV(const bool sp, const int id, Vector &v) const;
@@ -555,7 +636,20 @@ public:
 
     void ComputeReducedMatrices(bool sns1);
 
+    void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
+    void GetSpaceTimeInitialGuess(Vector& st) const;
+
+    // TODO: should these be public?
+    int GetTemporalSize() const {
+        return temporalSize;
+    }
+    void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
+
     MPI_Comm comm;
+
+    CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
+    CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
+    CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
 
 private:
     const bool hyperreduce;
@@ -622,6 +716,7 @@ private:
     int size_H1_sp = 0;
     int size_L2_sp = 0;
 
+protected:
     CAROM::Vector *spX = NULL;
     CAROM::Vector *spV = NULL;
     CAROM::Vector *spE = NULL;
@@ -654,6 +749,9 @@ private:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
+    int numTimeSamplesV = 0;
+    int numTimeSamplesE = 0;
+
     const bool Voffset;
 
     const bool RK2AvgFormulation;
@@ -665,10 +763,117 @@ private:
 
     const bool use_qdeim;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
+                             const std::vector<double> *timesteps);
 
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
+
+private:
+    void SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
+                                           ParFiniteElementSpace *fespace,
+                                           const CAROM::Matrix* basis,
+                                           const CAROM::Matrix* tbasis,
+                                           const int nt,
+                                           const int rdim) const;
+
+    void SampleMeshAddInitialState(Vector &usp) const;
+
+    // Space-time data
+    const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
+    const SpaceTimeMethod spaceTimeMethod;
+    const bool spaceTime;  // whether space-time is used
+    int temporalSize = 0;
+    int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+    // TODO: generalize for nonzero initial velocity.
+
+    CAROM::Matrix* tbasisX = 0;
+    CAROM::Matrix* tbasisV = 0;
+    CAROM::Matrix* tbasisE = 0;
+    CAROM::Matrix* tbasisFv = 0;
+    CAROM::Matrix* tbasisFe = 0;
+
+    CAROM::Matrix* PiVtransPiFv = 0;
+    CAROM::Matrix* PiEtransPiFe = 0;
+
+    // TODO: delete the new pointers added for space-time
+
+    std::vector<int> timeSamples;  // merged V and E time samples
+
+    Vector st0;
+};
+
+class STROM_Basis
+{
+public:
+    STROM_Basis(ROM_Options const& input, ROM_Basis *b_, std::vector<double> *timesteps_)
+        : b(b_), u_ti(b_->SolutionSize()), timesteps(timesteps_), spaceTimeMethod(input.spaceTimeMethod)
+    {
+    }
+
+    int SolutionSizeST() const {
+        // TODO: this assumes 1 temporal basis vector for each spatial vector. Generalize to allow for multiple temporal basis vectors per spatial vector.
+        return b->SolutionSize();
+    }
+
+    int GetNumSpatialSamples() const {
+        if (spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg)
+            return (2*b->numSamplesV) + b->numSamplesE;  // use V samples for X
+        else  // Galerkin case
+            return b->numSamplesX + b->numSamplesV + b->numSamplesE;
+    }
+
+    int GetNumSampledTimes() const {
+        return b->timeSamples.size();
+    }
+
+    int GetNumSamplesV() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return b->numSamplesV * GetNumSampledTimes();
+    }
+
+    int GetNumSamplesE() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return b->numSamplesE * GetNumSampledTimes();
+    }
+
+    int GetTotalNumSamples() const {
+        // NOTE: this assumes the space-time samples are the Cartesian product of spatial and temporal samples.
+        // This may need to be generalized in the future, depending on the space-time sampling algorithm.
+        return GetNumSpatialSamples() * GetNumSampledTimes();
+    }
+
+    int GetTimeSampleIndex(const int i) const {
+        return b->timeSamples[i];
+    }
+
+    double GetTimeSample(const int i) const {
+        MFEM_VERIFY(i <= timesteps->size(), "");
+        return (i == 0) ? t_initial : (*timesteps)[i-1];
+    }
+
+    double GetTimestep(const int i) const {
+        MFEM_VERIFY(i < timesteps->size(), "");
+        return GetTimeSample(i+1) - GetTimeSample(i);
+    }
+
+    void LiftToSampleMesh(const int ti, Vector const& x, Vector &xsp) const;
+
+    void RestrictFromSampleMesh(const int ti, Vector const& usp, Vector &u) const;
+
+    void ApplySpaceTimeHyperreductionInverses(Vector const& u, Vector &w) const;
+
+private:
+    ROM_Basis *b;  // stores spatial and temporal bases
+    mutable Vector u_ti;
+    const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
+    std::vector<double> *timesteps; // Positive timestep times (excluding initial time which is assumed to be zero).
+
+    const SpaceTimeMethod spaceTimeMethod;
+
+    const bool GaussNewton = true; // TODO: eliminate this
 };
 
 class ROM_Operator : public TimeDependentOperator
@@ -678,7 +883,8 @@ public:
                  FunctionCoefficient& mat_coeff, const int order_e, const int source,
                  const bool visc, const bool vort, const double cfl, const bool p_assembly, const double cg_tol,
                  const int cg_max_iter, const double ftz_tol,
-                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL);
+                 H1_FECollection *H1fec = NULL, FiniteElementCollection *L2fec = NULL,
+                 std::vector<double> *timesteps = NULL);
 
     virtual void Mult(const Vector &x, Vector &y) const;
 
@@ -702,6 +908,13 @@ public:
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
+    // TODO: should the following space time functions be refactored into a new space time ROM operator class?
+    void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
+    void EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const;  // TODO: private function?
+
+    void SolveSpaceTime(Vector &S);
+    void SolveSpaceTimeGN(Vector &S);
+
     ~ROM_Operator()
     {
         delete mat_gf_coeff;
@@ -721,6 +934,11 @@ private:
     Array<int> ess_tdofs;
 
     ROM_Basis *basis;
+
+    // Space-time data
+    STROM_Basis *STbasis = 0;
+    ODESolver *ST_ode_solver = 0;
+    mutable Vector Sr;
 
     mutable Vector fx, fy;
 
@@ -752,16 +970,21 @@ private:
     void ComputeReducedMe();
 
     const bool useGramSchmidt;
-    DenseMatrix CoordinateBVsp, CoordinateBEsp;
+    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidt(const int var, Vector &S);
+
+    const SpaceTimeMethod spaceTimeMethod;
+
+    const bool GaussNewton = true; // TODO: eliminate this
+
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyErrorIndicatorType, const char* greedySamplingType);
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
-CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath);
+CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
 
 void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
                      const int errorIndicatorVecSize, const std::string outputPath);
