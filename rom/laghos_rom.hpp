@@ -15,7 +15,7 @@ using namespace mfem;
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
 double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                  const bool scalar);
+                                    const bool scalar);
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                     const bool scalar);
 
@@ -98,6 +98,7 @@ struct ROM_Options
     std::string basisIdentifier = "";
     double greedyTol = 0.1; // error indicator tolerance for the greedy algorithm
     double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
+    double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
     double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
     double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
     int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space

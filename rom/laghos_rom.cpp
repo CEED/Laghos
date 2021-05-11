@@ -2359,7 +2359,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 }
 
 double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                  const bool scalar)
+                                    const bool scalar)
 {
     ConstantCoefficient zero(0.0);
     Vector zerov(3);
@@ -2581,9 +2581,9 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         bool latin_hypercube = sampleType == latinHypercubeSampling;
         parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
-            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha, 2,
-            romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize, latin_hypercube,
-            outputPath + "/greedy_algorithm_log.txt");
+            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
+            romOptions.greedyMaxClamp, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
+            latin_hypercube, outputPath + "/greedy_algorithm_log.txt");
 
         ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
         o << "Parameter considered: initial blast energy" << std::endl;
@@ -2616,7 +2616,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
         if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
-            romOptions.greedyErrorIndicatorType == varyBasisSize)
+                romOptions.greedyErrorIndicatorType == varyBasisSize)
         {
             t_final = 0.001;
         }

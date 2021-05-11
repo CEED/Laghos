@@ -324,6 +324,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
     args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
     args.AddOption(&romOptions.greedyAlpha, "-greedyalpha", "--greedyalpha", "The greedy algorithm alpha constant.");
+    args.AddOption(&romOptions.greedyMaxClamp, "-greedymaxclamp", "--greedymaxclamp", "The greedy algorithm max clamp constant.");
     args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
     args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
     args.AddOption(&greedySamplingType, "-greedysamptype", "--greedysamplingtype",
@@ -1845,7 +1846,7 @@ int main(int argc, char *argv[])
                 errorIndicatorComputed = true;
             }
             else if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
-                romOptions.greedyErrorIndicatorType == varyBasisSize)
+                     romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);
