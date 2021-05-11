@@ -3,9 +3,9 @@
 
 #include "mfem.hpp"
 
-#include "GreedyParameterPointRandomSampler.h"
 #include "BasisGenerator.h"
 #include "BasisReader.h"
+#include "GreedyParameterPointRandomSampler.h"
 
 #include "laghos_solver.hpp"
 
@@ -42,7 +42,7 @@ enum samplingType
     latinHypercubeSampling
 };
 
-enum residualType
+enum errorIndicatorType
 {
     useLastLiftedSolution,
     varyTimeStep,
@@ -74,16 +74,16 @@ static samplingType getSamplingType(const char* samp)
     return iter->second;
 }
 
-static residualType getResidualType(const char* residual)
+static errorIndicatorType getErrorIndicatorType(const char* errorIndicator)
 {
-    static std::unordered_map<std::string, residualType> residualMap =
+    static std::unordered_map<std::string, errorIndicatorType> errorIndicatorMap =
     {
         {"useLastLifted", useLastLiftedSolution},
         {"varyTimeStep", varyTimeStep},
         {"varyBasisSize", varyBasisSize}
     };
-    auto iter = residualMap.find(residual);
-    MFEM_VERIFY(iter != std::end(residualMap), "Invalid input of residual type");
+    auto iter = errorIndicatorMap.find(errorIndicator);
+    MFEM_VERIFY(iter != std::end(errorIndicatorMap), "Invalid input of error indicator type");
     return iter->second;
 }
 
@@ -101,10 +101,10 @@ struct ROM_Options
     double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
     double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
     int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space
-    int greedySubsetSize = 0; // subset size of parameter points whose residuals are checked during the greedy algorithm
+    int greedySubsetSize = 0; // subset size of parameter points whose error indicators are checked during the greedy algorithm
     int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
-    samplingType greedySamplingType = randomSampling; // residual type for the greedy algorithm
-    residualType greedyResidualType = useLastLiftedSolution; // residual type for the greedy algorithm
+    samplingType greedySamplingType = randomSampling; // error indicator type for the greedy algorithm
+    errorIndicatorType greedyErrorIndicatorType = useLastLiftedSolution; // error indicator type for the greedy algorithm
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
@@ -758,14 +758,14 @@ private:
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyResidualType, const char* greedySamplingType);
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
 CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath);
 
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double residual,
-                     const int residualVecSize, const std::string outputPath);
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
+                     const int errorIndicatorVecSize, const std::string outputPath);
 
- void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
-                      const std::string outputPath);
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
+                     const std::string outputPath);
 
 #endif // MFEM_LAGHOS_ROM

@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
     const char *normtype_char = "l2";
     const char *offsetType = "initial";
     const char *greedySamplingType = "random";
-    const char *greedyResidualType = "useLastLifted";
+    const char *greedyErrorIndicatorType = "useLastLifted";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -328,8 +328,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
     args.AddOption(&greedySamplingType, "-greedysamptype", "--greedysamplingtype",
                    "Sampling type for the greedy algorithm.");
-    args.AddOption(&greedyResidualType, "-greedyrestype", "--greedyresidualtype",
-                   "Residual type for the greedy algorithm.");
+    args.AddOption(&greedyErrorIndicatorType, "-greedyerrindtype", "--greedyerrorindtype",
+                   "Error indicator type for the greedy algorithm.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
@@ -398,7 +398,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyResidualType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyErrorIndicatorType, greedySamplingType);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -1419,7 +1419,7 @@ int main(int argc, char *argv[])
                     }
 
                     // If using the greedy algorithm, take only the last step in the FOM space
-                    if (rom_build_database && !rom_calc_rel_error && last_step && romOptions.greedyResidualType == useLastLiftedSolution)
+                    if (rom_build_database && !rom_calc_rel_error && last_step && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
                     {
                         lastLiftedSolution = *S;
                         ode_solver_dat->Init(*oper);
@@ -1819,38 +1819,38 @@ int main(int argc, char *argv[])
         }
     }
 
-    double residual = INT_MAX;
-    bool residualComputed = false;
-    int residualVecSize = 0;
+    double errorIndicator = INT_MAX;
+    bool errorIndicatorComputed = false;
+    int errorIndicatorVecSize = 0;
 
     if (rom_online)
     {
 
-        // If using the greedy algorithm, calculate the residual using the FOM lifted during
+        // If using the greedy algorithm, calculate the error indicator using the FOM lifted during
         // the second to last step compared against the FOM lifted at the last step.
         if (rom_build_database && !rom_calc_rel_error)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-            if (romOptions.greedyResidualType == useLastLiftedSolution)
+            if (romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
                 if (converged)
                 {
-                    Vector residualVec = Vector(lastLiftedSolution.Size());
-                    subtract(lastLiftedSolution, *S, residualVec);
+                    Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
+                    subtract(lastLiftedSolution, *S, errorIndicatorVec);
 
-                    residual = residualVec.Norml2();
-                    residualVecSize = residualVec.Size();
+                    errorIndicator = errorIndicatorVec.Norml2();
+                    errorIndicatorVecSize = errorIndicatorVec.Size();
                 }
 
-                residualComputed = true;
+                errorIndicatorComputed = true;
             }
-            else if (romOptions.greedyResidualType == varyTimeStep ||
-                romOptions.greedyResidualType == varyBasisSize)
+            else if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
+                romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);
 
-                std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
@@ -1861,17 +1861,17 @@ int main(int argc, char *argv[])
                         Vector previousFinalSolution;
                         previousFinalSolution.Load(checkfile, finalSolution.Size());
 
-                        Vector residualVec = Vector(finalSolution.Size());
-                        subtract(finalSolution, previousFinalSolution, residualVec);
+                        Vector errorIndicatorVec = Vector(finalSolution.Size());
+                        subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
 
-                        residual = residualVec.Norml2();
-                        residualVecSize = residualVec.Size();
+                        errorIndicator = errorIndicatorVec.Norml2();
+                        errorIndicatorVecSize = errorIndicatorVec.Size();
                     }
 
                     checkfile.close();
                     remove(fullname.c_str());
 
-                    residualComputed = true;
+                    errorIndicatorComputed = true;
                 }
                 else
                 {
@@ -1889,7 +1889,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        residualComputed = true;
+                        errorIndicatorComputed = true;
                     }
                 }
             }
@@ -1964,9 +1964,9 @@ int main(int argc, char *argv[])
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
     }
 
-    // If using the greedy algorithm, save the residual and any information
+    // If using the greedy algorithm, save the error indicator and any information
     // for use during the next iteration.
-    if(rom_build_database && (!rom_online || rom_calc_rel_error || residualComputed))
+    if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
     {
         if (rom_calc_rel_error)
         {
@@ -1974,7 +1974,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, residual, residualVecSize, outputPath);
+            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, errorIndicator, errorIndicatorVecSize, outputPath);
         }
     }
 

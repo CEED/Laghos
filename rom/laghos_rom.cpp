@@ -1,6 +1,10 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 
+#include "BasisGenerator.h"
+#include "BasisReader.h"
+#include "GreedyParameterPointRandomSampler.h"
+
 #include "DEIM.h"
 #include "QDEIM.h"
 #include "SampleMesh.hpp"
@@ -2556,12 +2560,12 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
 }
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyResidualType, const char* greedySamplingType)
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
 
-    romOptions.greedyResidualType = getResidualType(greedyResidualType);
+    romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
 
     char tmp[100];
     sprintf(tmp, ".%06d", myid);
@@ -2583,7 +2587,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
 
         ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
         o << "Parameter considered: initial blast energy" << std::endl;
-        o << "Error indicator: " << greedyResidualType << std::endl;
+        o << "Error indicator: " << greedyErrorIndicatorType << std::endl;
         o.close();
     }
 
@@ -2593,26 +2597,26 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         MFEM_ABORT("The greedy algorithm procedure has completed!");
     }
 
-    // First check if we need to compute another residual
-    struct CAROM::GreedyResidualPoint pointRequiringResidual = parameterPointGreedySampler->getNextPointRequiringResidual();
-    CAROM::Vector* residualPointData = pointRequiringResidual.point.get();
-    struct CAROM::GreedyResidualPoint pointRequiringRelativeError = parameterPointGreedySampler->getNextPointRequiringRelativeError();
+    // First check if we need to compute another error indicator
+    struct CAROM::GreedyErrorIndicatorPoint pointRequiringErrorIndicator = parameterPointGreedySampler->getNextPointRequiringErrorIndicator();
+    CAROM::Vector* errorIndicatorPointData = pointRequiringErrorIndicator.point.get();
+    struct CAROM::GreedyErrorIndicatorPoint pointRequiringRelativeError = parameterPointGreedySampler->getNextPointRequiringRelativeError();
     CAROM::Vector* samplePointData = pointRequiringRelativeError.point.get();
-    if (residualPointData != NULL)
+    if (errorIndicatorPointData != NULL)
     {
-        CAROM::Vector* localROM = pointRequiringResidual.localROM.get();
+        CAROM::Vector* localROM = pointRequiringErrorIndicator.localROM.get();
         romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
-        romOptions.blast_energyFactor = residualPointData->item(0);
+        romOptions.blast_energyFactor = errorIndicatorPointData->item(0);
 
-        double residualEnergyFraction = 0.9999;
+        double errorIndicatorEnergyFraction = 0.9999;
 
         char tmp[100];
         sprintf(tmp, ".%06d", myid);
 
-        std::string fullname = outputPath + "/" + std::string("residualVec") + tmp;
+        std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
-        if (romOptions.greedyResidualType == varyTimeStep ||
-            romOptions.greedyResidualType == varyBasisSize)
+        if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
+            romOptions.greedyErrorIndicatorType == varyBasisSize)
         {
             t_final = 0.001;
         }
@@ -2620,24 +2624,24 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         std::ifstream checkfile(fullname);
         if (!checkfile.good())
         {
-            if (romOptions.greedyResidualType == varyTimeStep)
+            if (romOptions.greedyErrorIndicatorType == varyTimeStep)
             {
                 dt_factor = 1.0;
             }
-            else if (romOptions.greedyResidualType == varyBasisSize)
+            else if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
-                residualEnergyFraction = 0.99;
+                errorIndicatorEnergyFraction = 0.99;
             }
         }
 
         // Get the rdim for the basis used.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         if (!romOptions.SNS)
         {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         }
 
         rom_online = true;
@@ -2648,16 +2652,16 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
         romOptions.blast_energyFactor = samplePointData->item(0);
 
-        double residualEnergyFraction = 0.9999;
+        double errorIndicatorEnergyFraction = 0.9999;
 
         // Get the rdim for the basis used.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         if (!romOptions.SNS)
         {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(residualEnergyFraction));
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         }
 
         rom_online = true;
@@ -2709,12 +2713,12 @@ CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, con
     return parameterPointGreedySampler;
 }
 
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double residual,
-                     const int residualVecSize, const std::string outputPath)
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
+                     const int errorIndicatorVecSize, const std::string outputPath)
 {
     if (rom_online)
     {
-        parameterPointGreedySampler->setPointResidual(residual, residualVecSize);
+        parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
     }
 
     parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
