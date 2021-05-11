@@ -1547,7 +1547,7 @@ int main(int argc, char *argv[])
                             pd_weight.push_back(pd_w);
                         }
                         infile_pd_weight.close();
-                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX(), "Number of weights do not match.")
+                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+1, "Number of weights do not match.")
                     }
 
                     ode_solver->Init(*romOper[romOptions.window]);
