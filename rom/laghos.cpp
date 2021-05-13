@@ -366,6 +366,10 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
         parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        if (rom_online)
+        {
+            windowNumSamples = 0;
+        }
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
