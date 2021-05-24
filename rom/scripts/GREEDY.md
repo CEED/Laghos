@@ -1,9 +1,10 @@
-To use the greedy algorithm obtained from algorithm 2 of Choi et. al's
+The greedy algorithm is obtained from algorithm 2 of Choi et. al's
 paper "Gradient-based constrained optimization using a database
-of linear reduced-order models": https://arxiv.org/abs/1506.07849
-to build a ROM database with Laghos, use one of the following commands.
+of linear reduced-order models": https://arxiv.org/abs/1506.07849.
+To build an accurate ROM database for a finite simulation parameter space
+with Laghos, use one of the following commands.
 
-Hyperreduction is not supported!
+Hyperreduction is currently not supported!
 
 To run locally without using srun:
 

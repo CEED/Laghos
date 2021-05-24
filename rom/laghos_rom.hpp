@@ -122,15 +122,15 @@ struct ROM_Options
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
-    double greedyTol = 0.1; // error indicator tolerance for the greedy algorithm
+    double greedyTol = 0.1; // relative error tolerance for the greedy algorithm
     double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
     double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
-    double greedyParamSpaceMin = 0; // min value of the greedy algorithm parameter domain
-    double greedyParamSpaceMax = 0; // max value of the greedy algorithm parameter domain
-    int greedyParamSpaceSize = 0; // size of the greedy algorithm parameter space
+    double greedyParamSpaceMin = 0; // min value of the greedy algorithm 1D parameter domain
+    double greedyParamSpaceMax = 0; // max value of the greedy algorithm 1D parameter domain
+    int greedyParamSpaceSize = 0; // the maximum number of local ROMS to create in the greedy algorithm 1D parameter domain
     int greedySubsetSize = 0; // subset size of parameter points whose error indicators are checked during the greedy algorithm
     int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
-    samplingType greedySamplingType = randomSampling; // error indicator type for the greedy algorithm
+    samplingType greedySamplingType = randomSampling; // sampling type for the greedy algorithm
     errorIndicatorType greedyErrorIndicatorType = useLastLiftedSolution; // error indicator type for the greedy algorithm
 
     double t_final = 0.0; // simulation final time

@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online,  rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
         if (rom_online)
         {
             windowNumSamples = 0;
@@ -1349,6 +1349,10 @@ int main(int argc, char *argv[])
                 if (myid == 0)
                     cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
 
+                // MFEM may not converge if the ROM is too far away from the point
+                // we are now trying to obtain an error indicator at.
+                // This kills the simulation if it does not converge,
+                // since romS will be full of NaN's.
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
                     converged = false;
@@ -1389,6 +1393,7 @@ int main(int argc, char *argv[])
                     }
 
                     // If using the greedy algorithm, take only the last step in the FOM space
+                    // when using the useLastLiftedSolution error indicator type
                     if (rom_build_database && !rom_calc_rel_error && last_step && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
                     {
                         lastLiftedSolution = *S;
@@ -1829,11 +1834,13 @@ int main(int argc, char *argv[])
     if (rom_online)
     {
 
-        // If using the greedy algorithm, calculate the error indicator using the FOM lifted during
-        // the second to last step compared against the FOM lifted at the last step.
+        // If using the greedy algorithm, calculate the error indicator
         if (rom_build_database && !rom_calc_rel_error)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+
+            // calculate the error indicator using the FOM lifted during
+            // the second to last step compared against the FOM lifted at the last step.
             if (romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
                 if (converged)
@@ -1847,6 +1854,8 @@ int main(int argc, char *argv[])
 
                 errorIndicatorComputed = true;
             }
+            // calculate the error indicator using the last step of the two FOM
+            // solutions with varied time step or basis size
             else if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
                      romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
