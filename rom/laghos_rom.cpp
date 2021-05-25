@@ -3266,7 +3266,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     }
 }
 
-CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
@@ -3323,8 +3323,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
 
         std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
-        if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
-                romOptions.greedyErrorIndicatorType == varyBasisSize)
+        if (romOptions.greedyErrorIndicatorType == varyBasisSize)
         {
             t_final = 0.001;
         }
@@ -3332,11 +3331,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         std::ifstream checkfile(fullname);
         if (!checkfile.good())
         {
-            if (romOptions.greedyErrorIndicatorType == varyTimeStep)
-            {
-                dt_factor = 1.0;
-            }
-            else if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+            if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
                 errorIndicatorEnergyFraction = 0.99;
             }

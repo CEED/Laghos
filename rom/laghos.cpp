@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         if (parameterPointGreedySampler->isComplete())
         {
@@ -1863,9 +1863,8 @@ int main(int argc, char *argv[])
                 errorIndicatorComputed = true;
             }
             // calculate the error indicator using the last step of the two FOM
-            // solutions with varied time step or basis size
-            else if (romOptions.greedyErrorIndicatorType == varyTimeStep ||
-                     romOptions.greedyErrorIndicatorType == varyBasisSize)
+            // solutions with varied basis size
+            else if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
                 char tmp[100];
                 sprintf(tmp, ".%06d", myid);

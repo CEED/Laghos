@@ -48,7 +48,6 @@ enum samplingType
 enum errorIndicatorType
 {
     useLastLiftedSolution,
-    varyTimeStep,
     varyBasisSize
 };
 
@@ -104,7 +103,6 @@ static errorIndicatorType getErrorIndicatorType(const char* errorIndicator)
     static std::unordered_map<std::string, errorIndicatorType> errorIndicatorMap =
     {
         {"useLastLifted", useLastLiftedSolution},
-        {"varyTimeStep", varyTimeStep},
         {"varyBasisSize", varyBasisSize}
     };
     auto iter = errorIndicatorMap.find(errorIndicator);
@@ -981,7 +979,7 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
-CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, double& dt_factor, const int myid, const std::string outputPath,
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
 CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
