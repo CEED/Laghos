@@ -3308,7 +3308,12 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     if (errorIndicatorPointData != NULL)
     {
         CAROM::Vector* localROM = pointRequiringErrorIndicator.localROM.get();
-        romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
+        std::string localROMString = "";
+        for (int i = 0; i < localROM->dim(); i++)
+        {
+            localROMString += "_" + to_string(localROM->item(i));
+        }
+        romOptions.basisIdentifier = localROMString;
         *greedyParam = errorIndicatorPointData->item(0);
 
         double errorIndicatorEnergyFraction = 0.9999;
@@ -3352,7 +3357,12 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     else if (samplePointData != NULL)
     {
         CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
-        romOptions.basisIdentifier = "_" + to_string(localROM->item(0));
+        std::string localROMString = "";
+        for (int i = 0; i < localROM->dim(); i++)
+        {
+            localROMString += "_" + to_string(localROM->item(i));
+        }
+        romOptions.basisIdentifier = localROMString;
         *greedyParam = samplePointData->item(0);
 
         double errorIndicatorEnergyFraction = 0.9999;
@@ -3377,7 +3387,12 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         samplePointData = nextSampleParameterPoint.get();
         if (samplePointData != NULL)
         {
-            romOptions.basisIdentifier = "_" + to_string(samplePointData->item(0));
+            std::string samplePointDataString = "";
+            for (int i = 0; i < samplePointData->dim(); i++)
+            {
+                samplePointDataString += "_" + to_string(samplePointData->item(i));
+            }
+            romOptions.basisIdentifier = samplePointDataString;
             *greedyParam = samplePointData->item(0);
             rom_offline = true;
         }
@@ -3412,7 +3427,12 @@ CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, cons
     CAROM::Vector* pointData = nearestROM.get();
 
     MFEM_VERIFY(pointData != NULL, "No parameter points were found");
-    romOptions.basisIdentifier = "_" + to_string(pointData->item(0));
+    std::string pointDataString = "";
+    for (int i = 0; i < pointData->dim(); i++)
+    {
+        pointDataString += "_" + to_string(pointData->item(i));
+    }
+    romOptions.basisIdentifier = pointDataString;
 
     return parameterPointGreedySampler;
 }
