@@ -370,7 +370,10 @@ int main(int argc, char *argv[])
         if (parameterPointGreedySampler->isComplete())
         {
             // The greedy algorithm procedure has ended
-            std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            if (myid == 0)
+            {
+                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            }
             return 1;
         }
 
@@ -2009,7 +2012,10 @@ int main(int argc, char *argv[])
         if (parameterPointGreedySampler->isComplete())
         {
             // The greedy algorithm procedure has ended
-            std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            if (myid == 0)
+            {
+                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            }
             return 1;
         }
     }
