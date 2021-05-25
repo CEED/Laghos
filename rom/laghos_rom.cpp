@@ -3298,12 +3298,6 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         o.close();
     }
 
-    if (parameterPointGreedySampler->isComplete())
-    {
-        // The greedy algorithm procedure has ended
-        MFEM_ABORT("The greedy algorithm procedure has completed!");
-    }
-
     // First check if we need to compute another error indicator
     struct CAROM::GreedyErrorIndicatorPoint pointRequiringErrorIndicator = parameterPointGreedySampler->getNextPointRequiringErrorIndicator();
     CAROM::Vector* errorIndicatorPointData = pointRequiringErrorIndicator.point.get();
@@ -3397,7 +3391,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     return parameterPointGreedySampler;
 }
 
-CAROM::GreedyParameterPointSampler* LoadROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
+CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
 {
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
@@ -3432,12 +3426,6 @@ void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySam
     }
 
     parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
-
-    if (parameterPointGreedySampler->isComplete())
-    {
-        // The greedy algorithm procedure has ended
-        MFEM_ABORT("The greedy algorithm procedure has completed!");
-    }
 }
 
 void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
@@ -3449,12 +3437,6 @@ void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySam
     }
 
     parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
-
-    if (parameterPointGreedySampler->isComplete())
-    {
-        // The greedy algorithm procedure has ended
-        MFEM_ABORT("The greedy algorithm procedure has completed!");
-    }
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const

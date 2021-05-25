@@ -366,6 +366,14 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
         parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, dt_factor, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+
+        if (parameterPointGreedySampler->isComplete())
+        {
+            // The greedy algorithm procedure has ended
+            std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            return 1;
+        }
+
         if (rom_online)
         {
             windowNumSamples = 0;
@@ -377,7 +385,7 @@ int main(int argc, char *argv[])
     {
         MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
         MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
-        parameterPointGreedySampler = LoadROMDatabase(romOptions, myid, outputPath, greedyParam);
+        parameterPointGreedySampler = UseROMDatabase(romOptions, myid, outputPath, greedyParam);
     }
 
     if (mpi.Root())
@@ -1998,6 +2006,12 @@ int main(int argc, char *argv[])
         else
         {
             SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, errorIndicator, errorIndicatorVecSize, outputPath);
+        }
+        if (parameterPointGreedySampler->isComplete())
+        {
+            // The greedy algorithm procedure has ended
+            std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            return 1;
         }
     }
 
