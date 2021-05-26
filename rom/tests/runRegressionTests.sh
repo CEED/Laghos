@@ -243,7 +243,7 @@ then
 	if [[ "$absolute" == "false" ]]; then
 		make --directory=$BASELINE_LAGHOS_DIR LIBS_DIR="$BASELINE_LIBS_DIR" >> $setupLogFile 2>&1
 	else
-		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$BASELINE_LIBS_DIR/mfem" >> $setupLogFile 2>&1
+		make --directory=$BASELINE_LAGHOS_DIR MFEM_DIR="$BASELINE_LIBS_DIR/libROM/dependencies/mfem" >> $setupLogFile 2>&1
 	fi
 
 	# Check if make built correctly
