@@ -26,7 +26,6 @@ if [ ! -d "libROM" ]; then
   git clone https://github.com/LLNL/libROM.git
 fi
 cd libROM
-git checkout feature/introduce_mfem
 git pull
 if [[ $1 == "Yes" ]]; then
     DEBUG="-d"
