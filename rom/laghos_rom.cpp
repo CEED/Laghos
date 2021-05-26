@@ -1280,7 +1280,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // Construct sample mesh
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
-    CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
+    CAROM::CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
                      *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
                      num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
 
@@ -3337,4 +3337,3 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
     t += dt;
 }
-
