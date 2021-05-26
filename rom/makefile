@@ -68,7 +68,7 @@ MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 ROM_DIR := $(dir $(MAKEFILE_PATH))
 LIBS_DIR ?= $(ROM_DIR)/dependencies
 DEBUG := NO
-MFEM_DIR = $(LIBS_DIR)/mfem
+MFEM_DIR = $(LIBS_DIR)/libROM/dependencies/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 
@@ -211,10 +211,6 @@ style:
 	fi
 
 setup:
-ifeq ($(DEBUG),$(filter $(DEBUG),Yes YES))
-	$(shell ./setup.sh debug >&2)
-else
-	$(shell ./setup.sh >&2)
-endif
+	$(shell ./setup.sh $(DEBUG) $(UPDATE) >&2)
 
 $(shell mkdir -p run)
