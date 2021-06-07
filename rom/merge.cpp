@@ -293,7 +293,7 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
                     }
                     else
                     {
-                        tMax = *(tSnapX[paramID].rbegin() + t);
+                        tMax = *(tSnapX[paramID].rbegin() + t); 
                         break;
                     }
                 }

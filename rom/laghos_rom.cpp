@@ -162,6 +162,10 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
 {
     cout << var << " snapshot size: " << tSnap.size() << endl;
     std::ofstream outfile_tSnap(path + var);
+
+    typedef std::numeric_limits< double > dbl;
+    outfile_tSnap.precision(dbl::max_digits10);
+
     for (auto const& i: tSnap)
     {
         outfile_tSnap << i << endl;
