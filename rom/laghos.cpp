@@ -1437,8 +1437,6 @@ int main(int argc, char *argv[])
             {
                 const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
 
-                //const double dt_est = oper->GetTimeStepEstimate(*S);
-                //cout << myid << ": dt_est " << dt_est << endl;
                 if (dt_est < dt)
                 {
                     // Repeat (solve again) with a decreased time step - decrease of the
@@ -1844,7 +1842,6 @@ int main(int argc, char *argv[])
 
     if (rom_online)
     {
-
         // If using the greedy algorithm, calculate the error indicator
         if (rom_build_database && !rom_calc_rel_error)
         {
