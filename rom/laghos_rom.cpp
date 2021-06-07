@@ -1,6 +1,10 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 
+#include "BasisGenerator.h"
+#include "BasisReader.h"
+#include "GreedyParameterPointRandomSampler.h"
+
 #include "DEIM.h"
 #include "QDEIM.h"
 #include "SampleMesh.hpp"
@@ -167,7 +171,7 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     }
 }
 
-void ROM_Sampler::Finalize(Array<int> &cutoff)
+void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 {
     if (writeSnapshots)
     {
@@ -196,29 +200,29 @@ void ROM_Sampler::Finalize(Array<int> &cutoff)
     {
         if (!useXV)
         {
-            cout << "X basis summary output: ";
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0]);
-            PrintSingularValues(rank, basename, "X", generator_X);
+            cout << "X basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimx" + input.basisIdentifier);
+            PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
         if (!useVX)
         {
-            cout << "V basis summary output: ";
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1]);
-            PrintSingularValues(rank, basename, "V", generator_V);
+            cout << "V basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimv" + input.basisIdentifier);
+            PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
-        cout << "E basis summary output: ";
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2]);
-        PrintSingularValues(rank, basename, "E", generator_E);
+        cout << "E basis summary output: " << endl;
+        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdime" + input.basisIdentifier);
+        PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (!sns)
         {
-            cout << "Fv basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3]);
+            cout << "Fv basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimfv" + input.basisIdentifier);
 
-            cout << "Fe basis summary output: ";
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4]);
+            cout << "Fe basis summary output: " << endl;
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimfe" + input.basisIdentifier);
         }
     }
 
@@ -361,8 +365,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), spaceTimeMethod(input.spaceTimeMethod),
-      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
+      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
+      spaceTimeMethod(input.spaceTimeMethod), spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -1496,14 +1500,14 @@ int ROM_Basis::SolutionSizeFOM() const
 void ROM_Basis::ReadSolutionBases(const int window)
 {
     if (!useVX)
-        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimv);
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdime);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdime);
 
     if (useXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window), tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, 0, rdimx);
 
     if (useVX)
         basisV = basisX;
@@ -1545,7 +1549,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 0.0;
         }
 
-        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, false);
+        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, "", false);
         rdimv = rdimx;
 
         cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
@@ -1564,13 +1568,13 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (use_sns)
     {
-        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window), tH1size, 0, rdimfv, lhoper, 1);
-        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window), tL2size, 0, rdimfe, lhoper, 2);
+        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
+        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
     }
     else
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window), tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window), tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe);
     }
 }
 
@@ -3260,6 +3264,194 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
             f[i] -= xv.item(i);
 #endif
     }
+}
+
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+{
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    samplingType sampleType = getSamplingType(greedySamplingType);
+
+    romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", myid);
+    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    if (f.good())
+    {
+        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+            outputPath + "/greedy_algorithm_data",
+            outputPath + "/greedy_algorithm_log.txt");
+    }
+    else
+    {
+        bool latin_hypercube = sampleType == latinHypercubeSampling;
+        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+            romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
+            romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
+            romOptions.greedyMaxClamp, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
+            latin_hypercube, outputPath + "/greedy_algorithm_log.txt");
+
+        ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
+        o << "Parameter considered: " << greedyParamString << std::endl;
+        o << "Error indicator: " << greedyErrorIndicatorType << std::endl;
+        o.close();
+    }
+
+    // First check if we need to compute another error indicator
+    struct CAROM::GreedyErrorIndicatorPoint pointRequiringErrorIndicator = parameterPointGreedySampler->getNextPointRequiringErrorIndicator();
+    CAROM::Vector* errorIndicatorPointData = pointRequiringErrorIndicator.point.get();
+    struct CAROM::GreedyErrorIndicatorPoint pointRequiringRelativeError = parameterPointGreedySampler->getNextPointRequiringRelativeError();
+    CAROM::Vector* samplePointData = pointRequiringRelativeError.point.get();
+    double* greedyParam = getGreedyParam(romOptions, greedyParamString);
+
+    if (errorIndicatorPointData != NULL)
+    {
+        CAROM::Vector* localROM = pointRequiringErrorIndicator.localROM.get();
+        std::string localROMString = "";
+        for (int i = 0; i < localROM->dim(); i++)
+        {
+            localROMString += "_" + to_string(localROM->item(i));
+        }
+        romOptions.basisIdentifier = localROMString;
+        *greedyParam = errorIndicatorPointData->item(0);
+
+        double errorIndicatorEnergyFraction = 0.9999;
+
+        char tmp[100];
+        sprintf(tmp, ".%06d", myid);
+
+        std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+        if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+        {
+            t_final = 0.001;
+        }
+
+        std::ifstream checkfile(fullname);
+        if (!checkfile.good())
+        {
+            if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+            {
+                errorIndicatorEnergyFraction = 0.99;
+            }
+        }
+
+        // Get the rdim for the basis used.
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        if (!romOptions.SNS)
+        {
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        }
+
+        rom_online = true;
+    }
+    else if (samplePointData != NULL)
+    {
+        CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
+        std::string localROMString = "";
+        for (int i = 0; i < localROM->dim(); i++)
+        {
+            localROMString += "_" + to_string(localROM->item(i));
+        }
+        romOptions.basisIdentifier = localROMString;
+        *greedyParam = samplePointData->item(0);
+
+        double errorIndicatorEnergyFraction = 0.9999;
+
+        // Get the rdim for the basis used.
+        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        if (!romOptions.SNS)
+        {
+            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        }
+
+        rom_online = true;
+        rom_calc_rel_error = true;
+    }
+    else
+    {
+        // Next check if we need to run FOM for another parameter point
+        std::shared_ptr<CAROM::Vector> nextSampleParameterPoint = parameterPointGreedySampler->getNextParameterPoint();
+        samplePointData = nextSampleParameterPoint.get();
+        if (samplePointData != NULL)
+        {
+            std::string samplePointDataString = "";
+            for (int i = 0; i < samplePointData->dim(); i++)
+            {
+                samplePointDataString += "_" + to_string(samplePointData->item(i));
+            }
+            romOptions.basisIdentifier = samplePointDataString;
+            *greedyParam = samplePointData->item(0);
+            rom_offline = true;
+        }
+        else
+        {
+            // The greedy algorithm procedure has ended
+            MFEM_ABORT("The greedy algorithm procedure has failed!");
+        }
+    }
+
+    return parameterPointGreedySampler;
+}
+
+CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
+{
+
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", myid);
+    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
+
+    parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+        outputPath + "/greedy_algorithm_data");
+    double* greedyParam = getGreedyParam(romOptions,greedyParamString);
+
+    CAROM::Vector parameter_point(1, false);
+    parameter_point.item(0) = *greedyParam;
+
+    std::shared_ptr<CAROM::Vector> nearestROM = parameterPointGreedySampler->getNearestROM(parameter_point);
+    CAROM::Vector* pointData = nearestROM.get();
+
+    MFEM_VERIFY(pointData != NULL, "No parameter points were found");
+    std::string pointDataString = "";
+    for (int i = 0; i < pointData->dim(); i++)
+    {
+        pointDataString += "_" + to_string(pointData->item(i));
+    }
+    romOptions.basisIdentifier = pointDataString;
+
+    return parameterPointGreedySampler;
+}
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
+                     const int errorIndicatorVecSize, const std::string outputPath)
+{
+    if (rom_online)
+    {
+        parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
+    }
+
+    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
+}
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
+                     const std::string outputPath)
+{
+    if (rom_online)
+    {
+        parameterPointGreedySampler->setPointRelativeError(relative_error);
+    }
+
+    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const

@@ -356,6 +356,7 @@ do
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
 				MERGE="$HEADER ./merge -o ${OUTPUT_DIR}"
+				GREEDY="./scripts/laghos_greedy_alg_launcher.sh"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
@@ -521,7 +522,10 @@ do
 							set_fail
 							continue 1
 						fi
-						num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+
+						if [[ -f $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps ]]; then
+							num_steps="$(cat $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/num_steps)"
+						fi
 
 						# After simulations complete, compare results
 						for baselineTestFile in $BASELINE_LAGHOS_DIR/run/${OUTPUT_DIR}/*

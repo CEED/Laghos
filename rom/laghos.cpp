@@ -59,11 +59,14 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
+#include "GreedyParameterPointRandomSampler.h"
+
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 #include <fstream>
+#include <limits.h>
 
 #ifndef _WIN32
 #include <sys/stat.h>  // mkdir
@@ -86,12 +89,12 @@ double e0(const Vector &);
 double gamma_func(const Vector &);
 void display_banner(ostream & os);
 
-
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
     MPI_Session mpi(argc, argv);
     int myid = mpi.WorldRank();
+    int nprocs = mpi.WorldSize();
 
     // Print the banner.
     if (mpi.Root()) {
@@ -125,6 +128,9 @@ int main(int argc, char *argv[])
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
+    double dt_factor = 1.0;
+    bool rom_build_database = false;
+    bool rom_use_database = false;
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
@@ -142,6 +148,9 @@ int main(int argc, char *argv[])
     const char *normtype_char = "l2";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
+    const char *greedyParam = "bef";
+    const char *greedySamplingType = "random";
+    const char *greedyErrorIndicatorType = "useLastLifted";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -207,6 +216,10 @@ int main(int argc, char *argv[])
                    "of zones in each direction, e.g., the number of zones in direction x\n\t"
                    "must be divisible by the number of MPI tasks in direction x.\n\t"
                    "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
+    args.AddOption(&rom_build_database, "-build-database", "--build-database", "-no-build-database", "--no-build-database",
+                   "Enable or disable ROM database building.");
+    args.AddOption(&rom_use_database, "-use-database", "--use-database", "-no-use-database", "--no-use-database",
+                   "Enable or disable ROM database usage.");
     args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
@@ -238,6 +251,7 @@ int main(int argc, char *argv[])
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
+    args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
@@ -264,6 +278,19 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
+    args.AddOption(&greedyParam, "-greedy-param", "--greedy-param", "The domain to parameterize.");
+    args.AddOption(&romOptions.greedyParamSpaceMin, "-greedy-param-min", "--greedy-param-min", "The minimum value of the parameter point space.");
+    args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
+    args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
+    args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
+    args.AddOption(&romOptions.greedyAlpha, "-greedyalpha", "--greedyalpha", "The greedy algorithm alpha constant.");
+    args.AddOption(&romOptions.greedyMaxClamp, "-greedymaxclamp", "--greedymaxclamp", "The greedy algorithm max clamp constant.");
+    args.AddOption(&romOptions.greedySubsetSize, "-greedysubsize", "--greedysubsize", "The greedy algorithm subset size.");
+    args.AddOption(&romOptions.greedyConvergenceSubsetSize, "-greedyconvsize", "--greedyconvsize", "The greedy algorithm convergence subset size.");
+    args.AddOption(&greedySamplingType, "-greedysamptype", "--greedysamplingtype",
+                   "Sampling type for the greedy algorithm.");
+    args.AddOption(&greedyErrorIndicatorType, "-greedyerrindtype", "--greedyerrorindtype",
+                   "Error indicator type for the greedy algorithm.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
@@ -308,8 +335,6 @@ int main(int argc, char *argv[])
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((outputPath + "/ROMsol").c_str(), 0777);
-
-        args.PrintOptions(cout);
     }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
@@ -321,13 +346,58 @@ int main(int argc, char *argv[])
 
     romOptions.basename = &outputPath;
 
-    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
-    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
-
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
 
     const bool fom_data = spaceTime || !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
+
+    static std::map<std::string, NormType> localmap;
+    localmap["l2"] = l2norm;
+    localmap["l1"] = l1norm;
+    localmap["max"] = maxnorm;
+
+    NormType normtype = localmap[normtype_char];
+
+    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    bool rom_calc_rel_error = false;
+
+    // If using the greedy algorithm, initialize the parameter point greedy sampler.
+    if (rom_build_database)
+    {
+        MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+
+        if (parameterPointGreedySampler->isComplete())
+        {
+            // The greedy algorithm procedure has ended
+            if (myid == 0)
+            {
+                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            }
+            return 1;
+        }
+
+        if (rom_online)
+        {
+            windowNumSamples = 0;
+        }
+    }
+
+    // Use the ROM database to run the parametric case on another parameter point.
+    if (rom_use_database)
+    {
+        MFEM_VERIFY(!rom_offline, "-offline should be off when -use-database is turned on");
+        MFEM_VERIFY(!rom_build_database, "-build-database should be off when -use-database is turned on");
+        parameterPointGreedySampler = UseROMDatabase(romOptions, myid, outputPath, greedyParam);
+    }
+
+    if (mpi.Root())
+    {
+        args.PrintOptions(cout);
+    }
+
+    MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
+    MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
     const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
@@ -340,7 +410,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile), twep, twparam, sFactor, myid == 0, romOptions.SNS);
+            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -365,13 +435,6 @@ int main(int argc, char *argv[])
 
     StopWatch totalTimer;
     totalTimer.Start();
-
-    static std::map<std::string, NormType> localmap;
-    localmap["l2"] = l2norm;
-    localmap["l1"] = l1norm;
-    localmap["max"] = maxnorm;
-
-    NormType normtype = localmap[normtype_char];
 
     // Read the serial mesh from the given mesh file on all processors.
     // Refine the mesh in serial to increase the resolution.
@@ -595,25 +658,32 @@ int main(int argc, char *argv[])
 
     // Define the explicit ODE solver used for time integration.
     ODESolver *ode_solver = NULL;
+    ODESolver *ode_solver_dat = NULL;
     switch (ode_solver_type)
     {
     case 1:
         ode_solver = new ForwardEulerSolver;
+        if (rom_build_database) ode_solver_dat = new ForwardEulerSolver;
         break;
     case 2:
         ode_solver = new RK2Solver(0.5);
+        if (rom_build_database) ode_solver_dat = new RK2Solver(0.5);
         break;
     case 3:
         ode_solver = new RK3SSPSolver;
+        if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
         ode_solver = new RK4Solver;
+        if (rom_build_database) ode_solver_dat = new RK4Solver;
         break;
     case 6:
         ode_solver = new RK6Solver;
+        if (rom_build_database) ode_solver_dat = new RK6Solver;
         break;
     case 7:
         ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
+        if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
         if (myid == 0)
@@ -829,7 +899,7 @@ int main(int argc, char *argv[])
     socketstream* vis_rho = NULL;
     socketstream* vis_v = NULL;
     socketstream* vis_e = NULL;
-    if (fom_data)
+    if (fom_data && (!rom_build_database || !rom_online))
     {
         vis_rho = new socketstream();
         vis_v = new socketstream();
@@ -850,7 +920,7 @@ int main(int argc, char *argv[])
         energy_init = oper->InternalEnergy(*e_gf) +
                       oper->KineticEnergy(*v_gf);
 
-        if (visualization)
+        if (visualization && (!rom_build_database || !rom_online))
         {
             // Make sure all MPI ranks have sent their 'v' solution before initiating
             // another set of GLVis connections (one from each rank):
@@ -883,7 +953,7 @@ int main(int argc, char *argv[])
     string visit_outputName = outputPath + "/" + std::string(visit_basename);
     const char *visit_outputPath = visit_outputName.c_str();
     VisItDataCollection* visit_dc = NULL;
-    if (fom_data)
+    if (fom_data && (!rom_build_database || !rom_online))
     {
         visit_dc = new VisItDataCollection(visit_outputPath, pmesh);
         if (visit)
@@ -927,7 +997,7 @@ int main(int argc, char *argv[])
 
     if (fom_data)
     {
-        dt = oper->GetTimeStepEstimate(*S);
+        dt = oper->GetTimeStepEstimate(*S) * dt_factor;
         S_old = new BlockVector(*S);
     }
 
@@ -962,7 +1032,7 @@ int main(int argc, char *argv[])
 
         samplerTimer.Start();
         if (usingWindows && romOptions.parameterID == -1) {
-            outfile_twp.open(outputPath + "/" + std::string(twpfile));
+            outfile_twp.open(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
         }
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
@@ -1011,7 +1081,7 @@ int main(int argc, char *argv[])
 
     std::vector<ROM_Basis*> basis;
     basis.assign(std::max(numWindows, 1), nullptr);
-    Vector romS, romS_old;
+    Vector romS, romS_old, lastLiftedSolution;
     std::vector<ROM_Operator*> romOper;
     romOper.assign(std::max(numWindows, 1), nullptr);
 
@@ -1085,7 +1155,7 @@ int main(int argc, char *argv[])
         if (!romOptions.hyperreduce)
         {
             basis[0]->ProjectFOMtoROM(*S, romS);
-            if (romOptions.hyperreduce_prep && myid == 0)
+            if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
             {
                 std::string romS_outPath = outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
@@ -1093,7 +1163,7 @@ int main(int argc, char *argv[])
                 romS.Print(outfile_romS, 1);
             }
         }
-        else
+        else if (!rom_build_database)
         {
             std::string romS_outPath = outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
@@ -1120,6 +1190,7 @@ int main(int argc, char *argv[])
     }
 
     StopWatch restoreTimer, timeLoopTimer;
+    bool converged = true;
     if (rom_restore)
     {
         // -restore phase
@@ -1277,7 +1348,7 @@ int main(int argc, char *argv[])
 
             if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
             t_old = t;
-            if (fom_data)
+            if (fom_data && (!rom_build_database || last_step))
             {
                 oper->ResetTimeStepEstimate();
             }
@@ -1289,6 +1360,15 @@ int main(int argc, char *argv[])
                 if (myid == 0)
                     cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
 
+                // MFEM may not converge if the ROM is too far away from the point
+                // we are now trying to obtain an error indicator at.
+                // This kills the simulation if it does not converge,
+                // since romS will be full of NaN's.
+                if (rom_build_database && !std::isfinite(romS.Norml2()))
+                {
+                    converged = false;
+                    break;
+                }
                 romS_old = romS;
                 ode_solver->Step(romS, t, dt);
 
@@ -1296,27 +1376,46 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
-                std::ofstream outfile_romS(filename.c_str());
-                outfile_romS.precision(16);
-                if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                if (!rom_build_database)
                 {
-                    Vector romCoord(romS);
-                    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                    romCoord.Print(outfile_romS, 1);
+                    std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                    std::ofstream outfile_romS(filename.c_str());
+                    outfile_romS.precision(16);
+                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    {
+                        Vector romCoord(romS);
+                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
+                        romCoord.Print(outfile_romS, 1);
+                    }
+                    else
+                    {
+                        romS.Print(outfile_romS, 1);
+                    }
+                    outfile_romS.close();
                 }
-                else
-                {
-                    romS.Print(outfile_romS, 1);
-                }
-                outfile_romS.close();
 
                 if (!romOptions.hyperreduce)
-                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+                {
+
+                    // If using the greedy algorithm, only lift during the last step
+                    if (!rom_build_database || last_step)
+                    {
+                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+                    }
+
+                    // If using the greedy algorithm, take only the last step in the FOM space
+                    // when using the useLastLiftedSolution error indicator type
+                    if (rom_build_database && !rom_calc_rel_error && last_step && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
+                    {
+                        lastLiftedSolution = *S;
+                        ode_solver_dat->Init(*oper);
+                        ode_solver_dat->Step(lastLiftedSolution, t, dt);
+                    }
+                }
 
                 romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                if (fom_data)
+                if (fom_data && (!rom_build_database || last_step))
                 {
                     oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
                 }
@@ -1334,37 +1433,38 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
-
-            //const double dt_est = oper->GetTimeStepEstimate(*S);
-            //cout << myid << ": dt_est " << dt_est << endl;
-            if (dt_est < dt)
+            if (!rom_build_database || last_step)
             {
-                // Repeat (solve again) with a decreased time step - decrease of the
-                // time estimate suggests appearance of oscillations.
-                dt *= 0.85;
-                if (dt < numeric_limits<double>::epsilon())
+                const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
+
+                if (dt_est < dt)
                 {
-                    MFEM_ABORT("The time step crashed!");
+                    // Repeat (solve again) with a decreased time step - decrease of the
+                    // time estimate suggests appearance of oscillations.
+                    dt *= 0.85;
+                    if (dt < numeric_limits<double>::epsilon())
+                    {
+                        MFEM_ABORT("The time step crashed!");
+                    }
+                    t = t_old;
+                    if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
+                    if (rom_online) romS = romS_old;
+                    if (fom_data)
+                    {
+                        oper->ResetQuadratureData();
+                    }
+                    if (mpi.Root()) {
+                        cout << "Repeating step " << ti << endl;
+                    }
+                    if (steps < max_tsteps) {
+                        last_step = false;
+                    }
+                    ti--;
+                    continue;
                 }
-                t = t_old;
-                if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
-                if (rom_online) romS = romS_old;
-                if (fom_data)
-                {
-                    oper->ResetQuadratureData();
+                else if (dtc == 0.0 && dt_est > 1.25 * dt) {
+                    dt *= 1.02;
                 }
-                if (mpi.Root()) {
-                    cout << "Repeating step " << ti << endl;
-                }
-                if (steps < max_tsteps) {
-                    last_step = false;
-                }
-                ti--;
-                continue;
-            }
-            else if (dtc == 0.0 && dt_est > 1.25 * dt) {
-                dt *= 1.02;
             }
 
             unique_steps++;
@@ -1406,7 +1506,7 @@ int main(int argc, char *argv[])
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
-                        samplerLast->Finalize(cutoff);
+                        samplerLast->Finalize(cutoff, romOptions);
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
@@ -1436,7 +1536,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        sampler->Finalize(cutoff);
+                        sampler->Finalize(cutoff, romOptions);
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
@@ -1525,7 +1625,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (mpi.Root())
+            if (!rom_build_database && mpi.Root())
             {
                 if (last_step) {
                     std::ofstream outfile(outputPath + "/num_steps");
@@ -1537,7 +1637,7 @@ int main(int argc, char *argv[])
             // Make sure that the mesh corresponds to the new solution state. This is
             // needed, because some time integrators use different S-type vectors
             // and the oper object might have redirected the mesh positions to those.
-            if (fom_data)
+            if (fom_data && (!rom_build_database || !rom_online))
             {
                 pmesh->NewNodes(*x_gf, false);
 
@@ -1648,9 +1748,9 @@ int main(int argc, char *argv[])
         samplerTimer.Start();
         basisConstructionTimer.Start();
         if (samplerLast)
-            samplerLast->Finalize(cutoff);
+            samplerLast->Finalize(cutoff, romOptions);
         else if (sampler)
-            sampler->Finalize(cutoff);
+            sampler->Finalize(cutoff, romOptions);
         basisConstructionTimer.Stop();
 
         if (outputTimes)
@@ -1687,6 +1787,15 @@ int main(int argc, char *argv[])
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
+    double relative_error = -1;
+
+    if (rom_build_database && rom_calc_rel_error)
+    {
+        relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+    }
+
     if (outputSpaceTimeSolution)
     {
         ofs_STX.close();
@@ -1694,13 +1803,13 @@ int main(int argc, char *argv[])
         ofs_STE.close();
     }
 
-    if (fom_data)
+    if (fom_data && (!rom_build_database || !rom_online))
     {
         if (writeSol)
         {
-            PrintParGridFunction(myid, outputPath + "/Sol_Position", x_gf);
-            PrintParGridFunction(myid, outputPath + "/Sol_Velocity", v_gf);
-            PrintParGridFunction(myid, outputPath + "/Sol_Energy", e_gf);
+            PrintParGridFunction(myid, outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+            PrintParGridFunction(myid, outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+            PrintParGridFunction(myid, outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
 
         if (solDiff)
@@ -1727,8 +1836,83 @@ int main(int argc, char *argv[])
         }
     }
 
+    double errorIndicator = INT_MAX;
+    bool errorIndicatorComputed = false;
+    int errorIndicatorVecSize = 0;
+
     if (rom_online)
     {
+        // If using the greedy algorithm, calculate the error indicator
+        if (rom_build_database && !rom_calc_rel_error)
+        {
+            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+
+            // calculate the error indicator using the FOM lifted during
+            // the second to last step compared against the FOM lifted at the last step.
+            if (romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
+            {
+                if (converged)
+                {
+                    Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
+                    subtract(lastLiftedSolution, *S, errorIndicatorVec);
+
+                    errorIndicator = errorIndicatorVec.Norml2();
+                    errorIndicatorVecSize = errorIndicatorVec.Size();
+                }
+
+                errorIndicatorComputed = true;
+            }
+            // calculate the error indicator using the last step of the two FOM
+            // solutions with varied basis size
+            else if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+            {
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    if (converged)
+                    {
+                        Vector finalSolution = *S;
+                        Vector previousFinalSolution;
+                        previousFinalSolution.Load(checkfile, finalSolution.Size());
+
+                        Vector errorIndicatorVec = Vector(finalSolution.Size());
+                        subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
+
+                        errorIndicator = errorIndicatorVec.Norml2();
+                        errorIndicatorVecSize = errorIndicatorVec.Size();
+                    }
+
+                    checkfile.close();
+                    remove(fullname.c_str());
+
+                    errorIndicatorComputed = true;
+                }
+                else
+                {
+                    if (converged)
+                    {
+                        Vector finalSolution = *S;
+
+                        std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                        ofs.precision(16);
+
+                        for (int i=0; i<finalSolution.Size(); ++i)
+                            ofs << finalSolution[i] << std::endl;
+
+                        ofs.close();
+                    }
+                    else
+                    {
+                        errorIndicatorComputed = true;
+                    }
+                }
+            }
+        }
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
     }
@@ -1750,7 +1934,7 @@ int main(int argc, char *argv[])
     case 7:
         steps *= 2;
     }
-    if (fom_data)
+    if (fom_data && (!rom_build_database || !rom_online))
     {
         oper->PrintTimingData(mpi.Root(), steps);
 
@@ -1763,9 +1947,9 @@ int main(int argc, char *argv[])
                  << fabs(energy_init - energy_final) << endl;
         }
 
-        PrintParGridFunction(myid, outputPath + "/x_gf", x_gf);
-        PrintParGridFunction(myid, outputPath + "/v_gf", v_gf);
-        PrintParGridFunction(myid, outputPath + "/e_gf", e_gf);
+        PrintParGridFunction(myid, outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
+        PrintParGridFunction(myid, outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
+        PrintParGridFunction(myid, outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
 
         // Print the error.
         // For problems 0 and 4 the exact velocity is constant in time.
@@ -1808,6 +1992,29 @@ int main(int argc, char *argv[])
         if(rom_offline) cout << "Elapsed time for basis construction in the offline phase: " << basisConstructionTimer.RealTime() << " sec\n";
         cout << "Elapsed time for time loop: " << timeLoopTimer.RealTime() << " sec\n";
         cout << "Total time: " << totalTimer.RealTime() << " sec\n";
+    }
+
+    // If using the greedy algorithm, save the error indicator and any information
+    // for use during the next iteration.
+    if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
+    {
+        if (rom_calc_rel_error)
+        {
+            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, relative_error, outputPath);
+        }
+        else
+        {
+            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, errorIndicator, errorIndicatorVecSize, outputPath);
+        }
+        if (parameterPointGreedySampler->isComplete())
+        {
+            // The greedy algorithm procedure has ended
+            if (myid == 0)
+            {
+                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+            }
+            return 1;
+        }
     }
 
     // Free the used memory.

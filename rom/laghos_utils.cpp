@@ -83,7 +83,7 @@ int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     return 0;
 }
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout)
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Vector* sing_vals = bg->getSingularValues();
@@ -95,13 +95,36 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
         sum += (*sing_vals)(sv);
     }
 
+    vector<double> energy_fractions = {0.9999, 0.999, 0.99, 0.9};
+    bool reached_cutoff = false;
+
     double partialSum = 0.0;
     for (int sv = 0; sv < sing_vals->dim(); ++sv) {
         partialSum += (*sing_vals)(sv);
-        if (partialSum / sum > energyFraction)
+        if (printout)
+        {
+            for (int i = energy_fractions.size() - 1; i >= 0; i--)
+            {
+                if (partialSum / sum > energy_fractions[i])
+                {
+                    cout << "For energy fraction: " << energy_fractions[i] << ", take first "
+                         << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
+                    if (cutoffOutputPath != "")
+                    {
+                        writeNum(sv+1, cutoffOutputPath + "_" + to_string(energy_fractions[i]));
+                    }
+                    energy_fractions.pop_back();
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        if (!reached_cutoff && partialSum / sum > energyFraction)
         {
             cutoff = sv+1;
-            break;
+            reached_cutoff = true;
         }
     }
 
@@ -366,7 +389,7 @@ void PrintParGridFunction(const int rank, const std::string& name, ParGridFuncti
     ofs.close();
 }
 
-void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
+double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
 {
     Vector tv(gf->ParFESpace()->GetTrueVSize());
 
@@ -389,7 +412,7 @@ void PrintDiffParGridFunction(NormType normtype, const int rank, const std::stri
     ParGridFunction rgf(gf->ParFESpace());
     rgf.SetFromTrueDofs(tv);
 
-    PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
+    return PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }
 
 void writeNum(int num, std::string file_name) {
@@ -446,8 +469,8 @@ void readVec(vector<int> &v, std::string file_name) {
     file.close();
 }
 
-void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                  const bool scalar)
+double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+                                    const bool scalar)
 {
     ConstantCoefficient zero(0.0);
     Vector zerov(3);
@@ -585,6 +608,8 @@ void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::
     ofs << "Rel. DIFF norm " << relDIFFnorm << endl;
 
     ofs.close();
+
+    return relDIFFnorm;
 
 }
 

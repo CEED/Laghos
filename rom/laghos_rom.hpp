@@ -5,6 +5,7 @@
 
 #include "BasisGenerator.h"
 #include "BasisReader.h"
+#include "GreedyParameterPointRandomSampler.h"
 
 #include "laghos_solver.hpp"
 
@@ -16,8 +17,8 @@ using namespace mfem;
 
 enum NormType { l1norm=1, l2norm=2, maxnorm=0 };
 
-void PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
-                                  const bool scalar);
+double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+                                    const bool scalar);
 void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
                                     const bool scalar);
 
@@ -36,6 +37,18 @@ enum offsetStyle
     useInitialState,
     saveLoadOffset,
     interpolateOffset
+};
+
+enum samplingType
+{
+    randomSampling,
+    latinHypercubeSampling
+};
+
+enum errorIndicatorType
+{
+    useLastLiftedSolution,
+    varyBasisSize
 };
 
 static offsetStyle getOffsetStyle(const char* offsetType)
@@ -73,6 +86,30 @@ static SpaceTimeMethod getSpaceTimeMethod(const char* spaceTime)
     return iter->second;
 }
 
+static samplingType getSamplingType(const char* samp)
+{
+    static std::unordered_map<std::string, samplingType> sampMap =
+    {
+        {"random", randomSampling},
+        {"latin-hypercube", latinHypercubeSampling}
+    };
+    auto iter = sampMap.find(samp);
+    MFEM_VERIFY(iter != std::end(sampMap), "Invalid input of sampling type");
+    return iter->second;
+}
+
+static errorIndicatorType getErrorIndicatorType(const char* errorIndicator)
+{
+    static std::unordered_map<std::string, errorIndicatorType> errorIndicatorMap =
+    {
+        {"useLastLifted", useLastLiftedSolution},
+        {"varyBasisSize", varyBasisSize}
+    };
+    auto iter = errorIndicatorMap.find(errorIndicator);
+    MFEM_VERIFY(iter != std::end(errorIndicatorMap), "Invalid input of error indicator type");
+    return iter->second;
+}
+
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
@@ -80,6 +117,19 @@ struct ROM_Options
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
     std::string *basename = NULL;
+
+    std::string basisIdentifier = "";
+    std::string greedyParam = "bef";
+    double greedyTol = 0.1; // relative error tolerance for the greedy algorithm
+    double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
+    double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
+    double greedyParamSpaceMin = 0; // min value of the greedy algorithm 1D parameter domain
+    double greedyParamSpaceMax = 0; // max value of the greedy algorithm 1D parameter domain
+    int greedyParamSpaceSize = 0; // the maximum number of local ROMS to create in the greedy algorithm 1D parameter domain
+    int greedySubsetSize = 0; // subset size of parameter points whose error indicators are checked during the greedy algorithm
+    int greedyConvergenceSubsetSize = 0; // convergence subset size for terminating the greedy algorithm
+    samplingType greedySamplingType = randomSampling; // sampling type for the greedy algorithm
+    errorIndicatorType greedyErrorIndicatorType = useLastLiftedSolution; // error indicator type for the greedy algorithm
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
@@ -151,6 +201,17 @@ struct ROM_Options
     bool VTos = false;
 };
 
+static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
+{
+    static std::unordered_map<std::string, double*> paramMap =
+    {
+        {"bef", &romOptions.blast_energyFactor}
+    };
+    auto iter = paramMap.find(greedyParam);
+    MFEM_VERIFY(iter != std::end(paramMap), "Invalid input for greedy parameter.");
+    return iter->second;
+}
+
 class ROM_Sampler
 {
 public:
@@ -202,7 +263,7 @@ public:
         generator_X = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID) : basename + "/" + ROMBasisName::X + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::X + std::to_string(window) + input.basisIdentifier);
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randdimV);
@@ -210,7 +271,7 @@ public:
         generator_V = new CAROM::BasisGenerator(
             x_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID) : basename + "/" + ROMBasisName::V + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::V + std::to_string(window) + input.basisIdentifier);
         if (input.randomizedSVD)
         {
             e_options.setRandomizedSVD(true, input.randdimE);
@@ -218,7 +279,7 @@ public:
         generator_E = new CAROM::BasisGenerator(
             e_options,
             !staticSVD,
-            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID) : basename + "/" + ROMBasisName::E + std::to_string(window));
+            staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
         if (!sns)
         {
             if (input.randomizedSVD)
@@ -228,7 +289,7 @@ public:
             generator_Fv = new CAROM::BasisGenerator(
                 x_options,
                 !staticSVD,
-                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID) : basename + "/" + ROMBasisName::Fv + std::to_string(window));
+                staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fv + std::to_string(window) + input.basisIdentifier);
             if (input.randomizedSVD)
             {
                 e_options.setRandomizedSVD(true, input.randdimFe);
@@ -236,7 +297,7 @@ public:
             generator_Fe = new CAROM::BasisGenerator(
                 e_options,
                 !staticSVD,
-                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID) : basename + "/" + ROMBasisName::Fe + std::to_string(window));
+                staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fe + std::to_string(window) + input.basisIdentifier);
         }
 
         SetStateVariables(S_init);
@@ -300,7 +361,7 @@ public:
 
     void SampleSolution(const double t, const double dt, Vector const& S);
 
-    void Finalize(Array<int> &cutoff);
+    void Finalize(Array<int> &cutoff, ROM_Options& input);
 
     int MaxNumSamples()
     {
@@ -397,7 +458,7 @@ private:
         }
     }
 
-    std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter)
+    std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter, const std::string basisIdentifier)
     {
         std::string fileName, path;
 
@@ -406,19 +467,19 @@ private:
         switch (v)
         {
         case VariableName::V:
-            fileName = "V" + std::to_string(window);
+            fileName = "V" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::E:
-            fileName = "E" + std::to_string(window);
+            fileName = "E" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::Fv:
-            fileName = "Fv" + std::to_string(window);
+            fileName = "Fv" + std::to_string(window) + basisIdentifier;
             break;
         case VariableName::Fe:
-            fileName = "Fe" + std::to_string(window);
+            fileName = "Fe" + std::to_string(window) + basisIdentifier;
             break;
         default:
-            fileName = "X" + std::to_string(window);
+            fileName = "X" + std::to_string(window) + basisIdentifier;
         }
 
         path = (parameter >= 0) ? basename + "/param" + std::to_string(parameter) + "_" : basename + "/";
@@ -606,6 +667,8 @@ private:
     int L2size;
     int tH1size;
     int tL2size;
+
+    std::string basisIdentifier;
 
     CAROM::Matrix* basisX = 0;
     CAROM::Matrix* basisV = 0;
@@ -915,5 +978,16 @@ private:
 
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
+
+CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
+        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
+
+CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
+                     const int errorIndicatorVecSize, const std::string outputPath);
+
+void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
+                     const std::string outputPath);
 
 #endif // MFEM_LAGHOS_ROM
