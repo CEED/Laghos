@@ -16,7 +16,7 @@ int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int num
 
 int VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const bool printout=true);
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath = "", const bool printout=true);
 
 void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows = false, const int window = -1);
 
@@ -30,7 +30,7 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
 
 void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf);
 void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf);
-void PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf);
+double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf);
 
 void writeNum(int num, std::string file_name);
 
