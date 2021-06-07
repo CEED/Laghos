@@ -293,7 +293,7 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
                     }
                     else
                     {
-                        tMax = *(tSnapX[paramID].rbegin() + t); 
+                        tMax = *(tSnapX[paramID].rbegin() + t);
                         break;
                     }
                 }
@@ -393,6 +393,7 @@ int main(int argc, char *argv[])
     int windowNumSamples = 0;
     int windowOverlapSamples = 0;
     const char *offsetType = "initial";
+    const char *indicatorType = "time";
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
@@ -408,10 +409,10 @@ int main(int argc, char *argv[])
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&indicatorType, "-loctype", "--romindicatortype",
+                   "Indicator type for partitioning ROM windows.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
-    args.AddOption(&romOptions.pd, "-rompd", "--rompd", "-no-rompd", "--no-rompd",
-                   "Enable or disable penetration distance based local ROM for Rayleigh-Taylor instability problem.");
     args.AddOption(&basename, "-o", "--outputfilename",
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
@@ -435,6 +436,12 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
+    romOptions.offsetType = getOffsetStyle(offsetType);
+    MFEM_VERIFY(romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM")
+
+    romOptions.indicatorType = getlocalROMIndicator(indicatorType);
+    const bool pd = (romOptions.indicatorType != physicalTime);
+
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
     MFEM_VERIFY(windowNumSamples >= 0, "Negative window");
     MFEM_VERIFY(windowOverlapSamples >= 0, "Negative window overlap");
@@ -455,16 +462,13 @@ int main(int argc, char *argv[])
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, romOptions.SNS, romOptions.pd, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        GetParametricTimeWindows(nset, romOptions.SNS, pd, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
         outfile_twp.open(outputPath + "/" + std::string(twpfile));
     }
     else {
         numWindows = 1;
         numBasisWindows = 1;
     }
-
-    romOptions.offsetType = getOffsetStyle(offsetType);
-    MFEM_VERIFY(romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM")
 
     int dim; // dummy
     double dt; // dummy

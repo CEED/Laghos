@@ -48,6 +48,26 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     return iter->second;
 }
 
+enum localROMIndicator
+{
+    physicalTime,
+    penetrationDistance,
+    parameterTime
+};
+
+static localROMIndicator getlocalROMIndicator(const char* indicatorType)
+{
+    static std::unordered_map<std::string, localROMIndicator> indicatorMap =
+    {
+        {"time", physicalTime},
+        {"distance", penetrationDistance},
+        {"parameter-time", parameterTime}
+    };
+    auto iter = indicatorMap.find(indicatorType);
+    MFEM_VERIFY(iter != std::end(indicatorMap), "Invalid input of local ROM indicator type");
+    return iter->second;
+}
+
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
@@ -66,7 +86,6 @@ struct ROM_Options
     bool staticSVD = true; // true: use StaticSVD
     bool useOffset = true; // if true, sample variables minus initial state as an offset
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
-    bool pd = false; // if true, use penetration distance based local ROM for Rayleigh-Taylor instability problem
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int window = 0; // Laghos-ROM time window index
@@ -110,6 +129,7 @@ struct ROM_Options
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = useInitialState; // type of offset in time windows
+    localROMIndicator indicatorType = physicalTime; // type of local ROM indicator in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 

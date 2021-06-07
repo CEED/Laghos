@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     const char *normtype_char = "l2";
     const char *offsetType = "initial";
+    const char *indicatorType = "time";
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -308,8 +309,6 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.incSVD_sampling_tol, "-samptol", "--samplingtol", "The incremental SVD model sampling tolerance.");
     args.AddOption(&romOptions.SNS, "-romsns", "--romsns", "-no-romsns", "--no-romsns",
                    "Enable or disable SNS in hyperreduction on Fv and Fe");
-    args.AddOption(&romOptions.pd, "-rompd", "--rompd", "-no-rompd", "--no-rompd",
-                   "Enable or disable penetration distance based local ROM for Rayleigh-Taylor instability problem.");
     args.AddOption(&romOptions.GramSchmidt, "-romgs", "--romgramschmidt", "-no-romgs", "--no-romgramschmidt",
                    "Enable or disable Gram-Schmidt orthonormalization on V and E induced by mass matrices.");
     args.AddOption(&romOptions.rhoFactor, "-rhof", "--rhofactor", "Factor for scaling rho.");
@@ -318,6 +317,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&indicatorType, "-loctype", "--romindicatortype",
+                   "Indicator type for partitioning ROM windows.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
                    "Enable or disable use of V basis for X-X0.");
     args.AddOption(&romOptions.useVX, "-romvx", "--romusevx", "-no-romvx", "--no-romusevx",
@@ -588,6 +589,7 @@ int main(int argc, char *argv[])
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
+    romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
         std::string filename = outputPath + "/ROMsol/romS_1";
@@ -1094,10 +1096,11 @@ int main(int argc, char *argv[])
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
+            cout << "Indicator Style: " << indicatorType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
-        if (problem == 7 && romOptions.pd)
+        if (problem == 7 && romOptions.indicatorType == penetrationDistance)
         {
             if (fom_data)
             {
@@ -1379,11 +1382,17 @@ int main(int argc, char *argv[])
                 samplerTimer.Start();
                 // 2D Rayleigh-Taylor penetration distance
                 double real_pd = -1.0;
-                if (problem == 7 && romOptions.pd)
+                if (problem == 7)
                 {
-                    double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-                    MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-                    //real_pd = romOptions.atwoodFactor * t * t;
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                        MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        real_pd = romOptions.atwoodFactor * t * t;
+                    }
                 }
                 sampler->SampleSolution(t, last_dt, real_pd, *S);
 
@@ -1466,15 +1475,21 @@ int main(int argc, char *argv[])
             if (rom_online)
             {
                 double window_par;
-                if (problem == 7 && romOptions.pd)
+                if (problem == 7)
                 {
-                    // 2D Rayleigh-Taylor penetration distance
-                    window_par = pd_weight[0];
-                    for (int i=1; i<pd_weight.size(); ++i)
-                        window_par -= pd_weight[i]*romS[i-1];
-                    //window_par = romOptions.atwoodFactor * t * t;
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        // 2D Rayleigh-Taylor penetration distance
+                        window_par = pd_weight[0];
+                        for (int i=1; i<pd_weight.size(); ++i)
+                            window_par -= pd_weight[i]*romS[i-1];
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        window_par = romOptions.atwoodFactor * t * t;
+                    }
+                    else window_par = t;
                 }
-                else window_par = t;
 
                 if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
@@ -1535,7 +1550,7 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
 
-                    if (problem == 7 && romOptions.pd)
+                    if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
                         std::string pd_weight_outPath = outputPath + "/pd_weight" + to_string(romOptions.window);
                         std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
