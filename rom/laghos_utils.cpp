@@ -71,7 +71,7 @@ void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, boo
 }
 
 void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore,
-                     ROM_Options& romOptions, std::string greedyfile)
+                      ROM_Options& romOptions, std::string greedyfile)
 {
     std::ofstream greedyout(greedyfile);
     if (rom_online)

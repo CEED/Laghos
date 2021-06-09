@@ -3350,7 +3350,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         if (romOptions.hyperreduce)
         {
             ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
-                romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                            romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
         else
         {
@@ -3384,7 +3384,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         if (romOptions.hyperreduce)
         {
             ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
-                romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                            romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
         else
         {
