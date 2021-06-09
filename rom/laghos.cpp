@@ -1192,7 +1192,7 @@ int main(int argc, char *argv[])
     }
 
     StopWatch restoreTimer, timeLoopTimer;
-    bool converged = true;
+    bool greedy_converged = true;
     if (rom_restore)
     {
         // -restore phase
@@ -1384,7 +1384,7 @@ int main(int argc, char *argv[])
                 // since romS will be full of NaN's.
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
-                    converged = false;
+                    greedy_converged = false;
                     break;
                 }
                 romS_old = romS;
@@ -1858,7 +1858,7 @@ int main(int argc, char *argv[])
     // If using the greedy algorithm, calculate the error indicator
     if (rom_build_database && !rom_calc_rel_error)
     {
-        if (rom_online && !converged)
+        if (rom_online && !greedy_converged)
         {
             if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {

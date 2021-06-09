@@ -15,7 +15,7 @@ sbatch scripts/laghos_greedy_alg_launcher.sh srun -n 1 -p pdebug laghos ...
 
 Example command with all available options:
 
-./scripts/laghos_greedy_alg_launcher.sh laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -build-database -writesol -romsvds -greedy-param "bef" -greedy-param-min 0.5 -greedy-param-max 2.5 -greedy-param-size 5 -greedysubsize 2 -greedyconvsize 3 -greedytol 0.1 -greedyalpha 1.05 - greedymaxclamp 2.0 -greedysamptype random -greedyerrindtype useLastLifted -romhr
+./scripts/laghos_greedy_alg_launcher.sh laghos -m data/cube01_hex.mesh -pt 211 -tf 0.01 -build-database -writesol -romsvds -greedy-param "bef" -greedy-param-min 0.5 -greedy-param-max 2.5 -greedy-param-size 5 -greedysubsize 2 -greedyconvsize 3 -greedytol 0.1 -greedyalpha 1.05 -greedymaxclamp 2.0 -greedysamptype random -greedyerrindtype useLastLifted -romhr
 
 - greedy-param (default: "bef"): The value to change (i.e. blast-energyfactor, etc.)
 New parameters can easily be added by adding an entry to the map in getGreedyParam()
