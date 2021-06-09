@@ -16,6 +16,91 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
+void DeleteROMSolution(std::string outputPath)
+{
+    bool last_step = false;
+    for (int ti = 1; !last_step; ti++)
+    {
+        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::ifstream infile_romS(filename.c_str());
+        if (infile_romS.good())
+        {
+            infile_romS.close();
+            remove(filename.c_str());
+        }
+        else
+        {
+            last_step = true;
+            break;
+        }
+    }
+}
+
+void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error,
+                     ROM_Options& romOptions, std::string greedyfile)
+{
+    std::ifstream greedystream(greedyfile);
+    if (!greedystream.is_open())
+    {
+        rom_online = true;
+        romOptions.hyperreduce_prep = true;
+        romOptions.hyperreduce = false;
+        rom_calc_rel_error = false;
+    }
+    else
+    {
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(greedystream, line);
+        split_line(line, words);
+
+        if (words[0] == "online")
+        {
+            if (words[1] == "hyperreduce_prep")
+            {
+                rom_online = true;
+                rom_calc_rel_error = false;
+            }
+            else if (words[1] == "hyperreduce")
+            {
+                rom_restore = true;
+                romOptions.hyperreduce = false;
+            }
+        }
+    }
+}
+
+void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore,
+                     ROM_Options& romOptions, std::string greedyfile)
+{
+    std::ofstream greedyout(greedyfile);
+    if (rom_online)
+    {
+        greedyout << "online" << " ";
+    }
+    else if (rom_restore)
+    {
+        greedyout << "restore" << " ";
+    }
+    else
+    {
+        greedyout << "offline" << " ";
+    }
+    if (romOptions.hyperreduce_prep)
+    {
+        greedyout << "hyperreduce_prep" << endl;
+    }
+    else if (romOptions.hyperreduce)
+    {
+        greedyout << "hyperreduce" << endl;
+    }
+    else
+    {
+        greedyout << "nonreduced" << endl;
+    }
+    greedyout.close();
+}
+
 int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {

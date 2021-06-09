@@ -312,7 +312,7 @@ public:
 
         if (offsetInit)
         {
-            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init";
+            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset" + input.basisIdentifier + "/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
@@ -980,14 +980,8 @@ private:
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
+        bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
 CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
-                     const int errorIndicatorVecSize, const std::string outputPath);
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
-                     const std::string outputPath);
 
 #endif // MFEM_LAGHOS_ROM

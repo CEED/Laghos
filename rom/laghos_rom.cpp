@@ -469,7 +469,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
     if (offsetInit)
     {
-        std::string path_init = basename + "/ROMoffset/init";
+        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         if (input.offsetType == useInitialState)
         {
@@ -551,7 +551,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
                 initE_off = new CAROM::Vector(tL2size, true);
 
                 int paramID_off = paramID_list[param];
-                std::string path_init_off = basename + "/ROMoffset/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
+                std::string path_init_off = basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
 
                 initX_off->read(path_init_off + "X" + std::to_string(input.window));
                 initV_off->read(path_init_off + "V" + std::to_string(input.window));
@@ -652,7 +652,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
     if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
-        std::string path_init = basename + "/ROMoffset/init";
+        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         // Compute and save offset in the online phase for the initial window in the useInitialState mode
         Vector X, V, E;
@@ -3267,7 +3267,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 }
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+        bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
@@ -3347,7 +3347,15 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         }
 
-        rom_online = true;
+        if (romOptions.hyperreduce)
+        {
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
+                romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        }
+        else
+        {
+            rom_online = true;
+        }
     }
     else if (samplePointData != NULL)
     {
@@ -3372,8 +3380,16 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
         }
 
-        rom_online = true;
         rom_calc_rel_error = true;
+        if (romOptions.hyperreduce)
+        {
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
+                romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        }
+        else
+        {
+            rom_online = true;
+        }
     }
     else
     {
@@ -3389,7 +3405,9 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             }
             romOptions.basisIdentifier = samplePointDataString;
             *greedyParam = samplePointData->item(0);
+
             rom_offline = true;
+            romOptions.hyperreduce = false;
         }
         else
         {
@@ -3430,28 +3448,6 @@ CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, cons
     romOptions.basisIdentifier = pointDataString;
 
     return parameterPointGreedySampler;
-}
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
-                     const int errorIndicatorVecSize, const std::string outputPath)
-{
-    if (rom_online)
-    {
-        parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
-    }
-
-    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
-}
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
-                     const std::string outputPath)
-{
-    if (rom_online)
-    {
-        parameterPointGreedySampler->setPointRelativeError(relative_error);
-    }
-
-    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
