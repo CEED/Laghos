@@ -16,7 +16,7 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
+void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
     if (romOptions.parameterID <= 0)
@@ -49,10 +49,9 @@ int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
         opout << romOptions.atwoodFactor << endl;
         opout.close();
     }
-    return 0;
 }
 
-int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
+void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
                        const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline)
 {
     std::ifstream opin(paramfile);
@@ -80,8 +79,6 @@ int VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     }
 
     opin.close();
-
-    return 0;
 }
 
 void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath, const bool printout)

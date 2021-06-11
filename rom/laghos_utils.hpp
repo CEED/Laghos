@@ -12,9 +12,9 @@ using namespace mfem;
 
 void split_line(const string &line, vector<string> &words);
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool printStatus);
+void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool printStatus);
 
-int VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
+void VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
 
 void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath = "", const bool printout=true);
 

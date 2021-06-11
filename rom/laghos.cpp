@@ -1190,7 +1190,7 @@ int main(int argc, char *argv[])
             {
                 int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
-                    basis[curr_window]->writePD(pd2_tdof, curr_window);
+                    basis[curr_window]->writePDweights(pd2_tdof, curr_window);
                 MPI_Barrier(pmesh->GetComm());
             }
             std::string pd_weight_outPath = outputPath + "/pd_weight0";
@@ -1519,7 +1519,7 @@ int main(int argc, char *argv[])
                 {
                     if (romOptions.indicatorType == penetrationDistance)
                     {
-                        double proc_pd = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+                        double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                         MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
                     }
                     else if (romOptions.indicatorType == parameterTime)
@@ -2047,8 +2047,8 @@ int main(int argc, char *argv[])
         if (problem == 7 && fom_data)
         {
             double proc_pd[2], real_pd[2];
-            proc_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
-            proc_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
+            proc_pd[0] = (pd1_vdof >= 0) ?  (*S)(pd1_vdof) : 0.0;
+            proc_pd[1] = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
             MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
             if (mpi.Root())
