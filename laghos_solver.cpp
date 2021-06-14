@@ -393,6 +393,43 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 
+      // ---
+
+      enum SolverType {Penalty, Eliminate, Schur};
+      const SolverType type = Schur;
+
+      Array<int> constraint_atts(1);
+      constraint_atts[0] = 4;
+      Array<int> constraint_rowstarts;
+
+      SparseMatrix* local_constraints =
+            ParBuildNormalConstraints(H1, constraint_atts,
+                                          constraint_rowstarts);
+      ConstrainedSolver * solver;
+      if (type == Eliminate)
+      {
+        solver = new EliminationCGSolver(A, *local_constraints,
+                                         constraint_rowstarts, dim, false);
+      }
+      else if (type == Penalty)
+      {
+         const double penalty = 100.0;
+         solver = new PenaltyPCGSolver(A, *local_constraints, penalty, dim);
+      }
+      else if (type == Schur)
+      {
+         solver = new SchurConstrainedHypreSolver(H1.GetComm(), A,
+                                                  *local_constraints, dim, false);
+      }
+
+      solver->SetRelTol(cg_rel_tol);
+      solver->SetMaxIter(cg_max_iter);
+      solver->SetPrintLevel(-1);
+      solver->Mult(B, X);
+
+      // ---
+
+      /*
       CGSolver cg(H1.GetParMesh()->GetComm());
       HypreSmoother prec;
       prec.SetType(HypreSmoother::Jacobi, 1);
@@ -406,7 +443,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       cg.Mult(B, X);
       timer.sw_cgH1.Stop();
       timer.H1iter += cg.GetNumIterations();
+      */
       Mv.RecoverFEMSolution(X, rhs, dv);
+      delete solver;
+      delete local_constraints;
    }
 }
 
