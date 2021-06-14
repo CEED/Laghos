@@ -292,6 +292,116 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
    }
 }
 
+HypreParMatrix * BuildNormalConstraintsNoIntersection(
+   ParFiniteElementSpace& fespace, Array<int>& constrained_att,
+   Array<int>& constraint_rowstarts)
+{
+   int rank, size;
+   MPI_Comm_rank(fespace.GetComm(), &rank);
+   MPI_Comm_size(fespace.GetComm(), &size);
+   int dim = fespace.GetVDim();
+
+   std::set<int> constrained_tdofs; // local tdofs
+   for (int i = 0; i < fespace.GetNBE(); ++i)
+   {
+      int att = fespace.GetBdrAttribute(i);
+      if (constrained_att.FindSorted(att) != -1)
+      {
+         Array<int> dofs;
+         fespace.GetBdrElementDofs(i, dofs);
+         for (auto k : dofs)
+         {
+            int vdof = fespace.DofToVDof(k, 0);
+            int tdof = fespace.GetLocalTDofNumber(vdof);
+            if (tdof >= 0) { constrained_tdofs.insert(tdof); }
+         }
+      }
+   }
+
+   std::map<int, int> dof_constraint;
+   int n_constraints = 0;
+   for (auto k : constrained_tdofs)
+   {
+      dof_constraint[k] = n_constraints++;
+   }
+   for (int k = 0; k < n_constraints + 1; ++k)
+   {
+      constraint_rowstarts.Append(k);
+   }
+   SparseMatrix * out = new SparseMatrix(n_constraints, fespace.GetTrueVSize());
+
+   int constraint_running_total = 0;
+   MPI_Scan(&n_constraints, &constraint_running_total, 1, MPI_INT,
+            MPI_SUM, fespace.GetComm());
+   int global_constraints = 0;
+   if (rank == size - 1) { global_constraints = constraint_running_total; }
+   MPI_Bcast(&global_constraints, 1, MPI_INT, size - 1, fespace.GetComm());
+
+   Vector nor(dim);
+   for (int i = 0; i < fespace.GetNBE(); ++i)
+   {
+      int att = fespace.GetBdrAttribute(i);
+      if (constrained_att.FindSorted(att) != -1)
+      {
+         ElementTransformation * Tr = fespace.GetBdrElementTransformation(i);
+         const FiniteElement * fe = fespace.GetBE(i);
+         const IntegrationRule& nodes = fe->GetNodes();
+
+         Array<int> dofs;
+         fespace.GetBdrElementDofs(i, dofs);
+         MFEM_VERIFY(dofs.Size() == nodes.Size(),
+                     "Something wrong in finite element space!");
+
+         for (int j = 0; j < dofs.Size(); ++j)
+         {
+            Tr->SetIntPoint(&nodes[j]);
+            // the normal returned in the next line is scaled by h, which
+            // is probably what we want in this application
+            CalcOrtho(Tr->Jacobian(), nor);
+
+            // next line assumes nodes and dofs are ordered the same, which
+            // seems to be true
+            int k = dofs[j];
+            int vdof = fespace.DofToVDof(k, 0);
+            int truek = fespace.GetLocalTDofNumber(vdof);
+            if (truek >= 0)
+            {
+               int constraint = dof_constraint[truek];
+               for (int d = 0; d < dim; ++d)
+               {
+                  int vdof = fespace.DofToVDof(k, d);
+                  int truek = fespace.GetLocalTDofNumber(vdof);
+                  // an arguably better algorithm does some kind of average
+                  // instead of just overwriting when two elements (with
+                  // potentially different normals) share a node.
+                  out->Set(constraint, truek, nor[d]);
+               }
+            }
+         }
+      }
+   }
+
+   out->Finalize();
+
+   // cols are same as for fespace; rows are built here
+   HYPRE_Int glob_num_rows = global_constraints;
+   HYPRE_Int glob_num_cols = fespace.GlobalTrueVSize();
+   HYPRE_Int row_starts[2] = {constraint_running_total - n_constraints,
+                              constraint_running_total
+                             };
+   HYPRE_Int * col_starts = fespace.GetTrueDofOffsets();
+   HypreParMatrix * h_out = new HypreParMatrix(fespace.GetComm(), glob_num_rows,
+                                               glob_num_cols, row_starts,
+                                               col_starts, out);
+   h_out->CopyRowStarts();
+   h_out->CopyColStarts();
+   h_out->SetOwnerFlags(3, -1, -1);
+   out->LoseData();
+   delete out;
+
+   return h_out;
+}
+
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -402,6 +512,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       constraint_atts[0] = 4;
       Array<int> constraint_rowstarts;
 
+      HypreParMatrix *hconstraints = BuildNormalConstraintsNoIntersection(
+                        H1, constraint_atts, constraint_rowstarts);
+
       SparseMatrix* local_constraints =
             ParBuildNormalConstraints(H1, constraint_atts,
                                           constraint_rowstarts);
@@ -419,7 +532,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       else if (type == Schur)
       {
          solver = new SchurConstrainedHypreSolver(H1.GetComm(), A,
-                                                  *local_constraints, dim, false);
+                                                  *hconstraints, dim,
+                                                  false);
       }
 
       solver->SetRelTol(cg_rel_tol);
