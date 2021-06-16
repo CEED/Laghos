@@ -206,7 +206,6 @@ struct ROM_Options
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
-    bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = useInitialState; // type of offset in time windows
     localROMIndicator indicatorType = physicalTime; // type of local ROM indicator in time windows
 
