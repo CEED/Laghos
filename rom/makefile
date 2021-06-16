@@ -68,7 +68,7 @@ MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 ROM_DIR := $(dir $(MAKEFILE_PATH))
 LIBS_DIR ?= $(ROM_DIR)/dependencies
 DEBUG := NO
-MFEM_DIR = $(LIBS_DIR)/mfem
+MFEM_DIR = $(LIBS_DIR)/libROM/dependencies/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 
@@ -121,7 +121,7 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp laghos_utils.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp laghos_utils.hpp
 TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp tests/solutionComparator.cpp tests/checkError.cpp tests/computeSpeedup.cpp
 
 # Targets
@@ -211,10 +211,6 @@ style:
 	fi
 
 setup:
-ifeq ($(DEBUG),$(filter $(DEBUG),Yes YES))
-	$(shell ./setup.sh debug >&2)
-else
-	$(shell ./setup.sh >&2)
-endif
+	$(shell ./setup.sh $(DEBUG) $(UPDATE) >&2)
 
 $(shell mkdir -p run)
