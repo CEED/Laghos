@@ -42,6 +42,24 @@ void HydroODESolver::Init(TimeDependentOperator &_f)
     }
 }
 
+void HydroODESolver::SetSampler(ROM_Sampler &_s)
+{
+    if (!rom)
+    {
+        sampler = dynamic_cast<ROM_Sampler *>(s);
+        MFEM_VERIFY(sampler, "HydroSolvers expect ROM_Sampler.");
+    }
+}
+
+void HydroODESolver::SetSampler(ROM_Sampler &_s)
+{
+    if (!rom)
+    {
+        samplerLast = dynamic_cast<ROM_Sampler *>(s);
+        MFEM_VERIFY(samplerLast, "HydroSolvers expect ROM_Sampler.");
+    }
+}
+
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
     if (rom)
@@ -78,6 +96,8 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     // -- 2.
     // S = S0 + 0.5 * dt * dS_dt;
     add(S0, 0.5 * dt, dS_dt, S);
+    if (sampler) sampler->SampleSolution(t, dt, *S);
+    if (samplerLast) samplerLast->SampleSolution(t, dt, *S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
     hydro_oper->SolveVelocity(S, dS_dt);

@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
     double dt_factor = 1.0;
     bool rom_build_database = false;
     bool rom_use_database = false;
+    bool rom_sample_stages = false;
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
@@ -220,6 +221,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM database building.");
     args.AddOption(&rom_use_database, "-use-database", "--use-database", "-no-use-database", "--no-use-database",
                    "Enable or disable ROM database usage.");
+    args.AddOption(&rom_sample_stages, "-sample-stages", "--sample-stages", "-no-sample-stages", "--no-sample-stages",
+                   "Enable or disable sampling of intermediate Runge Kutta stages in ROM offline phase.");
     args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
@@ -663,22 +666,27 @@ int main(int argc, char *argv[])
     {
     case 1:
         ode_solver = new ForwardEulerSolver;
+        rom_sample_stages = false;
         if (rom_build_database) ode_solver_dat = new ForwardEulerSolver;
         break;
     case 2:
         ode_solver = new RK2Solver(0.5);
+        rom_sample_stages = false;
         if (rom_build_database) ode_solver_dat = new RK2Solver(0.5);
         break;
     case 3:
         ode_solver = new RK3SSPSolver;
+        rom_sample_stages = false;
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
         ode_solver = new RK4Solver;
+        rom_sample_stages = false;
         if (rom_build_database) ode_solver_dat = new RK4Solver;
         break;
     case 6:
         ode_solver = new RK6Solver;
+        rom_sample_stages = false;
         if (rom_build_database) ode_solver_dat = new RK6Solver;
         break;
     case 7:
@@ -1039,6 +1047,7 @@ int main(int argc, char *argv[])
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
         sampler->SampleSolution(0, 0, *S);
+        if (rom_sample_stages) ode_solver->SetSampler(*sampler);
         samplerTimer.Stop();
     }
 
@@ -1490,11 +1499,11 @@ int main(int argc, char *argv[])
                 {
                     if (numWindows > 0)
                     {
-                        endWindow = (t >= twep[romOptions.window] && romOptions.window < numWindows-1);
+                        endWindow = (t >= twep[romOptions.window] && romOptions.window < numWindows-1); 
                     }
                     else
                     {
-                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
+                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples); // TODO: think about rom_sample_stages
                     }
                 }
 
@@ -1533,6 +1542,7 @@ int main(int argc, char *argv[])
                     if (numWindows == 0 && windowOverlapSamples > 0)
                     {
                         samplerLast = sampler;
+                        if (rom_sample_stages) ode_solver->SetSamplerLast(*samplerLast);
                     }
                     else
                     {
@@ -1555,6 +1565,7 @@ int main(int argc, char *argv[])
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
                         sampler->SampleSolution(t, dt, *S);
+                        if (rom_sample_stages) ode_solver->SetSampler(*sampler);
                     }
                 }
                 samplerTimer.Stop();

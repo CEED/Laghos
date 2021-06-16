@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 
+class ROM_Sampler;
 class ROM_Operator;
 
 namespace mfem
@@ -34,10 +35,11 @@ class HydroODESolver : public ODESolver
 protected:
     const bool rom;
     LagrangianHydroOperator *hydro_oper;
+    ROM_Sampler *sampler, *samplerLast;
     ROM_Operator *rom_oper;
 
 public:
-    HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline) { }
+    HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), sampler(NULL), rom_oper(NULL), rom(romOnline) { }
 
     virtual void Init(TimeDependentOperator &_f);
 
@@ -45,6 +47,10 @@ public:
     {
         MFEM_ABORT("Time stepping is undefined.");
     }
+
+    void SetSampler(ROM_Sampler &_s);
+
+    void SetSamplerLast(ROM_Sampler &_s);
 };
 
 class RK2AvgSolver : public HydroODESolver
