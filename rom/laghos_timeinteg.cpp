@@ -90,8 +90,8 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     // -- 2.
     // S = S0 + 0.5 * dt * dS_dt;
     add(S0, 0.5 * dt, dS_dt, S);
-    if (sampler) sampler->SampleSolution(t, dt, S);
-    if (samplerLast) samplerLast->SampleSolution(t, dt, S);
+    if (sampler) sampler->SampleSolution(t + 0.5 * dt, dt, S);
+    if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
     hydro_oper->SolveVelocity(S, dS_dt);
