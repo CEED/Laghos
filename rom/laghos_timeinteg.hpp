@@ -48,9 +48,9 @@ public:
         MFEM_ABORT("Time stepping is undefined.");
     }
 
-    void SetSampler(ROM_Sampler &_s);
+    void SetSampler(ROM_Sampler &_f);
 
-    void SetSamplerLast(ROM_Sampler &_s);
+    void SetSamplerLast(ROM_Sampler &_f);
 };
 
 class RK2AvgSolver : public HydroODESolver

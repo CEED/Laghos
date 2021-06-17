@@ -91,7 +91,6 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     // S = S0 + 0.5 * dt * dS_dt;
     add(S0, 0.5 * dt, dS_dt, S);
     if (sampler) sampler->SampleSolution(t, dt, S);
-    else std::cout << "No sample for intemediate RK stages" << endl;
     if (samplerLast) samplerLast->SampleSolution(t, dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
