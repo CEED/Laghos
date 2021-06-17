@@ -704,7 +704,7 @@ int main(int argc, char *argv[])
         return 3;
     }
 
-    if (rom_sample_stages)  ode_solver_samp = dynamic_cast<HydroODESolver*> (ode_solver);
+    if (rom_sample_stages) ode_solver_samp = dynamic_cast<HydroODESolver*> (ode_solver);
     romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
     if (fom_data)
@@ -1049,7 +1049,7 @@ int main(int argc, char *argv[])
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
         sampler->SampleSolution(0, 0, *S);
-        if (rom_sample_stages) ode_solver_samp->SetSampler(*sampler);
+        if (rom_sample_stages) ode_solver_samp->SetSampler(sampler);
         samplerTimer.Stop();
     }
 
@@ -1544,7 +1544,7 @@ int main(int argc, char *argv[])
                     if (numWindows == 0 && windowOverlapSamples > 0)
                     {
                         samplerLast = sampler;
-                        if (rom_sample_stages) ode_solver_samp->SetSamplerLast(*samplerLast);
+                        if (rom_sample_stages) ode_solver_samp->SetSamplerLast(samplerLast);
                     }
                     else
                     {
@@ -1567,7 +1567,7 @@ int main(int argc, char *argv[])
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
                         sampler->SampleSolution(t, dt, *S);
-                        if (rom_sample_stages) ode_solver_samp->SetSampler(*sampler);
+                        if (rom_sample_stages) ode_solver_samp->SetSampler(sampler);
                     }
                 }
                 samplerTimer.Stop();
