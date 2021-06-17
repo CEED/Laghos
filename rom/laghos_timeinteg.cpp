@@ -108,6 +108,43 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     t += dt;
 }
 
+void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
+{
+    //   0  |
+    //  1/2 | 1/2
+    //  1/2 |  0   1/2
+    //   1  |  0    0    1
+    // -----+-------------------
+    //      | 1/6  1/3  1/3  1/6
+
+    Vector k(S.Size()), y(S.Size()), z(S.Size());
+
+    f->SetTime(t);
+    f->Mult(S, k); // k1
+    add(S, dt/2, k, y);
+    add(S, dt/6, k, z);
+
+    f->SetTime(t + dt/2);
+    if (sampler) sampler->SampleSolution(t + 0.5 * dt, dt, y);
+    if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
+    f->Mult(y, k); // k2
+    add(S, dt/2, k, y);
+    z.Add(dt/3, k);
+
+    if (sampler) sampler->SampleSolution(t + 0.5 * dt, dt, y);
+    if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
+    f->Mult(y, k); // k3
+    add(S, dt, k, y);
+    z.Add(dt/3, k);
+
+    f->SetTime(t + dt);
+    if (sampler) sampler->SampleSolution(t + dt, dt, y);
+    if (samplerLast) samplerLast->SampleSolution(t + dt, dt, y);
+    f->Mult(y, k); // k4
+    add(z, dt/6, k, S);
+    t += dt;
+}
+
 } // namespace hydrodynamics
 
 } // namespace mfem

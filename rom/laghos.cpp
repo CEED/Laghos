@@ -681,9 +681,8 @@ int main(int argc, char *argv[])
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
-        ode_solver = new RK4Solver;
-        rom_sample_stages = false;
-        if (rom_build_database) ode_solver_dat = new RK4Solver;
+        ode_solver = new RK4ROMSolver;
+        if (rom_build_database) ode_solver_dat = new RK4ROMSolver;
         break;
     case 6:
         ode_solver = new RK6Solver;
@@ -1501,7 +1500,7 @@ int main(int argc, char *argv[])
                 {
                     if (numWindows > 0)
                     {
-                        endWindow = (t >= twep[romOptions.window] && romOptions.window < numWindows-1); 
+                        endWindow = (t >= twep[romOptions.window] && romOptions.window < numWindows-1);
                     }
                     else
                     {

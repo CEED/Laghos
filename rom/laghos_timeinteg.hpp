@@ -65,6 +65,12 @@ public:
     virtual void Step(Vector &S, double &t, double &dt);
 };
 
+class RK4ROMSolver : public HydroODESolver
+{
+public:
+    virtual void Step(Vector &S, double &t, double &dt);
+};
+
 } // namespace hydrodynamics
 
 } // namespace mfem
