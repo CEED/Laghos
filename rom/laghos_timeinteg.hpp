@@ -39,7 +39,7 @@ protected:
     ROM_Operator *rom_oper;
 
 public:
-    HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), sampler(NULL), rom_oper(NULL), rom(romOnline) { }
+    HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), sampler(NULL), samplerLast(NULL), rom_oper(NULL), rom(romOnline) { }
 
     virtual void Init(TimeDependentOperator &_f);
 

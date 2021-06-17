@@ -44,20 +44,12 @@ void HydroODESolver::Init(TimeDependentOperator &_f)
 
 void HydroODESolver::SetSampler(ROM_Sampler &_f)
 {
-    if (!rom)
-    {
-        sampler = dynamic_cast<ROM_Sampler *>(f);
-        MFEM_VERIFY(sampler, "HydroSolvers expect ROM_Sampler.");
-    }
+    sampler = dynamic_cast<ROM_Sampler *>(f);
 }
 
 void HydroODESolver::SetSamplerLast(ROM_Sampler &_f)
 {
-    if (!rom)
-    {
-        samplerLast = dynamic_cast<ROM_Sampler *>(f);
-        MFEM_VERIFY(samplerLast, "HydroSolvers expect ROM_Sampler.");
-    }
+    samplerLast = dynamic_cast<ROM_Sampler *>(f);
 }
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
