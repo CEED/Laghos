@@ -128,6 +128,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
         }
     }
 
+    if (!reached_cutoff) cutoff = sing_vals->dim();
     if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;
 }
 
