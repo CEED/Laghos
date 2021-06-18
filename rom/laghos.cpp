@@ -661,6 +661,7 @@ int main(int argc, char *argv[])
 
     // Define the explicit ODE solver used for time integration.
     ODESolver *ode_solver = NULL;
+    int RKStepNumSamples;
     ODESolver *ode_solver_dat = NULL;
     HydroODESolver *ode_solver_samp = NULL;
     switch (ode_solver_type)
@@ -682,6 +683,7 @@ int main(int argc, char *argv[])
         break;
     case 4:
         ode_solver = new RK4ROMSolver(rom_online);
+        if (rom_sample_stages) RKStepNumSamples = 3;
         if (rom_build_database) ode_solver_dat = new RK4ROMSolver(rom_online);
         break;
     case 6:
@@ -691,6 +693,7 @@ int main(int argc, char *argv[])
         break;
     case 7:
         ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
+        if (rom_sample_stages) RKStepNumSamples = 1;
         if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
@@ -1504,7 +1507,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples); // TODO: think about rom_sample_stages
+                        endWindow = (sampler->MaxNumSamples() + RKStepNumSamples >= windowNumSamples); 
                     }
                 }
 
@@ -1568,6 +1571,7 @@ int main(int argc, char *argv[])
                         sampler->SampleSolution(t, dt, *S);
                         if (rom_sample_stages) ode_solver_samp->SetSampler(sampler);
                     }
+                    else sampler = NULL;
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
