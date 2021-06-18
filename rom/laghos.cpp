@@ -681,8 +681,8 @@ int main(int argc, char *argv[])
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
-        ode_solver = new RK4ROMSolver;
-        if (rom_build_database) ode_solver_dat = new RK4ROMSolver;
+        ode_solver = new RK4ROMSolver(rom_online);
+        if (rom_build_database) ode_solver_dat = new RK4ROMSolver(rom_online);
         break;
     case 6:
         ode_solver = new RK6Solver;

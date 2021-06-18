@@ -68,6 +68,8 @@ public:
 class RK4ROMSolver : public HydroODESolver
 {
 public:
+    RK4ROMSolver(const bool romOnline=false) : HydroODESolver(romOnline) { }
+
     virtual void Step(Vector &S, double &t, double &dt);
 };
 
