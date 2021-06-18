@@ -374,6 +374,11 @@ public:
         return finalNumSamples;
     }
 
+    int GetRank()
+    {
+        return rank;
+    }
+
 private:
     const int H1size;
     const int L2size;
