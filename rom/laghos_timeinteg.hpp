@@ -37,6 +37,8 @@ protected:
     LagrangianHydroOperator *hydro_oper;
     ROM_Sampler *sampler, *samplerLast;
     ROM_Operator *rom_oper;
+    std::vector<Vector> RKStages;
+    std::vector<double> RKTime;
 
 public:
     HydroODESolver(const bool romOnline=false) : hydro_oper(NULL), sampler(NULL), samplerLast(NULL), rom_oper(NULL), rom(romOnline) { }
@@ -51,6 +53,16 @@ public:
     void SetSampler(ROM_Sampler *f);
 
     void SetSamplerLast(ROM_Sampler *f);
+
+    std::vector<Vector> GetRKStages()
+    {
+        return RKStages;
+    }
+
+    std::vector<double> GetRKTime()
+    {
+        return RKTime;
+    }
 };
 
 class RK2AvgSolver : public HydroODESolver

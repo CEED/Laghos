@@ -306,6 +306,8 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const std::string&
         double overlapMidpoint = (windowLeft + windowRight) / 2;
         twep.Append(overlapMidpoint);
 
+        cout << windowLeft << " " << windowRight << endl;
+
         if (numSnap[0] == offsetCurrentWindow[0]+1)
         {
             for (int i = 1; i < nset*numVar; ++i)

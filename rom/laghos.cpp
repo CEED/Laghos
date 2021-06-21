@@ -667,33 +667,33 @@ int main(int argc, char *argv[])
     switch (ode_solver_type)
     {
     case 1:
-        ode_solver = new ForwardEulerSolver;
         rom_sample_stages = false;
+        ode_solver = new ForwardEulerSolver;
         if (rom_build_database) ode_solver_dat = new ForwardEulerSolver;
         break;
     case 2:
-        ode_solver = new RK2Solver(0.5);
         rom_sample_stages = false;
+        ode_solver = new RK2Solver(0.5);
         if (rom_build_database) ode_solver_dat = new RK2Solver(0.5);
         break;
     case 3:
-        ode_solver = new RK3SSPSolver;
         rom_sample_stages = false;
+        ode_solver = new RK3SSPSolver;
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
-        ode_solver = new RK4ROMSolver(rom_online);
         if (rom_sample_stages) RKStepNumSamples = 3;
+        ode_solver = new RK4ROMSolver(rom_online);
         if (rom_build_database) ode_solver_dat = new RK4ROMSolver(rom_online);
         break;
     case 6:
-        ode_solver = new RK6Solver;
         rom_sample_stages = false;
+        ode_solver = new RK6Solver;
         if (rom_build_database) ode_solver_dat = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         if (rom_sample_stages) RKStepNumSamples = 1;
+        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
@@ -1481,6 +1481,20 @@ int main(int argc, char *argv[])
             }
 
             unique_steps++;
+
+            if (rom_sample_stages) 
+            {
+                // TODO: time this?
+                std::vector<Vector> RKStages = ode_solver_samp->GetRKStages();
+                std::vector<double> RKTime = ode_solver_samp->GetRKTime();
+                MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of RK stages.");
+                for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
+                {
+                    sampler->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                    if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                    if (mpi.Root()) cout << "Runge Kutta stage " << RKidx+1 << " sampled" << endl;
+                }
+            }
 
             if (outputTimes) outfile_time << t << "\n";
 
