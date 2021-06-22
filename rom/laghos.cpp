@@ -364,11 +364,14 @@ int main(int argc, char *argv[])
             }
             return 1;
         }
-        WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
 
-        if (rom_online)
+        if (rom_online || rom_restore)
         {
-            windowNumSamples = 0;
+            if (windowNumSamples > 0)
+            {
+                windowNumSamples = 0;
+                numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
+            }
         }
     }
 
@@ -414,6 +417,10 @@ int main(int argc, char *argv[])
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+            if (rom_build_database)
+            {
+                ReadGreedyTimeWindowParameters(romOptions, numWindows, twparam, outputPath, myid);
+            }
         }
         else if (rom_offline && windowNumSamples == 0)
         {
@@ -1183,6 +1190,10 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;
+            }
+            if (rom_build_database)
+            {
+                WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
             }
             return 0;
         }
@@ -2027,6 +2038,10 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the error indicator and any information
     // for use during the next iteration.
+    if (rom_build_database)
+    {
+        WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+    }
     if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
     {
         if (rom_calc_rel_error)

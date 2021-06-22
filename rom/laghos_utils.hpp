@@ -32,25 +32,30 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
 
 int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs);
 
+void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath, int myid);
+
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
 
 void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf);
 void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf);
 double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf);
 
-void writeNum(int num, std::string file_name);
+void writeNum(int num, std::string file_name, bool append = false);
 
 // read data from from text.txt and store it in vector v
 void readNum(int& num, std::string file_name);
 
-void writeDouble(double num, std::string file_name);
+void writeDouble(double num, std::string file_name, bool append = false);
 
 // read data from from text.txt and store it in vector v
 void readDouble(double& num, std::string file_name);
 
-void writeVec(vector<int> v, std::string file_name);
+void writeVec(vector<int> v, std::string file_name, bool append = false);
 
 // read data from from text.txt and store it in vector v
 void readVec(vector<int> &v, std::string file_name);
+
+// count the number of lines in a file
+int countNumLines(std::string file_name);
 
 #endif // MFEM_LAGHOS_UTILS
