@@ -143,7 +143,8 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
     f->SetTime(t + dt/2);
 
     RKStages.push_back(y);
-    RKTime.push_back(t + 0.4999 * dt); // Well-ordered snapshot time
+    RKTime.push_back(t + 0.5 * dt);
+    //RKTime.push_back(t + 0.4999 * dt); // Well-ordered snapshot time
     //if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
     //if (sampler)
     //{
@@ -156,7 +157,8 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
     z.Add(dt/3, k);
 
     RKStages.push_back(y);
-    RKTime.push_back(t + 0.5001 * dt); // Well-ordered snapshot time
+    RKTime.push_back(t + 0.5 * dt);
+    //RKTime.push_back(t + 0.5001 * dt); // Well-ordered snapshot time
     //if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
     //if (sampler)
     //{
@@ -170,7 +172,8 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
     f->SetTime(t + dt);
 
     RKStages.push_back(y);
-    RKTime.push_back(t + 0.9999 * dt); // Well-ordered snapshot time
+    RKTime.push_back(t + dt);
+    //RKTime.push_back(t + 0.9999 * dt); // Well-ordered snapshot time
     //if (samplerLast) samplerLast->SampleSolution(t + dt, dt, y);
     //if (sampler)
     //{
