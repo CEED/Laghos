@@ -1377,7 +1377,7 @@ int main(int argc, char *argv[])
 
             if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
             t_old = t;
-            if (fom_data && (!rom_build_database || last_step))
+            if (fom_data)
             {
                 oper->ResetTimeStepEstimate();
             }
@@ -1422,12 +1422,7 @@ int main(int argc, char *argv[])
 
                 if (!romOptions.hyperreduce)
                 {
-
-                    // If using the greedy algorithm, only lift during the last step
-                    if (!rom_build_database || last_step)
-                    {
-                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-                    }
+                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
                     // If using the greedy algorithm, take only the last step in the FOM space
                     // when using the useLastLiftedSolution error indicator type
@@ -1441,7 +1436,7 @@ int main(int argc, char *argv[])
 
                 romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                if (fom_data && (!rom_build_database || last_step))
+                if (fom_data)
                 {
                     oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
                 }
@@ -1459,38 +1454,35 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            if (!rom_build_database || last_step)
-            {
-                const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
+            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
 
-                if (dt_est < dt)
+            if (dt_est < dt)
+            {
+                // Repeat (solve again) with a decreased time step - decrease of the
+                // time estimate suggests appearance of oscillations.
+                dt *= 0.85;
+                if (dt < numeric_limits<double>::epsilon())
                 {
-                    // Repeat (solve again) with a decreased time step - decrease of the
-                    // time estimate suggests appearance of oscillations.
-                    dt *= 0.85;
-                    if (dt < numeric_limits<double>::epsilon())
-                    {
-                        MFEM_ABORT("The time step crashed!");
-                    }
-                    t = t_old;
-                    if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
-                    if (rom_online) romS = romS_old;
-                    if (fom_data)
-                    {
-                        oper->ResetQuadratureData();
-                    }
-                    if (mpi.Root()) {
-                        cout << "Repeating step " << ti << endl;
-                    }
-                    if (steps < max_tsteps) {
-                        last_step = false;
-                    }
-                    ti--;
-                    continue;
+                    MFEM_ABORT("The time step crashed!");
                 }
-                else if (dtc == 0.0 && dt_est > 1.25 * dt) {
-                    dt *= 1.02;
+                t = t_old;
+                if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
+                if (rom_online) romS = romS_old;
+                if (fom_data)
+                {
+                    oper->ResetQuadratureData();
                 }
+                if (mpi.Root()) {
+                    cout << "Repeating step " << ti << endl;
+                }
+                if (steps < max_tsteps) {
+                    last_step = false;
+                }
+                ti--;
+                continue;
+            }
+            else if (dtc == 0.0 && dt_est > 1.25 * dt) {
+                dt *= 1.02;
             }
 
             unique_steps++;
