@@ -1521,7 +1521,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        endWindow = (sampler->MaxNumSamples() + RKStepNumSamples >= windowNumSamples); 
+                        endWindow = (sampler->MaxNumSamples() + RKStepNumSamples * rom_sample_stages >= windowNumSamples); 
                     }
                 }
 
