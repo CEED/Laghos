@@ -3382,8 +3382,6 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             }
         }
 
-        std::cout << localROMString << std::endl;
-
         romOptions.basisIdentifier = localROMString;
         *greedyParam = samplePointData->item(0);
 

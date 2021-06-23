@@ -365,7 +365,6 @@ int main(int argc, char *argv[])
         rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
         rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.hyperreduce));
         greedy_write_solution = rom_offline || rom_calc_rel_error_nonlocal_completed;
-        std::cout << rom_calc_rel_error << " " << rom_calc_rel_error_nonlocal_completed << " " << rom_calc_rel_error_local_completed << std::endl;
 
         if (rom_online || rom_restore)
         {
@@ -1843,7 +1842,7 @@ int main(int argc, char *argv[])
     }
     if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
     {
-        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
+        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.")
     }
 
     if (outputSpaceTimeSolution)
@@ -1961,8 +1960,6 @@ int main(int argc, char *argv[])
                 {
                     Vector finalSolution = *S;
 
-                    std::cout << "AMA" << std::endl;
-
                     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
                     ofs.precision(16);
 
@@ -2077,7 +2074,6 @@ int main(int argc, char *argv[])
     }
     if(rom_build_database && (rom_offline || rom_calc_rel_error_nonlocal_completed || errorIndicatorComputed))
     {
-        std::cout << "AD" << std::endl;
         if (rom_calc_rel_error_nonlocal_completed)
         {
             parameterPointGreedySampler->setPointRelativeError(relative_error);
