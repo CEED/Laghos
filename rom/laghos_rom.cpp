@@ -3267,7 +3267,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 }
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+        bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error, bool& rom_calc_rel_error_completed, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
@@ -3333,6 +3333,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         {
             if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
+                rom_read_greedy_twparam = true;
                 errorIndicatorEnergyFraction = 0.99;
             }
         }
@@ -3349,7 +3350,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
 
         if (romOptions.hyperreduce)
         {
-            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_completed,
                             romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
         else
@@ -3381,9 +3382,10 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         }
 
         rom_calc_rel_error = true;
+        rom_calc_rel_error_completed = true;
         if (romOptions.hyperreduce)
         {
-            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error,
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_completed,
                             romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
         else

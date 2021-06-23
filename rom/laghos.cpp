@@ -348,12 +348,14 @@ int main(int argc, char *argv[])
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     bool rom_calc_rel_error = false;
+    bool rom_calc_rel_error_completed = false;
+    bool rom_read_greedy_twparam = false;
 
     // If using the greedy algorithm, initialize the parameter point greedy sampler.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error, rom_calc_rel_error_completed, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         if (parameterPointGreedySampler->isComplete())
         {
@@ -417,9 +419,9 @@ int main(int argc, char *argv[])
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
-            if (rom_build_database)
+            if (rom_build_database && rom_read_greedy_twparam)
             {
-                ReadGreedyTimeWindowParameters(romOptions, numWindows, twparam, outputPath, myid);
+                ReadGreedyTimeWindowParameters(romOptions, numWindows, twparam, outputPath);
             }
         }
         else if (rom_offline && windowNumSamples == 0)
@@ -1396,6 +1398,7 @@ int main(int argc, char *argv[])
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
                     greedy_converged = false;
+                    rom_calc_rel_error_completed = rom_calc_rel_error;
                     break;
                 }
                 romS_old = romS;
@@ -1463,7 +1466,16 @@ int main(int argc, char *argv[])
                 dt *= 0.85;
                 if (dt < numeric_limits<double>::epsilon())
                 {
-                    MFEM_ABORT("The time step crashed!");
+                    if (rom_build_database)
+                    {
+                        greedy_converged = false;
+                        rom_calc_rel_error_completed = rom_calc_rel_error;
+                        break;
+                    }
+                    else
+                    {
+                        MFEM_ABORT("The time step crashed!");
+                    }
                 }
                 t = t_old;
                 if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
@@ -1806,9 +1818,8 @@ int main(int argc, char *argv[])
         if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
-    double relative_error = -1;
-
-    if (rom_build_database && rom_calc_rel_error)
+    double relative_error = 10.0 * romOptions.greedyTol;
+    if (rom_build_database && rom_calc_rel_error_completed && greedy_converged)
     {
         relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
@@ -2035,9 +2046,9 @@ int main(int argc, char *argv[])
     {
         WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
     }
-    if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
+    if(rom_build_database && (!rom_online || rom_calc_rel_error_completed || errorIndicatorComputed))
     {
-        if (rom_calc_rel_error)
+        if (rom_calc_rel_error_completed)
         {
             parameterPointGreedySampler->setPointRelativeError(relative_error);
         }

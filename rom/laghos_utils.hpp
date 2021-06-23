@@ -32,7 +32,7 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
 
 int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs);
 
-void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath, int myid);
+void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath);
 
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
 

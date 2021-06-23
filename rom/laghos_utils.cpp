@@ -431,23 +431,10 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
     return 0;
 }
 
-void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath, int myid)
+void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath)
 {
-    double errorIndicatorEnergyFraction = 0.9999;
+    double errorIndicatorEnergyFraction = 0.99;
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", myid);
-
-    std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
-
-    std::ifstream checkfile(fullname);
-    if (!checkfile.good())
-    {
-        if (romOptions.greedyErrorIndicatorType == varyBasisSize)
-        {
-            errorIndicatorEnergyFraction = 0.99;
-        }
-    }
     std::vector<int> dimX, dimV, dimE, dimFv, dimFe;
 
     // Get the rdim for the basis used.
