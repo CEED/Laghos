@@ -357,16 +357,6 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
         parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error, rom_calc_rel_error_completed, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
-        if (parameterPointGreedySampler->isComplete())
-        {
-            // The greedy algorithm procedure has ended
-            if (myid == 0)
-            {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
-            }
-            return 1;
-        }
-
         if (rom_online || rom_restore)
         {
             if (windowNumSamples > 0)

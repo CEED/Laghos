@@ -3414,7 +3414,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         else
         {
             // The greedy algorithm procedure has ended
-            MFEM_ABORT("The greedy algorithm procedure has failed!");
+            MFEM_ABORT("The greedy algorithm procedure has ended!");
         }
     }
 
