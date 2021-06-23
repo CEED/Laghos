@@ -14,9 +14,9 @@ void split_line(const string &line, vector<string> &words);
 
 void DeleteROMSolution(std::string outputPath);
 
-void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error, ROM_Options& romOptions, std::string greedyfile);
+void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, ROM_Options& romOptions, std::string greedyfile);
 
-void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, ROM_Options& romOptions, std::string greedyfile);
+void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, ROM_Options& romOptions, std::string greedyfile);
 
 int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool printStatus);
 

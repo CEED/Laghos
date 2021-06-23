@@ -36,16 +36,19 @@ void DeleteROMSolution(std::string outputPath)
     }
 }
 
-void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error,
+void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local,
                      ROM_Options& romOptions, std::string greedyfile)
 {
+
     std::ifstream greedystream(greedyfile);
     if (!greedystream.is_open())
     {
+        std::cout << "0" << std::endl;
         rom_online = true;
         romOptions.hyperreduce_prep = true;
         romOptions.hyperreduce = false;
-        rom_calc_rel_error = false;
+        rom_calc_rel_error_nonlocal = false;
+        rom_calc_rel_error_local = true;
     }
     else
     {
@@ -54,26 +57,64 @@ void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, boo
         std::getline(greedystream, line);
         split_line(line, words);
 
-        if (words[0] == "online")
+        std::cout << words[0] << " " << words[1] << " " << words[2] << std::endl;
+
+        if (words[0] == "local")
         {
-            if (words[1] == "hyperreduce_prep")
+            std::cout << "A" << std::endl;
+            rom_calc_rel_error_nonlocal = false;
+            rom_calc_rel_error_local = true;
+        }
+        else if (words[0] == "non-local")
+        {
+            std::cout << "B" << std::endl;
+            rom_calc_rel_error_nonlocal = true;
+            rom_calc_rel_error_local = false;
+        }
+        if (words[1] == "online")
+        {
+            std::cout << "C" << std::endl;
+            if (words[2] == "hyperreduce_prep")
             {
+                std::cout << "D" << std::endl;
                 rom_online = true;
-                rom_calc_rel_error = false;
             }
-            else if (words[1] == "hyperreduce")
+            else if (words[2] == "hyperreduce")
             {
+                std::cout << "E" << std::endl;
                 rom_restore = true;
                 romOptions.hyperreduce = false;
             }
         }
+        else if (words[1] == "restore")
+        {
+            std::cout << "F" << std::endl;
+            rom_online = true;
+            romOptions.hyperreduce_prep = true;
+            romOptions.hyperreduce = false;
+            rom_calc_rel_error_nonlocal = true;
+            rom_calc_rel_error_local = false;
+        }
     }
+    std::cout << rom_calc_rel_error_nonlocal << " " << rom_calc_rel_error_local << " " << rom_online << " " << rom_restore << std::endl;
 }
 
-void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore,
+void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local,
                       ROM_Options& romOptions, std::string greedyfile)
 {
     std::ofstream greedyout(greedyfile);
+    if (rom_calc_rel_error_local)
+    {
+        greedyout << "local" << " ";
+    }
+    else if (rom_calc_rel_error_nonlocal)
+    {
+        greedyout << "non-local" << " ";
+    }
+    else
+    {
+        greedyout << "error-indicator" << " ";
+    }
     if (rom_online)
     {
         greedyout << "online" << " ";

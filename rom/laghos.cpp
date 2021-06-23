@@ -348,17 +348,34 @@ int main(int argc, char *argv[])
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     bool rom_calc_rel_error = false;
-    bool rom_calc_rel_error_completed = false;
+    bool rom_calc_rel_error_nonlocal = false;
+    bool rom_calc_rel_error_local = false;
+    bool rom_calc_rel_error_nonlocal_completed = false;
+    bool rom_calc_rel_error_local_completed = false;
+    bool greedy_write_solution = false;
     bool rom_read_greedy_twparam = false;
 
     // If using the greedy algorithm, initialize the parameter point greedy sampler.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error, rom_calc_rel_error_completed, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+
+        rom_calc_rel_error = rom_calc_rel_error_local || rom_calc_rel_error_nonlocal;
+        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
+        rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.hyperreduce));
+        greedy_write_solution = rom_offline || rom_calc_rel_error_nonlocal_completed;
+        std::cout << rom_calc_rel_error << " " << rom_calc_rel_error_nonlocal_completed << " " << rom_calc_rel_error_local_completed << std::endl;
 
         if (rom_online || rom_restore)
         {
+            if (romOptions.hyperreduce)
+            {
+                if (myid != 0)
+                {
+                    return 0;
+                }
+            }
             if (windowNumSamples > 0)
             {
                 windowNumSamples = 0;
@@ -1185,7 +1202,7 @@ int main(int argc, char *argv[])
             }
             if (rom_build_database)
             {
-                WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
             }
             return 0;
         }
@@ -1388,7 +1405,11 @@ int main(int argc, char *argv[])
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
                     greedy_converged = false;
-                    rom_calc_rel_error_completed = rom_calc_rel_error;
+                    if (rom_calc_rel_error_local)
+                    {
+                        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
+                    }
+                    rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal;
                     break;
                 }
                 romS_old = romS;
@@ -1459,7 +1480,11 @@ int main(int argc, char *argv[])
                     if (rom_build_database)
                     {
                         greedy_converged = false;
-                        rom_calc_rel_error_completed = rom_calc_rel_error;
+                        if (rom_calc_rel_error_local)
+                        {
+                            MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
+                        }
+                        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal;
                         break;
                     }
                     else
@@ -1809,11 +1834,16 @@ int main(int argc, char *argv[])
     }
 
     double relative_error = 10.0 * romOptions.greedyTol;
-    if (rom_build_database && rom_calc_rel_error_completed && greedy_converged)
+    if (rom_build_database && (rom_calc_rel_error_nonlocal_completed || rom_calc_rel_error_local_completed) && greedy_converged)
     {
+        cout << "Comparing to: " << outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
         relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+    }
+    if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
+    {
+        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
     }
 
     if (outputSpaceTimeSolution)
@@ -1823,7 +1853,7 @@ int main(int argc, char *argv[])
         ofs_STE.close();
     }
 
-    if (fom_data && (!rom_build_database || !rom_online))
+    if (fom_data && (!rom_build_database || greedy_write_solution))
     {
         if (writeSol)
         {
@@ -1931,6 +1961,8 @@ int main(int argc, char *argv[])
                 {
                     Vector finalSolution = *S;
 
+                    std::cout << "AMA" << std::endl;
+
                     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
                     ofs.precision(16);
 
@@ -2034,11 +2066,19 @@ int main(int argc, char *argv[])
     // for use during the next iteration.
     if (rom_build_database)
     {
-        WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        if (rom_calc_rel_error_local_completed)
+        {
+            if (myid == 0)
+            {
+                DeleteROMSolution(outputPath);
+            }
+        }
     }
-    if(rom_build_database && (!rom_online || rom_calc_rel_error_completed || errorIndicatorComputed))
+    if(rom_build_database && (rom_offline || rom_calc_rel_error_nonlocal_completed || errorIndicatorComputed))
     {
-        if (rom_calc_rel_error_completed)
+        std::cout << "AD" << std::endl;
+        if (rom_calc_rel_error_nonlocal_completed)
         {
             parameterPointGreedySampler->setPointRelativeError(relative_error);
         }
