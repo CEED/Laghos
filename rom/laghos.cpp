@@ -346,6 +346,8 @@ int main(int argc, char *argv[])
 
     NormType normtype = localmap[normtype_char];
 
+    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
+
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     bool rom_calc_rel_error = false;
     bool rom_calc_rel_error_nonlocal = false;
@@ -359,7 +361,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, usingWindows, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         rom_calc_rel_error = rom_calc_rel_error_local || rom_calc_rel_error_nonlocal;
         rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
@@ -368,13 +370,6 @@ int main(int argc, char *argv[])
 
         if (rom_online || rom_restore)
         {
-            if (romOptions.hyperreduce)
-            {
-                if (myid != 0)
-                {
-                    return 0;
-                }
-            }
             if (windowNumSamples > 0)
             {
                 windowNumSamples = 0;
@@ -412,7 +407,6 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
-    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
     {
         if (romOptions.dimX  > 0) romOptions.max_dimX  = romOptions.dimX;
@@ -1198,10 +1192,12 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;
-            }
-            if (rom_build_database)
-            {
-                WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                if (rom_build_database)
+                {
+                    WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                }
+                ofstream hyperreducefile(outputPath + "/hyperreduce.txt");
+                hyperreducefile.close();
             }
             return 0;
         }
@@ -2061,15 +2057,12 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the error indicator and any information
     // for use during the next iteration.
-    if (rom_build_database)
+    if (rom_build_database && myid == 0)
     {
         WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
         if (rom_calc_rel_error_local_completed)
         {
-            if (myid == 0)
-            {
-                DeleteROMSolution(outputPath);
-            }
+            DeleteROMSolution(outputPath);
         }
     }
     if(rom_build_database && (rom_offline || rom_calc_rel_error_nonlocal_completed || errorIndicatorComputed))
@@ -2083,8 +2076,11 @@ int main(int argc, char *argv[])
             parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
         }
 
-        std::string outputFile = outputPath + "/greedy_algorithm_stage.txt";
-        remove(outputFile.c_str());
+        if (myid == 0)
+        {
+            std::string outputFile = outputPath + "/greedy_algorithm_stage.txt";
+            remove(outputFile.c_str());
+        }
 
         parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
 
