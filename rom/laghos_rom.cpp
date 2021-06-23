@@ -473,6 +473,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
         if (input.offsetType == useInitialState)
         {
+            cout << "Reading: " << path_init << endl;
+
             // Read offset in the online phase of initial mode
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
@@ -482,6 +484,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         }
         else if (input.restore || input.offsetType == saveLoadOffset)
         {
+            cout << "Reading: " << path_init << endl;
+
             // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
