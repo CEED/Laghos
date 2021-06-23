@@ -1574,6 +1574,7 @@ int main(int argc, char *argv[])
                         sampler = new ROM_Sampler(romOptions, *S);
                         sampler->SampleSolution(t, dt, *S);
                     }
+                    else sampler = NULL;
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
