@@ -3278,9 +3278,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
 
     romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", myid);
-    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    ifstream f(outputPath + "/greedy_algorithm_data");
     if (f.good())
     {
         parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
@@ -3326,7 +3324,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         double errorIndicatorEnergyFraction = 0.9999;
 
         char tmp[100];
-        sprintf(tmp, ".%06d", myid);
+        sprintf(tmp, ".%06d", 0);
 
         std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
@@ -3439,9 +3437,7 @@ CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, cons
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", myid);
-    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    ifstream f(outputPath + "/greedy_algorithm_data");
     MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
 
     parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(

@@ -2080,12 +2080,8 @@ int main(int argc, char *argv[])
         {
             std::string outputFile = outputPath + "/greedy_algorithm_stage.txt";
             remove(outputFile.c_str());
-        }
 
-        parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
-
-        if (myid == 0)
-        {
+            parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
             DeleteROMSolution(outputPath);
         }
 
