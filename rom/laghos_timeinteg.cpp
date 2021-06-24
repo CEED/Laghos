@@ -42,24 +42,6 @@ void HydroODESolver::Init(TimeDependentOperator &_f)
     }
 }
 
-void HydroODESolver::SetSampler(ROM_Sampler *f)
-{
-    if (!rom)
-    {
-        sampler = f;
-        MFEM_VERIFY(sampler, "HydroSolvers expect ROM_Sampler.");
-    }
-}
-
-void HydroODESolver::SetSamplerLast(ROM_Sampler *f)
-{
-    if (!rom)
-    {
-        samplerLast = f;
-        MFEM_VERIFY(samplerLast, "HydroSolvers expect ROM_Sampler.");
-    }
-}
-
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
     if (rom)
@@ -100,12 +82,6 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 
     RKStages.push_back(S);
     RKTime.push_back(t + 0.5 * dt);
-    //if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, S);
-    //if (sampler)
-    //{
-    //    sampler->SampleSolution(t + 0.5 * dt, dt, S);
-    //    if (sampler->GetRank() == 0) std::cout << "1st RK2Avg stage sampled" << endl;
-    //}
     
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
@@ -144,13 +120,6 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
 
     RKStages.push_back(y);
     RKTime.push_back(t + 0.5 * dt);
-    //RKTime.push_back(t + 0.4999 * dt); // Well-ordered snapshot time
-    //if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
-    //if (sampler)
-    //{
-    //    sampler->SampleSolution(t + 0.5 * dt, dt, y);
-    //    if (sampler->GetRank() == 0) std::cout << "1st RK4 stage sampled" << endl;
-    //}
 
     f->Mult(y, k); // k2
     add(S, dt/2, k, y);
@@ -158,13 +127,6 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
 
     RKStages.push_back(y);
     RKTime.push_back(t + 0.5 * dt);
-    //RKTime.push_back(t + 0.5001 * dt); // Well-ordered snapshot time
-    //if (samplerLast) samplerLast->SampleSolution(t + 0.5 * dt, dt, y);
-    //if (sampler)
-    //{
-    //    sampler->SampleSolution(t + 0.5 * dt, dt, y);
-    //    if (sampler->GetRank() == 0) std::cout << "2nd RK4 stage sampled" << endl;
-    //}
 
     f->Mult(y, k); // k3
     add(S, dt, k, y);
@@ -173,13 +135,6 @@ void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
 
     RKStages.push_back(y);
     RKTime.push_back(t + dt);
-    //RKTime.push_back(t + 0.9999 * dt); // Well-ordered snapshot time
-    //if (samplerLast) samplerLast->SampleSolution(t + dt, dt, y);
-    //if (sampler)
-    //{
-    //    sampler->SampleSolution(t + dt, dt, y);
-    //    if (sampler->GetRank() == 0) std::cout << "3rd RK4 stage sampled" << endl;
-    //}
 
     f->Mult(y, k); // k4
     add(z, dt/6, k, S);
