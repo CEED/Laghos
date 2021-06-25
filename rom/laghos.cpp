@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
 
     NormType normtype = localmap[normtype_char];
 
-    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
+    bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     bool rom_calc_rel_error = false;
@@ -368,9 +368,22 @@ int main(int argc, char *argv[])
         rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.hyperreduce));
         greedy_write_solution = rom_offline || rom_calc_rel_error_nonlocal_completed;
 
+        if (rom_offline)
+        {
+            if (romOptions.parameterID != -1)
+            {
+                if (windowNumSamples > 0)
+                {
+                    windowNumSamples = 0;
+                    usingWindows = false;
+                }
+            }
+        }
+
         if (rom_online || rom_restore)
         {
-            if (windowNumSamples > 0)
+            romOptions.parameterID = -1;
+            if (usingWindows)
             {
                 windowNumSamples = 0;
                 numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
@@ -621,7 +634,7 @@ int main(int argc, char *argv[])
     int source = 0;
     double dt = 0.0;
 
-    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    std::string offlineParam_outputPath = outputPath + "/offline_param" + romOptions.basisIdentifier + ".csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
     if (rom_online)
     {
@@ -1019,6 +1032,13 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
+        if (romOptions.parameterID != -1 && romOptions.offsetType == interpolateOffset && myid == 0)
+        {
+            ofstream basisIdFile;
+            basisIdFile.open(outputPath + "/basisIdentifier.txt");
+            basisIdFile << romOptions.basisIdentifier;
+            basisIdFile.close();
+        }
         WriteOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, myid == 0);
     }
 
@@ -1470,7 +1490,7 @@ int main(int argc, char *argv[])
                 // Repeat (solve again) with a decreased time step - decrease of the
                 // time estimate suggests appearance of oscillations.
                 dt *= 0.85;
-                if (dt < numeric_limits<double>::epsilon())
+                if (dt < 1e-7)
                 {
                     if (rom_build_database)
                     {
@@ -1482,10 +1502,10 @@ int main(int argc, char *argv[])
                         rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal;
                         break;
                     }
-                    else
-                    {
-                        MFEM_ABORT("The time step crashed!");
-                    }
+                }
+                if (dt < numeric_limits<double>::epsilon())
+                {
+                    MFEM_ABORT("The time step crashed!");
                 }
                 t = t_old;
                 if (!rom_online || !romOptions.hyperreduce) *S = *S_old;

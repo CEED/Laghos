@@ -161,10 +161,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     }
 }
 
-void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var)
+void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var, std::string basisIdentifier)
 {
     cout << var << " snapshot size: " << tSnap.size() << endl;
-    std::ofstream outfile_tSnap(path + var);
+    std::ofstream outfile_tSnap(path + var + basisIdentifier);
     for (auto const& i: tSnap)
     {
         outfile_tSnap << i << endl;
@@ -201,28 +201,28 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV)
         {
             cout << "X basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimx" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
         if (!useVX)
         {
             cout << "V basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
         cout << "E basis summary output: " << endl;
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdime" + input.basisIdentifier);
+        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (!sns)
         {
             cout << "Fv basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimfv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
 
             cout << "Fe basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimfe" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
         }
     }
 
@@ -230,14 +230,14 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     {
         std::string path_tSnap = basename + "/param" + std::to_string(parameterID) + "_tSnap";
 
-        printSnapshotTime(tSnapX, path_tSnap, "X");
-        printSnapshotTime(tSnapV, path_tSnap, "V");
-        printSnapshotTime(tSnapE, path_tSnap, "E");
+        printSnapshotTime(tSnapX, path_tSnap, "X", input.basisIdentifier);
+        printSnapshotTime(tSnapV, path_tSnap, "V", input.basisIdentifier);
+        printSnapshotTime(tSnapE, path_tSnap, "E", input.basisIdentifier);
 
         if (!sns)
         {
-            printSnapshotTime(tSnapFv, path_tSnap, "Fv");
-            printSnapshotTime(tSnapFe, path_tSnap, "Fe");
+            printSnapshotTime(tSnapFv, path_tSnap, "Fv", input.basisIdentifier);
+            printSnapshotTime(tSnapFe, path_tSnap, "Fe", input.basisIdentifier);
         }
     }
 
@@ -497,7 +497,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         {
 
             // Calculation of coefficients of offset data using inverse distance weighting interpolation
-            std::ifstream infile_offlineParam(basename + "/offline_param.csv");
+            std::ifstream infile_offlineParam(basename + "/offline_param" + input.basisIdentifier + ".csv");
             MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
             std::string line;
             std::vector<std::string> words;
