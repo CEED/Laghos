@@ -3346,13 +3346,13 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         // Get the rdim for the basis used.
         if (!usingWindows)
         {
-            readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimX, outputPath + "/" + "rdimX" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimV, outputPath + "/" + "rdimV" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimE, outputPath + "/" + "rdimE" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
             if (!romOptions.SNS)
             {
-                readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-                readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFv, outputPath + "/" + "rdimFv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFe, outputPath + "/" + "rdimFe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
             }
         }
 
@@ -3394,13 +3394,13 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         // Get the rdim for the basis used.
         if (!usingWindows)
         {
-            readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimX, outputPath + "/" + "rdimX" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimV, outputPath + "/" + "rdimV" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimE, outputPath + "/" + "rdimE" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
             if (!romOptions.SNS)
             {
-                readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-                readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFv, outputPath + "/" + "rdimFv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFe, outputPath + "/" + "rdimFe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
             }
         }
     }
