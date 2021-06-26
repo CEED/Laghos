@@ -82,7 +82,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 
     RKStages.push_back(S);
     RKTime.push_back(t + 0.5 * dt);
-    
+
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
     hydro_oper->SolveVelocity(S, dS_dt);

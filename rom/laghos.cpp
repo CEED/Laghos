@@ -1481,20 +1481,6 @@ int main(int argc, char *argv[])
 
             unique_steps++;
 
-            if (rom_sample_stages) 
-            {
-                // TODO: time this?
-                std::vector<Vector> RKStages = ode_solver_samp->GetRKStages();
-                std::vector<double> RKTime = ode_solver_samp->GetRKTime();
-                MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
-                for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
-                {
-                    sampler->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
-                    if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
-                    if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
-                }
-            }
-
             if (outputTimes) outfile_time << t << "\n";
 
             if (outputSpaceTimeSolution)
@@ -1509,6 +1495,18 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
+                if (rom_sample_stages)
+                {
+                    std::vector<Vector> RKStages = ode_solver_samp->GetRKStages();
+                    std::vector<double> RKTime = ode_solver_samp->GetRKTime();
+                    MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
+                    for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
+                    {
+                        sampler->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
+                    }
+                }
                 sampler->SampleSolution(t, last_dt, *S);
 
                 bool endWindow = false;

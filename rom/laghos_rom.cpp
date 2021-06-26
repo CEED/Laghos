@@ -1779,6 +1779,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
+    // ROM opertion on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
 
