@@ -1486,12 +1486,12 @@ int main(int argc, char *argv[])
                 // TODO: time this?
                 std::vector<Vector> RKStages = ode_solver_samp->GetRKStages();
                 std::vector<double> RKTime = ode_solver_samp->GetRKTime();
-                MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of RK stages.");
+                MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                 for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                 {
                     sampler->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
                     if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
-                    if (mpi.Root()) cout << "Runge Kutta stage " << RKidx+1 << " sampled" << endl;
+                    if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                 }
             }
 
@@ -1520,7 +1520,8 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        endWindow = (sampler->MaxNumSamples() + RKStepNumSamples * rom_sample_stages >= windowNumSamples); 
+                        //endWindow = (sampler->MaxNumSamples() + RKStepNumSamples * rom_sample_stages >= windowNumSamples);
+                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
                     }
                 }
 

@@ -49,10 +49,6 @@ public:
         MFEM_ABORT("Time stepping is undefined.");
     }
 
-    void SetSampler(ROM_Sampler *f);
-
-    void SetSamplerLast(ROM_Sampler *f);
-
     std::vector<Vector> GetRKStages()
     {
         return RKStages;
