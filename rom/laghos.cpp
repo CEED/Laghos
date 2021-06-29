@@ -1840,7 +1840,7 @@ int main(int argc, char *argv[])
 
         if (solDiff)
         {
-            cout << "solDiff mode " << endl;
+            if (myid == 0) cout << "solDiff mode " << endl;
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
@@ -1850,7 +1850,7 @@ int main(int argc, char *argv[])
         {
             VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
             dc.Load(visitDiffCycle);
-            cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
+            if (myid == 0) cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
             ParGridFunction *dcfx = dc.GetParField("Position");
             ParGridFunction *dcfv = dc.GetParField("Velocity");
