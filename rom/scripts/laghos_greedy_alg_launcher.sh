@@ -6,6 +6,7 @@
 #SBATCH -o greedy.log
 #SBATCH --open-mode truncate
 
+date
 PARALLEL_PROCESSORS=8
 # Save directory of this script
 if [[ -f "$PWD/scripts/laghos_greedy_alg_launcher.sh" ]]; then
@@ -31,9 +32,12 @@ esac
 while [ "$?" -eq 0 ]
 do
     if [[ -f "$SCRIPT_DIR/run/hyperreduce.txt" ]]; then
+        echo "$SERIAL_COMMAND"
         eval "$SERIAL_COMMAND"
         rm $SCRIPT_DIR/run/hyperreduce.txt
     else
+        echo "$PARALLEL_COMMAND"
         eval "$PARALLEL_COMMAND"
     fi
 done
+date

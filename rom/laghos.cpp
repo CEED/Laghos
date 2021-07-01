@@ -125,6 +125,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *basisIdentifier = "";
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
@@ -248,6 +249,7 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
                    "Energy fraction for recommended X ROM basis size.");
+    args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for parametric case.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
@@ -333,6 +335,7 @@ int main(int argc, char *argv[])
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     romOptions.basename = &outputPath;
+    romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
@@ -349,6 +352,7 @@ int main(int argc, char *argv[])
     bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    bool rom_calc_error_indicator = false;
     bool rom_calc_rel_error = false;
     bool rom_calc_rel_error_nonlocal = false;
     bool rom_calc_rel_error_local = false;
@@ -361,7 +365,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, usingWindows, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, usingWindows, rom_calc_error_indicator, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         rom_calc_rel_error = rom_calc_rel_error_local || rom_calc_rel_error_nonlocal;
         rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
@@ -1926,7 +1930,8 @@ int main(int argc, char *argv[])
             }
             errorIndicatorComputed = true;
         }
-        else if ((rom_online && !romOptions.hyperreduce) || (rom_restore))
+        else if ((rom_online && !romOptions.hyperreduce) || (rom_restore) ||
+            (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
         {
             if (rom_online)
             {
@@ -1982,6 +1987,37 @@ int main(int argc, char *argv[])
                     for (int i=0; i<finalSolution.Size(); ++i)
                         ofs << finalSolution[i] << std::endl;
 
+                    ofs.close();
+
+                    if (myid == 0)
+                    {
+                        DeleteROMSolution(outputPath);
+                    }
+                }
+            }
+            else if (romOptions.greedyErrorIndicatorType == fom)
+            {
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    errorIndicator = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position_error_indicator", x_gf);
+                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity_error_indicator", v_gf));
+                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy_error_indicator", e_gf));
+                    errorIndicatorVecSize = 1;
+
+                    checkfile.close();
+                    remove(fullname.c_str());
+
+                    errorIndicatorComputed = true;
+                }
+                else
+                {
+                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
                     ofs.close();
 
                     if (myid == 0)
@@ -2079,7 +2115,10 @@ int main(int argc, char *argv[])
     // for use during the next iteration.
     if (rom_build_database && myid == 0)
     {
-        WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        if (!(rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
+        {
+            WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        }
         if (rom_calc_rel_error_local_completed)
         {
             DeleteROMSolution(outputPath);

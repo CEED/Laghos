@@ -3271,7 +3271,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 }
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
@@ -3332,6 +3332,10 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         {
             t_final = 0.001;
         }
+        else if (romOptions.greedyErrorIndicatorType == fom)
+        {
+            t_final = 0.08;
+        }
 
         std::ifstream checkfile(fullname);
         if (!checkfile.good())
@@ -3341,10 +3345,16 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
                 rom_read_greedy_twparam = true;
                 errorIndicatorEnergyFraction = 0.99;
             }
+            if (romOptions.greedyErrorIndicatorType == fom)
+            {
+                romOptions.basisIdentifier = "_error_indicator";
+                rom_offline = true;
+                romOptions.hyperreduce = false;
+            }
         }
 
         // Get the rdim for the basis used.
-        if (!usingWindows)
+        if (!rom_offline && !usingWindows)
         {
             readNum(romOptions.dimX, outputPath + "/" + "rdimX" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
             readNum(romOptions.dimV, outputPath + "/" + "rdimV" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
@@ -3356,9 +3366,13 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             }
         }
 
-        ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
+        if (!(rom_offline && romOptions.greedyErrorIndicatorType == fom))
+        {
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
                         romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        }
 
+        rom_calc_error_indicator = true;
         rom_calc_rel_error_nonlocal = false;
         rom_calc_rel_error_local = false;
     }
@@ -3367,7 +3381,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         rom_calc_rel_error_nonlocal = true;
         rom_calc_rel_error_local = true;
         ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
-                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                    romOptions, outputPath + "/greedy_algorithm_stage.txt");
 
         CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
         std::string localROMString = "";
