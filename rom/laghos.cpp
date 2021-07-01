@@ -284,6 +284,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedyParamSpaceMin, "-greedy-param-min", "--greedy-param-min", "The minimum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
+    args.AddOption(&romOptions.greedytf, "-greedytf", "--greedytf", "The greedy algorithm error indicator final time.");
     args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
     args.AddOption(&romOptions.greedyAlpha, "-greedyalpha", "--greedyalpha", "The greedy algorithm alpha constant.");
     args.AddOption(&romOptions.greedyMaxClamp, "-greedymaxclamp", "--greedymaxclamp", "The greedy algorithm max clamp constant.");

@@ -3330,11 +3330,25 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
 
         if (romOptions.greedyErrorIndicatorType == varyBasisSize)
         {
-            t_final = 0.001;
+            if (romOptions.greedytf == -1.0)
+            {
+                t_final = 0.001;
+            }
+            else
+            {
+                t_final = romOptions.greedytf;
+            }
         }
         else if (romOptions.greedyErrorIndicatorType == fom)
         {
-            t_final = 0.08;
+            if (romOptions.greedytf == -1.0)
+            {
+                t_final = 0.02;
+            }
+            else
+            {
+                t_final = romOptions.greedytf;
+            }
         }
 
         std::ifstream checkfile(fullname);

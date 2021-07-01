@@ -122,6 +122,7 @@ struct ROM_Options
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
+    double greedytf = -1.0; // error indicator final time for the greedy algorithm (only used in varyBasisSize and fom error indicator types)
     double greedyTol = 0.1; // relative error tolerance for the greedy algorithm
     double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
     double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
