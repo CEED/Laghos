@@ -359,9 +359,9 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
     return S;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV,
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_, const double sFactorX, const double sFactorV,
                      const std::vector<double> *timesteps)
-    : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
+    : comm(comm_), rom_com(rom_com_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
@@ -1279,11 +1279,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     ParFiniteElementSpace *sp_H1_space = NULL;
     ParFiniteElementSpace *sp_L2_space = NULL;
-
-    MPI_Comm rom_com;
-    int color = (rank != 0);
-    const int status = MPI_Comm_split(MPI_COMM_WORLD, color, rank, &rom_com);
-    MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
 
     // Construct sample mesh
 

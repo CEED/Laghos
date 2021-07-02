@@ -27,10 +27,10 @@ if [ ! -d "libROM" ]; then
 fi
 cd libROM
 git pull
-if [[ $1 == "Yes" ]]; then
+if [[ $1 == "YES" ]]; then
     DEBUG="-d"
 fi
-if [[ $2  == "Yes" ]]; then
+if [[ $2  == "YES" ]]; then
     UPDATE="-u"
 fi
 ./scripts/compile.sh -m $DEBUG $UPDATE
