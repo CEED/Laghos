@@ -51,6 +51,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     }
 
     RKStages.clear();
+    RKTime.clear();
     const int Vsize = hydro_oper->GetH1VSize();
     Vector V(Vsize), dS_dt(S.Size()), S0(S);
 
