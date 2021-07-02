@@ -380,7 +380,7 @@ int main(int argc, char *argv[])
             // The greedy algorithm procedure has ended
             if (myid == 0)
             {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+                cout << "The greedy algorithm procedure has completed!" << endl;
             }
             return 1;
         }
@@ -1149,6 +1149,7 @@ int main(int argc, char *argv[])
         {
             if (myid == 0)
             {
+                cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
@@ -1156,6 +1157,7 @@ int main(int argc, char *argv[])
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
                 {
+                    cout << "Writing SP files for window: " << curr_window << endl;
                     basis[curr_window]->writeSP(romOptions, curr_window);
                 }
             }
@@ -2042,7 +2044,7 @@ int main(int argc, char *argv[])
             // The greedy algorithm procedure has ended
             if (myid == 0)
             {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+                cout << "The greedy algorithm procedure has completed!" << endl;
             }
             return 1;
         }
