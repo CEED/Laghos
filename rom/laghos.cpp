@@ -96,6 +96,11 @@ int main(int argc, char *argv[])
     int myid = mpi.WorldRank();
     int nprocs = mpi.WorldSize();
 
+    MPI_Comm rom_com;
+    int color = (myid != 0);
+    const int status = MPI_Comm_split(MPI_COMM_WORLD, color, myid, &rom_com);
+    MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
+
     // Print the banner.
     if (mpi.Root()) {
         display_banner(cout);
@@ -1115,7 +1120,7 @@ int main(int argc, char *argv[])
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
@@ -1127,7 +1132,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
@@ -1215,7 +1220,7 @@ int main(int argc, char *argv[])
             SetWindowParameters(twparam, romOptions);
         }
 
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
         basis[0]->Init(romOptions, *S);
 
         if (romOptions.mergeXV)
@@ -1277,7 +1282,7 @@ int main(int argc, char *argv[])
                 SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                 delete basis[romOptions.window-1];
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, *S);
 
                 if (romOptions.mergeXV)
