@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -t 0:30:00
+#SBATCH -t 1:00:00
 #SBATCH -p pdebug
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
