@@ -689,7 +689,7 @@ int main(int argc, char *argv[])
     case 4:
         if (rom_sample_stages) RKStepNumSamples = 3;
         ode_solver = new RK4ROMSolver(rom_online);
-        if (rom_build_database) ode_solver_dat = new RK4ROMSolver(rom_online);
+        if (rom_build_database) ode_solver_dat = new RK4ROMSolver();
         break;
     case 6:
         rom_sample_stages = false;
