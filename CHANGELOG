@@ -8,6 +8,16 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
+Version 3.1, released on Apr 9, 2021
+====================================
+
+- New version compatible with MFEM v4.2.
+
+- Added new examples: Taylor-Green instability and 3D Triple Point.
+
+- Support for device computations of internal and kinetic energy.
+
+
 Version 3.0, released on Mar 27, 2020
 =====================================
 
