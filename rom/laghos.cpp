@@ -688,7 +688,7 @@ int main(int argc, char *argv[])
         break;
     case 4:
         if (rom_sample_stages) RKStepNumSamples = 3;
-        ode_solver = new RK4ROMSolver(rom_online);
+        ode_solver = new RK4ROMSolver(rom_online, RKStepNumSamples);
         if (rom_build_database) ode_solver_dat = new RK4ROMSolver();
         break;
     case 6:
@@ -698,7 +698,7 @@ int main(int argc, char *argv[])
         break;
     case 7:
         if (rom_sample_stages) RKStepNumSamples = 1;
-        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
+        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace, RKStepNumSamples);
         if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
