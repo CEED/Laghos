@@ -128,6 +128,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
         }
     }
 
+    if (!reached_cutoff) cutoff = sing_vals->dim();
     if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;
 }
 
@@ -354,6 +355,8 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.dimE = min(romOptions.max_dimE, twparam(w,2));
     romOptions.dimFv = romOptions.SNS ? romOptions.dimV : min(romOptions.max_dimFv, twparam(w,3));
     romOptions.dimFe = romOptions.SNS ? romOptions.dimE : min(romOptions.max_dimFe, twparam(w,4));
+    if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
+    if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     const int oss = (romOptions.SNS) ? 3 : 5;
     romOptions.sampX = twparam(w,oss);

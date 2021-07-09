@@ -165,6 +165,9 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
 {
     cout << var << " snapshot size: " << tSnap.size() << endl;
     std::ofstream outfile_tSnap(path + var);
+
+    outfile_tSnap.precision(std::numeric_limits<double>::max_digits10);
+
     for (auto const& i: tSnap)
     {
         outfile_tSnap << i << endl;
@@ -355,9 +358,9 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
     return S;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV,
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_, const double sFactorX, const double sFactorV,
                      const std::vector<double> *timesteps)
-    : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
+    : comm(comm_), rom_com(rom_com_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
@@ -1276,17 +1279,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     ParFiniteElementSpace *sp_H1_space = NULL;
     ParFiniteElementSpace *sp_L2_space = NULL;
 
-    MPI_Comm rom_com;
-    int color = (rank != 0);
-    const int status = MPI_Comm_split(MPI_COMM_WORLD, color, rank, &rom_com);
-    MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
-
     // Construct sample mesh
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
     CAROM::CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
-                     *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
-                     num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
+                            *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
+                            num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
 
     if (rank == 0)
     {
@@ -1775,6 +1773,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
+    // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
 
