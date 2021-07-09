@@ -166,8 +166,7 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     cout << var << " snapshot size: " << tSnap.size() << endl;
     std::ofstream outfile_tSnap(path + var);
 
-    typedef std::numeric_limits< double > dbl;
-    outfile_tSnap.precision(dbl::max_digits10);
+    outfile_tSnap.precision(std::numeric_limits<double>::max_digits10);
 
     for (auto const& i: tSnap)
     {
@@ -1774,7 +1773,7 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     for (int i=0; i<numSamplesE; ++i)
         (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
 
-    // ROM opertion on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
+    // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
 

@@ -1509,7 +1509,7 @@ int main(int argc, char *argv[])
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
-                        sampler->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        sampler->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
                         if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
@@ -1525,7 +1525,6 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        //endWindow = (sampler->MaxNumSamples() + RKStepNumSamples * rom_sample_stages >= windowNumSamples);
                         endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
                     }
                 }
