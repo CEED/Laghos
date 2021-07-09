@@ -56,12 +56,12 @@ public:
         MFEM_ABORT("Time stepping is undefined.");
     }
 
-    std::vector<Vector> GetRKStages()
+    std::vector<Vector>& GetRKStages()
     {
         return RKStages;
     }
 
-    std::vector<double> GetRKTime()
+    std::vector<double>& GetRKTime()
     {
         return RKTime;
     }

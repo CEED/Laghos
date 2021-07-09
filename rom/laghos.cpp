@@ -1504,8 +1504,8 @@ int main(int argc, char *argv[])
                 samplerTimer.Start();
                 if (rom_sample_stages)
                 {
-                    std::vector<Vector> RKStages = ode_solver_samp->GetRKStages();
-                    std::vector<double> RKTime = ode_solver_samp->GetRKTime();
+                    std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
+                    std::vector<double>& RKTime = ode_solver_samp->GetRKTime();
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
