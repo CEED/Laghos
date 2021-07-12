@@ -1720,7 +1720,6 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
 
         for (int i=0; i<size_L2_sp; ++i)
         {
-            //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
             usp[(2*size_H1_sp) + i] = offsetInit ? (*initEsp)(i) + (*spE)(i) : (*spE)(i);
         }
     }
