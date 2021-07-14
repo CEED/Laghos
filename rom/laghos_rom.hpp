@@ -529,6 +529,8 @@ public:
         delete BsinvV;
         delete BsinvE;
         delete BX0;
+        delete RV;
+        delete RE;
         delete initX;
         delete initV;
         delete initE;
@@ -575,6 +577,9 @@ public:
     int SolutionSizeH1FOM() const {
         return H1size;
     }
+
+    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip); 
+    void InducedGramSchmidt(const int var);
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
@@ -637,6 +642,14 @@ public:
         return BEsp;
     }
 
+    DenseMatrix *GetRV() {
+        return RV;
+    }
+
+    DenseMatrix *GetRE() {
+        return RE;
+    }
+
     void ComputeReducedMatrices(bool sns1);
 
     void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
@@ -668,6 +681,7 @@ private:
     const bool useXV;  // If true, use V basis for X-X0.
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
+    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
 
     int H1size;
     int L2size;
@@ -716,6 +730,9 @@ private:
     CAROM::Matrix *BEsp = NULL;
     CAROM::Matrix *BFvsp = NULL;
     CAROM::Matrix *BFesp = NULL;
+
+    DenseMatrix *RV;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
+    DenseMatrix *RE;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
 
     int size_H1_sp = 0;
     int size_L2_sp = 0;
@@ -974,15 +991,14 @@ private:
     void ComputeReducedMe();
 
     const bool useGramSchmidt;
-    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
-    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
-    void InducedGramSchmidt(const int var, Vector &S);
+    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: remove this? use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
+    void InducedInnerProductSP(const int id1, const int id2, const int var, const int dim, double& ip);
+    void InducedGramSchmidtSP(const int var, Vector &S);
+    void UndoInducedGramSchmidtSP(const int var, Vector &S, bool keep_data);
 
     const SpaceTimeMethod spaceTimeMethod;
 
     const bool GaussNewton = true; // TODO: eliminate this
-
-    void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
