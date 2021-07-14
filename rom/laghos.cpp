@@ -1114,9 +1114,10 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
+
+        // Construct the ROM_Basis.
         if (usingWindows)
         {
-            // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
@@ -1140,39 +1141,18 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (!romOptions.hyperreduce)
-        {
-            basis[0]->Init(romOptions, *S);
-        }
-
-        if (romOptions.hyperreduce_prep)
-        {
-            if (myid == 0)
-            {
-                cout << "Writing SP files for window: 0" << endl;
-                basis[0]->writeSP(romOptions, 0);
-            }
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-                basis[curr_window]->Init(romOptions, *S);
-                basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
-                if (myid == 0)
-                {
-                    cout << "Writing SP files for window: " << curr_window << endl;
-                    basis[curr_window]->writeSP(romOptions, curr_window);
-                }
-            }
-        }
-
         if (romOptions.mergeXV)
         {
             romOptions.dimX = basis[0]->GetDimX();
             romOptions.dimV = basis[0]->GetDimV();
         }
 
+        // Initialize the state vector.
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
 
         if (!romOptions.hyperreduce)
         {
+            basis[0]->Init(romOptions, *S);
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
             {
@@ -1195,8 +1175,27 @@ int main(int argc, char *argv[])
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
+        // Calculate the sample mesh operators.
         if (romOptions.hyperreduce_prep)
         {
+            if (myid == 0)
+            {
+                cout << "Writing SP files for window: 0" << endl;
+                basis[0]->InducedGramSchmidt(1); // velocity
+                basis[0]->InducedGramSchmidt(2); // energy
+                basis[0]->writeSP(romOptions, 0);
+            }
+            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+                basis[curr_window]->Init(romOptions, *S);
+                basis[curr_window]->InducedGramSchmidt(1); // velocity
+                basis[curr_window]->InducedGramSchmidt(2); // energy
+                basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
+                if (myid == 0)
+                {
+                    cout << "Writing SP files for window: " << curr_window << endl;
+                    basis[curr_window]->writeSP(romOptions, curr_window);
+                }
+            }
             if (myid == 0)
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;

@@ -622,59 +622,65 @@ void ROM_Basis::InducedInnerProduct(const int id1, const int id2, const int var,
 
 void ROM_Basis::InducedGramSchmidt(const int var)
 {
-    // Induced Gram Schmidt normalization is equivalent to
-    // factorizing the basis into X = QR,
-    // where size(Q) = size(X), Q is M-orthonormal,
-    // and R is square and upper triangular.
-    // Matrix X will be substituted by matrix Q.
-    int fdim, rdim;
-    CAROM::Matrix *X;
-    DenseMatrix *R;
-    double factor;
-    if (var == 1) // velocity
-    {
-        fdim = tH1size;
-        rdim = rdimv;
-        RV->SetSize(rdimv);
-        X = basisV;
-        R = RV;
-    }
-    else if (var == 2) // energy
-    {
-        fdim = tL2size;
-        rdim = rdime;
-        RE->SetSize(rdime);
-        X = basisE;
-        R = RE;
-    }
-    else
-    {
-        MFEM_ABORT("Invalid variable index");
-    }
+    sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
 
-    InducedInnerProduct(0, 0, var, fdim, factor);
-    (*R)(0,0) = sqrt(factor);
-    for (int k=0; k<fdim; ++k)
+    if (useGramSchmidt && !sns1)
     {
-        (*X)(k,0) /= (*R)(0,0); // normalize
-    }
 
-    for (int j=1; j<rdim; ++j)
-    {
-        for (int i=0; i<j; ++i)
+        // Induced Gram Schmidt normalization is equivalent to
+        // factorizing the basis into X = QR,
+        // where size(Q) = size(X), Q is M-orthonormal,
+        // and R is square and upper triangular.
+        // Matrix X will be substituted by matrix Q.
+        int fdim, rdim;
+        CAROM::Matrix *X;
+        DenseMatrix *R;
+        double factor;
+        if (var == 1) // velocity
         {
-            InducedInnerProduct(j, i, var, fdim, factor);
-            (*R)(i,j) = factor;
-            for (int k=0; k<fdim; ++k)
-            {
-                (*X)(k,j) -= (*R)(i,j)*(*X)(k,i); // orthogonalize
-            }
+            fdim = tH1size;
+            rdim = rdimv;
+            RV->SetSize(rdimv);
+            X = basisV;
+            R = RV;
         }
-        InducedInnerProduct(j, j, var, fdim, factor);
-        (*R)(j,j) = sqrt(factor);
+        else if (var == 2) // energy
+        {
+            fdim = tL2size;
+            rdim = rdime;
+            RE->SetSize(rdime);
+            X = basisE;
+            R = RE;
+        }
+        else
+        {
+            MFEM_ABORT("Invalid variable index");
+        }
+
+        InducedInnerProduct(0, 0, var, fdim, factor);
+        (*R)(0,0) = sqrt(factor);
         for (int k=0; k<fdim; ++k)
         {
-            (*X)(k,j) /= (*R)(j,j); // normalize
+            (*X)(k,0) /= (*R)(0,0); // normalize
+        }
+
+        for (int j=1; j<rdim; ++j)
+        {
+            for (int i=0; i<j; ++i)
+            {
+                InducedInnerProduct(j, i, var, fdim, factor);
+                (*R)(i,j) = factor;
+                for (int k=0; k<fdim; ++k)
+                {
+                    (*X)(k,j) -= (*R)(i,j)*(*X)(k,i); // orthogonalize
+                }
+            }
+            InducedInnerProduct(j, j, var, fdim, factor);
+            (*R)(j,j) = sqrt(factor);
+            for (int k=0; k<fdim; ++k)
+            {
+                (*X)(k,j) /= (*R)(j,j); // normalize
+            }
         }
     }
 }
@@ -1649,13 +1655,6 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
-    }
-
-    sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
-    if (useGramSchmidt && !sns1)
-    {
-        InducedGramSchmidt(1); // velocity
-        InducedGramSchmidt(2); // energy
     }
 
     if (use_sns)
