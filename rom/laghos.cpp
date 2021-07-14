@@ -1400,16 +1400,17 @@ int main(int argc, char *argv[])
                     std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
                     std::ofstream outfile_romS(filename.c_str());
                     outfile_romS.precision(16);
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
-                    {
-                        Vector romCoord(romS);
-                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                        romCoord.Print(outfile_romS, 1);
-                    }
-                    else
-                    {
-                        romS.Print(outfile_romS, 1);
-                    }
+                    romS.Print(outfile_romS, 1);
+                    //if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                    //{
+                    //    Vector romCoord(romS);
+                    //    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
+                    //    romCoord.Print(outfile_romS, 1);
+                    //}
+                    //else
+                    //{
+                    //    romS.Print(outfile_romS, 1);
+                    //}
                     outfile_romS.close();
                 }
 
@@ -1603,10 +1604,10 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce)
-                    {
-                        romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
-                    }
+                    //if (romOptions.hyperreduce)
+                    //{
+                    //    romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
+                    //}
 
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
@@ -1765,10 +1766,10 @@ int main(int argc, char *argv[])
 
     if (romOptions.hyperreduce)
     {
-        if (romOptions.GramSchmidt && !spaceTime)
-        {
-            romOper[romOptions.window]->PostprocessHyperreduction(romS);
-        }
+        //if (romOptions.GramSchmidt && !spaceTime)
+        //{
+        //    romOper[romOptions.window]->PostprocessHyperreduction(romS);
+        //}
         if (!rom_online || spaceTime)
         {
             basis[romOptions.window]->LiftROMtoFOM(romS, *S);

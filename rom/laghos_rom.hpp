@@ -578,7 +578,7 @@ public:
         return H1size;
     }
 
-    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip); 
+    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip);
     void InducedGramSchmidt(const int var);
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
