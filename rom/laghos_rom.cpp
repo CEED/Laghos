@@ -620,7 +620,7 @@ void ROM_Basis::InducedInnerProduct(const int id1, const int id2, const int var,
     }
 }
 
-void ROM_Basis::InducedGramSchmidt()
+void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
 {
     sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
 
@@ -687,8 +687,35 @@ void ROM_Basis::InducedGramSchmidt()
             }
         }
 
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to Q is
+        // obtained by d = Rc.
+
+        if (window == 0)
+        {
+            // Velocity
+            for (int i=0; i<rdimv; ++i)
+            {
+                S[rdimx+i] *= (*RV)(i,i);
+                for (int j=i+1; j<rdimv; ++j)
+                {
+                    S[rdimx+i] += (*RV)(i,j)*S[rdimx+j]; // triangular update
+                }
+            }
+
+            // Energy
+            for (int i=0; i<rdime; ++i)
+            {
+                S[rdimx+rdimv+i] *= (*RE)(i,i);
+                for (int j=i+1; j<rdime; ++j)
+                {
+                    S[rdimx+rdimv+i] += (*RE)(i,j)*S[rdimx+rdimv+j]; // triangular update
+                }
+            }
+        }
+
         if (rank == 0)
-            cout << "FOM induced Gram-Schmidt completed." << endl;
+            cout << "FOM induced Gram-Schmidt completed for window: " << window << endl;
     }
 }
 

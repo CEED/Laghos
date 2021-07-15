@@ -1112,7 +1112,7 @@ int main(int argc, char *argv[])
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
 
-        // Construct the ROM_Basis.
+        // Set up the ROM basis and operator.
         if (usingWindows)
         {
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
@@ -1146,7 +1146,7 @@ int main(int argc, char *argv[])
             romOptions.dimV = basis[0]->GetDimV();
         }
 
-        // Initialize the state vector.
+        // Initialize the ROM coefficient vector.
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
 
         if (!romOptions.hyperreduce)
@@ -1177,14 +1177,12 @@ int main(int argc, char *argv[])
         // Perform Gram-Schmidt procedure.
         if (!romOptions.hyperreduce)
         {
-            for (int curr_window = 0; curr_window < numWindows; curr_window++) {
-                if (myid == 0)
-                    cout << "Peforming FOM induced Gram-Schmidt for window: " << romOptions.window << endl;
-                basis[curr_window]->InducedGramSchmidt();
-            }
+            basis[0]->InducedGramSchmidt(0, romS);
+            for (int curr_window = 1; curr_window < numWindows; curr_window++) 
+                basis[curr_window]->InducedGramSchmidt(curr_window, romS);
         }
-        
-        // Calculate the sample mesh operators.
+
+        // Compute the hyper-reduction matrices.
         if (romOptions.hyperreduce_prep)
         {
             if (myid == 0)
@@ -1237,11 +1235,12 @@ int main(int argc, char *argv[])
             romOptions.dimV = basis[0]->GetDimV();
         }
 
-        for (int curr_window = 0; curr_window < numWindows; curr_window++) 
-            basis[curr_window]->InducedGramSchmidt();
-
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
+
+        for (int curr_window = 0; curr_window < numWindows; curr_window++)
+            basis[curr_window]->InducedGramSchmidt(curr_window, romS);
+
         if (infile_tw_steps.good())
         {
             infile_tw_steps >> nb_step;
