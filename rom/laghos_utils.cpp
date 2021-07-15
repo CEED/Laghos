@@ -16,7 +16,7 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
+void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
     if (romOptions.parameterID <= 0)
