@@ -36,12 +36,13 @@ protected:
     const bool rom;
     LagrangianHydroOperator *hydro_oper;
     ROM_Operator *rom_oper;
+    const int numRKStages;
     std::vector<Vector> RKStages;
     std::vector<double> RKTime;
 
 public:
-    HydroODESolver(const bool romOnline=false, const int RKStepNumSamples=0) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline) 
-    { 
+    HydroODESolver(const bool romOnline=false, const int RKStepNumSamples=0) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline), numRKStages(RKStepNumSamples)
+    {
         if (RKStepNumSamples > 0)
         {
             RKStages.resize(RKStepNumSamples);
@@ -73,7 +74,7 @@ private:
     ParFiniteElementSpace *H1FESpace, *L2FESpace;
 
 public:
-    RK2AvgSolver(const bool romOnline=false, ParFiniteElementSpace *H1FESpace_=NULL, ParFiniteElementSpace *L2FESpace_=NULL, const int RKStepNumSamples=0) : 
+    RK2AvgSolver(const bool romOnline=false, ParFiniteElementSpace *H1FESpace_=NULL, ParFiniteElementSpace *L2FESpace_=NULL, const int RKStepNumSamples=0) :
         HydroODESolver(romOnline, RKStepNumSamples), H1FESpace(H1FESpace_), L2FESpace(L2FESpace_) { }
 
     virtual void Step(Vector &S, double &t, double &dt);
