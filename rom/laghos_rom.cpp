@@ -436,12 +436,11 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         readNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
     }
 
-    if (mergeXV)
-    {
-        // Update number of samples based on changed rdimx and rdimv.
+    // Update number of samples based on changed rdimx and rdimv.
+    if (mergeXV || useXV)
         numSamplesX = sFactorX * rdimx;
+    if (mergeXV || useVX)
         numSamplesV = sFactorV * rdimv;
-    }
 
     rX = new CAROM::Vector(rdimx, false);
     rV = new CAROM::Vector(rdimv, false);

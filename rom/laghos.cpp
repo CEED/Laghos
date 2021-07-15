@@ -1138,13 +1138,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-        if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
-        if (romOptions.mergeXV)
-        {
+        if (romOptions.mergeXV || romOptions.useXV)
             romOptions.dimX = basis[0]->GetDimX();
+        if (romOptions.mergeXV || romOptions.useVX)
             romOptions.dimV = basis[0]->GetDimV();
-        }
 
         // Initialize the ROM coefficient vector.
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
@@ -1178,7 +1175,7 @@ int main(int argc, char *argv[])
         if (!romOptions.hyperreduce)
         {
             basis[0]->InducedGramSchmidt(0, romS);
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) 
+            for (int curr_window = 1; curr_window < numWindows; curr_window++)
                 basis[curr_window]->InducedGramSchmidt(curr_window, romS);
         }
 
@@ -1227,13 +1224,10 @@ int main(int argc, char *argv[])
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
         basis[0]->Init(romOptions, *S);
 
-        if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-        if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
-        if (romOptions.mergeXV)
-        {
+        if (romOptions.mergeXV || romOptions.useXV)
             romOptions.dimX = basis[0]->GetDimX();
+        if (romOptions.mergeXV || romOptions.useVX)
             romOptions.dimV = basis[0]->GetDimV();
-        }
 
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
@@ -1295,13 +1289,10 @@ int main(int argc, char *argv[])
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, *S);
 
-                if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-                if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
-                if (romOptions.mergeXV)
-                {
+                if (romOptions.mergeXV || romOptions.useXV)
                     romOptions.dimX = basis[romOptions.window]->GetDimX();
+                if (romOptions.mergeXV || romOptions.useVX)
                     romOptions.dimV = basis[romOptions.window]->GetDimV();
-                }
 
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
@@ -1637,13 +1628,10 @@ int main(int argc, char *argv[])
                         basis[romOptions.window]->Init(romOptions, *S);
                     }
 
-                    if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-                    if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
-                    if (romOptions.mergeXV)
-                    {
+                    if (romOptions.mergeXV || romOptions.useXV)
                         romOptions.dimX = basis[romOptions.window]->GetDimX();
+                    if (romOptions.mergeXV || romOptions.useVX)
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
-                    }
 
                     if (!romOptions.hyperreduce)
                     {
