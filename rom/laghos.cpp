@@ -96,6 +96,11 @@ int main(int argc, char *argv[])
     int myid = mpi.WorldRank();
     int nprocs = mpi.WorldSize();
 
+    MPI_Comm rom_com;
+    int color = (myid != 0);
+    const int status = MPI_Comm_split(MPI_COMM_WORLD, color, myid, &rom_com);
+    MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
+
     // Print the banner.
     if (mpi.Root()) {
         display_banner(cout);
@@ -131,6 +136,7 @@ int main(int argc, char *argv[])
     double dt_factor = 1.0;
     bool rom_build_database = false;
     bool rom_use_database = false;
+    bool rom_sample_stages = false;
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
@@ -221,6 +227,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM database building.");
     args.AddOption(&rom_use_database, "-use-database", "--use-database", "-no-use-database", "--no-use-database",
                    "Enable or disable ROM database usage.");
+    args.AddOption(&rom_sample_stages, "-sample-stages", "--sample-stages", "-no-sample-stages", "--no-sample-stages",
+                   "Enable or disable sampling of intermediate Runge Kutta stages in ROM offline phase.");
     args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
@@ -375,7 +383,7 @@ int main(int argc, char *argv[])
             // The greedy algorithm procedure has ended
             if (myid == 0)
             {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+                cout << "The greedy algorithm procedure has completed!" << endl;
             }
             return 1;
         }
@@ -662,31 +670,39 @@ int main(int argc, char *argv[])
 
     // Define the explicit ODE solver used for time integration.
     ODESolver *ode_solver = NULL;
+    int RKStepNumSamples;
     ODESolver *ode_solver_dat = NULL;
+    HydroODESolver *ode_solver_samp = NULL;
     switch (ode_solver_type)
     {
     case 1:
+        rom_sample_stages = false;
         ode_solver = new ForwardEulerSolver;
         if (rom_build_database) ode_solver_dat = new ForwardEulerSolver;
         break;
     case 2:
+        rom_sample_stages = false;
         ode_solver = new RK2Solver(0.5);
         if (rom_build_database) ode_solver_dat = new RK2Solver(0.5);
         break;
     case 3:
+        rom_sample_stages = false;
         ode_solver = new RK3SSPSolver;
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
-        ode_solver = new RK4Solver;
-        if (rom_build_database) ode_solver_dat = new RK4Solver;
+        if (rom_sample_stages) RKStepNumSamples = 3;
+        ode_solver = new RK4ROMSolver(rom_online, RKStepNumSamples);
+        if (rom_build_database) ode_solver_dat = new RK4ROMSolver();
         break;
     case 6:
+        rom_sample_stages = false;
         ode_solver = new RK6Solver;
         if (rom_build_database) ode_solver_dat = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
+        if (rom_sample_stages) RKStepNumSamples = 1;
+        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace, RKStepNumSamples);
         if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
@@ -699,6 +715,7 @@ int main(int argc, char *argv[])
         return 3;
     }
 
+    if (rom_sample_stages) ode_solver_samp = dynamic_cast<HydroODESolver*> (ode_solver);
     romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
     if (fom_data)
@@ -1110,7 +1127,7 @@ int main(int argc, char *argv[])
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
@@ -1122,7 +1139,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
@@ -1139,6 +1156,7 @@ int main(int argc, char *argv[])
         {
             if (myid == 0)
             {
+                cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
@@ -1146,6 +1164,7 @@ int main(int argc, char *argv[])
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
                 {
+                    cout << "Writing SP files for window: " << curr_window << endl;
                     basis[curr_window]->writeSP(romOptions, curr_window);
                 }
             }
@@ -1233,7 +1252,7 @@ int main(int argc, char *argv[])
             SetWindowParameters(twparam, romOptions);
         }
 
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
         basis[0]->Init(romOptions, *S);
 
         if (romOptions.mergeXV)
@@ -1295,7 +1314,7 @@ int main(int argc, char *argv[])
                 SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                 delete basis[romOptions.window-1];
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, *S);
 
                 if (romOptions.mergeXV)
@@ -1513,12 +1532,41 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
-                // 2D Rayleigh-Taylor penetration distance
-                double real_pd = -1.0;
+
+                double real_pd;
+                if (rom_sample_stages)
+                {
+                    std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
+                    std::vector<double>& RKTime = ode_solver_samp->GetRKTime();
+                    MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
+                    for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
+                    {
+                        if (problem == 7)
+                        {
+                            // 2D Rayleigh-Taylor penetration distance
+                            if (romOptions.indicatorType == penetrationDistance)
+                            {
+                                real_pd = -1.0;
+                                double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
+                                MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                            }
+                            else if (romOptions.indicatorType == parameterTime)
+                            {
+                                real_pd = romOptions.atwoodFactor * RKTime[RKidx] * RKTime[RKidx];
+                            }
+                            MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                        }
+                        sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
+                    }
+                }
                 if (problem == 7)
                 {
+                    // 2D Rayleigh-Taylor penetration distance
                     if (romOptions.indicatorType == penetrationDistance)
                     {
+                        real_pd = -1.0;
                         double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                         MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
                     }
@@ -1526,6 +1574,7 @@ int main(int argc, char *argv[])
                     {
                         real_pd = romOptions.atwoodFactor * t * t;
                     }
+                    MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
                 }
                 sampler->SampleSolution(t, last_dt, real_pd, *S);
 
@@ -1600,6 +1649,7 @@ int main(int argc, char *argv[])
                         sampler = new ROM_Sampler(romOptions, *S);
                         sampler->SampleSolution(t, dt, real_pd, *S);
                     }
+                    else sampler = NULL;
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
@@ -1891,7 +1941,7 @@ int main(int argc, char *argv[])
 
         if (solDiff)
         {
-            cout << "solDiff mode " << endl;
+            if (myid == 0) cout << "solDiff mode " << endl;
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
             PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
@@ -1901,7 +1951,7 @@ int main(int argc, char *argv[])
         {
             VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
             dc.Load(visitDiffCycle);
-            cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
+            if (myid == 0) cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
             ParGridFunction *dcfx = dc.GetParField("Position");
             ParGridFunction *dcfv = dc.GetParField("Velocity");
@@ -2089,7 +2139,7 @@ int main(int argc, char *argv[])
             // The greedy algorithm procedure has ended
             if (myid == 0)
             {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+                cout << "The greedy algorithm procedure has completed!" << endl;
             }
             return 1;
         }

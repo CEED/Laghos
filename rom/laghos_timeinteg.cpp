@@ -78,6 +78,10 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     // -- 2.
     // S = S0 + 0.5 * dt * dS_dt;
     add(S0, 0.5 * dt, dS_dt, S);
+
+    RKStages[0] = S;
+    RKTime[0] = t + 0.5 * dt;
+
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
     hydro_oper->SolveVelocity(S, dS_dt);
@@ -91,6 +95,46 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
     add(S0, dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
 
+    t += dt;
+}
+
+void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
+{
+    //   0  |
+    //  1/2 | 1/2
+    //  1/2 |  0   1/2
+    //   1  |  0    0    1
+    // -----+-------------------
+    //      | 1/6  1/3  1/3  1/6
+
+    Vector k(S.Size()), y(S.Size()), z(S.Size());
+
+    f->SetTime(t);
+    f->Mult(S, k); // k1
+    add(S, dt/2, k, y);
+    add(S, dt/6, k, z);
+    f->SetTime(t + dt/2);
+
+    RKStages[0] = y;
+    RKTime[0] = t + 0.5 * dt;
+
+    f->Mult(y, k); // k2
+    add(S, dt/2, k, y);
+    z.Add(dt/3, k);
+
+    RKStages[1] = y;
+    RKTime[1] = t + 0.5 * dt;
+
+    f->Mult(y, k); // k3
+    add(S, dt, k, y);
+    z.Add(dt/3, k);
+    f->SetTime(t + dt);
+
+    RKStages[2] = y;
+    RKTime[2] = t + dt;
+
+    f->Mult(y, k); // k4
+    add(z, dt/6, k, S);
     t += dt;
 }
 

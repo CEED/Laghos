@@ -394,6 +394,11 @@ public:
         return finalNumSamples;
     }
 
+    int GetRank()
+    {
+        return rank;
+    }
+
 private:
     const int H1size;
     const int L2size;
@@ -512,7 +517,7 @@ class ROM_Basis
     friend class STROM_Basis;
 
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_,
               const double sFactorX=1.0, const double sFactorV=1.0,
               const std::vector<double> *timesteps=NULL);
 
@@ -666,6 +671,7 @@ public:
     void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
 
     MPI_Comm comm;
+    MPI_Comm rom_com;
 
     CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
