@@ -579,7 +579,7 @@ public:
     }
 
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip);
-    void InducedGramSchmidt(const int var);
+    void InducedGramSchmidt();
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,

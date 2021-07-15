@@ -620,68 +620,75 @@ void ROM_Basis::InducedInnerProduct(const int id1, const int id2, const int var,
     }
 }
 
-void ROM_Basis::InducedGramSchmidt(const int var)
+void ROM_Basis::InducedGramSchmidt()
 {
     sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
 
     if (useGramSchmidt && !sns1)
     {
-
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
         // where size(Q) = size(X), Q is M-orthonormal,
         // and R is square and upper triangular.
         // Matrix X will be substituted by matrix Q.
-        int fdim, rdim;
-        CAROM::Matrix *X;
-        DenseMatrix *R;
         double factor;
-        if (var == 1) // velocity
+
+        // Velocity
+        InducedInnerProduct(0, 0, 1, tH1size, factor);
+        (*RV)(0,0) = sqrt(factor);
+        for (int k=0; k<tH1size; ++k)
         {
-            fdim = tH1size;
-            rdim = rdimv;
-            RV->SetSize(rdimv);
-            X = basisV;
-            R = RV;
-        }
-        else if (var == 2) // energy
-        {
-            fdim = tL2size;
-            rdim = rdime;
-            RE->SetSize(rdime);
-            X = basisE;
-            R = RE;
-        }
-        else
-        {
-            MFEM_ABORT("Invalid variable index");
+            (*basisV)(k,0) /= (*RV)(0,0); // normalize
         }
 
-        InducedInnerProduct(0, 0, var, fdim, factor);
-        (*R)(0,0) = sqrt(factor);
-        for (int k=0; k<fdim; ++k)
-        {
-            (*X)(k,0) /= (*R)(0,0); // normalize
-        }
-
-        for (int j=1; j<rdim; ++j)
+        for (int j=1; j<rdimv; ++j)
         {
             for (int i=0; i<j; ++i)
             {
-                InducedInnerProduct(j, i, var, fdim, factor);
-                (*R)(i,j) = factor;
-                for (int k=0; k<fdim; ++k)
+                InducedInnerProduct(j, i, 1, tH1size, factor);
+                (*RV)(i,j) = factor;
+                for (int k=0; k<tH1size; ++k)
                 {
-                    (*X)(k,j) -= (*R)(i,j)*(*X)(k,i); // orthogonalize
+                    (*basisV)(k,j) -= (*RV)(i,j)*(*basisV)(k,i); // orthogonalize
                 }
             }
-            InducedInnerProduct(j, j, var, fdim, factor);
-            (*R)(j,j) = sqrt(factor);
-            for (int k=0; k<fdim; ++k)
+            InducedInnerProduct(j, j, 1, tH1size, factor);
+            (*RV)(j,j) = sqrt(factor);
+            for (int k=0; k<tH1size; ++k)
             {
-                (*X)(k,j) /= (*R)(j,j); // normalize
+                (*basisV)(k,j) /= (*RV)(j,j); // normalize
             }
         }
+
+        // Energy
+        InducedInnerProduct(0, 0, 2, tL2size, factor);
+        (*RE)(0,0) = sqrt(factor);
+        for (int k=0; k<tL2size; ++k)
+        {
+            (*basisE)(k,0) /= (*RE)(0,0); // normalize
+        }
+
+        for (int j=1; j<rdime; ++j)
+        {
+            for (int i=0; i<j; ++i)
+            {
+                InducedInnerProduct(j, i, 2, tL2size, factor);
+                (*RE)(i,j) = factor;
+                for (int k=0; k<tL2size; ++k)
+                {
+                    (*basisE)(k,j) -= (*RE)(i,j)*(*basisE)(k,i); // orthogonalize
+                }
+            }
+            InducedInnerProduct(j, j, 2, tL2size, factor);
+            (*RE)(j,j) = sqrt(factor);
+            for (int k=0; k<tL2size; ++k)
+            {
+                (*basisE)(k,j) /= (*RE)(j,j); // normalize
+            }
+        }
+
+        if (rank == 0)
+            cout << "FOM induced Gram-Schmidt completed." << endl;
     }
 }
 
@@ -2665,8 +2672,12 @@ void ROM_Operator::ApplyHyperreduction(Vector &S)
         InducedGramSchmidtSP(1, S); // velocity
         InducedGramSchmidtSP(2, S); // energy
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
+        if (rank == 0)
+            cout << "SP induced Gram-Schmidt completed." << endl;
     }
     basis->ComputeReducedMatrices(sns1);
+    if (rank == 0)
+        cout << "Computation of hyperreduction operators completed." << endl;
 }
 
 void ROM_Operator::PostprocessHyperreduction(Vector &S, bool keep_data)
@@ -2676,6 +2687,8 @@ void ROM_Operator::PostprocessHyperreduction(Vector &S, bool keep_data)
         UndoInducedGramSchmidtSP(1, S, keep_data); // velocity
         UndoInducedGramSchmidtSP(2, S, keep_data); // energy
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
+        if (rank == 0)
+            cout << "SP induced Gram-Schmidt completed." << endl;
     }
 }
 

@@ -1178,8 +1178,9 @@ int main(int argc, char *argv[])
         if (!romOptions.hyperreduce)
         {
             for (int curr_window = 0; curr_window < numWindows; curr_window++) {
-                basis[curr_window]->InducedGramSchmidt(1); // velocity
-                basis[curr_window]->InducedGramSchmidt(2); // energy
+                if (myid == 0)
+                    cout << "Peforming FOM induced Gram-Schmidt for window: " << romOptions.window << endl;
+                basis[curr_window]->InducedGramSchmidt();
             }
         }
         
@@ -1236,10 +1237,8 @@ int main(int argc, char *argv[])
             romOptions.dimV = basis[0]->GetDimV();
         }
 
-        for (int curr_window = 0; curr_window < numWindows; curr_window++) {
-            basis[curr_window]->InducedGramSchmidt(1); // velocity
-            basis[curr_window]->InducedGramSchmidt(2); // energy
-        }
+        for (int curr_window = 0; curr_window < numWindows; curr_window++) 
+            basis[curr_window]->InducedGramSchmidt();
 
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
