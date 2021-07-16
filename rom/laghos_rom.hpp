@@ -529,8 +529,6 @@ public:
         delete BsinvV;
         delete BsinvE;
         delete BX0;
-        delete RV;
-        delete RE;
         delete initX;
         delete initV;
         delete initE;
@@ -642,14 +640,6 @@ public:
         return BEsp;
     }
 
-    DenseMatrix *GetRV() {
-        return RV;
-    }
-
-    DenseMatrix *GetRE() {
-        return RE;
-    }
-
     void ComputeReducedMatrices(bool sns1);
 
     void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
@@ -731,8 +721,8 @@ private:
     CAROM::Matrix *BFvsp = NULL;
     CAROM::Matrix *BFesp = NULL;
 
-    DenseMatrix *RV;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
-    DenseMatrix *RE;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
+    DenseMatrix RV;
+    DenseMatrix RE;
 
     int size_H1_sp = 0;
     int size_L2_sp = 0;
@@ -991,7 +981,7 @@ private:
     void ComputeReducedMe();
 
     const bool useGramSchmidt;
-    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: remove this? use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
+    DenseMatrix RVsp, REsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp; but this is triangular, not symmetric
     void InducedInnerProductSP(const int id1, const int id2, const int var, const int dim, double& ip);
     void InducedGramSchmidtSP(const int var, Vector &S);
     void UndoInducedGramSchmidtSP(const int var, Vector &S, bool keep_data);

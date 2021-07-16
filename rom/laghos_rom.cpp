@@ -631,13 +631,15 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
         // and R is square and upper triangular.
         // Matrix X will be substituted by matrix Q.
         double factor;
+        RV.SetSize(rdimv);
+        RE.SetSize(rdime);
 
         // Velocity
         InducedInnerProduct(0, 0, 1, tH1size, factor);
-        (*RV)(0,0) = sqrt(factor);
+        RV(0,0) = sqrt(factor);
         for (int k=0; k<tH1size; ++k)
         {
-            (*basisV)(k,0) /= (*RV)(0,0); // normalize
+            (*basisV)(k,0) /= RV(0,0); // normalize
         }
 
         for (int j=1; j<rdimv; ++j)
@@ -645,26 +647,26 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
             for (int i=0; i<j; ++i)
             {
                 InducedInnerProduct(j, i, 1, tH1size, factor);
-                (*RV)(i,j) = factor;
+                RV(i,j) = factor;
                 for (int k=0; k<tH1size; ++k)
                 {
-                    (*basisV)(k,j) -= (*RV)(i,j)*(*basisV)(k,i); // orthogonalize
+                    (*basisV)(k,j) -= RV(i,j)*(*basisV)(k,i); // orthogonalize
                 }
             }
             InducedInnerProduct(j, j, 1, tH1size, factor);
-            (*RV)(j,j) = sqrt(factor);
+            RV(j,j) = sqrt(factor);
             for (int k=0; k<tH1size; ++k)
             {
-                (*basisV)(k,j) /= (*RV)(j,j); // normalize
+                (*basisV)(k,j) /= RV(j,j); // normalize
             }
         }
 
         // Energy
         InducedInnerProduct(0, 0, 2, tL2size, factor);
-        (*RE)(0,0) = sqrt(factor);
+        RE(0,0) = sqrt(factor);
         for (int k=0; k<tL2size; ++k)
         {
-            (*basisE)(k,0) /= (*RE)(0,0); // normalize
+            (*basisE)(k,0) /= RE(0,0); // normalize
         }
 
         for (int j=1; j<rdime; ++j)
@@ -672,17 +674,17 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
             for (int i=0; i<j; ++i)
             {
                 InducedInnerProduct(j, i, 2, tL2size, factor);
-                (*RE)(i,j) = factor;
+                RE(i,j) = factor;
                 for (int k=0; k<tL2size; ++k)
                 {
-                    (*basisE)(k,j) -= (*RE)(i,j)*(*basisE)(k,i); // orthogonalize
+                    (*basisE)(k,j) -= RE(i,j)*(*basisE)(k,i); // orthogonalize
                 }
             }
             InducedInnerProduct(j, j, 2, tL2size, factor);
-            (*RE)(j,j) = sqrt(factor);
+            RE(j,j) = sqrt(factor);
             for (int k=0; k<tL2size; ++k)
             {
-                (*basisE)(k,j) /= (*RE)(j,j); // normalize
+                (*basisE)(k,j) /= RE(j,j); // normalize
             }
         }
 
@@ -695,20 +697,20 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
             // Velocity
             for (int i=0; i<rdimv; ++i)
             {
-                S[rdimx+i] *= (*RV)(i,i);
+                S[rdimx+i] *= RV(i,i);
                 for (int j=i+1; j<rdimv; ++j)
                 {
-                    S[rdimx+i] += (*RV)(i,j)*S[rdimx+j]; // triangular update
+                    S[rdimx+i] += RV(i,j)*S[rdimx+j]; // triangular update
                 }
             }
 
             // Energy
             for (int i=0; i<rdime; ++i)
             {
-                S[rdimx+rdimv+i] *= (*RE)(i,i);
+                S[rdimx+rdimv+i] *= RE(i,i);
                 for (int j=i+1; j<rdime; ++j)
                 {
-                    S[rdimx+rdimv+i] += (*RE)(i,j)*S[rdimx+rdimv+j]; // triangular update
+                    S[rdimx+rdimv+i] += RE(i,j)*S[rdimx+rdimv+j]; // triangular update
                 }
             }
         }
@@ -2559,18 +2561,18 @@ void ROM_Operator::InducedGramSchmidtSP(const int var, Vector &S)
             spdim = basis->SolutionSizeH1SP();
             rdim = basis->GetDimV();
             offset = basis->GetDimX();
-            CoordinateBVsp.SetSize(rdim);
+            RVsp.SetSize(rdim);
             X = basis->GetBVsp();
-            R = basis->GetRV();
+            R = &RVsp;
         }
         else if (var == 2) // energy
         {
             spdim = basis->SolutionSizeL2SP();
             rdim = basis->GetDimE();
             offset = basis->GetDimX() + basis->GetDimV();
-            CoordinateBEsp.SetSize(rdim);
+            REsp.SetSize(rdim);
             X = basis->GetBEsp();
-            R = basis->GetRE();
+            R = &REsp;
         }
         else
         {
@@ -2638,7 +2640,7 @@ void ROM_Operator::UndoInducedGramSchmidtSP(const int var, Vector &S, bool keep_
             rdim = basis->GetDimV();
             offset = basis->GetDimX();
             X = keep_data ? new CAROM::Matrix(*basis->GetBVsp()) : basis->GetBVsp();
-            R = basis->GetRV();
+            R = &RVsp;
         }
         else if (var == 2) // energy
         {
@@ -2646,7 +2648,7 @@ void ROM_Operator::UndoInducedGramSchmidtSP(const int var, Vector &S, bool keep_
             rdim = basis->GetDimE();
             offset = basis->GetDimX() + basis->GetDimV();
             X = keep_data ? new CAROM::Matrix(*basis->GetBEsp()) : basis->GetBEsp();
-            R = basis->GetRE();
+            R = &REsp;
         }
         else
         {

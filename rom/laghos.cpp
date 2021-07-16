@@ -644,20 +644,18 @@ int main(int argc, char *argv[])
 
     if (fom_data)
     {
+        Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
+        for (int d = 0; d < pmesh->Dimension(); d++)
         {
-            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-            for (int d = 0; d < pmesh->Dimension(); d++)
-            {
-                // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
-                // enforce v_x/y/z = 0 for the velocity components.
-                ess_bdr = 0;
-                ess_bdr[d] = 1;
-                H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-                ess_tdofs.Append(dofs_list);
-                H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
-                FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-                ess_vdofs.Append(dofs_list);
-            }
+            // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
+            // enforce v_x/y/z = 0 for the velocity components.
+            ess_bdr = 0;
+            ess_bdr[d] = 1;
+            H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+            ess_tdofs.Append(dofs_list);
+            H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
+            FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+            ess_vdofs.Append(dofs_list);
         }
     }
 
