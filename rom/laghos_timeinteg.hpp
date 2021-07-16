@@ -36,11 +36,12 @@ protected:
     const bool rom;
     LagrangianHydroOperator *hydro_oper;
     ROM_Operator *rom_oper;
+    const int numRKStages;
     std::vector<Vector> RKStages;
     std::vector<double> RKTime;
 
 public:
-    HydroODESolver(const bool romOnline=false, const int RKStepNumSamples=0) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline)
+    HydroODESolver(const bool romOnline=false, const int RKStepNumSamples=0) : hydro_oper(NULL), rom_oper(NULL), rom(romOnline), numRKStages(RKStepNumSamples)
     {
         if (RKStepNumSamples > 0)
         {
