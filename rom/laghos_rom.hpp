@@ -117,6 +117,7 @@ struct ROM_Options
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
     std::string *basename = NULL;
+    std::string *solution_basename = NULL;
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
@@ -683,6 +684,7 @@ private:
     CAROM::Matrix* basisFe = 0;
 
     std::string basename = "run";
+    std::string solution_basename = "run";
 
     CAROM::Vector *fH1, *fL2;
 
