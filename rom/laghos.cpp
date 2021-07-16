@@ -1170,11 +1170,10 @@ int main(int argc, char *argv[])
         }
 
         // Perform Gram-Schmidt procedure.
-        if (!romOptions.hyperreduce)
+        if (romOptions.hyperreduce_prep)
         {
-            basis[0]->InducedGramSchmidt(0, romS);
-            for (int curr_window = 1; curr_window < numWindows; curr_window++)
-                basis[curr_window]->InducedGramSchmidt(curr_window, romS);
+            for (int curr_window = 0; curr_window < numWindows; curr_window++)
+                basis[curr_window]->InducedGramSchmidt(curr_window, romS); // romS is redundant
         }
 
         // Compute the hyper-reduction matrices.
@@ -1338,6 +1337,10 @@ int main(int argc, char *argv[])
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
+        else if (rom_online)
+        {
+            basis[0]->InducedGramSchmidt(0, romS);
+        }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
@@ -1400,16 +1403,6 @@ int main(int argc, char *argv[])
                     std::ofstream outfile_romS(filename.c_str());
                     outfile_romS.precision(16);
                     romS.Print(outfile_romS, 1);
-                    //if (romOptions.hyperreduce && romOptions.GramSchmidt)
-                    //{
-                    //    Vector romCoord(romS);
-                    //    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                    //    romCoord.Print(outfile_romS, 1);
-                    //}
-                    //else
-                    //{
-                    //    romS.Print(outfile_romS, 1);
-                    //}
                     outfile_romS.close();
                 }
 
@@ -1603,11 +1596,6 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    //if (romOptions.hyperreduce)
-                    //{
-                    //    romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
-                    //}
-
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
@@ -1651,6 +1639,10 @@ int main(int argc, char *argv[])
                     if (romOptions.hyperreduce)
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
+                    }
+                    else if (rom_online)
+                    {
+                        basis[romOptions.window]->InducedGramSchmidt(romOptions.window, romS);
                     }
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
@@ -1769,16 +1761,9 @@ int main(int argc, char *argv[])
         outfile_tw_steps.close();
     }
 
-    if (romOptions.hyperreduce)
+    if (romOptions.hyperreduce && spaceTime)
     {
-        //if (romOptions.GramSchmidt && !spaceTime)
-        //{
-        //    romOper[romOptions.window]->PostprocessHyperreduction(romS);
-        //}
-        if (!rom_online || spaceTime)
-        {
-            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-        }
+        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
     }
 
     if (rom_offline)

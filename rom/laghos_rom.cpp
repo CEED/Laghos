@@ -692,7 +692,7 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
         // the coefficients of s with respect to Q is
         // obtained by d = Rc.
 
-        if (window == 0)
+        if (!hyperreduce_prep)
         {
             // Velocity
             for (int i=0; i<rdimv; ++i)
@@ -3103,7 +3103,7 @@ void ROM_Operator::SolveSpaceTime(Vector &S)
     if (useGramSchmidt)
     {
         //InducedGramSchmidtFinalize(x);
-        PostprocessHyperreduction(x);
+        PostprocessHyperreduction(x); // TODO: Check with Dylan if it is needed
     }
 
     // Scale by the temporal basis at the final time.
@@ -3209,7 +3209,7 @@ void ROM_Operator::SolveSpaceTimeGN(Vector &S)
     if (useGramSchmidt)
     {
         //InducedGramSchmidtFinalize(x);
-        PostprocessHyperreduction(x);
+        PostprocessHyperreduction(x); // TODO: Check with Dylan if this is needed
     }
 
     // Scale by the temporal basis at the final time.
