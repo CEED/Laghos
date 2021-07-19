@@ -364,7 +364,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
-      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), restore(input.restore),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
@@ -625,7 +625,7 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
 
     if (useGramSchmidt && !sns1)
     {
-        MFEM_VERIFY(hyperreduce_prep, "ROM online time marching assumes L2 orthogonality");
+        MFEM_VERIFY(hyperreduce_prep || restore, "ROM online time marching assumes L2 orthogonality");
 
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
@@ -694,7 +694,7 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
         // the coefficients of s with respect to Q is
         // obtained by d = Rc.
 
-        if (!hyperreduce_prep)
+        if (!hyperreduce_prep && !restore)
         {
             // Velocity
             for (int i=0; i<rdimv; ++i)

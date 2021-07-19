@@ -1229,8 +1229,7 @@ int main(int argc, char *argv[])
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
 
-        for (int curr_window = 0; curr_window < numWindows; curr_window++)
-            basis[curr_window]->InducedGramSchmidt(curr_window, romS);
+        basis[0]->InducedGramSchmidt(0, romS);
 
         if (infile_tw_steps.good())
         {
@@ -1293,6 +1292,7 @@ int main(int argc, char *argv[])
 
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
+                basis[romOptions.window]->InducedGramSchmidt(romOptions.window, romS);
             }
         } // time loop in "restore" phase
         ti--;

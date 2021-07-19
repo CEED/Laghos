@@ -662,6 +662,7 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
+    const bool restore;
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
