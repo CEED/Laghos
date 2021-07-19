@@ -335,6 +335,13 @@ int main(int argc, char *argv[])
     if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
+
+    std::string solution_outputPath = outputPath;
+    if (std::string(solution_basename) != "") {
+        solution_outputPath += "/" + std::string(solution_basename);
+    }
+    romOptions.solution_basename = &solution_outputPath;
+
     if (mpi.Root()) {
         const char path_delim = '/';
         std::string::size_type pos = 0;
@@ -345,7 +352,7 @@ int main(int argc, char *argv[])
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
-        mkdir((outputPath + "/ROMsol").c_str(), 0777);
+        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
@@ -368,12 +375,6 @@ int main(int argc, char *argv[])
     localmap["max"] = maxnorm;
 
     NormType normtype = localmap[normtype_char];
-
-    std::string solution_outputPath = outputPath;
-    if (std::string(solution_basename) != "") {
-        solution_outputPath += "/" + std::string(solution_basename);
-    }
-    romOptions.solution_basename = &solution_outputPath;
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     bool rom_calc_rel_error = false;
@@ -631,7 +632,7 @@ int main(int argc, char *argv[])
     romOptions.offsetType = getOffsetStyle(offsetType);
     if (rom_online)
     {
-        std::string filename = outputPath + "/ROMsol/romS_1";
+        std::string filename = solution_outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
@@ -1253,7 +1254,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+            std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -1307,7 +1308,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -1406,7 +1407,7 @@ int main(int argc, char *argv[])
                 // TODO: think about how to reuse "gfprint" option
                 if (!rom_build_database)
                 {
-                    std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                    std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                     std::ofstream outfile_romS(filename.c_str());
                     outfile_romS.precision(16);
                     if (romOptions.hyperreduce && romOptions.GramSchmidt)
