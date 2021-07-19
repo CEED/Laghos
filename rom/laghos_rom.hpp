@@ -578,6 +578,7 @@ public:
 
     void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip);
     void InducedGramSchmidt(const int window, Vector &S);
+    void UndoInducedGramSchmidt(const int window, Vector &S);
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
@@ -671,7 +672,6 @@ private:
     const bool useXV;  // If true, use V basis for X-X0.
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
-    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
 
     int H1size;
     int L2size;
@@ -971,7 +971,7 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
+    bool sns1 = false; // Simplify calculation as in Section 3.6 of arXiv 2104.11404 when using 1st choice of SNS.
     bool noMsolve = false;
     bool useReducedM = false;  // TODO: remove this?
 

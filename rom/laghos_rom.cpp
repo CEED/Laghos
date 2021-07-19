@@ -621,10 +621,12 @@ void ROM_Basis::InducedInnerProduct(const int id1, const int id2, const int var,
 
 void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
 {
-    sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
+    bool sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
 
     if (useGramSchmidt && !sns1)
     {
+        MFEM_VERIFY(hyperreduce_prep, "ROM online time marching assumes L2 orthogonality");
+
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
         // where size(Q) = size(X), Q is M-orthonormal,
@@ -717,6 +719,75 @@ void ROM_Basis::InducedGramSchmidt(const int window, Vector &S)
 
         if (rank == 0)
             cout << "FOM induced Gram-Schmidt completed for window: " << window << endl;
+    }
+}
+
+void ROM_Basis::UndoInducedGramSchmidt(const int window, Vector &S)
+{
+    bool sns1 = (use_sns && rdimv == rdimfv && rdime == rdimfe); // SNS type I
+
+    if (useGramSchmidt && !sns1)
+    {
+        // Get back the original matrix X from matrix Q by undoing all the operations
+        // in the induced Gram Schmidt normalization process.
+        // See ROM_Basis::InducedGramSchmidt
+
+        // Velocity
+        for (int j=rdimv-1; j>-1; --j)
+        {
+            for (int k=0; k<tH1size; ++k)
+            {
+                (*basisV)(k,j) *= RV(j,j);
+            }
+            for (int i=0; i<j; ++i)
+            {
+                for (int k=0; k<tH1size; ++k)
+                {
+                    (*basisV)(k,j) += RV(i,j)*(*basisV)(k,i);
+                }
+            }
+        }
+        // Energy
+        for (int j=rdime-1; j>-1; --j)
+        {
+            for (int k=0; k<tL2size; ++k)
+            {
+                (*basisE)(k,j) *= RE(j,j);
+            }
+            for (int i=0; i<j; ++i)
+            {
+                for (int k=0; k<tL2size; ++k)
+                {
+                    (*basisE)(k,j) += RE(i,j)*(*basisE)(k,i);
+                }
+            }
+        }
+
+        // With solution representation by s = Xc = Qd,
+        // the coefficients of s with respect to X is
+        // obtained from c = R\d.
+
+        // Velocity
+        for (int i=rdimv-1; i>-1; --i)
+        {
+            for (int j = rdimv-1; j>i; --j)
+            {
+                S[rdimx+i] -= RV(i,j)*S[rdimx+j]; // backward substitution
+            }
+            S[rdimx+i] /= RV(i,i);
+        }
+        // Energy
+        for (int i=rdime-1; i>-1; --i)
+        {
+            for (int j = rdime-1; j>i; --j)
+            {
+                S[rdimx+rdimv+i] -= RE(i,j)*S[rdimx+rdimv+j]; // backward substitution
+            }
+            S[rdimx+rdimv+i] /= RE(i,i);
+        }
+
+        if (rank == 0)
+            cout << "Undoing FOM induced Gram-Schmidt completed for window: " << window << endl;
     }
 }
 
@@ -1727,6 +1798,7 @@ void ROM_Basis::ReadTemporalBases(const int window)
 }
 
 // f is a full vector, not a true vector
+// Assumes L2 orthogonality
 void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDerivative)
 {
     MFEM_VERIFY(r.Size() == rdimx + rdimv + rdime, "");
@@ -1775,6 +1847,7 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
 }
 
 // f is a full vector, not a true vector
+// Does not assume L2 orthogonality
 void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
 {
     MFEM_VERIFY(r.Size() == rdimx + rdimv + rdime, "");
