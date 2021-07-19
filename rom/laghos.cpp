@@ -332,18 +332,6 @@ int main(int argc, char *argv[])
     if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
-    if (mpi.Root()) {
-        const char path_delim = '/';
-        std::string::size_type pos = 0;
-        do {
-            pos = outputPath.find(path_delim, pos+1);
-            std::string subdir = outputPath.substr(0, pos);
-            mkdir(subdir.c_str(), 0777);
-        }
-        while (pos != std::string::npos);
-        mkdir((outputPath + "/ROMoffset").c_str(), 0777);
-        mkdir((outputPath + "/ROMsol").c_str(), 0777);
-    }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -373,7 +361,7 @@ int main(int argc, char *argv[])
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         if (parameterPointGreedySampler->isComplete())
         {
@@ -385,10 +373,27 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        if (rom_online)
+        if (rom_online || rom_restore)
         {
-            windowNumSamples = 0;
+            if (windowNumSamples > 0)
+            {
+                windowNumSamples = 0;
+                numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
+            }
         }
+    }
+
+    if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
+        mkdir((outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -420,6 +425,10 @@ int main(int argc, char *argv[])
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+            if (rom_build_database)
+            {
+                ReadGreedyTimeWindowParameters(romOptions, numWindows, twparam, outputPath, myid);
+            }
         }
         else if (rom_offline && windowNumSamples == 0)
         {
@@ -1174,7 +1183,7 @@ int main(int argc, char *argv[])
         if (!romOptions.hyperreduce)
         {
             basis[0]->ProjectFOMtoROM(*S, romS);
-            if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
+            if (romOptions.hyperreduce_prep && myid == 0)
             {
                 std::string romS_outPath = outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
@@ -1182,7 +1191,7 @@ int main(int argc, char *argv[])
                 romS.Print(outfile_romS, 1);
             }
         }
-        else if (!rom_build_database)
+        else
         {
             std::string romS_outPath = outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
@@ -1201,6 +1210,10 @@ int main(int argc, char *argv[])
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;
             }
+            if (rom_build_database)
+            {
+                WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+            }
             return 0;
         }
 
@@ -1209,7 +1222,7 @@ int main(int argc, char *argv[])
     }
 
     StopWatch restoreTimer, timeLoopTimer;
-    bool converged = true;
+    bool greedy_converged = true;
     if (rom_restore)
     {
         // -restore phase
@@ -1295,6 +1308,22 @@ int main(int argc, char *argv[])
 
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
+            }
+
+            if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
+            {
+                std::string nextfilename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
+                std::string next2filename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
+                std::ifstream nextfile_romS(nextfilename.c_str());
+                std::ifstream next2file_romS(next2filename.c_str());
+                if (nextfile_romS.good() && !next2file_romS.good())
+                {
+                    lastLiftedSolution = *S;
+                    ode_solver_dat->Init(*oper);
+                    ode_solver_dat->Step(lastLiftedSolution, t, dt);
+                }
+                nextfile_romS.close();
+                next2file_romS.close();
             }
         } // time loop in "restore" phase
         ti--;
@@ -1385,7 +1414,7 @@ int main(int argc, char *argv[])
                 // since romS will be full of NaN's.
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
-                    converged = false;
+                    greedy_converged = false;
                     break;
                 }
                 romS_old = romS;
@@ -1395,23 +1424,20 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                if (!rom_build_database)
+                std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::ofstream outfile_romS(filename.c_str());
+                outfile_romS.precision(16);
+                if (romOptions.hyperreduce && romOptions.GramSchmidt)
                 {
-                    std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
-                    std::ofstream outfile_romS(filename.c_str());
-                    outfile_romS.precision(16);
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
-                    {
-                        Vector romCoord(romS);
-                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                        romCoord.Print(outfile_romS, 1);
-                    }
-                    else
-                    {
-                        romS.Print(outfile_romS, 1);
-                    }
-                    outfile_romS.close();
+                    Vector romCoord(romS);
+                    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
+                    romCoord.Print(outfile_romS, 1);
                 }
+                else
+                {
+                    romS.Print(outfile_romS, 1);
+                }
+                outfile_romS.close();
 
                 if (!romOptions.hyperreduce)
                 {
@@ -1657,7 +1683,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (!rom_build_database && mpi.Root())
+            if (mpi.Root())
             {
                 if (last_step) {
                     std::ofstream outfile(outputPath + "/num_steps");
@@ -1872,25 +1898,43 @@ int main(int argc, char *argv[])
     bool errorIndicatorComputed = false;
     int errorIndicatorVecSize = 0;
 
-    if (rom_online)
+    // If using the greedy algorithm, calculate the error indicator
+    if (rom_build_database && !rom_calc_rel_error)
     {
-        // If using the greedy algorithm, calculate the error indicator
-        if (rom_build_database && !rom_calc_rel_error)
+        if (rom_online && !greedy_converged)
         {
-            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+            if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+            {
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    checkfile.close();
+                    remove(fullname.c_str());
+                }
+            }
+            errorIndicatorComputed = true;
+        }
+        else if ((rom_online && !romOptions.hyperreduce) || (rom_restore))
+        {
+            if (rom_online)
+            {
+                basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+            }
 
             // calculate the error indicator using the FOM lifted during
             // the second to last step compared against the FOM lifted at the last step.
             if (romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
-                if (converged)
-                {
-                    Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
-                    subtract(lastLiftedSolution, *S, errorIndicatorVec);
+                Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
+                subtract(lastLiftedSolution, *S, errorIndicatorVec);
 
-                    errorIndicator = errorIndicatorVec.Norml2();
-                    errorIndicatorVecSize = errorIndicatorVec.Size();
-                }
+                errorIndicator = errorIndicatorVec.Norml2();
+                errorIndicatorVecSize = errorIndicatorVec.Size();
 
                 errorIndicatorComputed = true;
             }
@@ -1906,18 +1950,15 @@ int main(int argc, char *argv[])
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
                 {
-                    if (converged)
-                    {
-                        Vector finalSolution = *S;
-                        Vector previousFinalSolution;
-                        previousFinalSolution.Load(checkfile, finalSolution.Size());
+                    Vector finalSolution = *S;
+                    Vector previousFinalSolution;
+                    previousFinalSolution.Load(checkfile, finalSolution.Size());
 
-                        Vector errorIndicatorVec = Vector(finalSolution.Size());
-                        subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
+                    Vector errorIndicatorVec = Vector(finalSolution.Size());
+                    subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
 
-                        errorIndicator = errorIndicatorVec.Norml2();
-                        errorIndicatorVecSize = errorIndicatorVec.Size();
-                    }
+                    errorIndicator = errorIndicatorVec.Norml2();
+                    errorIndicatorVecSize = errorIndicatorVec.Size();
 
                     checkfile.close();
                     remove(fullname.c_str());
@@ -1926,25 +1967,26 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    if (converged)
+                    Vector finalSolution = *S;
+
+                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                    ofs.precision(16);
+
+                    for (int i=0; i<finalSolution.Size(); ++i)
+                        ofs << finalSolution[i] << std::endl;
+
+                    ofs.close();
+
+                    if (myid == 0)
                     {
-                        Vector finalSolution = *S;
-
-                        std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-                        ofs.precision(16);
-
-                        for (int i=0; i<finalSolution.Size(); ++i)
-                            ofs << finalSolution[i] << std::endl;
-
-                        ofs.close();
-                    }
-                    else
-                    {
-                        errorIndicatorComputed = true;
+                        DeleteROMSolution(outputPath);
                     }
                 }
             }
         }
+    }
+    if (rom_online)
+    {
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
     }
@@ -2028,16 +2070,31 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the error indicator and any information
     // for use during the next iteration.
+    if (rom_build_database)
+    {
+        WriteGreedyPhase(rom_offline, rom_online, rom_restore, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+    }
     if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
     {
         if (rom_calc_rel_error)
         {
-            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, relative_error, outputPath);
+            parameterPointGreedySampler->setPointRelativeError(relative_error);
         }
-        else
+        else if (errorIndicatorComputed)
         {
-            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, errorIndicator, errorIndicatorVecSize, outputPath);
+            parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
         }
+
+        std::string outputFile = outputPath + "/greedy_algorithm_stage.txt";
+        remove(outputFile.c_str());
+
+        parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
+
+        if (myid == 0)
+        {
+            DeleteROMSolution(outputPath);
+        }
+
         if (parameterPointGreedySampler->isComplete())
         {
             // The greedy algorithm procedure has ended

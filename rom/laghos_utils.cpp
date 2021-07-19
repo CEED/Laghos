@@ -16,6 +16,91 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
+void DeleteROMSolution(std::string outputPath)
+{
+    bool last_step = false;
+    for (int ti = 1; !last_step; ti++)
+    {
+        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::ifstream infile_romS(filename.c_str());
+        if (infile_romS.good())
+        {
+            infile_romS.close();
+            remove(filename.c_str());
+        }
+        else
+        {
+            last_step = true;
+            break;
+        }
+    }
+}
+
+void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error,
+                     ROM_Options& romOptions, std::string greedyfile)
+{
+    std::ifstream greedystream(greedyfile);
+    if (!greedystream.is_open())
+    {
+        rom_online = true;
+        romOptions.hyperreduce_prep = true;
+        romOptions.hyperreduce = false;
+        rom_calc_rel_error = false;
+    }
+    else
+    {
+        std::string line;
+        std::vector<std::string> words;
+        std::getline(greedystream, line);
+        split_line(line, words);
+
+        if (words[0] == "online")
+        {
+            if (words[1] == "hyperreduce_prep")
+            {
+                rom_online = true;
+                rom_calc_rel_error = false;
+            }
+            else if (words[1] == "hyperreduce")
+            {
+                rom_restore = true;
+                romOptions.hyperreduce = false;
+            }
+        }
+    }
+}
+
+void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore,
+                      ROM_Options& romOptions, std::string greedyfile)
+{
+    std::ofstream greedyout(greedyfile);
+    if (rom_online)
+    {
+        greedyout << "online" << " ";
+    }
+    else if (rom_restore)
+    {
+        greedyout << "restore" << " ";
+    }
+    else
+    {
+        greedyout << "offline" << " ";
+    }
+    if (romOptions.hyperreduce_prep)
+    {
+        greedyout << "hyperreduce_prep" << endl;
+    }
+    else if (romOptions.hyperreduce)
+    {
+        greedyout << "hyperreduce" << endl;
+    }
+    else
+    {
+        greedyout << "nonreduced" << endl;
+    }
+    greedyout.close();
+}
+
 int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
@@ -111,7 +196,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
                          << sv+1 << " of " << sing_vals->dim() << " basis vectors" << endl;
                     if (cutoffOutputPath != "")
                     {
-                        writeNum(sv+1, cutoffOutputPath + "_" + to_string(energy_fractions[i]));
+                        writeNum(sv+1, cutoffOutputPath + "_" + to_string(energy_fractions[i]), true);
                     }
                     energy_fractions.pop_back();
                 }
@@ -347,6 +432,48 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
     return 0;
 }
 
+void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath, int myid)
+{
+    double errorIndicatorEnergyFraction = 0.9999;
+
+    char tmp[100];
+    sprintf(tmp, ".%06d", myid);
+
+    std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+    std::ifstream checkfile(fullname);
+    if (!checkfile.good())
+    {
+        if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+        {
+            errorIndicatorEnergyFraction = 0.99;
+        }
+    }
+    std::vector<int> dimX, dimV, dimE, dimFv, dimFe;
+
+    // Get the rdim for the basis used.
+    readVec(dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+    readVec(dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+    readVec(dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+    if (!romOptions.SNS)
+    {
+        readVec(dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+        readVec(dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+    }
+
+    for (int i = 0; i < nw; i++)
+    {
+        twparam(i, 0) = dimX[dimX.size() - nw + i];
+        twparam(i, 1) = dimV[dimV.size() - nw + i];
+        twparam(i, 2) = dimE[dimE.size() - nw + i];
+        if (!romOptions.SNS)
+        {
+            twparam(i, 3) = dimFv[dimFv.size() - nw + i];
+            twparam(i, 4) = dimFe[dimFe.size() - nw + i];
+        }
+    }
+}
+
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
 {
     const int w = romOptions.window;
@@ -418,9 +545,16 @@ double PrintDiffParGridFunction(NormType normtype, const int rank, const std::st
     return PrintNormsOfParGridFunctions(normtype, rank, name, &rgf, gf, true);
 }
 
-void writeNum(int num, std::string file_name) {
+void writeNum(int num, std::string file_name, bool append) {
     ofstream file;
-    file.open(file_name);
+    if (append)
+    {
+        file.open(file_name, std::ios_base::app);
+    }
+    else
+    {
+        file.open(file_name);
+    }
     file << num << endl;
     file.close();
 }
@@ -435,9 +569,16 @@ void readNum(int& num, std::string file_name) {
     file.close();
 }
 
-void writeDouble(double num, std::string file_name) {
+void writeDouble(double num, std::string file_name, bool append) {
     ofstream file;
-    file.open(file_name);
+    if (append)
+    {
+        file.open(file_name, std::ios_base::app);
+    }
+    else
+    {
+        file.open(file_name);
+    }
     file << std::fixed << std::setprecision(16) << num <<endl;
     file.close();
 }
@@ -452,9 +593,16 @@ void readDouble(double& num, std::string file_name) {
     file.close();
 }
 
-void writeVec(vector<int> v, std::string file_name) {
+void writeVec(vector<int> v, std::string file_name, bool append) {
     ofstream file;
-    file.open(file_name);
+    if (append)
+    {
+        file.open(file_name, std::ios_base::app);
+    }
+    else
+    {
+        file.open(file_name);
+    }
     for(int i=0; i<v.size(); ++i) {
         file << v[i] << endl;
     }
@@ -470,6 +618,19 @@ void readVec(vector<int> &v, std::string file_name) {
         v.push_back(stoi(line));
     }
     file.close();
+}
+
+int countNumLines(std::string file_name)
+{
+    ifstream file;
+    file.open(file_name);
+    string line;
+    int count = 0;
+    while(getline(file, line)) {
+        count++;
+    }
+    file.close();
+    return count;
 }
 
 double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
