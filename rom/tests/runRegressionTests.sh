@@ -356,13 +356,13 @@ do
 					OUTPUT_DIR="${scriptName}-parallel"
 				fi
 				MERGE="$HEADER ./merge -o ${OUTPUT_DIR}"
-				GREEDY="./scripts/laghos_greedy_alg_launcher.sh"
+				GREEDY="./scripts/laghos_regression_test_greedy_alg_launcher.sh"
 
 				# Update subtest numbers
 				subTestNum=$((subTestNum+1))
 
 				# Get testtype
-				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -F '$LAGHOS')
+				RAN_COMMAND=$(awk "/$subTestNum\)/{f=1;next} /;;/{f=0} f" $script | grep -E '\$LAGHOS|\$GREEDY')
 				if [[ $RAN_COMMAND == *"writesol"* ]]; then
 					testtype=fom
 				elif [[ $RAN_COMMAND == *"romhr"* ]]; then
