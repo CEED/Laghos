@@ -96,6 +96,11 @@ int main(int argc, char *argv[])
     int myid = mpi.WorldRank();
     int nprocs = mpi.WorldSize();
 
+    MPI_Comm rom_com;
+    int color = (myid != 0);
+    const int status = MPI_Comm_split(MPI_COMM_WORLD, color, myid, &rom_com);
+    MFEM_VERIFY(status == MPI_SUCCESS, "Construction of hyperreduction comm failed");
+
     // Print the banner.
     if (mpi.Root()) {
         display_banner(cout);
@@ -132,6 +137,7 @@ int main(int argc, char *argv[])
     double dt_factor = 1.0;
     bool rom_build_database = false;
     bool rom_use_database = false;
+    bool rom_sample_stages = false;
     bool rom_offline = false;
     bool rom_online = false;
     bool rom_restore = false;
@@ -147,6 +153,7 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
+    const char *solution_basename = "";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
     const char *greedyParam = "bef";
@@ -221,6 +228,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM database building.");
     args.AddOption(&rom_use_database, "-use-database", "--use-database", "-no-use-database", "--no-use-database",
                    "Enable or disable ROM database usage.");
+    args.AddOption(&rom_sample_stages, "-sample-stages", "--sample-stages", "-no-sample-stages", "--no-sample-stages",
+                   "Enable or disable sampling of intermediate Runge Kutta stages in ROM offline phase.");
     args.AddOption(&rom_offline, "-offline", "--offline", "-no-offline", "--no-offline",
                    "Enable or disable ROM offline computations and output.");
     args.AddOption(&rom_online, "-online", "--online", "-no-online", "--no-online",
@@ -276,6 +285,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
+    args.AddOption(&solution_basename, "-soldir", "--solution_dir",
+                   "Name of the subdirectory containing reference solution files");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
@@ -327,6 +338,12 @@ int main(int argc, char *argv[])
     if (std::string(basename) != "") {
         outputPath += "/" + std::string(basename);
     }
+
+    std::string solution_outputPath = outputPath;
+    if (std::string(solution_basename) != "") {
+        solution_outputPath += "/" + std::string(solution_basename);
+    }
+    romOptions.solution_basename = &solution_outputPath;
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -406,7 +423,7 @@ int main(int argc, char *argv[])
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
-        mkdir((outputPath + "/ROMsol").c_str(), 0777);
+        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -643,7 +660,7 @@ int main(int argc, char *argv[])
     romOptions.offsetType = getOffsetStyle(offsetType);
     if (rom_online)
     {
-        std::string filename = outputPath + "/ROMsol/romS_1";
+        std::string filename = solution_outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
@@ -687,31 +704,39 @@ int main(int argc, char *argv[])
 
     // Define the explicit ODE solver used for time integration.
     ODESolver *ode_solver = NULL;
+    int RKStepNumSamples;
     ODESolver *ode_solver_dat = NULL;
+    HydroODESolver *ode_solver_samp = NULL;
     switch (ode_solver_type)
     {
     case 1:
+        rom_sample_stages = false;
         ode_solver = new ForwardEulerSolver;
         if (rom_build_database) ode_solver_dat = new ForwardEulerSolver;
         break;
     case 2:
+        rom_sample_stages = false;
         ode_solver = new RK2Solver(0.5);
         if (rom_build_database) ode_solver_dat = new RK2Solver(0.5);
         break;
     case 3:
+        rom_sample_stages = false;
         ode_solver = new RK3SSPSolver;
         if (rom_build_database) ode_solver_dat = new RK3SSPSolver;
         break;
     case 4:
-        ode_solver = new RK4Solver;
-        if (rom_build_database) ode_solver_dat = new RK4Solver;
+        if (rom_sample_stages) RKStepNumSamples = 3;
+        ode_solver = new RK4ROMSolver(rom_online, RKStepNumSamples);
+        if (rom_build_database) ode_solver_dat = new RK4ROMSolver();
         break;
     case 6:
+        rom_sample_stages = false;
         ode_solver = new RK6Solver;
         if (rom_build_database) ode_solver_dat = new RK6Solver;
         break;
     case 7:
-        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
+        if (rom_sample_stages) RKStepNumSamples = 1;
+        ode_solver = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace, RKStepNumSamples);
         if (rom_build_database) ode_solver_dat = new RK2AvgSolver(rom_online, H1FESpace, L2FESpace);
         break;
     default:
@@ -724,6 +749,7 @@ int main(int argc, char *argv[])
         return 3;
     }
 
+    if (rom_sample_stages) ode_solver_samp = dynamic_cast<HydroODESolver*> (ode_solver);
     romOptions.RK2AvgSolver = (ode_solver_type == 7);
 
     if (fom_data)
@@ -1091,15 +1117,15 @@ int main(int argc, char *argv[])
         char fileExtension[100];
         sprintf(fileExtension, ".%06d", myid);
 
-        std::string fullname = outputPath + "/ST_Sol_Position" + fileExtension;
+        std::string fullname = solution_outputPath + "/ST_Sol_Position" + fileExtension;
         ofs_STX.open(fullname.c_str(), std::ofstream::out);
         ofs_STX.precision(16);
 
-        fullname = outputPath + "/ST_Sol_Velocity" + fileExtension;
+        fullname = solution_outputPath + "/ST_Sol_Velocity" + fileExtension;
         ofs_STV.open(fullname.c_str(), std::ofstream::out);
         ofs_STV.precision(16);
 
-        fullname = outputPath + "/ST_Sol_Energy" + fileExtension;
+        fullname = solution_outputPath + "/ST_Sol_Energy" + fileExtension;
         ofs_STE.open(fullname.c_str(), std::ofstream::out);
         ofs_STE.precision(16);
 
@@ -1139,7 +1165,7 @@ int main(int argc, char *argv[])
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
@@ -1151,7 +1177,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
@@ -1168,6 +1194,7 @@ int main(int argc, char *argv[])
         {
             if (myid == 0)
             {
+                cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
             for (int curr_window = 1; curr_window < numWindows; curr_window++) {
@@ -1175,6 +1202,7 @@ int main(int argc, char *argv[])
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
                 {
+                    cout << "Writing SP files for window: " << curr_window << endl;
                     basis[curr_window]->writeSP(romOptions, curr_window);
                 }
             }
@@ -1245,7 +1273,7 @@ int main(int argc, char *argv[])
             SetWindowParameters(twparam, romOptions);
         }
 
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
         basis[0]->Init(romOptions, *S);
 
         if (romOptions.mergeXV)
@@ -1267,7 +1295,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+            std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -1307,7 +1335,7 @@ int main(int argc, char *argv[])
                 SetWindowParameters(twparam, romOptions);
                 basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                 delete basis[romOptions.window-1];
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, *S);
 
                 if (romOptions.mergeXV)
@@ -1337,7 +1365,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -1439,7 +1467,7 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 outfile_romS.precision(16);
                 if (romOptions.hyperreduce && romOptions.GramSchmidt)
@@ -1548,6 +1576,18 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
+                if (rom_sample_stages)
+                {
+                    std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
+                    std::vector<double>& RKTime = ode_solver_samp->GetRKTime();
+                    MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
+                    for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
+                    {
+                        sampler->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
+                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
+                    }
+                }
                 sampler->SampleSolution(t, last_dt, *S);
 
                 bool endWindow = false;
@@ -1644,7 +1684,7 @@ int main(int argc, char *argv[])
 
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
-                    int rdimeprev =  romOptions.dimE;
+                    int rdimeprev = romOptions.dimE;
 
                     SetWindowParameters(twparam, romOptions);
                     if (romOptions.hyperreduce)
@@ -1856,10 +1896,10 @@ int main(int argc, char *argv[])
     double relative_error = 10.0 * romOptions.greedyTol;
     if (rom_build_database && (rom_calc_rel_error_nonlocal_completed || rom_calc_rel_error_local_completed) && greedy_converged)
     {
-        cout << "Comparing to: " << outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
-        relative_error = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+        cout << "Comparing to: " << solution_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
+        relative_error = PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
     }
     if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
     {
@@ -1877,24 +1917,24 @@ int main(int argc, char *argv[])
     {
         if (writeSol)
         {
-            PrintParGridFunction(myid, outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
-            PrintParGridFunction(myid, outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
-            PrintParGridFunction(myid, outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
+            PrintParGridFunction(myid, solution_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+            PrintParGridFunction(myid, solution_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+            PrintParGridFunction(myid, solution_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
 
         if (solDiff)
         {
-            cout << "solDiff mode " << endl;
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position", x_gf);
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity", v_gf);
-            PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy", e_gf);
+            if (myid == 0) cout << "solDiff mode " << endl;
+            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position", x_gf);
+            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity", v_gf);
+            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy", e_gf);
         }
 
         if (visitDiffCycle >= 0)
         {
             VisItDataCollection dc(MPI_COMM_WORLD, visit_outputPath, pmesh);
             dc.Load(visitDiffCycle);
-            cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
+            if (myid == 0) cout << "Loaded VisIt DC cycle " << dc.GetCycle() << endl;
 
             ParGridFunction *dcfx = dc.GetParField("Position");
             ParGridFunction *dcfv = dc.GetParField("Velocity");
@@ -2150,7 +2190,7 @@ int main(int argc, char *argv[])
             // The greedy algorithm procedure has ended
             if (myid == 0)
             {
-                std::cout << "The greedy algorithm procedure has completed!" << std::endl;
+                cout << "The greedy algorithm procedure has completed!" << endl;
             }
             return 1;
         }

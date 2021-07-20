@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -t 0:30:00
+#SBATCH -t 1:00:00
 #SBATCH -p pdebug
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
@@ -537,6 +537,9 @@ do
 								if [[ $testtype == "fom" ]]; then
 									if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
 									[[ "$fileName" != "sVal"*".000000" ]]; then
+										continue 1
+									fi
+									if [[ "$fileName" == *"norms.000000" ]]; then
 										continue 1
 									fi
 								elif [[ $testtype == "romhr" ]]; then
