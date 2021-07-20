@@ -155,6 +155,7 @@ int main(int argc, char *argv[])
     const char *solution_basename = "";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
+    const char *indicatorType = "time";
     const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
@@ -312,6 +313,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&indicatorType, "-loctype", "--romindicatortype",
+                   "Indicator type for partitioning ROM windows.");
     args.AddOption(&spaceTimeMethod, "-romst", "--romspacetimetype",
                    "Space-time method.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
@@ -630,6 +633,7 @@ int main(int argc, char *argv[])
 
     std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
+    romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
         std::string filename = solution_outputPath + "/ROMsol/romS_1";
@@ -911,6 +915,8 @@ int main(int argc, char *argv[])
                 pd1_vdof = Vsize_h1/2+i;
             if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
                 pd2_vdof = Vsize_h1/2+i;
+            if (pd1_vdof >= 0 && pd2_vdof >= 0)
+                break;
         }
     }
 
@@ -1065,7 +1071,7 @@ int main(int argc, char *argv[])
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
-        sampler->SampleSolution(0, 0, *S);
+        sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         samplerTimer.Stop();
     }
 
@@ -1111,6 +1117,7 @@ int main(int argc, char *argv[])
     Vector romS, romS_old, lastLiftedSolution;
     std::vector<ROM_Operator*> romOper;
     romOper.assign(std::max(numWindows, 1), nullptr);
+    std::vector<double> pd_weight;
 
     if (!usingWindows)
     {
@@ -1202,7 +1209,30 @@ int main(int argc, char *argv[])
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
+            cout << "Indicator Style: " << indicatorType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+        }
+
+        if (problem == 7 && romOptions.indicatorType == penetrationDistance)
+        {
+            if (fom_data)
+            {
+                int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
+                for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
+                    basis[curr_window]->writePDweights(pd2_tdof, curr_window);
+                MPI_Barrier(pmesh->GetComm());
+            }
+            std::string pd_weight_outPath = outputPath + "/pd_weight0";
+            std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
+            MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+            pd_weight.clear();
+            double pd_w;
+            while (infile_pd_weight >> pd_w)
+            {
+                pd_weight.push_back(pd_w);
+            }
+            infile_pd_weight.close();
+            MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+1, "Number of weights do not match.")
         }
 
         if (romOptions.hyperreduce_prep)
@@ -1512,6 +1542,8 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
+
+                double real_pd;
                 if (rom_sample_stages)
                 {
                     std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
@@ -1519,12 +1551,42 @@ int main(int argc, char *argv[])
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
-                        sampler->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
-                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        if (problem == 7)
+                        {
+                            // 2D Rayleigh-Taylor penetration distance
+                            if (romOptions.indicatorType == penetrationDistance)
+                            {
+                                real_pd = -1.0;
+                                double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
+                                MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                            }
+                            else if (romOptions.indicatorType == parameterTime)
+                            {
+                                real_pd = romOptions.atwoodFactor * RKTime[RKidx] * RKTime[RKidx];
+                            }
+                            MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                        }
+                        sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
-                sampler->SampleSolution(t, last_dt, *S);
+                if (problem == 7)
+                {
+                    // 2D Rayleigh-Taylor penetration distance
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        real_pd = -1.0;
+                        double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+                        MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        real_pd = romOptions.atwoodFactor * t * t;
+                    }
+                    MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                }
+                sampler->SampleSolution(t, last_dt, real_pd, *S);
 
                 bool endWindow = false;
                 if (usingWindows)
@@ -1541,7 +1603,7 @@ int main(int argc, char *argv[])
 
                 if (samplerLast)
                 {
-                    samplerLast->SampleSolution(t, last_dt, *S);
+                    samplerLast->SampleSolution(t, last_dt, real_pd, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                         tOverlapMidpoint = t;
 
@@ -1595,7 +1657,7 @@ int main(int argc, char *argv[])
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
-                        sampler->SampleSolution(t, dt, *S);
+                        sampler->SampleSolution(t, dt, real_pd, *S);
                     }
                     else sampler = NULL;
                 }
@@ -1605,7 +1667,24 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                if (usingWindows && t >= twep[romOptions.window] && romOptions.window < numWindows-1)
+                double window_par;
+                if (problem == 7)
+                {
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        // 2D Rayleigh-Taylor penetration distance
+                        window_par = pd_weight[0];
+                        for (int i=1; i<pd_weight.size(); ++i)
+                            window_par -= pd_weight[i]*romS[i-1];
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        window_par = romOptions.atwoodFactor * t * t;
+                    }
+                    else window_par = t;
+                }
+
+                if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
                     romOptions.window++;
                     outfile_tw_steps << ti << "\n";
@@ -1663,6 +1742,22 @@ int main(int argc, char *argv[])
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
+
+                    if (problem == 7 && romOptions.indicatorType == penetrationDistance)
+                    {
+                        std::string pd_weight_outPath = outputPath + "/pd_weight" + to_string(romOptions.window);
+                        std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
+                        MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+                        pd_weight.clear();
+                        double pd_w;
+                        while (infile_pd_weight >> pd_w)
+                        {
+                            pd_weight.push_back(pd_w);
+                        }
+                        infile_pd_weight.close();
+                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+1, "Number of weights do not match.")
+                    }
+
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
@@ -2011,12 +2106,13 @@ int main(int argc, char *argv[])
         // 2D Rayleigh-Taylor penetration distance
         if (problem == 7 && fom_data)
         {
-            double my_pd[2], pd_max[2];
-            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
-            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            double proc_pd[2], real_pd[2];
+            proc_pd[0] = (pd1_vdof >= 0) ?  (*S)(pd1_vdof) : 0.0;
+            proc_pd[1] = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
             if (mpi.Root())
-                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
+                cout << "Penetration distance (upward, downward): " << real_pd[0] << ", " << real_pd[1] << endl;
         }
 
         if (visualization)

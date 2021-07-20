@@ -12,7 +12,7 @@
 
 using namespace std;
 
-void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
+void ROM_Sampler::SampleSolution(const double t, const double dt, const double pd, Vector const& S)
 {
     SetStateVariables(S);
     SetStateVariableRates(dt);
@@ -54,6 +54,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         if (writeSnapshots && addSample)
         {
             tSnapX.push_back(t);
+            if (pd >= 0.0) pdSnap.push_back(pd);
         }
     }
 
@@ -167,7 +168,6 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     std::ofstream outfile_tSnap(path + var);
 
     outfile_tSnap.precision(std::numeric_limits<double>::max_digits10);
-
     for (auto const& i: tSnap)
     {
         outfile_tSnap << i << endl;
@@ -241,6 +241,12 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv");
             printSnapshotTime(tSnapFe, path_tSnap, "Fe");
+        }
+
+        if (pdSnap.size() > 0)
+        {
+            std::string path_pdSnap = basename + "/param" + std::to_string(parameterID) + "_pdSnap";
+            printSnapshotTime(pdSnap, path_pdSnap, "X");
         }
     }
 
@@ -2274,6 +2280,28 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
         initVsp->read(basename + "/" + "initVsp" + "_" + to_string(window));
         initEsp->read(basename + "/" + "initEsp" + "_" + to_string(window));
     }
+}
+
+void ROM_Basis::writePDweights(const int id, const int window) const
+{
+    std::string pd_weight_outPath = basename + "/pd_weight" + to_string(window);
+    std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
+    if (id >= 0)
+    {
+        if (offsetInit)
+        {
+            outfile_pd_weight << (*initX)(id) << endl;
+        }
+        else
+        {
+            outfile_pd_weight << "0.0" << endl;
+        }
+        for (int i=0; i < rdimx; ++i)
+        {
+            outfile_pd_weight << (*basisX)(id,i) << endl;
+        }
+    }
+    outfile_pd_weight.close();
 }
 
 void ROM_Operator::ComputeReducedMv()
