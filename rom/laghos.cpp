@@ -355,6 +355,8 @@ int main(int argc, char *argv[])
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
+        if (std::string(solution_basename) != "")
+            mkdir(solution_outputPath.c_str(), 0777);
         mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
     }
 
