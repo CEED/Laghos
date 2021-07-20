@@ -1193,7 +1193,7 @@ int main(int argc, char *argv[])
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
             {
-                std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+                std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
                 outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
@@ -1201,7 +1201,7 @@ int main(int argc, char *argv[])
         }
         else if (!rom_build_database)
         {
-            std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+            std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
             romS.Load(outfile_romS, romS.Size());
         }
