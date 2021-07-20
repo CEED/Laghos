@@ -366,7 +366,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), solution_basename(*input.solution_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
       spaceTimeMethod(input.spaceTimeMethod), spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
@@ -2796,7 +2796,7 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
     char fileExtension[100];
     sprintf(fileExtension, ".%06d", rank);
 
-    std::string fullname = basename + "/ST_Sol_" + name + fileExtension;
+    std::string fullname = solution_basename + "/ST_Sol_" + name + fileExtension;
     std::ifstream ifs(fullname.c_str());
 
     const int tvsize = fespace->GetTrueVSize();

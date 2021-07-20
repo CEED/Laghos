@@ -539,6 +539,9 @@ do
 									[[ "$fileName" != "sVal"*".000000" ]]; then
 										continue 1
 									fi
+									if [[ "$fileName" == *"norms.000000" ]]; then
+										continue 1
+									fi
 								elif [[ $testtype == "romhr" ]]; then
 									if [[ "$fileName" != "ROMsol" ]]; then
 										continue 1
