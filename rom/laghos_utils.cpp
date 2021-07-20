@@ -16,8 +16,8 @@ void split_line(const std::string &line, std::vector<std::string> &words)
     }
 }
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
-                      const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
+void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
+                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
     if (romOptions.parameterID <= 0)
     {
@@ -355,8 +355,6 @@ void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
     romOptions.dimE = min(romOptions.max_dimE, twparam(w,2));
     romOptions.dimFv = romOptions.SNS ? romOptions.dimV : min(romOptions.max_dimFv, twparam(w,3));
     romOptions.dimFe = romOptions.SNS ? romOptions.dimE : min(romOptions.max_dimFe, twparam(w,4));
-    if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-    if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     const int oss = (romOptions.SNS) ? 3 : 5;
     romOptions.sampX = twparam(w,oss);

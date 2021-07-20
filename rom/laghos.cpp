@@ -359,9 +359,6 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
     MFEM_VERIFY(!(romOptions.hyperreduce && romOptions.hyperreduce_prep), "");
 
-    if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
-    if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
-
     romOptions.basename = &outputPath;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
@@ -657,20 +654,18 @@ int main(int argc, char *argv[])
 
     if (fom_data)
     {
+        Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
+        for (int d = 0; d < pmesh->Dimension(); d++)
         {
-            Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-            for (int d = 0; d < pmesh->Dimension(); d++)
-            {
-                // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
-                // enforce v_x/y/z = 0 for the velocity components.
-                ess_bdr = 0;
-                ess_bdr[d] = 1;
-                H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-                ess_tdofs.Append(dofs_list);
-                H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
-                FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-                ess_vdofs.Append(dofs_list);
-            }
+            // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e., we must
+            // enforce v_x/y/z = 0 for the velocity components.
+            ess_bdr = 0;
+            ess_bdr[d] = 1;
+            H1FESpace->GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+            ess_tdofs.Append(dofs_list);
+            H1FESpace->GetEssentialVDofs(ess_bdr, dofs_marker, d);
+            FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+            ess_vdofs.Append(dofs_list);
         }
     }
 
@@ -1124,9 +1119,10 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
+
+        // Set up the ROM basis and operator.
         if (usingWindows)
         {
-            // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
@@ -1150,39 +1146,17 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (!romOptions.hyperreduce)
-        {
-            basis[0]->Init(romOptions, *S);
-        }
-
-        if (romOptions.hyperreduce_prep)
-        {
-            if (myid == 0)
-            {
-                cout << "Writing SP files for window: 0" << endl;
-                basis[0]->writeSP(romOptions, 0);
-            }
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-                basis[curr_window]->Init(romOptions, *S);
-                basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
-                if (myid == 0)
-                {
-                    cout << "Writing SP files for window: " << curr_window << endl;
-                    basis[curr_window]->writeSP(romOptions, curr_window);
-                }
-            }
-        }
-
-        if (romOptions.mergeXV)
-        {
+        if (romOptions.mergeXV || romOptions.useXV)
             romOptions.dimX = basis[0]->GetDimX();
+        if (romOptions.mergeXV || romOptions.useVX)
             romOptions.dimV = basis[0]->GetDimV();
-        }
 
+        // Initialize the ROM coefficient vector.
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
 
         if (!romOptions.hyperreduce)
         {
+            basis[0]->Init(romOptions, *S);
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
             {
@@ -1205,8 +1179,30 @@ int main(int argc, char *argv[])
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
+        // Perform Gram-Schmidt procedure.
         if (romOptions.hyperreduce_prep)
         {
+            for (int curr_window = 0; curr_window < numWindows; curr_window++)
+                basis[curr_window]->InducedGramSchmidt(curr_window, romS); // romS is redundant
+        }
+
+        // Compute the hyper-reduction matrices.
+        if (romOptions.hyperreduce_prep)
+        {
+            if (myid == 0)
+            {
+                cout << "Writing SP files for window: 0" << endl;
+                basis[0]->writeSP(romOptions, 0);
+            }
+            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+                basis[curr_window]->Init(romOptions, *S);
+                basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
+                if (myid == 0)
+                {
+                    cout << "Writing SP files for window: " << curr_window << endl;
+                    basis[curr_window]->writeSP(romOptions, curr_window);
+                }
+            }
             if (myid == 0)
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;
@@ -1235,14 +1231,16 @@ int main(int argc, char *argv[])
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
         basis[0]->Init(romOptions, *S);
 
-        if (romOptions.mergeXV)
-        {
+        if (romOptions.mergeXV || romOptions.useXV)
             romOptions.dimX = basis[0]->GetDimX();
+        if (romOptions.mergeXV || romOptions.useVX)
             romOptions.dimV = basis[0]->GetDimV();
-        }
 
         int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
         romS.SetSize(romSsize);
+
+        basis[0]->InducedGramSchmidt(0, romS);
+
         if (infile_tw_steps.good())
         {
             infile_tw_steps >> nb_step;
@@ -1297,14 +1295,14 @@ int main(int argc, char *argv[])
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
                 basis[romOptions.window]->Init(romOptions, *S);
 
-                if (romOptions.mergeXV)
-                {
+                if (romOptions.mergeXV || romOptions.useXV)
                     romOptions.dimX = basis[romOptions.window]->GetDimX();
+                if (romOptions.mergeXV || romOptions.useVX)
                     romOptions.dimV = basis[romOptions.window]->GetDimV();
-                }
 
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
+                basis[romOptions.window]->InducedGramSchmidt(romOptions.window, romS);
             }
         } // time loop in "restore" phase
         ti--;
@@ -1348,6 +1346,10 @@ int main(int argc, char *argv[])
         if (romOptions.hyperreduce)
         {
             romOper[0]->ApplyHyperreduction(romS);
+        }
+        else if (rom_online)
+        {
+            basis[0]->InducedGramSchmidt(0, romS);
         }
         double tOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
@@ -1410,16 +1412,7 @@ int main(int argc, char *argv[])
                     std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                     std::ofstream outfile_romS(filename.c_str());
                     outfile_romS.precision(16);
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
-                    {
-                        Vector romCoord(romS);
-                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                        romCoord.Print(outfile_romS, 1);
-                    }
-                    else
-                    {
-                        romS.Print(outfile_romS, 1);
-                    }
+                    romS.Print(outfile_romS, 1);
                     outfile_romS.close();
                 }
 
@@ -1613,11 +1606,6 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce)
-                    {
-                        romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
-                    }
-
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
@@ -1636,11 +1624,10 @@ int main(int argc, char *argv[])
                         basis[romOptions.window]->Init(romOptions, *S);
                     }
 
-                    if (romOptions.mergeXV)
-                    {
+                    if (romOptions.mergeXV || romOptions.useXV)
                         romOptions.dimX = basis[romOptions.window]->GetDimX();
+                    if (romOptions.mergeXV || romOptions.useVX)
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
-                    }
 
                     if (!romOptions.hyperreduce)
                     {
@@ -1662,6 +1649,10 @@ int main(int argc, char *argv[])
                     if (romOptions.hyperreduce)
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
+                    }
+                    else if (rom_online)
+                    {
+                        basis[romOptions.window]->InducedGramSchmidt(romOptions.window, romS);
                     }
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
@@ -1770,19 +1761,19 @@ int main(int argc, char *argv[])
             }
         } // usual time loop
         timeLoopTimer.Stop();
+        if (myid == 0)
+        {
+            if (rom_online)
+                cout << "ROM online at t " << t << ", dt " << dt << ", romS norm " << romS.Norml2() << endl;
+            else
+                cout << "FOM simulation at t " << t << ", dt " << dt << endl;
+        }
         outfile_tw_steps.close();
     }
 
-    if (romOptions.hyperreduce)
+    if (romOptions.hyperreduce && spaceTime)
     {
-        if (romOptions.GramSchmidt && !spaceTime)
-        {
-            romOper[romOptions.window]->PostprocessHyperreduction(romS);
-        }
-        if (!rom_online || spaceTime)
-        {
-            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-        }
+        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
     }
 
     if (rom_offline)
@@ -1826,7 +1817,7 @@ int main(int argc, char *argv[])
         }
 
         samplerTimer.Stop();
-        if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
+        if (usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
     double relative_error = -1;
@@ -1954,9 +1945,9 @@ int main(int argc, char *argv[])
                     }
                 }
             }
+            delete basis[romOptions.window]; // moved inside the wrapper due to segmentation fault. deleted twice?
+            delete romOper[romOptions.window]; // moved inside the wrapper due to segmentation fault. deleted twice?
         }
-        delete basis[romOptions.window];
-        delete romOper[romOptions.window];
     }
 
     switch (ode_solver_type)

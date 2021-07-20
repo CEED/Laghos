@@ -577,6 +577,10 @@ public:
         return H1size;
     }
 
+    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip);
+    void InducedGramSchmidt(const int window, Vector &S);
+    void UndoInducedGramSchmidt(const int window, Vector &S);
+
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
                                 const bool timeDerivative=false,
@@ -659,6 +663,7 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
+    const bool restore;
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
@@ -718,6 +723,9 @@ private:
     CAROM::Matrix *BEsp = NULL;
     CAROM::Matrix *BFvsp = NULL;
     CAROM::Matrix *BFesp = NULL;
+
+    DenseMatrix RV;
+    DenseMatrix RE;
 
     int size_H1_sp = 0;
     int size_L2_sp = 0;
@@ -966,7 +974,7 @@ private:
 
     mutable double dt_est_SP = 0.0;
 
-    bool sns1 = false; // Simplify calculation by Eq. (4.4) in arXiv 1809.04064 when using 1st choice of SNS.
+    bool sns1 = false; // Simplify calculation as in Section 3.6 of arXiv 2104.11404 when using 1st choice of SNS.
     bool noMsolve = false;
     bool useReducedM = false;  // TODO: remove this?
 
@@ -976,15 +984,14 @@ private:
     void ComputeReducedMe();
 
     const bool useGramSchmidt;
-    DenseMatrix CoordinateBVsp, CoordinateBEsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp
-    void InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double& ip);
-    void InducedGramSchmidt(const int var, Vector &S);
+    DenseMatrix RVsp, REsp;  // TODO: use DenseSymmetricMatrix in mfem/linalg/symmat.hpp; but this is triangular, not symmetric
+    void InducedInnerProductSP(const int id1, const int id2, const int var, const int dim, double& ip);
+    void InducedGramSchmidtSP(const int var, Vector &S);
+    void UndoInducedGramSchmidtSP(const int var, Vector &S, bool keep_data);
 
     const SpaceTimeMethod spaceTimeMethod;
 
     const bool GaussNewton = true; // TODO: eliminate this
-
-    void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
