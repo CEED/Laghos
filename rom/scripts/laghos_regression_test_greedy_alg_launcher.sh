@@ -10,3 +10,4 @@ do
         $LAGHOS "$@"
     fi
 done
+exit 0
