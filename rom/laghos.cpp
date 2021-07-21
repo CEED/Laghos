@@ -1605,7 +1605,7 @@ int main(int argc, char *argv[])
                 {
                     samplerLast->SampleSolution(t, last_dt, real_pd, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
-                        tOverlapMidpoint = t;
+                        tOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
@@ -1613,7 +1613,7 @@ int main(int argc, char *argv[])
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
-                            tOverlapMidpoint = t;
+                            tOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                             sampler = NULL;
                         }
 
