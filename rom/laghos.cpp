@@ -1381,7 +1381,8 @@ int main(int argc, char *argv[])
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
-        double tOverlapMidpoint = 0.0;
+        double windowEndpoint = 0.0;
+        double windowOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
             if (t + dt >= t_final)
@@ -1607,7 +1608,7 @@ int main(int argc, char *argv[])
                 {
                     samplerLast->SampleSolution(t, last_dt, real_pd, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
-                        tOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+                        windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
@@ -1615,13 +1616,13 @@ int main(int argc, char *argv[])
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
-                            tOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+                            windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                             sampler = NULL;
                         }
 
-                        MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
+                        MFEM_VERIFY(windowOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << tOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            outfile_twp << windowOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
                                 outfile_twp << "\n";
                             else
@@ -1629,12 +1630,13 @@ int main(int argc, char *argv[])
                         }
                         delete samplerLast;
                         samplerLast = NULL;
-                        tOverlapMidpoint = 0.0;
+                        windowOverlapMidpoint = 0.0;
                     }
                 }
 
                 if (endWindow)
                 {
+                    windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                     if (numWindows == 0 && windowOverlapSamples > 0)
                     {
                         samplerLast = sampler;
@@ -1643,7 +1645,7 @@ int main(int argc, char *argv[])
                     {
                         sampler->Finalize(cutoff, romOptions);
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
                                 outfile_twp << "\n";
                             else
