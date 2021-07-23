@@ -48,7 +48,8 @@ enum samplingType
 enum errorIndicatorType
 {
     useLastLiftedSolution,
-    varyBasisSize
+    varyBasisSize,
+    fom
 };
 
 static offsetStyle getOffsetStyle(const char* offsetType)
@@ -103,7 +104,8 @@ static errorIndicatorType getErrorIndicatorType(const char* errorIndicator)
     static std::unordered_map<std::string, errorIndicatorType> errorIndicatorMap =
     {
         {"useLastLifted", useLastLiftedSolution},
-        {"varyBasisSize", varyBasisSize}
+        {"varyBasisSize", varyBasisSize},
+        {"fom", fom}
     };
     auto iter = errorIndicatorMap.find(errorIndicator);
     MFEM_VERIFY(iter != std::end(errorIndicatorMap), "Invalid input of error indicator type");
@@ -121,6 +123,7 @@ struct ROM_Options
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
+    double greedytf = -1.0; // error indicator final time for the greedy algorithm (only used in varyBasisSize and fom error indicator types)
     double greedyTol = 0.1; // relative error tolerance for the greedy algorithm
     double greedyAlpha = 1.05; // alpha constant for the greedy algorithm
     double greedyMaxClamp = 2.0; // max clamp constant for the greedy algorithm
@@ -313,7 +316,7 @@ public:
 
         if (offsetInit)
         {
-            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset/init";
+            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset" + input.basisIdentifier + "/init";
             initX = new CAROM::Vector(tH1size, true);
             initV = new CAROM::Vector(tH1size, true);
             initE = new CAROM::Vector(tL2size, true);
@@ -988,14 +991,8 @@ private:
 };
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
+        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
 CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
-                     const int errorIndicatorVecSize, const std::string outputPath);
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
-                     const std::string outputPath);
 
 #endif // MFEM_LAGHOS_ROM
