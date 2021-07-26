@@ -33,35 +33,8 @@
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
-// Test problems:
-//    p = 0  --> Taylor-Green vortex (smooth problem).
-//    p = 1  --> Sedov blast.
-//    p = 2  --> 1D Sod shock tube.
-//    p = 3  --> Triple point.
-//    p = 4  --> Gresho vortex (smooth problem).
-//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
-//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
-//    p = 7  --> 2D Rayleigh-Taylor instability problem.
-//
-// Sample runs: see README.md, section 'Verification of Results'.
-//
-// Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
-// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
-// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
-// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
-// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
-// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
-// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
-// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
-// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
-// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
+// Test problems: see README.
 
-#include <fstream>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include "laghos_solver.hpp"
 
 using std::cout;
@@ -77,9 +50,7 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
-static long GetMaxRssMB();
 static void display_banner(std::ostream&);
-static void Checks(const int dim, const int ti, const double norm, int &checks);
 
 int main(int argc, char *argv[])
 {
@@ -96,7 +67,6 @@ int main(int argc, char *argv[])
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
-   Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
    int order_q = -1;
@@ -107,20 +77,12 @@ int main(int argc, char *argv[])
    double ftz_tol = 0.0;
    int cg_max_iter = 300;
    int max_tsteps = -1;
-   bool p_assembly = true;
    bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 0;
-   const char *device = "cpu";
-   bool check = false;
-   bool mem_usage = false;
-   bool fom = false;
-   bool gpu_aware_mpi = false;
-   int dev = 0;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
 
@@ -131,8 +93,6 @@ int main(int argc, char *argv[])
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
-   args.AddOption(&cxyz, "-c", "--cartesian-partitioning",
-                  "Use Cartesian partitioning.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
@@ -155,9 +115,6 @@ int main(int argc, char *argv[])
                   "Maximum number of CG iterations (velocity linear solve).");
    args.AddOption(&max_tsteps, "-ms", "--max-steps",
                   "Maximum number of steps (negative means no restriction).");
-   args.AddOption(&p_assembly, "-pa", "--partial-assembly", "-fa",
-                  "--full-assembly",
-                  "Activate 1D tensor-based assembly (partial assembly).");
    args.AddOption(&impose_visc, "-iv", "--impose-viscosity", "-niv",
                   "--no-impose-viscosity",
                   "Use active viscosity terms even for smooth problems.");
@@ -172,26 +129,6 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   args.AddOption(&partition_type, "-pt", "--partition",
-                  "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
-                  "Here x,y,z are relative task ratios in each direction.\n\t"
-                  "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
-                  "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
-                  "NOTE: the serially refined mesh must have the appropriate number\n\t"
-                  "of zones in each direction, e.g., the number of zones in direction x\n\t"
-                  "must be divisible by the number of MPI tasks in direction x.\n\t"
-                  "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
-   args.AddOption(&device, "-d", "--device",
-                  "Device configuration string, see Device::Configure().");
-   args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
-                  "Enable 2D checks.");
-   args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
-                  "Enable memory usage.");
-   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
-                  "Enable figure of merit output.");
-   args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
-                  "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
-   args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.Parse();
    if (!args.Good())
    {
@@ -199,12 +136,6 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (mpi.Root()) { args.PrintOptions(cout); }
-
-   // Configure the device from the command line options
-   Device backend;
-   backend.Configure(device, dev);
-   if (mpi.Root()) { backend.Print(); }
-   backend.SetGPUAwareMPI(gpu_aware_mpi);
 
    // On all processors, use the default builtin 1D/2D/3D mesh or read the
    // serial one given on the command line.
@@ -248,16 +179,6 @@ int main(int argc, char *argv[])
    }
    dim = mesh->Dimension();
 
-   // 1D vs partial assembly sanity check.
-   if (p_assembly && dim == 1)
-   {
-      p_assembly = false;
-      if (mpi.Root())
-      {
-         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
-      }
-   }
-
    // Refine the mesh in serial to increase the resolution.
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
    const int mesh_NE = mesh->GetNE();
@@ -267,133 +188,7 @@ int main(int argc, char *argv[])
    }
 
    // Parallel partitioning of the mesh.
-   ParMesh *pmesh = nullptr;
-   const int num_tasks = mpi.WorldSize(); int unit = 1;
-   int *nxyz = new int[dim];
-   switch (partition_type)
-   {
-      case 0:
-         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         break;
-      case 11:
-      case 111:
-         unit = static_cast<int>(floor(pow(num_tasks, 1.0 / dim) + 1e-2));
-         for (int d = 0; d < dim; d++) { nxyz[d] = unit; }
-         break;
-      case 21: // 2D
-         unit = static_cast<int>(floor(pow(num_tasks / 2, 1.0 / 2) + 1e-2));
-         nxyz[0] = 2 * unit; nxyz[1] = unit;
-         break;
-      case 31: // 2D
-         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 2) + 1e-2));
-         nxyz[0] = 3 * unit; nxyz[1] = unit;
-         break;
-      case 32: // 2D
-         unit = static_cast<int>(floor(pow(2 * num_tasks / 3, 1.0 / 2) + 1e-2));
-         nxyz[0] = 3 * unit / 2; nxyz[1] = unit;
-         break;
-      case 49: // 2D
-         unit = static_cast<int>(floor(pow(9 * num_tasks / 4, 1.0 / 2) + 1e-2));
-         nxyz[0] = 4 * unit / 9; nxyz[1] = unit;
-         break;
-      case 51: // 2D
-         unit = static_cast<int>(floor(pow(num_tasks / 5, 1.0 / 2) + 1e-2));
-         nxyz[0] = 5 * unit; nxyz[1] = unit;
-         break;
-      case 211: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 2, 1.0 / 3) + 1e-2));
-         nxyz[0] = 2 * unit; nxyz[1] = unit; nxyz[2] = unit;
-         break;
-      case 221: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 4, 1.0 / 3) + 1e-2));
-         nxyz[0] = 2 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
-         break;
-      case 311: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2));
-         nxyz[0] = 3 * unit; nxyz[1] = unit; nxyz[2] = unit;
-         break;
-      case 321: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 6, 1.0 / 3) + 1e-2));
-         nxyz[0] = 3 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
-         break;
-      case 322: // 3D.
-         unit = static_cast<int>(floor(pow(2 * num_tasks / 3, 1.0 / 3) + 1e-2));
-         nxyz[0] = 3 * unit / 2; nxyz[1] = unit; nxyz[2] = unit;
-         break;
-      case 432: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 3, 1.0 / 3) + 1e-2));
-         nxyz[0] = 2 * unit; nxyz[1] = 3 * unit / 2; nxyz[2] = unit;
-         break;
-      case 511: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 5, 1.0 / 3) + 1e-2));
-         nxyz[0] = 5 * unit; nxyz[1] = unit; nxyz[2] = unit;
-         break;
-      case 521: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 10, 1.0 / 3) + 1e-2));
-         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
-         break;
-      case 522: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2));
-         nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
-         break;
-      case 911: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2));
-         nxyz[0] = 9 * unit; nxyz[1] = unit; nxyz[2] = unit;
-         break;
-      case 921: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 18, 1.0 / 3) + 1e-2));
-         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = unit;
-         break;
-      case 922: // 3D.
-         unit = static_cast<int>(floor(pow(num_tasks / 36, 1.0 / 3) + 1e-2));
-         nxyz[0] = 9 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
-         break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown partition type: " << partition_type << '\n';
-         }
-         delete mesh;
-         MPI_Finalize();
-         return 3;
-   }
-   int product = 1;
-   for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
-   if (product == num_tasks || cartesian_partitioning)
-   {
-      if (cartesian_partitioning)
-      {
-         int cproduct = 1;
-         for (int d = 0; d < dim; d++) { cproduct *= cxyz[d]; }
-         MFEM_VERIFY(!cartesian_partitioning || cxyz.Size() == dim,
-                     "Expected " << mesh->SpaceDimension() << " integers with the "
-                     "option --cartesian-partitioning.");
-         MFEM_VERIFY(!cartesian_partitioning || num_tasks == cproduct,
-                     "Expected cartesian partitioning product to match number of ranks.");
-      }
-      int *partitioning = cartesian_partitioning ?
-                          mesh->CartesianPartitioning(cxyz):
-                          mesh->CartesianPartitioning(nxyz);
-      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, partitioning);
-      delete [] partitioning;
-   }
-   else
-   {
-      if (myid == 0)
-      {
-         cout << "Non-Cartesian partitioning through METIS will be used.\n";
-#ifndef MFEM_USE_METIS
-         cout << "MFEM was built without METIS. "
-              << "Adjust the number of tasks to use a Cartesian split." << endl;
-#endif
-      }
-#ifndef MFEM_USE_METIS
-      return 1;
-#endif
-      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
-   }
-   delete [] nxyz;
+   ParMesh *pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
    delete mesh;
 
    // Refine the mesh further in parallel to increase the resolution.
@@ -472,7 +267,7 @@ int main(int argc, char *argv[])
    offset[1] = offset[0] + Vsize_h1;
    offset[2] = offset[1] + Vsize_h1;
    offset[3] = offset[2] + Vsize_l2;
-   BlockVector S(offset, Device::GetMemoryType());
+   BlockVector S(offset);
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
@@ -485,18 +280,11 @@ int main(int argc, char *argv[])
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
-   // Sync the data location of x_gf with its base, S
-   x_gf.SyncAliasMemory(S);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   for (int i = 0; i < ess_vdofs.Size(); i++)
-   {
-      v_gf(ess_vdofs[i]) = 0.0;
-   }
-   // Sync the data location of v_gf with its base, S
-   v_gf.SyncAliasMemory(S);
+   for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs. Then we do an
@@ -524,8 +312,6 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
-   // Sync the data location of e_gf with its base, S
-   e_gf.SyncAliasMemory(S);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
@@ -555,7 +341,7 @@ int main(int argc, char *argv[])
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
-                                                visc, vorticity, p_assembly,
+                                                visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
@@ -613,29 +399,6 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
-   long mem=0, mmax=0, msum=0;
-   int checks = 0;
-   //   const double internal_energy = hydro.InternalEnergy(e_gf);
-   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-   //   if (mpi.Root())
-   //   {
-   //      cout << std::fixed;
-   //      cout << "step " << std::setw(5) << 0
-   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-   //            << internal_energy
-   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-   //            << kinetic_energy
-   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
-   //            << kinetic_energy+internal_energy;
-   //      cout << std::fixed;
-   //      if (mem_usage)
-   //      {
-   //         cout << ", mem: " << mmax << "/" << msum << " MB";
-   //      }
-   //      cout << endl;
-   //   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -671,13 +434,6 @@ int main(int argc, char *argv[])
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
-      // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
-      // data in S. This operation simply updates the Memory validity flags of
-      // the sub-vectors to match those of S.
-      x_gf.SyncAliasMemory(S);
-      v_gf.SyncAliasMemory(S);
-      e_gf.SyncAliasMemory(S);
-
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
       // and the oper object might have redirected the mesh positions to those.
@@ -687,12 +443,6 @@ int main(int argc, char *argv[])
       {
          double lnorm = e_gf * e_gf, norm;
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-         if (mem_usage)
-         {
-            mem = GetMaxRssMB();
-            MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-            MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
-         }
          // const double internal_energy = hydro.InternalEnergy(e_gf);
          // const double kinetic_energy = hydro.KineticEnergy(v_gf);
          if (mpi.Root())
@@ -712,10 +462,6 @@ int main(int argc, char *argv[])
             //   << ",\t|E| = " << std::setprecision(10) << std::scientific
             //  << kinetic_energy+internal_energy;
             cout << std::fixed;
-            if (mem_usage)
-            {
-               cout << ", mem: " << mmax << "/" << msum << " MB";
-            }
             cout << endl;
          }
 
@@ -780,25 +526,7 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
-
-      // Problems checks
-      if (check)
-      {
-         double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-         const double e_norm = sqrt(norm);
-         MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
-         MFEM_VERIFY(order_v==2, "check: order_v");
-         MFEM_VERIFY(order_e==1, "check: order_e");
-         MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final == 0.6, "check: t_final");
-         MFEM_VERIFY(cfl==0.5, "check: cfl");
-         MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
-         MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         Checks(dim, ti, e_norm, checks);
-      }
    }
-   MFEM_VERIFY(!check || checks == 2, "Check error!");
 
    switch (ode_solver_type)
    {
@@ -809,15 +537,6 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
 
-   hydro.PrintTimingData(mpi.Root(), steps, fom);
-
-   if (mem_usage)
-   {
-      mem = GetMaxRssMB();
-      MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-      MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
-   }
-
    const double energy_final = hydro.InternalEnergy(e_gf) +
                                hydro.KineticEnergy(v_gf);
    if (mpi.Root())
@@ -825,11 +544,6 @@ int main(int argc, char *argv[])
       cout << endl;
       cout << "Energy  diff: " << std::scientific << std::setprecision(2)
            << fabs(energy_init - energy_final) << endl;
-      if (mem_usage)
-      {
-         cout << "Maximum memory resident set size: "
-              << mmax << "/" << msum << " MB" << endl;
-      }
    }
 
    // Print the error.
@@ -1049,101 +763,4 @@ static void display_banner(std::ostream &os)
       << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
       << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
       << "               /____/                       " << endl << endl;
-}
-
-static long GetMaxRssMB()
-{
-   struct rusage usage;
-   if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
-#ifndef __APPLE__
-   const long unit = 1024; // kilo
-#else
-   const long unit = 1024*1024; // mega
-#endif
-   return usage.ru_maxrss/unit; // mega bytes
-}
-
-static bool rerr(const double a, const double v, const double eps)
-{
-   MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
-   const double err_a = fabs((a-v)/a);
-   const double err_v = fabs((a-v)/v);
-   return fmax(err_a, err_v) < eps;
-}
-
-static void Checks(const int dim, const int ti, const double nrm, int &chk)
-{
-   const int pb = problem;
-   const double eps = 1.e-13;
-   printf("%.15e\n",nrm);
-   if (dim==2)
-   {
-      const double p0_05 = 6.54653862453438e+00;
-      const double p0_27 = 7.58857635779292e+00;
-      if (pb==0 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==27) {chk++; MFEM_VERIFY(rerr(nrm,p0_27,eps),"P0, #27");}
-      const double p1_05 = 3.50825494522579e+00;
-      const double p1_15 = 2.75644459682321e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==15) {chk++; MFEM_VERIFY(rerr(nrm,p1_15,eps),"P1, #15");}
-      const double p2_05 = 1.02074579565124e+01;
-      const double p2_59 = 1.72159020590190e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-      const double p3_05 = 8.0;
-      const double p3_16 = 8.0;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 3.446324942352448e+01;
-      const double p4_18 = 3.446844033767240e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
-      const double p5_05 = 1.030899557252528e+01;
-      const double p5_36 = 1.057362418574309e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-      const double p6_05 = 8.039707010835693e+00;
-      const double p6_36 = 8.316970976817373e+00;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-      const double p7_05 = 1.514929259650760e+01;
-      const double p7_25 = 1.514931278155159e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(rerr(nrm,p7_25,eps),"P7, #25");}
-   }
-   if (dim==3)
-   {
-      const double  p0_05 = 1.198510951452527e+03;
-      const double p0_188 = 1.199384410059154e+03;
-      if (pb==0 && ti==005) {chk++; MFEM_VERIFY(rerr(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==188) {chk++; MFEM_VERIFY(rerr(nrm,p0_188,eps),"P0, #188");}
-      const double p1_05 = 1.33916371859257e+01;
-      const double p1_28 = 7.52107367739800e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==28) {chk++; MFEM_VERIFY(rerr(nrm,p1_28,eps),"P1, #28");}
-      const double p2_05 = 2.041491591302486e+01;
-      const double p2_59 = 3.443180411803796e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(rerr(nrm,p2_59,eps),"P2, #59");}
-      const double p3_05 = 1.600000000000000e+01;
-      const double p3_16 = 1.600000000000000e+01;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(rerr(nrm,p3_16,eps),"P3, #16");}
-      const double p4_05 = 6.892649884704898e+01;
-      const double p4_18 = 6.893688067534482e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(rerr(nrm,p4_18,eps),"P4, #18");}
-      const double p5_05 = 2.061984481890964e+01;
-      const double p5_36 = 2.114519664792607e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p5_36,eps),"P5, #36");}
-      const double p6_05 = 1.607988713996459e+01;
-      const double p6_36 = 1.662736010353023e+01;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(rerr(nrm,p6_36,eps),"P6, #36");}
-      const double p7_05 = 3.029858112572883e+01;
-      const double p7_24 = 3.029858832743707e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(rerr(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(rerr(nrm,p7_24,eps),"P7, #24");}
-   }
 }

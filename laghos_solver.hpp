@@ -36,62 +36,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
 
-struct TimingData
-{
-   // Total times for all major computations:
-   // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
-   StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
-
-   // Store the number of dofs of the corresponding local CG
-   const HYPRE_Int L2dof;
-
-   // These accumulate the total processed dofs or quad points:
-   // #(CG iterations) for the L2 CG solve.
-   // #quads * #(RK sub steps) for the quadrature data computations.
-   HYPRE_Int H1iter, L2iter;
-   HYPRE_Int quad_tstep;
-
-   TimingData(const HYPRE_Int l2d) :
-      L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
-};
-
-class QUpdate
-{
-private:
-   const int dim, vdim, NQ, NE, Q1D;
-   const bool use_viscosity, use_vorticity;
-   const double cfl;
-   TimingData *timer;
-   const IntegrationRule &ir;
-   ParFiniteElementSpace &H1, &L2;
-   const Operator *H1R;
-   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
-   const QuadratureInterpolator *q1,*q2;
-   const ParGridFunction &gamma_gf;
-public:
-   QUpdate(const int d, const int ne, const int q1d,
-           const bool visc, const bool vort,
-           const double cfl, TimingData *t,
-           const ParGridFunction &gamma_gf,
-           const IntegrationRule &ir,
-           ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d), vdim(h1.GetVDim()),
-      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
-      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
-      timer(t), ir(ir), H1(h1), L2(l2),
-      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-      q_dt_est(NE*NQ),
-      q_e(NE*NQ),
-      e_vec(NQ*NE*vdim),
-      q_dx(NQ*NE*vdim*vdim),
-      q_dv(NQ*NE*vdim*vdim),
-      q1(H1.GetQuadratureInterpolator(ir)),
-      q2(L2.GetQuadratureInterpolator(ir)),
-      gamma_gf(gamma_gf) { }
-
-   void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
-};
-
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
@@ -102,18 +46,14 @@ protected:
    ParMesh *pmesh;
    // FE spaces local and global sizes
    const int H1Vsize;
-   const int H1TVSize;
-   const HYPRE_Int H1GTVSize;
    const int L2Vsize;
-   const int L2TVSize;
-   const HYPRE_Int L2GTVSize;
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
-   const bool use_viscosity, use_vorticity, p_assembly;
+   const bool use_viscosity, use_vorticity;
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
@@ -134,19 +74,7 @@ protected:
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
-   // Same as above, but done through partial assembly.
-   ForcePAOperator *ForcePA;
-   // Mass matrices done through partial assembly:
-   // velocity (coupled H1 assembly) and energy (local L2 assemblies).
-   MassPAOperator *VMassPA, *EMassPA;
-   OperatorJacobiSmoother *VMassPA_Jprec;
-   // Linear solver for energy.
-   CGSolver CG_VMass, CG_EMass;
-   mutable TimingData timer;
-   mutable QUpdate *qupdate;
    mutable Vector X, B, one, rhs, e_rhs;
-   mutable ParGridFunction rhs_c_gf, dvc_gf;
-   mutable Array<int> c_tdofs[3];
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -172,16 +100,13 @@ public:
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,
-                           const bool visc, const bool vort, const bool pa,
+                           const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
-
-   virtual MemoryClass GetMemoryClass() const
-   { return Device::GetMemoryClass(); }
 
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
@@ -200,8 +125,6 @@ public:
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
-
-   void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

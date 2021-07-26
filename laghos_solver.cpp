@@ -80,14 +80,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *pmesh,
-                         ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
-                         QuadratureData &qdata,
-                         double &volume);
-
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
@@ -99,7 +91,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cfl,
                                                  const bool visc,
                                                  const bool vort,
-                                                 const bool p_assembly,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
@@ -108,11 +99,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),
-   H1TVSize(H1.TrueVSize()),
-   H1GTVSize(H1.GlobalTrueVSize()),
    L2Vsize(L2.GetVSize()),
-   L2TVSize(L2.TrueVSize()),
-   L2GTVSize(L2.GlobalTrueVSize()),
    block_offsets(4),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
@@ -123,7 +110,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
-   p_assembly(p_assembly),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
@@ -136,105 +122,60 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1),
-   ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
-   VMassPA_Jprec(nullptr),
-   CG_VMass(H1.GetParMesh()->GetComm()),
-   CG_EMass(L2.GetParMesh()->GetComm()),
-   timer(p_assembly ? L2TVSize : 1),
-   qupdate(nullptr),
    X(H1c.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
    rhs(H1Vsize),
-   e_rhs(L2Vsize),
-   rhs_c_gf(&H1c),
-   dvc_gf(&H1c)
+   e_rhs(L2Vsize)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
    block_offsets[3] = block_offsets[2] + L2Vsize;
-   one.UseDevice(true);
    one = 1.0;
 
-   if (p_assembly)
+   // Standard local assembly and inversion for energy mass matrices.
+   // 'Me' is used in the computation of the internal energy
+   // which is used twice: once at the start and once at the end of the run.
+   MassIntegrator mi(rho0_coeff, &ir);
+   for (int e = 0; e < NE; e++)
    {
-      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
-                            &timer, gamma_gf, ir, H1, L2);
-      ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
-      EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
-      // Inside the above constructors for mass, there is reordering of the mesh
-      // nodes which is performed on the host. Since the mesh nodes are a
-      // subvector, so we need to sync with the rest of the base vector (which
-      // is assumed to be in the memory space used by the mfem::Device).
-      H1.GetParMesh()->GetNodes()->ReadWrite();
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-      // we must enforce v_x/y/z = 0 for the velocity components.
-      const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
-      Array<int> ess_bdr(bdr_attr_max);
-      for (int c = 0; c < dim; c++)
-      {
-         ess_bdr = 0;
-         ess_bdr[c] = 1;
-         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-         c_tdofs[c].Read();
-      }
-      X.UseDevice(true);
-      B.UseDevice(true);
-      rhs.UseDevice(true);
-      e_rhs.UseDevice(true);
+      DenseMatrixInverse inv(&Me(e));
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      mi.AssembleElementMatrix(fe, Tr, Me(e));
+      inv.Factor();
+      inv.GetInverseMatrix(Me_inv(e));
    }
-   else
-   {
-      // Standard local assembly and inversion for energy mass matrices.
-      // 'Me' is used in the computation of the internal energy
-      // which is used twice: once at the start and once at the end of the run.
-      MassIntegrator mi(rho0_coeff, &ir);
-      for (int e = 0; e < NE; e++)
-      {
-         DenseMatrixInverse inv(&Me(e));
-         const FiniteElement &fe = *L2.GetFE(e);
-         ElementTransformation &Tr = *L2.GetElementTransformation(e);
-         mi.AssembleElementMatrix(fe, Tr, Me(e));
-         inv.Factor();
-         inv.GetInverseMatrix(Me_inv(e));
-      }
-      // Standard assembly for the velocity mass matrix.
-      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-      Mv.AddDomainIntegrator(vmi);
-      Mv.Assemble();
-      Mv_spmat_copy = Mv.SpMat();
-   }
+   // Standard assembly for the velocity mass matrix.
+   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   Mv.AddDomainIntegrator(vmi);
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-   if (dim > 1 && p_assembly)
+
+   const int NQ = ir.GetNPoints();
+   Vector rho_vals(NQ);
+   for (int e = 0; e < NE; e++)
    {
-      Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol);
-   }
-   else
-   {
-      const int NQ = ir.GetNPoints();
-      Vector rho_vals(NQ);
-      for (int e = 0; e < NE; e++)
+      rho0_gf.GetValues(e, ir, rho_vals);
+      ElementTransformation &Tr = *H1.GetElementTransformation(e);
+      for (int q = 0; q < NQ; q++)
       {
-         rho0_gf.GetValues(e, ir, rho_vals);
-         ElementTransformation &Tr = *H1.GetElementTransformation(e);
-         for (int q = 0; q < NQ; q++)
-         {
-            const IntegrationPoint &ip = ir.IntPoint(q);
-            Tr.SetIntPoint(&ip);
-            DenseMatrixInverse Jinv(Tr.Jacobian());
-            Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-            const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-            qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
-         }
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         DenseMatrixInverse Jinv(Tr.Jacobian());
+         Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
+         const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
+         qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
       }
-      for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
    }
+   for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
+
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))
@@ -248,49 +189,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    qdata.h0 /= (double) H1.GetOrder(0);
 
-   if (p_assembly)
-   {
-      // Setup the preconditioner of the velocity mass operator.
-      // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> empty_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty_tdofs);
-      CG_VMass.SetPreconditioner(*VMassPA_Jprec);
-
-      CG_VMass.SetOperator(*VMassPA);
-      CG_VMass.SetRelTol(cg_rel_tol);
-      CG_VMass.SetAbsTol(0.0);
-      CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(-1);
-
-      CG_EMass.SetOperator(*EMassPA);
-      CG_EMass.iterative_mode = false;
-      CG_EMass.SetRelTol(cg_rel_tol);
-      CG_EMass.SetAbsTol(0.0);
-      CG_EMass.SetMaxIter(cg_max_iter);
-      CG_EMass.SetPrintLevel(-1);
-   }
-   else
-   {
-      ForceIntegrator *fi = new ForceIntegrator(qdata);
-      fi->SetIntRule(&ir);
-      Force.AddDomainIntegrator(fi);
-      // Make a dummy assembly to figure out the sparsity.
-      Force.Assemble(0);
-      Force.Finalize(0);
-   }
+   ForceIntegrator *fi = new ForceIntegrator(qdata);
+   fi->SetIntRule(&ir);
+   Force.AddDomainIntegrator(fi);
+   // Make a dummy assembly to figure out the sparsity.
+   Force.Assemble(0);
+   Force.Finalize(0);
 }
 
-LagrangianHydroOperator::~LagrangianHydroOperator()
-{
-   delete qupdate;
-   if (p_assembly)
-   {
-      delete EMassPA;
-      delete VMassPA;
-      delete VMassPA_Jprec;
-      delete ForcePA;
-   }
-}
+LagrangianHydroOperator::~LagrangianHydroOperator() { }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
@@ -333,81 +240,30 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       accel_src_gf.Read();
    }
 
-   if (p_assembly)
+   Force.Mult(one, rhs);
+   rhs.Neg();
+
+   if (source_type == 2)
    {
-      timer.sw_force.Start();
-      ForcePA->Mult(one, rhs);
-      timer.sw_force.Stop();
-      rhs.Neg();
-
-      // Partial assembly solve for each velocity component
-      const int size = H1c.GetVSize();
-      const Operator *Pconf = H1c.GetProlongationMatrix();
-      for (int c = 0; c < dim; c++)
-      {
-         dvc_gf.MakeRef(&H1c, dS_dt, H1Vsize + c*size);
-         rhs_c_gf.MakeRef(&H1c, rhs, c*size);
-
-         if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
-         else { B = rhs_c_gf; }
-
-         if (source_type == 2)
-         {
-            ParGridFunction accel_comp;
-            accel_comp.MakeRef(&H1c, accel_src_gf, c*size);
-            Vector AC;
-            accel_comp.GetTrueDofs(AC);
-            Vector BA(AC.Size());
-            VMassPA->MultFull(AC, BA);
-            B += BA;
-         }
-
-         H1c.GetRestrictionMatrix()->Mult(dvc_gf, X);
-         VMassPA->SetEssentialTrueDofs(c_tdofs[c]);
-         VMassPA->EliminateRHS(B);
-         timer.sw_cgH1.Start();
-         CG_VMass.Mult(B, X);
-         timer.sw_cgH1.Stop();
-         timer.H1iter += CG_VMass.GetNumIterations();
-         if (Pconf) { Pconf->Mult(X, dvc_gf); }
-         else { dvc_gf = X; }
-         // We need to sync the subvector 'dvc_gf' with its base vector
-         // because it may have been moved to a different memory space.
-         dvc_gf.GetMemory().SyncAlias(dS_dt.GetMemory(), dvc_gf.Size());
-      }
+      Vector rhs_accel(rhs.Size());
+      Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
+      rhs += rhs_accel;
    }
-   else
-   {
-      timer.sw_force.Start();
-      Force.Mult(one, rhs);
-      timer.sw_force.Stop();
-      rhs.Neg();
 
-      if (source_type == 2)
-      {
-         Vector rhs_accel(rhs.Size());
-         Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
-         rhs += rhs_accel;
-      }
+   HypreParMatrix A;
+   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 
-      HypreParMatrix A;
-      Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
-
-      CGSolver cg(H1.GetParMesh()->GetComm());
-      HypreSmoother prec;
-      prec.SetType(HypreSmoother::Jacobi, 1);
-      cg.SetPreconditioner(prec);
-      cg.SetOperator(A);
-      cg.SetRelTol(cg_rel_tol);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(cg_max_iter);
-      cg.SetPrintLevel(-1);
-      timer.sw_cgH1.Start();
-      cg.Mult(B, X);
-      timer.sw_cgH1.Stop();
-      timer.H1iter += cg.GetNumIterations();
-      Mv.RecoverFEMSolution(X, rhs, dv);
-   }
+   CGSolver cg(H1.GetParMesh()->GetComm());
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   cg.SetPreconditioner(prec);
+   cg.SetOperator(A);
+   cg.SetRelTol(cg_rel_tol);
+   cg.SetAbsTol(0.0);
+   cg.SetMaxIter(cg_max_iter);
+   cg.SetPrintLevel(-1);
+   cg.Mult(B, X);
+   Mv.RecoverFEMSolution(X, rhs, dv);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -434,38 +290,15 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    }
 
    Array<int> l2dofs;
-   if (p_assembly)
+   Force.MultTranspose(v, e_rhs);
+   if (e_source) { e_rhs += *e_source; }
+   Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+   for (int e = 0; e < NE; e++)
    {
-      timer.sw_force.Start();
-      ForcePA->MultTranspose(v, e_rhs);
-      timer.sw_force.Stop();
-      if (e_source) { e_rhs += *e_source; }
-      timer.sw_cgL2.Start();
-      CG_EMass.Mult(e_rhs, de);
-      timer.sw_cgL2.Stop();
-      const HYPRE_Int cg_num_iter = CG_EMass.GetNumIterations();
-      timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
-      // Move the memory location of the subvector 'de' to the memory
-      // location of the base vector 'dS_dt'.
-      de.GetMemory().SyncAlias(dS_dt.GetMemory(), de.Size());
-   }
-   else // not p_assembly
-   {
-      timer.sw_force.Start();
-      Force.MultTranspose(v, e_rhs);
-      timer.sw_force.Stop();
-      if (e_source) { e_rhs += *e_source; }
-      Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
-      for (int e = 0; e < NE; e++)
-      {
-         L2.GetElementDofs(e, l2dofs);
-         e_rhs.GetSubVector(l2dofs, loc_rhs);
-         timer.sw_cgL2.Start();
-         Me_inv(e).Mult(loc_rhs, loc_de);
-         timer.sw_cgL2.Stop();
-         timer.L2iter += 1;
-         de.SetSubVector(l2dofs, loc_de);
-      }
+      L2.GetElementDofs(e, l2dofs);
+      e_rhs.GetSubVector(l2dofs, loc_rhs);
+      Me_inv(e).Mult(loc_rhs, loc_de);
+      de.SetSubVector(l2dofs, loc_de);
    }
    delete e_source;
 }
@@ -514,8 +347,6 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
       rho.SetSubVector(dofs, rho_z);
    }
 }
-
-
 
 double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
                              const int Q1D,const int VDIM,const double ln_norm,
@@ -641,90 +472,8 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
    return 0.5*glob_ke;
 }
 
-void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
-                                              const bool fom) const
-{
-   const MPI_Comm com = H1.GetComm();
-   double my_rt[5], T[5];
-   my_rt[0] = timer.sw_cgH1.RealTime();
-   my_rt[1] = timer.sw_cgL2.RealTime();
-   my_rt[2] = timer.sw_force.RealTime();
-   my_rt[3] = timer.sw_qdata.RealTime();
-   my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
-   MPI_Reduce(my_rt, T, 5, MPI_DOUBLE, MPI_MAX, 0, com);
-
-   HYPRE_Int mydata[3], alldata[3];
-   mydata[0] = timer.L2dof * timer.L2iter;
-   mydata[1] = timer.quad_tstep;
-   mydata[2] = NE;
-   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0, com);
-
-   if (IamRoot)
-   {
-      using namespace std;
-      // FOM = (FOM1 * T1 + FOM2 * T2 + FOM3 * T3) / (T1 + T2 + T3)
-      const HYPRE_Int H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
-      const double FOM1 = 1e-6 * H1GTVSize * H1iter / T[0];
-      const double FOM2 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[2];
-      const double FOM3 = 1e-6 * alldata[1] * ir.GetNPoints() / T[3];
-      const double FOM = (FOM1 * T[0] + FOM2 * T[2] + FOM3 * T[3]) / T[4];
-      const double FOM0 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[4];
-      cout << endl;
-      cout << "CG (H1) total time: " << T[0] << endl;
-      cout << "CG (H1) rate (megadofs x cg_iterations / second): "
-           << FOM1 << endl;
-      cout << endl;
-      cout << "CG (L2) total time: " << T[1] << endl;
-      cout << "CG (L2) rate (megadofs x cg_iterations / second): "
-           << 1e-6 * alldata[0] / T[1] << endl;
-      cout << endl;
-      cout << "Forces total time: " << T[2] << endl;
-      cout << "Forces rate (megadofs x timesteps / second): "
-           << FOM2 << endl;
-      cout << endl;
-      cout << "UpdateQuadData total time: " << T[3] << endl;
-      cout << "UpdateQuadData rate (megaquads x timesteps / second): "
-           << FOM3 << endl;
-      cout << endl;
-      cout << "Major kernels total time (seconds): " << T[4] << endl;
-      cout << "Major kernels total rate (megadofs x time steps / second): "
-           << FOM << endl;
-      if (!fom) { return; }
-      const int QPT = ir.GetNPoints();
-      const HYPRE_Int GNZones = alldata[2];
-      const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
-      cout << endl;
-      cout << "| Ranks " << "| Zones   "
-           << "| H1 dofs " << "| L2 dofs "
-           << "| QP "      << "| N dofs   "
-           << "| FOM0   "
-           << "| FOM1   " << "| T1   "
-           << "| FOM2   " << "| T2   "
-           << "| FOM3   " << "| T3   "
-           << "| FOM    " << "| TT   "
-           << "|" << endl;
-      cout << setprecision(3);
-      cout << "| " << setw(6) << H1.GetNRanks()
-           << "| " << setw(8) << GNZones
-           << "| " << setw(8) << H1GTVSize
-           << "| " << setw(8) << L2GTVSize
-           << "| " << setw(3) << QPT
-           << "| " << setw(9) << ndofs
-           << "| " << setw(7) << FOM0
-           << "| " << setw(7) << FOM1
-           << "| " << setw(5) << T[0]
-           << "| " << setw(7) << FOM2
-           << "| " << setw(5) << T[2]
-           << "| " << setw(7) << FOM3
-           << "| " << setw(5) << T[3]
-           << "| " << setw(7) << FOM
-           << "| " << setw(5) << T[4]
-           << "| " << endl;
-   }
-}
-
 // Smooth transition between 0 and 1 for x in [-eps, eps].
-MFEM_HOST_DEVICE inline double smooth_step_01(double x, double eps)
+double smooth_step_01(double x, double eps)
 {
    const double y = (x + eps) / (2.0 * eps);
    if (y < 0.0) { return 0.0; }
@@ -739,10 +488,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
-   if (dim > 1 && p_assembly) { return qupdate->UpdateQuadratureData(S, qdata); }
-
    // This code is only for the 1D/FA mode
-   timer.sw_qdata.Start();
    const int nqp = ir.GetNPoints();
    ParGridFunction x, v, e;
    Vector* sptr = const_cast<Vector*>(&S);
@@ -904,434 +650,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] p_b;
    delete [] cs_b;
    delete [] Jpr_b;
-   timer.sw_qdata.Stop();
-   timer.quad_tstep += NE;
-}
-
-/// Trace of a square matrix
-template<int H, int W, typename T>
-MFEM_HOST_DEVICE inline
-double Trace(const T * __restrict__ data)
-{
-   double t = 0.0;
-   for (int i = 0; i < W; i++) { t += data[i+i*H]; }
-   return t;
-}
-
-template<int H, int W, typename T>
-MFEM_HOST_DEVICE static inline
-void SFNorm(double &scale_factor, double &scaled_fnorm2,
-            const T * __restrict__ data)
-{
-   int i;
-   constexpr int hw = H * W;
-   T max_norm = 0.0, entry, fnorm2;
-
-   for (i = 0; i < hw; i++)
-   {
-      entry = fabs(data[i]);
-      if (entry > max_norm)
-      {
-         max_norm = entry;
-      }
-   }
-
-   if (max_norm == 0.0)
-   {
-      scale_factor = scaled_fnorm2 = 0.0;
-      return;
-   }
-
-   fnorm2 = 0.0;
-   for (i = 0; i < hw; i++)
-   {
-      entry = data[i] / max_norm;
-      fnorm2 += entry * entry;
-   }
-
-   scale_factor = max_norm;
-   scaled_fnorm2 = fnorm2;
-}
-
-/// Compute the Frobenius norm of the matrix
-template<int H, int W, typename T>
-MFEM_HOST_DEVICE inline
-double FNorm(const T * __restrict__ data)
-{
-   double s, n2;
-   SFNorm<H,W>(s, n2, data);
-   return s*sqrt(n2);
-}
-
-template<int DIM> MFEM_HOST_DEVICE static inline
-void QUpdateBody(const int NE, const int e,
-                 const int NQ, const int q,
-                 const bool use_viscosity,
-                 const bool use_vorticity,
-                 const double h0,
-                 const double h1order,
-                 const double cfl,
-                 const double infinity,
-                 double* __restrict__ Jinv,
-                 double* __restrict__ stress,
-                 double* __restrict__ sgrad_v,
-                 double* __restrict__ eig_val_data,
-                 double* __restrict__ eig_vec_data,
-                 double* __restrict__ compr_dir,
-                 double* __restrict__ Jpi,
-                 double* __restrict__ ph_dir,
-                 double* __restrict__ stressJiT,
-                 const double* __restrict__ d_gamma,
-                 const double* __restrict__ d_weights,
-                 const double* __restrict__ d_Jacobians,
-                 const double* __restrict__ d_rho0DetJ0w,
-                 const double* __restrict__ d_e_quads,
-                 const double* __restrict__ d_grad_v_ext,
-                 const double* __restrict__ d_Jac0inv,
-                 double *d_dt_est,
-                 double *d_stressJinvT)
-{
-   constexpr int DIM2 = DIM*DIM;
-   double min_detJ = infinity;
-
-   const int eq = e * NQ + q;
-   const double gamma = d_gamma[e];
-   const double weight =  d_weights[q];
-   const double inv_weight = 1. / weight;
-   const double *J = d_Jacobians + DIM2*(NQ*e + q);
-   const double detJ = kernels::Det<DIM>(J);
-   min_detJ = fmin(min_detJ, detJ);
-   kernels::CalcInverse<DIM>(J, Jinv);
-   const double R = inv_weight * d_rho0DetJ0w[eq] / detJ;
-   const double E = fmax(0.0, d_e_quads[eq]);
-   const double P = (gamma - 1.0) * R * E;
-   const double S = sqrt(gamma * (gamma - 1.0) * E);
-   for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
-   for (int d = 0; d < DIM; d++) { stress[d*DIM+d] = -P; }
-   double visc_coeff = 0.0;
-   if (use_viscosity)
-   {
-      // Compression-based length scale at the point. The first
-      // eigenvector of the symmetric velocity gradient gives the
-      // direction of maximal compression. This is used to define the
-      // relative change of the initial length scale.
-      const double *dV = d_grad_v_ext + DIM2*(NQ*e + q);
-      kernels::Mult(DIM, DIM, DIM, dV, Jinv, sgrad_v);
-
-      double vorticity_coeff = 1.0;
-      if (use_vorticity)
-      {
-         const double grad_norm = FNorm<DIM,DIM>(sgrad_v);
-         const double div_v = fabs(Trace<DIM,DIM>(sgrad_v));
-         vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-      }
-
-      kernels::Symmetrize(DIM, sgrad_v);
-      if (DIM == 1)
-      {
-         eig_val_data[0] = sgrad_v[0];
-         eig_vec_data[0] = 1.;
-      }
-      else
-      {
-         kernels::CalcEigenvalues<DIM>(sgrad_v, eig_val_data, eig_vec_data);
-      }
-      for (int k=0; k<DIM; k++) { compr_dir[k] = eig_vec_data[k]; }
-      // Computes the initial->physical transformation Jacobian.
-      kernels::Mult(DIM, DIM, DIM, J, d_Jac0inv + eq*DIM*DIM, Jpi);
-      kernels::Mult(DIM, DIM, Jpi, compr_dir, ph_dir);
-      // Change of the initial mesh size in the compression direction.
-      const double ph_dir_nl2 = kernels::Norml2(DIM, ph_dir);
-      const double compr_dir_nl2 = kernels::Norml2(DIM, compr_dir);
-      const double H = h0 * ph_dir_nl2 / compr_dir_nl2;
-      // Measure of maximal compression.
-      const double mu = eig_val_data[0];
-      visc_coeff = 2.0 * R * H * H * fabs(mu);
-      // The following represents a "smooth" version of the statement
-      // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-      // eps must be scaled appropriately if a different unit system is
-      // being used.
-      const double eps = 1e-12;
-      visc_coeff += 0.5 * R * H  * S * vorticity_coeff *
-                    (1.0 - smooth_step_01(mu-2.0*eps, eps));
-      kernels::Add(DIM, DIM, visc_coeff, stress, sgrad_v, stress);
-   }
-   // Time step estimate at the point. Here the more relevant length
-   // scale is related to the actual mesh deformation; we use the min
-   // singular value of the ref->physical Jacobian. In addition, the
-   // time step estimate should be aware of the presence of shocks.
-   const double sv = kernels::CalcSingularvalue<DIM>(J, DIM - 1);
-   const double h_min = sv / h1order;
-   const double ih_min = 1. / h_min;
-   const double irho_ih_min_sq = ih_min * ih_min / R ;
-   const double idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
-   if (min_detJ < 0.0)
-   {
-      // This will force repetition of the step with smaller dt.
-      d_dt_est[eq] = 0.0;
-   }
-   else
-   {
-      if (idt > 0.0)
-      {
-         const double cfl_inv_dt = cfl / idt;
-         d_dt_est[eq] = fmin(d_dt_est[eq], cfl_inv_dt);
-      }
-   }
-   // Quadrature data for partial assembly of the force operator.
-   kernels::MultABt(DIM, DIM, DIM, stress, Jinv, stressJiT);
-   for (int k = 0; k < DIM2; k++) { stressJiT[k] *= weight * detJ; }
-   for (int vd = 0 ; vd < DIM; vd++)
-   {
-      for (int gd = 0; gd < DIM; gd++)
-      {
-         const int offset = eq + NQ*NE*(gd + vd*DIM);
-         d_stressJinvT[offset] = stressJiT[vd + gd*DIM];
-      }
-   }
-}
-
-static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *pmesh,
-                         ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
-                         QuadratureData &qdata,
-                         double &volume)
-{
-   const int NQ = ir.GetNPoints();
-   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
-   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
-   Vector rho0Q(NQ*NE);
-   rho0Q.UseDevice(true);
-   Vector j, detj;
-   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
-   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
-   const auto W = ir.GetWeights().Read();
-   const auto R = Reshape(rho0Q.Read(), NQ, NE);
-   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
-   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
-   auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
-   Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
-   const MemoryClass mc = Device::GetMemoryClass();
-   const int Ji_total_size = qdata.Jac0inv.TotalSize();
-   auto invJ = Reshape(Jinv_m.Write(mc, Ji_total_size), dim, dim, NQ, NE);
-   Vector vol(NE*NQ), one(NE*NQ);
-   auto A = Reshape(vol.Write(), NQ, NE);
-   auto O = Reshape(one.Write(), NQ, NE);
-   MFEM_ASSERT(dim==2 || dim==3, "");
-   if (dim==2)
-   {
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               const int q = qx + qy * Q1D;
-               const double J11 = J(q,0,0,e);
-               const double J12 = J(q,1,0,e);
-               const double J21 = J(q,0,1,e);
-               const double J22 = J(q,1,1,e);
-               const double det = detJ(q,e);
-               V(q,e) =  W[q] * R(q,e) * det;
-               const double r_idetJ = 1.0 / det;
-               invJ(0,0,q,e) =  J22 * r_idetJ;
-               invJ(1,0,q,e) = -J12 * r_idetJ;
-               invJ(0,1,q,e) = -J21 * r_idetJ;
-               invJ(1,1,q,e) =  J11 * r_idetJ;
-               A(q,e) = W[q] * det;
-               O(q,e) = 1.0;
-            }
-         }
-      });
-   }
-   else
-   {
-      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-      {
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  const int q = qx + (qy + qz * Q1D) * Q1D;
-                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
-                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
-                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
-                  const double det = detJ(q,e);
-                  V(q,e) = W[q] * R(q,e) * det;
-                  const double r_idetJ = 1.0 / det;
-                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
-                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
-                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
-                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
-                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
-                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
-                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
-                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
-                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
-                  A(q,e) = W[q] * det;
-                  O(q,e) = 1.0;
-               }
-            }
-         }
-      });
-   }
-   qdata.rho0DetJ0w.HostRead();
-   volume = vol * one;
-}
-
-template<int DIM, int Q1D> static inline
-void QKernel(const int NE, const int NQ,
-             const bool use_viscosity,
-             const bool use_vorticity,
-             const double h0,
-             const double h1order,
-             const double cfl,
-             const double infinity,
-             const ParGridFunction &gamma_gf,
-             const Array<double> &weights,
-             const Vector &Jacobians,
-             const Vector &rho0DetJ0w,
-             const Vector &e_quads,
-             const Vector &grad_v_ext,
-             const DenseTensor &Jac0inv,
-             Vector &dt_est,
-             DenseTensor &stressJinvT)
-{
-   constexpr int DIM2 = DIM*DIM;
-   const auto d_gamma = gamma_gf.Read();
-   const auto d_weights = weights.Read();
-   const auto d_Jacobians = Jacobians.Read();
-   const auto d_rho0DetJ0w = rho0DetJ0w.Read();
-   const auto d_e_quads = e_quads.Read();
-   const auto d_grad_v_ext = grad_v_ext.Read();
-   const auto d_Jac0inv = Read(Jac0inv.GetMemory(), Jac0inv.TotalSize());
-   auto d_dt_est = dt_est.ReadWrite();
-   auto d_stressJinvT = Write(stressJinvT.GetMemory(), stressJinvT.TotalSize());
-   if (DIM == 2)
-   {
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
-      {
-         double Jinv[DIM2];
-         double stress[DIM2];
-         double sgrad_v[DIM2];
-         double eig_val_data[3];
-         double eig_vec_data[9];
-         double compr_dir[DIM];
-         double Jpi[DIM2];
-         double ph_dir[DIM];
-         double stressJiT[DIM2];
-         MFEM_FOREACH_THREAD(qx,x,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               QUpdateBody<DIM>(NE, e, NQ, qx + qy * Q1D,
-               use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
-               Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
-               compr_dir, Jpi, ph_dir, stressJiT,
-               d_gamma, d_weights, d_Jacobians, d_rho0DetJ0w,
-               d_e_quads, d_grad_v_ext, d_Jac0inv,
-               d_dt_est, d_stressJinvT);
-            }
-         }
-         MFEM_SYNC_THREAD;
-      });
-   }
-   if (DIM == 3)
-   {
-      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-      {
-         double Jinv[DIM2];
-         double stress[DIM2];
-         double sgrad_v[DIM2];
-         double eig_val_data[3];
-         double eig_vec_data[9];
-         double compr_dir[DIM];
-         double Jpi[DIM2];
-         double ph_dir[DIM];
-         double stressJiT[DIM2];
-         MFEM_FOREACH_THREAD(qx,x,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qz,z,Q1D)
-               {
-                  QUpdateBody<DIM>(NE, e, NQ, qx + Q1D * (qy + qz * Q1D),
-                  use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
-                  Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
-                  compr_dir, Jpi, ph_dir, stressJiT,
-                  d_gamma, d_weights, d_Jacobians, d_rho0DetJ0w,
-                  d_e_quads, d_grad_v_ext, d_Jac0inv,
-                  d_dt_est, d_stressJinvT);
-               }
-            }
-         }
-         MFEM_SYNC_THREAD;
-      });
-   }
-}
-
-void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
-{
-   timer->sw_qdata.Start();
-   Vector* S_p = const_cast<Vector*>(&S);
-   const int H1_size = H1.GetVSize();
-   const double h1order = (double) H1.GetOrder(0);
-   const double infinity = std::numeric_limits<double>::infinity();
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1,*S_p, 0);
-   H1R->Mult(x, e_vec);
-   q1->SetOutputLayout(QVectorLayout::byVDIM);
-   q1->Derivatives(e_vec, q_dx);
-   v.MakeRef(&H1,*S_p, H1_size);
-   H1R->Mult(v, e_vec);
-   q1->Derivatives(e_vec, q_dv);
-   e.MakeRef(&L2, *S_p, 2*H1_size);
-   q2->SetOutputLayout(QVectorLayout::byVDIM);
-   q2->Values(e, q_e);
-   q_dt_est = qdata.dt_est;
-   const int id = (dim << 4) | Q1D;
-   typedef void (*fQKernel)(const int NE, const int NQ,
-                            const bool use_viscosity,
-                            const bool use_vorticity,
-                            const double h0, const double h1order,
-                            const double cfl, const double infinity,
-                            const ParGridFunction &gamma_gf,
-                            const Array<double> &weights,
-                            const Vector &Jacobians, const Vector &rho0DetJ0w,
-                            const Vector &e_quads, const Vector &grad_v_ext,
-                            const DenseTensor &Jac0inv,
-                            Vector &dt_est, DenseTensor &stressJinvT);
-   static std::unordered_map<int, fQKernel> qupdate =
-   {
-      {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>}, {0x28,&QKernel<2,8>},
-      {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
-   };
-   if (!qupdate[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
-   }
-   qupdate[id](NE, NQ, use_viscosity, use_vorticity, qdata.h0, h1order,
-               cfl, infinity, gamma_gf, ir.GetWeights(), q_dx,
-               qdata.rho0DetJ0w, q_e, q_dv,
-               qdata.Jac0inv, q_dt_est, qdata.stressJinvT);
-   qdata.dt_est = q_dt_est.Min();
-   timer->sw_qdata.Stop();
-   timer->quad_tstep += NE;
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const
 {
-   if (forcemat_is_assembled || p_assembly) { return; }
    Force = 0.0;
-   timer.sw_force.Start();
    Force.Assemble();
-   timer.sw_force.Stop();
    forcemat_is_assembled = true;
 }
 
@@ -1349,7 +673,6 @@ void RK2AvgSolver::Init(TimeDependentOperator &tdop)
    HydroODESolver::Init(tdop);
    const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
    V.SetSize(block_offsets[1], mem_type);
-   V.UseDevice(true);
    dS_dt.Update(block_offsets, mem_type);
    dS_dt = 0.0;
    S0.Update(block_offsets, mem_type);

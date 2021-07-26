@@ -90,46 +90,6 @@ public:
                                        DenseMatrix &elmat);
 };
 
-// Performs partial assembly for the force operator.
-class ForcePAOperator : public Operator
-{
-private:
-   const int dim, NE;
-   const QuadratureData &qdata;
-   const ParFiniteElementSpace &H1, &L2;
-   const Operator *H1R, *L2R;
-   const IntegrationRule &ir1D;
-   const int D1D, Q1D, L1D, H1sz, L2sz;
-   const DofToQuad *L2D2Q, *H1D2Q;
-   mutable Vector X, Y;
-public:
-   ForcePAOperator(const QuadratureData&,
-                   ParFiniteElementSpace&,
-                   ParFiniteElementSpace&,
-                   const IntegrationRule&);
-   virtual void Mult(const Vector&, Vector&) const;
-   virtual void MultTranspose(const Vector&, Vector&) const;
-};
-
-// Performs partial assembly for the velocity mass matrix.
-class MassPAOperator : public Operator
-{
-private:
-   const MPI_Comm comm;
-   const int dim, NE, vsize;
-   ParBilinearForm pabf;
-   int ess_tdofs_count;
-   Array<int> ess_tdofs;
-   OperatorPtr mass;
-public:
-   MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
-   virtual void Mult(const Vector&, Vector&) const;
-   void MultFull(const Vector &x, Vector &y) const { mass->Mult(x, y); }
-   virtual void SetEssentialTrueDofs(Array<int>&);
-   virtual void EliminateRHS(Vector&) const;
-   const ParBilinearForm &GetBF() const { return pabf; }
-};
-
 } // namespace hydrodynamics
 
 } // namespace mfem
