@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_shift.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -35,6 +36,35 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
+class PressureFunction
+{
+public:
+   enum PressureSpace {L2, H1};
+
+private:
+   const int p_order     = 1;
+   const int basis_type  = BasisType::GaussLobatto;
+   PressureSpace p_space;
+
+   L2_FECollection p_fec_L2;
+   H1_FECollection p_fec_H1;
+   ParFiniteElementSpace p_fes_L2, p_fes_H1;
+   ParGridFunction p_L2, p_H1;
+   // Stores rho0 * det(J0)  at the pressure GF's nodes.
+   Vector rho0DetJ0;
+   ParGridFunction &gamma_gf;
+   int problem = -1;
+
+public:
+   PressureFunction(ParMesh &pmesh, PressureSpace space,
+                    ParGridFunction &rho0, int e_order, ParGridFunction &gamma);
+
+   void UpdatePressure(const ParGridFunction &e);
+
+   void SetProblem(int prob) { problem = prob; }
+
+   ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
+};
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -50,6 +80,7 @@ protected:
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
+   PressureFunction &p_func;
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
@@ -73,17 +104,32 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force;
+   mutable MixedBilinearForm Force, FaceForce;
+   mutable LinearForm FaceForce_e;
    mutable Vector X, B, one, rhs, e_rhs;
+
+   int v_shift_type = 0, e_shift_type = 0;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
    {
+      double T;
       for (int v = 0; v < nvalues; v++)
       {
-         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
+         // Special case - stiffened gas;
+         // Assumes that gamma = 4.4 is used only in problem 9 [water-air] !!
+         if (fabs(gamma[v] - 4.4) < 1e-8)
+         {
+            p[v] = (gamma[v] - 1.0) * rho[v] * e[v] - gamma[v] * 6.0e8;
+            T    = std::max(p[v] / rho[v], 1e-3);
+         }
+         else
+         {
+            p[v] = (gamma[v] - 1.0) * rho[v] * e[v];
+            T    = (gamma[v] - 1.0) * e[v]; // T = p / rho
+         }
+         cs[v] = sqrt(gamma[v] * T);
       }
    }
 
@@ -96,13 +142,15 @@ public:
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
-                           ParGridFunction &rho0_gf,
+                           ParGridFunction &rho0_gf, ParGridFunction &v_gf,
                            ParGridFunction &gamma_gf,
+                           VectorCoefficient &dist_coeff,
+                           PressureFunction &pressure,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q);
+                           const int order_q, double *dt);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -117,11 +165,35 @@ public:
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
 
+   void SetShiftingOptions(int problem, int vs_type, int es_type, double scale)
+   {
+      p_func.SetProblem(problem);
+
+      v_shift_type = vs_type;
+      e_shift_type = es_type;
+
+      //auto tfi_v = FaceForce.GetTFBFI();
+      auto tfi_v = FaceForce.GetFBFI();
+      auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
+      v_integ->SetShiftType(v_shift_type);
+      v_integ->SetScale(scale);
+
+      auto tfi = FaceForce_e.GetTLFI();
+      auto en_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi)[0]);
+      en_integ->SetShiftType(e_shift_type);
+   }
+
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    void ComputeDensity(ParGridFunction &rho) const;
+   ParGridFunction &GetPressure(const ParGridFunction &e)
+   {
+      p_func.UpdatePressure(e);
+      return p_func.GetPressure();
+   }
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
+   double Momentum(const ParGridFunction &v) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }

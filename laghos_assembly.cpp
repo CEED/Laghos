@@ -48,9 +48,9 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    const int e = Tr.ElementNo;
    const int nqp = IntRule->GetNPoints();
    const int dim = trial_fe.GetDim();
-   const int h1dofs_cnt = test_fe.GetDof();
-   const int l2dofs_cnt = trial_fe.GetDof();
-   elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
+   const int h1dofs_cnt = trial_fe.GetDof();
+   const int l2dofs_cnt = test_fe.GetDof();
+   elmat.SetSize(l2dofs_cnt, h1dofs_cnt*dim);
    elmat = 0.0;
    DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
@@ -58,7 +58,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    {
       const IntegrationPoint &ip = IntRule->IntPoint(q);
       // Form stress:grad_shape at the current point.
-      test_fe.CalcDShape(ip, vshape);
+      trial_fe.CalcDShape(ip, vshape);
       for (int i = 0; i < h1dofs_cnt; i++)
       {
          for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -72,8 +72,8 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             }
          }
       }
-      trial_fe.CalcShape(ip, shape);
-      AddMultVWt(Vloc_force, shape, elmat);
+      test_fe.CalcShape(ip, shape);
+      AddMultVWt(shape, Vloc_force, elmat);
    }
 }
 

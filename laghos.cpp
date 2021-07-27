@@ -36,10 +36,13 @@
 // Test problems: see README.
 
 #include "laghos_solver.hpp"
+#include "dist_solver.hpp"
+#include "riemann1D.hpp"
 
 using std::cout;
 using std::endl;
 using namespace mfem;
+using namespace hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
@@ -51,6 +54,238 @@ double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
 static void display_banner(std::ostream&);
+
+// Used for debugging the elem-to-dof tables when the elements' attributes
+// are associated with materials. Options for lvl:
+// 0 - only duplicated materials per DOF.
+// 1 - all materials per DOF .
+// 2 - full element/material output per DOF.
+void PrintDofElemTable(const Table &elem_dof, const ParMesh &pmesh, int lvl = 0)
+{
+   Table dof_elem;
+   Transpose(elem_dof, dof_elem);
+
+   const int nrows = dof_elem.Size();
+   std::cout << "Total DOFs: " << nrows << std::endl;
+   Array<int> dof_elements;
+   for (int dof = 0; dof < nrows; dof++)
+   {
+      // Find the materials that share the current dof.
+      std::set<int> dof_materials;
+      dof_elem.GetRow(dof, dof_elements);
+      if (lvl == 2) { std::cout << "Elements for DOF " << dof << ": \n"; }
+      for (int e = 0; e < dof_elements.Size(); e++)
+      {
+         const int mat_id = pmesh.GetAttribute(dof_elements[e]);
+
+         if (lvl == 2) { cout << dof_elements[e] << "(" << mat_id << ") "; }
+
+         dof_materials.insert(mat_id);
+      }
+      if (lvl == 2) { std::cout << std::endl; }
+
+      if (lvl == 2) { continue; }
+      if (lvl == 0 && dof_materials.size() < 2) { continue; }
+
+      std::cout << "Materials for DOF " << dof << ": " << std::endl;
+      for (auto it = dof_materials.cbegin(); it != dof_materials.cend(); it++)
+      { std::cout << *it << ' '; }
+      std::cout << std::endl;
+   }
+}
+
+void PrintDofTable(const Table &obj_to_dof, std::string table_label, bool transp)
+{
+   Table dof_to_obj;
+   if (transp) { Transpose(obj_to_dof, dof_to_obj); }
+   else        { dof_to_obj = obj_to_dof; }
+
+   const int nrows = dof_to_obj.Size();
+   std::cout << "------\n" << table_label
+             << ".\n------\nTotal DOFs: " << nrows << std::endl;
+   Array<int> dof_objects;
+   for (int dof = 0; dof < nrows; dof++)
+   {
+      // Find the materials that share the current dof.
+      dof_to_obj.GetRow(dof, dof_objects);
+      std::cout << "Objects for DOF " << dof << ": \n";
+      for (int o = 0; o < dof_objects.Size(); o++)
+      {
+         cout << dof_objects[o] << " ";
+      }
+      std::cout << std::endl;
+   }
+}
+
+void VisualizeL2(ParGridFunction &gf, int size, int x, int y)
+{
+   int num_procs, myid;
+   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+   ParMesh *pmesh = gf.ParFESpace()->GetParMesh();
+   const int order = gf.ParFESpace()->GetOrder(0);
+   L2_FECollection fec(order, pmesh->Dimension());
+   ParFiniteElementSpace pfes(pmesh, &fec);
+   ParGridFunction gf_l2(&pfes);
+   gf_l2.ProjectGridFunction(gf);
+
+   char vishost[] = "localhost";
+   int  visport   = 19916;
+
+   socketstream sol_sock(vishost, visport);
+   sol_sock << "parallel " << num_procs << " " << myid << "\n";
+   sol_sock.precision(8);
+   sol_sock << "solution\n" << *pmesh << gf_l2;
+   sol_sock << "window_geometry " << x << " " << y << " "
+                                  << size << " " << size << "\n"
+            << "window_title '" << "Y" << "'\n"
+            << "keys mRjlc\n" << std::flush;
+}
+
+void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
+{
+   ParMesh &pmesh = *pfes.GetParMesh();
+   ParGridFunction x_vis(&pfes);
+
+   // Duplicate DOFs on the material interface.
+   // That is, the DOF touches different element attributes.
+   const Table &elem_dof = pfes.GetElementToDofTable(),
+               &bdre_dof = pfes.GetBdrElementToDofTable();
+   Table dof_elem, dof_bdre;
+   Table new_elem_dof(elem_dof), new_bdre_dof(bdre_dof);
+   Transpose(elem_dof, dof_elem);
+   Transpose(bdre_dof, dof_bdre);
+   const int nrows = dof_elem.Size();
+   int ndofs = nrows;
+   Array<int> dof_elements, dof_boundaries;
+   if (print)
+   {
+      PrintDofElemTable(elem_dof, pmesh, 0);
+      PrintDofElemTable(bdre_dof, pmesh, 2);
+   }
+   for (int dof = 0; dof < nrows; dof++)
+   {
+      // Check which materials share the current dof.
+      std::set<int> dof_materials;
+      dof_elem.GetRow(dof, dof_elements);
+      for (int e = 0; e < dof_elements.Size(); e++)
+      {
+         const int mat_id = pmesh.GetAttribute(dof_elements[e]);
+         dof_materials.insert(mat_id);
+      }
+      // Count the materials for the current DOF.
+      const int dof_mat_cnt = dof_materials.size();
+
+      // Duplicate the dof if it is shared between materials.
+      if (dof_mat_cnt > 1)
+      {
+         // The material with the lowest index keeps the old DOF id.
+         // All other materials duplicate the dof.
+         auto mat = dof_materials.cbegin();
+         mat++;
+         while(mat != dof_materials.cend())
+         {
+            // Replace in all elements with material mat.
+            const int new_dof_id = ndofs;
+            for (int e = 0; e < dof_elements.Size(); e++)
+            {
+               if (pmesh.GetAttribute(dof_elements[e]) == *mat)
+               {
+                  if (print)
+                  {
+                     std::cout << "Replacing DOF (for element) : "
+                               << dof << " -> " << new_dof_id
+                               << " in EL " << dof_elements[e] << std::endl;
+                  }
+                  new_elem_dof.ReplaceConnection(dof_elements[e],
+                                                 dof, new_dof_id);
+               }
+            }
+
+            // Replace in all boundary elements with material mat.
+            dof_bdre.GetRow(dof, dof_boundaries);
+            const int dof_bdr_cnt = dof_boundaries.Size();
+            for (int b = 0; b < dof_bdr_cnt; b++)
+            {
+               int face_id = pmesh.GetBdrFace(dof_boundaries[b]);
+               int elem_id, tmp;
+               pmesh.GetFaceElements(face_id, &elem_id, &tmp);
+               if (pmesh.GetAttribute(elem_id) == *mat)
+               {
+                  std::cout << "Replacing DOF (for boundary): "
+                            << dof << " -> " << new_dof_id
+                            << " in BE " << dof_boundaries[b] << std::endl;
+                  new_bdre_dof.ReplaceConnection(dof_boundaries[b],
+                                                 dof, new_dof_id);
+               }
+            }
+
+            // TODO go over faces (in face_dof) that have the replaced dof, and
+            // check if the face_dof table should be updated.
+            // Maybe the face should have the new dof instead of the old one,
+            // which is the case if it has higher el-attributes on both sides.
+
+            ndofs++;
+            mat++;
+         }
+      }
+
+      // Used only for visualization.
+      // Must be visualized before the space update.
+      x_vis(dof) = dof_mat_cnt;
+   }
+
+   // Send the solution by socket to a GLVis server.
+   if (vis)
+   {
+      int size = 500;
+      char vishost[] = "localhost";
+      int  visport   = 19916;
+      const int myid = pfes.GetMyRank(), num_procs = pfes.GetNRanks();
+
+      socketstream sol_sock_x(vishost, visport);
+      sol_sock_x << "parallel " << num_procs << " " << myid << "\n";
+      sol_sock_x.precision(8);
+      sol_sock_x << "solution\n" << pmesh << x_vis;
+      sol_sock_x << "window_geometry " << 0 << " " << 0 << " "
+                                       << size << " " << size << "\n"
+                 << "window_title '" << "X" << "'\n"
+                 << "keys mRjlc\n" << std::flush;
+   }
+
+   if (print)
+   {
+      PrintDofElemTable(elem_dof, pmesh, 0);
+      PrintDofElemTable(new_elem_dof, pmesh, 0);
+   }
+
+   // Remove face dofs for cut faces.
+   const Table &face_dof = pfes.GetFaceToDofTable();
+   Table new_face_dof(face_dof);
+   for (int f = 0; f < pmesh.GetNumFaces(); f++)
+   {
+      auto *ftr = pmesh.GetFaceElementTransformations(f, 3);
+      if (ftr->Elem2No > 0 &&
+          pmesh.GetAttribute(ftr->Elem1No) != pmesh.GetAttribute(ftr->Elem2No))
+      {
+         if (print)
+         {
+            std::cout << ftr->Elem1No << " " << ftr->Elem2No << std::endl;
+            std::cout << pmesh.GetAttribute(ftr->Elem1No) << " "
+                      << pmesh.GetAttribute(ftr->Elem2No) << std::endl;
+            std::cout << "Removing face dofs for face " << f << std::endl;
+         }
+         new_face_dof.RemoveRow(f);
+      }
+   }
+   new_face_dof.Finalize();
+
+   // Cut the space.
+   pfes.ReplaceElemDofTable(new_elem_dof, ndofs);
+   pfes.ReplaceBdrElemDofTable(new_bdre_dof);
+   pfes.ReplaceFaceDofTable(new_face_dof);
+}
 
 int main(int argc, char *argv[])
 {
@@ -64,6 +299,7 @@ int main(int argc, char *argv[])
    // Parse command-line options.
    problem = 1;
    dim = 3;
+   int zones = 50;
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
@@ -88,6 +324,7 @@ int main(int argc, char *argv[])
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
+   args.AddOption(&zones, "-z", "--zones_1d", "1D zones for problem 8.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
@@ -148,14 +385,21 @@ int main(int argc, char *argv[])
    {
       if (dim == 1)
       {
-         mesh = new Mesh(Mesh::MakeCartesian1D(2));
+         int n = 2;
+         if (problem == 8 || problem == 9) { n = zones; }
+         mesh = new Mesh(n);
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
-                                               true));
+         if (problem == 10) {
+             mesh = new Mesh(8, 4, Element::QUADRILATERAL, true, 7, 3);
+             //mesh = new Mesh(2, 2, Element::QUADRILATERAL, true);
+         }
+         else
+         { mesh = new Mesh(2, 2, Element::QUADRILATERAL, true); }
+
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
@@ -166,8 +410,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 3)
       {
-         mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
-                                               true));
+         mesh = new Mesh(2, 2, 2, Element::HEXAHEDRON, true);
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
@@ -207,6 +450,9 @@ int main(int argc, char *argv[])
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+
+   //cutH1Space(H1FESpace, true, true);
+   //MFEM_ABORT("lets see");
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -260,8 +506,8 @@ int main(int argc, char *argv[])
    // - 0 -> position
    // - 1 -> velocity
    // - 2 -> specific internal energy
-   const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
+   const int Vsize_l2 = L2FESpace.GetVSize();
    Array<int> offset(4);
    offset[0] = 0;
    offset[1] = offset[0] + Vsize_h1;
@@ -317,9 +563,110 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
+   ParGridFunction gamma_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
-   mat_gf.ProjectCoefficient(mat_coeff);
+   gamma_gf.ProjectCoefficient(mat_coeff);
+
+   //
+   // Shifted interface options.
+   //
+   // FE space for the pressure reconstruction.
+   // L2 or H1.
+   PressureFunction::PressureSpace p_space = PressureFunction::L2;
+   // Integration of mass matrices.
+   // true  -- the element mass matrices are integrated as mixed.
+   // false -- the element mass matrices are integrated as pure.
+   bool mix_mass = false;
+   // 0 -- no shifting term.
+   // 1 -- the momentum RHS gets this term:  - < [grad_p.d] psi >
+   // 2 -- the momentum RHS gets this term:  - < [grad_p.d * grad_psi.d] n >
+   // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
+   // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [grad_psi.d] n >
+   int v_shift_type = 5;
+   // 0 -- no shifting terms.
+   // 1 -- the energy RHS gets the conservative momentum term:
+   //      + < [grad_p.d] v phi >                         for v_shift_type = 1.
+   //      + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
+   //      + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
+   //      + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
+   // 2 -- - <[[((nabla v d) . n)n]], {{p phi}} + <v, phi[[\grad p . d]]>
+   //T3 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>  + <v, phi[[\grad p . d]]>
+   //G4 -- - <[[((nabla v d) . n)n]], {{p phi}}
+   //N5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
+   // optionally, a stability term can be added:
+   // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
+   int e_shift_type = 1;
+   // Scaling of both shifting terms.
+   double shift_scale = 0.1;
+
+   const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
+
+   const int nproc = mpi.WorldSize();
+   if (e_shift_type > 1)
+   {
+      MFEM_VERIFY(nproc == 1, "The e terms are not parallel yet.");
+   }
+   if (e_shift_type == 1)
+   {
+      MFEM_VERIFY(v_shift_type >= 1 || v_shift_type <= 5,
+                 "doesn't match");
+   }
+
+#define EXTRACT_1D
+
+   // Interface function.
+   ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
+   ParGridFunction xi(&pfes_xi);
+   hydrodynamics::InterfaceCoeff coeff_xi_0(problem, *pmesh);
+   xi.ProjectCoefficient(coeff_xi_0);
+   GridFunctionCoefficient coeff_xi(&xi);
+
+   // Material marking and visualization function.
+   ParGridFunction materials(&mat_fes);
+   int zone_id_L, zone_id_R;
+   for (int i = 0; i < NE; i++)
+   {
+      int mat_id = hydrodynamics::material_id(i, xi);
+      pmesh->SetAttribute(i, mat_id + 1);
+      materials(i) = mat_id;
+      if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
+      {
+         zone_id_L = i-1;
+         zone_id_R = i;
+      }
+   }
+   hydrodynamics::MarkFaceAttributes(pfes_xi);
+   // Distance vector.
+   ParGridFunction dist(&H1FESpace);
+   VectorGridFunctionCoefficient dist_coeff(&dist);
+   // Set the initial condition based on the materials.
+   Coefficient *rho_coeff = &rho0_coeff;
+   GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
+   if (problem == 8)
+   {
+      hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+   else if (problem == 9)
+   {
+      hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+   else if (problem == 10)
+   {
+      hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+
+   v_gf.SyncAliasMemory(S);
+   e_gf.SyncAliasMemory(S);
+
+   PLapDistanceSolver dist_solver(7);
+   //HeatDistanceSolver dist_solver(2.0);
+   //dist_solver.diffuse_iter = 1;
+   dist_solver.print_level = 0;
+   if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+   else           { dist = 0.0; }
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
@@ -333,19 +680,26 @@ int main(int argc, char *argv[])
       case 5: visc = true; break;
       case 6: visc = true; break;
       case 7: source = 2; visc = true; vorticity = true;  break;
+      case 8: visc = true; break;
+      case 9: visc = true; break;
+      case 10: visc = true; S.HostRead(); break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
 
+   double dt;
+   PressureFunction p_gf(*pmesh, p_space, rho0_gf, order_e, gamma_gf);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
-                                                rho0_coeff, rho0_gf,
-                                                mat_gf, source, cfl,
+                                                *rho_coeff, rho0_gf, v_gf,
+                                                gamma_gf, dist_coeff, p_gf,
+                                                source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q);
+                                                order_q, &dt);
+   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_scale);
 
-   socketstream vis_rho, vis_v, vis_e;
+   socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
@@ -353,6 +707,7 @@ int main(int argc, char *argv[])
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
+   const double momentum_init = hydro.Momentum(v_gf);
 
    if (visualization)
    {
@@ -362,9 +717,13 @@ int main(int argc, char *argv[])
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
+      vis_p.precision(8);
+      vis_xi.precision(8);
+      vis_dist.precision(8);
+      vis_mat.precision(8);
       int Wx = 0, Wy = 0; // window position
-      const int Ww = 350, Wh = 350; // window size
-      int offx = Ww+10; // window offsets
+      const int Ww = 500, Wh = 500; // window size
+      int offx = Ww + 10; // window offsets
       if (problem != 0 && problem != 4)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -376,6 +735,19 @@ int main(int argc, char *argv[])
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      Wy += Wh + Wh/5;
+      Wx = 0;
+      hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                    hydro.GetPressure(e_gf),
+                                    "Pressure", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      hydrodynamics::VisualizeField(vis_xi, vishost, visport, xi,
+                                    "Interface", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      hydrodynamics::VisualizeField(vis_dist, vishost, visport, dist,
+                                    "Distances", Wx, Wy, Ww, Wh);
+      hydrodynamics::VisualizeField(vis_mat, vishost, visport, materials,
+                                    "Materials", 0, 0, Ww, Wh);
    }
 
    // Save data for VisIt visualization.
@@ -395,10 +767,105 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(hydro);
    hydro.ResetTimeStepEstimate();
-   double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
+   double t = 0.0, t_old;
+   dt = hydro.GetTimeStepEstimate(S);
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+
+   long mem=0, mmax=0, msum=0;
+   int checks = 0;
+   //   const double internal_energy = hydro.InternalEnergy(e_gf);
+   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   if (mpi.Root())
+   //   {
+   //      cout << std::fixed;
+   //      cout << "step " << std::setw(5) << 0
+   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+   //            << internal_energy
+   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy
+   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy+internal_energy;
+   //      cout << std::fixed;
+   //      if (mem_usage)
+   //      {
+   //         cout << ", mem: " << mmax << "/" << msum << " MB";
+   //      }
+   //      cout << endl;
+   //   }
+
+   // Shifting - related extractors.
+#ifdef EXTRACT_1D
+
+   if (problem != 8 && problem != 9) {
+       MFEM_ABORT(" Please comment out extract1D\n.");
+   }
+   MFEM_VERIFY(nproc == 1, "Point extraction works inly in serial.");
+   const double dx = 1.0 / NE;
+   ParGridFunction &pe_gf = hydro.GetPressure(e_gf);
+   Vector point_interface(1), point_face(1);
+   point_interface(0) = 0.5;
+   if (problem == 9) { point_interface(0) = 0.7; }
+   point_face(0) = zone_id_R * dx;
+   std::cout << zone_id_L << " " << zone_id_R <<  std::endl;
+   std::cout << point_interface(0) << " " << point_face(0) <<  std::endl;
+   hydrodynamics::PrintCellNumbers(point_interface, H1FESpace);
+   hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
+   // By construction, the interface is in the left zone.
+   std::string vname, xname, pnameshiftl, pnameshiftr,
+               pnamefitl, pnamefitr, enamel, enamer;
+
+   if (problem != 9) {
+       vname = "sod_v_" + std::to_string(zones) + ".out";
+       xname = "sod_x_" + std::to_string(zones) + ".out";
+       enamel = "sod_e_" + std::to_string(zones) + "_L.out";
+       enamer = "sod_e_" + std::to_string(zones) + "_R.out";
+       pnameshiftl = "sod_p_" + std::to_string(zones) + "_shift_L.out";
+       pnameshiftr = "sod_p_" + std::to_string(zones) + "_shift_R.out";
+       pnamefitl = "sod_p_" + std::to_string(zones) + "_fit_L.out";
+       pnamefitr = "sod_p_" + std::to_string(zones) + "_fit_R.out";
+   }
+   else {
+       vname = "airwater_v_" + std::to_string(zones) + ".out";
+       xname = "airwater_x_" + std::to_string(zones) + ".out";
+       enamel = "airwater_e_" + std::to_string(zones) + "_l.out";
+       enamer = "airwater_e_" + std::to_string(zones) + "_r.out";
+       pnameshiftl = "airwater_p_" + std::to_string(zones) + "_shift_l.out";
+       pnameshiftr = "airwater_p_" + std::to_string(zones) + "_shift_r.out";
+       pnamefitl = "airwater_p_" + std::to_string(zones) + "_fit_l.out";
+       pnamefitr = "airwater_p_" + std::to_string(zones) + "_fit_r.out";
+   }
+
+   hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
+   hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
+   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enamel);
+   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enamer);
+   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, pe_gf, pnamefitl);
+   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, pe_gf, pnamefitr);
+   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, pe_gf,
+                                                  dist, pnameshiftl);
+   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, pe_gf,
+                                                  dist, pnameshiftr);
+   v_extr.WriteValue(0.0);
+   x_extr.WriteValue(0.0);
+   if (v_shift_type == 0 && e_shift_type == 0)
+   {
+       p_L_extr.WriteValue(0.0);
+       p_R_extr.WriteValue(0.0);
+   }
+   else
+   {
+       p_LS_extr.WriteValue(0.0);
+       p_RS_extr.WriteValue(0.0);
+   }
+#endif
+
+   double energy_old = energy_init,
+          energy_new = energy_init;
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -412,7 +879,7 @@ int main(int argc, char *argv[])
       hydro.ResetTimeStepEstimate();
 
       // S is the vector of dofs, t is the current time, and dt is the time step
-      // to advance.
+      // to advance. The function does t += dt.
       ode_solver->Step(S, t, dt);
       steps++;
 
@@ -423,7 +890,7 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
-         if (dt < std::numeric_limits<double>::epsilon())
+         if (dt < 1e-12)
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
@@ -439,8 +906,31 @@ int main(int argc, char *argv[])
       // and the oper object might have redirected the mesh positions to those.
       pmesh->NewNodes(x_gf, false);
 
+      // Shifting-related procedures.
+      if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+#ifdef EXTRACT_1D
+      v_extr.WriteValue(t);
+      x_extr.WriteValue(t);
+      e_L_extr.WriteValue(t);
+      e_R_extr.WriteValue(t);
+      if (v_shift_type == 0 && e_shift_type == 0)
+      {
+          p_L_extr.WriteValue(t);
+          p_R_extr.WriteValue(t);
+      }
+      else
+      {
+          p_LS_extr.WriteValue(t);
+          p_RS_extr.WriteValue(t);
+      }
+#endif
+
       if (last_step || (ti % vis_steps) == 0)
       {
+         energy_old = energy_new;
+         energy_new = hydro.InternalEnergy(e_gf) + hydro.KineticEnergy(v_gf);
+
+
          double lnorm = e_gf * e_gf, norm;
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
          // const double internal_energy = hydro.InternalEnergy(e_gf);
@@ -454,7 +944,9 @@ int main(int argc, char *argv[])
                  << ",\tt = " << std::setw(5) << std::setprecision(4) << t
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
-                 << sqrt_norm;
+                 << sqrt_norm
+                 << ",\tde = " << std::setw(5) << std::setprecision(6) << energy_new-energy_old;
+
             //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
             //  << internal_energy
             //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
@@ -473,7 +965,7 @@ int main(int argc, char *argv[])
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
-            int Ww = 350, Wh = 350; // window size
+            int Ww = 500, Wh = 500; // window size
             int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
@@ -487,7 +979,19 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
+            Wy += Wh + Wh/5;
+            Wx = 0;
+            hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                          hydro.GetPressure(e_gf),
+                                          "Pressure", Wx, Wy, Ww, Wh);
             Wx += offx;
+            hydrodynamics::VisualizeField(vis_xi, vishost, visport,
+                                          xi, "Interface", Wx, Wy, Ww, Wh);
+            Wx += offx;
+            hydrodynamics::VisualizeField(vis_dist, vishost, visport, dist,
+                                          "Distances", Wx, Wy, Ww, Wh);
+            hydrodynamics::VisualizeField(vis_mat, vishost, visport, materials,
+                                          "Materials", 0, 800, Ww, Wh);
          }
 
          if (visit)
@@ -531,7 +1035,8 @@ int main(int argc, char *argv[])
    switch (ode_solver_type)
    {
       case 2: steps *= 2; break;
-      case 3: steps *= 3; break;
+      case 3:
+      case 10: steps *= 3; break;
       case 4: steps *= 4; break;
       case 6: steps *= 6; break;
       case 7: steps *= 2;
@@ -539,11 +1044,14 @@ int main(int argc, char *argv[])
 
    const double energy_final = hydro.InternalEnergy(e_gf) +
                                hydro.KineticEnergy(v_gf);
+   const double momentum_final = hydro.Momentum(v_gf);
    if (mpi.Root())
    {
       cout << endl;
       cout << "Energy  diff: " << std::scientific << std::setprecision(2)
            << fabs(energy_init - energy_final) << endl;
+      cout << "Momentum diff: " << std::scientific << std::setprecision(2)
+           << fabs(momentum_init - momentum_final) << endl;
    }
 
    // Print the error.
@@ -555,6 +1063,23 @@ int main(int argc, char *argv[])
                    error_l2  = v_gf.ComputeL2Error(v_coeff);
       if (mpi.Root())
       {
+         cout << "L_inf  error: " << error_max << endl
+              << "L_1    error: " << error_l1 << endl
+              << "L_2    error: " << error_l2 << endl;
+      }
+   }
+
+   if (problem == 2)
+   {
+      riemann1D::ExactEnergyCoefficient e_coeff;
+      e_coeff.SetTime(t_final);
+
+      const double error_max = e_gf.ComputeMaxError(e_coeff),
+                   error_l1  = e_gf.ComputeL1Error(e_coeff),
+                   error_l2  = e_gf.ComputeL2Error(e_coeff);
+      if (mpi.Root())
+      {
+         cout << "Tot elements: " << mesh_NE << endl;
          cout << "L_inf  error: " << error_max << endl
               << "L_1    error: " << error_l1 << endl
               << "L_2    error: " << error_l2 << endl;
@@ -598,6 +1123,9 @@ double rho0(const Vector &x)
          return 1.0;
       }
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 8: return (x(0) < 0.5) ? 1.0 : 0.125;
+      case 9: return (x(0) < 0.7) ? 1000.0 : 50.;
+      case 10: return (x(0) > 1.1 && x(1) > 1.5) ? 0.125 : 1.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -614,6 +1142,9 @@ double gamma_func(const Vector &x)
       case 5: return 1.4;
       case 6: return 1.4;
       case 7: return 5.0 / 3.0;
+      case 8: return (x(0) < 0.5) ? 2.0 : 1.4;
+      case 9: return (x(0) < 0.7) ? 4.4 : 1.4;
+      case 10: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -634,7 +1165,7 @@ void v0(const Vector &x, Vector &v)
             v(1) *= cos(M_PI*x(2));
             v(2) = 0.0;
          }
-         break;
+      break;
       case 1: v = 0.0; break;
       case 2: v = 0.0; break;
       case 3: v = 0.0; break;
@@ -681,6 +1212,9 @@ void v0(const Vector &x, Vector &v)
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
          break;
       }
+      case 8: v = 0.0; break;
+      case 9: v = 0.0; break;
+      case 10: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -750,6 +1284,11 @@ double e0(const Vector &x)
          const double rho = rho0(x), gamma = gamma_func(x);
          return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
       }
+      case 8: return (x(0) < 0.5) ? 2.0 / rho0(x) / (gamma_func(x) - 1.0)
+                                  : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
+      case 9: return (x(0) < 0.7) ? (1.0e9+gamma_func(x)*6.0e8) / rho0(x) / (gamma_func(x) - 1.0)
+                                  : 1.0e5 / rho0(x) / (gamma_func(x) - 1.0);
+      case 10: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
