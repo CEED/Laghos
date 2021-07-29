@@ -1671,22 +1671,22 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                double window_par;
+                double window_par = t;
                 if (problem == 7)
                 {
                     if (romOptions.indicatorType == penetrationDistance)
                     {
                         // 2D Rayleigh-Taylor penetration distance
-                        window_par = pd_weight[0];
-                        for (int i=1; i<pd_weight.size(); ++i)
-                            window_par -= pd_weight[i]*romS[i-1];
+                        window_par = pd_weight[0]; // TODO: get offset in online phase
+                        for (int i=0; i<pd_weight.size(); ++i)
+                            window_par -= pd_weight[i]*romS[i];
                     }
                     else if (romOptions.indicatorType == parameterTime)
                     {
                         window_par = romOptions.atwoodFactor * t * t;
                     }
-                    else window_par = t;
                 }
+                cout << window_par << endl; 
 
                 if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
@@ -1909,7 +1909,24 @@ int main(int argc, char *argv[])
         }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+            double real_pd;
+            if (problem == 7)
+            {
+                // 2D Rayleigh-Taylor penetration distance
+                if (romOptions.indicatorType == penetrationDistance)
+                {
+                    real_pd = -1.0;
+                    double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+                    MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                }
+                else if (romOptions.indicatorType == parameterTime)
+                {
+                    real_pd = romOptions.atwoodFactor * t * t;
+                }
+                MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+            }
+            double windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+            outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
 
             if (romOptions.SNS)
                 outfile_twp << "\n";
@@ -1925,7 +1942,7 @@ int main(int argc, char *argv[])
         }
 
         samplerTimer.Stop();
-        if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
+        if (usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
     double relative_error = -1;
