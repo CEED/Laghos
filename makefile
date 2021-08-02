@@ -63,7 +63,7 @@ PREFIX ?= ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM source, build, or install directory
-MFEM_DIR ?= ../mfem
+MFEM_DIR ?= ../mfem_shift
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 ifeq ($(wildcard $(CONFIG_MK)),)
    CONFIG_MK = $(MFEM_DIR)/share/mfem/config.mk

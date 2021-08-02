@@ -42,7 +42,6 @@ class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
    ParFiniteElementSpace &H1, &L2;
-   mutable ParFiniteElementSpace H1c;
    ParMesh *pmesh;
    // FE spaces local and global sizes
    const int H1Vsize;
@@ -56,7 +55,6 @@ protected:
    const bool use_viscosity, use_vorticity;
    const double cg_rel_tol;
    const int cg_max_iter;
-   const double ftz_tol;
    const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -74,7 +72,7 @@ protected:
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
-   mutable Vector X, B, one, rhs, e_rhs;
+   mutable Vector one, rhs, e_rhs;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -101,7 +99,7 @@ public:
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort,
-                           const double cgt, const int cgiter, double ftz_tol,
+                           const double cgt, const int cgiter,
                            const int order_q);
    ~LagrangianHydroOperator();
 

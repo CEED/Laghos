@@ -36,6 +36,7 @@
 // Test problems: see README.
 
 #include "laghos_solver.hpp"
+#include "laghos_cut.hpp"
 
 using std::cout;
 using std::endl;
@@ -74,7 +75,6 @@ int main(int argc, char *argv[])
    double t_final = 0.6;
    double cfl = 0.5;
    double cg_tol = 1e-8;
-   double ftz_tol = 0.0;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool impose_visc = false;
@@ -109,8 +109,6 @@ int main(int argc, char *argv[])
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
-   args.AddOption(&ftz_tol, "-ftz", "--ftz-tol",
-                  "Absolute flush-to-zero tolerance.");
    args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
                   "Maximum number of CG iterations (velocity linear solve).");
    args.AddOption(&max_tsteps, "-ms", "--max-steps",
@@ -207,6 +205,21 @@ int main(int argc, char *argv[])
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   ParFiniteElementSpace H1CutFESpace(pmesh, &H1FEC, pmesh->Dimension());
+
+   // Assign material indices to the element attributes.
+   for (int i = 0; i < NE; i++)
+   {
+      Vector center;
+      pmesh->GetElementCenter(i, center);
+      Element *el = pmesh->GetElement(i);
+      if (center(0) <= 0.5 || center(1) >= 0.5)
+      {
+         el->SetAttribute(0);
+      }
+      else { el->SetAttribute(1); }
+   }
+   //hydrodynamics::cutH1Space(H1CutFESpace, true, true);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -218,13 +231,14 @@ int main(int argc, char *argv[])
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
          // i.e., we must enforce v_x/y/z = 0 for the velocity components.
          ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-         ess_tdofs.Append(dofs_list);
-         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+         //H1CutFESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+         //ess_tdofs.Append(dofs_list);
+         H1CutFESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
          FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
          ess_vdofs.Append(dofs_list);
       }
    }
+   ess_tdofs = ess_vdofs;
 
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
@@ -248,10 +262,13 @@ int main(int argc, char *argv[])
 
    const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   const HYPRE_Int glob_size_h1cut = H1CutFESpace.GetVSize();
    if (mpi.Root())
    {
-      cout << "Number of kinematic (position, velocity) dofs: "
+      cout << "Number of position dofs: "
            << glob_size_h1 << endl;
+      cout << "Number of velocity dofs: "
+           << glob_size_h1cut << endl;
       cout << "Number of specific internal energy dofs: "
            << glob_size_l2 << endl;
    }
@@ -262,10 +279,11 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
+   const int Vsize_h1cut = H1CutFESpace.GetVSize();
    Array<int> offset(4);
    offset[0] = 0;
    offset[1] = offset[0] + Vsize_h1;
-   offset[2] = offset[1] + Vsize_h1;
+   offset[2] = offset[1] + Vsize_h1cut;
    offset[3] = offset[2] + Vsize_l2;
    BlockVector S(offset);
 
@@ -275,7 +293,7 @@ int main(int argc, char *argv[])
    // property of pointwise mass conservation.
    ParGridFunction x_gf, v_gf, e_gf;
    x_gf.MakeRef(&H1FESpace, S, offset[0]);
-   v_gf.MakeRef(&H1FESpace, S, offset[1]);
+   v_gf.MakeRef(&H1CutFESpace, S, offset[1]);
    e_gf.MakeRef(&L2FESpace, S, offset[2]);
 
    // Initialize x_gf using the starting mesh coordinates.
@@ -337,12 +355,14 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   //MFEM_ABORT("up to here");
+
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
-                                                cg_tol, cg_max_iter, ftz_tol,
+                                                cg_tol, cg_max_iter,
                                                 order_q);
 
    socketstream vis_rho, vis_v, vis_e;

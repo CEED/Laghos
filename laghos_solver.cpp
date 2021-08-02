@@ -16,7 +16,7 @@
 
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
-#include "linalg/kernels.hpp"
+#include "laghos_cut.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
@@ -93,10 +93,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const bool vort,
                                                  const double cgt,
                                                  const int cgiter,
-                                                 double ftz,
                                                  const int oq) :
    TimeDependentOperator(size),
-   H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   H1(h1), L2(l2),
    pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),
    L2Vsize(L2.GetVSize()),
@@ -110,7 +109,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
-   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
+   cg_rel_tol(cgt), cg_max_iter(cgiter),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
@@ -122,8 +121,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1),
-   X(H1c.GetTrueVSize()),
-   B(H1c.GetTrueVSize()),
    one(L2Vsize),
    rhs(H1Vsize),
    e_rhs(L2Vsize)
@@ -214,7 +211,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Set dx_dt = v (explicit).
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
-   dx = v;
+   hydrodynamics::MeshUpdate(dx, v);
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
@@ -250,6 +247,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       rhs += rhs_accel;
    }
 
+   Vector X, B;
    HypreParMatrix A;
    Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 
@@ -680,6 +678,8 @@ void RK2AvgSolver::Init(TimeDependentOperator &tdop)
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
+   MFEM_ABORT("Mesh stitching is not fixed in RK2Avg.");
+
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    S0.Vector::operator=(S);
