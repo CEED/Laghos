@@ -914,34 +914,15 @@ int main(int argc, char *argv[])
         std::string pd_idx_outPath = outputPath + "/pd_idx";
         if (fom_data)
         {
-            int proc_pd1_vdof = -1, proc_pd2_vdof = -1;
             for (int i = 0; i < Vsize_h1/2; ++i)
             {
                 if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
-                    proc_pd1_vdof = Vsize_h1/2+i;
+                    pd1_vdof = Vsize_h1/2+i;
                 if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
-                    proc_pd2_vdof = Vsize_h1/2+i;
-                if (proc_pd1_vdof >= 0 && proc_pd2_vdof >= 0)
+                    pd2_vdof = Vsize_h1/2+i;
+                if (pd1_vdof >= 0 && pd2_vdof >= 0)
                     break;
             }
-            int pd1_vdof, pd2_vdof;
-            MPI_Reduce(&proc_pd1_vdof, &pd1_vdof, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&proc_pd2_vdof, &pd2_vdof, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-            if (myid == 0)
-            {
-                std::ofstream outfile_pd_idx(pd_idx_outPath.c_str());
-                outfile_pd_idx << pd1_vdof << endl;
-                outfile_pd_idx << pd2_vdof << endl;
-                outfile_pd_idx.close();
-            }
-        }
-        else
-        {
-            std::ifstream infile_pd_idx(pd_idx_outPath.c_str());
-            MFEM_VERIFY(infile_pd_idx.good(), "Index file does not exist.")
-            infile_pd_idx >> pd1_vdof;
-            infile_pd_idx >> pd2_vdof;
-            infile_pd_idx.close();
         }
     }
 
@@ -1238,26 +1219,28 @@ int main(int argc, char *argv[])
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
         }
 
-        if (problem == 7 && romOptions.indicatorType == penetrationDistance)
+        if (rom_online && problem == 7 && romOptions.indicatorType == penetrationDistance)
         {
-            if (fom_data)
+            if (!romOptions.hyperreduce)
             {
                 int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
-                MPI_Barrier(pmesh->GetComm());
             }
-            std::string pd_weight_outPath = outputPath + "/pd_weight0";
-            std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
-            MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
-            pd_weight.clear();
-            double pd_w;
-            while (infile_pd_weight >> pd_w)
+            if (!romOptions.hyperreduce_prep)
             {
-                pd_weight.push_back(pd_w);
+                std::string pd_weight_outPath = outputPath + "/pd_weight0";
+                std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
+                MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+                pd_weight.clear();
+                double pd_w;
+                while (infile_pd_weight >> pd_w)
+                {
+                    pd_weight.push_back(pd_w);
+                }
+                infile_pd_weight.close();
+                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX(), "Number of weights do not match.")
             }
-            infile_pd_weight.close();
-            MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX(), "Number of weights do not match.")
         }
 
         if (romOptions.hyperreduce_prep)
