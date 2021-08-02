@@ -911,14 +911,37 @@ int main(int argc, char *argv[])
     int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7)
     {
-        for (int i = 0; i < Vsize_h1/2; ++i)
+        std::string pd_idx_outPath = outputPath + "/pd_idx";
+        if (fom_data)
         {
-            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
-                pd1_vdof = Vsize_h1/2+i;
-            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
-                pd2_vdof = Vsize_h1/2+i;
-            if (pd1_vdof >= 0 && pd2_vdof >= 0)
-                break;
+            int proc_pd1_vdof = -1, proc_pd2_vdof = -1;
+            for (int i = 0; i < Vsize_h1/2; ++i)
+            {
+                if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
+                    proc_pd1_vdof = Vsize_h1/2+i;
+                if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
+                    proc_pd2_vdof = Vsize_h1/2+i;
+                if (proc_pd1_vdof >= 0 && proc_pd2_vdof >= 0)
+                    break;
+            }
+            int pd1_vdof, pd2_vdof;
+            MPI_Reduce(&proc_pd1_vdof, &pd1_vdof, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&proc_pd2_vdof, &pd2_vdof, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (myid == 0)
+            {
+                std::ofstream outfile_pd_idx(pd_idx_outPath.c_str());
+                outfile_pd_idx << pd1_vdof << endl;
+                outfile_pd_idx << pd2_vdof << endl;
+                outfile_pd_idx.close();
+            }
+        }
+        else
+        {
+            std::ifstream infile_pd_idx(pd_idx_outPath.c_str());
+            MFEM_VERIFY(infile_pd_idx.good(), "Index file does not exist.")
+            infile_pd_idx >> pd1_vdof;
+            infile_pd_idx >> pd2_vdof;
+            infile_pd_idx.close();
         }
     }
 
@@ -1677,7 +1700,9 @@ int main(int argc, char *argv[])
                     if (romOptions.indicatorType == penetrationDistance)
                     {
                         // 2D Rayleigh-Taylor penetration distance
-                        window_par = (romOptions.useOffset) ? basis[romOptions.window]->GetOffsetX(pd2_vdof) : 0.0;
+                        cout << window_par << endl; // TODO: Remove after debug
+                        window_par = (romOptions.useOffset) ? -basis[romOptions.window]->GetOffsetX(pd2_vdof) : 0.0;
+                        cout << window_par << endl; // TODO: Remove after debug
                         for (int i=0; i<pd_weight.size(); ++i)
                             window_par -= pd_weight[i]*romS[i];
                     }
@@ -1686,7 +1711,7 @@ int main(int argc, char *argv[])
                         window_par = romOptions.atwoodFactor * t * t;
                     }
                 }
-                cout << window_par << endl; 
+                cout << window_par << endl; // TODO: Remove after debug
 
                 if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
