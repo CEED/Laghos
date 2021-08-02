@@ -2288,7 +2288,6 @@ void ROM_Basis::writePDweights(const int id, const int window) const
     std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
     if (id >= 0)
     {
-        // offset should be determined in online phase
         for (int i=0; i < rdimx; ++i)
         {
             outfile_pd_weight << (*basisX)(id,i) << endl;

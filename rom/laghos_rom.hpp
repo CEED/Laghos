@@ -621,6 +621,11 @@ public:
 
     void writePDweights(const int id, const int window = 0) const;
 
+    double GetOffsetX(const int idx)
+    {
+        return (*initX)(idx);
+    }
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
