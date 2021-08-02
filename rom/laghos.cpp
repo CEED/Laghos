@@ -909,7 +909,7 @@ int main(int argc, char *argv[])
 
     // 2D Rayleigh-Taylor penetration distance
     int pd1_vdof = -1, pd2_vdof = -1;
-    if (problem == 7 && fom_data)
+    if (problem == 7)
     {
         for (int i = 0; i < Vsize_h1/2; ++i)
         {
@@ -1677,7 +1677,7 @@ int main(int argc, char *argv[])
                     if (romOptions.indicatorType == penetrationDistance)
                     {
                         // 2D Rayleigh-Taylor penetration distance
-                        window_par = pd_weight[0]; // TODO: get offset in online phase
+                        window_par = (romOptions.useOffset) ? ROM_basis[romOptions.window]->GetOffsetX(pd2_vdof) : 0.0;
                         for (int i=0; i<pd_weight.size(); ++i)
                             window_par -= pd_weight[i]*romS[i];
                     }
