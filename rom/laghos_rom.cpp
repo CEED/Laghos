@@ -246,7 +246,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (pdSnap.size() > 0)
         {
             std::string path_pdSnap = basename + "/param" + std::to_string(parameterID) + "_pdSnap";
-            printSnapshotTime(pdSnap, path_pdSnap, "X");
+            printSnapshotTime(pdSnap, path_pdSnap, "X", input.basisIdentifier);
         }
     }
 

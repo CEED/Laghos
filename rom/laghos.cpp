@@ -361,6 +361,7 @@ int main(int argc, char *argv[])
         if (std::string(solution_basename) != "")
             mkdir(solution_outputPath.c_str(), 0777);
         mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
+    }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -2036,7 +2037,7 @@ int main(int argc, char *argv[])
     }
     if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
     {
-        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.")
+        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.");
     }
 
     if (outputSpaceTimeSolution)
