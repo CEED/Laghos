@@ -162,10 +162,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     }
 }
 
-void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var)
+void printSnapshotTime(std::vector<double> const &tSnap, std::string const path, std::string const var, std::string basisIdentifier)
 {
     cout << var << " snapshot size: " << tSnap.size() << endl;
-    std::ofstream outfile_tSnap(path + var);
+    std::ofstream outfile_tSnap(path + var + basisIdentifier);
 
     outfile_tSnap.precision(std::numeric_limits<double>::max_digits10);
     for (auto const& i: tSnap)
@@ -204,28 +204,28 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV)
         {
             cout << "X basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimx" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
         if (!useVX)
         {
             cout << "V basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
         cout << "E basis summary output: " << endl;
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdime" + input.basisIdentifier);
+        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (!sns)
         {
             cout << "Fv basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimfv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
 
             cout << "Fe basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimfe" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
         }
     }
 
@@ -233,14 +233,14 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     {
         std::string path_tSnap = basename + "/param" + std::to_string(parameterID) + "_tSnap";
 
-        printSnapshotTime(tSnapX, path_tSnap, "X");
-        printSnapshotTime(tSnapV, path_tSnap, "V");
-        printSnapshotTime(tSnapE, path_tSnap, "E");
+        printSnapshotTime(tSnapX, path_tSnap, "X", input.basisIdentifier);
+        printSnapshotTime(tSnapV, path_tSnap, "V", input.basisIdentifier);
+        printSnapshotTime(tSnapE, path_tSnap, "E", input.basisIdentifier);
 
         if (!sns)
         {
-            printSnapshotTime(tSnapFv, path_tSnap, "Fv");
-            printSnapshotTime(tSnapFe, path_tSnap, "Fe");
+            printSnapshotTime(tSnapFv, path_tSnap, "Fv", input.basisIdentifier);
+            printSnapshotTime(tSnapFe, path_tSnap, "Fe", input.basisIdentifier);
         }
 
         if (pdSnap.size() > 0)
@@ -478,10 +478,12 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
 
     if (offsetInit)
     {
-        std::string path_init = basename + "/ROMoffset/init";
+        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         if (input.offsetType == useInitialState)
         {
+            cout << "Reading: " << path_init << endl;
+
             // Read offset in the online phase of initial mode
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
@@ -491,6 +493,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         }
         else if (input.restore || input.offsetType == saveLoadOffset)
         {
+            cout << "Reading: " << path_init << endl;
+
             // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
@@ -502,7 +506,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         {
 
             // Calculation of coefficients of offset data using inverse distance weighting interpolation
-            std::ifstream infile_offlineParam(basename + "/offline_param.csv");
+            std::ifstream infile_offlineParam(basename + "/offline_param" + input.basisIdentifier + ".csv");
             MFEM_VERIFY(infile_offlineParam.is_open(), "Offline parameter record file does not exist.");
             std::string line;
             std::vector<std::string> words;
@@ -560,7 +564,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
                 initE_off = new CAROM::Vector(tL2size, true);
 
                 int paramID_off = paramID_list[param];
-                std::string path_init_off = basename + "/ROMoffset/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
+                std::string path_init_off = basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(paramID_off) + "_init" ; // paramID_off = 0, 1, 2, ...
 
                 initX_off->read(path_init_off + "X" + std::to_string(input.window));
                 initV_off->read(path_init_off + "V" + std::to_string(input.window));
@@ -661,7 +665,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
     if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
-        std::string path_init = basename + "/ROMoffset/init";
+        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         // Compute and save offset in the online phase for the initial window in the useInitialState mode
         Vector X, V, E;
@@ -3287,16 +3291,14 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 }
 
 CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_calc_rel_error, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
 
     romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", myid);
-    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    ifstream f(outputPath + "/greedy_algorithm_data");
     if (f.good())
     {
         parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
@@ -3312,10 +3314,13 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             romOptions.greedyMaxClamp, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
             latin_hypercube, outputPath + "/greedy_algorithm_log.txt");
 
-        ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
-        o << "Parameter considered: " << greedyParamString << std::endl;
-        o << "Error indicator: " << greedyErrorIndicatorType << std::endl;
-        o.close();
+        if (myid == 0)
+        {
+            ofstream o(outputPath + "/greedy_algorithm_log.txt", std::ios::app);
+            o << "Parameter considered: " << greedyParamString << std::endl;
+            o << "Error indicator: " << greedyErrorIndicatorType << std::endl;
+            o.close();
+        }
     }
 
     // First check if we need to compute another error indicator
@@ -3339,13 +3344,31 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         double errorIndicatorEnergyFraction = 0.9999;
 
         char tmp[100];
-        sprintf(tmp, ".%06d", myid);
+        sprintf(tmp, ".%06d", 0);
 
         std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
 
         if (romOptions.greedyErrorIndicatorType == varyBasisSize)
         {
-            t_final = 0.001;
+            if (romOptions.greedytf == -1.0)
+            {
+                t_final = 0.001;
+            }
+            else
+            {
+                t_final = romOptions.greedytf;
+            }
+        }
+        else if (romOptions.greedyErrorIndicatorType == fom)
+        {
+            if (romOptions.greedytf == -1.0)
+            {
+                t_final = 0.02;
+            }
+            else
+            {
+                t_final = romOptions.greedytf;
+            }
         }
 
         std::ifstream checkfile(fullname);
@@ -3353,47 +3376,81 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         {
             if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
+                rom_read_greedy_twparam = true;
                 errorIndicatorEnergyFraction = 0.99;
+            }
+            if (romOptions.greedyErrorIndicatorType == fom)
+            {
+                romOptions.basisIdentifier = "_error_indicator";
+                rom_offline = true;
+                romOptions.hyperreduce = false;
             }
         }
 
         // Get the rdim for the basis used.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        if (!romOptions.SNS)
+        if (!rom_offline && !usingWindows)
         {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimX, outputPath + "/" + "rdimX" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimV, outputPath + "/" + "rdimV" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimE, outputPath + "/" + "rdimE" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            if (!romOptions.SNS)
+            {
+                readNum(romOptions.dimFv, outputPath + "/" + "rdimFv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFe, outputPath + "/" + "rdimFe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            }
         }
 
-        rom_online = true;
+        if (!(rom_offline && romOptions.greedyErrorIndicatorType == fom))
+        {
+            ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
+                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
+        }
+
+        rom_calc_error_indicator = true;
+        rom_calc_rel_error_nonlocal = false;
+        rom_calc_rel_error_local = false;
     }
     else if (samplePointData != NULL)
     {
+        rom_calc_rel_error_nonlocal = true;
+        rom_calc_rel_error_local = true;
+        ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
+                    romOptions, outputPath + "/greedy_algorithm_stage.txt");
+
         CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
         std::string localROMString = "";
-        for (int i = 0; i < localROM->dim(); i++)
+        if (rom_calc_rel_error_local)
         {
-            localROMString += "_" + to_string(localROM->item(i));
+            for (int i = 0; i < localROM->dim(); i++)
+            {
+                localROMString += "_" + to_string(samplePointData->item(i));
+            }
         }
+        else
+        {
+            for (int i = 0; i < localROM->dim(); i++)
+            {
+                localROMString += "_" + to_string(localROM->item(i));
+            }
+        }
+
         romOptions.basisIdentifier = localROMString;
         *greedyParam = samplePointData->item(0);
 
         double errorIndicatorEnergyFraction = 0.9999;
 
         // Get the rdim for the basis used.
-        readNum(romOptions.dimX, outputPath + "/" + "rdimx" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        readNum(romOptions.dimV, outputPath + "/" + "rdimv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        readNum(romOptions.dimE, outputPath + "/" + "rdime" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-        if (!romOptions.SNS)
+        if (!usingWindows)
         {
-            readNum(romOptions.dimFv, outputPath + "/" + "rdimfv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
-            readNum(romOptions.dimFe, outputPath + "/" + "rdimfe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimX, outputPath + "/" + "rdimX" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimV, outputPath + "/" + "rdimV" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            readNum(romOptions.dimE, outputPath + "/" + "rdimE" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            if (!romOptions.SNS)
+            {
+                readNum(romOptions.dimFv, outputPath + "/" + "rdimFv" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+                readNum(romOptions.dimFe, outputPath + "/" + "rdimFe" + romOptions.basisIdentifier + "_" + to_string(errorIndicatorEnergyFraction));
+            }
         }
-
-        rom_online = true;
-        rom_calc_rel_error = true;
     }
     else
     {
@@ -3409,12 +3466,14 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
             }
             romOptions.basisIdentifier = samplePointDataString;
             *greedyParam = samplePointData->item(0);
+
             rom_offline = true;
+            romOptions.hyperreduce = false;
         }
         else
         {
             // The greedy algorithm procedure has ended
-            MFEM_ABORT("The greedy algorithm procedure has failed!");
+            MFEM_ABORT("The greedy algorithm procedure has ended!");
         }
     }
 
@@ -3426,9 +3485,7 @@ CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, cons
 
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", myid);
-    ifstream f(outputPath + "/greedy_algorithm_data" + tmp);
+    ifstream f(outputPath + "/greedy_algorithm_data");
     MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
 
     parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
@@ -3450,28 +3507,6 @@ CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, cons
     romOptions.basisIdentifier = pointDataString;
 
     return parameterPointGreedySampler;
-}
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double errorIndicator,
-                     const int errorIndicatorVecSize, const std::string outputPath)
-{
-    if (rom_online)
-    {
-        parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
-    }
-
-    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
-}
-
-void SaveROMDatabase(CAROM::GreedyParameterPointSampler* parameterPointGreedySampler, ROM_Options& romOptions, const bool rom_online, const double relative_error,
-                     const std::string outputPath)
-{
-    if (rom_online)
-    {
-        parameterPointGreedySampler->setPointRelativeError(relative_error);
-    }
-
-    parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
 }
 
 void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const

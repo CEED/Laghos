@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *basisIdentifier = "";
     int partition_type = 0;
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
@@ -258,6 +259,7 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
                    "Energy fraction for recommended X ROM basis size.");
+    args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for parametric case.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
@@ -294,6 +296,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.greedyParamSpaceMin, "-greedy-param-min", "--greedy-param-min", "The minimum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceMax, "-greedy-param-max", "--greedy-param-max", "The maximum value of the parameter point space.");
     args.AddOption(&romOptions.greedyParamSpaceSize, "-greedy-param-size", "--greedy-param-size", "The number of values to search in the parameter point space.");
+    args.AddOption(&romOptions.greedytf, "-greedytf", "--greedytf", "The greedy algorithm error indicator final time.");
     args.AddOption(&romOptions.greedyTol, "-greedytol", "--greedytol", "The greedy algorithm tolerance.");
     args.AddOption(&romOptions.greedyAlpha, "-greedyalpha", "--greedyalpha", "The greedy algorithm alpha constant.");
     args.AddOption(&romOptions.greedyMaxClamp, "-greedymaxclamp", "--greedymaxclamp", "The greedy algorithm max clamp constant.");
@@ -358,7 +361,6 @@ int main(int argc, char *argv[])
         if (std::string(solution_basename) != "")
             mkdir(solution_outputPath.c_str(), 0777);
         mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
-    }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -368,6 +370,7 @@ int main(int argc, char *argv[])
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     romOptions.basename = &outputPath;
+    romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
@@ -381,29 +384,63 @@ int main(int argc, char *argv[])
 
     NormType normtype = localmap[normtype_char];
 
+    bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
+
     CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    bool rom_calc_error_indicator = false;
     bool rom_calc_rel_error = false;
+    bool rom_calc_rel_error_nonlocal = false;
+    bool rom_calc_rel_error_local = false;
+    bool rom_calc_rel_error_nonlocal_completed = false;
+    bool rom_calc_rel_error_local_completed = false;
+    bool greedy_write_solution = false;
+    bool rom_read_greedy_twparam = false;
 
     // If using the greedy algorithm, initialize the parameter point greedy sampler.
     if (rom_build_database)
     {
         MFEM_VERIFY(!rom_offline && !rom_online && !rom_restore, "-offline, -online, -restore should be off when using -build-database");
-        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_calc_rel_error, greedyParam, greedyErrorIndicatorType, greedySamplingType);
+        parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, usingWindows, rom_calc_error_indicator, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
-        if (parameterPointGreedySampler->isComplete())
+        rom_calc_rel_error = rom_calc_rel_error_local || rom_calc_rel_error_nonlocal;
+        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
+        rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.hyperreduce));
+        greedy_write_solution = rom_offline || rom_calc_rel_error_nonlocal_completed;
+
+        if (rom_offline)
         {
-            // The greedy algorithm procedure has ended
-            if (myid == 0)
+            if (romOptions.parameterID != -1)
             {
-                cout << "The greedy algorithm procedure has completed!" << endl;
+                if (windowNumSamples > 0)
+                {
+                    windowNumSamples = 0;
+                    usingWindows = false;
+                }
             }
-            return 1;
         }
 
-        if (rom_online)
+        if (rom_online || rom_restore)
         {
-            windowNumSamples = 0;
+            romOptions.parameterID = -1;
+            if (usingWindows)
+            {
+                windowNumSamples = 0;
+                numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
+            }
         }
+    }
+
+    if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
+        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -422,7 +459,6 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(windowNumSamples == 0 || rom_offline, "-nwinsamp should be specified only in offline mode");
     MFEM_VERIFY(windowNumSamples == 0 || numWindows == 0, "-nwinsamp and -nwin cannot both be set");
 
-    const bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
     if (usingWindows)
     {
         if (romOptions.dimX  > 0) romOptions.max_dimX  = romOptions.dimX;
@@ -435,6 +471,10 @@ int main(int argc, char *argv[])
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
             const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
+            if (rom_build_database && rom_read_greedy_twparam)
+            {
+                ReadGreedyTimeWindowParameters(romOptions, numWindows, twparam, outputPath);
+            }
         }
         else if (rom_offline && windowNumSamples == 0)
         {
@@ -633,7 +673,7 @@ int main(int argc, char *argv[])
     int source = 0;
     double dt = 0.0;
 
-    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    std::string offlineParam_outputPath = outputPath + "/offline_param" + romOptions.basisIdentifier + ".csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
     romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
@@ -1047,6 +1087,13 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
+        if (romOptions.parameterID != -1 && romOptions.offsetType == interpolateOffset && myid == 0)
+        {
+            ofstream basisIdFile;
+            basisIdFile.open(outputPath + "/basisIdentifier.txt");
+            basisIdFile << romOptions.basisIdentifier;
+            basisIdFile.close();
+        }
         WriteOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, myid == 0);
     }
 
@@ -1197,7 +1244,7 @@ int main(int argc, char *argv[])
         if (!romOptions.hyperreduce)
         {
             basis[0]->ProjectFOMtoROM(*S, romS);
-            if (romOptions.hyperreduce_prep && myid == 0 && !rom_build_database)
+            if (romOptions.hyperreduce_prep && myid == 0)
             {
                 std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
@@ -1205,7 +1252,7 @@ int main(int argc, char *argv[])
                 romS.Print(outfile_romS, 1);
             }
         }
-        else if (!rom_build_database)
+        else
         {
             std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
@@ -1248,6 +1295,12 @@ int main(int argc, char *argv[])
             if (myid == 0)
             {
                 cout << "Hyperreduction pre-processing completed. " << endl;
+                if (rom_build_database)
+                {
+                    WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                }
+                ofstream hyperreducefile(outputPath + "/hyperreduce.txt");
+                hyperreducefile.close();
             }
             return 0;
         }
@@ -1257,7 +1310,7 @@ int main(int argc, char *argv[])
     }
 
     StopWatch restoreTimer, timeLoopTimer;
-    bool converged = true;
+    bool greedy_converged = true;
     if (rom_restore)
     {
         // -restore phase
@@ -1344,6 +1397,22 @@ int main(int argc, char *argv[])
                 romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                 romS.SetSize(romSsize);
             }
+
+            if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
+            {
+                std::string nextfilename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
+                std::string next2filename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
+                std::ifstream nextfile_romS(nextfilename.c_str());
+                std::ifstream next2file_romS(next2filename.c_str());
+                if (nextfile_romS.good() && !next2file_romS.good())
+                {
+                    lastLiftedSolution = *S;
+                    ode_solver_dat->Init(*oper);
+                    ode_solver_dat->Step(lastLiftedSolution, t, dt);
+                }
+                nextfile_romS.close();
+                next2file_romS.close();
+            }
         } // time loop in "restore" phase
         ti--;
         std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
@@ -1416,7 +1485,7 @@ int main(int argc, char *argv[])
 
             if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
             t_old = t;
-            if (fom_data && (!rom_build_database || last_step))
+            if (fom_data)
             {
                 oper->ResetTimeStepEstimate();
             }
@@ -1434,7 +1503,12 @@ int main(int argc, char *argv[])
                 // since romS will be full of NaN's.
                 if (rom_build_database && !std::isfinite(romS.Norml2()))
                 {
-                    converged = false;
+                    greedy_converged = false;
+                    if (rom_calc_rel_error_local)
+                    {
+                        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
+                    }
+                    rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal;
                     break;
                 }
                 romS_old = romS;
@@ -1444,32 +1518,24 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                if (!rom_build_database)
+                std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::ofstream outfile_romS(filename.c_str());
+                outfile_romS.precision(16);
+                if (romOptions.hyperreduce && romOptions.GramSchmidt)
                 {
-                    std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
-                    std::ofstream outfile_romS(filename.c_str());
-                    outfile_romS.precision(16);
-                    if (romOptions.hyperreduce && romOptions.GramSchmidt)
-                    {
-                        Vector romCoord(romS);
-                        romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
-                        romCoord.Print(outfile_romS, 1);
-                    }
-                    else
-                    {
-                        romS.Print(outfile_romS, 1);
-                    }
-                    outfile_romS.close();
+                    Vector romCoord(romS);
+                    romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
+                    romCoord.Print(outfile_romS, 1);
                 }
+                else
+                {
+                    romS.Print(outfile_romS, 1);
+                }
+                outfile_romS.close();
 
                 if (!romOptions.hyperreduce)
                 {
-
-                    // If using the greedy algorithm, only lift during the last step
-                    if (!rom_build_database || last_step)
-                    {
-                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-                    }
+                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
                     // If using the greedy algorithm, take only the last step in the FOM space
                     // when using the useLastLiftedSolution error indicator type
@@ -1483,7 +1549,7 @@ int main(int argc, char *argv[])
 
                 romOper[romOptions.window]->UpdateSampleMeshNodes(romS);
 
-                if (fom_data && (!rom_build_database || last_step))
+                if (fom_data)
                 {
                     oper->ResetQuadratureData();  // Necessary for oper->GetTimeStepEstimate(*S);
                 }
@@ -1501,38 +1567,48 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            if (!rom_build_database || last_step)
-            {
-                const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
+            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
 
-                if (dt_est < dt)
+            if (dt_est < dt)
+            {
+                // Repeat (solve again) with a decreased time step - decrease of the
+                // time estimate suggests appearance of oscillations.
+                dt *= 0.85;
+                if (dt < 1e-7)
                 {
-                    // Repeat (solve again) with a decreased time step - decrease of the
-                    // time estimate suggests appearance of oscillations.
-                    dt *= 0.85;
-                    if (dt < numeric_limits<double>::epsilon())
+                    if (rom_build_database)
                     {
-                        MFEM_ABORT("The time step crashed!");
+                        greedy_converged = false;
+                        if (rom_calc_rel_error_local)
+                        {
+                            MFEM_ABORT("The greedy algorithm has failed. The local ROM did not converge. Decrease your parameter space range.")
+                        }
+                        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal;
+                        break;
                     }
-                    t = t_old;
-                    if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
-                    if (rom_online) romS = romS_old;
-                    if (fom_data)
-                    {
-                        oper->ResetQuadratureData();
-                    }
-                    if (mpi.Root()) {
-                        cout << "Repeating step " << ti << endl;
-                    }
-                    if (steps < max_tsteps) {
-                        last_step = false;
-                    }
-                    ti--;
-                    continue;
                 }
-                else if (dtc == 0.0 && dt_est > 1.25 * dt) {
-                    dt *= 1.02;
+                if (dt < numeric_limits<double>::epsilon())
+                {
+                    MFEM_ABORT("The time step crashed!");
                 }
+                t = t_old;
+                if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
+                if (rom_online) romS = romS_old;
+                if (fom_data)
+                {
+                    oper->ResetQuadratureData();
+                }
+                if (mpi.Root()) {
+                    cout << "Repeating step " << ti << endl;
+                }
+                if (steps < max_tsteps) {
+                    last_step = false;
+                }
+                ti--;
+                continue;
+            }
+            else if (dtc == 0.0 && dt_est > 1.25 * dt) {
+                dt *= 1.02;
             }
 
             unique_steps++;
@@ -1771,7 +1847,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (!rom_build_database && mpi.Root())
+            if (mpi.Root())
             {
                 if (last_step) {
                     std::ofstream outfile(outputPath + "/num_steps");
@@ -1950,13 +2026,17 @@ int main(int argc, char *argv[])
         if (usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
-    double relative_error = -1;
-
-    if (rom_build_database && rom_calc_rel_error)
+    double relative_error = 10.0 * romOptions.greedyTol;
+    if (rom_build_database && (rom_calc_rel_error_nonlocal_completed || rom_calc_rel_error_local_completed) && greedy_converged)
     {
+        cout << "Comparing to: " << solution_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
         relative_error = PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
         relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+    }
+    if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
+    {
+        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.")
     }
 
     if (outputSpaceTimeSolution)
@@ -1966,7 +2046,7 @@ int main(int argc, char *argv[])
         ofs_STE.close();
     }
 
-    if (fom_data && (!rom_build_database || !rom_online))
+    if (fom_data && (!rom_build_database || greedy_write_solution))
     {
         if (writeSol)
         {
@@ -2003,25 +2083,44 @@ int main(int argc, char *argv[])
     bool errorIndicatorComputed = false;
     int errorIndicatorVecSize = 0;
 
-    if (rom_online)
+    // If using the greedy algorithm, calculate the error indicator
+    if (rom_build_database && !rom_calc_rel_error)
     {
-        // If using the greedy algorithm, calculate the error indicator
-        if (rom_build_database && !rom_calc_rel_error)
+        if (rom_online && !greedy_converged)
         {
-            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+            if (romOptions.greedyErrorIndicatorType == varyBasisSize)
+            {
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    checkfile.close();
+                    remove(fullname.c_str());
+                }
+            }
+            errorIndicatorComputed = true;
+        }
+        else if ((rom_online && !romOptions.hyperreduce) || (rom_restore) ||
+            (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
+        {
+            if (rom_online)
+            {
+                basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+            }
 
             // calculate the error indicator using the FOM lifted during
             // the second to last step compared against the FOM lifted at the last step.
             if (romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
-                if (converged)
-                {
-                    Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
-                    subtract(lastLiftedSolution, *S, errorIndicatorVec);
+                Vector errorIndicatorVec = Vector(lastLiftedSolution.Size());
+                subtract(lastLiftedSolution, *S, errorIndicatorVec);
 
-                    errorIndicator = errorIndicatorVec.Norml2();
-                    errorIndicatorVecSize = errorIndicatorVec.Size();
-                }
+                errorIndicator = errorIndicatorVec.Norml2();
+                errorIndicatorVecSize = errorIndicatorVec.Size();
 
                 errorIndicatorComputed = true;
             }
@@ -2037,18 +2136,15 @@ int main(int argc, char *argv[])
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
                 {
-                    if (converged)
-                    {
-                        Vector finalSolution = *S;
-                        Vector previousFinalSolution;
-                        previousFinalSolution.Load(checkfile, finalSolution.Size());
+                    Vector finalSolution = *S;
+                    Vector previousFinalSolution;
+                    previousFinalSolution.Load(checkfile, finalSolution.Size());
 
-                        Vector errorIndicatorVec = Vector(finalSolution.Size());
-                        subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
+                    Vector errorIndicatorVec = Vector(finalSolution.Size());
+                    subtract(finalSolution, previousFinalSolution, errorIndicatorVec);
 
-                        errorIndicator = errorIndicatorVec.Norml2();
-                        errorIndicatorVecSize = errorIndicatorVec.Size();
-                    }
+                    errorIndicator = errorIndicatorVec.Norml2();
+                    errorIndicatorVecSize = errorIndicatorVec.Size();
 
                     checkfile.close();
                     remove(fullname.c_str());
@@ -2057,25 +2153,57 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    if (converged)
+                    Vector finalSolution = *S;
+
+                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                    ofs.precision(16);
+
+                    for (int i=0; i<finalSolution.Size(); ++i)
+                        ofs << finalSolution[i] << std::endl;
+
+                    ofs.close();
+
+                    if (myid == 0)
                     {
-                        Vector finalSolution = *S;
-
-                        std::ofstream ofs(fullname.c_str(), std::ofstream::out);
-                        ofs.precision(16);
-
-                        for (int i=0; i<finalSolution.Size(); ++i)
-                            ofs << finalSolution[i] << std::endl;
-
-                        ofs.close();
+                        DeleteROMSolution(outputPath);
                     }
-                    else
+                }
+            }
+            else if (romOptions.greedyErrorIndicatorType == fom)
+            {
+                char tmp[100];
+                sprintf(tmp, ".%06d", myid);
+
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+
+                std::ifstream checkfile(fullname);
+                if (checkfile.good())
+                {
+                    errorIndicator = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position_error_indicator", x_gf);
+                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity_error_indicator", v_gf));
+                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy_error_indicator", e_gf));
+                    errorIndicatorVecSize = 1;
+
+                    checkfile.close();
+                    remove(fullname.c_str());
+
+                    errorIndicatorComputed = true;
+                }
+                else
+                {
+                    std::ofstream ofs(fullname.c_str(), std::ofstream::out);
+                    ofs.close();
+
+                    if (myid == 0)
                     {
-                        errorIndicatorComputed = true;
+                        DeleteROMSolution(outputPath);
                     }
                 }
             }
         }
+    }
+    if (rom_online)
+    {
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
     }
@@ -2160,16 +2288,37 @@ int main(int argc, char *argv[])
 
     // If using the greedy algorithm, save the error indicator and any information
     // for use during the next iteration.
-    if(rom_build_database && (!rom_online || rom_calc_rel_error || errorIndicatorComputed))
+    if (rom_build_database && myid == 0)
     {
-        if (rom_calc_rel_error)
+        if (!(rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
         {
-            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, relative_error, outputPath);
+            WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
-        else
+        if (rom_calc_rel_error_local_completed)
         {
-            SaveROMDatabase(parameterPointGreedySampler, romOptions, rom_online, errorIndicator, errorIndicatorVecSize, outputPath);
+            DeleteROMSolution(outputPath);
         }
+    }
+    if(rom_build_database && (rom_offline || rom_calc_rel_error_nonlocal_completed || errorIndicatorComputed))
+    {
+        if (rom_calc_rel_error_nonlocal_completed)
+        {
+            parameterPointGreedySampler->setPointRelativeError(relative_error);
+        }
+        else if (errorIndicatorComputed)
+        {
+            parameterPointGreedySampler->setPointErrorIndicator(errorIndicator, errorIndicatorVecSize);
+        }
+
+        if (myid == 0)
+        {
+            std::string outputFile = outputPath + "/greedy_algorithm_stage.txt";
+            remove(outputFile.c_str());
+
+            parameterPointGreedySampler->save(outputPath + "/greedy_algorithm_data");
+            DeleteROMSolution(outputPath);
+        }
+
         if (parameterPointGreedySampler->isComplete())
         {
             // The greedy algorithm procedure has ended

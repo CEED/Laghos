@@ -8,7 +8,7 @@ using namespace std;
 using namespace mfem;
 
 
-void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
+void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, const std::string& basisIdentifier,
                              const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
@@ -27,7 +27,7 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
 
     for (int i=0; i<nsets; ++i)
     {
-        std::string filename = basename + "/param" + std::to_string(i) + "_var" + varName + std::to_string(basisWindow) + "_snapshot";
+        std::string filename = basename + "/param" + std::to_string(i) + "_var" + varName + std::to_string(basisWindow) + basisIdentifier + "_snapshot";
         basis_generator->loadSamples(filename,"snapshot");
     }
 
@@ -44,13 +44,13 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff);
-        PrintSingularValues(rank, basename, varName, basis_generator.get(), usingWindows, basisWindow);
+        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        PrintSingularValues(rank, basename, varName + basisIdentifier, basis_generator.get(), usingWindows, basisWindow);
     }
 }
 
 void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                             const std::string& varName, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
+                             const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
                              const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
@@ -74,7 +74,7 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
 
     for (int paramID=0; paramID<nsets; ++paramID)
     {
-        std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0_snapshot";
+        std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0" + basisIdentifier + "_snapshot";
         basis_generator.reset(new CAROM::BasisGenerator(static_svd_options, false, basis_filename));
         basis_generator->loadSamples(snapshot_filename,"snapshot");
 
@@ -87,7 +87,7 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
 
         if (offsetInit && offsetType == interpolateOffset)
         {
-            std::string path_init = basename + "/ROMoffset/param" + std::to_string(paramID) + "_init";
+            std::string path_init = basename + "/ROMoffset" + basisIdentifier + "/param" + std::to_string(paramID) + "_init";
             CAROM::Vector *init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
@@ -116,13 +116,13 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(window_basis_generator.get(), energyFraction, cutoff);
-        PrintSingularValues(rank, basename, varName, window_basis_generator.get(), true, basisWindow);
+        BasisGeneratorFinalSummary(window_basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        PrintSingularValues(rank, basename, varName + basisIdentifier, window_basis_generator.get(), true, basisWindow);
     }
 }
 
 void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                    const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
+                    const std::string& basisIdentifier, const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
                     const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                     const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
@@ -144,23 +144,23 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     default:
         varName = "X";
     }
-    std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow);
+    std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow) + basisIdentifier;
 
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basis_filename, windowOverlapSamples, basisWindow,
+        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
                                 useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
-        MergePhysicalTimeWindow(rank, energyFraction, nsets, basename, varName, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
+        MergePhysicalTimeWindow(rank, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
     }
 }
 
 // id is snapshot index, 0-based
-void GetSnapshotDim(const int id, const std::string& basename, const std::string& varName, const int window, int& varDim, int& numSnapshots)
+void GetSnapshotDim(const int id, const std::string& basename, const std::string& varName, const std::string& basisIdentifier, const int window, int& varDim, int& numSnapshots)
 {
-    std::string filename = basename + "/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + "_snapshot";
+    std::string filename = basename + "/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + basisIdentifier + "_snapshot";
 
     CAROM::BasisReader reader(filename);
     const CAROM::Matrix *S = reader.getSnapshotMatrix(0.0);
@@ -168,9 +168,10 @@ void GetSnapshotDim(const int id, const std::string& basename, const std::string
     numSnapshots = S->numColumns();
 }
 
-void GetSnapshotTime(const int id, const std::string& basename, const std::string& varName, std::vector<double> &tSnap)
+void GetSnapshotTime(const int id, const std::string& basename, const std::string& varName, const std::string& basisIdentifier, std::vector<double> &tSnap)
 {
-    std::string filename = basename + "/param" + std::to_string(id) + "_tSnap" + varName;
+    std::string filename = basename + "/param" + std::to_string(id) + "_tSnap" + varName + basisIdentifier;
+    std::cout << filename << std::endl;
     std::ifstream infile_tSnap(filename);
     MFEM_VERIFY(infile_tSnap.is_open(), "Snapshot time input file does not exists.");
 
@@ -196,8 +197,8 @@ void GetSnapshotPenetrationDistance(const int id, const std::string& basename, s
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const int windowNumSamples,
-                              int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
+void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const std::string& basisIdentifier, 
+                              const int windowNumSamples, int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;
     std::vector<std::vector<double>> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe, pdSnap;
@@ -206,26 +207,26 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
     // The snapshot time vectors are placed in descending order, with the last element is when the first snapshot is taken
     for (int paramID = 0; paramID < nset; ++paramID)
     {
-        GetSnapshotTime(paramID, basename, "X", tVec);
+        GetSnapshotTime(paramID, basename, "X", basisIdentifier, tVec);
         reverse(tVec.begin(), tVec.end());
         tSnapX.push_back(tVec);
         numSnap[paramID+nset*VariableName::X] = tVec.size();
-        GetSnapshotTime(paramID, basename, "V", tVec);
+        GetSnapshotTime(paramID, basename, "V", basisIdentifier, tVec);
         reverse(tVec.begin(), tVec.end());
         tSnapV.push_back(tVec);
         numSnap[paramID+nset*VariableName::V] = tVec.size();
-        GetSnapshotTime(paramID, basename, "E", tVec);
+        GetSnapshotTime(paramID, basename, "E", basisIdentifier, tVec);
         reverse(tVec.begin(), tVec.end());
         tSnapE.push_back(tVec);
         numSnap[paramID+nset*VariableName::E] = tVec.size();
 
         if (!SNS)
         {
-            GetSnapshotTime(paramID, basename, "Fv", tVec);
+            GetSnapshotTime(paramID, basename, "Fv", basisIdentifier, tVec);
             reverse(tVec.begin(), tVec.end());
             tSnapFv.push_back(tVec);
             numSnap[paramID+nset*VariableName::Fv] = tVec.size();
-            GetSnapshotTime(paramID, basename, "Fe", tVec);
+            GetSnapshotTime(paramID, basename, "Fe", basisIdentifier, tVec);
             reverse(tVec.begin(), tVec.end());
             tSnapFe.push_back(tVec);
             numSnap[paramID+nset*VariableName::Fe] = tVec.size();
@@ -397,6 +398,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *basisIdentifier = "";
     ROM_Options romOptions;
 
     OptionsParser args(argc, argv);
@@ -404,6 +406,7 @@ int main(int argc, char *argv[])
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
+    args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for the greedy algorithm.");
     args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
@@ -453,17 +456,19 @@ int main(int argc, char *argv[])
     Array<int> cutoff(5);
     int numBasisWindows = 0;
     std::vector<std::vector<int>> offsetAllWindows;
+    std::string basisIdentifierString = std::string(basisIdentifier);
+    std::string twp_file_path = std::string(twpfile) + basisIdentifierString;
 
     if (numWindows > 0) {
         numBasisWindows = numWindows;
         const int err = ReadTimeWindows(numWindows, twfile, twep, myid == 0);
         MFEM_VERIFY(err == 0, "Error in ReadTimeWindows");
-        outfile_twp.open(outputPath + "/" + std::string(twpfile));
+        outfile_twp.open(outputPath + "/" + std::string(twp_file_path));
     }
     else if (windowNumSamples > 0) {
         numWindows = 1;
-        GetParametricTimeWindows(nset, romOptions.SNS, pd, outputPath, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
-        outfile_twp.open(outputPath + "/" + std::string(twpfile));
+        GetParametricTimeWindows(nset, romOptions.SNS, pd, outputPath, basisIdentifierString, windowNumSamples, numBasisWindows, twep, offsetAllWindows);
+        outfile_twp.open(outputPath + "/" + std::string(twp_file_path));
     }
     else {
         numWindows = 1;
@@ -472,7 +477,7 @@ int main(int argc, char *argv[])
 
     int dim; // dummy
     double dt; // dummy
-    std::string offlineParam_outputPath = outputPath + "/offline_param.csv";
+    std::string offlineParam_outputPath = outputPath + "/offline_param" + basisIdentifierString + ".csv";
     VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, true);
 
     Array<int> snapshotSize(nset);
@@ -485,19 +490,19 @@ int main(int argc, char *argv[])
 
     for (int sampleWindow = 0; sampleWindow < numWindows; ++sampleWindow)
     {
-        GetSnapshotDim(0, outputPath, "X", sampleWindow, dimX, snapshotSize[0]);
+        GetSnapshotDim(0, outputPath, "X", basisIdentifierString, sampleWindow, dimX, snapshotSize[0]);
         {
             int dummy = 0;
-            GetSnapshotDim(0, outputPath, "V", sampleWindow, dimV, dummy);
+            GetSnapshotDim(0, outputPath, "V", basisIdentifierString, sampleWindow, dimV, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
-            GetSnapshotDim(0, outputPath, "E", sampleWindow, dimE, dummy);
+            GetSnapshotDim(0, outputPath, "E", basisIdentifierString, sampleWindow, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
             if (!romOptions.SNS)
             {
-                GetSnapshotDim(0, outputPath, "Fv", sampleWindow, dimFv, snapshotSizeFv[0]);
+                GetSnapshotDim(0, outputPath, "Fv", basisIdentifierString, sampleWindow, dimFv, snapshotSizeFv[0]);
                 MFEM_VERIFY(snapshotSizeFv[0] >= snapshotSize[0], "Inconsistent snapshot sizes");
-                GetSnapshotDim(0, outputPath, "Fe", sampleWindow, dimFe, snapshotSizeFe[0]);
+                GetSnapshotDim(0, outputPath, "Fe", basisIdentifierString, sampleWindow, dimFe, snapshotSizeFe[0]);
                 MFEM_VERIFY(dummy >= snapshotSize[0], "Inconsistent snapshot sizes");
             }
         }
@@ -516,18 +521,18 @@ int main(int argc, char *argv[])
         {
             int dummy = 0;
             int dim = 0;
-            GetSnapshotDim(paramID, outputPath, "X", sampleWindow, dim, snapshotSize[paramID]);
+            GetSnapshotDim(paramID, outputPath, "X", basisIdentifierString, sampleWindow, dim, snapshotSize[paramID]);
             MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
-            GetSnapshotDim(paramID, outputPath, "V", sampleWindow, dim, dummy);
+            GetSnapshotDim(paramID, outputPath, "V", basisIdentifierString, sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimV && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
-            GetSnapshotDim(paramID, outputPath, "E", sampleWindow, dim, dummy);
+            GetSnapshotDim(paramID, outputPath, "E", basisIdentifierString, sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 
             if (!romOptions.SNS)
             {
-                GetSnapshotDim(paramID, outputPath, "Fv", sampleWindow, dim, snapshotSizeFv[paramID]);
+                GetSnapshotDim(paramID, outputPath, "Fv", basisIdentifierString, sampleWindow, dim, snapshotSizeFv[paramID]);
                 MFEM_VERIFY(dim == dimV && snapshotSizeFv[paramID] >= snapshotSize[paramID], "Inconsistent snapshot sizes");
-                GetSnapshotDim(paramID, outputPath, "Fe", sampleWindow, dim, snapshotSizeFe[paramID]);
+                GetSnapshotDim(paramID, outputPath, "Fe", basisIdentifierString, sampleWindow, dim, snapshotSizeFe[paramID]);
                 MFEM_VERIFY(dim == dimE && snapshotSizeFe[paramID] >= snapshotSize[paramID], "Inconsistent snapshot sizes");
             }
 
@@ -539,18 +544,18 @@ int main(int argc, char *argv[])
         int lastBasisWindow = (windowNumSamples > 0) ? numBasisWindows - 1 : sampleWindow;
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
             if (!romOptions.SNS)
             {
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
             }
 
