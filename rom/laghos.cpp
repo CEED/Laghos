@@ -1239,7 +1239,7 @@ int main(int argc, char *argv[])
                     pd_weight.push_back(pd_w);
                 }
                 infile_pd_weight.close();
-                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX(), "Number of weights do not match.")
+                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
             }
         }
 
@@ -1683,10 +1683,8 @@ int main(int argc, char *argv[])
                     if (romOptions.indicatorType == penetrationDistance)
                     {
                         // 2D Rayleigh-Taylor penetration distance
-                        cout << window_par << endl; // TODO: Remove after debug
-                        window_par = (romOptions.useOffset) ? -basis[romOptions.window]->GetOffsetX(pd2_vdof) : 0.0;
-                        cout << window_par << endl; // TODO: Remove after debug
-                        for (int i=0; i<pd_weight.size(); ++i)
+                        window_par = (romOptions.useOffset) ? -pd_weight.back() : 0.0;
+                        for (int i=0; i<basis[romOptions.window]->GetDimX(); ++i)
                             window_par -= pd_weight[i]*romS[i];
                     }
                     else if (romOptions.indicatorType == parameterTime)
@@ -1694,7 +1692,6 @@ int main(int argc, char *argv[])
                         window_par = romOptions.atwoodFactor * t * t;
                     }
                 }
-                cout << window_par << endl; // TODO: Remove after debug
 
                 if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
@@ -1767,7 +1764,7 @@ int main(int argc, char *argv[])
                             pd_weight.push_back(pd_w);
                         }
                         infile_pd_weight.close();
-                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+1, "Number of weights do not match.")
+                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
                     }
 
                     ode_solver->Init(*romOper[romOptions.window]);

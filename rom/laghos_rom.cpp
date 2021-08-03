@@ -2292,6 +2292,7 @@ void ROM_Basis::writePDweights(const int id, const int window) const
         {
             outfile_pd_weight << (*basisX)(id,i) << endl;
         }
+        if (offsetInit) outfile_pd_weight << (*initX)(id) << endl;
     }
     outfile_pd_weight.close();
 }
