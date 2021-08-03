@@ -282,13 +282,12 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
             for (int j = 0; j < h1dofs_cnt; j++)
             {
                double h1_shape_part = h1_shape(j);
-               if (v_shift_type == 2 || v_shift_type == 3
-                || v_shift_type == 4 || v_shift_type == 5)
+               if (v_shift_type == 2 || v_shift_type == 3 ||
+                   v_shift_type == 4 || v_shift_type == 5)
                {
                   h1_grads.GetRow(j, grad_shape_h1);
                   h1_shape_part = d_q1 * grad_shape_h1;
                }
-
 
                double p_shift_part = grad_p_d1;
                if (v_shift_type == 3) {

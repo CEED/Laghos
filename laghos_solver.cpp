@@ -100,7 +100,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int oq,
                                                  double *dt) :
    TimeDependentOperator(size),
-   H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   H1(h1), L2(l2),
    pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),
    L2Vsize(L2.GetVSize()),
@@ -127,8 +127,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&H1, &L2), FaceForce(&H1, &L2), FaceForce_e(&L2),
-   X(H1c.GetTrueVSize()),
-   B(H1c.GetTrueVSize()),
    one(L2Vsize),
    rhs(H1Vsize),
    e_rhs(L2Vsize)
@@ -201,6 +199,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    H1.ExchangeFaceNbrData();
    Array<int> nor_dir_mask(H1.GetParMesh()->GetNumFaces());
    nor_dir_mask = 1;
+   /*
    for (int i = 0; i < H1.GetParMesh()->GetNSharedFaces(); i++) {
       FaceElementTransformations *T = H1.GetParMesh()->GetSharedFaceTransformations(i);
       int Elem1 = T->Elem1No;
@@ -218,9 +217,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
           nor_dir_mask[faceno] = -1;
       }
    }
+   */
 
    // Interface forces.
-   auto *ffi = new FaceForceIntegrator(p_func.GetPressure(), dist_coeff, nor_dir_mask);
+   auto *ffi = new FaceForceIntegrator(p_func.GetPressure(),
+                                       dist_coeff, nor_dir_mask);
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
@@ -258,8 +259,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // Set dx_dt = v (explicit).
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
-
-   // SHIFT - average the velocity.
    dx = v;
 
    SolveVelocity(S, dS_dt);
@@ -299,7 +298,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    }
    //std::cout << rhs.Norml2() << "\n---" << std::endl;
 
-
    rhs.Neg();
 
    if (source_type == 2)
@@ -309,6 +307,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       rhs += rhs_accel;
    }
 
+   Vector X, B;
    HypreParMatrix A;
    Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 

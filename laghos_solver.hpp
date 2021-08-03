@@ -36,6 +36,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
+
 class PressureFunction
 {
 public:
@@ -72,7 +73,6 @@ class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
    ParFiniteElementSpace &H1, &L2;
-   mutable ParFiniteElementSpace H1c;
    ParMesh *pmesh;
    // FE spaces local and global sizes
    const int H1Vsize;
@@ -106,7 +106,7 @@ protected:
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force, FaceForce;
    mutable LinearForm FaceForce_e;
-   mutable Vector X, B, one, rhs, e_rhs;
+   mutable Vector one, rhs, e_rhs;
 
    int v_shift_type = 0, e_shift_type = 0;
 
