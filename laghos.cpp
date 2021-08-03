@@ -348,7 +348,8 @@ int main(int argc, char *argv[])
    // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
    // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [grad_psi.d] n >
    // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [grad_psi.d] n >
-   int v_shift_type = 0;
+   int v_shift_type = 2;
+   bool shift_momentum = false;
    // 0 -- no shifting terms.
    // 1 -- the energy RHS gets the conservative momentum term:
    //      + < [grad_p.d] v phi >                         for v_shift_type = 1.
@@ -361,9 +362,9 @@ int main(int argc, char *argv[])
    //N5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
    // optionally, a stability term can be added:
    // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   int e_shift_type = 0;
+   int e_shift_type = 1;
    // Scaling of both shifting terms.
-   double shift_scale = 0.1;
+   double shift_scale = 1.0;
 
    const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
 
@@ -377,7 +378,7 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-// #define EXTRACT_1D
+//#define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -462,7 +463,8 @@ int main(int argc, char *argv[])
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, &dt);
-   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_scale);
+   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_momentum,
+                            shift_scale);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";
@@ -544,7 +546,8 @@ int main(int argc, char *argv[])
    if (problem != 8 && problem != 9) {
        MFEM_ABORT(" Please comment out extract1D\n.");
    }
-   MFEM_VERIFY(nproc == 1, "Point extraction works inly in serial.");
+   MFEM_VERIFY(H1FESpace.GetNRanks() == 1,
+               "Point extraction works inly in serial.");
    const double dx = 1.0 / NE;
    ParGridFunction &pe_gf = hydro.GetPressure(e_gf);
    Vector point_interface(1), point_face(1);

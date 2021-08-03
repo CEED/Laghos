@@ -291,12 +291,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.MultTranspose(one, rhs);
-   //std::cout << "v ---\n" << rhs.Norml2() << std::endl;
-   if (v_shift_type >= 1 && v_shift_type <= 5)
+   const double vold = rhs.Norml2();
+   if (v_shift_type >= 1 && v_shift_type <= 5 && shift_momentum)
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
-   //std::cout << rhs.Norml2() << "\n---" << std::endl;
+   std::cout << "v rhs diff: " << std::scientific
+             << fabs(rhs.Norml2() - vold) << std::endl;
 
    rhs.Neg();
 
@@ -351,10 +352,11 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.Mult(v, e_rhs);
 
-   //std::cout << "e ---\n" << e_rhs.Norml2() << std::endl;
+   const double eold = e_rhs.Norml2();
    if (e_shift_type == 1) { FaceForce.AddMult(v, e_rhs, 1.0); }
    if (e_shift_type > 1) { FaceForce_e.Assemble(); e_rhs -= FaceForce_e; }
-   //std::cout << e_rhs.Norml2() << "\n---" << std::endl;
+   std::cout << "e rhs diff: " << std::scientific
+             << fabs(e_rhs.Norml2() - eold) << std::endl;
 
    if (e_source) { e_rhs += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);

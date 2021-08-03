@@ -109,6 +109,7 @@ protected:
    mutable Vector one, rhs, e_rhs;
 
    int v_shift_type = 0, e_shift_type = 0;
+   bool shift_momentum = false;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -165,12 +166,14 @@ public:
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
 
-   void SetShiftingOptions(int problem, int vs_type, int es_type, double scale)
+   void SetShiftingOptions(int problem, int vs_type, int es_type, bool shift_v,
+                           double scale)
    {
       p_func.SetProblem(problem);
 
       v_shift_type = vs_type;
       e_shift_type = es_type;
+      shift_momentum = shift_v;
 
       //auto tfi_v = FaceForce.GetTFBFI();
       auto tfi_v = FaceForce.GetFBFI();

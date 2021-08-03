@@ -87,7 +87,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-  const int mode_TG = 2;
+  const int mode_TG = 1;
 
    switch (problem)
    {
@@ -186,10 +186,13 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                                              FaceElementTransformations &Trans,
                                              DenseMatrix &elmat)
 {
+   MFEM_VERIFY(p.ParFESpace()->GetNRanks() == 1,
+               "Implemented only in serial.");
+
    const int h1dofs_cnt = trial_fe.GetDof();
    const int l2dofs_cnt = test_fe.GetDof();
    const int dim = test_fe.GetDim();
-   int nor_dir_mask = 1;
+   //int nor_dir_mask = 1;
 
    if (Trans.Elem2No < 0)
    {
