@@ -41,10 +41,10 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
-   ParFiniteElementSpace &H1, &L2;
+   ParFiniteElementSpace &H1, &H1cut, &L2;
    ParMesh *pmesh;
    // FE spaces local and global sizes
-   const int H1Vsize;
+   const int H1Vsize, H1cutVsize;
    const int L2Vsize;
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
@@ -72,7 +72,7 @@ protected:
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
-   mutable Vector one, rhs, e_rhs;
+   mutable Vector one, v_rhs, e_rhs;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -91,6 +91,7 @@ protected:
 public:
    LagrangianHydroOperator(const int size,
                            ParFiniteElementSpace &h1_fes,
+                           ParFiniteElementSpace &h1cut_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,

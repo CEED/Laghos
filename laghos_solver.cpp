@@ -82,6 +82,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
+                                                 ParFiniteElementSpace &h1cut,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
@@ -95,9 +96,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int cgiter,
                                                  const int oq) :
    TimeDependentOperator(size),
-   H1(h1), L2(l2),
+   H1(h1), H1cut(h1cut), L2(l2),
    pmesh(H1.GetParMesh()),
-   H1Vsize(H1.GetVSize()),
+   H1Vsize(H1.GetVSize()), H1cutVsize(H1cut.GetVSize()),
    L2Vsize(L2.GetVSize()),
    block_offsets(4),
    x_gf(&H1),
@@ -122,7 +123,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    forcemat_is_assembled(false),
    Force(&L2, &H1),
    one(L2Vsize),
-   rhs(H1Vsize),
+   v_rhs(H1cutVsize),
    e_rhs(L2Vsize)
 {
    block_offsets[0] = 0;
@@ -225,31 +226,31 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
-   dv.MakeRef(&H1, dS_dt, H1Vsize);
+   dv.MakeRef(&H1cut, dS_dt, H1cutVsize);
    dv = 0.0;
 
    ParGridFunction accel_src_gf;
    if (source_type == 2)
    {
-      accel_src_gf.SetSpace(&H1);
+      accel_src_gf.SetSpace(&H1cut);
       RTCoefficient accel_coeff(dim);
       accel_src_gf.ProjectCoefficient(accel_coeff);
       accel_src_gf.Read();
    }
 
-   Force.Mult(one, rhs);
-   rhs.Neg();
+   Force.Mult(one, v_rhs);
+   v_rhs.Neg();
 
    if (source_type == 2)
    {
-      Vector rhs_accel(rhs.Size());
+      Vector rhs_accel(v_rhs.Size());
       Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
-      rhs += rhs_accel;
+      v_rhs += rhs_accel;
    }
 
    Vector X, B;
    HypreParMatrix A;
-   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
+   Mv.FormLinearSystem(ess_tdofs, dv, v_rhs, A, X, B);
 
    CGSolver cg(H1.GetParMesh()->GetComm());
    HypreSmoother prec;
@@ -261,7 +262,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    cg.SetMaxIter(cg_max_iter);
    cg.SetPrintLevel(-1);
    cg.Mult(B, X);
-   Mv.RecoverFEMSolution(X, rhs, dv);
+   Mv.RecoverFEMSolution(X, v_rhs, dv);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,

@@ -37,6 +37,7 @@
 
 #include "laghos_solver.hpp"
 #include "laghos_cut.hpp"
+#include "laghos_shift.hpp"
 
 using std::cout;
 using std::endl;
@@ -207,6 +208,14 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
    ParFiniteElementSpace H1CutFESpace(pmesh, &H1FEC, pmesh->Dimension());
 
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+   // gamma values are projected on function that's constant on the moving mesh.
+   L2_FECollection mat_fec(0, pmesh->Dimension());
+   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   ParGridFunction mat_gf(&mat_fes);
+   FunctionCoefficient mat_coeff(gamma_func);
+   mat_gf.ProjectCoefficient(mat_coeff);
+
    // Assign material indices to the element attributes.
    for (int i = 0; i < NE; i++)
    {
@@ -219,7 +228,23 @@ int main(int argc, char *argv[])
       }
       else { el->SetAttribute(1); }
    }
-   //hydrodynamics::cutH1Space(H1CutFESpace, true, true);
+
+   // Interface function.
+   ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
+   ParGridFunction xi(&pfes_xi);
+   hydrodynamics::InterfaceCoeff coeff_xi_0(problem, *pmesh);
+   xi.ProjectCoefficient(coeff_xi_0);
+   GridFunctionCoefficient coeff_xi(&xi);
+
+   // Material marking and visualization function.
+   ParGridFunction materials(&mat_fes);
+   for (int i = 0; i < NE; i++)
+   {
+      materials(i)  = hydrodynamics::material_id(i, xi);
+      pmesh->SetAttribute(i, materials(i) + 1);
+   }
+
+   hydrodynamics::cutH1Space(H1CutFESpace, true, true);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -331,14 +356,6 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
-   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
-   // gamma values are projected on function that's constant on the moving mesh.
-   L2_FECollection mat_fec(0, pmesh->Dimension());
-   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(gamma_func);
-   mat_gf.ProjectCoefficient(mat_coeff);
-
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
    switch (problem)
@@ -355,10 +372,9 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   //MFEM_ABORT("up to here");
-
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-                                                H1FESpace, L2FESpace, ess_tdofs,
+                                                H1FESpace, H1CutFESpace,
+                                                L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
@@ -391,8 +407,9 @@ int main(int argc, char *argv[])
                                        "Density", Wx, Wy, Ww, Wh);
       }
       Wx += offx;
-      hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
-                                    "Velocity", Wx, Wy, Ww, Wh);
+      hydrodynamics::VisualizeL2(v_gf, Ww, Wx, Wy);
+      //hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
+      //                              "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
@@ -435,6 +452,8 @@ int main(int argc, char *argv[])
       // to advance.
       ode_solver->Step(S, t, dt);
       steps++;
+
+      MFEM_ABORT("one step");
 
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);

@@ -236,6 +236,33 @@ void MeshUpdate(ParGridFunction &dx_dt, const ParGridFunction &v)
    dx_dt.ProjectDiscCoefficient(v_coeff, GridFunction::ARITHMETIC);
 }
 
+void VisualizeL2(ParGridFunction &gf, int size, int x, int y)
+{
+   int num_procs, myid;
+   MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+
+   ParMesh *pmesh = gf.ParFESpace()->GetParMesh();
+   const int order = gf.ParFESpace()->GetOrder(0);
+   L2_FECollection fec(order, pmesh->Dimension());
+   ParFiniteElementSpace pfes(pmesh, &fec, gf.ParFESpace()->GetVDim());
+   ParGridFunction gf_l2(&pfes);
+   gf_l2.ProjectGridFunction(gf);
+
+   char vishost[] = "localhost";
+   int  visport   = 19916;
+
+   socketstream sol_sock(vishost, visport);
+   sol_sock << "parallel " << num_procs << " " << myid << "\n";
+   sol_sock.precision(8);
+   sol_sock << "solution\n" << *pmesh << gf_l2;
+   sol_sock << "window_geometry " << x << " " << y << " "
+                                  << size << " " << size << "\n"
+            << "window_title '" << "Y" << "'\n"
+            << "keys mRjlc\n" << flush;
+}
+
+
 } // namespace hydrodynamics
 
 } // namespace mfem
