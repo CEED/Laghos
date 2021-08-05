@@ -50,7 +50,7 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
-   const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
+   const int dim, NE, l2dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, use_vorticity;
    const double cg_rel_tol;
@@ -122,7 +122,6 @@ public:
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
-   int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 };
 

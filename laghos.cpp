@@ -453,8 +453,6 @@ int main(int argc, char *argv[])
       ode_solver->Step(S, t, dt);
       steps++;
 
-      MFEM_ABORT("one step");
-
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);
       if (dt_est < dt)
@@ -520,8 +518,9 @@ int main(int argc, char *argv[])
                                              "Density", Wx, Wy, Ww, Wh);
             }
             Wx += offx;
-            hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                          v_gf, "Velocity", Wx, Wy, Ww, Wh);
+            hydrodynamics::VisualizeL2(v_gf, Ww, Wx, Wy);
+            //hydrodynamics::VisualizeField(vis_v, vishost, visport,
+            //                              v_gf, "Velocity", Wx, Wy, Ww, Wh);
             Wx += offx;
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
@@ -564,6 +563,8 @@ int main(int argc, char *argv[])
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
+
+         MFEM_ABORT("one vis step");
       }
    }
 

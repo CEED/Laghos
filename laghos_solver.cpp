@@ -106,13 +106,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()),
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
-   h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
    cg_rel_tol(cgt), cg_max_iter(cgiter),
    gamma_gf(gamma_gf),
-   Mv(&H1), Mv_spmat_copy(),
+   Mv(&H1cut), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
@@ -121,7 +120,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force(&L2, &H1),
+   Force(&L2, &H1cut),
    one(L2Vsize),
    v_rhs(H1cutVsize),
    e_rhs(L2Vsize)
@@ -205,10 +204,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    UpdateMesh(S);
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   Vector* sptr = const_cast<Vector*>(&S);
+   Vector *sptr = const_cast<Vector *>(&S);
    ParGridFunction v;
-   const int VsizeH1 = H1.GetVSize();
-   v.MakeRef(&H1, *sptr, VsizeH1);
+   v.MakeRef(&H1cut, *sptr, H1cutVsize);
    // Set dx_dt = v (explicit).
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
@@ -221,6 +219,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
+   std::cout << "enter SolveVelocity" << std::endl;
+
    UpdateQuadratureData(S);
    AssembleForceMatrix();
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -252,7 +252,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    HypreParMatrix A;
    Mv.FormLinearSystem(ess_tdofs, dv, v_rhs, A, X, B);
 
-   CGSolver cg(H1.GetParMesh()->GetComm());
+   CGSolver cg(H1cut.GetParMesh()->GetComm());
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
    cg.SetPreconditioner(prec);
@@ -263,6 +263,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    cg.SetPrintLevel(-1);
    cg.Mult(B, X);
    Mv.RecoverFEMSolution(X, v_rhs, dv);
+
+   std::cout << "exit SolveVelocity" << std::endl;
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -277,7 +279,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    de.MakeRef(&L2, dS_dt, H1Vsize*2);
    de = 0.0;
 
-   // Solve for energy, assemble the energy source if such exists.
+   Force.MultTranspose(v, e_rhs);
+
+   // Assemble the energy source if such exists.
    LinearForm *e_source = nullptr;
    if (source_type == 1) // 2D Taylor-Green.
    {
@@ -286,11 +290,10 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
+      e_rhs += *e_source;
    }
 
    Array<int> l2dofs;
-   Force.MultTranspose(v, e_rhs);
-   if (e_source) { e_rhs += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    for (int e = 0; e < NE; e++)
    {
@@ -351,7 +354,6 @@ double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
                              const int Q1D,const int VDIM,const double ln_norm,
                              const mfem::Vector& mass, const mfem::Vector& f)
 {
-
    auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
    mfem::Vector integrand(NE*NQ);
    auto I = Reshape(integrand.Write(), NQ, NE);
@@ -415,8 +417,8 @@ double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
    }
    const double integral = integrand * mass;
    return integral;
-
 }
+
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
    double glob_ie = 0.0;
