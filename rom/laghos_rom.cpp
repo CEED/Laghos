@@ -372,7 +372,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), solution_basename(*input.solution_basename),
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), testing_parameter_basename(*input.testing_parameter_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
       spaceTimeMethod(input.spaceTimeMethod), spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
@@ -2156,6 +2156,10 @@ void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options 
 
 void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
 {
+    std::string outfile_string = testing_parameter_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ofstream outfile_romS(outfile_string.c_str());
+    sample_pmesh->ParPrint(outfile_romS);
+
     writeNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
     writeNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
     writeNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
@@ -2163,10 +2167,6 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
     writeVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
     writeVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
-
-    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ofstream outfile_romS(outfile_string.c_str());
-    sample_pmesh->ParPrint(outfile_romS);
 
     writeNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     writeNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -2219,6 +2219,10 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
         infile.close();
     }
 
+    std::string outfile_string = testing_parameter_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ifstream outfile_romS(outfile_string.c_str());
+    sample_pmesh = new ParMesh(comm, outfile_romS);
+
     readNum(numSamplesX, basename + "/" + "numSamplesX" + "_" + to_string(window));
     readNum(numSamplesV, basename + "/" + "numSamplesV" + "_" + to_string(window));
     readNum(numSamplesE, basename + "/" + "numSamplesE" + "_" + to_string(window));
@@ -2226,10 +2230,6 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     readVec(s2sp_X, basename + "/" + "s2sp_X" + "_" + to_string(window));
     readVec(s2sp_V, basename + "/" + "s2sp_V" + "_" + to_string(window));
     readVec(s2sp_E, basename + "/" + "s2sp_E" + "_" + to_string(window));
-
-    std::string outfile_string = basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ifstream outfile_romS(outfile_string.c_str());
-    sample_pmesh = new ParMesh(comm, outfile_romS);
 
     readNum(size_H1_sp, basename + "/" + "size_H1_sp" + "_" + to_string(window));
     readNum(size_L2_sp, basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -2821,7 +2821,7 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
     char fileExtension[100];
     sprintf(fileExtension, ".%06d", rank);
 
-    std::string fullname = solution_basename + "/ST_Sol_" + name + fileExtension;
+    std::string fullname = testing_parameter_basename + "/ST_Sol_" + name + fileExtension;
     std::ifstream ifs(fullname.c_str());
 
     const int tvsize = fespace->GetTrueVSize();

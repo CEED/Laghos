@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
-    const char *solution_basename = "";
+    const char *testing_parameter_basename = "";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
     const char *indicatorType = "time";
@@ -212,6 +212,8 @@ int main(int argc, char *argv[])
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&visit_basename, "-k", "--visitfilename",
                    "Name of the visit dump files");
+    args.AddOption(&testing_parameter_basename, "-pardir", "--param_dir",
+                   "Name of the subdirectory containing testing parameter files");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
@@ -286,8 +288,6 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
-    args.AddOption(&solution_basename, "-soldir", "--solution_dir",
-                   "Name of the subdirectory containing reference solution files");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
@@ -342,11 +342,11 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    std::string solution_outputPath = outputPath;
-    if (std::string(solution_basename) != "") {
-        solution_outputPath += "/" + std::string(solution_basename);
+    std::string testing_parameter_outputPath = outputPath;
+    if (std::string(testing_parameter_basename) != "") {
+        testing_parameter_outputPath += "/" + std::string(testing_parameter_basename);
     }
-    romOptions.solution_basename = &solution_outputPath;
+    romOptions.testing_parameter_basename = &testing_parameter_outputPath;
 
     if (mpi.Root()) {
         const char path_delim = '/';
@@ -358,9 +358,9 @@ int main(int argc, char *argv[])
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset").c_str(), 0777);
-        if (std::string(solution_basename) != "")
-            mkdir(solution_outputPath.c_str(), 0777);
-        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
+        if (std::string(testing_parameter_basename) != "")
+            mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
@@ -441,7 +441,7 @@ int main(int argc, char *argv[])
         }
         while (pos != std::string::npos);
         mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
-        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -679,7 +679,7 @@ int main(int argc, char *argv[])
     romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
-        std::string filename = solution_outputPath + "/ROMsol/romS_1";
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
@@ -1142,15 +1142,15 @@ int main(int argc, char *argv[])
         char fileExtension[100];
         sprintf(fileExtension, ".%06d", myid);
 
-        std::string fullname = solution_outputPath + "/ST_Sol_Position" + fileExtension;
+        std::string fullname = testing_parameter_outputPath + "/ST_Sol_Position" + fileExtension;
         ofs_STX.open(fullname.c_str(), std::ofstream::out);
         ofs_STX.precision(16);
 
-        fullname = solution_outputPath + "/ST_Sol_Velocity" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Velocity" + fileExtension;
         ofs_STV.open(fullname.c_str(), std::ofstream::out);
         ofs_STV.precision(16);
 
-        fullname = solution_outputPath + "/ST_Sol_Energy" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Energy" + fileExtension;
         ofs_STE.open(fullname.c_str(), std::ofstream::out);
         ofs_STE.precision(16);
 
@@ -1247,7 +1247,7 @@ int main(int argc, char *argv[])
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0)
             {
-                std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
+                std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
                 outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
@@ -1255,7 +1255,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::string romS_outPath = solution_outputPath + "/" + "romS" + "_0";
+            std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
             romS.Load(outfile_romS, romS.Size());
         }
@@ -1346,7 +1346,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+            std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -1416,7 +1416,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -1519,7 +1519,7 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 outfile_romS.precision(16);
                 if (romOptions.hyperreduce && romOptions.GramSchmidt)
@@ -2030,10 +2030,10 @@ int main(int argc, char *argv[])
     double relative_error = 10.0 * romOptions.greedyTol;
     if (rom_build_database && (rom_calc_rel_error_nonlocal_completed || rom_calc_rel_error_local_completed) && greedy_converged)
     {
-        cout << "Comparing to: " << solution_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
-        relative_error = PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+        cout << "Comparing to: " << testing_parameter_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
+        relative_error = PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
     }
     if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
     {
@@ -2051,17 +2051,17 @@ int main(int argc, char *argv[])
     {
         if (writeSol)
         {
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
 
         if (solDiff)
         {
             if (myid == 0) cout << "solDiff mode " << endl;
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position", x_gf);
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity", v_gf);
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy", e_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position", x_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity", v_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy", e_gf);
         }
 
         if (visitDiffCycle >= 0)
