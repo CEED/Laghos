@@ -140,6 +140,7 @@ struct ROM_Options
 
     std::string *basename = NULL;
     std::string *testing_parameter_basename = NULL;
+    std::string *hyperreduce_basename = NULL;
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
@@ -715,6 +716,7 @@ private:
 
     std::string basename = "run";
     std::string testing_parameter_basename = "run";
+    std::string hyperreduce_basename = "run";
 
     CAROM::Vector *fH1, *fL2;
 

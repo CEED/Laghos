@@ -346,7 +346,12 @@ int main(int argc, char *argv[])
     if (std::string(testing_parameter_basename) != "") {
         testing_parameter_outputPath += "/" + std::string(testing_parameter_basename);
     }
+
+    std::string hyperreduce_outputPath = (problem == 7) ? testing_parameter_outputPath : outputPath;
+
+    romOptions.basename = &outputPath;
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
+    romOptions.hyperreduce_basename = &hyperreduce_outputPath;
 
     if (mpi.Root()) {
         const char path_delim = '/';
@@ -357,9 +362,9 @@ int main(int argc, char *argv[])
             mkdir(subdir.c_str(), 0777);
         }
         while (pos != std::string::npos);
-        mkdir((outputPath + "/ROMoffset").c_str(), 0777);
         if (std::string(testing_parameter_basename) != "")
             mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMoffset").c_str(), 0777);
         mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
@@ -370,7 +375,6 @@ int main(int argc, char *argv[])
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
-    romOptions.basename = &outputPath;
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
@@ -431,19 +435,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (mpi.Root()) {
-        const char path_delim = '/';
-        std::string::size_type pos = 0;
-        do {
-            pos = outputPath.find(path_delim, pos+1);
-            std::string subdir = outputPath.substr(0, pos);
-            mkdir(subdir.c_str(), 0777);
-        }
-        while (pos != std::string::npos);
-        mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
-        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
-    }
-
     // Use the ROM database to run the parametric case on another parameter point.
     if (rom_use_database)
     {
@@ -470,7 +461,7 @@ int main(int argc, char *argv[])
         if (rom_online || rom_restore)
         {
             double sFactor[]  = {sFactorX, sFactorV, sFactorE};
-            const int err = ReadTimeWindowParameters(numWindows, outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
+            const int err = ReadTimeWindowParameters(numWindows, hyperreduce_outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier, twep, twparam, sFactor, myid == 0, romOptions.SNS);
             MFEM_VERIFY(err == 0, "Error in ReadTimeWindowParameters");
             if (rom_build_database && rom_read_greedy_twparam)
             {
@@ -1277,7 +1268,7 @@ int main(int argc, char *argv[])
             }
             if (!romOptions.hyperreduce_prep)
             {
-                std::string pd_weight_outPath = outputPath + "/pd_weight0";
+                std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight0";
                 std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
                 MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
                 pd_weight.clear();
@@ -1300,8 +1291,6 @@ int main(int argc, char *argv[])
                 {
                     WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
                 }
-                ofstream hyperreducefile(outputPath + "/hyperreduce.txt");
-                hyperreducefile.close();
             }
             return 0;
         }
@@ -1317,7 +1306,7 @@ int main(int argc, char *argv[])
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
-        std::ifstream infile_tw_steps(outputPath + "/tw_steps");
+        std::ifstream infile_tw_steps(testing_parameter_outputPath + "/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
@@ -1401,8 +1390,8 @@ int main(int argc, char *argv[])
 
             if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
-                std::string nextfilename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
-                std::string next2filename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
+                std::string nextfilename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
+                std::string next2filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
                 std::ifstream nextfile_romS(nextfilename.c_str());
                 std::ifstream next2file_romS(next2filename.c_str());
                 if (nextfile_romS.good() && !next2file_romS.good())
@@ -1450,7 +1439,7 @@ int main(int argc, char *argv[])
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
-            outfile_tw_steps.open(outputPath + "/tw_steps");
+            outfile_tw_steps.open(testing_parameter_outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
         if (romOptions.hyperreduce)
@@ -1831,7 +1820,7 @@ int main(int argc, char *argv[])
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
-                        std::string pd_weight_outPath = outputPath + "/pd_weight" + to_string(romOptions.window);
+                        std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
                         std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
                         MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
                         pd_weight.clear();
@@ -1851,7 +1840,7 @@ int main(int argc, char *argv[])
             if (mpi.Root())
             {
                 if (last_step) {
-                    std::ofstream outfile(outputPath + "/num_steps");
+                    std::ofstream outfile(testing_parameter_outputPath + "/num_steps");
                     outfile << ti;
                     outfile.close();
                 }
@@ -2239,9 +2228,9 @@ int main(int argc, char *argv[])
                  << fabs(energy_init - energy_final) << endl;
         }
 
-        PrintParGridFunction(myid, outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
-        PrintParGridFunction(myid, outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
-        PrintParGridFunction(myid, outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
 
         // Print the error.
         // For problems 0 and 4 the exact velocity is constant in time.
