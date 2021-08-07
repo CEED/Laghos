@@ -2095,7 +2095,7 @@ int main(int argc, char *argv[])
             errorIndicatorComputed = true;
         }
         else if ((rom_online && !romOptions.hyperreduce) || (rom_restore) ||
-            (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
+                 (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
         {
             if (rom_online)
             {

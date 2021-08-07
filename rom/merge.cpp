@@ -197,7 +197,7 @@ void GetSnapshotPenetrationDistance(const int id, const std::string& basename, s
     }
 }
 
-void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const std::string& basisIdentifier, 
+void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, const std::string& basename, const std::string& basisIdentifier,
                               const int windowNumSamples, int &numBasisWindows, Array<double> &twep, std::vector<std::vector<int>> &offsetAllWindows)
 {
     std::vector<double> tVec;

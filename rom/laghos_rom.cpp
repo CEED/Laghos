@@ -372,7 +372,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), 
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
@@ -2161,34 +2161,38 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "hyperreduce_basename"
     // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
 
-    writeNum(numSamplesX, hyperreduce_basename + "/" + "numSamplesX" + "_" + to_string(window));
-    writeNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
-    writeNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
-
-    writeVec(s2sp_X, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
-    writeVec(s2sp_V, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
-    writeVec(s2sp_E, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
-
     std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ofstream outfile_romS(outfile_string.c_str());
-    sample_pmesh->ParPrint(outfile_romS);
+    std::ofstream outfile_spmesh(outfile_string.c_str());
 
-    writeNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
-    writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
+    if (!outfile_spmesh.good())
+    {
+        sample_pmesh->ParPrint(outfile_spmesh);
 
-    if (spaceTimeMethod == gnat_lspg) BsinvX->write(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
-    BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
-    BsinvE->write(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
-    BXsp->write(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
-    BVsp->write(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
-    BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
+        writeNum(numSamplesX, hyperreduce_basename + "/" + "numSamplesX" + "_" + to_string(window));
+        writeNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
+        writeNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
 
-    BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
-    BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+        writeVec(s2sp_X, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
+        writeVec(s2sp_V, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
+        writeVec(s2sp_E, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
 
-    spX->write(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
-    spV->write(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
-    spE->write(hyperreduce_basename + "/" + "spE" + "_" + to_string(window));
+        writeNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
+        writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+        if (spaceTimeMethod == gnat_lspg) BsinvX->write(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
+        BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
+        BsinvE->write(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
+        BXsp->write(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
+        BVsp->write(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
+        BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
+
+        BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
+        BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+
+        spX->write(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
+        spV->write(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
+        spE->write(hyperreduce_basename + "/" + "spE" + "_" + to_string(window));
+    }
 
     if (offsetInit || spaceTime) // TODO: why is this necessary for spaceTime case? See SampleMeshAddInitialState
     {
@@ -2197,7 +2201,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
         initEsp->write(testing_parameter_basename + "/" + "initEsp" + "_" + to_string(window));
     }
 
-    if (window > 0)
+    if (window > 0) // TODO: do not output multiple times
     {
         BwinX->write(basename + "/" + "BwinX" + "_" + to_string(window));
         BwinV->write(basename + "/" + "BwinV" + "_" + to_string(window));
@@ -2229,6 +2233,10 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "hyperreduce_basename"
     // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
 
+    std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ifstream outfile_spmesh(outfile_string.c_str());
+    sample_pmesh = new ParMesh(comm, outfile_spmesh);
+
     readNum(numSamplesX, hyperreduce_basename + "/" + "numSamplesX" + "_" + to_string(window));
     readNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
     readNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
@@ -2236,10 +2244,6 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     readVec(s2sp_X, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
     readVec(s2sp_V, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
     readVec(s2sp_E, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
-
-    std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ifstream outfile_spmesh(outfile_string.c_str());
-    sample_pmesh = new ParMesh(comm, outfile_spmesh);
 
     readNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
     readNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -3413,7 +3417,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         if (!(rom_offline && romOptions.greedyErrorIndicatorType == fom))
         {
             ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
-                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                            romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
 
         rom_calc_error_indicator = true;
@@ -3425,7 +3429,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         rom_calc_rel_error_nonlocal = true;
         rom_calc_rel_error_local = true;
         ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
-                    romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
 
         CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
         std::string localROMString = "";

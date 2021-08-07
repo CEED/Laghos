@@ -133,7 +133,7 @@ void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bo
 }
 
 void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions,
-                      const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
+                       const int numWindows, const char* twfile, std::string paramfile, const bool printStatus)
 {
     if (romOptions.parameterID <= 0)
     {
