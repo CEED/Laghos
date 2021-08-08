@@ -58,7 +58,7 @@ protected:
    const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
-   mutable ParBilinearForm Mv;
+   mutable BilinearForm Mv;
    SparseMatrix Mv_spmat_copy;
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.

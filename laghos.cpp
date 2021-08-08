@@ -244,6 +244,7 @@ int main(int argc, char *argv[])
       pmesh->SetAttribute(i, materials(i) + 1);
    }
 
+   MFEM_VERIFY(mpi.WorldSize() == 1, "H1cut is not implemented in parallel.");
    hydrodynamics::cutH1Space(H1CutFESpace, true, true);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
@@ -407,7 +408,7 @@ int main(int argc, char *argv[])
                                        "Density", Wx, Wy, Ww, Wh);
       }
       Wx += offx;
-      hydrodynamics::VisualizeL2(v_gf, Ww, Wx, Wy);
+      hydrodynamics::VisualizeL2(vis_v, v_gf, Ww, Wx, Wy);
       //hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
       //                              "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
@@ -518,7 +519,7 @@ int main(int argc, char *argv[])
                                              "Density", Wx, Wy, Ww, Wh);
             }
             Wx += offx;
-            hydrodynamics::VisualizeL2(v_gf, Ww, Wx, Wy);
+            hydrodynamics::VisualizeL2(vis_v, v_gf, Ww, Wx, Wy);
             //hydrodynamics::VisualizeField(vis_v, vishost, visport,
             //                              v_gf, "Velocity", Wx, Wy, Ww, Wh);
             Wx += offx;
@@ -563,8 +564,6 @@ int main(int argc, char *argv[])
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
-
-         MFEM_ABORT("one vis step");
       }
    }
 

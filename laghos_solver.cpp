@@ -29,12 +29,10 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
-   gf.HostRead();
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
    MPI_Comm comm = pmesh.GetComm();
 
-   int num_procs, myid;
-   MPI_Comm_size(comm, &num_procs);
+   int myid;
    MPI_Comm_rank(comm, &myid);
 
    bool newly_opened = false;
@@ -215,8 +213,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
-   std::cout << "enter SolveVelocity" << std::endl;
-
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -241,22 +237,22 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    }
 
    Vector X, B;
-   HypreParMatrix A;
+   OperatorPtr A;
+   // HypreParMatrix A;
    Mv.FormLinearSystem(ess_tdofs, dv, v_rhs, A, X, B);
 
    CGSolver cg(H1cut.GetParMesh()->GetComm());
-   HypreSmoother prec;
-   prec.SetType(HypreSmoother::Jacobi, 1);
+   //HypreSmoother prec;
+   //prec.SetType(HypreSmoother::Jacobi, 1);
+   DSmoother prec(1);
    cg.SetPreconditioner(prec);
-   cg.SetOperator(A);
+   cg.SetOperator((SparseMatrix&)(*A));
    cg.SetRelTol(cg_rel_tol);
    cg.SetAbsTol(0.0);
    cg.SetMaxIter(cg_max_iter);
    cg.SetPrintLevel(-1);
    cg.Mult(B, X);
    Mv.RecoverFEMSolution(X, v_rhs, dv);
-
-   std::cout << "exit SolveVelocity" << std::endl;
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,

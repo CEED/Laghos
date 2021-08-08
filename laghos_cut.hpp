@@ -30,7 +30,8 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print);
 // Does dx_dt = v when x is in H1, but v is in the cut H1.
 void MeshUpdate(ParGridFunction &dx_dt, const ParGridFunction &v);
 
-void VisualizeL2(ParGridFunction &gf, int size, int x, int y);
+void VisualizeL2(socketstream &sock, ParGridFunction &gf,
+                 int size, int x, int y);
 
 } // namespace hydrodynamics
 

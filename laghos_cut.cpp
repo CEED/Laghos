@@ -185,7 +185,7 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
    // Send the solution by socket to a GLVis server.
    if (vis)
    {
-      int size = 500;
+      int size = 350;
       char vishost[] = "localhost";
       int  visport   = 19916;
       const int myid = pfes.GetMyRank(), num_procs = pfes.GetNRanks();
@@ -196,7 +196,7 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
       sol_sock_x << "solution\n" << pmesh << x_vis;
       sol_sock_x << "window_geometry " << 0 << " " << 0 << " "
                                        << size << " " << size << "\n"
-                 << "window_title '" << "X" << "'\n"
+                 << "window_title '" << "Duplicated DOFs" << "'\n"
                  << "keys mRjlc\n" << flush;
    }
 
@@ -238,7 +238,8 @@ void MeshUpdate(ParGridFunction &dx_dt, const ParGridFunction &v)
    dx_dt.ProjectDiscCoefficient(v_coeff, GridFunction::ARITHMETIC);
 }
 
-void VisualizeL2(ParGridFunction &gf, int size, int x, int y)
+void VisualizeL2(socketstream &sock, ParGridFunction &gf,
+                 int size, int x, int y)
 {
    int num_procs, myid;
    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
@@ -254,14 +255,44 @@ void VisualizeL2(ParGridFunction &gf, int size, int x, int y)
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   socketstream sol_sock(vishost, visport);
-   sol_sock << "parallel " << num_procs << " " << myid << "\n";
-   sol_sock.precision(8);
-   sol_sock << "solution\n" << *pmesh << gf_l2;
-   sol_sock << "window_geometry " << x << " " << y << " "
-                                  << size << " " << size << "\n"
-            << "window_title '" << "Y" << "'\n"
-            << "keys mRjlc\n" << flush;
+   bool newly_opened = false;
+   int connection_failed;
+
+   do
+   {
+      if (myid == 0)
+      {
+         if (!sock.is_open() || !sock)
+         {
+            sock.open(vishost, visport);
+            sock.precision(8);
+            newly_opened = true;
+         }
+         sock << "solution\n";
+      }
+
+      pmesh->PrintAsOne(sock);
+      gf_l2.SaveAsOne(sock);
+
+      if (myid == 0 && newly_opened)
+      {
+         const char* keys = (gf_l2.FESpace()->GetMesh()->Dimension() == 2)
+                            ? "mAcRjl" : "mmaaAcl";
+
+         sock << "window_title '" << "Velocity" << "'\n"
+              << "window_geometry "
+              << x << " " << y << " " << size << " " << size << "\n"
+              << "keys " << keys;
+         sock << std::endl;
+      }
+
+      if (myid == 0)
+      {
+         connection_failed = !sock && !newly_opened;
+      }
+      MPI_Bcast(&connection_failed, 1, MPI_INT, 0, MPI_COMM_WORLD);
+   }
+   while (connection_failed);
 }
 
 
