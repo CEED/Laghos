@@ -14,10 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "laghos_cut.hpp"
-#include <unordered_map>
 
 #ifdef MFEM_USE_MPI
 
@@ -127,7 +125,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
-   block_offsets[2] = block_offsets[1] + H1Vsize;
+   block_offsets[2] = block_offsets[1] + H1cutVsize;
    block_offsets[3] = block_offsets[2] + L2Vsize;
    one = 1.0;
 
@@ -194,8 +192,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force.Finalize(0);
 }
 
-LagrangianHydroOperator::~LagrangianHydroOperator() { }
-
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    // Make sure that the mesh positions correspond to the ones in S. This is
@@ -206,7 +202,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    // (Position, Velocity, Specific Internal Energy).
    Vector *sptr = const_cast<Vector *>(&S);
    ParGridFunction v;
-   v.MakeRef(&H1cut, *sptr, H1cutVsize);
+   v.MakeRef(&H1cut, *sptr, H1Vsize);
    // Set dx_dt = v (explicit).
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
@@ -223,26 +219,22 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    UpdateQuadratureData(S);
    AssembleForceMatrix();
+
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
-   dv.MakeRef(&H1cut, dS_dt, H1cutVsize);
+   dv.MakeRef(&H1cut, dS_dt, H1Vsize);
    dv = 0.0;
-
-   ParGridFunction accel_src_gf;
-   if (source_type == 2)
-   {
-      accel_src_gf.SetSpace(&H1cut);
-      RTCoefficient accel_coeff(dim);
-      accel_src_gf.ProjectCoefficient(accel_coeff);
-      accel_src_gf.Read();
-   }
 
    Force.Mult(one, v_rhs);
    v_rhs.Neg();
 
    if (source_type == 2)
    {
+      ParGridFunction accel_src_gf(&H1cut);
+      RTCoefficient accel_coeff(dim);
+      accel_src_gf.ProjectCoefficient(accel_coeff);
+
       Vector rhs_accel(v_rhs.Size());
       Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
       v_rhs += rhs_accel;
@@ -276,7 +268,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction de;
-   de.MakeRef(&L2, dS_dt, H1Vsize*2);
+   de.MakeRef(&L2, dS_dt, H1Vsize + H1cutVsize);
    de = 0.0;
 
    Force.MultTranspose(v, e_rhs);
@@ -402,8 +394,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    ParGridFunction x, v, e;
    Vector* sptr = const_cast<Vector*>(&S);
    x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1.GetVSize());
-   e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
+   v.MakeRef(&H1cut, *sptr, H1Vsize);
+   e.MakeRef(&L2, *sptr, H1Vsize + H1cutVsize);
    Vector e_vals;
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 

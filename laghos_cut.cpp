@@ -29,13 +29,22 @@ using namespace std;
 // 0 - only duplicated materials per DOF.
 // 1 - all materials per DOF .
 // 2 - full element/material output per DOF.
-void PrintDofElemTable(const Table &elem_dof, const ParMesh &pmesh, int lvl = 0)
+void PrintDofElemTable(const Table &elem_dof, const ParMesh &pmesh,
+                       int lvl, bool boundary)
 {
    Table dof_elem;
    Transpose(elem_dof, dof_elem);
 
    const int nrows = dof_elem.Size();
-   std::cout << "Total DOFs: " << nrows << std::endl;
+   if (boundary == false)
+   {
+      std::cout << "--- Dof-to-Elem. Total elem DOFs: " << nrows << std::endl;
+   }
+   else
+   {
+      std::cout << "--- Dof-to-Bdr. Total bndry DOFs: " << nrows << std::endl;
+   }
+
    Array<int> dof_elements;
    for (int dof = 0; dof < nrows; dof++)
    {
@@ -45,7 +54,18 @@ void PrintDofElemTable(const Table &elem_dof, const ParMesh &pmesh, int lvl = 0)
       if (lvl == 2) { std::cout << "Elements for DOF " << dof << ": \n"; }
       for (int e = 0; e < dof_elements.Size(); e++)
       {
-         const int mat_id = pmesh.GetAttribute(dof_elements[e]);
+         int mat_id;
+         if (boundary == false)
+         {
+            mat_id = pmesh.GetAttribute(dof_elements[e]);
+         }
+         else
+         {
+            int face_id = pmesh.GetBdrFace(dof_elements[e]);
+            int elem_id, tmp;
+            pmesh.GetFaceElements(face_id, &elem_id, &tmp);
+            mat_id = pmesh.GetAttribute(elem_id);
+         }
 
          if (lvl == 2) { cout << dof_elements[e] << "(" << mat_id << ") "; }
 
@@ -61,29 +81,7 @@ void PrintDofElemTable(const Table &elem_dof, const ParMesh &pmesh, int lvl = 0)
       { std::cout << *it << ' '; }
       std::cout << std::endl;
    }
-}
-
-void PrintDofTable(const Table &obj_to_dof, string table_label, bool transp)
-{
-   Table dof_to_obj;
-   if (transp) { Transpose(obj_to_dof, dof_to_obj); }
-   else        { dof_to_obj = obj_to_dof; }
-
-   const int nrows = dof_to_obj.Size();
-   std::cout << "------\n" << table_label
-             << ".\n------\nTotal DOFs: " << nrows << std::endl;
-   Array<int> dof_objects;
-   for (int dof = 0; dof < nrows; dof++)
-   {
-      // Find the materials that share the current dof.
-      dof_to_obj.GetRow(dof, dof_objects);
-      std::cout << "Objects for DOF " << dof << ": \n";
-      for (int o = 0; o < dof_objects.Size(); o++)
-      {
-         cout << dof_objects[o] << " ";
-      }
-      std::cout << std::endl;
-   }
+   std::cout << "--- End of Table" << std::endl;
 }
 
 void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
@@ -99,13 +97,13 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
    Table new_elem_dof(elem_dof), new_bdre_dof(bdre_dof);
    Transpose(elem_dof, dof_elem);
    Transpose(bdre_dof, dof_bdre);
-   const int nrows = dof_elem.Size();
+   const int nrows = dof_elem.Size(), n_bdr_dofs = dof_bdre.Size();
    int ndofs = nrows;
    Array<int> dof_elements, dof_boundaries;
    if (print)
    {
-      PrintDofElemTable(elem_dof, pmesh, 0);
-      PrintDofElemTable(bdre_dof, pmesh, 0);
+      PrintDofElemTable(elem_dof, pmesh, 2, false);
+      PrintDofElemTable(bdre_dof, pmesh, 2, true);
    }
    for (int dof = 0; dof < nrows; dof++)
    {
@@ -147,8 +145,12 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
             }
 
             // Replace in all boundary elements with material mat.
-            dof_bdre.GetRow(dof, dof_boundaries);
-            const int dof_bdr_cnt = dof_boundaries.Size();
+            int dof_bdr_cnt = 0;
+            if (dof < n_bdr_dofs)
+            {
+               dof_bdre.GetRow(dof, dof_boundaries);
+               dof_bdr_cnt = dof_boundaries.Size();
+            }
             for (int b = 0; b < dof_bdr_cnt; b++)
             {
                int face_id = pmesh.GetBdrFace(dof_boundaries[b]);
@@ -200,7 +202,7 @@ void cutH1Space(ParFiniteElementSpace &pfes, bool vis, bool print)
 
    if (print)
    {
-      PrintDofElemTable(new_elem_dof, pmesh, 0);
+      PrintDofElemTable(new_elem_dof, pmesh, 0, false);
    }
 
    // Remove face dofs for cut faces.

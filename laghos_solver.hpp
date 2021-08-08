@@ -102,7 +102,7 @@ public:
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter,
                            const int order_q);
-   ~LagrangianHydroOperator();
+   ~LagrangianHydroOperator() { }
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
