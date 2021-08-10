@@ -133,10 +133,9 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    }
 }
 
-
-void GradAtLocalDofs(ElementTransformation &T,
-                     const ParGridFunction &g,
-                     DenseMatrix &grad_g){
+void GradAtLocalDofs(ElementTransformation &T, const ParGridFunction &g,
+                     DenseMatrix &grad_g)
+{
    ParFiniteElementSpace &pfes = *g.ParFESpace();
    const FiniteElement &el = *pfes.GetFE(T.ElementNo);
    const int dim = el.GetDim(), dof = el.GetDof();
@@ -192,7 +191,6 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    const int h1dofs_cnt = trial_fe.GetDof();
    const int l2dofs_cnt = test_fe.GetDof();
    const int dim = test_fe.GetDim();
-   //int nor_dir_mask = 1;
 
    if (Trans.Elem2No < 0)
    {
@@ -206,16 +204,11 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    // Must be done after elmat.SetSize().
    if (Trans.Attribute != 77) { return; }
 
-   if (Trans.Elem2No < 0 && Trans.Attribute == 77)
-   {
-      // nor_dir_mask = nordir[Trans.FaceNo];
-   }
-
    h1_shape.SetSize(h1dofs_cnt);
    l2_shape.SetSize(l2dofs_cnt);
 
    const int ir_order =
-      trial_fe.GetOrder() +test_fe.GetOrder() + Trans.OrderW();
+      trial_fe.GetOrder() + test_fe.GetOrder() + Trans.OrderW();
    const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
    const int nqp_face = ir->GetNPoints();
 
@@ -252,10 +245,6 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          nor(0) = (2*ip_e1.x - 1.0) * Trans.Weight();
       }
       else { CalcOrtho(Trans.Jacobian(), nor); }
-      if (Trans.Elem2No < 0 && Trans.Attribute == 77)
-      {
-          // nor *= nor_dir_mask;
-      }
       nor *= ip_f.weight;
 
       el_p.CalcShape(ip_e1, shape_p1);
@@ -330,8 +319,8 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
             for (int j = 0; j < h1dofs_cnt; j++)
             {
                double h1_shape_part = h1_shape(j);
-               if (v_shift_type == 2 || v_shift_type == 3
-                || v_shift_type == 4 || v_shift_type == 5)
+               if (v_shift_type == 2 || v_shift_type == 3 ||
+                   v_shift_type == 4 || v_shift_type == 5)
                {
                   h1_grads.GetRow(j, grad_shape_h1);
                   h1_shape_part = d_q2 * grad_shape_h1;

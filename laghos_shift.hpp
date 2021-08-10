@@ -26,9 +26,6 @@ namespace hydrodynamics
 {
 
 int material_id(int el_id, const ParGridFunction &g);
-int multi_material_id(int el_id, const ParGridFunction &xgf);
-
-//double interfaceLS(const Vector &x);
 
 void MarkFaceAttributes(ParFiniteElementSpace &pfes);
 
