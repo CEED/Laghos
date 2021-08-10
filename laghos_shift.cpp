@@ -304,10 +304,10 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
 
 
 
-void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
-                                                    const FiniteElement &el_2,
-                                                    FaceElementTransformations &Trans,
-                                                    Vector &elvect)
+void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1,
+                                                       const FiniteElement &el_2,
+                                                       FaceElementTransformations &Trans,
+                                                       Vector &elvect)
 {
    const int l2dofs_cnt = el_1.GetDof();
    const int dim = el_1.GetDim();
@@ -401,37 +401,27 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       }
       v_strain_q2.Transpose();
 
-      v.GetVectorValue(Trans, ip_f, v_vals);
-      const int form = e_shift_type;
-
+      //v.GetVectorValue(Trans, ip_f, v_vals);
       double gradv_d_n_n_jump = 0.;
-      double gradp_d_jump = 0.0;
-      double p_avg = 0.0;
-
-      // generic stuff that we need for form 2, 3 and 4
       {
-        Vector gradv_d(dim);
-        v_strain_q1.Mult(d_q1, gradv_d);
-        gradv_d += v1;
+        d_q1 = nor;
         Vector true_normal = d_q1;
         true_normal *= d_q1.Norml2() == 0. ? 0 : 1./d_q1.Norml2();
-        double gradv_d_n = gradv_d*true_normal;
+        double gradv_d_n = v1*true_normal;
         Vector gradv_d_n_n1 = true_normal;
         gradv_d_n_n1 *= gradv_d_n;
 
-        v_strain_q2.Mult(d_q2, gradv_d);
-        gradv_d += v2;
+        d_q2 = nor;
         true_normal = d_q2;
         true_normal *= d_q2.Norml2() == 0. ? 0 : 1./d_q2.Norml2();
-        gradv_d_n = gradv_d*true_normal;
+        gradv_d_n = v2*true_normal;
         Vector gradv_d_n_n2 = true_normal;
         gradv_d_n_n2 *= gradv_d_n;
 
         gradv_d_n_n_jump = gradv_d_n_n1*nor - gradv_d_n_n2*nor;
-        p_avg = 0.5*(p1 + p2);
       }
 
-      // - <[[((nabla v d) . n)n]], {{p phi}}
+      // - <[[(v +nabla v d) . n)n]], {{p phi}}
       // 1st element.
       {
          // L2 shape functions in the 1st element.
@@ -440,7 +430,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
          Vector l2_shape_p_avg = l2_shape;
          l2_shape_p_avg *= 0.5*p1;
          l2_shape_p_avg *= gradv_d_n_n_jump;
-         l2_shape_p_avg *= ip_f.weight;
+         l2_shape_p_avg *= ip_e1.weight;
          Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
          elvect_temp.Add(-1., l2_shape_p_avg);
       }
@@ -452,12 +442,12 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
          Vector l2_shape_p_avg = l2_shape;
          l2_shape_p_avg *= 0.5*p2;
          l2_shape_p_avg *= gradv_d_n_n_jump;
-         l2_shape_p_avg *= ip_f.weight;
+         l2_shape_p_avg *= ip_e2.weight;
          Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
          elvect_temp.Add(-1., l2_shape_p_avg);
       }
-
    }
+   //elvect *= 0.0;
 }
 
 } // namespace hydrodynamics

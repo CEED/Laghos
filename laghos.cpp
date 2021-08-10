@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
    PressureFunction::PressureSpace p_space = PressureFunction::L2;
    bool mix_mass = false;
    int v_shift_type = 1;
-   int e_shift_type = 1;
+   int e_shift_type = 0;
    double shift_scale = 1.0;
 
 
