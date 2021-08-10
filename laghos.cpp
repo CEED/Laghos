@@ -42,6 +42,7 @@
 using std::cout;
 using std::endl;
 using namespace mfem;
+using namespace hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
@@ -212,9 +213,16 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
+   ParGridFunction gamma_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
-   mat_gf.ProjectCoefficient(mat_coeff);
+   gamma_gf.ProjectCoefficient(mat_coeff);
+
+   PressureFunction::PressureSpace p_space = PressureFunction::L2;
+   bool mix_mass = false;
+   int v_shift_type = 1;
+   int e_shift_type = 1;
+   double shift_scale = 1.0;
+
 
    // Assign material indices to the element attributes.
    for (int i = 0; i < NE; i++)
@@ -243,6 +251,7 @@ int main(int argc, char *argv[])
       materials(i)  = hydrodynamics::material_id(i, xi);
       pmesh->SetAttribute(i, materials(i) + 1);
    }
+   hydrodynamics::MarkFaceAttributes(pfes_xi);
 
    MFEM_VERIFY(mpi.WorldSize() == 1, "H1cut is not implemented in parallel.");
    hydrodynamics::cutH1Space(H1CutFESpace, true, true);
@@ -357,6 +366,9 @@ int main(int argc, char *argv[])
    }
    e_gf.ProjectGridFunction(l2_e);
 
+   Coefficient *rho_coeff = &rho0_coeff;
+   GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
+
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
    switch (problem)
@@ -373,16 +385,20 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   PressureFunction p_gf(*pmesh, p_space, rho0_gf, order_e, gamma_gf);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, H1CutFESpace,
                                                 L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                mat_gf, source, cfl,
+                                                v_gf, gamma_gf, p_gf,
+                                                source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter,
                                                 order_q);
 
-   socketstream vis_rho, vis_v, vis_e;
+   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_scale);
+
+   socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
@@ -399,8 +415,12 @@ int main(int argc, char *argv[])
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
+      vis_p.precision(8);
+      vis_xi.precision(8);
+      vis_dist.precision(8);
+      vis_mat.precision(8);
       int Wx = 0, Wy = 0; // window position
-      const int Ww = 350, Wh = 350; // window size
+      const int Ww = 500, Wh = 500; // window size
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
@@ -414,6 +434,18 @@ int main(int argc, char *argv[])
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
+
+      Wy += Wh + Wh/5;
+      Wx = 0;
+      hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                  hydro.GetPressure(e_gf),
+                                  "Pressure", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      hydrodynamics::VisualizeField(vis_xi, vishost, visport, xi,
+                                  "Interface", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      hydrodynamics::VisualizeField(vis_mat, vishost, visport, materials,
+                                  "Materials", 0, 0, Ww, Wh);
    }
 
    // Save data for VisIt visualization.
@@ -511,7 +543,7 @@ int main(int argc, char *argv[])
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
-            int Ww = 350, Wh = 350; // window size
+            int Ww = 500, Wh = 500; // window size
             int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
@@ -526,7 +558,17 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
+            Wy += Wh + Wh/5;
+            Wx = 0;
+            hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                          hydro.GetPressure(e_gf),
+                                          "Pressure", Wx, Wy, Ww, Wh);
             Wx += offx;
+            hydrodynamics::VisualizeField(vis_xi, vishost, visport,
+                                          xi, "Interface", Wx, Wy, Ww, Wh);
+            Wx += offx;
+            hydrodynamics::VisualizeField(vis_mat, vishost, visport, materials,
+                                          "Materials", 0, 800, Ww, Wh);
          }
 
          if (visit)

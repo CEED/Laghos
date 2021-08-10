@@ -18,6 +18,7 @@
 #define MFEM_LAGHOS_SHIFT
 
 
+//#include "../../mfem_shift/mfem.hpp"
 #include "mfem.hpp"
 
 namespace mfem
@@ -27,6 +28,8 @@ namespace hydrodynamics
 {
 
 int material_id(int el_id, const ParGridFunction &g);
+
+void MarkFaceAttributes(ParFiniteElementSpace &pfes);
 
 // Specifies the material interface, depending on the problem number.
 class InterfaceCoeff : public Coefficient
@@ -41,6 +44,53 @@ public:
       : problem(prob), pmesh(pm), glob_NE(pm.GetGlobalNE()) { }
 
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip);
+};
+
+class FaceForceIntegrator : public BilinearFormIntegrator
+{
+private:
+   Vector h1_shape_face, h1_shape, l2_shape;
+   const ParGridFunction &p;
+
+   int v_shift_type = 0;
+   double scale = 1.0;
+
+  public:
+   FaceForceIntegrator(const ParGridFunction &p_gf) : p(p_gf)  { }
+
+   // Goes over only the H1 dofs that are exactly on the interface.
+   void AssembleFaceMatrix(const FiniteElement &trial_fe,
+                           const FiniteElement &test_fe,
+                           FaceElementTransformations &Trans,
+                           DenseMatrix &elmat);
+
+   void SetShiftType(int type) { v_shift_type = type; }
+   void SetScale(double s) { scale = s; }
+};
+
+class EnergyInterfaceIntegrator : public LinearFormIntegrator
+{
+private:
+   const ParGridFunction &p, &v;
+   int e_shift_type = 0;
+
+public:
+   EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
+                             const ParGridFunction &v_gf)
+      : p(p_gf), v(v_gf) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSFaceVect(const FiniteElement &el_1,
+                                    const FiniteElement &el_2,
+                                    FaceElementTransformations &Trans,
+                                    Vector &elvect);
+
+   void SetShiftType(int type) { e_shift_type = type; }
 };
 
 } // namespace hydrodynamics

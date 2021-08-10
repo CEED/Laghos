@@ -83,7 +83,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
+                                                 ParGridFunction &v_gf,
                                                  ParGridFunction &gamma_gf,
+                                                 PressureFunction &pressure,
                                                  const int source,
                                                  const double cfl,
                                                  const bool visc,
@@ -107,6 +109,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    use_vorticity(vort),
    cg_rel_tol(cgt), cg_max_iter(cgiter),
    gamma_gf(gamma_gf),
+   p_func(pressure),
    Mv(&H1cut), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -117,6 +120,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1cut),
+   FaceForce(&H1cut, &L2), FaceForce_e(&L2),
    one(L2Vsize),
    v_rhs(H1cutVsize),
    e_rhs(L2Vsize)
@@ -182,12 +186,25 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    qdata.h0 /= (double) H1.GetOrder(0);
 
+   // Interface forces.
+   auto *ffi = new FaceForceIntegrator(p_func.GetPressure());
+   FaceForce.AddFaceIntegrator(ffi);
+
+   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
+                                             v_gf);
+   Array<int> attr;
+   FaceForce_e.AddTraceFaceIntegrator(efi, attr);
+
    ForceIntegrator *fi = new ForceIntegrator(qdata);
    fi->SetIntRule(&ir);
    Force.AddDomainIntegrator(fi);
+
    // Make a dummy assembly to figure out the sparsity.
    Force.Assemble(0);
    Force.Finalize(0);
+
+   FaceForce.Assemble(0);
+   FaceForce.Finalize(0);
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
@@ -236,6 +253,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       v_rhs += rhs_accel;
    }
 
+   if (v_shift_type >= 1)
+   {
+       FaceForce.AddMultTranspose(one, v_rhs, -1.0);
+   }
+
    Vector X, B;
    OperatorPtr A;
    // HypreParMatrix A;
@@ -279,6 +301,10 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
       e_rhs += *e_source;
+   }
+
+   if (e_shift_type >= 1) {
+       FaceForce_e.Assemble(); e_rhs -= FaceForce_e;
    }
 
    Array<int> l2dofs;
@@ -394,6 +420,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    e.MakeRef(&L2, *sptr, H1Vsize + H1cutVsize);
    Vector e_vals;
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
+
+   // Update the pressure values (used for the shifted interface method).
+   p_func.UpdatePressure(e);
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this
@@ -553,7 +582,80 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 {
    Force = 0.0;
    Force.Assemble();
+   FaceForce = 0.0;
+   FaceForce.Assemble();
    forcemat_is_assembled = true;
+}
+
+PressureFunction::PressureFunction(ParMesh &pmesh, PressureSpace space,
+                                   ParGridFunction &rho0, int e_order,
+                                   ParGridFunction &gamma)
+   : p_space(space),
+     p_fec_L2(p_order, pmesh.Dimension(), basis_type),
+     p_fec_H1(p_order, pmesh.Dimension(), basis_type),
+     p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
+     p_L2(&p_fes_L2), p_H1(&p_fes_H1),
+     rho0DetJ0(p_L2.Size()), gamma_gf(gamma)
+{
+   p_L2 = 0.0;
+   p_H1 = 0.0;
+
+   const int NE = pmesh.GetNE();
+   const int nqp = rho0DetJ0.Size() / NE;
+
+   Vector rho_vals(nqp);
+   for (int i = 0; i < NE; i++)
+   {
+      // The points (and their numbering) coincide with the nodes of p.
+      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
+      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
+
+      rho0.GetValues(Tr, ir, rho_vals);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         rho0DetJ0(i * nqp + q) = Tr.Weight() * rho_vals(q);
+      }
+   }
+}
+
+void PressureFunction::UpdatePressure(const ParGridFunction &e)
+{
+   const int NE = p_fes_L2.GetParMesh()->GetNE();
+   Vector e_vals;
+
+   // Compute L2 pressure element by element.
+   for (int i = 0; i < NE; i++)
+   {
+      // The points (and their numbering) coincide with the nodes of p.
+      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
+      const int nqp = ir.GetNPoints();
+      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
+
+      e.GetValues(Tr, ir, e_vals);
+
+      for (int q = 0; q < ir.GetNPoints(); q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         double rho = rho0DetJ0(i * nqp + q) / Tr.Weight();
+         p_L2(i * nqp + q) = (gamma_gf(i) - 1.0) * rho * e_vals(q);
+
+         if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(i) == 1)
+         {
+            // Water pressure in the water/air test.
+            p_L2(i * nqp + q) -= gamma_gf(i) * 6.0e8;
+         }
+      }
+   }
+
+   // If H1 pressure is needed, average on the shared faces.
+   if (p_space == H1)
+   {
+      GridFunctionCoefficient p_coeff(&p_L2);
+      p_H1.ProjectDiscCoefficient(p_coeff, GridFunction::ARITHMETIC);
+   }
 }
 
 } // namespace hydrodynamics
