@@ -349,7 +349,7 @@ int main(int argc, char *argv[])
    // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [grad_psi.d] n >
    // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [grad_psi.d] n >
    int v_shift_type = 2;
-   bool shift_momentum = false;
+   bool shift_momentum = true;
    // 0 -- no shifting terms.
    // 1 -- the energy RHS gets the conservative momentum term:
    //      + < [grad_p.d] v phi >                         for v_shift_type = 1.

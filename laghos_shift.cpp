@@ -282,14 +282,17 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                }
 
                double p_shift_part = grad_p_d1;
-               if (v_shift_type == 3) {
+               if (v_shift_type == 3)
+               {
                    p_shift_part = p1 + grad_p_d1;
                }
-               else if (v_shift_type == 4) {
+               else if (v_shift_type == 4)
+               {
                    p_shift_part = p1 + grad_p_d1 - p2 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
-               else if (v_shift_type == 5) {
+               else if (v_shift_type == 5)
+               {
                    p_shift_part = grad_p_d1 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
