@@ -204,28 +204,28 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV)
         {
             cout << "X basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_X, first_sv, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
         if (!useVX)
         {
             cout << "V basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_V, first_sv, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
         cout << "E basis summary output: " << endl;
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
+        BasisGeneratorFinalSummary(generator_E, first_sv, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (!sns)
         {
             cout << "Fv basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fv, 0, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
 
             cout << "Fe basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fe, 0, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
         }
     }
 
@@ -1558,7 +1558,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 0.0;
         }
 
-        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, "", false);
+        BasisGeneratorFinalSummary(&generator_XV, 0, energyFraction_X, rdimx, "", false);
         rdimv = rdimx;
 
         cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X

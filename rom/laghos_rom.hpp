@@ -350,6 +350,7 @@ public:
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
+                first_sv = 1;
             }
             else
             {
@@ -382,6 +383,7 @@ public:
                 }
             }
         }
+        else first_sv = 1;
     }
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
@@ -411,6 +413,7 @@ private:
     const int tL2size;
 
     const int rank;
+    int first_sv = 0;
     double energyFraction;
     double energyFraction_X;
 

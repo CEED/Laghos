@@ -8,9 +8,9 @@ using namespace std;
 using namespace mfem;
 
 
-void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, const std::string& basisIdentifier,
-                             const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
-                             const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+void MergePhysicalTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, 
+                             const std::string& basisIdentifier, const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, 
+                             const int totalSamples, const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::unique_ptr<CAROM::BasisGenerator> basis_generator;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
@@ -44,12 +44,12 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
         PrintSingularValues(rank, basename, varName + basisIdentifier, basis_generator.get(), usingWindows, basisWindow);
     }
 }
 
-void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+void MergeSamplingTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
                              const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
                              const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
@@ -116,7 +116,7 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(window_basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(window_basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
         PrintSingularValues(rank, basename, varName + basisIdentifier, window_basis_generator.get(), true, basisWindow);
     }
 }
@@ -146,14 +146,15 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     }
     std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow) + basisIdentifier;
 
+    int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E);;
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
+        MergeSamplingTimeWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
                                 useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
-        MergePhysicalTimeWindow(rank, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
+        MergePhysicalTimeWindow(rank, first_sv, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
     }
 }
 
