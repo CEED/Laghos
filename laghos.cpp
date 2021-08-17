@@ -562,31 +562,17 @@ int main(int argc, char *argv[])
    std::string vname, xname, pnameshiftl, pnameshiftr,
                pnamefitl, pnamefitr, enamel, enamer, enameSL, enameSR;
 
-   std::string prefix = (problem == 9) ? "sod_" : "airwater_";
+   std::string prefix = (problem == 8) ? "sod_" : "airwater_";
    vname = prefix + "v_" + std::to_string(zones) + ".out";
-
-   if (problem != 9)
-   {
-       xname = "sod_x_" + std::to_string(zones) + ".out";
-       enamel = "sod_e_" + std::to_string(zones) + "_L.out";
-       enamer = "sod_e_" + std::to_string(zones) + "_R.out";
-       enameSL = "sod_e_" + std::to_string(zones) + "_shift_L.out";
-       enameSR = "sod_e_" + std::to_string(zones) + "_shift_R.out";
-       pnameshiftl = "sod_p_" + std::to_string(zones) + "_shift_L.out";
-       pnameshiftr = "sod_p_" + std::to_string(zones) + "_shift_R.out";
-       pnamefitl = "sod_p_" + std::to_string(zones) + "_fit_L.out";
-       pnamefitr = "sod_p_" + std::to_string(zones) + "_fit_R.out";
-   }
-   else
-   {
-       xname = "airwater_x_" + std::to_string(zones) + ".out";
-       enamel = "airwater_e_" + std::to_string(zones) + "_l.out";
-       enamer = "airwater_e_" + std::to_string(zones) + "_r.out";
-       pnameshiftl = "airwater_p_" + std::to_string(zones) + "_shift_l.out";
-       pnameshiftr = "airwater_p_" + std::to_string(zones) + "_shift_r.out";
-       pnamefitl = "airwater_p_" + std::to_string(zones) + "_fit_l.out";
-       pnamefitr = "airwater_p_" + std::to_string(zones) + "_fit_r.out";
-   }
+   xname = prefix + "x_" + std::to_string(zones) + ".out";
+   enameSL = prefix + "e_" + std::to_string(zones) + "_shift_L.out";
+   enameSR = prefix + "e_" + std::to_string(zones) + "_shift_R.out";
+   enamel = prefix + "e_" + std::to_string(zones) + "_L.out";
+   enamer = prefix + "e_" + std::to_string(zones) + "_R.out";
+   pnameshiftl = prefix + "p_" + std::to_string(zones) + "_shift_L.out";
+   pnameshiftr = prefix + "p_" + std::to_string(zones) + "_shift_R.out";
+   pnamefitl = prefix + "p_" + std::to_string(zones) + "_fit_L.out";
+   pnamefitr = prefix + "p_" + std::to_string(zones) + "_fit_R.out";
 
    hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
    hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);

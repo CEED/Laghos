@@ -904,9 +904,21 @@ double ShiftedPointExtractor::GetValue() const
    const FiniteElement &el = *pfes.GetFE(zone_id);
    const int dim = el.GetDim(), dof = el.GetDof();
 
-   // Gradient of the field at the point.
    DenseMatrix grad_e;
-   GradAtLocalDofs(*pfes.GetElementTransformation(zone_id), g, grad_e);
+
+   // It it Bernstein?
+   auto pfe = dynamic_cast<const PositiveFiniteElement *>(&el);
+   if (pfe)
+   {
+      const IntegrationRule &ir = el.GetNodes();
+      g.GetGradients(*pfes.GetElementTransformation(zone_id), ir, grad_e);
+      grad_e.Transpose();
+   }
+   else
+   {
+      // Gradient of the field at the point.
+      GradAtLocalDofs(*pfes.GetElementTransformation(zone_id), g, grad_e);
+   }
 
    Array<int> dofs;
    pfes.GetElementDofs(zone_id, dofs);
