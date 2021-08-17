@@ -1,8 +1,9 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -t 1:00:00
-#SBATCH -p pdebug
+#SBATCH --exclusive
+#SBATCH -t 2:00:00
+#SBATCH -p pbatch
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
 
@@ -123,7 +124,7 @@ done
 # Check machine
 case "$(uname -s)" in
     Linux*)
-		  COMMAND="srun -p pdebug"
+		  COMMAND="srun"
 			MACHINE="Linux";;
     Darwin*)
 		  COMMAND="mpirun -oversubscribe"

@@ -353,21 +353,6 @@ int main(int argc, char *argv[])
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
 
-    if (mpi.Root()) {
-        const char path_delim = '/';
-        std::string::size_type pos = 0;
-        do {
-            pos = outputPath.find(path_delim, pos+1);
-            std::string subdir = outputPath.substr(0, pos);
-            mkdir(subdir.c_str(), 0777);
-        }
-        while (pos != std::string::npos);
-        if (std::string(testing_parameter_basename) != "")
-            mkdir(testing_parameter_outputPath.c_str(), 0777);
-        mkdir((testing_parameter_outputPath + "/ROMoffset").c_str(), 0777);
-        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
-    }
-
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
     MFEM_VERIFY(!(romOptions.hyperreduce && romOptions.hyperreduce_prep), "");
@@ -433,6 +418,21 @@ int main(int argc, char *argv[])
                 numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
             }
         }
+    }
+
+    if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        if (std::string(testing_parameter_basename) != "")
+            mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
