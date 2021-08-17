@@ -143,13 +143,12 @@ void GradAtLocalDofs(ElementTransformation &T, const ParGridFunction &g,
    Array<int> dofs;
    Vector g_e;
    DenseMatrix grad_phys; // This will be (dof_p x dim, dof_p).
-   {
-      pfes.GetElementDofs(T.ElementNo, dofs);
-      g.GetSubVector(dofs, g_e);
-      el.ProjectGrad(el, T, grad_phys);
-      Vector grad_ptr(grad_g.GetData(), dof*dim);
-      grad_phys.Mult(g_e, grad_ptr);
-   }
+
+   pfes.GetElementDofs(T.ElementNo, dofs);
+   g.GetSubVector(dofs, g_e);
+   el.ProjectGrad(el, T, grad_phys);
+   Vector grad_ptr(grad_g.GetData(), dof*dim);
+   grad_phys.Mult(g_e, grad_ptr);
 }
 
 void StrainTensorAtLocalDofs(ElementTransformation &T, const ParGridFunction &g,
@@ -828,7 +827,6 @@ int FindPointDOF(const int z_id, const Vector &xyz,
    Array<int> dofs;
    double eps = 1e-8;
    pfes.GetElementDofs(z_id, dofs);
-   //if (xyz[0] == 0.7) { eps = 1.e-3; }
    for (int j = 0; j < dofs_cnt; j++)
    {
       pfes.GetElementDofs(z_id, dofs);
@@ -841,10 +839,8 @@ int FindPointDOF(const int z_id, const Vector &xyz,
         //std::cout << j << " " << dofs[j] << " " << position(d) << " " << xyz(d) << std::endl;
          if (fabs(position(d) - xyz(d)) > eps) { found = false; break; }
       }
-      if (found)
-      {
-         return dofs[j];
-      }
+
+      if (found) { return dofs[j]; }
    }
    return -1;
 }

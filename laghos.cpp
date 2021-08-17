@@ -348,7 +348,7 @@ int main(int argc, char *argv[])
    // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
    // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [grad_psi.d] n >
    // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [grad_psi.d] n >
-   int v_shift_type = 2;
+   int v_shift_type = 1;
    bool shift_momentum = true;
    // 0 -- no shifting terms.
    // 1 -- the energy RHS gets the conservative momentum term:
@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-//#define EXTRACT_1D
+#define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -560,20 +560,25 @@ int main(int argc, char *argv[])
    hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
    // By construction, the interface is in the left zone.
    std::string vname, xname, pnameshiftl, pnameshiftr,
-               pnamefitl, pnamefitr, enamel, enamer;
+               pnamefitl, pnamefitr, enamel, enamer, enameSL, enameSR;
 
-   if (problem != 9) {
-       vname = "sod_v_" + std::to_string(zones) + ".out";
+   std::string prefix = (problem == 9) ? "sod_" : "airwater_";
+   vname = prefix + "v_" + std::to_string(zones) + ".out";
+
+   if (problem != 9)
+   {
        xname = "sod_x_" + std::to_string(zones) + ".out";
        enamel = "sod_e_" + std::to_string(zones) + "_L.out";
        enamer = "sod_e_" + std::to_string(zones) + "_R.out";
+       enameSL = "sod_e_" + std::to_string(zones) + "_shift_L.out";
+       enameSR = "sod_e_" + std::to_string(zones) + "_shift_R.out";
        pnameshiftl = "sod_p_" + std::to_string(zones) + "_shift_L.out";
        pnameshiftr = "sod_p_" + std::to_string(zones) + "_shift_R.out";
        pnamefitl = "sod_p_" + std::to_string(zones) + "_fit_L.out";
        pnamefitr = "sod_p_" + std::to_string(zones) + "_fit_R.out";
    }
-   else {
-       vname = "airwater_v_" + std::to_string(zones) + ".out";
+   else
+   {
        xname = "airwater_x_" + std::to_string(zones) + ".out";
        enamel = "airwater_e_" + std::to_string(zones) + "_l.out";
        enamer = "airwater_e_" + std::to_string(zones) + "_r.out";
@@ -587,6 +592,10 @@ int main(int argc, char *argv[])
    hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
    hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enamel);
    hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enamer);
+   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face, e_gf,
+                                                  dist, enameSL);
+   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_R, point_face, e_gf,
+                                                  dist, enameSR);
    hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, pe_gf, pnamefitl);
    hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, pe_gf, pnamefitr);
    hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, pe_gf,
@@ -597,13 +606,17 @@ int main(int argc, char *argv[])
    x_extr.WriteValue(0.0);
    if (v_shift_type == 0 && e_shift_type == 0)
    {
-       p_L_extr.WriteValue(0.0);
-       p_R_extr.WriteValue(0.0);
+      e_L_extr.WriteValue(0.0);
+      e_R_extr.WriteValue(0.0);
+      p_L_extr.WriteValue(0.0);
+      p_R_extr.WriteValue(0.0);
    }
    else
    {
-       p_LS_extr.WriteValue(0.0);
-       p_RS_extr.WriteValue(0.0);
+      e_LS_extr.WriteValue(0.0);
+      e_RS_extr.WriteValue(0.0);
+      p_LS_extr.WriteValue(0.0);
+      p_RS_extr.WriteValue(0.0);
    }
 #endif
 
@@ -655,17 +668,19 @@ int main(int argc, char *argv[])
 #ifdef EXTRACT_1D
       v_extr.WriteValue(t);
       x_extr.WriteValue(t);
-      e_L_extr.WriteValue(t);
-      e_R_extr.WriteValue(t);
       if (v_shift_type == 0 && e_shift_type == 0)
       {
-          p_L_extr.WriteValue(t);
-          p_R_extr.WriteValue(t);
+         e_L_extr.WriteValue(t);
+         e_R_extr.WriteValue(t);
+         p_L_extr.WriteValue(t);
+         p_R_extr.WriteValue(t);
       }
       else
       {
-          p_LS_extr.WriteValue(t);
-          p_RS_extr.WriteValue(t);
+         e_LS_extr.WriteValue(t);
+         e_RS_extr.WriteValue(t);
+         p_LS_extr.WriteValue(t);
+         p_RS_extr.WriteValue(t);
       }
 #endif
 
