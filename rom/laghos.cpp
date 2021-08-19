@@ -939,7 +939,8 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    // 2D Rayleigh-Taylor penetration distance
+    // Finding kinematic DOF on the end of the interface 
+    // which measure penetration distance in 2D Rayleigh-Taylor instability (problem 7)
     int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7)
     {
