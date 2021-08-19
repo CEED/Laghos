@@ -419,6 +419,8 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       IVN2.Mult(nor, v2jump);
 
       v1jump -= v2jump; // v1jump -> [[ (I-n_i n_j)(v_i n_j+) ]]
+      Vector dvjump = v1jump;
+             dvjump -= v2jump;
 
       const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
                 idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
@@ -438,14 +440,14 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
              DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
              Mult(work, PsiN1, IPsiN1);
              IPsiN1.Mult(nor, psi1jump);
-             elvect(j) += w1 * (psi1jump*v1jump);
+             elvect(j) += w1 * (psi1jump*dvjump);
 
              psi = 0.;
              psi(1) = h1_shape(j);
              DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
              Mult(work, PsiN1, IPsiN1);
              IPsiN1.Mult(nor, psi1jump);
-             elvect(j + h1dofs_cnt) += w1 * (psi1jump*v1jump);
+             elvect(j + h1dofs_cnt) += w1 * (psi1jump*dvjump);
          }
       }
 
@@ -461,18 +463,18 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
              DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
              Mult(work, PsiN2, IPsiN2);
              IPsiN2.Mult(nor, psi2jump);
-             elvect(h1dofs_cnt * dim + j) -= w2 * (psi2jump*v2jump);
+             elvect(h1dofs_cnt * dim + j) -= w2 * (psi2jump*dvjump);
 
              psi = 0.;
              psi(1) = h1_shape(j);
              DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
              Mult(work, PsiN2, IPsiN2);
              IPsiN2.Mult(nor, psi2jump);
-             elvect(h1dofs_cnt * dim + j + h1dofs_cnt) -= w2 * (psi2jump*v2jump);
+             elvect(h1dofs_cnt * dim + j + h1dofs_cnt) -= w2 * (psi2jump*dvjump);
          }
       }
    }
-   elvect *= 0.01;
+   elvect *= 0.1;
 }
 
 void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1,
