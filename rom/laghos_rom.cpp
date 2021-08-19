@@ -479,7 +479,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
 
     if (offsetInit)
     {
-        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init"; // TODO: think about parametric case
+        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init"; 
 
         if (input.offsetType == useInitialState)
         {
