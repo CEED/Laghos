@@ -490,6 +490,19 @@ void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array
     }
 }
 
+void ReadPDweight(std::vector<double>& pd_weight, std::string outputPath)
+{
+    std::ifstream infile_pd_weight(outputPath.c_str());
+    MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
+    pd_weight.clear();
+    double pd_w;
+    while (infile_pd_weight >> pd_w)
+    {
+        pd_weight.push_back(pd_w);
+    }
+    infile_pd_weight.close();
+}
+
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
 {
     const int w = romOptions.window;

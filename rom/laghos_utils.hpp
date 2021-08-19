@@ -34,6 +34,8 @@ int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& tw
 
 void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath);
 
+void ReadPDweight(std::vector<double>& pd_weight, std::string outputPath);
+
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
 
 void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf);

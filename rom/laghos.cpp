@@ -1269,16 +1269,8 @@ int main(int argc, char *argv[])
             }
             if (!romOptions.hyperreduce_prep)
             {
-                std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight0";
-                std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
-                MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
-                pd_weight.clear();
-                double pd_w;
-                while (infile_pd_weight >> pd_w)
-                {
-                    pd_weight.push_back(pd_w);
-                }
-                infile_pd_weight.close();
+                std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
+                ReadPDweight(pd_weight, pd_weight_outputPath);
                 MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
             }
         }
@@ -1821,16 +1813,8 @@ int main(int argc, char *argv[])
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
-                        std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
-                        std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
-                        MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
-                        pd_weight.clear();
-                        double pd_w;
-                        while (infile_pd_weight >> pd_w)
-                        {
-                            pd_weight.push_back(pd_w);
-                        }
-                        infile_pd_weight.close();
+                        std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
+                        ReadPDweight(pd_weight, pd_weight_outputPath);
                         MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
                     }
 
