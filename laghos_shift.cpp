@@ -23,6 +23,16 @@ namespace mfem
 namespace hydrodynamics
 {
 
+
+
+void DenseMatrixFromVecVecT(Vector &x, Vector &y, DenseMatrix &xyT) {
+    for (int i = 0; i < x.Size(); i++) {
+        for (int j = 0; j < y.Size(); j++) {
+            xyT(i, j) = x(i)*y(j);
+        }
+    }
+}
+
 int material_id(int el_id, const ParGridFunction &g)
 {
    const ParFiniteElementSpace &pfes =  *g.ParFESpace();
@@ -54,7 +64,7 @@ void MarkFaceAttributes(ParFiniteElementSpace &pfes)
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {
       auto *ftr = pmesh->GetFaceElementTransformations(f, 3);
-      if (ftr->Elem2No > 0 &&
+       if (ftr->Elem2No > 0 &&
           pmesh->GetAttribute(ftr->Elem1No) != pmesh->GetAttribute(ftr->Elem2No))
       {
          pmesh->SetFaceAttribute(f, 77);
@@ -302,7 +312,168 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    }
 }
 
+void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
+                                                   const FiniteElement &el_2,
+                                                   FaceElementTransformations &Trans,
+                                                   Vector &elvect)
+{
+   const int h1dofs_cnt = el_1.GetDof();
+   const int dim = el_1.GetDim();
 
+   elvect.SetSize(h1dofs_cnt * dim * 2);
+   if (Trans.Elem2No < 0)
+   {
+      elvect.SetSize(h1dofs_cnt * dim);
+   }
+   elvect = 0.0;
+
+   // Must be done after elvect.SetSize().
+   if (Trans.Attribute != 77) { return; }
+
+   Vector h1_shape(h1dofs_cnt);
+
+   const int ir_order =
+      el_1.GetOrder() + Trans.OrderW();
+   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
+   const int nqp_face = ir->GetNPoints();
+
+   // grad_p at all quad points, on both sides.
+   const FiniteElement &el_v = *v.ParFESpace()->GetFE(0);
+   const int dof_v = el_v.GetDof();
+   Vector nor(dim), d_q1(dim), d_q2(dim),
+          v1jump(dim), v2jump(dim), shape_v(dof_v),
+          psi1jump(dim), psi2jump(dim);
+
+   DenseTensor v_strain_e_1(dof_v, dim, dim), v_strain_e_2(dof_v, dim, dim);
+   if (Trans.Elem2No > 0)
+   {
+       StrainTensorAtLocalDofs(Trans.GetElement2Transformation(), v, v_strain_e_2);
+   }
+   StrainTensorAtLocalDofs(Trans.GetElement1Transformation(), v, v_strain_e_1);
+
+   DenseMatrix v_strain_q1(dim), v_strain_q2(dim);
+   DenseMatrix Iden(dim);
+   Iden = 0.0;
+   for (int d = 0; d < dim; d++) { Iden(d, d) = 1.0; }
+   DenseMatrix NN(dim), VN1(dim), VN2(dim), work(dim);
+   DenseMatrix IVN1(dim), IVN2(dim);
+   DenseMatrix PsiN1(dim), PsiN2(dim);
+   DenseMatrix IPsiN1(dim), IPsiN2(dim);
+
+   for (int q = 0; q  < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
+
+      // Set the integration point in the face and the neighboring elements
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+      const IntegrationPoint &ip_e2 = Trans.GetElement2IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0 ) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+
+      Vector true_normal = nor;
+      true_normal *= true_normal.Norml2() == 0. ? 0 : 1./true_normal.Norml2();
+
+      DenseMatrixFromVecVecT(true_normal, true_normal, NN);
+      Add(Iden, NN, -1.0, work); //work_ij = I - n_i n_j
+
+
+      // 1st element stuff.
+      Vector v1(dim), v2(dim);
+      v.GetVectorValue(Trans.GetElement1Transformation(), ip_e1, v1);
+      el_v.CalcShape(ip_e1, shape_v);
+      for (int d = 0; d < dim; d++) {
+          DenseMatrix v_grad_e_1(v_strain_e_1.GetData(d), dof_v, dim);
+          Vector v_grad_q1(v_strain_q1.GetData()+d*dim, dim);
+          v_grad_e_1.MultTranspose(shape_v, v_grad_q1);
+      }
+      v_strain_q1.Transpose(); //du_i/dx_j
+
+      // 2nd element stuff.
+      v.GetVectorValue(Trans.GetElement2Transformation(), ip_e2, v2);
+      el_v.CalcShape(ip_e2, shape_v);
+      for (int d = 0; d < dim; d++) {
+          DenseMatrix v_grad_e_2(v_strain_e_2.GetData(d), dof_v, dim);
+          Vector v_grad_q2(v_strain_q2.GetData()+d*dim, dim);
+          v_grad_e_2.MultTranspose(shape_v, v_grad_q2);
+      }
+      v_strain_q2.Transpose();
+
+      //VN1(i, j) = v1(i)*true_normal(j)
+      DenseMatrixFromVecVecT(v1, true_normal, VN1);
+      Mult(work, VN1, IVN1);
+      IVN1.Mult(nor, v1jump);
+
+      //VN2(i, j) = v2(i)*true_normal(j)
+      DenseMatrixFromVecVecT(v2, true_normal, VN2);
+      Mult(work, VN2, IVN2);
+      IVN2.Mult(nor, v2jump);
+
+      v1jump -= v2jump; // v1jump -> [[ (I-n_i n_j)(v_i n_j+) ]]
+
+      const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
+                idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
+      double rhocs1 = cfqdata.rhocs(idx1),
+             rhocs2 = cfqdata.rhocs(idx2);
+      double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
+
+      // 1st element.
+      {
+         el_1.CalcShape(ip_e1, h1_shape);
+         double w1 = tau*ip_f.weight / nor.Norml2();
+         for (int j = 0; j < h1_shape.Size(); j++)
+         {
+             Vector psi(dim);
+             psi = 0.;
+             psi(0) = h1_shape(j);
+             DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
+             Mult(work, PsiN1, IPsiN1);
+             IPsiN1.Mult(nor, psi1jump);
+             elvect(j) += w1 * (psi1jump*v1jump);
+
+             psi = 0.;
+             psi(1) = h1_shape(j);
+             DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
+             Mult(work, PsiN1, IPsiN1);
+             IPsiN1.Mult(nor, psi1jump);
+             elvect(j + h1dofs_cnt) += w1 * (psi1jump*v1jump);
+         }
+      }
+
+      // 2nd element
+      {
+         el_2.CalcShape(ip_e2, h1_shape);
+         double w2 = tau*ip_f.weight / nor.Norml2();
+         for (int j = 0; j < h1_shape.Size(); j++)
+         {
+             Vector psi(dim);
+             psi = 0.;
+             psi(0) = h1_shape(j);
+             DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
+             Mult(work, PsiN2, IPsiN2);
+             IPsiN2.Mult(nor, psi2jump);
+             elvect(h1dofs_cnt * dim + j) -= w2 * (psi2jump*v2jump);
+
+             psi = 0.;
+             psi(1) = h1_shape(j);
+             DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
+             Mult(work, PsiN2, IPsiN2);
+             IPsiN2.Mult(nor, psi2jump);
+             elvect(h1dofs_cnt * dim + j + h1dofs_cnt) -= w2 * (psi2jump*v2jump);
+         }
+      }
+   }
+   elvect *= 0.01;
+}
 
 void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1,
                                                        const FiniteElement &el_2,
@@ -312,11 +483,11 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1
    const int l2dofs_cnt = el_1.GetDof();
    const int dim = el_1.GetDim();
 
+   elvect.SetSize(l2dofs_cnt * 2);
    if (Trans.Elem2No < 0)
    {
       elvect.SetSize(l2dofs_cnt);
    }
-   elvect.SetSize(l2dofs_cnt * 2);
    elvect = 0.0;
 
    // Must be done after elvect.SetSize().
@@ -430,7 +601,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1
          Vector l2_shape_p_avg = l2_shape;
          l2_shape_p_avg *= 0.5*p1;
          l2_shape_p_avg *= gradv_d_n_n_jump;
-         l2_shape_p_avg *= ip_e1.weight;
+         l2_shape_p_avg *= ip_f.weight;
          Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
          elvect_temp.Add(-1., l2_shape_p_avg);
       }
@@ -442,13 +613,112 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1
          Vector l2_shape_p_avg = l2_shape;
          l2_shape_p_avg *= 0.5*p2;
          l2_shape_p_avg *= gradv_d_n_n_jump;
-         l2_shape_p_avg *= ip_e2.weight;
+         l2_shape_p_avg *= ip_f.weight;
          Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
          elvect_temp.Add(-1., l2_shape_p_avg);
       }
    }
-   //elvect *= 0.0;
 }
+
+
+void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
+                 ParGridFunction &e, ParGridFunction &gamma)
+{
+   v = 0.0;
+
+   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = rho.Size() / NE;
+   double r, g, p;
+   for (int i = 0; i < NE; i++)
+   {
+      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      {
+         r = 1.000; g = 2.0; p = 2.0;
+      }
+      else
+      {
+         r = 0.125; g = 1.4; p = 0.1;
+      }
+
+      gamma(i) = g;
+      for (int j = 0; j < ndofs; j++)
+      {
+         rho(i*ndofs + j) = r;
+         e(i*ndofs + j)   = p / r / (g - 1.0);
+      }
+   }
+}
+
+void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
+                  ParGridFunction &e, ParGridFunction &gamma)
+{
+   v = 0.0;
+
+   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = rho.Size() / NE;
+   double r, g, p;
+   for (int i = 0; i < NE; i++)
+   {
+      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      {
+         r = 1000; g = 4.4; p = 1.e9;
+         double A = 6.0e8;
+         gamma(i) = g;
+         for (int j = 0; j < ndofs; j++)
+         {
+            rho(i*ndofs + j) = r;
+            e(i*ndofs + j)   = (p + g*A) / r / (g - 1.0);
+         }
+      }
+      else
+      {
+         r = 50; g = 1.4; p = 1.e5;
+         gamma(i) = g;
+         for (int j = 0; j < ndofs; j++)
+         {
+            rho(i*ndofs + j) = r;
+            e(i*ndofs + j)   = p / r / (g - 1.0);
+         }
+      }
+   }
+}
+
+void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
+                      ParGridFunction &e, ParGridFunction &gamma)
+{
+   MFEM_VERIFY(rho.ParFESpace()->GetMesh()->Dimension() == 2, "2D only.");
+
+   v = 0.0;
+   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = rho.Size() / NE;
+   double r, g, p;
+   for (int i = 0; i < NE; i++)
+   {
+      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      {
+         r = 1.0; g = 1.5; p = 1.0;
+      }
+      else
+      {
+         p = 0.1;
+         Vector center(2);
+         pfes.GetParMesh()->GetElementCenter(i, center);
+         r = (center(1) < 1.5) ? 1.0 : 0.125;
+         g = (center(1) < 1.5) ? 1.4 : 1.5;
+      }
+
+      gamma(i) = g;
+      for (int j = 0; j < ndofs; j++)
+      {
+         rho(i*ndofs + j) = r;
+         e(i*ndofs + j)   = p / r / (g - 1.0);
+      }
+   }
+}
+
 
 } // namespace hydrodynamics
 

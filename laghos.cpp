@@ -31,7 +31,7 @@
 //
 //    V. Dobrev, Tz. Kolev and R. Rieben, "High-order curvilinear finite element
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
-//    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
+//    Computing, (34) 2012, pp. B606–B641, https://vdofs sizedoi.org/10.1137/120864672.
 //
 // Test problems: see README.
 
@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
    // Parse command-line options.
    problem = 1;
    dim = 3;
+   int zones = 50;
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
@@ -91,6 +92,7 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
+   args.AddOption(&zones, "-z", "--zones_1d", "1D zones for problem 8.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -148,14 +150,23 @@ int main(int argc, char *argv[])
    {
       if (dim == 1)
       {
-         mesh = new Mesh(Mesh::MakeCartesian1D(2));
+         int n = 2;
+         if (problem == 8 || problem == 9) { n = zones; }
+         mesh = new Mesh(Mesh::MakeCartesian1D(n));
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
-                                               true));
+          if (problem == 10) {
+              mesh = new Mesh(Mesh::MakeCartesian2D(8, 4, Element::QUADRILATERAL,
+                                                    true, 7, 3));
+           }
+           else
+           {
+              mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
+                                                    true));
+          }
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
@@ -220,22 +231,22 @@ int main(int argc, char *argv[])
    PressureFunction::PressureSpace p_space = PressureFunction::L2;
    bool mix_mass = false;
    int v_shift_type = 1;
-   int e_shift_type = 0;
+   int e_shift_type = 1;
    double shift_scale = 1.0;
 
 
    // Assign material indices to the element attributes.
-   for (int i = 0; i < NE; i++)
-   {
-      Vector center;
-      pmesh->GetElementCenter(i, center);
-      Element *el = pmesh->GetElement(i);
-      if (center(0) <= 0.5 || center(1) >= 0.5)
-      {
-         el->SetAttribute(0);
-      }
-      else { el->SetAttribute(1); }
-   }
+//   for (int i = 0; i < NE; i++)
+//   {
+//      Vector center;
+//      pmesh->GetElementCenter(i, center);
+//      Element *el = pmesh->GetElement(i);
+//      if (center(0) <= 0.5 || center(1) >= 0.5)
+//      {
+//         el->SetAttribute(0);
+//      }
+//      else { el->SetAttribute(1); }
+//   }
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -246,10 +257,16 @@ int main(int argc, char *argv[])
 
    // Material marking and visualization function.
    ParGridFunction materials(&mat_fes);
+   int zone_id_L, zone_id_R;
    for (int i = 0; i < NE; i++)
    {
       materials(i)  = hydrodynamics::material_id(i, xi);
       pmesh->SetAttribute(i, materials(i) + 1);
+      if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
+      {
+         zone_id_L = i-1;
+         zone_id_R = i;
+      }
    }
    hydrodynamics::MarkFaceAttributes(pfes_xi);
 
@@ -368,6 +385,23 @@ int main(int argc, char *argv[])
 
    Coefficient *rho_coeff = &rho0_coeff;
    GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
+   if (problem == 8)
+   {
+      hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+   else if (problem == 9)
+   {
+      hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+   else if (problem == 10)
+   {
+      hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+   }
+   v_gf.SyncAliasMemory(S);
+   e_gf.SyncAliasMemory(S);
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
@@ -381,6 +415,9 @@ int main(int argc, char *argv[])
       case 5: visc = true; break;
       case 6: visc = true; break;
       case 7: source = 2; visc = true; vorticity = true;  break;
+      case 8: visc = true; break;
+      case 9: visc = true; break;
+      case 10: visc = true; S.HostRead(); break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -389,7 +426,7 @@ int main(int argc, char *argv[])
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, H1CutFESpace,
                                                 L2FESpace, ess_tdofs,
-                                                rho0_coeff, rho0_gf,
+                                                *rho_coeff, rho0_gf,
                                                 v_gf, gamma_gf, p_gf,
                                                 source, cfl,
                                                 visc, vorticity,
@@ -469,6 +506,9 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
+
+
+
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -612,7 +652,8 @@ int main(int argc, char *argv[])
    switch (ode_solver_type)
    {
       case 2: steps *= 2; break;
-      case 3: steps *= 3; break;
+      case 3:
+      case 10:steps *= 3; break;
       case 4: steps *= 4; break;
       case 6: steps *= 6; break;
       case 7: steps *= 2;
@@ -679,6 +720,9 @@ double rho0(const Vector &x)
          return 1.0;
       }
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 8: return (x(0) < 0.5) ? 1.0 : 0.125;
+      case 9: return (x(0) < 0.7) ? 1000.0 : 50.;
+      case 10: return (x(0) > 1.1 && x(1) > 1.5) ? 0.125 : 1.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -695,6 +739,9 @@ double gamma_func(const Vector &x)
       case 5: return 1.4;
       case 6: return 1.4;
       case 7: return 5.0 / 3.0;
+      case 8: return (x(0) < 0.5) ? 2.0 : 1.4;
+      case 9: return (x(0) < 0.7) ? 4.4 : 1.4;
+      case 10: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -703,7 +750,6 @@ static double rad(double x, double y) { return sqrt(x*x + y*y); }
 
 void v0(const Vector &x, Vector &v)
 {
-   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
    switch (problem)
    {
       case 0:
@@ -739,6 +785,7 @@ void v0(const Vector &x, Vector &v)
       case 5:
       {
          v = 0.0;
+         const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
          if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
          if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
@@ -749,6 +796,7 @@ void v0(const Vector &x, Vector &v)
       case 6:
       {
          v = 0.0;
+         const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
          if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
          if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
          if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
@@ -762,6 +810,9 @@ void v0(const Vector &x, Vector &v)
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
          break;
       }
+      case 8: v = 0.0; break;
+      case 9: v = 0.0; break;
+      case 10: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -831,6 +882,11 @@ double e0(const Vector &x)
          const double rho = rho0(x), gamma = gamma_func(x);
          return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
       }
+      case 8: return (x(0) < 0.5) ? 2.0 / rho0(x) / (gamma_func(x) - 1.0)
+                                  : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
+      case 9: return (x(0) < 0.7) ? (1.0e9+gamma_func(x)*6.0e8) / rho0(x) / (gamma_func(x) - 1.0)
+                                  : 1.0e5 / rho0(x) / (gamma_func(x) - 1.0);
+      case 10: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }

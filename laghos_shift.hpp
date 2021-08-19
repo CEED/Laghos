@@ -20,6 +20,7 @@
 
 //#include "../../mfem_shift/mfem.hpp"
 #include "mfem.hpp"
+#include "laghos_assembly.hpp"
 
 namespace mfem
 {
@@ -92,6 +93,37 @@ public:
 
    void SetShiftType(int type) { e_shift_type = type; }
 };
+
+class VelocityStabilizerLFI : public LinearFormIntegrator
+{
+private:
+   const ParGridFunction &v;CutFaceQuadratureData &cfqdata;
+
+public:
+   VelocityStabilizerLFI(const ParGridFunction &v_gf,
+                         CutFaceQuadratureData &cfqdata_)
+      : v(v_gf), cfqdata(cfqdata_) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el_1,
+                                       const FiniteElement &el_2,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
+};
+
+void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
+                 ParGridFunction &e, ParGridFunction &gamma);
+
+void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
+                  ParGridFunction &e, ParGridFunction &gamma);
+
+void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
+                      ParGridFunction &e, ParGridFunction &gamma);
 
 } // namespace hydrodynamics
 

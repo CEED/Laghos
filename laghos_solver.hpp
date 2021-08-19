@@ -95,17 +95,19 @@ protected:
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   const IntegrationRule *cfir;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
+   mutable CutFaceQuadratureData cfqdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force, FaceForce;
    mutable Vector one, v_rhs, e_rhs;
-   mutable LinearForm FaceForce_e;
+   mutable LinearForm FaceForce_e, FaceForce_v;
 
    int v_shift_type = 0, e_shift_type = 0;
 
