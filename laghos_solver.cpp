@@ -233,13 +233,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    Force.Assemble(0);
    Force.Finalize(0);
-
-   // Make a dummy assembly to figure out the sparsity.
-   FaceForce.Assemble(0);
-   FaceForce.Finalize(0);
-
-   Array<int> interface_attr(1);
-   interface_attr[0] = 77;
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -643,9 +636,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 void LagrangianHydroOperator::AssembleForceMatrix() const
 {
    Force = 0.0;
-   FaceForce = 0.0;
    Force.Assemble();
-   FaceForce.Assemble();
+   if (v_shift_type > 0 || e_shift_type > 0)
+   {
+      FaceForce = 0.0;
+      FaceForce.Assemble();
+   }
    //FaceForce_v.Assemble();
    forcemat_is_assembled = true;
 }

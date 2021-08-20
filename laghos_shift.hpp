@@ -57,10 +57,12 @@ private:
    int v_shift_type = 0;
    double scale = 1.0;
 
+   bool diffuse = false;
+
   public:
    FaceForceIntegrator(const ParGridFunction &p_gf,
-                       VectorCoefficient &d,
-                       Array<int> nordir_) : p(p_gf), dist(d), nordir(nordir_) { }
+                       VectorCoefficient &d, Array<int> nordir_)
+   : p(p_gf), dist(d), nordir(nordir_) { }
 
    // Goes over all H1 volumetric dofs in both cells around the interface.
    void AssembleFaceMatrix(const FiniteElement &trial_fe,

@@ -184,6 +184,13 @@ public:
       auto tfi = FaceForce_e.GetTLFI();
       auto en_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi)[0]);
       en_integ->SetShiftType(e_shift_type);
+
+      if (v_shift_type > 0 || e_shift_type > 0)
+      {
+         // Make a dummy assembly to figure out the sparsity.
+         FaceForce.Assemble(0);
+         FaceForce.Finalize(0);
+      }
    }
 
    // The density values, which are stored only at some quadrature points,

@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-#define EXTRACT_1D
+//#define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -559,35 +559,35 @@ int main(int argc, char *argv[])
    hydrodynamics::PrintCellNumbers(point_interface, H1FESpace);
    hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
    // By construction, the interface is in the left zone.
-   std::string vname, xname, pnameshiftl, pnameshiftr,
-               pnamefitl, pnamefitr, enamel, enamer, enameSL, enameSR;
+   std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
+               enameFL, enameFR, enameSL, enameSR;
 
    std::string prefix = (problem == 8) ? "sod_" : "airwater_";
-   vname = prefix + "v_" + std::to_string(zones) + ".out";
-   xname = prefix + "x_" + std::to_string(zones) + ".out";
-   enameSL = prefix + "e_" + std::to_string(zones) + "_shift_L.out";
-   enameSR = prefix + "e_" + std::to_string(zones) + "_shift_R.out";
-   enamel = prefix + "e_" + std::to_string(zones) + "_L.out";
-   enamer = prefix + "e_" + std::to_string(zones) + "_R.out";
-   pnameshiftl = prefix + "p_" + std::to_string(zones) + "_shift_L.out";
-   pnameshiftr = prefix + "p_" + std::to_string(zones) + "_shift_R.out";
-   pnamefitl = prefix + "p_" + std::to_string(zones) + "_fit_L.out";
-   pnamefitr = prefix + "p_" + std::to_string(zones) + "_fit_R.out";
+   vname = prefix + "v.out";
+   xname = prefix + "x.out";
+   enameFL = prefix + "e_fit_L.out";
+   enameFR = prefix + "e_fit_R.out";
+   enameSL = prefix + "e_shift_L.out";
+   enameSR = prefix + "e_shift_R.out";
+   pnameFL = prefix + "p_fit_L.out";
+   pnameFR = prefix + "p_fit_R.out";
+   pnameSL = prefix + "p_shift_L.out";
+   pnameSR = prefix + "p_shift_R.out";
 
    hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
    hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
-   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enamel);
-   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enamer);
+   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enameFL);
+   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enameFR);
    hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face, e_gf,
                                                   dist, enameSL);
    hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_R, point_face, e_gf,
                                                   dist, enameSR);
-   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, pe_gf, pnamefitl);
-   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, pe_gf, pnamefitr);
+   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, pe_gf, pnameFL);
+   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, pe_gf, pnameFR);
    hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, pe_gf,
-                                                  dist, pnameshiftl);
+                                                  dist, pnameSL);
    hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, pe_gf,
-                                                  dist, pnameshiftr);
+                                                  dist, pnameSR);
    v_extr.WriteValue(0.0);
    x_extr.WriteValue(0.0);
    if (v_shift_type == 0 && e_shift_type == 0)
