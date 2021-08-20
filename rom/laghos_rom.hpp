@@ -625,8 +625,7 @@ public:
 
     void writePDweights(const int id, const int window = 0) const;
 
-    double GetOffsetX(const int idx)
-    {
+    double GetOffsetX(const int idx) const {
         return (*initX)(idx);
     }
 
