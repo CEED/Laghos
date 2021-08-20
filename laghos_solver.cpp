@@ -216,7 +216,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // This must match the IntegrationRule used in VelocityStabilizerLFI
    cfir = &IntRules.Get(tr->GetGeometryType(), h1cut.GetOrder(0) + tr->OrderW());
    const int nqp_face = cfir->GetNPoints();
-   cfqdata.rho0DetJ0w.SetSize(pmesh->GetNumFaces()*2*nqp_face);
+   cfqdata.rho0DetJ0.SetSize(pmesh->GetNumFaces()*2*nqp_face);
    int fcount = 0;
    for (int f = 0; f < pmesh->GetNumFaces(); f++) {
        const int attr = pmesh->GetFace(f)->GetAttribute();
@@ -234,13 +234,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                ElementTransformation &Tr1 = *H1cut.GetElementTransformation(Elem1No);
                Tr1.SetIntPoint(&ip_e1);
                const double rho1 = rho0_gf.GetValue(Elem1No, ip_e1);
-               cfqdata.rho0DetJ0w(f*nqp_face*2 + q + 0*nqp_face) =
+               cfqdata.rho0DetJ0(f*nqp_face*2 + q + 0*nqp_face) =
                        Tr1.Weight() * rho1;
 
                ElementTransformation &Tr2 = *H1cut.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
                const double rho2 = rho0_gf.GetValue(Elem2No, ip_e2);
-               cfqdata.rho0DetJ0w(f*nqp_face*2 + q + 1*nqp_face) =
+               cfqdata.rho0DetJ0(f*nqp_face*2 + q + 1*nqp_face) =
                        Tr2.Weight() * rho2;
            }
        }
@@ -634,14 +634,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                Tr1.SetIntPoint(&ip_e1);
                const int idx1 = f*nqp_face*2 + q + 0*nqp_face,
                          idx2 = f*nqp_face*2 + q + 1*nqp_face;
-               const double rho1 = cfqdata.rho0DetJ0w(idx1)/Tr1.Weight();
+               const double rho1 = cfqdata.rho0DetJ0(idx1)/Tr1.Weight();
                const double gamma1 = gamma_gf(Elem1No);
                const double e1 = e.GetValue(Elem1No, ip_e1);
                cfqdata.rhocs(idx1) = rho1*sqrt(gamma1*(gamma1-1.0)*e1);
 
                ElementTransformation &Tr2 = *H1cut.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
-               const double rho2 = cfqdata.rho0DetJ0w(idx2)/Tr2.Weight();
+               const double rho2 = cfqdata.rho0DetJ0(idx2)/Tr2.Weight();
                const double gamma2 = gamma_gf(Elem2No);
                const double e2 = e.GetValue(Elem2No, ip_e2);
                cfqdata.rhocs(idx2) = rho2*sqrt(gamma2*(gamma2-1.0)*e2);

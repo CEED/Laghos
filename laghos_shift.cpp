@@ -343,6 +343,7 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
    Vector nor(dim), d_q1(dim), d_q2(dim),
           v1jump(dim), v2jump(dim), shape_v(dof_v),
           psi1jump(dim), psi2jump(dim);
+   Vector vx1jump(dim), vx2jump(dim), vy1jump(dim), vy2jump(dim);
 
    DenseTensor v_strain_e_1(dof_v, dim, dim), v_strain_e_2(dof_v, dim, dim);
    if (Trans.Elem2No > 0)
@@ -408,7 +409,34 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       }
       v_strain_q2.Transpose();
 
+      double alpha = 0.5*work.FNorm2();
+
       //VN1(i, j) = v1(i)*true_normal(j)
+      Vector vx1(dim), vy1(dim), vx2(dim), vy2(dim);
+      vx1 = 0.;
+      vx2 = 0.;
+      vy1 = 0.;
+      vy2 = 0.;
+      vx1(0) = v1(0);
+      vy1(1) = v1(1);
+      vx2(0) = v2(0);
+      vy2(1) = v2(1);
+
+      DenseMatrixFromVecVecT(vx1, true_normal, VN1);
+      Mult(work, VN1, IVN1);
+      IVN1.Mult(nor, vx1jump);
+      DenseMatrixFromVecVecT(vy1, true_normal, VN1);
+      Mult(work, VN1, IVN1);
+      IVN1.Mult(nor, vy1jump);
+
+      DenseMatrixFromVecVecT(vx2, true_normal, VN2);
+      Mult(work, VN2, IVN2);
+      IVN2.Mult(nor, vx2jump);
+      DenseMatrixFromVecVecT(vy2, true_normal, VN2);
+      Mult(work, VN2, IVN2);
+      IVN2.Mult(nor, vy2jump);
+
+
       DenseMatrixFromVecVecT(v1, true_normal, VN1);
       Mult(work, VN1, IVN1);
       IVN1.Mult(nor, v1jump);
@@ -418,9 +446,14 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       Mult(work, VN2, IVN2);
       IVN2.Mult(nor, v2jump);
 
-      v1jump -= v2jump; // v1jump -> [[ (I-n_i n_j)(v_i n_j+) ]]
+      //dvjum -> [[ (I-n_i n_j)(v_i n_j+) ]]
       Vector dvjump = v1jump;
              dvjump -= v2jump;
+
+      Vector dvxjump = vx1jump;
+             dvxjump -= vx2jump;
+      Vector dvyjump = vy1jump;
+             dvyjump -= vy2jump;
 
       const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
                 idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
@@ -428,10 +461,13 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
              rhocs2 = cfqdata.rhocs(idx2);
       double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
 
+//      dvxjump = dvjump;
+//      dvyjump = dvjump;
+
       // 1st element.
       {
          el_1.CalcShape(ip_e1, h1_shape);
-         double w1 = tau*ip_f.weight / nor.Norml2();
+         double w1 = alpha*tau*ip_f.weight / nor.Norml2();
          for (int j = 0; j < h1_shape.Size(); j++)
          {
              Vector psi(dim);
@@ -440,21 +476,21 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
              DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
              Mult(work, PsiN1, IPsiN1);
              IPsiN1.Mult(nor, psi1jump);
-             elvect(j) += w1 * (psi1jump*dvjump);
+             elvect(j) += w1 * (psi1jump*dvxjump);
 
              psi = 0.;
              psi(1) = h1_shape(j);
              DenseMatrixFromVecVecT(psi, true_normal, PsiN1);
              Mult(work, PsiN1, IPsiN1);
              IPsiN1.Mult(nor, psi1jump);
-             elvect(j + h1dofs_cnt) += w1 * (psi1jump*dvjump);
+             elvect(j + h1dofs_cnt) += w1 * (psi1jump*dvyjump);
          }
       }
 
       // 2nd element
       {
          el_2.CalcShape(ip_e2, h1_shape);
-         double w2 = tau*ip_f.weight / nor.Norml2();
+         double w2 = alpha*tau*ip_f.weight / nor.Norml2();
          for (int j = 0; j < h1_shape.Size(); j++)
          {
              Vector psi(dim);
@@ -463,18 +499,18 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
              DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
              Mult(work, PsiN2, IPsiN2);
              IPsiN2.Mult(nor, psi2jump);
-             elvect(h1dofs_cnt * dim + j) -= w2 * (psi2jump*dvjump);
+             elvect(h1dofs_cnt * dim + j) -= w2 * (psi2jump*dvxjump);
 
              psi = 0.;
              psi(1) = h1_shape(j);
              DenseMatrixFromVecVecT(psi, true_normal, PsiN2);
              Mult(work, PsiN2, IPsiN2);
              IPsiN2.Mult(nor, psi2jump);
-             elvect(h1dofs_cnt * dim + j + h1dofs_cnt) -= w2 * (psi2jump*dvjump);
+             elvect(h1dofs_cnt * dim + j + h1dofs_cnt) -= w2 * (psi2jump*dvyjump);
          }
       }
    }
-   elvect *= 0.1;
+   //elvect *= 0.0;
 }
 
 void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1,

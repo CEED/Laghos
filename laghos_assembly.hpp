@@ -69,11 +69,11 @@ struct CutFaceQuadratureData
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
-   Vector rho0DetJ0w;
+   Vector rho0DetJ0;
    Vector rhocs;
 
    CutFaceQuadratureData()
-      : rho0DetJ0w(), rhocs() { }
+      : rho0DetJ0(), rhocs() { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
