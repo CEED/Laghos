@@ -96,10 +96,12 @@ protected:
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   const IntegrationRule *cfir;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
+   mutable CutFaceQuadratureData cfqdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
@@ -144,7 +146,7 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf, ParGridFunction &v_gf,
-                           ParGridFunction &gamma_gf,
+                           ParGridFunction &gamma,
                            VectorCoefficient &dist_coeff,
                            PressureFunction &pressure,
                            const int source,

@@ -18,6 +18,7 @@
 #define MFEM_LAGHOS_SHIFT
 
 #include "mfem.hpp"
+#include "laghos_assembly.hpp"
 
 namespace mfem
 {
@@ -50,19 +51,20 @@ class FaceForceIntegrator : public BilinearFormIntegrator
 {
 private:
    Vector h1_shape_face, h1_shape, l2_shape;
-   const ParGridFunction &p;
+   const ParGridFunction &p, &gamma;
+   const ParGridFunction *v = nullptr;
    VectorCoefficient &dist;
-   Array<int> nordir;
 
    int v_shift_type = 0;
    double scale = 1.0;
 
    bool diffuse = false;
+   CutFaceQuadratureData &qdata;
 
   public:
-   FaceForceIntegrator(const ParGridFunction &p_gf,
-                       VectorCoefficient &d, Array<int> nordir_)
-   : p(p_gf), dist(d), nordir(nordir_) { }
+   FaceForceIntegrator(const ParGridFunction &p_gf, const ParGridFunction &g_gf,
+                       VectorCoefficient &d, CutFaceQuadratureData &cfqdata)
+   : p(p_gf), gamma(g_gf), dist(d), qdata(cfqdata) { }
 
    // Goes over all H1 volumetric dofs in both cells around the interface.
    void AssembleFaceMatrix(const FiniteElement &trial_fe,
@@ -79,6 +81,9 @@ private:
 
    void SetShiftType(int type) { v_shift_type = type; }
    void SetScale(double s) { scale = s; }
+
+   void SetVelocity(const ParGridFunction &vel) { v = &vel; }
+   void UnsetVelocity() { v = nullptr; }
 };
 
 class EnergyInterfaceIntegrator : public LinearFormIntegrator

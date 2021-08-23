@@ -184,8 +184,12 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                                              FaceElementTransformations &Trans,
                                              DenseMatrix &elmat)
 {
-   MFEM_VERIFY(p.ParFESpace()->GetNRanks() == 1,
-               "Implemented only in serial.");
+   MFEM_VERIFY(p.ParFESpace()->GetNRanks() == 1, "Implemented only in serial.");
+
+   if (diffuse == true)
+   {
+      MFEM_VERIFY(v != nullptr, "Velocity pointer has not been set!");
+   }
 
    const int h1dofs_cnt = trial_fe.GetDof();
    const int l2dofs_cnt = test_fe.GetDof();
@@ -206,10 +210,8 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    h1_shape.SetSize(h1dofs_cnt);
    l2_shape.SetSize(l2dofs_cnt);
 
-   const int ir_order =
-      trial_fe.GetOrder() + test_fe.GetOrder() + Trans.OrderW();
-   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
-   const int nqp_face = ir->GetNPoints();
+   MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
+   const int nqp_face = IntRule->GetNPoints();
 
    // grad_p at all DOFs of the pressure FE space, on both sides.
    const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
@@ -223,13 +225,13 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
 
    Vector nor(dim);
 
-   Vector p_grad_q1(dim), d_q1(dim), shape_p1(dof_p), grad_shape_h1(dim);
+   Vector p_grad_q1(dim), d_q1(dim), shape_p1(dof_p);
    Vector p_grad_q2(dim), d_q2(dim), shape_p2(dof_p);
-   DenseMatrix h1_grads(h1dofs_cnt, dim);
-   for (int q = 0; q  < nqp_face; q++)
+   DenseMatrix h1_grads(h1dofs_cnt, dim), grad_v_q1, grad_v_q2;
+   for (int q = 0; q < nqp_face; q++)
    {
       // Set the integration point in the face and the neighboring elements
-      const IntegrationPoint &ip_f = ir->IntPoint(q);
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
       Trans.SetAllIntPoints(&ip_f);
 
       // Access the neighboring elements' integration points
@@ -246,17 +248,36 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       else { CalcOrtho(Trans.Jacobian(), nor); }
       nor *= ip_f.weight;
 
+      // Compute el1 quantities.
       el_p.CalcShape(ip_e1, shape_p1);
       p_grad_e_1.MultTranspose(shape_p1, p_grad_q1);
-      dist.Eval(d_q1, Trans.GetElement1Transformation(), ip_e1);
+      ElementTransformation &Trans_el1 = Trans.GetElement1Transformation();
+      Trans_el1.SetIntPoint(&ip_e1);
+      dist.Eval(d_q1, Trans_el1, ip_e1);
       const double grad_p_d1 = d_q1 * p_grad_q1;
-      const double p1 = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
+      const double p1 = p.GetValue(Trans_el1, ip_e1);
+      const double rho1 =
+            qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
+            Trans_el1.Weight();
+      const double cs1 = sqrt(gamma(Trans.Elem1No) * p1 / rho1);
+      if (diffuse) { v->GetVectorGradient(Trans_el1, grad_v_q1); }
 
+      // Compute el2 quantities.
       el_p.CalcShape(ip_e2, shape_p2);
       p_grad_e_2.MultTranspose(shape_p2, p_grad_q2);
-      dist.Eval(d_q2, Trans.GetElement2Transformation(), ip_e2);
+      ElementTransformation &Trans_el2 = Trans.GetElement2Transformation();
+      Trans_el2.SetIntPoint(&ip_e2);
+      dist.Eval(d_q2, Trans_el2, ip_e2);
       const double grad_p_d2 = d_q2 * p_grad_q2;
-      const double p2 = p.GetValue(Trans.GetElement2Transformation(), ip_e2);
+      const double p2 = p.GetValue(Trans_el2, ip_e2);
+      const double rho2 =
+            qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
+            Trans_el2.Weight();
+      const double cs2 = sqrt(gamma(Trans.Elem2No) * p2 / rho2);
+      if (diffuse) { v->GetVectorGradient(Trans_el1, grad_v_q2); }
+
+      const double rho_cs_avg = 2.0 * rho1 * cs1 * rho2 * cs2 /
+                                      (rho1 * cs1 + rho2 * cs2);
 
       // 1st element.
       {
@@ -265,7 +286,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          test_fe.CalcShape(ip_e1, l2_shape);
 
          // Compute dist * grad_psi in the first element
-         trial_fe.CalcPhysDShape(Trans.GetElement1Transformation(), h1_grads);
+         trial_fe.CalcPhysDShape(Trans_el1, h1_grads);
 
          // TODO reorder/optimize loops.
          for (int i = 0; i < l2dofs_cnt; i++)
@@ -276,6 +297,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                if (v_shift_type == 2 || v_shift_type == 3 ||
                    v_shift_type == 4 || v_shift_type == 5)
                {
+                  Vector grad_shape_h1;
                   h1_grads.GetRow(j, grad_shape_h1);
                   h1_shape_part = d_q1 * grad_shape_h1;
                }
@@ -301,6 +323,20 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                {
                   elmat(i, d*h1dofs_cnt + j)
                         += p_shift_part * h1_shape_part * l2_shape(i) * nor(d);
+
+                  double diffuse_term = 0.0;
+                  if (diffuse)
+                  {
+                     Vector grad_v_d_q1, grad_v_d_q2, grad_shape_h1;
+                     grad_v_q1.GetRow(d, grad_v_d_q1);
+                     grad_v_q2.GetRow(d, grad_v_d_q2);
+                     h1_grads.GetRow(j, grad_shape_h1);
+                     h1_shape_part = d_q1 * grad_shape_h1;
+                     diffuse_term = rho_cs_avg * h1_shape_part *
+                                    (d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
+
+                  }
+                  elmat(i, d*h1dofs_cnt + j) += diffuse_term;
                }
             }
          }
@@ -313,7 +349,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          test_fe.CalcShape(ip_e2, l2_shape);
 
          // Compute dist * grad_psi in the second element
-         trial_fe.CalcPhysDShape(Trans.GetElement2Transformation(), h1_grads);
+         trial_fe.CalcPhysDShape(Trans_el2, h1_grads);
 
          // TODO reorder/optimize loops.
          for (int i = 0; i < l2dofs_cnt; i++)
@@ -324,6 +360,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                if (v_shift_type == 2 || v_shift_type == 3 ||
                    v_shift_type == 4 || v_shift_type == 5)
                {
+                  Vector grad_shape_h1;
                   h1_grads.GetRow(j, grad_shape_h1);
                   h1_shape_part = d_q2 * grad_shape_h1;
                }
@@ -346,6 +383,19 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                {
                   elmat(l2dofs_cnt + i, dim*h1dofs_cnt + d*h1dofs_cnt + j)
                         -= p_shift_part * h1_shape_part * l2_shape(i) * nor(d);
+
+                  double diffuse_term = 0.0;
+                  if (diffuse)
+                  {
+                     Vector grad_v_d_q1, grad_v_d_q2, grad_shape_h1;
+                     grad_v_q1.GetRow(d, grad_v_d_q1);
+                     grad_v_q2.GetRow(d, grad_v_d_q2);
+                     h1_grads.GetRow(j, grad_shape_h1);
+                     h1_shape_part = d_q1 * grad_shape_h1;
+                     diffuse_term = rho_cs_avg * h1_shape_part *
+                                    (d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
+                  }
+                  elmat(i, d*h1dofs_cnt + j) -= diffuse_term;
                }
             }
          }

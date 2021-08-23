@@ -87,7 +87,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
                                                  ParGridFunction &v_gf,
-                                                 ParGridFunction &gamma_gf,
+                                                 ParGridFunction &gamma,
                                                  VectorCoefficient &dist_coeff,
                                                  PressureFunction &pressure,
                                                  const int source,
@@ -115,15 +115,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    use_viscosity(visc),
    use_vorticity(vort),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
-   gamma_gf(gamma_gf),
+   gamma_gf(gamma),
    p_func(pressure),
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   cfir(NULL),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
+   cfqdata(),
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&H1, &L2), FaceForce(&H1, &L2), FaceForce_e(&L2),
@@ -195,44 +197,60 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ForceIntegrator *fi = new ForceIntegrator(qdata);
    fi->SetIntRule(&ir);
    Force.AddDomainIntegrator(fi);
+   // Make a dummy assembly to figure out the sparsity.
+   Force.Assemble(0);
+   Force.Finalize(0);
 
-   H1.ExchangeFaceNbrData();
-   Array<int> nor_dir_mask(H1.GetParMesh()->GetNumFaces());
-   nor_dir_mask = 1;
-   /*
-   for (int i = 0; i < H1.GetParMesh()->GetNSharedFaces(); i++) {
-      FaceElementTransformations *T = H1.GetParMesh()->GetSharedFaceTransformations(i);
-      int Elem1 = T->Elem1No;
-      int Elem2 = T->Elem2No - H1.GetParMesh()->GetNE();
-      int faceno = H1.GetParMesh()->GetSharedFace(i);
-      const HYPRE_Int *face_nbr_glob_ldof = H1.GetFaceNbrGlobalDofMap();
-      HYPRE_Int ldof_offset = H1.GetMyDofOffset();
-      Array<int> vdofs;
-      Array<int> nbr_vdofs;
-      H1.GetFaceNbrElementVDofs(Elem2, nbr_vdofs);
-      H1.GetElementVDofs(Elem1, vdofs);
-      int globdof1 = vdofs[0]+ldof_offset;
-      int globdof2 = face_nbr_glob_ldof[nbr_vdofs[0]];
-      if (globdof1 < globdof2) {
-          nor_dir_mask[faceno] = -1;
-      }
+   // Get rho0detJ0 for integration points on marked faces.
+   FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
+   cfir = &IntRules.Get(tr->GetGeometryType(),
+                        H1.GetOrder(0) + L2.GetOrder(0) + tr->OrderW());
+   const int nqp_face = cfir->GetNPoints();
+   const int nfaces = pmesh->GetNumFaces();
+   cfqdata.rho0DetJ0.SetSize(nfaces * 2 * nqp_face);
+   cfqdata.rho0DetJ0 = 0.0;
+   for (int f = 0; f < nfaces; f++)
+   {
+       const int attr = pmesh->GetFace(f)->GetAttribute();
+       if (attr == 77)
+       {
+           tr = pmesh->GetFaceElementTransformations(f);
+
+           const int Elem1No = tr->Elem1No,
+                     Elem2No = tr->Elem2No;
+           for (int q = 0; q < nqp_face; q++)
+           {
+               const IntegrationPoint &ip_f = cfir->IntPoint(q);
+               tr->SetAllIntPoints(&ip_f);
+               const IntegrationPoint &ip_e1 = tr->GetElement1IntPoint();
+               const IntegrationPoint &ip_e2 = tr->GetElement2IntPoint();
+
+               ElementTransformation &Tr1 = *H1.GetElementTransformation(Elem1No);
+               Tr1.SetIntPoint(&ip_e1);
+               const double rho1 = rho0_gf.GetValue(Elem1No, ip_e1);
+               cfqdata.rho0DetJ0(f*nqp_face*2 + 0*nqp_face + q ) =
+                       Tr1.Weight() * rho1;
+
+               ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
+               Tr2.SetIntPoint(&ip_e2);
+               const double rho2 = rho0_gf.GetValue(Elem2No, ip_e2);
+               cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
+                       Tr2.Weight() * rho2;
+           }
+       }
    }
-   */
 
    // Interface forces.
-   auto *ffi = new FaceForceIntegrator(p_func.GetPressure(),
-                                       dist_coeff, nor_dir_mask);
+   auto *ffi = new FaceForceIntegrator(p_func.GetPressure(), gamma_gf,
+                                       dist_coeff, cfqdata);
+   ffi->SetIntRule(cfir);
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
    auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
-                                            v_gf, dist_coeff, dt);
+                                             v_gf, dist_coeff, dt);
    Array<int> attr;
    FaceForce_e.AddTraceFaceIntegrator(efi, attr);
-
-   // Make a dummy assembly to figure out the sparsity.
-   Force.Assemble(0);
-   Force.Finalize(0);
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -254,9 +272,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
 
+   auto tfi_v = FaceForce.GetFBFI();
+   auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
+   v_integ->SetVelocity(v);
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
+   v_integ->UnsetVelocity();
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
