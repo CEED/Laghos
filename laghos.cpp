@@ -232,7 +232,9 @@ int main(int argc, char *argv[])
    bool mix_mass = false;
    int v_shift_type = 1;
    int e_shift_type = 1;
-   double shift_scale = 1.0;
+   double v_shift_scale = 1.0;
+   double e_shift_scale = 1.0;
+   double v_stability_scale = 0.05;
 
 
    // Assign material indices to the element attributes.
@@ -421,6 +423,7 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
+   double dt;
 
    PressureFunction p_gf(*pmesh, p_space, rho0_gf, order_e, gamma_gf);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
@@ -431,9 +434,10 @@ int main(int argc, char *argv[])
                                                 source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter,
-                                                order_q);
+                                                order_q, &dt);
 
-   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_scale);
+   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, v_shift_scale,
+                            e_shift_scale, v_stability_scale);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";
@@ -502,7 +506,8 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(hydro);
    hydro.ResetTimeStepEstimate();
-   double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
+   double t = 0.0, t_old;
+   dt = hydro.GetTimeStepEstimate(S);
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);

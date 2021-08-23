@@ -333,7 +333,7 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
    Vector h1_shape(h1dofs_cnt);
 
    const int ir_order =
-      el_1.GetOrder() + Trans.OrderW();
+      2*el_1.GetOrder() + Trans.OrderW();
    const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
    const int nqp_face = ir->GetNPoints();
 
@@ -409,7 +409,12 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       }
       v_strain_q2.Transpose();
 
-      double alpha = 0.5*work.FNorm2();
+      //when penalize normal is true, we penalize both the tangential and
+      //normal components. We get rid of (I-n_in_j) terms from the
+      //formulation
+      bool penalize_normal = false;
+      double alpha = scale*work.FNorm2();
+      if (penalize_normal) { alpha = scale; }
 
       //VN1(i, j) = v1(i)*true_normal(j)
       Vector vx1(dim), vy1(dim), vx2(dim), vy2(dim);
@@ -424,18 +429,21 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
 
       DenseMatrixFromVecVecT(vx1, true_normal, VN1);
       Mult(work, VN1, IVN1);
+      if (penalize_normal) { IVN1 = VN1; }
       IVN1.Mult(nor, vx1jump);
       DenseMatrixFromVecVecT(vy1, true_normal, VN1);
       Mult(work, VN1, IVN1);
+      if (penalize_normal) { IVN1 = VN1; }
       IVN1.Mult(nor, vy1jump);
 
       DenseMatrixFromVecVecT(vx2, true_normal, VN2);
       Mult(work, VN2, IVN2);
+      if (penalize_normal) { IVN2 = VN2; }
       IVN2.Mult(nor, vx2jump);
       DenseMatrixFromVecVecT(vy2, true_normal, VN2);
       Mult(work, VN2, IVN2);
+      if (penalize_normal) { IVN2 = VN2; }
       IVN2.Mult(nor, vy2jump);
-
 
       DenseMatrixFromVecVecT(v1, true_normal, VN1);
       Mult(work, VN1, IVN1);
@@ -458,8 +466,11 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
                 idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
       double rhocs1 = cfqdata.rhocs(idx1),
-             rhocs2 = cfqdata.rhocs(idx2);
-      double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
+             rhocs2 = cfqdata.rhocs(idx2),
+             rhohdt1 = cfqdata.rho(idx1)*cfqdata.h(idx1)/(*dt),
+             rhohdt2 = cfqdata.rho(idx2)*cfqdata.h(idx2)/(*dt);
+//      double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
+      double tau = 2.0*rhohdt1*rhohdt2/(rhohdt1 + rhohdt2);
 
 //      dvxjump = dvjump;
 //      dvyjump = dvjump;
@@ -468,6 +479,8 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       {
          el_1.CalcShape(ip_e1, h1_shape);
          double w1 = alpha*tau*ip_f.weight / nor.Norml2();
+         //We divide by nor.Norml2() here because we have included it twice
+         //through the jump terms
          for (int j = 0; j < h1_shape.Size(); j++)
          {
              Vector psi(dim);

@@ -71,9 +71,17 @@ struct CutFaceQuadratureData
    // conservation.
    Vector rho0DetJ0;
    Vector rhocs;
+   // Initial length scale. This represents a notion of local mesh size.
+   // We assume that all initial zones have similar size.
+   Vector h;
+   // Reference to physical Jacobian for the initial mesh.
+   // These are computed only at time zero and stored here.
+   DenseTensor Jac0inv;
+   Vector rho;
+
 
    CutFaceQuadratureData()
-      : rho0DetJ0(), rhocs() { }
+      : rho0DetJ0(), rhocs(), h(), Jac0inv(), rho() { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each

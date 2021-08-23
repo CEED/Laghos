@@ -72,12 +72,13 @@ private:
 class EnergyInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
-   const ParGridFunction &p, &v;
+   const ParGridFunction &p; ParGridFunction &v;
    int e_shift_type = 0;
+   double scale = 1.0;
 
 public:
    EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
-                             const ParGridFunction &v_gf)
+                             ParGridFunction &v_gf)
       : p(p_gf), v(v_gf) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
@@ -91,18 +92,25 @@ public:
                                        FaceElementTransformations &Trans,
                                        Vector &elvect);
 
+   void SetVelocityReference(const ParGridFunction &v_gf) { v = v_gf; }
    void SetShiftType(int type) { e_shift_type = type; }
+   void SetScale(double s) { scale = s; }
+
 };
 
 class VelocityStabilizerLFI : public LinearFormIntegrator
 {
 private:
-   const ParGridFunction &v;CutFaceQuadratureData &cfqdata;
+   ParGridFunction &v;
+   CutFaceQuadratureData &cfqdata;
+   double scale = 1.0; //\beta in Nabil's notes
+   double *dt;
 
 public:
-   VelocityStabilizerLFI(const ParGridFunction &v_gf,
-                         CutFaceQuadratureData &cfqdata_)
-      : v(v_gf), cfqdata(cfqdata_) { }
+   VelocityStabilizerLFI(ParGridFunction &v_gf,
+                         CutFaceQuadratureData &cfqdata_,
+                         double *dt_)
+      : v(v_gf), cfqdata(cfqdata_), dt(dt_) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -114,6 +122,8 @@ public:
                                        const FiniteElement &el_2,
                                        FaceElementTransformations &Trans,
                                        Vector &elvect);
+   void SetVelocityReference(const ParGridFunction &v_gf) { v = v_gf; }
+   void SetScale(double s) { scale = s; }
 };
 
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
