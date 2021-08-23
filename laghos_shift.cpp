@@ -215,7 +215,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    l2_shape.SetSize(l2dofs_cnt);
 
    const int ir_order =
-      trial_fe.GetOrder() +test_fe.GetOrder() + Trans.OrderW();
+      2*trial_fe.GetOrder() + 2*test_fe.GetOrder() + Trans.OrderW();
    const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
    const int nqp_face = ir->GetNPoints();
 
@@ -463,14 +463,22 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       Vector dvyjump = vy1jump;
              dvyjump -= vy2jump;
 
+
       const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
                 idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
+      cfqdata.h(idx1) = Trans.GetElement1Transformation().Weight()/nor.Norml2();
+      cfqdata.h(idx2) = Trans.GetElement2Transformation().Weight()/nor.Norml2();
+
       double rhocs1 = cfqdata.rhocs(idx1),
              rhocs2 = cfqdata.rhocs(idx2),
              rhohdt1 = cfqdata.rho(idx1)*cfqdata.h(idx1)/(*dt),
              rhohdt2 = cfqdata.rho(idx2)*cfqdata.h(idx2)/(*dt);
+      double rhocshdt1 = cfqdata.rhocs(idx1)*cfqdata.rhocs(idx1)*(*dt)/cfqdata.h(idx1);
+      double rhocshdt2 = cfqdata.rhocs(idx2)*cfqdata.rhocs(idx2)*(*dt)/cfqdata.h(idx2);
 //      double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
       double tau = 2.0*rhohdt1*rhohdt2/(rhohdt1 + rhohdt2);
+//      double tau = 2.0*rhocshdt1*rhocshdt2/(rhocshdt1 + rhocshdt2);
+
 
 //      dvxjump = dvjump;
 //      dvyjump = dvjump;
@@ -547,7 +555,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1
    Vector l2_shape(l2dofs_cnt);
 
    const int ir_order =
-      el_1.GetOrder() + Trans.OrderW();
+      2*el_1.GetOrder() + Trans.OrderW();
    const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
    const int nqp_face = ir->GetNPoints();
 
@@ -667,6 +675,107 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1
          l2_shape_p_avg *= ip_f.weight;
          Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
          elvect_temp.Add(-1., l2_shape_p_avg);
+      }
+   }
+}
+
+
+void EnergyStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
+                                                 const FiniteElement &el_2,
+                                                 FaceElementTransformations &Trans,
+                                                 Vector &elvect)
+{
+   const int l2dofs_cnt = el_1.GetDof();
+   const int dim = el_1.GetDim();
+
+   elvect.SetSize(l2dofs_cnt * 2);
+   if (Trans.Elem2No < 0)
+   {
+      elvect.SetSize(l2dofs_cnt);
+   }
+   elvect = 0.0;
+
+   // Must be done after elvect.SetSize().
+   if (Trans.Attribute != 77) { return; }
+
+   Vector l2_shape(l2dofs_cnt);
+
+   const int ir_order =
+      2*el_1.GetOrder() + Trans.OrderW();
+   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
+   const int nqp_face = ir->GetNPoints();
+
+   // grad_p at all quad points, on both sides.
+   const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
+   const int dof_p = el_p.GetDof();
+
+   Vector nor(dim);
+   Vector shape_p(dof_p);
+
+   for (int q = 0; q  < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
+
+      // Set the integration point in the face and the neighboring elements
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+      const IntegrationPoint &ip_e2 = Trans.GetElement2IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0 ) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+
+      // 1st element stuff.
+      el_p.CalcShape(ip_e1, shape_p);
+      const double p1 = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
+
+      // 2nd element stuff.
+      el_p.CalcShape(ip_e2, shape_p);
+      const double p2 = p.GetValue(Trans.GetElement2Transformation(), ip_e2);
+
+      const double h1 = Trans.GetElement1Transformation().Weight()/nor.Norml2();
+      const double h2 = Trans.GetElement2Transformation().Weight()/nor.Norml2();
+
+      double hdt1 = h1/(*dt),
+             hdt2 = h2/(*dt);
+      double tau = scale*2.0*hdt1*hdt2/(hdt1 + hdt2);
+
+      double p_jump = p1-p2;
+
+      // + <tau[[p]], [[phi]]>
+      // 1st element.
+      {
+         // L2 shape functions in the 1st element.
+         el_1.CalcShape(ip_e1, l2_shape);
+
+         Vector l2_shape_jump = l2_shape;
+         l2_shape_jump *= p_jump;
+         l2_shape_jump *= ip_f.weight;
+         l2_shape_jump *= nor.Norml2();
+         l2_shape_jump *= tau;
+         Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
+         elvect_temp.Add(1., l2_shape_jump);
+      }
+
+      // 2nd element
+      {
+         el_2.CalcShape(ip_e2, l2_shape);
+
+         Vector l2_shape_jump = l2_shape;
+         l2_shape_jump *= -1.0;
+         l2_shape_jump *= p_jump;
+         l2_shape_jump *= ip_f.weight;
+         l2_shape_jump *= nor.Norml2();
+         l2_shape_jump *= tau;
+         Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
+         elvect_temp.Add(1., l2_shape_jump);
       }
    }
 }

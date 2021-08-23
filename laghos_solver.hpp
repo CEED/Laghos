@@ -107,7 +107,7 @@ protected:
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force, FaceForce;
    mutable Vector one, v_rhs, e_rhs;
-   mutable LinearForm FaceForce_e, FaceForce_v;
+   mutable LinearForm FaceForce_e, FaceForce_v, FaceForce_es;
 
    int v_shift_type = 0, e_shift_type = 0;
 
@@ -140,7 +140,8 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter,
-                           const int order_q);
+                           const int order_q,
+                           double *dt);
    ~LagrangianHydroOperator() { }
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -155,7 +156,9 @@ public:
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
 
-   void SetShiftingOptions(int problem, int v_shift, int e_shift, double scale)
+   void SetShiftingOptions(int problem, int v_shift, int e_shift,
+                           double v_scale, double e_scale,
+                           double v_stability_scale, double e_stability_scale)
    {
       p_func.SetProblem(problem);
       v_shift_type = v_shift;
@@ -163,11 +166,20 @@ public:
 
       auto tfi_v = FaceForce.GetFBFI();
       auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
-      v_integ->SetScale(scale);
+      v_integ->SetScale(v_scale);
 
       auto tfi = FaceForce_e.GetTLFI();
       auto en_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi)[0]);
       en_integ->SetShiftType(e_shift_type);
+      en_integ->SetScale(e_scale);
+
+      auto tfi_vs = FaceForce_v.GetTLFI();
+      auto vs_integ = dynamic_cast<VelocityStabilizerLFI *>((*tfi_vs)[0]);
+      vs_integ->SetScale(v_stability_scale);
+
+      auto tfi_es = FaceForce_es.GetTLFI();
+      auto es_integ = dynamic_cast<EnergyStabilizerLFI *>((*tfi_es)[0]);
+      es_integ->SetScale(e_stability_scale);
    }
 
    // The density values, which are stored only at some quadrature points,

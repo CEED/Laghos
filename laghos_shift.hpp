@@ -126,6 +126,33 @@ public:
    void SetScale(double s) { scale = s; }
 };
 
+class EnergyStabilizerLFI : public LinearFormIntegrator
+{
+private:
+   ParGridFunction &p;
+   CutFaceQuadratureData &cfqdata;
+   double scale = 1.0;
+   double *dt;
+
+public:
+   EnergyStabilizerLFI(ParGridFunction &p_gf,
+                       CutFaceQuadratureData &cfqdata_,
+                       double *dt_)
+      : p(p_gf), cfqdata(cfqdata_), dt(dt_) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el_1,
+                                       const FiniteElement &el_2,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
+   void SetScale(double s) { scale = s; }
+};
+
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
                  ParGridFunction &e, ParGridFunction &gamma);
 

@@ -235,6 +235,7 @@ int main(int argc, char *argv[])
    double v_shift_scale = 1.0;
    double e_shift_scale = 1.0;
    double v_stability_scale = 0.05;
+   double e_stability_scale = 0.5;
 
 
    // Assign material indices to the element attributes.
@@ -437,7 +438,7 @@ int main(int argc, char *argv[])
                                                 order_q, &dt);
 
    hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, v_shift_scale,
-                            e_shift_scale, v_stability_scale);
+                            e_shift_scale, v_stability_scale, e_stability_scale);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";

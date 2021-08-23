@@ -92,7 +92,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const bool vort,
                                                  const double cgt,
                                                  const int cgiter,
-                                                 const int oq) :
+                                                 const int oq,
+                                                 double *dt) :
    TimeDependentOperator(size),
    H1(h1), H1cut(h1cut), L2(l2),
    pmesh(H1.GetParMesh()),
@@ -122,7 +123,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1cut),
-   FaceForce(&H1cut, &L2), FaceForce_e(&L2), FaceForce_v(&H1cut),
+   FaceForce(&H1cut, &L2), FaceForce_e(&L2), FaceForce_v(&H1cut), FaceForce_es(&L2),
    one(L2Vsize),
    v_rhs(H1cutVsize),
    e_rhs(L2Vsize)
@@ -193,12 +194,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
-   auto *vfis = new VelocityStabilizerLFI(v_gf, cfqdata);
+   auto *vfis = new VelocityStabilizerLFI(v_gf, cfqdata, dt);
    FaceForce_v.AddTraceFaceIntegrator(vfis, attr);
 
    auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
                                              v_gf);
    FaceForce_e.AddTraceFaceIntegrator(efi, attr);
+
+
+   auto *efis = new EnergyStabilizerLFI(p_func.GetPressure(), cfqdata, dt);
+   FaceForce_es.AddTraceFaceIntegrator(efis, attr);
 
    ForceIntegrator *fi = new ForceIntegrator(qdata);
    fi->SetIntRule(&ir);
@@ -214,9 +219,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Get rho0detJ0 for integration points on cut faces
    FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
    // This must match the IntegrationRule used in VelocityStabilizerLFI
-   cfir = &IntRules.Get(tr->GetGeometryType(), h1cut.GetOrder(0) + tr->OrderW());
+   cfir = &IntRules.Get(tr->GetGeometryType(), 2*h1cut.GetOrder(0) + tr->OrderW());
    const int nqp_face = cfir->GetNPoints();
    cfqdata.rho0DetJ0.SetSize(pmesh->GetNumFaces()*2*nqp_face);
+   cfqdata.Jac0inv.SetSize(dim, dim, pmesh->GetNumFaces()*2*nqp_face);
    int fcount = 0;
    for (int f = 0; f < pmesh->GetNumFaces(); f++) {
        const int attr = pmesh->GetFace(f)->GetAttribute();
@@ -234,14 +240,20 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                ElementTransformation &Tr1 = *H1cut.GetElementTransformation(Elem1No);
                Tr1.SetIntPoint(&ip_e1);
                const double rho1 = rho0_gf.GetValue(Elem1No, ip_e1);
-               cfqdata.rho0DetJ0(f*nqp_face*2 + q + 0*nqp_face) =
-                       Tr1.Weight() * rho1;
+               const int idx1 = f*nqp_face*2 + q + 0*nqp_face;
+               cfqdata.rho0DetJ0(idx1) = Tr1.Weight() * rho1;
 
                ElementTransformation &Tr2 = *H1cut.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
                const double rho2 = rho0_gf.GetValue(Elem2No, ip_e2);
-               cfqdata.rho0DetJ0(f*nqp_face*2 + q + 1*nqp_face) =
-                       Tr2.Weight() * rho2;
+               const int idx2 = f*nqp_face*2 + q + 1*nqp_face;
+               cfqdata.rho0DetJ0(idx2) = Tr2.Weight() * rho2;
+
+               DenseMatrixInverse Jinv1(Tr1.Jacobian());
+               Jinv1.GetInverseMatrix(cfqdata.Jac0inv(idx1));
+
+               DenseMatrixInverse Jinv2(Tr2.Jacobian());
+               Jinv2.GetInverseMatrix(cfqdata.Jac0inv(idx2));
            }
        }
    }
@@ -262,6 +274,16 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    hydrodynamics::MeshUpdate(dx, v);
+   //update pointer to FaceForce_v, FaceForce_e
+   auto tfi = FaceForce_e.GetTLFI();
+   auto en_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi)[0]);
+   en_integ->SetVelocityReference(v);
+
+   auto tfi_vs = FaceForce_v.GetTLFI();
+   auto vs_integ = dynamic_cast<VelocityStabilizerLFI *>((*tfi_vs)[0]);
+   vs_integ->SetVelocityReference(v);
+
+   //
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
@@ -347,6 +369,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 
    if (e_shift_type >= 1) {
        FaceForce_e.Assemble(); e_rhs -= FaceForce_e;
+       FaceForce_es.Assemble(); e_rhs -= FaceForce_es;
    }
 
    Array<int> l2dofs;
@@ -616,6 +639,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // Get rho0detJ0 for integration points on cut faces
    const int nqp_face = cfir->GetNPoints();
    cfqdata.rhocs.SetSize(pmesh->GetNumFaces()*2*nqp_face);
+   cfqdata.h.SetSize(pmesh->GetNumFaces()*2*nqp_face);
+   cfqdata.rho.SetSize(pmesh->GetNumFaces()*2*nqp_face);
    int fcount = 0;
    for (int f = 0; f < pmesh->GetNumFaces(); f++) {
        const int attr = pmesh->GetFace(f)->GetAttribute();
@@ -638,6 +663,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const double gamma1 = gamma_gf(Elem1No);
                const double e1 = e.GetValue(Elem1No, ip_e1);
                cfqdata.rhocs(idx1) = rho1*sqrt(gamma1*(gamma1-1.0)*e1);
+               cfqdata.rho(idx1) = rho1;
 
                ElementTransformation &Tr2 = *H1cut.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
@@ -645,6 +671,47 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const double gamma2 = gamma_gf(Elem2No);
                const double e2 = e.GetValue(Elem2No, ip_e2);
                cfqdata.rhocs(idx2) = rho2*sqrt(gamma2*(gamma2-1.0)*e2);
+               cfqdata.rho(idx2) = rho2;
+
+               // Determine h for each point on side 1
+               {
+                   v.GetVectorGradient(Tr1, sgrad_v);
+                   sgrad_v.Symmetrize();
+                   double eig_val_data[3], eig_vec_data[9];
+                   if (dim==1)
+                   {
+                      eig_val_data[0] = sgrad_v(0, 0);
+                      eig_vec_data[0] = 1.;
+                   }
+                   else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+                   Vector compr_dir(eig_vec_data, dim);
+                   const DenseMatrix &Jpr = Tr1.Jacobian();
+                   CalcInverse(Jpr, Jinv);
+                   mfem::Mult(Jpr, cfqdata.Jac0inv(idx1), Jpi);
+                   Vector ph_dir(dim);
+                   Jpi.Mult(compr_dir, ph_dir);
+                   cfqdata.h(idx1) = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+               }
+
+               // Determine h for each point on side 2
+               {
+                   v.GetVectorGradient(Tr2, sgrad_v);
+                   sgrad_v.Symmetrize();
+                   double eig_val_data[3], eig_vec_data[9];
+                   if (dim==1)
+                   {
+                      eig_val_data[0] = sgrad_v(0, 0);
+                      eig_vec_data[0] = 1.;
+                   }
+                   else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+                   Vector compr_dir(eig_vec_data, dim);
+                   const DenseMatrix &Jpr = Tr2.Jacobian();
+                   CalcInverse(Jpr, Jinv);
+                   mfem::Mult(Jpr, cfqdata.Jac0inv(idx2), Jpi);
+                   Vector ph_dir(dim);
+                   Jpi.Mult(compr_dir, ph_dir);
+                   cfqdata.h(idx2) = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+               }
            }
        }
    }
