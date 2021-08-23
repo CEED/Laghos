@@ -485,7 +485,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         {
             cout << "Reading: " << path_init << endl;
 
-            // Read initial offset in the resotre phase or online phase
+            // Read initial offset in the restore phase or online phase
             // input.online && input.window == 0 is set with Init
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
@@ -505,7 +505,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         }
         else if (input.offsetType == interpolateOffset)
         {
-            // Interpoate and save window dependent offsets in the online phase
+            // Interpolate and save window dependent offsets in the online phase
 
             // Calculation of coefficients of offset data using inverse distance weighting interpolation
             std::ifstream infile_offlineParam(basename + "/offline_param" + input.basisIdentifier + ".csv");
@@ -549,7 +549,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             }
             infile_offlineParam.close();
 
-            // Compute and save the interplated offset
+            // Compute and save the interpolated offset
             for (int i=0; i<tH1size; ++i)
                 (*initX)(i) = 0;
             for (int i=0; i<tH1size; ++i)
@@ -667,7 +667,7 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
+    if ((offsetInit || spaceTime) && input.offsetType == useInitialState && input.window == 0)
     {
         std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
@@ -714,7 +714,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 
     if ((offsetInit || spaceTime) && hyperreduce_prep)
     {
-        // Compute and save offset restricted on sample mesh in the online hyperreduction preparation phase for the all windows
+        // Compute and save offset restricted on sample mesh in the online hyperreduction preparation phase for all windows
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
         for (int i=0; i<tH1size; ++i)

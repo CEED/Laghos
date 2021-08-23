@@ -1178,6 +1178,10 @@ int main(int argc, char *argv[])
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
 
+        if (usingWindows)
+        {
+            SetWindowParameters(twparam, romOptions);
+        }
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
         if (!romOptions.hyperreduce)
         {
@@ -1199,8 +1203,6 @@ int main(int argc, char *argv[])
                                                         visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
             }
         }
-
-        romOptions.window = 0;
 
         if (romOptions.hyperreduce_prep)
         {
@@ -1301,7 +1303,6 @@ int main(int argc, char *argv[])
         }
 
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
-        basis[0]->Init(romOptions, *S); // TODO: is this redundant?
 
         if (romOptions.mergeXV)
         {
@@ -1363,7 +1364,6 @@ int main(int argc, char *argv[])
                 basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                 delete basis[romOptions.window-1];
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
-                basis[romOptions.window]->Init(romOptions, *S);
 
                 if (romOptions.mergeXV)
                 {
