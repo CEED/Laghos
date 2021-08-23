@@ -666,7 +666,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
     if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
-        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
+        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         // Compute and save offset in the online phase for the initial window in the useInitialState mode
         Vector X, V, E;
