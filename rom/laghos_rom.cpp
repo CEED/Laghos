@@ -479,13 +479,14 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
 
     if (offsetInit)
     {
-        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init"; 
+        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
-        if (input.offsetType == useInitialState)
+        if (input.offsetType == useInitialState && (input.restore || input.window > 0))
         {
             cout << "Reading: " << path_init << endl;
 
-            // Read offset in the online phase of initial mode
+            // Read initial offset in the resotre phase or online phase
+            // input.online && input.window == 0 is set with Init
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
@@ -496,15 +497,15 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         {
             cout << "Reading: " << path_init << endl;
 
-            // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
+            // Read window dependent offsets in the restore phase or in the online phase
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
-
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == interpolateOffset)
         {
+            // Interpoate and save window dependent offsets in the online phase
 
             // Calculation of coefficients of offset data using inverse distance weighting interpolation
             std::ifstream infile_offlineParam(basename + "/offline_param" + input.basisIdentifier + ".csv");
@@ -514,6 +515,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             std::getline(infile_offlineParam, line);
             int true_idx = -1;
             double coeff_sum = 0.0;
+
             // Compute the distances from online parameters to each offline parameter
             while (std::getline(infile_offlineParam, line))
             {
@@ -531,6 +533,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
                 coeff_sum += coeff;
                 coeff_list.push_back(coeff);
             }
+
             // Determine the coefficients with respect to the offline parameters
             // The coefficients are inversely porportional to distances and form a convex combination of offset data
             for (int param=0; param<paramID_list.size(); ++param)
@@ -546,7 +549,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             }
             infile_offlineParam.close();
 
-            // Interpolate and save offset in the online phase of parametric save-and-load mode
+            // Compute and save the interplated offset
             for (int i=0; i<tH1size; ++i)
                 (*initX)(i) = 0;
             for (int i=0; i<tH1size; ++i)
@@ -711,6 +714,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 
     if ((offsetInit || spaceTime) && hyperreduce_prep)
     {
+        // Compute and save offset restricted on sample mesh in the online hyperreduction preparation phase for the all windows
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
         for (int i=0; i<tH1size; ++i)

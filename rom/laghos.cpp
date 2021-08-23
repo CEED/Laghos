@@ -939,7 +939,7 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    // Finding kinematic DOF on the end of the interface 
+    // Finding kinematic DOF on the end of the interface
     // which measure penetration distance in 2D Rayleigh-Taylor instability (problem 7)
     int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7)
@@ -1177,36 +1177,30 @@ int main(int argc, char *argv[])
     {
         onlinePreprocessTimer.Start();
         if (dtc > 0.0) dt = dtc;
-        if (usingWindows)
-        {
-            // Construct the ROM_Basis for each window.
-            for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
-            {
-                SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
-                if (!romOptions.hyperreduce_prep)
-                {
-                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
-                }
-            }
 
-            romOptions.window = 0;
-        }
-        else
-        {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
-            if (!romOptions.hyperreduce_prep)
-            {
-                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
-                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
-            }
-        }
-
+        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
         if (!romOptions.hyperreduce)
         {
             basis[0]->Init(romOptions, *S);
         }
+
+        if (!romOptions.hyperreduce_prep)
+        {
+            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
+                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
+        }
+
+        for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+            SetWindowParameters(twparam, romOptions);
+            basis[curr_window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
+            if (!romOptions.hyperreduce_prep)
+            {
+                romOper[curr_window] = new ROM_Operator(romOptions, basis[curr_window], rho_coeff, mat_coeff, order_e, source,
+                                                        visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+            }
+        }
+
+        romOptions.window = 0;
 
         if (romOptions.hyperreduce_prep)
         {
@@ -1307,7 +1301,7 @@ int main(int argc, char *argv[])
         }
 
         basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
-        basis[0]->Init(romOptions, *S);
+        basis[0]->Init(romOptions, *S); // TODO: is this redundant?
 
         if (romOptions.mergeXV)
         {
@@ -1638,7 +1632,7 @@ int main(int argc, char *argv[])
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
-                
+
                 real_pd = -1.0;
                 if (problem == 7)
                 {
