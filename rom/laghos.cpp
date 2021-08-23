@@ -1611,7 +1611,7 @@ int main(int argc, char *argv[])
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
 
-                double real_pd;
+                double real_pd = -1.0;
                 if (rom_sample_stages)
                 {
                     std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
@@ -1624,9 +1624,8 @@ int main(int argc, char *argv[])
                             // 2D Rayleigh-Taylor penetration distance
                             if (romOptions.indicatorType == penetrationDistance)
                             {
-                                real_pd = -1.0;
                                 double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
-                                MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                                MPI_Allreduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
                             }
                             else if (romOptions.indicatorType == parameterTime)
                             {
@@ -1639,14 +1638,15 @@ int main(int argc, char *argv[])
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
+                
+                real_pd = -1.0;
                 if (problem == 7)
                 {
                     // 2D Rayleigh-Taylor penetration distance
                     if (romOptions.indicatorType == penetrationDistance)
                     {
-                        real_pd = -1.0;
                         double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
-                        MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                        MPI_Allreduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
                     }
                     else if (romOptions.indicatorType == parameterTime)
                     {
