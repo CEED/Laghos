@@ -1180,27 +1180,32 @@ int main(int argc, char *argv[])
 
         if (usingWindows)
         {
-            SetWindowParameters(twparam, romOptions);
+            for (int curr_window = 0; curr_window < numWindows; curr_window++)
+            {
+                SetWindowParameters(twparam, romOptions);
+                basis[curr_window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
+                if (curr_window == 0 && !romOptions.hyperreduce)
+                {
+                    basis[0]->Init(romOptions, *S);
+                }
+                if (!romOptions.hyperreduce_prep)
+                {
+                    romOper[curr_window] = new ROM_Operator(romOptions, basis[curr_window], rho_coeff, mat_coeff, order_e, source,
+                                                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                }
+            }
         }
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
-        if (!romOptions.hyperreduce)
+        else
         {
-            basis[0]->Init(romOptions, *S);
-        }
-
-        if (!romOptions.hyperreduce_prep)
-        {
-            romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
-                                          cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
-        }
-
-        for (int curr_window = 1; curr_window < numWindows; curr_window++) {
-            SetWindowParameters(twparam, romOptions);
-            basis[curr_window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV, &timesteps);
+            if (!romOptions.hyperreduce)
+            {
+                basis[0]->Init(romOptions, *S);
+            }
             if (!romOptions.hyperreduce_prep)
             {
-                romOper[curr_window] = new ROM_Operator(romOptions, basis[curr_window], rho_coeff, mat_coeff, order_e, source,
-                                                        visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
+                                              cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
             }
         }
 
@@ -1211,7 +1216,8 @@ int main(int argc, char *argv[])
                 cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+            for (int curr_window = 1; curr_window < numWindows; curr_window++)
+            {
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
