@@ -1180,20 +1180,21 @@ int main(int argc, char *argv[])
 
         if (usingWindows)
         {
-            for (int curr_window = 0; curr_window < numWindows; curr_window++)
+            for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
-                basis[curr_window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
-                if (curr_window == 0 && !romOptions.hyperreduce)
+                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, rom_com, sFactorX, sFactorV);
+                if (romOptions.window == 0 && !romOptions.hyperreduce)
                 {
                     basis[0]->Init(romOptions, *S);
                 }
                 if (!romOptions.hyperreduce_prep)
                 {
-                    romOper[curr_window] = new ROM_Operator(romOptions, basis[curr_window], rho_coeff, mat_coeff, order_e, source,
-                                                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
+                                                                  visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
+            romOptions.window = 0;
         }
         else
         {
@@ -1238,7 +1239,9 @@ int main(int argc, char *argv[])
 
         if (!romOptions.hyperreduce)
         {
+            cout << "Debug 1" << endl;
             basis[0]->ProjectFOMtoROM(*S, romS);
+            cout << "Debug 2" << endl;
             if (romOptions.hyperreduce_prep && myid == 0)
             {
                 std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
