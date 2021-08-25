@@ -1239,9 +1239,7 @@ int main(int argc, char *argv[])
 
         if (!romOptions.hyperreduce)
         {
-            cout << "Debug 1" << endl;
             basis[0]->ProjectFOMtoROM(*S, romS);
-            cout << "Debug 2" << endl;
             if (romOptions.hyperreduce_prep && myid == 0)
             {
                 std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
