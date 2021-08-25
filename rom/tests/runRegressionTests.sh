@@ -1,7 +1,6 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH --exclusive
 #SBATCH -t 1:00:00
 #SBATCH -p pdebug
 #SBATCH -o sbatch.log
@@ -124,7 +123,7 @@ done
 # Check machine
 case "$(uname -s)" in
     Linux*)
-		  COMMAND="srun"
+		  COMMAND="srun -p pdebug"
 			MACHINE="Linux";;
     Darwin*)
 		  COMMAND="mpirun -oversubscribe"
