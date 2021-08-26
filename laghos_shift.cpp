@@ -108,7 +108,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
             const double dx = sqrt(1.0 / glob_NE);
 
             // The middle of the element after x = 0.5.
-            return tanh(x(0) - (0.5 + dx/2.0));
+            return tanh(x(0) - (0.5 + 0*dx/2.0));
          }
          else if (mode_TG == 1)
          {
@@ -252,7 +252,6 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          nor(0) = (2*ip_e1.x - 1.0) * Trans.Weight();
       }
       else { CalcOrtho(Trans.Jacobian(), nor); }
-      nor *= ip_f.weight;
 
       el_p.CalcShape(ip_e1, shape_p1);
       const double p1 = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
@@ -260,13 +259,12 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       el_p.CalcShape(ip_e2, shape_p2);
       const double p2 = p.GetValue(Trans.GetElement2Transformation(), ip_e2);
 
-      const double p_term = 0.5*(p1+p2);
+      double p_term = 0.5*(p1+p2);
       // 1st element.
       {
          // Shape functions in the 1st element.
          trial_fe.CalcShape(ip_e1, h1_shape);
          test_fe.CalcShape(ip_e1, l2_shape);
-
 
          // TODO reorder/optimize loops.
          for (int i = 0; i < l2dofs_cnt; i++)
@@ -280,7 +278,8 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                for (int d = 0; d < dim; d++)
                {
                   elmat(i, d*h1dofs_cnt + j)
-                        += p_shift_part * h1_shape_part * l2_shape(i) * nor(d);
+                        += ip_f.weight * p_shift_part *
+                          h1_shape_part * l2_shape(i) * nor(d);
                }
             }
          }
@@ -304,7 +303,8 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                for (int d = 0; d < dim; d++)
                {
                   elmat(l2dofs_cnt + i, dim*h1dofs_cnt + d*h1dofs_cnt + j)
-                        -= p_shift_part * h1_shape_part * l2_shape(i) * nor(d);
+                        -= ip_f.weight * p_shift_part *
+                          h1_shape_part * l2_shape(i) * nor(d);
                }
             }
          }
@@ -411,10 +411,12 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
 
       //when penalize normal is true, we penalize both the tangential and
       //normal components. We get rid of (I-n_in_j) terms from the
-      //formulation
+      //formulation i.e.e just set work = I instead of I-n_in_j
       bool penalize_normal = false;
+      if (penalize_normal) { work = Iden; }
       double alpha = scale*work.FNorm2();
       if (penalize_normal) { alpha = scale; }
+
 
       //VN1(i, j) = v1(i)*true_normal(j)
       Vector vx1(dim), vy1(dim), vx2(dim), vy2(dim);
@@ -429,22 +431,19 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
 
       DenseMatrixFromVecVecT(vx1, true_normal, VN1);
       Mult(work, VN1, IVN1);
-      if (penalize_normal) { IVN1 = VN1; }
       IVN1.Mult(nor, vx1jump);
       DenseMatrixFromVecVecT(vy1, true_normal, VN1);
       Mult(work, VN1, IVN1);
-      if (penalize_normal) { IVN1 = VN1; }
       IVN1.Mult(nor, vy1jump);
 
       DenseMatrixFromVecVecT(vx2, true_normal, VN2);
       Mult(work, VN2, IVN2);
-      if (penalize_normal) { IVN2 = VN2; }
       IVN2.Mult(nor, vx2jump);
       DenseMatrixFromVecVecT(vy2, true_normal, VN2);
       Mult(work, VN2, IVN2);
-      if (penalize_normal) { IVN2 = VN2; }
       IVN2.Mult(nor, vy2jump);
 
+      //VN1(i, j) = v1(i)*true_normal(j)
       DenseMatrixFromVecVecT(v1, true_normal, VN1);
       Mult(work, VN1, IVN1);
       IVN1.Mult(nor, v1jump);
@@ -466,19 +465,13 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
 
       const int idx1 = Trans.ElementNo*nqp_face*2 + q + 0*nqp_face,
                 idx2 = Trans.ElementNo*nqp_face*2 + q + 1*nqp_face;
-      cfqdata.h(idx1) = Trans.GetElement1Transformation().Weight()/nor.Norml2();
-      cfqdata.h(idx2) = Trans.GetElement2Transformation().Weight()/nor.Norml2();
 
       double rhocs1 = cfqdata.rhocs(idx1),
              rhocs2 = cfqdata.rhocs(idx2),
              rhohdt1 = cfqdata.rho(idx1)*cfqdata.h(idx1)/(*dt),
              rhohdt2 = cfqdata.rho(idx2)*cfqdata.h(idx2)/(*dt);
-      double rhocshdt1 = cfqdata.rhocs(idx1)*cfqdata.rhocs(idx1)*(*dt)/cfqdata.h(idx1);
-      double rhocshdt2 = cfqdata.rhocs(idx2)*cfqdata.rhocs(idx2)*(*dt)/cfqdata.h(idx2);
 //      double tau = 2.0*rhocs1*rhocs2/(rhocs1 + rhocs2);
       double tau = 2.0*rhohdt1*rhohdt2/(rhohdt1 + rhohdt2);
-//      double tau = 2.0*rhocshdt1*rhocshdt2/(rhocshdt1 + rhocshdt2);
-
 
 //      dvxjump = dvjump;
 //      dvyjump = dvjump;
@@ -707,10 +700,8 @@ void EnergyStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
 
    // grad_p at all quad points, on both sides.
    const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
-   const int dof_p = el_p.GetDof();
 
    Vector nor(dim);
-   Vector shape_p(dof_p);
 
    for (int q = 0; q  < nqp_face; q++)
    {
@@ -733,11 +724,9 @@ void EnergyStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       else { CalcOrtho(Trans.Jacobian(), nor); }
 
       // 1st element stuff.
-      el_p.CalcShape(ip_e1, shape_p);
       const double p1 = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
 
       // 2nd element stuff.
-      el_p.CalcShape(ip_e2, shape_p);
       const double p2 = p.GetValue(Trans.GetElement2Transformation(), ip_e2);
 
       const double h1 = Trans.GetElement1Transformation().Weight()/nor.Norml2();

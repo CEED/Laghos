@@ -234,8 +234,8 @@ int main(int argc, char *argv[])
    int e_shift_type = 1;
    double v_shift_scale = 1.0;
    double e_shift_scale = 1.0;
-   double v_stability_scale = 0.05;
-   double e_stability_scale = 0.5;
+   double v_stability_scale = 0.1;
+   double e_stability_scale = 0.1;
 
 
    // Assign material indices to the element attributes.

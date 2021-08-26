@@ -317,9 +317,30 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    if (v_shift_type >= 1)
    {
-       FaceForce.AddMultTranspose(one, v_rhs, -1.0);
+       Vector v_rhs2 = v_rhs;
+       v_rhs2 *= 0.0;
+       FaceForce.AddMultTranspose(one, v_rhs2, -1.0);
        FaceForce_v.Assemble();
-       v_rhs -= FaceForce_v;
+       v_rhs2 -= FaceForce_v;
+       Array<int> ess_vdofs;
+       {
+          Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
+          for (int d = 0; d < pmesh->Dimension(); d++)
+          {
+             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+             // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+             ess_bdr = 0; ess_bdr[d] = 1;
+             //H1CutFESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+             //ess_tdofs.Append(dofs_list);
+             H1cut.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+             FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+             for (int i = 0; i < dofs_list.Size(); i++) {
+                 v_rhs2(dofs_list[i]) = 0.0;
+                 v_rhs(dofs_list[i]) = 0.0;
+             }
+          }
+       }
+       v_rhs += v_rhs2;
    }
 
    Vector X, B;
@@ -646,6 +667,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
        const int attr = pmesh->GetFace(f)->GetAttribute();
        if (attr == 77) {
            FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(f);
+           Vector nor(dim);
            const int Elem1No = tr->Elem1No,
                      Elem2No = tr->Elem2No;
            for (int q = 0; q  < nqp_face; q++)
@@ -673,6 +695,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                cfqdata.rhocs(idx2) = rho2*sqrt(gamma2*(gamma2-1.0)*e2);
                cfqdata.rho(idx2) = rho2;
 
+               if (dim == 1)
+               {
+                  nor(0) = (2*ip_e1.x - 1.0 ) * tr->Weight();
+               }
+               else { CalcOrtho(tr->Jacobian(), nor); }
+
                // Determine h for each point on side 1
                {
                    v.GetVectorGradient(Tr1, sgrad_v);
@@ -691,6 +719,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                    Vector ph_dir(dim);
                    Jpi.Mult(compr_dir, ph_dir);
                    cfqdata.h(idx1) = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+                   cfqdata.h(idx1) = H1cut.GetElementTransformation(Elem1No)->Weight()/nor.Norml2();
                }
 
                // Determine h for each point on side 2
@@ -711,6 +740,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                    Vector ph_dir(dim);
                    Jpi.Mult(compr_dir, ph_dir);
                    cfqdata.h(idx2) = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+                   cfqdata.h(idx2) = H1cut.GetElementTransformation(Elem2No)->Weight()/nor.Norml2();
                }
            }
        }
