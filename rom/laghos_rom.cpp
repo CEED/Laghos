@@ -481,12 +481,11 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
     {
         std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
-        if (input.offsetType == useInitialState && (input.restore || input.window > 0))
+        if (input.offsetType == useInitialState)
         {
             cout << "Reading: " << path_init << endl;
 
             // Read initial offset in the restore phase or online phase
-            // input.online && input.window == 0 is set with Init
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
@@ -501,6 +500,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
+
             cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == interpolateOffset)
@@ -667,7 +667,7 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
 
 void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
-    if ((offsetInit || spaceTime) && input.offsetType == useInitialState && input.window == 0)
+    if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
         std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
