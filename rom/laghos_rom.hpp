@@ -758,6 +758,9 @@ protected:
     int numSamplesV = 0;
     int numSamplesE = 0;
 
+    std::vector<int> initSamplesV;
+    std::vector<int> initSamplesE;
+
     int numTimeSamplesV = 0;
     int numTimeSamplesE = 0;
 

@@ -951,6 +951,42 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
+    int numInitSamplesV = 0; 
+    initSamplesV.clear();
+    std::string initSamplesV_filename = basename + "/initSamplesV.csv"; // TODO: change to hyperreduce_basename
+    std::ifstream initSamplesV_infile(initSamplesV_filename);
+    if (initSamplesV_infile.is_open())
+    {    
+        std::string sample_str;
+        while (std::getline(initSamplesV_infile, sample_str))
+        {    
+            initSamplesV.push_back(std::stoi(sample_str));
+            numInitSamplesV++;
+        }    
+    }    
+    MFEM_VERIFY(numInitSamplesV <= numSamplesV, "Too many prescribed samples for velocity.");
+
+    int numInitSamplesE = 0; 
+    initSamplesE.clear();
+    std::string initSamplesE_filename = basename + "/initSamplesE.csv"; // TODO: change to hyperreduce_basename
+    std::ifstream initSamplesE_infile(initSamplesE_filename);
+    if (initSamplesE_infile.is_open())
+    {    
+        std::string sample_str;
+        while (std::getline(initSamplesE_infile, sample_str))
+        {    
+            initSamplesE.push_back(std::stoi(sample_str));
+            numInitSamplesE++;
+        }    
+    }    
+    MFEM_VERIFY(numInitSamplesE <= numSamplesE, "Too many prescribed samples for energy.");
+
+    if (rank == 0)
+    {
+        cout << "number of prescribed samples for velocity: " << numInitSamplesV << "\n";
+        cout << "number of prescribed samples for energy  : " << numInitSamplesE << "\n";
+    }
+
     // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
 
     if (spaceTime)
@@ -1114,7 +1150,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         *BsinvV,
                         rank,
                         nprocs,
-                        numSamplesV);
+                        numSamplesV,
+                        &initSamplesV);
 
             CAROM::GNAT(basisFe,
                         rdimfe,
@@ -1123,7 +1160,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         *BsinvE,
                         rank,
                         nprocs,
-                        numSamplesE);
+                        numSamplesE,
+                        &initSamplesE);
         }
     }
 
