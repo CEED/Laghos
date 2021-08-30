@@ -108,6 +108,7 @@ protected:
    mutable MixedBilinearForm Force, FaceForce;
    mutable Vector one, v_rhs, e_rhs;
    mutable LinearForm FaceForce_e, FaceForce_v, FaceForce_es;
+   mutable LinearForm BdrFace_v, BdrFace_e;
 
    int v_shift_type = 0, e_shift_type = 0;
 

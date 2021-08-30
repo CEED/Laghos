@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
    int e_shift_type = 1;
    double v_shift_scale = 1.0;
    double e_shift_scale = 1.0;
-   double v_stability_scale = 0.1;
+   double v_stability_scale = 0.05;
    double e_stability_scale = 0.1;
 
 
@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
          ess_vdofs.Append(dofs_list);
       }
    }
-   ess_tdofs = ess_vdofs;
+   //ess_tdofs = ess_vdofs;
 
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;

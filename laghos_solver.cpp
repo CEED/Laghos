@@ -123,7 +123,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1cut),
-   FaceForce(&H1cut, &L2), FaceForce_e(&L2), FaceForce_v(&H1cut), FaceForce_es(&L2),
+   FaceForce(&H1cut, &L2), FaceForce_e(&L2),
+   FaceForce_v(&H1cut), FaceForce_es(&L2),
+   BdrFace_v(&H1cut), BdrFace_e(&L2),
    one(L2Vsize),
    v_rhs(H1cutVsize),
    e_rhs(L2Vsize)
@@ -201,9 +203,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                              v_gf);
    FaceForce_e.AddTraceFaceIntegrator(efi, attr);
 
+   auto *bfiv = new VelocityBoundaryLFI(p_func.GetPressure());
+   BdrFace_v.AddBdrFaceIntegrator(bfiv);
 
    auto *efis = new EnergyStabilizerLFI(p_func.GetPressure(), cfqdata, dt);
    FaceForce_es.AddTraceFaceIntegrator(efis, attr);
+
+   auto *efiv = new EnergyBoundaryLFI(v_gf, p_func.GetPressure());
+   BdrFace_e.AddBdrFaceIntegrator(efiv);
 
    ForceIntegrator *fi = new ForceIntegrator(qdata);
    fi->SetIntRule(&ir);
@@ -283,6 +290,10 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    auto vs_integ = dynamic_cast<VelocityStabilizerLFI *>((*tfi_vs)[0]);
    vs_integ->SetVelocityReference(v);
 
+   auto bfi_e = BdrFace_e.GetFLFI();
+   auto eb_integ = dynamic_cast<EnergyBoundaryLFI *>((*bfi_e)[0]);
+   eb_integ->SetVelocityReference(v);
+
    //
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
@@ -317,30 +328,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    if (v_shift_type >= 1)
    {
-       Vector v_rhs2 = v_rhs;
-       v_rhs2 *= 0.0;
-       FaceForce.AddMultTranspose(one, v_rhs2, -1.0);
-       FaceForce_v.Assemble();
-       v_rhs2 -= FaceForce_v;
-       Array<int> ess_vdofs;
-       {
-          Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-          for (int d = 0; d < pmesh->Dimension(); d++)
-          {
-             // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-             // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-             ess_bdr = 0; ess_bdr[d] = 1;
-             //H1CutFESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-             //ess_tdofs.Append(dofs_list);
-             H1cut.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-             FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-             for (int i = 0; i < dofs_list.Size(); i++) {
-                 v_rhs2(dofs_list[i]) = 0.0;
-                 v_rhs(dofs_list[i]) = 0.0;
-             }
-          }
-       }
-       v_rhs += v_rhs2;
+       FaceForce.AddMultTranspose(one, v_rhs, -1.0);
+       FaceForce_v.Assemble(); v_rhs -= FaceForce_v;
+       BdrFace_v.Assemble(); v_rhs -= BdrFace_v;
    }
 
    Vector X, B;
@@ -391,6 +381,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    if (e_shift_type >= 1) {
        FaceForce_e.Assemble(); e_rhs -= FaceForce_e;
        FaceForce_es.Assemble(); e_rhs -= FaceForce_es;
+       BdrFace_e.Assemble(); e_rhs += BdrFace_e;
    }
 
    Array<int> l2dofs;

@@ -428,6 +428,7 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       vy1(1) = v1(1);
       vx2(0) = v2(0);
       vy2(1) = v2(1);
+      //vy1.Print();
 
       DenseMatrixFromVecVecT(vx1, true_normal, VN1);
       Mult(work, VN1, IVN1);
@@ -525,6 +526,58 @@ void VelocityStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
       }
    }
    //elvect *= 0.0;
+}
+
+void VelocityBoundaryLFI::AssembleRHSElementVect(const FiniteElement &el,
+                                                 FaceElementTransformations &Trans,
+                                                 Vector &elvect)
+{
+   const int h1dofs_cnt = el.GetDof();
+   const int dim = el.GetDim();
+
+   elvect.SetSize(h1dofs_cnt * dim);
+   elvect = 0.0;
+
+   Vector h1_shape(h1dofs_cnt);
+
+   const int ir_order =
+      2*el.GetOrder() + Trans.OrderW();
+   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
+   const int nqp_face = ir->GetNPoints();
+
+   Vector nor(dim);
+   for (int q = 0; q  < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
+
+      // Set the integration point in the face and the neighboring elements
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0 ) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+
+      const double pr = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
+      // 1st element.
+      {
+         el.CalcShape(ip_e1, h1_shape);
+         for (int j = 0; j < h1_shape.Size(); j++)
+         {
+             for (int d = 0; d < dim; d++)
+             {
+                elvect(j + d*h1dofs_cnt) += ip_f.weight * h1_shape(j) * nor(d) * pr;
+             }
+         }
+      }
+   }
 }
 
 void EnergyInterfaceIntegrator::AssembleRHSElementVect(const FiniteElement &el_1,
@@ -769,6 +822,58 @@ void EnergyStabilizerLFI::AssembleRHSElementVect(const FiniteElement &el_1,
    }
 }
 
+void EnergyBoundaryLFI::AssembleRHSElementVect(const FiniteElement &el,
+                                               FaceElementTransformations &Trans,
+                                               Vector &elvect)
+{
+
+   const int l2dofs_cnt = el.GetDof();
+   const int dim = el.GetDim();
+
+   elvect.SetSize(l2dofs_cnt);
+   elvect = 0.0;
+
+   Vector l2_shape(l2dofs_cnt);
+
+   const int ir_order =
+      4*el.GetOrder() + Trans.OrderW();
+   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
+   const int nqp_face = ir->GetNPoints();
+
+   // grad_p at all quad points, on both sides.
+   const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
+   const int dof_p = el_p.GetDof();
+   Vector nor(dim), v1(dim);
+
+   for (int q = 0; q  < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
+
+      // Set the integration point in the face and the neighboring elements
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0 ) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+
+      const double pr = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
+      v.GetVectorValue(Trans.GetElement1Transformation(), ip_e1, v1);
+      // 1st element.
+      {
+         el.CalcShape(ip_e1, l2_shape);
+         l2_shape *= ip_f.weight * pr * (v1*nor);
+         elvect += l2_shape;
+      }
+   }
+}
 
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
                  ParGridFunction &e, ParGridFunction &gamma)

@@ -126,6 +126,26 @@ public:
    void SetScale(double s) { scale = s; }
 };
 
+class VelocityBoundaryLFI : public LinearFormIntegrator
+{
+private:
+   ParGridFunction &p;
+
+public:
+   VelocityBoundaryLFI(ParGridFunction &p_gf)
+      : p(p_gf) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
+};
+
 class EnergyStabilizerLFI : public LinearFormIntegrator
 {
 private:
@@ -150,6 +170,30 @@ public:
                                        const FiniteElement &el_2,
                                        FaceElementTransformations &Trans,
                                        Vector &elvect);
+   void SetScale(double s) { scale = s; }
+};
+
+class EnergyBoundaryLFI : public LinearFormIntegrator
+{
+private:
+   ParGridFunction &v;
+   ParGridFunction &p;
+   double scale = 1.0;
+
+public:
+   EnergyBoundaryLFI(ParGridFunction &v_gf, ParGridFunction &p_gf)
+      : v(v_gf), p(p_gf) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
+   void SetVelocityReference(const ParGridFunction &v_gf) { v = v_gf; }
    void SetScale(double s) { scale = s; }
 };
 
