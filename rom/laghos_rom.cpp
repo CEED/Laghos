@@ -962,9 +962,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {    
             initSamplesV.push_back(std::stoi(sample_str));
             numInitSamplesV++;
+            if (numInitSamplesV >= numSamplesV) break;
         }    
     }    
-    MFEM_VERIFY(numInitSamplesV <= numSamplesV, "Too many prescribed samples for velocity.");
 
     int numInitSamplesE = 0; 
     initSamplesE.clear();
@@ -977,9 +977,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {    
             initSamplesE.push_back(std::stoi(sample_str));
             numInitSamplesE++;
+            if (numInitSamplesE >= numSamplesE) break;
         }    
     }    
-    MFEM_VERIFY(numInitSamplesE <= numSamplesE, "Too many prescribed samples for energy.");
 
     if (rank == 0)
     {
