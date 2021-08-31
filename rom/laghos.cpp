@@ -1611,7 +1611,7 @@ int main(int argc, char *argv[])
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
 
-                double real_pd = 0.0;
+                double real_pd;
                 if (rom_sample_stages)
                 {
                     std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
@@ -1619,6 +1619,7 @@ int main(int argc, char *argv[])
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
+                        real_pd = -1.0;
                         if (problem == 7)
                         {
                             // 2D Rayleigh-Taylor penetration distance
@@ -1626,7 +1627,7 @@ int main(int argc, char *argv[])
                             {
                                 double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
                                 MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-                                MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                                MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
                             }
                             else if (romOptions.indicatorType == parameterTime)
                             {
@@ -1639,6 +1640,7 @@ int main(int argc, char *argv[])
                     }
                 }
 
+                real_pd = -1.0;
                 if (problem == 7)
                 {
                     // 2D Rayleigh-Taylor penetration distance
@@ -1646,7 +1648,7 @@ int main(int argc, char *argv[])
                     {
                         double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                         MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-                        MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                        MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
                     }
                     else if (romOptions.indicatorType == parameterTime)
                     {
@@ -1964,7 +1966,7 @@ int main(int argc, char *argv[])
         }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            double real_pd = 0.0;
+            double real_pd = -1.0;
             if (problem == 7)
             {
                 // 2D Rayleigh-Taylor penetration distance
@@ -1972,7 +1974,7 @@ int main(int argc, char *argv[])
                 {
                     double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                     MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-                    MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
+                    MFEM_VERIFY(myid || real_pd >= 0.0, "Incorrect computation of penetration distance");
                 }
                 else if (romOptions.indicatorType == parameterTime)
                 {
