@@ -1,8 +1,7 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH --exclusive
-#SBATCH -t 2:00:00
+#SBATCH -t 1:00:00
 #SBATCH -p pbatch
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
