@@ -366,6 +366,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), solution_basename(*input.solution_basename),
+      initSamples_basename(input.initSamples_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
       spaceTimeMethod(input.spaceTimeMethod), spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
@@ -951,35 +952,38 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
-    int numInitSamplesV = 0; 
+    // Read the initial samples from file
+    // TODO: window-dependent initialization is not supported yet.
+
+    int numInitSamplesV = 0;
     initSamplesV.clear();
-    std::string initSamplesV_filename = basename + "/initSamplesV.csv"; // TODO: change to hyperreduce_basename
+    std::string initSamplesV_filename = basename + "/" + initSamples_basename + "V.csv"; // TODO: change to hyperreduce_basename
     std::ifstream initSamplesV_infile(initSamplesV_filename);
     if (initSamplesV_infile.is_open())
-    {    
+    {
         std::string sample_str;
         while (std::getline(initSamplesV_infile, sample_str))
-        {    
+        {
             initSamplesV.push_back(std::stoi(sample_str));
             numInitSamplesV++;
             if (numInitSamplesV >= numSamplesV) break;
-        }    
-    }    
+        }
+    }
 
-    int numInitSamplesE = 0; 
+    int numInitSamplesE = 0;
     initSamplesE.clear();
-    std::string initSamplesE_filename = basename + "/initSamplesE.csv"; // TODO: change to hyperreduce_basename
+    std::string initSamplesE_filename = basename + "/" + initSamples_basename + "E.csv"; // TODO: change to hyperreduce_basename
     std::ifstream initSamplesE_infile(initSamplesE_filename);
     if (initSamplesE_infile.is_open())
-    {    
+    {
         std::string sample_str;
         while (std::getline(initSamplesE_infile, sample_str))
-        {    
+        {
             initSamplesE.push_back(std::stoi(sample_str));
             numInitSamplesE++;
             if (numInitSamplesE >= numSamplesE) break;
-        }    
-    }    
+        }
+    }
 
     if (rank == 0)
     {
@@ -3419,7 +3423,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         if (!(rom_offline && romOptions.greedyErrorIndicatorType == fom))
         {
             ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
-                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                            romOptions, outputPath + "/greedy_algorithm_stage.txt");
         }
 
         rom_calc_error_indicator = true;
@@ -3431,7 +3435,7 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
         rom_calc_rel_error_nonlocal = true;
         rom_calc_rel_error_local = true;
         ReadGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local,
-                    romOptions, outputPath + "/greedy_algorithm_stage.txt");
+                        romOptions, outputPath + "/greedy_algorithm_stage.txt");
 
         CAROM::Vector* localROM = pointRequiringRelativeError.localROM.get();
         std::string localROMString = "";

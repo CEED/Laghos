@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *initSamples_basename = "initSamples";
     const char *basisIdentifier = "";
     int partition_type = 0;
     double blast_energy = 0.25;
@@ -215,6 +216,8 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
+    args.AddOption(&initSamples_basename, "-is", "--initsamplesfileename",
+                   "Prefix of the CSV file defining prescribed sample points");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
                    "Here x,y,z are relative task ratios in each direction.\n\t"
@@ -344,6 +347,8 @@ int main(int argc, char *argv[])
         solution_outputPath += "/" + std::string(solution_basename);
     }
     romOptions.solution_basename = &solution_outputPath;
+
+    romOptions.initSamples_basename = std::string(initSamples_basename);
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -1972,7 +1977,7 @@ int main(int argc, char *argv[])
             errorIndicatorComputed = true;
         }
         else if ((rom_online && !romOptions.hyperreduce) || (rom_restore) ||
-            (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
+                 (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
         {
             if (rom_online)
             {

@@ -120,6 +120,7 @@ struct ROM_Options
 
     std::string *basename = NULL;
     std::string *solution_basename = NULL;
+    std::string initSamples_basename = "";
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
@@ -688,6 +689,7 @@ private:
 
     std::string basename = "run";
     std::string solution_basename = "run";
+    std::string initSamples_basename = "";
 
     CAROM::Vector *fH1, *fL2;
 
