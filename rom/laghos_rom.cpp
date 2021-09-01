@@ -267,71 +267,55 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     finalized = true;
 }
 
-CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
-{
-    CAROM::Matrix* S = new CAROM::Matrix(numRows, std::min(N, A->numColumns()), A->distributed());
-    for (int i=0; i<S->numRows(); ++i)
-    {
-        for (int j=0; j<S->numColumns(); ++j)
-            (*S)(i,j) = (*A)(rowOS + i, j);
-    }
-
-    return S;
-}
-
-CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim)
+CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
-
+    CAROM::Matrix *basis;
     if (dim == -1)
-        dim = basis->numColumns();
+    {
+        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
+    }
+    else
+    {
+        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0, dim);
+    }
 
-    // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
-    // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
-    // Another alternative would be for BasisReader to allow the option to release ownership.
-    // On the other hand, maybe it is best just to keep doing this copy, since it truncates the basis.
-    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, rowOS, vectorSize);
-
-    MFEM_VERIFY(basisCopy->numRows() == vectorSize, "");
+    MFEM_VERIFY(basis->numRows() == vectorSize, "");
 
     if (rank == 0)
-        cout << "Read basis " << filename << " of dimension " << basisCopy->numColumns() << endl;
+        cout << "Read basis " << filename << " of dimension " << basis->numColumns() << endl;
 
-    //delete basis;  // TODO: it seems this can be done safely.
-    return basisCopy;
+    return basis;
 }
 
 CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, int& temporalSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+    CAROM::Matrix *basis;
 
     // The size of basis is (number of time samples) x (basis dimension), and it is a distributed matrix.
     // In libROM, a Matrix is always distributed row-wise. In this case, the global matrix is on each process.
-    temporalSize = basis->numRows();
     if (dim == -1)
-        dim = basis->numColumns();
+    {
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+    }
+    else
+    {
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0, dim);
+    }
 
-    // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
-    // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
-    // Another alternative would be for BasisReader to allow the option to release ownership.
-    // On the other hand, maybe it is best just to keep doing this copy, since it truncates the basis.
-    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, 0, temporalSize);
-
-    MFEM_VERIFY(basisCopy->numRows() == temporalSize, "");
+    MFEM_VERIFY(basis->numRows() == temporalSize, "");
 
     if (rank == 0)
-        cout << "Read temporal basis " << filename << " of dimension " << basisCopy->numColumns() << endl;
+        cout << "Read temporal basis " << filename << " of dimension " << basis->numColumns() << endl;
 
-    //delete basis;  // TODO: it seems this can be done safely.
-    return basisCopy;
+    return basis;
 }
 
 CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim,
                             hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
 {
-    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, rowOS, dim);
+    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, dim);
     CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
     Vector Bej(A->numRows());
     Vector MBej(A->numRows());
@@ -1089,8 +1073,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {
             CAROM::QDEIM(basisFv,
                          rdimfv,
-                         sample_dofs_V.data(),
-                         num_sample_dofs_per_procV.data(),
+                         sample_dofs_V,
+                         num_sample_dofs_per_procV,
                          *BsinvV,
                          rank,
                          nprocs,
@@ -1098,8 +1082,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
             CAROM::QDEIM(basisFe,
                          rdimfe,
-                         sample_dofs_E.data(),
-                         num_sample_dofs_per_procE.data(),
+                         sample_dofs_E,
+                         num_sample_dofs_per_procE,
                          *BsinvE,
                          rank,
                          nprocs,
@@ -1109,8 +1093,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {
             CAROM::GNAT(basisFv,
                         rdimfv,
-                        sample_dofs_V.data(),
-                        num_sample_dofs_per_procV.data(),
+                        sample_dofs_V,
+                        num_sample_dofs_per_procV,
                         *BsinvV,
                         rank,
                         nprocs,
@@ -1118,8 +1102,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
             CAROM::GNAT(basisFe,
                         rdimfe,
-                        sample_dofs_E.data(),
-                        num_sample_dofs_per_procE.data(),
+                        sample_dofs_E,
+                        num_sample_dofs_per_procE,
                         *BsinvE,
                         rank,
                         nprocs,
@@ -1501,14 +1485,14 @@ int ROM_Basis::SolutionSizeFOM() const
 void ROM_Basis::ReadSolutionBases(const int window)
 {
     if (!useVX)
-        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimv);
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdime);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, rdime);
 
     if (useXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, rdimx);
 
     if (useVX)
         basisV = basisX;
@@ -1562,7 +1546,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
 
         // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
-        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
+        basisX = basisX_full->getFirstNColumns(rdimx);
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
     }
@@ -1574,8 +1558,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
     }
     else
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, rdimfe);
     }
 }
 
