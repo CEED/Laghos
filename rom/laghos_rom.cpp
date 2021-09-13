@@ -303,8 +303,7 @@ CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, 
     {
         basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0, dim);
     }
-
-    MFEM_VERIFY(basis->numRows() == temporalSize, "");
+    temporalSize = basis->numRows();
 
     if (rank == 0)
         cout << "Read temporal basis " << filename << " of dimension " << basis->numColumns() << endl;
