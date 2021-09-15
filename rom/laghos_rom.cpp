@@ -372,7 +372,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), 
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename), 
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
@@ -968,7 +968,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     int numInitSamplesV = 0;
     initSamplesV.clear();
-    std::string initSamplesV_filename = basename + "/" + initSamples_basename + "V.csv"; // TODO: change to hyperreduce_basename
+    std::string initSamplesV_filename = hyperreduce_basename + "/" + initSamples_basename + "V.csv"; 
     std::ifstream initSamplesV_infile(initSamplesV_filename);
     if (initSamplesV_infile.is_open())
     {
@@ -983,7 +983,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     int numInitSamplesE = 0;
     initSamplesE.clear();
-    std::string initSamplesE_filename = basename + "/" + initSamples_basename + "E.csv"; // TODO: change to hyperreduce_basename
+    std::string initSamplesE_filename = hyperreduce_basename + "/" + initSamples_basename + "E.csv"; 
     std::ifstream initSamplesE_infile(initSamplesE_filename);
     if (initSamplesE_infile.is_open())
     {
@@ -1620,10 +1620,12 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (use_sns)
+    if (use_sns) // TODO: only do in online and not hyperreduce
     {
         basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
         basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
+        basisFv->write(hyperreduce_basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier);
+        basisFe->write(hyperreduce_basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier);
     }
     else
     {
