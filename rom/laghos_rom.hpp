@@ -112,6 +112,26 @@ static errorIndicatorType getErrorIndicatorType(const char* errorIndicator)
     return iter->second;
 }
 
+enum localROMIndicator
+{
+    physicalTime,
+    penetrationDistance,
+    parameterTime
+};
+
+static localROMIndicator getlocalROMIndicator(const char* indicatorType)
+{
+    static std::unordered_map<std::string, localROMIndicator> indicatorMap =
+    {
+        {"time", physicalTime},
+        {"distance", penetrationDistance},
+        {"parameter-time", parameterTime}
+    };
+    auto iter = indicatorMap.find(indicatorType);
+    MFEM_VERIFY(iter != std::end(indicatorMap), "Invalid input of local ROM indicator type");
+    return iter->second;
+}
+
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
@@ -119,7 +139,8 @@ struct ROM_Options
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
     std::string *basename = NULL;
-    std::string *solution_basename = NULL;
+    std::string *testing_parameter_basename = NULL;
+    std::string *hyperreduce_basename = NULL;
     std::string initSamples_basename = "";
 
     std::string basisIdentifier = "";
@@ -191,8 +212,8 @@ struct ROM_Options
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
-    bool paramOffset = false; // TODO: redundant, remove after PR 98 used for determining offset options in the online stage, depending on parametric ROM or non-parametric
     offsetStyle offsetType = useInitialState; // type of offset in time windows
+    localROMIndicator indicatorType = physicalTime; // type of local ROM indicator in time windows
 
     bool mergeXV = false; // If true, merge bases for V and X-X0 by using BasisGenerator on normalized basis vectors for V and X-X0.
 
@@ -364,7 +385,7 @@ public:
         }
     }
 
-    void SampleSolution(const double t, const double dt, Vector const& S);
+    void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
 
     void Finalize(Array<int> &cutoff, ROM_Options& input);
 
@@ -396,7 +417,7 @@ private:
 
     const int parameterID;
     const bool writeSnapshots;
-    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe;
+    std::vector<double> tSnapX, tSnapV, tSnapE, tSnapFv, tSnapFe, pdSnap;
 
     std::string basename = "run";
 
@@ -603,6 +624,12 @@ public:
     void writeSP(ROM_Options const& input, const int window = 0) const;
     void readSP(ROM_Options const& input, const int window = 0);
 
+    void writePDweights(const int id, const int window = 0) const;
+
+    double GetOffsetX(const int idx) const {
+        return (*initX)(idx);
+    }
+
     void Set_dxdt_Reduced(const Vector &x, Vector &y) const;
 
     int GetRank() const {
@@ -688,7 +715,8 @@ private:
     CAROM::Matrix* basisFe = 0;
 
     std::string basename = "run";
-    std::string solution_basename = "run";
+    std::string testing_parameter_basename = "run";
+    std::string hyperreduce_basename = "run";
     std::string initSamples_basename = "";
 
     CAROM::Vector *fH1, *fL2;

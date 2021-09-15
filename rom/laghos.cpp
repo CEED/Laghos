@@ -154,9 +154,10 @@ int main(int argc, char *argv[])
     bool solDiff = false;
     bool match_end_time = false;
     const char *normtype_char = "l2";
-    const char *solution_basename = "";
+    const char *testing_parameter_basename = "";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
+    const char *indicatorType = "time";
     const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
@@ -212,6 +213,8 @@ int main(int argc, char *argv[])
                    "Name of the sub-folder to dump files within the run directory");
     args.AddOption(&visit_basename, "-k", "--visitfilename",
                    "Name of the visit dump files");
+    args.AddOption(&testing_parameter_basename, "-pardir", "--param_dir",
+                   "Name of the subdirectory containing testing parameter files");
     args.AddOption(&twfile, "-tw", "--timewindowfilename",
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
@@ -288,8 +291,6 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&normtype_char, "-normtype", "--norm_type", "Norm type for relative error computation.");
-    args.AddOption(&solution_basename, "-soldir", "--solution_dir",
-                   "Name of the subdirectory containing reference solution files");
     args.AddOption(&romOptions.max_dim, "-sdim", "--sdim", "ROM max sample dimension");
     args.AddOption(&romOptions.incSVD_linearity_tol, "-lintol", "--linearitytol", "The incremental SVD model linearity tolerance.");
     args.AddOption(&romOptions.incSVD_singular_value_tol, "-svtol", "--singularvaluetol", "The incremental SVD model singular value tolerance.");
@@ -318,6 +319,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.parameterID, "-rpar", "--romparam", "ROM offline parameter index.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
                    "Offset type for initializing ROM windows.");
+    args.AddOption(&indicatorType, "-loctype", "--romindicatortype",
+                   "Indicator type for partitioning ROM windows.");
     args.AddOption(&spaceTimeMethod, "-romst", "--romspacetimetype",
                    "Space-time method.");
     args.AddOption(&romOptions.useXV, "-romxv", "--romusexv", "-no-romxv", "--no-romusexv",
@@ -342,11 +345,16 @@ int main(int argc, char *argv[])
         outputPath += "/" + std::string(basename);
     }
 
-    std::string solution_outputPath = outputPath;
-    if (std::string(solution_basename) != "") {
-        solution_outputPath += "/" + std::string(solution_basename);
+    std::string testing_parameter_outputPath = outputPath;
+    if (std::string(testing_parameter_basename) != "") {
+        testing_parameter_outputPath += "/" + std::string(testing_parameter_basename);
     }
-    romOptions.solution_basename = &solution_outputPath;
+
+    std::string hyperreduce_outputPath = (problem == 7) ? testing_parameter_outputPath : outputPath;
+
+    romOptions.basename = &outputPath;
+    romOptions.testing_parameter_basename = &testing_parameter_outputPath;
+    romOptions.hyperreduce_basename = &hyperreduce_outputPath;
 
     romOptions.initSamples_basename = std::string(initSamples_basename);
 
@@ -357,7 +365,6 @@ int main(int argc, char *argv[])
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
-    romOptions.basename = &outputPath;
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
@@ -427,8 +434,10 @@ int main(int argc, char *argv[])
             mkdir(subdir.c_str(), 0777);
         }
         while (pos != std::string::npos);
-        mkdir((outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
-        mkdir((solution_outputPath + "/ROMsol").c_str(), 0777);
+        if (std::string(testing_parameter_basename) != "")
+            mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -663,9 +672,10 @@ int main(int argc, char *argv[])
 
     std::string offlineParam_outputPath = outputPath + "/offline_param" + romOptions.basisIdentifier + ".csv";
     romOptions.offsetType = getOffsetStyle(offsetType);
+    romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
-        std::string filename = solution_outputPath + "/ROMsol/romS_1";
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
@@ -934,16 +944,23 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    // 2D Rayleigh-Taylor penetration distance
+    // Finding kinematic DOF on the end of the interface
+    // which measure penetration distance in 2D Rayleigh-Taylor instability (problem 7)
     int pd1_vdof = -1, pd2_vdof = -1;
-    if (problem == 7 && fom_data)
+    if (problem == 7)
     {
-        for (int i = 0; i < Vsize_h1/2; ++i)
+        std::string pd_idx_outPath = outputPath + "/pd_idx";
+        if (fom_data)
         {
-            if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
-                pd1_vdof = Vsize_h1/2+i;
-            if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
-                pd2_vdof = Vsize_h1/2+i;
+            for (int i = 0; i < Vsize_h1/2; ++i)
+            {
+                if ((*S)(i) == 0.0 && (*S)(Vsize_h1/2+i) == 0.0)
+                    pd1_vdof = Vsize_h1/2+i;
+                if ((*S)(i) == 0.5 && (*S)(Vsize_h1/2+i) == 0.0)
+                    pd2_vdof = Vsize_h1/2+i;
+                if (pd1_vdof >= 0 && pd2_vdof >= 0)
+                    break;
+            }
         }
     }
 
@@ -1105,7 +1122,7 @@ int main(int argc, char *argv[])
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
-        sampler->SampleSolution(0, 0, *S);
+        sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         samplerTimer.Stop();
     }
 
@@ -1122,15 +1139,15 @@ int main(int argc, char *argv[])
         char fileExtension[100];
         sprintf(fileExtension, ".%06d", myid);
 
-        std::string fullname = solution_outputPath + "/ST_Sol_Position" + fileExtension;
+        std::string fullname = testing_parameter_outputPath + "/ST_Sol_Position" + fileExtension;
         ofs_STX.open(fullname.c_str(), std::ofstream::out);
         ofs_STX.precision(16);
 
-        fullname = solution_outputPath + "/ST_Sol_Velocity" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Velocity" + fileExtension;
         ofs_STV.open(fullname.c_str(), std::ofstream::out);
         ofs_STV.precision(16);
 
-        fullname = solution_outputPath + "/ST_Sol_Energy" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Energy" + fileExtension;
         ofs_STE.open(fullname.c_str(), std::ofstream::out);
         ofs_STE.precision(16);
 
@@ -1151,6 +1168,7 @@ int main(int argc, char *argv[])
     Vector romS, romS_old, lastLiftedSolution;
     std::vector<ROM_Operator*> romOper;
     romOper.assign(std::max(numWindows, 1), nullptr);
+    std::vector<double> pd_weight;
 
     if (!usingWindows)
     {
@@ -1177,7 +1195,6 @@ int main(int argc, char *argv[])
                             visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
-
             romOptions.window = 0;
         }
         else
@@ -1202,7 +1219,8 @@ int main(int argc, char *argv[])
                 cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+            for (int curr_window = 1; curr_window < numWindows; curr_window++)
+            {
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
@@ -1226,7 +1244,7 @@ int main(int argc, char *argv[])
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0)
             {
-                std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+                std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
                 outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
@@ -1234,7 +1252,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::string romS_outPath = outputPath + "/" + "romS" + "_0";
+            std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
             romS.Load(outfile_romS, romS.Size());
         }
@@ -1242,7 +1260,24 @@ int main(int argc, char *argv[])
         if (myid == 0)
         {
             cout << "Offset Style: " << offsetType << endl;
+            cout << "Indicator Style: " << indicatorType << endl;
             cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
+        }
+
+        if (rom_online && problem == 7 && romOptions.indicatorType == penetrationDistance)
+        {
+            if (!romOptions.hyperreduce)
+            {
+                int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
+                for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
+                    basis[curr_window]->writePDweights(pd2_tdof, curr_window);
+            }
+            if (!romOptions.hyperreduce_prep)
+            {
+                std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
+                ReadPDweight(pd_weight, pd_weight_outputPath);
+                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+            }
         }
 
         if (romOptions.hyperreduce_prep)
@@ -1254,8 +1289,6 @@ int main(int argc, char *argv[])
                 {
                     WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
                 }
-                ofstream hyperreducefile(outputPath + "/hyperreduce.txt");
-                hyperreducefile.close();
             }
             return 0;
         }
@@ -1271,7 +1304,7 @@ int main(int argc, char *argv[])
         // -restore phase
         // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
         // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
-        std::ifstream infile_tw_steps(outputPath + "/tw_steps");
+        std::ifstream infile_tw_steps(testing_parameter_outputPath + "/tw_steps");
         int nb_step(0);
         restoreTimer.Start();
         if (usingWindows) {
@@ -1300,7 +1333,7 @@ int main(int argc, char *argv[])
             // read ROM solution from a file.
             // TODO: it needs to be read from the format of HDF5 format
             // TODO: how about parallel version? introduce rank in filename
-            std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+            std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
             if (infile_romS.good())
             {
@@ -1355,8 +1388,8 @@ int main(int argc, char *argv[])
 
             if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
             {
-                std::string nextfilename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
-                std::string next2filename = outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
+                std::string nextfilename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
+                std::string next2filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
                 std::ifstream nextfile_romS(nextfilename.c_str());
                 std::ifstream next2file_romS(next2filename.c_str());
                 if (nextfile_romS.good() && !next2file_romS.good())
@@ -1370,7 +1403,7 @@ int main(int argc, char *argv[])
             }
         } // time loop in "restore" phase
         ti--;
-        std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
         std::ifstream infile_romS(filename.c_str());
         if (myid == 0)
             cout << "Restoring " << ti << "-th solution" << endl;
@@ -1404,14 +1437,15 @@ int main(int argc, char *argv[])
         std::ofstream outfile_tw_steps;
         if (rom_online && usingWindows)
         {
-            outfile_tw_steps.open(outputPath + "/tw_steps");
+            outfile_tw_steps.open(testing_parameter_outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
         if (romOptions.hyperreduce)
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
-        double tOverlapMidpoint = 0.0;
+        double windowEndpoint = 0.0;
+        double windowOverlapMidpoint = 0.0;
         for (int ti = 1; !last_step; ti++)
         {
             if (t + dt >= t_final)
@@ -1472,7 +1506,7 @@ int main(int argc, char *argv[])
                 // TODO: it needs to be save in the format of HDF5 format
                 // TODO: how about parallel version? introduce rank in filename
                 // TODO: think about how to reuse "gfprint" option
-                std::string filename = solution_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 outfile_romS.precision(16);
                 if (romOptions.hyperreduce && romOptions.GramSchmidt)
@@ -1581,6 +1615,8 @@ int main(int argc, char *argv[])
             {
                 timeLoopTimer.Stop();
                 samplerTimer.Start();
+
+                double real_pd;
                 if (rom_sample_stages)
                 {
                     std::vector<Vector>& RKStages = ode_solver_samp->GetRKStages();
@@ -1588,12 +1624,43 @@ int main(int argc, char *argv[])
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
-                        sampler->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
-                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], dt, RKStages[RKidx]);
+                        real_pd = -1.0;
+                        if (problem == 7)
+                        {
+                            // 2D Rayleigh-Taylor penetration distance
+                            if (romOptions.indicatorType == penetrationDistance)
+                            {
+                                double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
+                                MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                                MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
+                            }
+                            else if (romOptions.indicatorType == parameterTime)
+                            {
+                                real_pd = romOptions.atwoodFactor * RKTime[RKidx] * RKTime[RKidx];
+                            }
+                        }
+                        sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
-                sampler->SampleSolution(t, last_dt, *S);
+
+                real_pd = -1.0;
+                if (problem == 7)
+                {
+                    // 2D Rayleigh-Taylor penetration distance
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+                        MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                        MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        real_pd = romOptions.atwoodFactor * t * t;
+                    }
+                }
+                sampler->SampleSolution(t, last_dt, real_pd, *S);
 
                 bool endWindow = false;
                 if (usingWindows)
@@ -1610,9 +1677,9 @@ int main(int argc, char *argv[])
 
                 if (samplerLast)
                 {
-                    samplerLast->SampleSolution(t, last_dt, *S);
+                    samplerLast->SampleSolution(t, last_dt, real_pd, *S);
                     if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
-                        tOverlapMidpoint = t;
+                        windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
 
                     if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                     {
@@ -1620,13 +1687,13 @@ int main(int argc, char *argv[])
                         if (last_step)
                         {
                             // Let samplerLast define the final window, discarding the sampler window.
-                            tOverlapMidpoint = t;
+                            windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                             sampler = NULL;
                         }
 
-                        MFEM_VERIFY(tOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
+                        MFEM_VERIFY(windowOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << tOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            outfile_twp << windowOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
                                 outfile_twp << "\n";
                             else
@@ -1634,12 +1701,13 @@ int main(int argc, char *argv[])
                         }
                         delete samplerLast;
                         samplerLast = NULL;
-                        tOverlapMidpoint = 0.0;
+                        windowOverlapMidpoint = 0.0;
                     }
                 }
 
                 if (endWindow)
                 {
+                    windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                     if (numWindows == 0 && windowOverlapSamples > 0)
                     {
                         samplerLast = sampler;
@@ -1648,7 +1716,7 @@ int main(int argc, char *argv[])
                     {
                         sampler->Finalize(cutoff, romOptions);
                         if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                            outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
                                 outfile_twp << "\n";
                             else
@@ -1664,7 +1732,7 @@ int main(int argc, char *argv[])
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
-                        sampler->SampleSolution(t, dt, *S);
+                        sampler->SampleSolution(t, dt, real_pd, *S);
                     }
                     else sampler = NULL;
                 }
@@ -1674,7 +1742,23 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-                if (usingWindows && t >= twep[romOptions.window] && romOptions.window < numWindows-1)
+                double window_par = t;
+                if (problem == 7)
+                {
+                    if (romOptions.indicatorType == penetrationDistance)
+                    {
+                        // 2D Rayleigh-Taylor penetration distance
+                        window_par = (romOptions.useOffset) ? -pd_weight.back() : 0.0;
+                        for (int i=0; i<basis[romOptions.window]->GetDimX(); ++i)
+                            window_par -= pd_weight[i]*romS[i];
+                    }
+                    else if (romOptions.indicatorType == parameterTime)
+                    {
+                        window_par = romOptions.atwoodFactor * t * t;
+                    }
+                }
+
+                if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
                 {
                     romOptions.window++;
                     outfile_tw_steps << ti << "\n";
@@ -1732,6 +1816,14 @@ int main(int argc, char *argv[])
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
+
+                    if (problem == 7 && romOptions.indicatorType == penetrationDistance)
+                    {
+                        std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
+                        ReadPDweight(pd_weight, pd_weight_outputPath);
+                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+                    }
+
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
@@ -1739,7 +1831,7 @@ int main(int argc, char *argv[])
             if (mpi.Root())
             {
                 if (last_step) {
-                    std::ofstream outfile(outputPath + "/num_steps");
+                    std::ofstream outfile(testing_parameter_outputPath + "/num_steps");
                     outfile << ti;
                     outfile.close();
                 }
@@ -1879,7 +1971,23 @@ int main(int argc, char *argv[])
         }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            outfile_twp << t << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+            double real_pd = -1.0;
+            if (problem == 7)
+            {
+                // 2D Rayleigh-Taylor penetration distance
+                if (romOptions.indicatorType == penetrationDistance)
+                {
+                    double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+                    MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    MFEM_VERIFY(myid || real_pd >= 0.0, "Incorrect computation of penetration distance");
+                }
+                else if (romOptions.indicatorType == parameterTime)
+                {
+                    real_pd = romOptions.atwoodFactor * t * t;
+                }
+            }
+            double windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+            outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
 
             if (romOptions.SNS)
                 outfile_twp << "\n";
@@ -1895,20 +2003,20 @@ int main(int argc, char *argv[])
         }
 
         samplerTimer.Stop();
-        if(usingWindows && romOptions.parameterID == -1) outfile_twp.close();
+        if (usingWindows && romOptions.parameterID == -1) outfile_twp.close();
     }
 
     double relative_error = 10.0 * romOptions.greedyTol;
     if (rom_build_database && (rom_calc_rel_error_nonlocal_completed || rom_calc_rel_error_local_completed) && greedy_converged)
     {
-        cout << "Comparing to: " << solution_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
-        relative_error = PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
-        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
+        cout << "Comparing to: " << testing_parameter_outputPath + "/Sol" + "_" + to_string(romOptions.blast_energyFactor) << endl;
+        relative_error = PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position" + "_" + to_string(romOptions.blast_energyFactor), x_gf);
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity" + "_" + to_string(romOptions.blast_energyFactor), v_gf));
+        relative_error = std::max(relative_error, PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy" + "_" + to_string(romOptions.blast_energyFactor), e_gf));
     }
     if (rom_calc_rel_error_local_completed && relative_error > romOptions.greedyTol)
     {
-        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.")
+        MFEM_ABORT("The greedy algorithm has failed. The local ROM did not meet the relative error tolerance. Increase your relative error tolerance.");
     }
 
     if (outputSpaceTimeSolution)
@@ -1922,17 +2030,17 @@ int main(int argc, char *argv[])
     {
         if (writeSol)
         {
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
-            PrintParGridFunction(myid, solution_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+            PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
 
         if (solDiff)
         {
             if (myid == 0) cout << "solDiff mode " << endl;
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Position", x_gf);
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Velocity", v_gf);
-            PrintDiffParGridFunction(normtype, myid, solution_outputPath + "/Sol_Energy", e_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position", x_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity", v_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy", e_gf);
         }
 
         if (visitDiffCycle >= 0)
@@ -2110,9 +2218,9 @@ int main(int argc, char *argv[])
                  << fabs(energy_init - energy_final) << endl;
         }
 
-        PrintParGridFunction(myid, outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
-        PrintParGridFunction(myid, outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
-        PrintParGridFunction(myid, outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/v_gf" + romOptions.basisIdentifier, v_gf);
+        PrintParGridFunction(myid, testing_parameter_outputPath + "/e_gf" + romOptions.basisIdentifier, e_gf);
 
         // Print the error.
         // For problems 0 and 4 the exact velocity is constant in time.
@@ -2132,12 +2240,13 @@ int main(int argc, char *argv[])
         // 2D Rayleigh-Taylor penetration distance
         if (problem == 7 && fom_data)
         {
-            double my_pd[2], pd_max[2];
-            my_pd[0] = (pd1_vdof > 0) ?  (*S)(pd1_vdof) : 0.0;
-            my_pd[1] = (pd2_vdof > 0) ? -(*S)(pd2_vdof) : 0.0;
-            MPI_Reduce(my_pd, pd_max, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            double proc_pd[2], real_pd[2];
+            proc_pd[0] = (pd1_vdof >= 0) ?  (*S)(pd1_vdof) : 0.0;
+            proc_pd[1] = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
+            MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
             if (mpi.Root())
-                cout << "Penetration distance (upward, downward): " << pd_max[0] << ", " << pd_max[1] << endl;
+                cout << "Penetration distance (upward, downward): " << real_pd[0] << ", " << real_pd[1] << endl;
         }
 
         if (visualization)

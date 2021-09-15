@@ -18,9 +18,9 @@ void ReadGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, boo
 
 void WriteGreedyPhase(bool& rom_offline, bool& rom_online, bool& rom_restore, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, ROM_Options& romOptions, std::string greedyfile);
 
-int WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool printStatus);
+void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool printStatus);
 
-int VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
+void VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
 
 void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath = "", const bool printout=true);
 
@@ -33,6 +33,8 @@ int ReadTimeWindows(const int nw, std::string twfile, Array<double>& twep, const
 int ReadTimeWindowParameters(const int nw, std::string twfile, Array<double>& twep, Array2D<int>& twparam, double sFactor[], const bool printStatus, const bool rhs);
 
 void ReadGreedyTimeWindowParameters(ROM_Options& romOptions, const int nw, Array2D<int>& twparam, std::string outputPath);
+
+void ReadPDweight(std::vector<double>& pd_weight, std::string outputPath);
 
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options& romOptions);
 
