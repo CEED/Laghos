@@ -64,9 +64,11 @@ PREFIX = ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM build directory
-LIBS_DIR ?= dependencies
+MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+ROM_DIR := $(dir $(MAKEFILE_PATH))
+LIBS_DIR ?= $(ROM_DIR)/dependencies
 DEBUG := NO
-MFEM_DIR = $(LIBS_DIR)/mfem
+MFEM_DIR = $(LIBS_DIR)/libROM/dependencies/mfem
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 TEST_MK = $(MFEM_DIR)/config/test.mk
 
@@ -119,8 +121,8 @@ Ccc  = $(strip $(CC) $(CFLAGS) $(GL_OPTS))
 SOURCE_FILES = laghos.cpp laghos_solver.cpp laghos_assembly.cpp laghos_timeinteg.cpp laghos_rom.cpp laghos_utils.cpp
 OBJECT_FILES1 = $(SOURCE_FILES:.cpp=.o)
 OBJECT_FILES = $(OBJECT_FILES1:.c=.o)
-HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp SampleMesh.hpp laghos_utils.hpp
-TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp
+HEADER_FILES = laghos_solver.hpp laghos_assembly.hpp laghos_timeinteg.hpp laghos_rom.hpp laghos_utils.hpp
+TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp tests/solutionComparator.cpp tests/checkError.cpp tests/computeSpeedup.cpp
 
 # Targets
 
@@ -165,10 +167,12 @@ test: laghos
 $(CONFIG_MK) $(MFEM_LIB_FILE):
 	$(error The MFEM library is not built)
 
-regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp
+regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp tests/checkError.cpp tests/computeSpeedup.cpp
 	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
 	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
 	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
+	$(CXX) $(CXXFLAGS) -o tests/checkError tests/checkError.cpp
+	$(CXX) $(CXXFLAGS) -o tests/computeSpeedup tests/computeSpeedup.cpp
 
 clean: clean-regtest clean-build
 
@@ -179,7 +183,7 @@ clean-exec:
 	rm -rf run/*
 
 clean-regtest: clean-exec
-	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/solutionComparator tests/results
+	rm -rf tests/Laghos tests/fileComparator tests/basisComparator tests/solutionComparator tests/checkError tests/computeSpeedup tests/results
 
 distclean: clean
 	rm -rf bin/
@@ -207,10 +211,6 @@ style:
 	fi
 
 setup:
-ifeq ($(DEBUG),$(filter $(DEBUG),Yes YES))
-	$(shell ./setup.sh debug >&2)
-else
-	$(shell ./setup.sh >&2)
-endif
+	$(shell ./setup.sh $(DEBUG) $(UPDATE) >&2)
 
 $(shell mkdir -p run)
