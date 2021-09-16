@@ -746,7 +746,7 @@ int main(int argc, char *argv[])
             visit_dc.Save();
          }
 
-         if (gfprint)
+         if (last_step && gfprint)
          {
             std::ostringstream mesh_name, rho_name, v_name, e_name;
             mesh_name << basename << "_" << ti << "_mesh";
@@ -773,6 +773,17 @@ int main(int argc, char *argv[])
             e_ofs.precision(8);
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
+
+            ParaViewDataCollection dacol("ParaViewLaghos", pmesh);
+            dacol.SetLevelsOfDetail(10);
+            dacol.SetHighOrderOutput(true);
+            dacol.RegisterField("interface", &xi);
+            dacol.RegisterField("density", &rho_gf);
+            dacol.RegisterField("velocity", &v_gf);
+            dacol.RegisterField("materials", &materials);
+            dacol.SetTime(1.0);
+            dacol.SetCycle(1);
+            dacol.Save();
          }
       }
    }
