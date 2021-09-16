@@ -1276,7 +1276,10 @@ int main(int argc, char *argv[])
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
                 ReadPDweight(pd_weight, pd_weight_outputPath);
-                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+                if (myid == 0)
+                {
+                    MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.");
+                }
             }
         }
 
