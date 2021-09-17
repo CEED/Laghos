@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
-    args.AddOption(&initSamples_basename, "-is", "--initsamplesfileename",
+    args.AddOption(&initSamples_basename, "-is", "--initsamplesfilename",
                    "Prefix of the CSV file defining prescribed sample points");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
