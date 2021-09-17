@@ -1266,11 +1266,9 @@ int main(int argc, char *argv[])
 
         if (rom_online && problem == 7 && romOptions.indicatorType == penetrationDistance)
         {
-            cout << "Processor: " << myid << ": vdof = " << pd2_vdof << endl;
             if (!romOptions.hyperreduce)
             {
                 int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1; 
-                cout << "Processor: " << myid << ": tdof = " << pd2_tdof << endl;
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
@@ -1280,9 +1278,6 @@ int main(int argc, char *argv[])
                 ReadPDweight(pd_weight, pd_weight_outputPath);
                 if (myid == 0)
                 {
-                    cout << pd_weight.size() << endl;
-                    cout << basis[0]->GetDimX() << endl;
-                    cout << romOptions.useOffset << endl;
                     MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.");
                 }
             }
