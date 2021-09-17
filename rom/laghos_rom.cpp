@@ -372,7 +372,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename), 
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
@@ -968,7 +968,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     int numInitSamplesV = 0;
     initSamplesV.clear();
-    std::string initSamplesV_filename = hyperreduce_basename + "/" + initSamples_basename + "V.csv"; 
+    std::string initSamplesV_filename = hyperreduce_basename + "/" + initSamples_basename + "V.csv";
     std::ifstream initSamplesV_infile(initSamplesV_filename);
     if (initSamplesV_infile.is_open())
     {
@@ -983,7 +983,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     int numInitSamplesE = 0;
     initSamplesE.clear();
-    std::string initSamplesE_filename = hyperreduce_basename + "/" + initSamples_basename + "E.csv"; 
+    std::string initSamplesE_filename = hyperreduce_basename + "/" + initSamples_basename + "E.csv";
     std::ifstream initSamplesE_infile(initSamplesE_filename);
     if (initSamplesE_infile.is_open())
     {

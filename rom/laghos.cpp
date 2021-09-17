@@ -1268,7 +1268,7 @@ int main(int argc, char *argv[])
         {
             if (!romOptions.hyperreduce)
             {
-                int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1; 
+                int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1;
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
