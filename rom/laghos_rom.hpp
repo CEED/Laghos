@@ -141,6 +141,7 @@ struct ROM_Options
     std::string *basename = NULL;
     std::string *testing_parameter_basename = NULL;
     std::string *hyperreduce_basename = NULL;
+    std::string initSamples_basename = "";
 
     std::string basisIdentifier = "";
     std::string greedyParam = "bef";
@@ -716,6 +717,7 @@ private:
     std::string basename = "run";
     std::string testing_parameter_basename = "run";
     std::string hyperreduce_basename = "run";
+    std::string initSamples_basename = "";
 
     CAROM::Vector *fH1, *fL2;
 
@@ -785,6 +787,9 @@ protected:
     int numSamplesX = 0;
     int numSamplesV = 0;
     int numSamplesE = 0;
+
+    std::vector<int> initSamplesV;
+    std::vector<int> initSamplesE;
 
     int numTimeSamplesV = 0;
     int numTimeSamplesE = 0;

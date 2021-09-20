@@ -355,7 +355,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
@@ -946,6 +946,45 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
+    // Read the initial samples from file
+    // TODO: window-dependent initialization is not supported yet.
+
+    int numInitSamplesV = 0;
+    initSamplesV.clear();
+    std::string initSamplesV_filename = hyperreduce_basename + "/" + initSamples_basename + "V.csv";
+    std::ifstream initSamplesV_infile(initSamplesV_filename);
+    if (initSamplesV_infile.is_open())
+    {
+        std::string sample_str;
+        while (std::getline(initSamplesV_infile, sample_str))
+        {
+            initSamplesV.push_back(std::stoi(sample_str));
+            numInitSamplesV++;
+            if (numInitSamplesV >= numSamplesV) break;
+        }
+    }
+
+    int numInitSamplesE = 0;
+    initSamplesE.clear();
+    std::string initSamplesE_filename = hyperreduce_basename + "/" + initSamples_basename + "E.csv";
+    std::ifstream initSamplesE_infile(initSamplesE_filename);
+    if (initSamplesE_infile.is_open())
+    {
+        std::string sample_str;
+        while (std::getline(initSamplesE_infile, sample_str))
+        {
+            initSamplesE.push_back(std::stoi(sample_str));
+            numInitSamplesE++;
+            if (numInitSamplesE >= numSamplesE) break;
+        }
+    }
+
+    if (rank == 0)
+    {
+        cout << "number of prescribed samples for velocity: " << numInitSamplesV << "\n";
+        cout << "number of prescribed samples for energy  : " << numInitSamplesE << "\n";
+    }
+
     // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
 
     if (spaceTime)
@@ -1109,7 +1148,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         *BsinvV,
                         rank,
                         nprocs,
-                        numSamplesV);
+                        numSamplesV,
+                        &initSamplesV);
 
             CAROM::GNAT(basisFe,
                         rdimfe,
@@ -1118,7 +1158,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         *BsinvE,
                         rank,
                         nprocs,
-                        numSamplesE);
+                        numSamplesE,
+                        &initSamplesE);
         }
     }
 
@@ -1562,10 +1603,12 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (use_sns)
+    if (use_sns) // TODO: only do in online and not hyperreduce
     {
         basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
         basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
+        basisFv->write(hyperreduce_basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier);
+        basisFe->write(hyperreduce_basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier);
     }
     else
     {

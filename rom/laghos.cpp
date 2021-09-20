@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *initSamples_basename = "initSamples";
     const char *basisIdentifier = "";
     int partition_type = 0;
     double blast_energy = 0.25;
@@ -218,6 +219,8 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
+    args.AddOption(&initSamples_basename, "-is", "--initsamplesfilename",
+                   "Prefix of the CSV file defining prescribed sample points");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
                    "Here x,y,z are relative task ratios in each direction.\n\t"
@@ -352,6 +355,8 @@ int main(int argc, char *argv[])
     romOptions.basename = &outputPath;
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
+
+    romOptions.initSamples_basename = std::string(initSamples_basename);
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
@@ -1263,7 +1268,7 @@ int main(int argc, char *argv[])
         {
             if (!romOptions.hyperreduce)
             {
-                int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
+                int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1;
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
@@ -1271,7 +1276,10 @@ int main(int argc, char *argv[])
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
                 ReadPDweight(pd_weight, pd_weight_outputPath);
-                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+                if (myid == 0)
+                {
+                    MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.");
+                }
             }
         }
 
@@ -1816,7 +1824,10 @@ int main(int argc, char *argv[])
                     {
                         std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
                         ReadPDweight(pd_weight, pd_weight_outputPath);
-                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+                        if (myid == 0)
+                        {
+                            MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
+                        }
                     }
 
                     ode_solver->Init(*romOper[romOptions.window]);
