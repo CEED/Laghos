@@ -29,7 +29,7 @@ simulations using multiple PDE parameter samples.
 
 LaghosROM is based on the following article:
 
-> D. Copeland, K. Huynh, S.W. Cheung, and Y. Choi <br>
+> D. Copeland, S.W. Cheung, K. Huynh, and Y. Choi <br>
 > [Reduced order models for Lagrangian hydrodynamics](https://arxiv.org/abs/2104.11404) <br>
 > *submitted for publication*, 2021.
 
@@ -123,11 +123,13 @@ The 2D Gresho vortex problem can be runned with `-p 4`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
+./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -offline -writesol -romsvds -rostype load -romsns -nwinsamp 21 -sample-stages 
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 168 -twp twpTemp.csv -sfacv 60 -sface 30
+./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhrprep -rostype load -romsns -nwin 152 -sfacv 8 -sface 8
+./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -online -romhr -rostype load -romsns -nwin 152 -sfacv 8 -sface 8
+./laghos -p 4 -m data/square_gresho.mesh -rs 4 -ok 3 -ot 2 -tf 0.62 -s 7 -soldiff -restore -rostype load -romsns -nwin 152
 ```
 
 #### Sedov blast problem
@@ -136,11 +138,13 @@ The 3D Sedov blast wave problem can be runned with `-p 1`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
+./laghos -m data/cube01_hex.mesh -pt 211 -tf 0.8 -s 7 -offline -romsvds -writesol -rostype load -romsns -nwinsamp 21 -sample-stages
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 71 -twp twpTemp.csv -sfacv 20 -sface 35
+./laghos -m data/cube01_hex.mesh -pt 211 -tf 0.8 -s 7 -online -rostype load -romhrprep -romsns -nwin 66 -sfacv 2 -sface 2
+./laghos -m data/cube01_hex.mesh -pt 211 -tf 0.8 -s 7 -online -rostype load -romhr -romsns -nwin 66 -sfacv 2 -sface 2
+./laghos -m data/cube01_hex.mesh -pt 211 -tf 0.8 -s 7 -restore -soldiff -rostype load -romsns -nwin 66
 ```
 
 #### Taylor-Green vortex problem
@@ -149,11 +153,13 @@ The 3D Taylor-Green vortex problem can be runned with `-p 0`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
+./laghos -p 0 -rs 2 -cfl 0.1 -tf 0.25 -s 7 -offline -romsvds -writesol -rostype load -romsns -nwinsamp 21 -sample-stages
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 0 -m data/cube01_hex.mesh -rs 2 -cfl 0.1 -tf 0.25 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 90 -twp twpTemp.csv -sfacv 120 -sface 120
+./laghos -p 0 -rs 2 -cfl 0.1 -tf 0.25 -s 7 -online -rostype load -romhrprep -romsns -nwin 82 -sfacv 2 -sface 2
+./laghos -p 0 -rs 2 -cfl 0.1 -tf 0.25 -s 7 -online -rostype load -romhr -romsns -nwin 82 -sfacv 2 -sface 2
+./laghos -p 0 -rs 2 -cfl 0.1 -tf 0.25 -s 7 -restore -soldiff -rostype load -romsns -nwin 82
 ```
 
 #### Triple-point problem
@@ -162,11 +168,13 @@ The 3D triple-point problem can be runned with `-p 3`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -pa -offline -writesol -romsvds -ef 0.9999 -romsrhs -romos -rostype load -nwinsamp 10 
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -s 7 -cfl 0.5 -offline -writesol -romsvds -rostype load -romsns -nwinsamp 21 -sample-stages
 ```
 The corresponding run of the reduce order model is:
 ```sh
-./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype load -nwin 20 -twp twpTemp.csv -sfacv 720 -sface 240
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -s 7 -cfl 0.5 -online -romhrprep -rostype load -romsns -nwin 18 -sfacv 2 -sface 2
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -s 7 -cfl 0.5 -online -romhr -rostype load -romsns -nwin 18 -sfacv 2 -sface 2
+./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 0.8 -s 7 -cfl 0.5 -restore -soldiff -rostype load -romsns -nwin 18
 ```
 
 #### Parametric Sedov blast problem
@@ -175,19 +183,20 @@ The 3D parametric Sedov blast wave problem can be runned with `-p 1` in the snap
 
 A sample run of the offline stage is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 1.0 -rpar 0
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 1.2 -rpar 1
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -romsvds -romsrhs -romos -rostype interpolate -bef 0.8 -rpar 2
-./merge -nset 3 -ef 0.9999 -rhs -romos -rostype interpolate -nwinsamp 10
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -rostype interpolate -romsns -sample-stages -bef 1.0 -rpar 0
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -rostype interpolate -romsns -sample-stages -bef 1.2 -rpar 1
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -offline -rostype interpolate -romsns -sample-stages -bef 0.8 -rpar 2
+./merge -nset 3 -rostype interpolate -romsns -nwinsamp 21
 ```
 
 A sample run of the full order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -writesol -bef 1.1 
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -writesol -bef 0.9
 ```
 A corresponding sample run of the reduce order model is:
 ```sh
-./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -soldiff -romhr -romsrhs -romgs -romos -rostype interpolate -nwin 27 -twp twpTemp.csv -sfacv 50 -sface 36 -bef 0.9
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -romhrprep -rostype interpolate -romsns -nwin 27 -sfacv 2 -sface 2 -bef 0.9
+./laghos -p 1 -m data/cube01_hex.mesh -pt 211 -tf 0.8 -pa -online -romhr -rostype interpolate -romsns -nwin 27 -sfacv 2 -sface 2 -bef 0.9
 ```
 
 ## Verification of Results
@@ -198,10 +207,10 @@ between the full order model and the reduced order model (note the `-writesol` a
 
 | `Problem` | `E_v` | `E_e` | `E_x` |
 | ----- | ------ | ---- | --- |
-| Gresho vortex | 0.0442954563 | 0.0116069954 | 0.0005619728 |
-| Sedov blast | 0.0096947945 | 0.0001539552 | 0.0001362571 |
-| Taylor-Green vortex | 0.0358874219 | 0.0028153373 | 0.0003168334 |
-| Triple-point | 0.0203094905 | 0.0290051342 | 0.0004656691 |
+| Gresho vortex | 4.44385e-05 | 3.9624e-06 | 1.3527e-06 |
+| Sedov blast | 2.17542e-04 | 2.35066e-04 | 2.25713e-05 |
+| Taylor-Green vortex | 1.13658e-06 | 1.00322e-07 | 1.84963e-08 |
+| Triple-point | 8.09275e-04 | 2.77958e-04 | 3.14557e-05 |
 | Parametric Sedov blast | 0.0475838078 | 0.020014503 | 0.0022553601 |
 
 The results are generated by the [Quartz](https://hpc.llnl.gov/hardware/platforms/Quartz) machine at LLNL.
