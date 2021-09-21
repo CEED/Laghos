@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
     const char *basename = "";
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
+    const char *initSamples_basename = "initSamples";
     const char *basisIdentifier = "";
     int partition_type = 0;
     double blast_energy = 0.25;
@@ -218,6 +219,8 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
+    args.AddOption(&initSamples_basename, "-is", "--initsamplesfilename",
+                   "Prefix of the CSV file defining prescribed sample points");
     args.AddOption(&partition_type, "-pt", "--partition",
                    "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
                    "Here x,y,z are relative task ratios in each direction.\n\t"
@@ -352,6 +355,7 @@ int main(int argc, char *argv[])
     romOptions.basename = &outputPath;
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
+    romOptions.initSamples_basename = std::string(initSamples_basename);
 
     if (mpi.Root()) {
         const char path_delim = '/';
@@ -433,6 +437,21 @@ int main(int argc, char *argv[])
                 numWindows = countNumLines(outputPath + "/" + std::string(twpfile) + romOptions.basisIdentifier);
             }
         }
+    }
+
+    if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        if (std::string(testing_parameter_basename) != "")
+            mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMoffset" + romOptions.basisIdentifier).c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
     }
 
     // Use the ROM database to run the parametric case on another parameter point.
@@ -939,7 +958,8 @@ int main(int argc, char *argv[])
         visc = true;
     }
 
-    // 2D Rayleigh-Taylor penetration distance
+    // Finding kinematic DOF on the end of the interface
+    // which measure penetration distance in 2D Rayleigh-Taylor instability (problem 7)
     int pd1_vdof = -1, pd2_vdof = -1;
     if (problem == 7)
     {
@@ -1189,7 +1209,6 @@ int main(int argc, char *argv[])
                             visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
                 }
             }
-
             romOptions.window = 0;
         }
         else
@@ -1214,7 +1233,8 @@ int main(int argc, char *argv[])
                 cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
-            for (int curr_window = 1; curr_window < numWindows; curr_window++) {
+            for (int curr_window = 1; curr_window < numWindows; curr_window++)
+            {
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
@@ -1262,23 +1282,18 @@ int main(int argc, char *argv[])
         {
             if (!romOptions.hyperreduce)
             {
-                int pd2_tdof = H1FESpace->GetLocalTDofNumber(pd2_vdof);
+                int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1;
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
             if (!romOptions.hyperreduce_prep)
             {
-                std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight0";
-                std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
-                MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
-                pd_weight.clear();
-                double pd_w;
-                while (infile_pd_weight >> pd_w)
+                std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
+                ReadPDweight(pd_weight, pd_weight_outputPath);
+                if (myid == 0)
                 {
-                    pd_weight.push_back(pd_w);
+                    MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.");
                 }
-                infile_pd_weight.close();
-                MFEM_VERIFY(pd_weight.size() == basis[0]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
             }
         }
 
@@ -1626,40 +1641,41 @@ int main(int argc, char *argv[])
                     MFEM_VERIFY(RKStages.size() == RKStepNumSamples, "Inconsistent number of Runge Kutta stages.");
                     for (int RKidx = 0; RKidx < RKStepNumSamples; ++RKidx)
                     {
+                        real_pd = -1.0;
                         if (problem == 7)
                         {
                             // 2D Rayleigh-Taylor penetration distance
                             if (romOptions.indicatorType == penetrationDistance)
                             {
-                                real_pd = -1.0;
                                 double proc_pd = (pd2_vdof >= 0) ? -RKStages[RKidx](pd2_vdof) : 0.0;
                                 MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                                MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
                             }
                             else if (romOptions.indicatorType == parameterTime)
                             {
                                 real_pd = romOptions.atwoodFactor * RKTime[RKidx] * RKTime[RKidx];
                             }
-                            MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
                         }
                         sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                         if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
+
+                real_pd = -1.0;
                 if (problem == 7)
                 {
                     // 2D Rayleigh-Taylor penetration distance
                     if (romOptions.indicatorType == penetrationDistance)
                     {
-                        real_pd = -1.0;
                         double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                         MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                        MFEM_VERIFY(myid > 0 || real_pd >= 0.0, "Incorrect computation of penetration distance");
                     }
                     else if (romOptions.indicatorType == parameterTime)
                     {
                         real_pd = romOptions.atwoodFactor * t * t;
                     }
-                    MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
                 }
                 sampler->SampleSolution(t, last_dt, real_pd, *S);
 
@@ -1820,17 +1836,12 @@ int main(int argc, char *argv[])
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
-                        std::string pd_weight_outPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
-                        std::ifstream infile_pd_weight(pd_weight_outPath.c_str());
-                        MFEM_VERIFY(infile_pd_weight.good(), "Weight file does not exist.")
-                        pd_weight.clear();
-                        double pd_w;
-                        while (infile_pd_weight >> pd_w)
+                        std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
+                        ReadPDweight(pd_weight, pd_weight_outputPath);
+                        if (myid == 0)
                         {
-                            pd_weight.push_back(pd_w);
+                            MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
                         }
-                        infile_pd_weight.close();
-                        MFEM_VERIFY(pd_weight.size() == basis[romOptions.window]->GetDimX()+romOptions.useOffset, "Number of weights do not match.")
                     }
 
                     ode_solver->Init(*romOper[romOptions.window]);
@@ -1980,21 +1991,20 @@ int main(int argc, char *argv[])
         }
 
         if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
-            double real_pd;
+            double real_pd = -1.0;
             if (problem == 7)
             {
                 // 2D Rayleigh-Taylor penetration distance
                 if (romOptions.indicatorType == penetrationDistance)
                 {
-                    real_pd = -1.0;
                     double proc_pd = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
                     MPI_Reduce(&proc_pd, &real_pd, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+                    MFEM_VERIFY(myid || real_pd >= 0.0, "Incorrect computation of penetration distance");
                 }
                 else if (romOptions.indicatorType == parameterTime)
                 {
                     real_pd = romOptions.atwoodFactor * t * t;
                 }
-                MFEM_VERIFY(real_pd >= 0.0, "Incorrect computation of penetration distance");
             }
             double windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
             outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];

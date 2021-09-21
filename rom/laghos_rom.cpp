@@ -274,71 +274,54 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     finalized = true;
 }
 
-CAROM::Matrix* GetFirstColumns(const int N, const CAROM::Matrix* A, const int rowOS, const int numRows)
-{
-    CAROM::Matrix* S = new CAROM::Matrix(numRows, std::min(N, A->numColumns()), A->distributed());
-    for (int i=0; i<S->numRows(); ++i)
-    {
-        for (int j=0; j<S->numColumns(); ++j)
-            (*S)(i,j) = (*A)(rowOS + i, j);
-    }
-
-    return S;
-}
-
-CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim)
+CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
-
+    CAROM::Matrix *basis;
     if (dim == -1)
-        dim = basis->numColumns();
+    {
+        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
+    }
+    else
+    {
+        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0, dim);
+    }
 
-    // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
-    // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
-    // Another alternative would be for BasisReader to allow the option to release ownership.
-    // On the other hand, maybe it is best just to keep doing this copy, since it truncates the basis.
-    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, rowOS, vectorSize);
-
-    MFEM_VERIFY(basisCopy->numRows() == vectorSize, "");
+    MFEM_VERIFY(basis->numRows() == vectorSize, "");
 
     if (rank == 0)
-        cout << "Read basis " << filename << " of dimension " << basisCopy->numColumns() << endl;
+        cout << "Read basis " << filename << " of dimension " << basis->numColumns() << endl;
 
-    //delete basis;  // TODO: it seems this can be done safely.
-    return basisCopy;
+    return basis;
 }
 
 CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, int& temporalSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+    CAROM::Matrix *basis;
 
     // The size of basis is (number of time samples) x (basis dimension), and it is a distributed matrix.
     // In libROM, a Matrix is always distributed row-wise. In this case, the global matrix is on each process.
-    temporalSize = basis->numRows();
     if (dim == -1)
-        dim = basis->numColumns();
-
-    // Make a deep copy of basis, which is inefficient but necessary since BasisReader owns the basis data and deletes it when BasisReader goes out of scope.
-    // An alternative would be to keep all the BasisReader instances as long as each basis is kept, but that would be inconvenient.
-    // Another alternative would be for BasisReader to allow the option to release ownership.
-    // On the other hand, maybe it is best just to keep doing this copy, since it truncates the basis.
-    CAROM::Matrix* basisCopy = GetFirstColumns(dim, basis, 0, temporalSize);
-
-    MFEM_VERIFY(basisCopy->numRows() == temporalSize, "");
+    {
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+    }
+    else
+    {
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0, dim);
+    }
+    temporalSize = basis->numRows();
 
     if (rank == 0)
-        cout << "Read temporal basis " << filename << " of dimension " << basisCopy->numColumns() << endl;
+        cout << "Read temporal basis " << filename << " of dimension " << basis->numColumns() << endl;
 
-    //delete basis;  // TODO: it seems this can be done safely.
-    return basisCopy;
+    return basis;
 }
 
 CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim,
                             hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
 {
-    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, rowOS, dim);
+    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, dim);
     CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
     Vector Bej(A->numRows());
     Vector MBej(A->numRows());
@@ -372,7 +355,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
       use_sns(input.SNS),  offsetInit(input.useOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
-      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename),
+      RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), basisIdentifier(input.basisIdentifier),
@@ -479,13 +462,13 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
 
     if (offsetInit)
     {
-        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init"; // TODO: think about parametric case
+        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         if (input.offsetType == useInitialState)
         {
             cout << "Reading: " << path_init << endl;
 
-            // Read offset in the online phase of initial mode
+            // Read initial offset in the restore phase or online phase
             initX->read(path_init + "X0");
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
@@ -496,7 +479,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         {
             cout << "Reading: " << path_init << endl;
 
-            // Read offsets in the restore phase or in the online phase of non-parametric save-and-load mode
+            // Read window dependent offsets in the restore phase or in the online phase
             initX->read(path_init + "X" + std::to_string(input.window));
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
@@ -505,6 +488,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
         }
         else if (input.offsetType == interpolateOffset)
         {
+            // Interpolate and save window dependent offsets in the online phase
 
             // Calculation of coefficients of offset data using inverse distance weighting interpolation
             std::ifstream infile_offlineParam(basename + "/offline_param" + input.basisIdentifier + ".csv");
@@ -514,6 +498,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             std::getline(infile_offlineParam, line);
             int true_idx = -1;
             double coeff_sum = 0.0;
+
             // Compute the distances from online parameters to each offline parameter
             while (std::getline(infile_offlineParam, line))
             {
@@ -531,6 +516,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
                 coeff_sum += coeff;
                 coeff_list.push_back(coeff);
             }
+
             // Determine the coefficients with respect to the offline parameters
             // The coefficients are inversely porportional to distances and form a convex combination of offset data
             for (int param=0; param<paramID_list.size(); ++param)
@@ -546,7 +532,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_
             }
             infile_offlineParam.close();
 
-            // Interpolate and save offset in the online phase of parametric save-and-load mode
+            // Compute and save the interpolated offset
             for (int i=0; i<tH1size; ++i)
                 (*initX)(i) = 0;
             for (int i=0; i<tH1size; ++i)
@@ -666,7 +652,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 {
     if ((offsetInit || spaceTime) && !input.restore && input.offsetType == useInitialState && input.window == 0)
     {
-        std::string path_init = basename + "/ROMoffset" + input.basisIdentifier + "/init";
+        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
 
         // Compute and save offset in the online phase for the initial window in the useInitialState mode
         Vector X, V, E;
@@ -711,6 +697,7 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
 
     if ((offsetInit || spaceTime) && hyperreduce_prep)
     {
+        // Compute and save offset restricted on sample mesh in the online hyperreduction preparation phase for all windows
         CAROM::Matrix FOMX0(tH1size, 2, true);
 
         for (int i=0; i<tH1size; ++i)
@@ -959,6 +946,45 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         cout << "number of samples for energy  : " << numSamplesE << "\n";
     }
 
+    // Read the initial samples from file
+    // TODO: window-dependent initialization is not supported yet.
+
+    int numInitSamplesV = 0;
+    initSamplesV.clear();
+    std::string initSamplesV_filename = hyperreduce_basename + "/" + initSamples_basename + "V.csv";
+    std::ifstream initSamplesV_infile(initSamplesV_filename);
+    if (initSamplesV_infile.is_open())
+    {
+        std::string sample_str;
+        while (std::getline(initSamplesV_infile, sample_str))
+        {
+            initSamplesV.push_back(std::stoi(sample_str));
+            numInitSamplesV++;
+            if (numInitSamplesV >= numSamplesV) break;
+        }
+    }
+
+    int numInitSamplesE = 0;
+    initSamplesE.clear();
+    std::string initSamplesE_filename = hyperreduce_basename + "/" + initSamples_basename + "E.csv";
+    std::ifstream initSamplesE_infile(initSamplesE_filename);
+    if (initSamplesE_infile.is_open())
+    {
+        std::string sample_str;
+        while (std::getline(initSamplesE_infile, sample_str))
+        {
+            initSamplesE.push_back(std::stoi(sample_str));
+            numInitSamplesE++;
+            if (numInitSamplesE >= numSamplesE) break;
+        }
+    }
+
+    if (rank == 0)
+    {
+        cout << "number of prescribed samples for velocity: " << numInitSamplesV << "\n";
+        cout << "number of prescribed samples for energy  : " << numInitSamplesE << "\n";
+    }
+
     // Perform DEIM, GNAT, or QDEIM to find sample DOF's.
 
     if (spaceTime)
@@ -1097,8 +1123,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {
             CAROM::QDEIM(basisFv,
                          rdimfv,
-                         sample_dofs_V.data(),
-                         num_sample_dofs_per_procV.data(),
+                         sample_dofs_V,
+                         num_sample_dofs_per_procV,
                          *BsinvV,
                          rank,
                          nprocs,
@@ -1106,8 +1132,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
             CAROM::QDEIM(basisFe,
                          rdimfe,
-                         sample_dofs_E.data(),
-                         num_sample_dofs_per_procE.data(),
+                         sample_dofs_E,
+                         num_sample_dofs_per_procE,
                          *BsinvE,
                          rank,
                          nprocs,
@@ -1117,21 +1143,23 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         {
             CAROM::GNAT(basisFv,
                         rdimfv,
-                        sample_dofs_V.data(),
-                        num_sample_dofs_per_procV.data(),
+                        sample_dofs_V,
+                        num_sample_dofs_per_procV,
                         *BsinvV,
                         rank,
                         nprocs,
-                        numSamplesV);
+                        numSamplesV,
+                        &initSamplesV);
 
             CAROM::GNAT(basisFe,
                         rdimfe,
-                        sample_dofs_E.data(),
-                        num_sample_dofs_per_procE.data(),
+                        sample_dofs_E,
+                        num_sample_dofs_per_procE,
                         *BsinvE,
                         rank,
                         nprocs,
-                        numSamplesE);
+                        numSamplesE,
+                        &initSamplesE);
         }
     }
 
@@ -1509,14 +1537,14 @@ int ROM_Basis::SolutionSizeFOM() const
 void ROM_Basis::ReadSolutionBases(const int window)
 {
     if (!useVX)
-        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimv);
+        basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdime);
+    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, rdime);
 
     if (useXV)
         basisX = basisV;
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, 0, rdimx);
+        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, rdimx);
 
     if (useVX)
         basisV = basisX;
@@ -1570,20 +1598,22 @@ void ROM_Basis::ReadSolutionBases(const int window)
         const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
 
         // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
-        basisX = GetFirstColumns(rdimx, basisX_full, 0, tH1size);
+        basisX = basisX_full->getFirstNColumns(rdimx);
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
     }
 
-    if (use_sns)
+    if (use_sns) // TODO: only do in online and not hyperreduce
     {
         basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
         basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
+        basisFv->write(hyperreduce_basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier);
+        basisFe->write(hyperreduce_basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier);
     }
     else
     {
-        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv);
-        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe);
+        basisFv = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier, tH1size, rdimfv);
+        basisFe = ReadBasisROM(rank, basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier, tL2size, rdimfe);
     }
 }
 
