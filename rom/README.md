@@ -29,9 +29,9 @@ simulations using multiple PDE parameter samples.
 
 LaghosROM is based on the following article:
 
-> D. Copeland, S.W. Cheung, K. Huynh, and Y. Choi <br>
-> [Reduced order models for Lagrangian hydrodynamics](https://arxiv.org/abs/2104.11404) <br>
-> *submitted for publication*, 2021.
+> D. Copeland, S.W. Cheung, K. Huynh, and Y. Choi. <br>
+> [Reduced order models for Lagrangian hydrodynamics](https://arxiv.org/abs/2104.11404). <br>
+> *arXiv preprint arXiv:2104.11404*, 2021.
 
 To see the purpose of **Laghos**, please see README.md in Laghos directory.
 
