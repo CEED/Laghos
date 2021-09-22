@@ -233,6 +233,7 @@ These YouTube tutorial videos might be useful for you:
 
 - [Poisson equation and its finite element discretization](https://youtu.be/YaZPtlbGay4)
 - [Poisson equation and its reduced order model](https://youtu.be/YlFrBP31riA)
+- [Physics-informed sampling procedure for reduced order models](https://youtu.be/A5JlIXRHxrI)
 
 ## Copyright
 
