@@ -37,10 +37,11 @@ private:
    const int problem;
    const ParMesh &pmesh;
    const int glob_NE;
+   const bool pure_test;
 
 public:
-   InterfaceCoeff(int prob, const ParMesh &pm)
-      : problem(prob), pmesh(pm), glob_NE(pm.GetGlobalNE()) { }
+   InterfaceCoeff(int prob, const ParMesh &pm, bool pure)
+      : problem(prob), pmesh(pm), glob_NE(pm.GetGlobalNE()), pure_test(pure) { }
 
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip);
 };

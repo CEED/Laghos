@@ -366,7 +366,9 @@ int main(int argc, char *argv[])
    // Scaling of both shifting terms.
    double shift_scale = 1.0;
 
+   const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
+
 
    if (e_shift_type > 1)
    {
@@ -378,12 +380,12 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-//#define EXTRACT_1D
+#define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
    ParGridFunction xi(&pfes_xi);
-   hydrodynamics::InterfaceCoeff coeff_xi_0(problem, *pmesh);
+   hydrodynamics::InterfaceCoeff coeff_xi_0(problem, *pmesh, pure_test);
    xi.ProjectCoefficient(coeff_xi_0);
    GridFunctionCoefficient coeff_xi(&xi);
 
@@ -397,6 +399,7 @@ int main(int argc, char *argv[])
       materials(i) = mat_id;
       if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
       {
+         // Relevant only for the 1D tests.
          zone_id_L = i-1;
          zone_id_R = i;
       }
@@ -408,20 +411,23 @@ int main(int argc, char *argv[])
    // Set the initial condition based on the materials.
    Coefficient *rho_coeff = &rho0_coeff;
    GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
-   if (problem == 8)
+   if (v_shift_type > 0 || e_shift_type > 0)
    {
-      hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
-   }
-   else if (problem == 9)
-   {
-      hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
-      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
-   }
-   else if (problem == 10)
-   {
-      hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-      if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+      if (problem == 8)
+      {
+         hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+      }
+      else if (problem == 9)
+      {
+         hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
+         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+      }
+      else if (problem == 10)
+      {
+         hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+      }
    }
 
    v_gf.SyncAliasMemory(S);
@@ -543,8 +549,9 @@ int main(int argc, char *argv[])
    // Shifting - related extractors.
 #ifdef EXTRACT_1D
 
-   if (problem != 8 && problem != 9) {
-       MFEM_ABORT(" Please comment out extract1D\n.");
+   if (problem != 8 && problem != 9)
+   {
+      MFEM_ABORT("Please comment out extract1D\n.");
    }
    MFEM_VERIFY(H1FESpace.GetNRanks() == 1,
                "Point extraction works inly in serial.");
@@ -552,17 +559,21 @@ int main(int argc, char *argv[])
    ParGridFunction &pe_gf = hydro.GetPressure(e_gf);
    Vector point_interface(1), point_face(1);
    point_interface(0) = 0.5;
-   if (problem == 9) { point_interface(0) = 0.7; }
+   if (problem == 9)
+   {
+      point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
+   }
    point_face(0) = zone_id_R * dx;
-   std::cout << zone_id_L << " " << zone_id_R <<  std::endl;
-   std::cout << point_interface(0) << " " << point_face(0) <<  std::endl;
+   std::cout << zone_id_L << " " << zone_id_R << std::endl;
+   std::cout << "True interface: " << point_interface(0) << std::endl
+             << "Surrogate:      " << point_face(0) <<  std::endl;
    hydrodynamics::PrintCellNumbers(point_interface, H1FESpace);
    hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
    // By construction, the interface is in the left zone.
    std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
                enameFL, enameFR, enameSL, enameSR;
 
-   std::string prefix = (problem == 8) ? "sod_" : "airwater_";
+   std::string prefix = (problem == 8) ? "sod_" : "wa_";
    vname = prefix + "v.out";
    xname = prefix + "x.out";
    enameFL = prefix + "e_fit_L.out";
@@ -574,8 +585,8 @@ int main(int argc, char *argv[])
    pnameSL = prefix + "p_shift_L.out";
    pnameSR = prefix + "p_shift_R.out";
 
-   hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
-   hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
+   //hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
+   //hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
    hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enameFL);
    hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enameFR);
    hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face, e_gf,
@@ -588,9 +599,9 @@ int main(int argc, char *argv[])
                                                   dist, pnameSL);
    hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, pe_gf,
                                                   dist, pnameSR);
-   v_extr.WriteValue(0.0);
-   x_extr.WriteValue(0.0);
-   if (v_shift_type == 0 && e_shift_type == 0)
+   //v_extr.WriteValue(0.0);
+   //x_extr.WriteValue(0.0);
+   if (pure_test)
    {
       e_L_extr.WriteValue(0.0);
       e_R_extr.WriteValue(0.0);
@@ -652,9 +663,9 @@ int main(int argc, char *argv[])
       // Shifting-related procedures.
       if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 #ifdef EXTRACT_1D
-      v_extr.WriteValue(t);
-      x_extr.WriteValue(t);
-      if (v_shift_type == 0 && e_shift_type == 0)
+      //v_extr.WriteValue(t);
+      //x_extr.WriteValue(t);
+      if (pure_test)
       {
          e_L_extr.WriteValue(t);
          e_R_extr.WriteValue(t);

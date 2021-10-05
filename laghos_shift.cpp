@@ -24,6 +24,9 @@ namespace mfem
 namespace hydrodynamics
 {
 
+// LS < 0 --> material 0.
+// mixed  --> material 0.
+// LS > 0 --> material 1.
 int material_id(int el_id, const ParGridFunction &g)
 {
    const ParFiniteElementSpace &pfes =  *g.ParFESpace();
@@ -33,7 +36,7 @@ int material_id(int el_id, const ParGridFunction &g)
       IntRules.Get(fe->GetGeomType(), pfes.GetOrder(el_id) + 7);
 
    double integral = 0.0;
-   bool is_positive = true;
+   bool pos_value = false, neg_value = false;
    g.GetValues(el_id, ir, g_vals);
    ElementTransformation *Tr = pfes.GetMesh()->GetElementTransformation(el_id);
    for (int q = 0; q < ir.GetNPoints(); q++)
@@ -41,9 +44,14 @@ int material_id(int el_id, const ParGridFunction &g)
       const IntegrationPoint &ip = ir.IntPoint(q);
       Tr->SetIntPoint(&ip);
       integral += ip.weight * g_vals(q) * Tr->Weight();
-      if (g_vals(q) + 1e-12 < 0.0) { is_positive = false; }
+      if (g_vals(q) - 1e-12 > 0.0) { pos_value = true; }
+      if (g_vals(q) + 1e-12 < 0.0) { neg_value = true; }
    }
-   return (is_positive) ? 1 : 0;
+
+   if (pos_value == false) { return 0; }
+   if (neg_value == false) { return 1; }
+   return 0;
+
    //return (integral > 0.0) ? 1 : 0;
 }
 
@@ -54,17 +62,17 @@ void MarkFaceAttributes(ParFiniteElementSpace &pfes)
    // Set face_attribute = 77 to faces that are on the material interface.
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {
-      auto *ftr = pmesh->GetFaceElementTransformations(f, 3);
-      if (ftr->Elem2No > 0 &&
-          pmesh->GetAttribute(ftr->Elem1No) != pmesh->GetAttribute(ftr->Elem2No))
+      auto *ft = pmesh->GetFaceElementTransformations(f, 3);
+      if (ft->Elem2No > 0 &&
+          pmesh->GetAttribute(ft->Elem1No) != pmesh->GetAttribute(ft->Elem2No))
       {
          pmesh->SetFaceAttribute(f, 77);
       }
    }
-   for (int f = 0; f < pmesh->GetNSharedFaces(); f++) {
+   for (int f = 0; f < pmesh->GetNSharedFaces(); f++)
+   {
        auto *ftr = pmesh->GetSharedFaceTransformations(f, 3);
        int faceno = pmesh->GetSharedFace(f);
-       int Elem1no = ftr->Elem1No;
        int Elem2NbrNo = ftr->Elem2No - pmesh->GetNE();
        auto *nbrftr = pfes.GetFaceNbrElementTransformation(Elem2NbrNo);
        int attr1 = pmesh->GetAttribute(ftr->Elem1No);
@@ -118,8 +126,20 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
          }
          else { MFEM_ABORT("wrong TG mode"); return 0.0; }
       }
-      case 8: return tanh(x(0) - 0.5); // 2 mat Sod.
-      case 9: return tanh(x(0) - 0.7); // water-air.
+      case 8:
+      {
+         // Sod - the 1D domain length is 1.
+         const double dx = 1.0 / glob_NE;
+         return (pure_test) ? tanh(x(0) - 0.5)
+                            : tanh(x(0) - (0.5 + 0.5*dx));
+      }
+      case 9:
+      {
+         // Water-air - the 1D domain length is 1.
+         const double dx = 1.0 / glob_NE;
+         return (pure_test) ? tanh(x(0) - 0.7)
+                            : tanh(x(0) - (0.7 + 0.5*dx));
+      }
       case 10:
       {
          // The domain area for the 3point is 21.
@@ -1003,10 +1023,12 @@ void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
    {
       if (pfes.GetParMesh()->GetAttribute(i) == 1)
       {
+         // Left material (high pressure).
          r = 1.000; g = 2.0; p = 2.0;
       }
       else
       {
+         // Right material (low pressure).
          r = 0.125; g = 1.4; p = 0.1;
       }
 
@@ -1032,6 +1054,7 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
    {
       if (pfes.GetParMesh()->GetAttribute(i) == 1)
       {
+         // Left material - water (attribute 1).
          r = 1000; g = 4.4; p = 1.e9;
          double A = 6.0e8;
          gamma(i) = g;
@@ -1043,6 +1066,7 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
       }
       else
       {
+         // Right material - air (attribute 2).
          r = 50; g = 1.4; p = 1.e5;
          gamma(i) = g;
          for (int j = 0; j < ndofs; j++)
