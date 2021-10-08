@@ -505,20 +505,24 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
       // ---
 
-      enum SolverType {Penalty, Eliminate, Schur};
+      enum SolverType {Eliminate, Penalty, Schur};
       const SolverType type = Schur;
 
-      Array<int> constraint_atts(1);
+      Array<int> constraint_atts(2);
       constraint_atts[0] = 4;
+      constraint_atts[1] = 5;
       Array<int> constraint_rowstarts;
 
       HypreParMatrix *hconstraints = BuildNormalConstraintsNoIntersection(
                         H1, constraint_atts, constraint_rowstarts);
 
-      SparseMatrix* local_constraints =
+      SparseMatrix *local_constraints =
             ParBuildNormalConstraints(H1, constraint_atts,
                                           constraint_rowstarts);
-      ConstrainedSolver * solver;
+
+      ConstrainedSolver *solver;
+      OperatorJacobiSmoother M;
+      M.SetOperator(A);
       if (type == Eliminate)
       {
         solver = new EliminationCGSolver(A, *local_constraints,
@@ -531,9 +535,11 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       }
       else if (type == Schur)
       {
-         solver = new SchurConstrainedHypreSolver(H1.GetComm(), A,
-                                                  *hconstraints, dim,
-                                                  false);
+//         solver = new SchurConstrainedHypreSolver(H1.GetComm(), A,
+//                                                  *hconstraints, dim,
+//                                                  false);
+         solver = new SchurConstrainedSolver(H1.GetComm(), A,
+                                             *local_constraints, M);
       }
 
       solver->SetRelTol(cg_rel_tol);
