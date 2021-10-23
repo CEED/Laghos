@@ -169,7 +169,7 @@ public:
    void ResetQuadratureData() const { qdata_is_current = false; }
 
    void SetShiftingOptions(int problem, int vs_type, int es_type, bool shift_v,
-                           double scale)
+                           double scale, bool diffusion)
    {
       p_func.SetProblem(problem);
 
@@ -193,6 +193,8 @@ public:
          FaceForce.Assemble(0);
          FaceForce.Finalize(0);
       }
+      // Done after the dummy assembly to avoid extra calculations.
+      v_integ->SetDiffusion(diffusion);
    }
 
    // The density values, which are stored only at some quadrature points,

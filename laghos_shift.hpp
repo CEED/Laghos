@@ -82,6 +82,7 @@ private:
 
    void SetShiftType(int type) { v_shift_type = type; }
    void SetScale(double s) { scale = s; }
+   void SetDiffusion(bool d) { diffuse = d; }
 
    void SetVelocity(const ParGridFunction &vel) { v = &vel; }
    void UnsetVelocity() { v = nullptr; }

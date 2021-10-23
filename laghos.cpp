@@ -362,9 +362,11 @@ int main(int argc, char *argv[])
    //N5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
    // optionally, a stability term can be added:
    // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   int e_shift_type = 1;
+   int e_shift_type = 0;
    // Scaling of both shifting terms.
    double shift_scale = 1.0;
+   // Activate the diffusion.
+   bool v_shift_diffusion = true;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
@@ -469,8 +471,9 @@ int main(int argc, char *argv[])
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, &dt);
+
    hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_momentum,
-                            shift_scale);
+                            shift_scale, v_shift_diffusion);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";
@@ -634,6 +637,7 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance. The function does t += dt.
+
       ode_solver->Step(S, t, dt);
       steps++;
 

@@ -272,18 +272,24 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
 
-   auto tfi_v = FaceForce.GetFBFI();
-   auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
-   v_integ->SetVelocity(v);
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
-   v_integ->UnsetVelocity();
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt) const
 {
+   Vector* sptr = const_cast<Vector*>(&S);
+   ParGridFunction v;
+   const int VsizeH1 = H1.GetVSize();
+   v.MakeRef(&H1, *sptr, VsizeH1);
+   auto tfi_v = FaceForce.GetFBFI();
+   auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
+   v_integ->SetVelocity(v);
+   v = 0.0;
+   v = p_func.GetPressure();
+
    UpdateQuadratureData(S);
    AssembleForceMatrix();
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -338,11 +344,19 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    cg.SetPrintLevel(-1);
    cg.Mult(B, X);
    Mv.RecoverFEMSolution(X, rhs, dv);
+
+   v_integ->UnsetVelocity();
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
+   ParGridFunction vel;
+   Vector* s = const_cast<Vector*>(&v);
+   vel.MakeRef(&H1, *s, H1.GetVSize());
+   auto tfi_v = FaceForce.GetFBFI();
+   auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
+   v_integ->SetVelocity(vel);
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -383,6 +397,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       de.SetSubVector(l2dofs, loc_de);
    }
    delete e_source;
+
+   v_integ->UnsetVelocity();
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
@@ -792,7 +808,6 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
    hydro_oper->SolveEnergy(S, V, dS_dt);
-   // SHIFT - average the velocity.
    dx_dt = V;
 
    // -- 3.

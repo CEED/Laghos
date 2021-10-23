@@ -95,7 +95,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-  const int mode_TG = 1;
+  const int mode_TG = 0;
 
    switch (problem)
    {
@@ -280,7 +280,10 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
             Trans_el1.Weight();
       const double cs1 = sqrt(gamma(Trans.Elem1No) * p1 / rho1);
-      if (diffuse) { v->GetVectorGradient(Trans_el1, grad_v_q1); }
+      if (diffuse)
+      {
+         v->GetVectorGradient(Trans_el1, grad_v_q1);
+      }
 
       // Compute el2 quantities.
       el_p.CalcShape(ip_e2, shape_p2);
@@ -294,10 +297,28 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
             Trans_el2.Weight();
       const double cs2 = sqrt(gamma(Trans.Elem2No) * p2 / rho2);
-      if (diffuse) { v->GetVectorGradient(Trans_el1, grad_v_q2); }
+      if (diffuse)
+      {
+         v->GetVectorGradient(Trans_el2, grad_v_q2);
+      }
 
-      const double rho_cs_avg = 2.0 * rho1 * cs1 * rho2 * cs2 /
+      double rho_cs_avg = 2.0 * rho1 * cs1 * rho2 * cs2 /
                                       (rho1 * cs1 + rho2 * cs2);
+
+      // TODO use the distance.
+      // TODO sign?
+      Vector true_normal(nor);
+      const double norm = nor.Norml2();
+      if (norm > 0.0) { true_normal /= norm; }
+
+      double grad_v_d_jump = 0.0;
+      if (diffuse)
+      {
+         Vector grad_v_d_1(dim), grad_v_d_2(dim);
+         grad_v_q1.Mult(d_q1, grad_v_d_1);
+         grad_v_q2.Mult(d_q2, grad_v_d_2);
+         grad_v_d_jump = grad_v_d_1 * true_normal - grad_v_d_2 * true_normal;
+      }
 
       // 1st element.
       {
@@ -305,7 +326,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          trial_fe.CalcShape(ip_e1, h1_shape);
          test_fe.CalcShape(ip_e1, l2_shape);
 
-         // Compute dist * grad_psi in the first element
+         // Compute grad_psi in the first element.
          trial_fe.CalcPhysDShape(Trans_el1, h1_grads);
 
          // TODO reorder/optimize loops.
@@ -351,12 +372,14 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                      grad_v_q1.GetRow(d, grad_v_d_q1);
                      grad_v_q2.GetRow(d, grad_v_d_q2);
                      h1_grads.GetRow(j, grad_shape_h1);
-                     h1_shape_part = d_q1 * grad_shape_h1;
-                     diffuse_term = rho_cs_avg * h1_shape_part *
-                                    (d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
-
+                     double psi_grad_d = d_q1 * grad_shape_h1;
+                     psi_grad_d *= true_normal(d);
+                     diffuse_term = Trans.Weight() * ip_f.weight *
+                                    rho_cs_avg * psi_grad_d *
+                                    grad_v_d_jump;
+                                    //(d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
                   }
-                  elmat(i, d*h1dofs_cnt + j) += diffuse_term;
+                  elmat(i, d*h1dofs_cnt + j) += diffuse_term * l2_shape(i);
                }
             }
          }
@@ -368,7 +391,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
          trial_fe.CalcShape(ip_e2, h1_shape);
          test_fe.CalcShape(ip_e2, l2_shape);
 
-         // Compute dist * grad_psi in the second element
+         // Compute grad_psi in the second element.
          trial_fe.CalcPhysDShape(Trans_el2, h1_grads);
 
          // TODO reorder/optimize loops.
@@ -411,11 +434,14 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                      grad_v_q1.GetRow(d, grad_v_d_q1);
                      grad_v_q2.GetRow(d, grad_v_d_q2);
                      h1_grads.GetRow(j, grad_shape_h1);
-                     h1_shape_part = d_q1 * grad_shape_h1;
-                     diffuse_term = rho_cs_avg * h1_shape_part *
-                                    (d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
+                     double psi_grad_d = d_q2 * grad_shape_h1;
+                     psi_grad_d *= true_normal(d);
+                     diffuse_term = Trans.Weight() * ip_f.weight *
+                                    rho_cs_avg * psi_grad_d *
+                                    grad_v_d_jump;
+                                    //(d_q1 * grad_v_d_q1 - d_q2 * grad_v_d_q2);
                   }
-                  elmat(i, d*h1dofs_cnt + j) -= diffuse_term;
+                  elmat(i, d*h1dofs_cnt + j) -= diffuse_term * l2_shape(i);
                }
             }
          }
