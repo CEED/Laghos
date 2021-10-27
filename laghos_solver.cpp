@@ -227,15 +227,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
                ElementTransformation &Tr1 = *H1.GetElementTransformation(Elem1No);
                Tr1.SetIntPoint(&ip_e1);
-               const double rho1 = rho0_gf.GetValue(Elem1No, ip_e1);
                cfqdata.rho0DetJ0(f*nqp_face*2 + 0*nqp_face + q ) =
-                       Tr1.Weight() * rho1;
+                       Tr1.Weight() * rho0_gf.GetValue(Elem1No, ip_e1);
 
                ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
-               const double rho2 = rho0_gf.GetValue(Elem2No, ip_e2);
                cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
-                       Tr2.Weight() * rho2;
+                       Tr2.Weight() * rho0_gf.GetValue(Elem2No, ip_e2);
            }
        }
    }

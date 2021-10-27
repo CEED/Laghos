@@ -357,20 +357,20 @@ int main(int argc, char *argv[])
    //      + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
    //      + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
    // 2 -- - <[[((nabla v d) . n)n]], {{p phi}} + <v, phi[[\grad p . d]]>
-   //T3 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>  + <v, phi[[\grad p . d]]>
-   //G4 -- - <[[((nabla v d) . n)n]], {{p phi}}
-   //N5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
+   // 3 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>  + <v, phi[[\grad p . d]]>
+   // 4 -- - <[[((nabla v d) . n)n]], {{p phi}}
+   // 5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
    // optionally, a stability term can be added:
    // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   int e_shift_type = 0;
+   int e_shift_type = 1;
    // Scaling of both shifting terms.
    double shift_scale = 1.0;
    // Activate the diffusion.
-   bool v_shift_diffusion = true;
+   bool   v_shift_diffusion = false;
+   double v_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
-
 
    if (e_shift_type > 1)
    {
@@ -382,7 +382,7 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-#define EXTRACT_1D
+//#define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -407,9 +407,7 @@ int main(int argc, char *argv[])
       }
    }
    hydrodynamics::MarkFaceAttributes(pfes_xi);
-   // Distance vector.
-   ParGridFunction dist(&H1FESpace);
-   VectorGridFunctionCoefficient dist_coeff(&dist);
+
    // Set the initial condition based on the materials.
    Coefficient *rho_coeff = &rho0_coeff;
    GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
@@ -435,6 +433,9 @@ int main(int argc, char *argv[])
    v_gf.SyncAliasMemory(S);
    e_gf.SyncAliasMemory(S);
 
+   // Distance vector.
+   ParGridFunction dist(&H1FESpace);
+   VectorGridFunctionCoefficient dist_coeff(&dist);
    PLapDistanceSolver dist_solver(7);
    //HeatDistanceSolver dist_solver(2.0);
    //dist_solver.diffuse_iter = 1;
@@ -472,8 +473,9 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, &dt);
 
-   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type, shift_momentum,
-                            shift_scale, v_shift_diffusion);
+   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type,
+                            shift_momentum, shift_scale,
+                            v_shift_diffusion, v_shift_diffusion_scale);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";

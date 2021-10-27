@@ -59,7 +59,8 @@ private:
    int v_shift_type = 0;
    double scale = 1.0;
 
-   bool diffuse = false;
+   bool diffuse_v = false;
+   double diffuse_v_scale = 1.0;
    CutFaceQuadratureData &qdata;
 
   public:
@@ -82,7 +83,7 @@ private:
 
    void SetShiftType(int type) { v_shift_type = type; }
    void SetScale(double s) { scale = s; }
-   void SetDiffusion(bool d) { diffuse = d; }
+   void SetDiffusion(bool d, double s) { diffuse_v = d; diffuse_v_scale = s; }
 
    void SetVelocity(const ParGridFunction &vel) { v = &vel; }
    void UnsetVelocity() { v = nullptr; }
