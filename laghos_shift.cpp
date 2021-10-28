@@ -375,8 +375,9 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
                                     true_nor(d) * nor(d);
+                     elmat(i, d*h1dofs_cnt + j)
+                           += diffuse_term * l2_shape(i);
                   }
-                  elmat(i, d*h1dofs_cnt + j) += diffuse_term * l2_shape(i);
                }
             }
          }
@@ -406,14 +407,17 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                }
 
                double p_shift_part = grad_p_d2;
-               if (v_shift_type == 3) {
+               if (v_shift_type == 3)
+               {
                    p_shift_part = p2 + grad_p_d2;
                }
-               else if (v_shift_type == 4) {
+               else if (v_shift_type == 4)
+               {
                    p_shift_part = p1 + grad_p_d1 - p2 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
-               else if (v_shift_type == 5) {
+               else if (v_shift_type == 5)
+               {
                    p_shift_part = grad_p_d1 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
@@ -434,9 +438,9 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
                                     true_nor(d) * nor(d);
+                     elmat(l2dofs_cnt + i, dim*h1dofs_cnt + d*h1dofs_cnt + j)
+                           -= diffuse_term * l2_shape(i);
                   }
-                  elmat(l2dofs_cnt + i, dim*h1dofs_cnt + d*h1dofs_cnt + j)
-                        -= diffuse_term * l2_shape(i);
                }
             }
          }
