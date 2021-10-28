@@ -249,7 +249,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    Vector dist_q(dim);
    Vector p_grad_q1(dim), shape_p1(dof_p);
    Vector p_grad_q2(dim), shape_p2(dof_p);
-   DenseMatrix h1_grads(h1dofs_cnt, dim), grad_v_q1, grad_v_q2;
+   DenseMatrix h1_grads(h1dofs_cnt, dim), grad_v_q1(dim), grad_v_q2(dim);
    for (int q = 0; q < nqp_face; q++)
    {
       // Set the integration point in the face and the neighboring elements
@@ -368,11 +368,9 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   double diffuse_term = 0.0;
                   if (diffuse_v)
                   {
-                     Vector grad_v_d_q1, grad_v_d_q2, grad_shape_h1;
-                     grad_v_q1.GetRow(d, grad_v_d_q1);
-                     grad_v_q2.GetRow(d, grad_v_d_q2);
+                     Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
-                     double grad_psi_d = grad_shape_h1 * dist_q * true_nor(d);
+                     double grad_psi_d = (grad_shape_h1 * dist_q) * true_nor(d);
                      diffuse_term = Trans.Weight() * ip_f.weight *
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
@@ -429,17 +427,16 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   double diffuse_term = 0.0;
                   if (diffuse_v)
                   {
-                     Vector grad_v_d_q1, grad_v_d_q2, grad_shape_h1;
-                     grad_v_q1.GetRow(d, grad_v_d_q1);
-                     grad_v_q2.GetRow(d, grad_v_d_q2);
+                     Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
-                     double grad_psi_d = grad_shape_h1 * dist_q * true_nor(d);
+                     double grad_psi_d = (grad_shape_h1 * dist_q) * true_nor(d);
                      diffuse_term = Trans.Weight() * ip_f.weight *
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
                                     true_nor(d) * nor(d);
                   }
-                  elmat(i, d*h1dofs_cnt + j) -= diffuse_term * l2_shape(i);
+                  elmat(l2dofs_cnt + i, dim*h1dofs_cnt + d*h1dofs_cnt + j)
+                        -= diffuse_term * l2_shape(i);
                }
             }
          }

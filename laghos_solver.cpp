@@ -285,8 +285,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    auto tfi_v = FaceForce.GetFBFI();
    auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
    v_integ->SetVelocity(v);
-   v = 0.0;
-   v = p_func.GetPressure();
 
    UpdateQuadratureData(S);
    AssembleForceMatrix();

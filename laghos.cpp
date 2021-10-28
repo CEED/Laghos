@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
    // Scaling of both shifting terms.
    double shift_scale = 1.0;
    // Activate the diffusion.
-   bool   v_shift_diffusion = false;
+   bool   v_shift_diffusion = true;
    double v_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
