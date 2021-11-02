@@ -1310,20 +1310,19 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         os_merged += num_sample_dofs_per_proc_merged[p];
     }  // loop over p
 
-    // Define a superfluous finite element space, merely to get global vertex indices for the sample mesh construction.
-    const int dim = pmesh->Dimension();
-    H1_FECollection h1_coll(1, dim);  // Must be first order, to get a bijection between vertices and DOF's.
-    ParFiniteElementSpace H1_space(pmesh, &h1_coll);  // This constructor effectively sets vertex (DOF) global indices.
-
-    ParFiniteElementSpace *sp_H1_space = NULL;
-    ParFiniteElementSpace *sp_L2_space = NULL;
-
     // Construct sample mesh
+    std::vector<ParFiniteElementSpace*> fespace(2);
+    std::vector<ParFiniteElementSpace*> spfespace(2);
+    fespace[0] = H1FESpace;
+    fespace[1] = L2FESpace;
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
-    CAROM::CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
-                            *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
-                            num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
+    CAROM::CreateSampleMesh(*pmesh, fespace, rom_com,
+			    sample_dofs_merged, num_sample_dofs_per_proc_merged,
+			    sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace);
+
+    ParFiniteElementSpace *sp_H1_space = spfespace[0];
+    ParFiniteElementSpace *sp_L2_space = spfespace[1];
 
     if (rank == 0)
     {
@@ -1332,6 +1331,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         SetBdryAttrForVelocity_Cartesian(sample_pmesh);
         sample_pmesh->EnsureNodes();
 
+	/* TODO: remove this?
         const bool printSampleMesh = true;
         if (printSampleMesh)
         {
@@ -1342,6 +1342,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
             mesh_ofs.precision(8);
             sample_pmesh->Print(mesh_ofs);
         }
+	*/
     }
 
     // Set s2sp_H1 and s2sp_L2 from s2sp
