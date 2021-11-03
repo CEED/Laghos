@@ -1323,7 +1323,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
     CAROM::CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
                             *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
-                            num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space);
+                            num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space,
+                            basename + "/sampleElems_" + std::to_string(window));
 
     if (rank == 0)
     {
@@ -1331,17 +1332,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         //SetBdryAttrForVelocity(sample_pmesh);
         SetBdryAttrForVelocity_Cartesian(sample_pmesh);
         sample_pmesh->EnsureNodes();
-
-        const bool printSampleMesh = true;
-        if (printSampleMesh)
-        {
-            ostringstream mesh_name;
-            mesh_name << basename + "/smesh." << setfill('0') << setw(6) << rank;
-
-            ofstream mesh_ofs(mesh_name.str().c_str());
-            mesh_ofs.precision(8);
-            sample_pmesh->Print(mesh_ofs);
-        }
     }
 
     // Set s2sp_H1 and s2sp_L2 from s2sp
