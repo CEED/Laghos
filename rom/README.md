@@ -119,7 +119,7 @@ To see the building instruction of **Laghos**, please see README.md in Laghos di
 
 #### Gresho vortex problem
 
-The 2D Gresho vortex problem can be runned with `-p 4`.
+The 2D Gresho vortex problem can be run with `-p 4`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
@@ -134,7 +134,7 @@ The corresponding run of the reduce order model is:
 
 #### Sedov blast problem
 
-The 3D Sedov blast wave problem can be runned with `-p 1`.
+The 3D Sedov blast wave problem can be run with `-p 1`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
@@ -149,7 +149,7 @@ The corresponding run of the reduce order model is:
 
 #### Taylor-Green vortex problem
 
-The 3D Taylor-Green vortex problem can be runned with `-p 0`.
+The 3D Taylor-Green vortex problem can be run with `-p 0`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
@@ -164,7 +164,7 @@ The corresponding run of the reduce order model is:
 
 #### Triple-point problem
 
-The 3D triple-point problem can be runned with `-p 3`.
+The 3D triple-point problem can be run with `-p 3`.
 
 A sample run of the offline stage and the full order model is:
 ```sh
@@ -179,7 +179,7 @@ The corresponding run of the reduce order model is:
 
 #### Parametric Sedov blast problem
 
-The 3D parametric Sedov blast wave problem can be runned with `-p 1` in the snapshot collection. The snapshot data is passed to `merge`. (Note the `-bef` and `-rpar` option.)
+The 3D parametric Sedov blast wave problem can be run with `-p 1` in the snapshot collection. The snapshot data is passed to `merge`. (Note the `-bef` and `-rpar` option.)
 
 A sample run of the offline stage is:
 ```sh
