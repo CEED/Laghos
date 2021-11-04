@@ -523,7 +523,7 @@ int main(int argc, char *argv[])
     if (fom_data)
     {
         const int num_tasks = mpi.WorldSize();
-        int unit;
+        int unit = 1;
         int *nxyz = new int[dim];
         switch (partition_type)
         {
