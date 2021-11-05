@@ -716,8 +716,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-        GatherDistributedMatrixRows1(FOMX0, 2, spaceOS[0], spaceOS[1], spaceOSSP[0], *input.H1FESpace, st2sp, sprows, all_sprows, spX0mat);
-        GatherDistributedMatrixRows1(FOME0, 1, spaceOS[1], spaceOS[2], spaceOSSP[1], *input.L2FESpace, st2sp, sprows, all_sprows, spE0mat);
+        GatherDistributedMatrixRows(FOMX0, 2, spaceOS[0], spaceOS[1], spaceOSSP[0], *input.H1FESpace, st2sp, sprows, all_sprows, spX0mat);
+        GatherDistributedMatrixRows(FOME0, 1, spaceOS[1], spaceOS[2], spaceOSSP[1], *input.L2FESpace, st2sp, sprows, all_sprows, spE0mat);
 
         if (rank == 0)
         {
@@ -1438,12 +1438,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
-    GatherDistributedMatrixRows1(*basisX, rdimx, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BXsp);
-    GatherDistributedMatrixRows1(*basisE, rdime, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BEsp);
-    GatherDistributedMatrixRows1(*basisV, rdimv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BVsp);
+    GatherDistributedMatrixRows(*basisX, rdimx, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BXsp);
+    GatherDistributedMatrixRows(*basisE, rdime, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BEsp);
+    GatherDistributedMatrixRows(*basisV, rdimv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BVsp);
 
-    GatherDistributedMatrixRows1(*basisFv, rdimfv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BFvsp);
-    GatherDistributedMatrixRows1(*basisFe, rdimfe, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BFesp);
+    GatherDistributedMatrixRows(*basisFv, rdimfv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BFvsp);
+    GatherDistributedMatrixRows(*basisFe, rdimfe, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BFesp);
 
     delete sp_H1_space;
     delete sp_L2_space;
