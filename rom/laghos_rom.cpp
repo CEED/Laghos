@@ -716,12 +716,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-#ifdef FULL_DOF_STENCIL
-        const int NR = input.H1FESpace->GetVSize();
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#else
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#endif
+        GatherDistributedMatrixRows1(FOMX0, 2, spaceOS[0], spaceOS[1], spaceOSSP[0], *input.H1FESpace, st2sp, sprows, all_sprows, spX0mat);
+        GatherDistributedMatrixRows1(FOME0, 1, spaceOS[1], spaceOS[2], spaceOSSP[1], *input.L2FESpace, st2sp, sprows, all_sprows, spE0mat);
 
         if (rank == 0)
         {
@@ -1311,38 +1307,39 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // loop over p
 
     // Construct sample mesh
-    std::vector<ParFiniteElementSpace*> fespace(2);
-    std::vector<ParFiniteElementSpace*> spfespace(2);
+    const int nspaces = 2;
+    std::vector<ParFiniteElementSpace*> fespace(nspaces);
+    std::vector<ParFiniteElementSpace*> spfespace(nspaces);
     fespace[0] = H1FESpace;
     fespace[1] = L2FESpace;
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
     CAROM::CreateSampleMesh(*pmesh, fespace, rom_com,
-			    sample_dofs_merged, num_sample_dofs_per_proc_merged,
-			    sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace);
+                            sample_dofs_merged, num_sample_dofs_per_proc_merged,
+                            sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace);
 
     ParFiniteElementSpace *sp_H1_space = spfespace[0];
     ParFiniteElementSpace *sp_L2_space = spfespace[1];
 
+    spaceOS.assign(nspaces + 1, 0);
+    spaceOSSP.assign(nspaces, 0);
+
+    for (int i=0; i<nspaces; ++i)
+    {
+        spaceOS[i+1] = spaceOS[i] + fespace[i]->GetVSize();
+    }
+
     if (rank == 0)
     {
+        for (int i=0; i<nspaces - 1; ++i)
+        {
+            spaceOSSP[i+1] = spaceOSSP[i] + spfespace[i]->GetVSize();
+        }
+
         sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
         //SetBdryAttrForVelocity(sample_pmesh);
         SetBdryAttrForVelocity_Cartesian(sample_pmesh);
         sample_pmesh->EnsureNodes();
-
-	/* TODO: remove this?
-        const bool printSampleMesh = true;
-        if (printSampleMesh)
-        {
-            ostringstream mesh_name;
-            mesh_name << basename + "/smesh." << setfill('0') << setw(6) << rank;
-
-            ofstream mesh_ofs(mesh_name.str().c_str());
-            mesh_ofs.precision(8);
-            sample_pmesh->Print(mesh_ofs);
-        }
-	*/
     }
 
     // Set s2sp_H1 and s2sp_L2 from s2sp
@@ -1441,18 +1438,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
-#ifdef FULL_DOF_STENCIL
-    const int NR = H1FESpace->GetVSize();
-    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BXsp, *BEsp);
-    // TODO: this redundantly gathers BEsp again, but only once per simulation.
-    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+    GatherDistributedMatrixRows1(*basisX, rdimx, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BXsp);
+    GatherDistributedMatrixRows1(*basisE, rdime, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BEsp);
+    GatherDistributedMatrixRows1(*basisV, rdimv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BVsp);
 
-    GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
-#else
-    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
-    // TODO: this redundantly gathers BEsp again, but only once per simulation.
-    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
-#endif
+    GatherDistributedMatrixRows1(*basisFv, rdimfv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BFvsp);
+    GatherDistributedMatrixRows1(*basisFe, rdimfe, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BFesp);
 
     delete sp_H1_space;
     delete sp_L2_space;
