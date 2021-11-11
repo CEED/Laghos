@@ -59,7 +59,7 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
-#include "GreedyParameterPointRandomSampler.h"
+#include "algo/greedy/GreedyRandomSampler.h"
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
 
     bool usingWindows = (numWindows > 0 || windowNumSamples > 0);
 
-    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    CAROM::GreedySampler* parameterPointGreedySampler = NULL;
     bool rom_calc_error_indicator = false;
     bool rom_calc_rel_error = false;
     bool rom_calc_rel_error_nonlocal = false;
