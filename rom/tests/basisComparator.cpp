@@ -1,5 +1,5 @@
-#include "BasisReader.h"
-#include "Matrix.h"
+#include "linalg/BasisReader.h"
+#include "linalg/Matrix.h"
 #include <string>
 #include <iostream>
 #include <cmath>
