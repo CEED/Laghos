@@ -107,7 +107,7 @@ ifneq ($(LAGHOS_DEBUG),$(MFEM_DEBUG))
    endif
 endif
 
-LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(LIBS_DIR)/libROM
+LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS) -I$(LIBS_DIR)/libROM/lib
 LAGHOS_LIBS = $(MFEM_LIBS)
 
 ifeq ($(LAGHOS_DEBUG),YES)
@@ -135,10 +135,10 @@ TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp tests/solutionCo
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
 
 merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
 
 all: laghos merge
 
@@ -169,7 +169,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 
 regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp tests/checkError.cpp tests/computeSpeedup.cpp
 	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
-	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build -L$(LIBS_DIR)/libROM/build -lROM
+	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM/lib -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
 	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
 	$(CXX) $(CXXFLAGS) -o tests/checkError tests/checkError.cpp
 	$(CXX) $(CXXFLAGS) -o tests/computeSpeedup tests/computeSpeedup.cpp

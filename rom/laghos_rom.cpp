@@ -1,14 +1,14 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 
-#include "BasisGenerator.h"
-#include "BasisReader.h"
-#include "GreedyParameterPointRandomSampler.h"
+#include "linalg/BasisGenerator.h"
+#include "linalg/BasisReader.h"
+#include "algo/greedy/GreedyRandomSampler.h"
 
-#include "DEIM.h"
-#include "QDEIM.h"
-#include "SampleMesh.hpp"
-#include "STSampling.h"
+#include "hyperreduction/DEIM.h"
+#include "hyperreduction/QDEIM.h"
+#include "mfem/SampleMesh.hpp"
+#include "hyperreduction/STSampling.h"
 
 using namespace std;
 
@@ -3330,10 +3330,10 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     }
 }
 
-CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
+CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
-    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    CAROM::GreedySampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
 
     romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
@@ -3341,14 +3341,14 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     ifstream f(outputPath + "/greedy_algorithm_data");
     if (f.good())
     {
-        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+        parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
             outputPath + "/greedy_algorithm_data",
             outputPath + "/greedy_algorithm_log.txt");
     }
     else
     {
         bool latin_hypercube = sampleType == latinHypercubeSampling;
-        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+        parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
             romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
             romOptions.greedyMaxClamp, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
@@ -3520,15 +3520,15 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     return parameterPointGreedySampler;
 }
 
-CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
+CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
 {
 
-    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    CAROM::GreedySampler* parameterPointGreedySampler = NULL;
 
     ifstream f(outputPath + "/greedy_algorithm_data");
     MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
 
-    parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+    parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
         outputPath + "/greedy_algorithm_data");
     double* greedyParam = getGreedyParam(romOptions,greedyParamString);
 
