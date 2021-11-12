@@ -1,8 +1,8 @@
 #include "mfem.hpp"
 #include "laghos_utils.hpp"
 
-#include "BasisGenerator.h"
-#include "BasisReader.h"
+#include "linalg/BasisGenerator.h"
+#include "linalg/BasisReader.h"
 
 using namespace std;
 using namespace mfem;

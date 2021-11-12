@@ -1,7 +1,7 @@
 #ifndef MFEM_LAGHOS_UTILS
 #define MFEM_LAGHOS_UTILS
 
-#include "BasisGenerator.h"
+#include "linalg/BasisGenerator.h"
 
 #include "mfem.hpp"
 
