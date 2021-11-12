@@ -81,10 +81,10 @@ class DensityIntegrator : public LinearFormIntegrator
 {
    using LinearFormIntegrator::AssembleRHSElementVect;
 private:
-   const QuadratureData &qdata;
+   const Vector &rho0DetJ0w;
 
 public:
-   DensityIntegrator(QuadratureData &qdata) : qdata(qdata) { }
+   DensityIntegrator(const Vector &rDJw) : rho0DetJ0w(rDJw) { }
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);

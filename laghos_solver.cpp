@@ -230,10 +230,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                cfqdata.rho0DetJ0(f*nqp_face*2 + 0*nqp_face + q ) =
                        Tr1.Weight() * rho0_gf.GetValue(Elem1No, ip_e1);
 
-               ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
-               Tr2.SetIntPoint(&ip_e2);
-               cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
-                       Tr2.Weight() * rho0_gf.GetValue(Elem2No, ip_e2);
+//               ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
+//               Tr2.SetIntPoint(&ip_e2);
+//               cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
+//                       Tr2.Weight() * rho0_gf.GetValue(Elem2No, ip_e2);
            }
        }
    }
@@ -419,15 +419,15 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
+void LagrangianHydroOperator:: ComputeDensity(ParGridFunction &rho,
+                                             bool keep_bounds) const
 {
-   rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
-   DensityIntegrator di(qdata);
+   DensityIntegrator di(qdata.rho0DetJ0w);
    di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {
@@ -437,6 +437,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
       inv.Mult(rhs, rho_z);
+
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }

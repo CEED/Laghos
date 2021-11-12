@@ -201,7 +201,8 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho) const;
+   // The FE space of rho must be set before the call.
+   void ComputeDensity(ParGridFunction &rho, bool keep_bounds = false) const;
    ParGridFunction &GetPressure(const ParGridFunction &e)
    {
       p_func.UpdatePressure(e);
@@ -213,6 +214,9 @@ public:
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
+
+   const IntegrationRule &GetIntRule() { return ir; }
+   const Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

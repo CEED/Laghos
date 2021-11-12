@@ -37,6 +37,7 @@
 
 #include "laghos_solver.hpp"
 #include "dist_solver.hpp"
+#include "laghos_ale.hpp"
 #include "riemann1D.hpp"
 
 using std::cout;
@@ -292,6 +293,9 @@ int main(int argc, char *argv[])
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
 
+   // Initial mesh positions.
+   ParGridFunction x0(x_gf);
+
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
@@ -348,7 +352,7 @@ int main(int argc, char *argv[])
    // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
    // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [psi+grad_psi.d] n >
    // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [psi+grad_psi.d] n >
-   int v_shift_type = 1;
+   int v_shift_type = 0;
    bool shift_momentum = true;
    // 0 -- no shifting terms.
    // 1 -- the energy RHS gets the conservative momentum term:
@@ -362,7 +366,7 @@ int main(int argc, char *argv[])
    // 5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
    // optionally, a stability term can be added:
    // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   int e_shift_type = 1;
+   int e_shift_type = 0;
    // Scaling of both shifting terms.
    double shift_scale = 1.0;
    // Activate the diffusion.
@@ -370,7 +374,8 @@ int main(int argc, char *argv[])
    double v_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
-   const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
+   bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
+   calc_dist = true;
 
    if (e_shift_type > 1)
    {
@@ -472,7 +477,6 @@ int main(int argc, char *argv[])
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, &dt);
-
    hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type,
                             shift_momentum, shift_scale,
                             v_shift_diffusion, v_shift_diffusion_scale);
@@ -481,7 +485,7 @@ int main(int argc, char *argv[])
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
+   ParGridFunction rho_gf(&L2FESpace);
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
@@ -717,6 +721,25 @@ int main(int argc, char *argv[])
             //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             cout << endl;
+         }
+
+         if (last_step)
+         {
+            // Remap.
+            RemapAdvector adv(*pmesh, order_v, order_e);
+            adv.InitFromLagr(x_gf, dist,
+                             hydro.GetIntRule(), hydro.GetRhoDetJw());
+            adv.ComputeAtNewPosition(x0, dist);
+
+            ConstantCoefficient zero(0.0);
+            double err = dist.ComputeL1Error(zero);
+            if (myid == 0)
+            {
+               cout << std::setprecision(12) << "error: " << err << endl;
+            }
+
+            // Remesh.
+            x_gf = x0;
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
