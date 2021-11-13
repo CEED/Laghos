@@ -727,9 +727,10 @@ int main(int argc, char *argv[])
          {
             // Remap.
             RemapAdvector adv(*pmesh, order_v, order_e);
-            adv.InitFromLagr(x_gf, dist,
+            adv.InitFromLagr(x_gf, dist, v_gf,
                              hydro.GetIntRule(), hydro.GetRhoDetJw());
-            adv.ComputeAtNewPosition(x0, dist);
+            adv.ComputeAtNewPosition(x0);
+            adv.TransferToLagr(dist, v_gf, hydro.GetIntRule(), hydro.GetRhoDetJw());
 
             ConstantCoefficient zero(0.0);
             double err = dist.ComputeL1Error(zero);

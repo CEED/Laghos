@@ -216,7 +216,7 @@ public:
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
    const IntegrationRule &GetIntRule() { return ir; }
-   const Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
+   Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.
