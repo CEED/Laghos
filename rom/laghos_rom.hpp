@@ -735,6 +735,7 @@ private:
     CAROM::Vector *rE2 = 0;
 
     // For hyperreduction
+    std::vector<int> spaceOS, spaceOSSP;
     std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
     std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
