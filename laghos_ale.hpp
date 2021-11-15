@@ -67,12 +67,13 @@ protected:
    GridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
    mutable ParBilinearForm M, K;
+   mutable ParBilinearForm M_L2, K_L2;
 
 public:
    /** Here @a pfes is the ParFESpace of the function that will be moved. Note
        that Mult() moves the nodes of the mesh corresponding to @a pfes. */
    AdvectorOper(int size, const Vector &x_start, GridFunction &velocity,
-                ParFiniteElementSpace &pfes);
+                ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
 
    virtual void Mult(const Vector &U, Vector &dU) const;
 };
@@ -108,7 +109,8 @@ protected:
    ParFiniteElementSpace &pfes;
    const SparseMatrix &K;
    mutable SparseMatrix D;
-   const Array<int> &K_smap;
+
+   Array<int> K_smap;
    const Vector &M_lumped;
 
    void ComputeDiscreteUpwindMatrix() const;
@@ -116,8 +118,7 @@ protected:
 
 public:
    DiscreteUpwindLOSolver(ParFiniteElementSpace &space, const SparseMatrix &adv,
-                          const Array<int> &adv_smap, const Vector &Mlump)
-      : pfes(space), K(adv), D(), K_smap(adv_smap), M_lumped(Mlump) { }
+                          const Vector &Mlump);
 
    virtual void CalcLOSolution(const Vector &u, Vector &du) const;
 };
