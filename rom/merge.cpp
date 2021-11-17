@@ -59,7 +59,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
     CAROM::Options static_svd_options(dim, totalSamples, 1);
 
     int windowSamples = 0;
-    for (int paramID=0; paramID<nsets; ++paramID)
+    for (int paramID = 0; paramID < nsets; ++paramID)
     {
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
         int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v];
@@ -72,7 +72,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
 
     cout << "Loading snapshots for " << varName << " in basis window " << basisWindow << endl;
 
-    for (int paramID=0; paramID<nsets; ++paramID)
+    for (int paramID = 0; paramID < nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0" + basisIdentifier + "_snapshot";
         std::unique_ptr<CAROM::BasisReader> basis_reader(new CAROM::BasisReader(snapshot_filename));
@@ -100,6 +100,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
                 (*init)(i) += mat->item(i,0);
             }
             init->write(path_init + varName + std::to_string(basisWindow));
+            delete init;
         }
 
         Vector tmp;
