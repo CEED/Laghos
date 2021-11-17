@@ -197,7 +197,7 @@ void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     opin.close();
 }
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, const double energyFraction, 
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, const double energyFraction,
                                 int & cutoff, const std::string cutoffOutputPath, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();

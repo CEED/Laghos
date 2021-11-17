@@ -50,9 +50,9 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
 }
 
 void MergeSamplingWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                             const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
-                             const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                             const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+                         const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
+                         const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+                         const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
@@ -157,7 +157,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     if (windowNumSamples > 0)
     {
         MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
-                                useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
+                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
