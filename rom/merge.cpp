@@ -81,9 +81,10 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
         int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
 
-        // getSnapshotMatrix includes the final column, so we need to subtract 1.
-        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap) - 1;
+        // getSnapshotMatrix includes the final column, so we don't add 1.
+        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
         int num_cols = col_ub - col_lb + 1;
+        std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
         const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(0.0, col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
