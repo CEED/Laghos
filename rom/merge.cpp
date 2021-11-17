@@ -79,7 +79,7 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
         basis_reader.reset(new CAROM::BasisReader(snapshot_filename));
 
         // getSnapshotMatrix is 1-indexed, so we need to add 1.
-        int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v] + 2;
+        int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
         int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
         int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap) + 1;
         int num_cols = col_ub - col_lb + 1;
