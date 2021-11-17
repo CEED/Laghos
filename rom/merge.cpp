@@ -18,7 +18,7 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
 
     if (usingWindows)
     {
-        cout << "Loading snapshots for " << varName << " in sample time window " << basisWindow << endl; // sampleWindow = basisWindow
+        cout << "Loading snapshots for " << varName << " in physical time window " << basisWindow << endl; // sampleWindow = basisWindow
     }
     else
     {
@@ -33,7 +33,7 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
 
     if (usingWindows)
     {
-        cout << "Computing SVD for " << varName << " in basis time window " << basisWindow << endl;
+        cout << "Computing SVD for " << varName << " in physical time window " << basisWindow << endl;
     }
     else
     {
@@ -49,7 +49,7 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
     }
 }
 
-void MergeSamplingTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+void MergeSamplingWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
                              const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
                              const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
@@ -70,7 +70,7 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
     CAROM::Options window_static_svd_options(dim, windowSamples);
     window_basis_generator.reset(new CAROM::BasisGenerator(window_static_svd_options, false, basis_filename));
 
-    cout << "Loading snapshots for " << varName << " in basis time window " << basisWindow << endl;
+    cout << "Loading snapshots for " << varName << " in basis window " << basisWindow << endl;
 
     for (int paramID=0; paramID<nsets; ++paramID)
     {
@@ -116,7 +116,7 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
         delete mat;
     }
 
-    cout << "Computing SVD for " << varName << " in basis time window " << basisWindow << endl;
+    cout << "Computing SVD for " << varName << " in basis window " << basisWindow << endl;
     window_basis_generator->endSamples();  // save the basis file
 
     if (rank == 0)
@@ -155,7 +155,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E);;
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
+        MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
                                 useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
