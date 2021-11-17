@@ -100,6 +100,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    switch (problem)
    {
       case 0:
+      case 1:
       {
          if (mode_TG == 0)
          {

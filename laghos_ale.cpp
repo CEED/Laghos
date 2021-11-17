@@ -110,7 +110,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    }
 
    v_max = std::sqrt(v_max);
-   double dt = 0.5 * h_min / v_max;
+   double dt = 0.1 * h_min / v_max;
 
    double t = 0.0;
    bool last_step = false;
@@ -121,17 +121,34 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
          dt = 1.0 - t;
          last_step = true;
       }
+
+      oper.SetDt(dt);
       ode_solver.Step(S, t, dt);
    }
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &dist,
                                    ParGridFunction &vel,
-                                   const IntegrationRule &rho_ir,
+                                   const IntegrationRule &ir_rho,
                                    Vector &rhoDetJw)
 {
    dist = d;
    vel  = v;
+
+   const int NE = pfes_L2.GetNE(), nqp = ir_rho.GetNPoints();
+   Vector rho_vals(nqp);
+   for (int k = 0; k < NE; k++)
+   {
+      // Must use the space of the results.
+      ElementTransformation &T = *vel.ParFESpace()->GetElementTransformation(k);
+      rho.GetValues(T, ir_rho, rho_vals);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         rhoDetJw(k*NE + q) = rho_vals(q) * T.Jacobian().Det() * ip.weight;
+      }
+   }
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
@@ -171,6 +188,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    ParFiniteElementSpace &pfes_H1 = *K.ParFESpace(),
                          &pfes_L2 = *K_L2.ParFESpace();
    const int dim     = pfes_H1.GetMesh()->Dimension();
+   const int NE      = pfes_H1.GetNE();
    const int size_H1 = pfes_H1.GetVSize(), size_L2 = pfes_L2.GetVSize();
 
    // Move the mesh.
@@ -233,12 +251,94 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    M_L2.Assemble();
 
    // Density remap.
-   Vector rho, d_rho;
+   Vector rho, d_rho, d_rho_HO(size_L2), d_rho_LO(size_L2);
    rho.MakeRef(*Uptr, 2 * dim * size_H1, size_L2);
    d_rho.MakeRef(dU,  2 * dim * size_H1, size_L2);
    Vector lumpedM; M_L2.SpMat().GetDiag(lumpedM);
    DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
-   lo_solver.CalcLOSolution(rho, d_rho);
+   lo_solver.CalcLOSolution(rho, d_rho_LO);
+   LocalInverseHOSolver ho_solver(M_L2, K_L2);
+   ho_solver.CalcHOSolution(rho, d_rho_HO);
+   Vector rho_el_min(NE), rho_el_max(NE),
+          rho_min(size_L2), rho_max(size_L2);
+   ParGridFunction rho_gf(&pfes_L2);
+   rho_gf = rho;
+   rho_gf.ExchangeFaceNbrData();
+   ComputeElementsMinMax(pfes_L2, rho, rho_el_min, rho_el_max);
+   ComputeSparsityBounds(pfes_L2, rho_el_min, rho_el_max, rho_min, rho_max);
+   FluxBasedFCT fct_solver(pfes_L2, dt,
+                           K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
+   fct_solver.CalcFCTSolution(rho_gf, lumpedM, d_rho_HO, d_rho_LO,
+                              rho_min, rho_max, d_rho);
+}
+
+void AdvectorOper::ComputeElementsMinMax(const ParFiniteElementSpace &pfes,
+                                         const Vector &u,
+                                         Vector &el_min, Vector &el_max) const
+{
+   const int NE = pfes.GetNE(), ndof = pfes.GetFE(0)->GetDof();
+   int dof_id;
+   for (int k = 0; k < NE; k++)
+   {
+      el_min(k) = numeric_limits<double>::infinity();
+      el_max(k) = -numeric_limits<double>::infinity();
+
+      for (int i = 0; i < ndof; i++)
+      {
+         dof_id = k*ndof + i;
+
+         el_min(k) = min(el_min(k), u(dof_id));
+         el_max(k) = max(el_max(k), u(dof_id));
+      }
+   }
+}
+
+void AdvectorOper::ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
+                                         const Vector &el_min,
+                                         const Vector &el_max,
+                                         Vector &u_min, Vector &u_max) const
+{
+   ParMesh *pmesh = pfes.GetParMesh();
+   L2_FECollection fec_bounds(0, pmesh->Dimension());
+   ParFiniteElementSpace pfes_bounds(pmesh, &fec_bounds);
+   ParGridFunction x_min(&pfes_bounds), x_max(&pfes_bounds);
+   const int NE = pmesh->GetNE();
+   const int ndofs = u_min.Size() / NE;
+
+   x_min = el_min;
+   x_max = el_max;
+
+   x_min.ExchangeFaceNbrData(); x_max.ExchangeFaceNbrData();
+   const Vector &minv = x_min.FaceNbrData(), &maxv = x_max.FaceNbrData();
+   const Table &el_to_el = pmesh->ElementToElementTable();
+   Array<int> face_nbr_el;
+   for (int i = 0; i < NE; i++)
+   {
+      double el_min = x_min(i), el_max = x_max(i);
+
+      el_to_el.GetRow(i, face_nbr_el);
+      for (int n = 0; n < face_nbr_el.Size(); n++)
+      {
+         if (face_nbr_el[n] < NE)
+         {
+            // Local neighbor.
+            el_min = std::min(el_min, x_min(face_nbr_el[n]));
+            el_max = std::max(el_max, x_max(face_nbr_el[n]));
+         }
+         else
+         {
+            // MPI face neighbor.
+            el_min = std::min(el_min, minv(face_nbr_el[n] - NE));
+            el_max = std::max(el_max, maxv(face_nbr_el[n] - NE));
+         }
+      }
+
+      for (int j = 0; j < ndofs; j++)
+      {
+         u_min(i*ndofs + j) = el_min;
+         u_max(i*ndofs + j) = el_max;
+      }
+   }
 }
 
 void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
@@ -500,6 +600,185 @@ void DiscreteUpwindLOSolver::ApplyDiscreteUpwindMatrix(ParGridFunction &u,
          double u_j  = (j < s) ? u(j) : u_np[j - s];
          double d_ij = D_data[k];
          du(i) += d_ij * u_j;
+      }
+   }
+}
+
+void FluxBasedFCT::CalcFCTSolution(const ParGridFunction &u, const Vector &m,
+                                   const Vector &du_ho, const Vector &du_lo,
+                                   const Vector &u_min, const Vector &u_max,
+                                   Vector &du) const
+{
+   // Construct the flux matrix (it gets recomputed every time).
+   ComputeFluxMatrix(u, du_ho, flux_ij);
+
+   // Iterated FCT correction.
+   Vector du_lo_fct(du_lo);
+   for (int fct_iter = 0; fct_iter < 1; fct_iter++)
+   {
+      // Compute sums of incoming/outgoing fluxes at each DOF.
+      AddFluxesAtDofs(flux_ij, gp, gm);
+
+      // Compute the flux coefficients (aka alphas) into gp and gm.
+      ComputeFluxCoefficients(u, du_lo_fct, m, u_min, u_max, gp, gm);
+
+      // Apply the alpha coefficients to get the final solution.
+      // Update the flux matrix for iterative FCT (when iter_cnt > 1).
+      UpdateSolutionAndFlux(du_lo_fct, m, gp, gm, flux_ij, du);
+
+      du_lo_fct = du;
+   }
+}
+
+void FluxBasedFCT::ComputeFluxMatrix(const ParGridFunction &u,
+                                     const Vector &du_ho,
+                                     SparseMatrix &flux_mat) const
+{
+   const int s = u.Size();
+   double *flux_data = flux_mat.HostReadWriteData();
+   flux_mat.HostReadI(); flux_mat.HostReadJ();
+   const int *K_I = K.HostReadI(), *K_J = K.HostReadJ();
+   const double *K_data = K.HostReadData();
+   const double *u_np = u.FaceNbrData().HostRead();
+   u.HostRead();
+   du_ho.HostRead();
+   for (int i = 0; i < s; i++)
+   {
+      for (int k = K_I[i]; k < K_I[i + 1]; k++)
+      {
+         int j = K_J[k];
+         if (j <= i) { continue; }
+
+         double kij  = K_data[k], kji = K_data[K_smap[k]];
+         double dij  = max(max(0.0, -kij), -kji);
+         double u_ij = (j < s) ? u(i) - u(j)
+                       : u(i) - u_np[j - s];
+
+         flux_data[k] = dt * dij * u_ij;
+      }
+   }
+
+   const int NE = pfes.GetMesh()->GetNE();
+   const int ndof = s / NE;
+   Array<int> dofs;
+   DenseMatrix Mz(ndof);
+   Vector du_z(ndof);
+   for (int k = 0; k < NE; k++)
+   {
+      pfes.GetElementDofs(k, dofs);
+      M.GetSubMatrix(dofs, dofs, Mz);
+      du_ho.GetSubVector(dofs, du_z);
+      for (int i = 0; i < ndof; i++)
+      {
+         int j = 0;
+         for (; j <= i; j++) { Mz(i, j) = 0.0; }
+         for (; j < ndof; j++) { Mz(i, j) *= dt * (du_z(i) - du_z(j)); }
+      }
+      flux_mat.AddSubMatrix(dofs, dofs, Mz, 0);
+   }
+}
+
+// Compute sums of incoming fluxes for every DOF.
+void FluxBasedFCT::AddFluxesAtDofs(const SparseMatrix &flux_mat,
+                                   Vector &flux_pos, Vector &flux_neg) const
+{
+   const int s = flux_pos.Size();
+   const double *flux_data = flux_mat.GetData();
+   const int *flux_I = flux_mat.GetI(), *flux_J = flux_mat.GetJ();
+   flux_pos = 0.0;
+   flux_neg = 0.0;
+   flux_pos.HostReadWrite();
+   flux_neg.HostReadWrite();
+   for (int i = 0; i < s; i++)
+   {
+      for (int k = flux_I[i]; k < flux_I[i + 1]; k++)
+      {
+         int j = flux_J[k];
+
+         // The skipped fluxes will be added when the outer loop is at j as
+         // the flux matrix is always symmetric.
+         if (j <= i) { continue; }
+
+         const double f_ij = flux_data[k];
+
+         if (f_ij >= 0.0)
+         {
+            flux_pos(i) += f_ij;
+            // Modify j if it's on the same MPI task (prevents x2 counting).
+            if (j < s) { flux_neg(j) -= f_ij; }
+         }
+         else
+         {
+            flux_neg(i) += f_ij;
+            // Modify j if it's on the same MPI task (prevents x2 counting).
+            if (j < s) { flux_pos(j) -= f_ij; }
+         }
+      }
+   }
+}
+
+// Compute the so-called alpha coefficients that scale the fluxes into gp, gm.
+void FluxBasedFCT::
+ComputeFluxCoefficients(const Vector &u, const Vector &du_lo, const Vector &m,
+                        const Vector &u_min, const Vector &u_max,
+                        Vector &coeff_pos, Vector &coeff_neg) const
+{
+   const int s = u.Size();
+   for (int i = 0; i < s; i++)
+   {
+      const double u_lo = u(i) + dt * du_lo(i);
+      const double max_pos_diff = max((u_max(i) - u_lo) * m(i), 0.0),
+                   min_neg_diff = min((u_min(i) - u_lo) * m(i), 0.0);
+      const double sum_pos = coeff_pos(i), sum_neg = coeff_neg(i);
+
+      coeff_pos(i) = (sum_pos > max_pos_diff) ? max_pos_diff / sum_pos : 1.0;
+      coeff_neg(i) = (sum_neg < min_neg_diff) ? min_neg_diff / sum_neg : 1.0;
+   }
+}
+
+void FluxBasedFCT::
+UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
+                      ParGridFunction &coeff_pos, ParGridFunction &coeff_neg,
+                      SparseMatrix &flux_mat, Vector &du) const
+{
+   Vector &a_pos_n = coeff_pos.FaceNbrData(),
+          &a_neg_n = coeff_neg.FaceNbrData();
+   coeff_pos.ExchangeFaceNbrData();
+   coeff_neg.ExchangeFaceNbrData();
+
+   du = du_lo;
+
+   coeff_pos.HostReadWrite();
+   coeff_neg.HostReadWrite();
+   du.HostReadWrite();
+
+   double *flux_data = flux_mat.HostReadWriteData();
+   const int *flux_I = flux_mat.HostReadI(), *flux_J = flux_mat.HostReadJ();
+   const int s = du.Size();
+   for (int i = 0; i < s; i++)
+   {
+      for (int k = flux_I[i]; k < flux_I[i + 1]; k++)
+      {
+         int j = flux_J[k];
+         if (j <= i) { continue; }
+
+         double fij = flux_data[k], a_ij;
+         if (fij >= 0.0)
+         {
+            a_ij = (j < s) ? min(coeff_pos(i), coeff_neg(j))
+                   : min(coeff_pos(i), a_neg_n(j - s));
+         }
+         else
+         {
+            a_ij = (j < s) ? min(coeff_neg(i), coeff_pos(j))
+                   : min(coeff_neg(i), a_pos_n(j - s));
+         }
+         fij *= a_ij;
+
+         du(i) += fij / m(i) / dt;
+         if (j < s) { du(j) -= fij / m(j) / dt; }
+
+         flux_data[k] -= fij;
       }
    }
 }

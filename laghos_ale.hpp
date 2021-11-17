@@ -55,7 +55,7 @@ public:
    virtual void ComputeAtNewPosition(const Vector &new_nodes);
 
    void TransferToLagr(ParGridFunction &dist, ParGridFunction &vel,
-                       const IntegrationRule &rho_ir, Vector &rhoDetJw);
+                       const IntegrationRule &ir_rho, Vector &rhoDetJw);
 };
 
 // Performs a single remap advection step.
@@ -68,6 +68,14 @@ protected:
    VectorGridFunctionCoefficient u_coeff;
    mutable ParBilinearForm M, K;
    mutable ParBilinearForm M_L2, K_L2;
+   double dt = 0.0;
+
+   void ComputeElementsMinMax(const ParFiniteElementSpace &pfes,
+                              const Vector &u,
+                              Vector &el_min, Vector &el_max) const;
+   void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
+                              const Vector &el_min, const Vector &el_max,
+                              Vector &u_min, Vector &u_max) const;
 
 public:
    /** Here @a pfes is the ParFESpace of the function that will be moved. Note
@@ -76,6 +84,8 @@ public:
                 ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
 
    virtual void Mult(const Vector &U, Vector &dU) const;
+
+   void SetDt(double delta_t) { dt = delta_t; }
 };
 
 // Transfers of data between Lagrange and remap phases.
@@ -121,6 +131,46 @@ public:
                           const Vector &Mlump);
 
    virtual void CalcLOSolution(const Vector &u, Vector &du) const;
+   Array<int> &GetKmap() { return K_smap; }
+};
+
+class FluxBasedFCT
+{
+protected:
+   ParFiniteElementSpace &pfes;
+   double dt;
+
+   const SparseMatrix &K, &M;
+   const Array<int> &K_smap;
+
+   // Temporary computation objects.
+   mutable SparseMatrix flux_ij;
+   mutable ParGridFunction gp, gm;
+
+   void ComputeFluxMatrix(const ParGridFunction &u, const Vector &du_ho,
+                          SparseMatrix &flux_mat) const;
+   void AddFluxesAtDofs(const SparseMatrix &flux_mat,
+                        Vector &flux_pos, Vector &flux_neg) const;
+   void ComputeFluxCoefficients(const Vector &u, const Vector &du_lo,
+      const Vector &m, const Vector &u_min, const Vector &u_max,
+      Vector &coeff_pos, Vector &coeff_neg) const;
+   void UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
+      ParGridFunction &coeff_pos, ParGridFunction &coeff_neg,
+      SparseMatrix &flux_mat, Vector &du) const;
+
+public:
+   FluxBasedFCT(ParFiniteElementSpace &space,
+                double delta_t,
+                const SparseMatrix &adv_mat, const Array<int> &adv_smap,
+                const SparseMatrix &mass_mat)
+      : pfes(space), dt(delta_t),
+        K(adv_mat), M(mass_mat), K_smap(adv_smap), flux_ij(adv_mat),
+        gp(&pfes), gm(&pfes) { }
+
+   virtual void CalcFCTSolution(const ParGridFunction &u, const Vector &m,
+                                const Vector &du_ho, const Vector &du_lo,
+                                const Vector &u_min, const Vector &u_max,
+                                Vector &du) const;
 };
 
 } // namespace hydrodynamics

@@ -723,13 +723,17 @@ int main(int argc, char *argv[])
             cout << endl;
          }
 
+         // ALE step.
          if (last_step)
          {
-            // Remap.
+            // Remap to x0 (the remesh always goes back to x0).
             RemapAdvector adv(*pmesh, order_v, order_e);
             adv.InitFromLagr(x_gf, dist, v_gf,
                              hydro.GetIntRule(), hydro.GetRhoDetJw());
             adv.ComputeAtNewPosition(x0);
+
+            // Move the mesh back and transfer the result from the remap.
+            x_gf = x0;
             adv.TransferToLagr(dist, v_gf, hydro.GetIntRule(), hydro.GetRhoDetJw());
 
             ConstantCoefficient zero(0.0);
@@ -738,9 +742,6 @@ int main(int argc, char *argv[])
             {
                cout << std::setprecision(12) << "error: " << err << endl;
             }
-
-            // Remesh.
-            x_gf = x0;
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
