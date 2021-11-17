@@ -8,8 +8,8 @@ using namespace std;
 using namespace mfem;
 
 
-void MergePhysicalTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, 
-                             const std::string& basisIdentifier, const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, 
+void MergePhysicalTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
+                             const std::string& basisIdentifier, const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim,
                              const int totalSamples, const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::unique_ptr<CAROM::BasisGenerator> basis_generator;
@@ -55,7 +55,8 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
                              const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
-    std::unique_ptr<CAROM::BasisGenerator> basis_generator, window_basis_generator;
+    std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
+    std::unique_ptr<CAROM::BasisReader> basis_reader;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
 
     int windowSamples = 0;
@@ -75,15 +76,17 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
     for (int paramID=0; paramID<nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0" + basisIdentifier + "_snapshot";
-        basis_generator.reset(new CAROM::BasisGenerator(static_svd_options, false, basis_filename));
-        basis_generator->loadSamples(snapshot_filename,"snapshot");
+        basis_reader.reset(new CAROM::BasisReader(snapshot_filename));
 
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
-        const CAROM::Matrix* mat = basis_generator->getSnapshotMatrix();
+
+        // getSnapshotMatrix is 1-indexed, so we need to add 1.
+        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
+        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap) + 1;
+        int num_cols = col_ub - col_lb + 1;
+        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(0.0, col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
-        MFEM_VERIFY(num_snap == mat->numColumns(), "Inconsistent number of snapshots");
-        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v];
-        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+        MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
 
         if (offsetInit && offsetType == interpolateOffset)
         {
@@ -91,20 +94,20 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
             CAROM::Vector *init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
-            for (int i = 0; i<dim; ++i)
+            for (int i = 0; i < dim; ++i)
             {
-                (*init)(i) += mat->item(i,col_lb);
+                (*init)(i) += mat->item(i,0);
             }
             init->write(path_init + varName + std::to_string(basisWindow));
         }
 
         Vector tmp;
         tmp.SetSize(dim);
-        for (int j = col_lb; j < col_ub; ++j)
+        for (int j = 0; j < num_cols; ++j)
         {
             for (int i = 0; i < dim; ++i)
             {
-                tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,col_lb) : mat->item(i,j);
+                tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,0) : mat->item(i,j);
             }
             window_basis_generator->takeSample(tmp.GetData(), 0.0, 1.0);
         }
