@@ -56,7 +56,6 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
-    std::unique_ptr<CAROM::BasisReader> basis_reader;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
 
     int windowSamples = 0;
@@ -76,13 +75,15 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
     for (int paramID=0; paramID<nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0" + basisIdentifier + "_snapshot";
-        basis_reader.reset(new CAROM::BasisReader(snapshot_filename));
+        std::unique_ptr<CAROM::BasisReader> basis_reader(new CAROM::BasisReader(snapshot_filename));
 
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
 
         // getSnapshotMatrix is 1-indexed, so we need to add 1.
         int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
-        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap) + 1;
+
+        // getSnapshotMatrix includes the final column, so we need to subtract 1.
+        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap) - 1;
         int num_cols = col_ub - col_lb + 1;
         const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(0.0, col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
@@ -111,6 +112,8 @@ void MergeSamplingTimeWindow(const int rank, const int first_sv, const double en
             }
             window_basis_generator->takeSample(tmp.GetData(), 0.0, 1.0);
         }
+
+        delete mat;
     }
 
     cout << "Computing SVD for " << varName << " in basis time window " << basisWindow << endl;
