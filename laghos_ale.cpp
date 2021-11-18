@@ -264,7 +264,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    ParGridFunction rho_gf(&pfes_L2);
    rho_gf = rho;
    rho_gf.ExchangeFaceNbrData();
-   ComputeElementsMinMax(pfes_L2, rho, rho_el_min, rho_el_max);
+   ComputeElementsMinMax(rho_gf, rho_el_min, rho_el_max);
    ComputeSparsityBounds(pfes_L2, rho_el_min, rho_el_max, rho_min, rho_max);
    FluxBasedFCT fct_solver(pfes_L2, dt,
                            K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
@@ -272,10 +272,10 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                               rho_min, rho_max, d_rho);
 }
 
-void AdvectorOper::ComputeElementsMinMax(const ParFiniteElementSpace &pfes,
-                                         const Vector &u,
+void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &u,
                                          Vector &el_min, Vector &el_max) const
 {
+   ParFiniteElementSpace &pfes = *u.ParFESpace();
    const int NE = pfes.GetNE(), ndof = pfes.GetFE(0)->GetDof();
    int dof_id;
    for (int k = 0; k < NE; k++)

@@ -734,7 +734,8 @@ int main(int argc, char *argv[])
 
             // Move the mesh back and transfer the result from the remap.
             x_gf = x0;
-            adv.TransferToLagr(dist, v_gf, hydro.GetIntRule(), hydro.GetRhoDetJw());
+            adv.TransferToLagr(dist, v_gf,
+                               hydro.GetIntRule(), hydro.GetRhoDetJw());
 
             ConstantCoefficient zero(0.0);
             double err = dist.ComputeL1Error(zero);

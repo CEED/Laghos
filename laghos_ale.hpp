@@ -70,8 +70,7 @@ protected:
    mutable ParBilinearForm M_L2, K_L2;
    double dt = 0.0;
 
-   void ComputeElementsMinMax(const ParFiniteElementSpace &pfes,
-                              const Vector &u,
+   void ComputeElementsMinMax(const ParGridFunction &u,
                               Vector &el_min, Vector &el_max) const;
    void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
                               const Vector &el_min, const Vector &el_max,
