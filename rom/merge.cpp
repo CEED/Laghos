@@ -153,7 +153,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     }
     std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow) + basisIdentifier;
 
-    int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E);;
+    int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     if (windowNumSamples > 0)
     {
         MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
