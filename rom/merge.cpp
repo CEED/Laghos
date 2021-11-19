@@ -128,7 +128,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
     }
 }
 
-void LoadSampleSets(const int rank, const double energyFraction, const bool shift_sv, const int nsets, const std::string& basename, VariableName v,
+void LoadSampleSets(const int rank, const double energyFraction, const int sv_shift, const int nsets, const std::string& basename, VariableName v,
                     const std::string& basisIdentifier, const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
                     const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                     const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
@@ -153,7 +153,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const bool shif
     }
     std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow) + basisIdentifier;
 
-    int first_sv = (shift_sv && useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
+    int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E) ? sv_shift : 0;
     if (windowNumSamples > 0)
     {
         MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
@@ -416,8 +416,8 @@ int main(int argc, char *argv[])
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for the greedy algorithm.");
     args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
-    args.AddOption(&romOptions.shift_sv, "-shiftsv", "--shift-svv", "-no-shiftsv", "--no-shiftsv",
-                   "Enable or disable shifted energy fraction calculation when window-dependent offsets are not used.");
+    args.AddOption(&romOptions.sv_shift, "-sv-shift", "--sv-shift",
+                   "Number of shifted singular values in energy fraction calculation when window-dependent offsets are not used.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -554,18 +554,18 @@ int main(int argc, char *argv[])
         int lastBasisWindow = (windowNumSamples > 0) ? numBasisWindows - 1 : sampleWindow;
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
-            LoadSampleSets(myid, romOptions.energyFraction, romOptions.shift_sv, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
-            LoadSampleSets(myid, romOptions.energyFraction, romOptions.shift_sv, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
-            LoadSampleSets(myid, romOptions.energyFraction, romOptions.shift_sv, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
             if (!romOptions.SNS)
             {
-                LoadSampleSets(myid, romOptions.energyFraction, romOptions.shift_sv, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
-                LoadSampleSets(myid, romOptions.energyFraction, romOptions.shift_sv, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
             }
 
