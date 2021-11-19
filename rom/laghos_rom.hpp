@@ -169,6 +169,7 @@ struct ROM_Options
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
+    bool shift_sv = false; // if true, shift energy fraction calculation when window-dependent offsets are not used
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = -1; // index of parameters chosen for this Laghos simulation
@@ -351,7 +352,7 @@ public:
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
-                first_sv = 1;
+                first_sv = input.shift_sv;
             }
             else
             {
@@ -384,7 +385,7 @@ public:
                 }
             }
         }
-        else first_sv = 1;
+        else first_sv = input.shift_sv;
     }
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);

@@ -264,6 +264,8 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
                    "Energy fraction for recommended X ROM basis size.");
+    args.AddOption(&romOptions.shift_sv, "-shiftsv", "--shift-svv", "-no-shiftsv", "--no-shiftsv",
+                   "Enable or disable shifted energy fraction calculation when window-dependent offsets are not used.");
     args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for parametric case.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
