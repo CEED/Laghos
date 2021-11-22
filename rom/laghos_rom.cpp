@@ -1,14 +1,14 @@
 #include "laghos_rom.hpp"
 #include "laghos_utils.hpp"
 
-#include "BasisGenerator.h"
-#include "BasisReader.h"
-#include "GreedyParameterPointRandomSampler.h"
+#include "linalg/BasisGenerator.h"
+#include "linalg/BasisReader.h"
+#include "algo/greedy/GreedyRandomSampler.h"
 
-#include "DEIM.h"
-#include "QDEIM.h"
-#include "SampleMesh.hpp"
-#include "STSampling.h"
+#include "hyperreduction/DEIM.h"
+#include "hyperreduction/QDEIM.h"
+#include "mfem/SampleMesh.hpp"
+#include "hyperreduction/STSampling.h"
 
 using namespace std;
 
@@ -716,12 +716,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-#ifdef FULL_DOF_STENCIL
-        const int NR = input.H1FESpace->GetVSize();
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, NR, *input.H1FESpace, *input.L2FESpace, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#else
-        GatherDistributedMatrixRows(FOMX0, FOME0, 2, 1, st2sp, sprows, all_sprows, spX0mat, spE0mat);
-#endif
+        GatherDistributedMatrixRows(FOMX0, 2, spaceOS[0], spaceOS[1], spaceOSSP[0], *input.H1FESpace, st2sp, sprows, all_sprows, spX0mat);
+        GatherDistributedMatrixRows(FOME0, 1, spaceOS[1], spaceOS[2], spaceOSSP[1], *input.L2FESpace, st2sp, sprows, all_sprows, spE0mat);
 
         if (rank == 0)
         {
@@ -1310,24 +1306,37 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         os_merged += num_sample_dofs_per_proc_merged[p];
     }  // loop over p
 
-    // Define a superfluous finite element space, merely to get global vertex indices for the sample mesh construction.
-    const int dim = pmesh->Dimension();
-    H1_FECollection h1_coll(1, dim);  // Must be first order, to get a bijection between vertices and DOF's.
-    ParFiniteElementSpace H1_space(pmesh, &h1_coll);  // This constructor effectively sets vertex (DOF) global indices.
-
-    ParFiniteElementSpace *sp_H1_space = NULL;
-    ParFiniteElementSpace *sp_L2_space = NULL;
-
     // Construct sample mesh
+    const int nspaces = 2;
+    std::vector<ParFiniteElementSpace*> fespace(nspaces);
+    std::vector<ParFiniteElementSpace*> spfespace(nspaces);
+    fespace[0] = H1FESpace;
+    fespace[1] = L2FESpace;
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
-    CAROM::CreateSampleMesh(*pmesh, H1_space, *H1FESpace, *L2FESpace, *(H1FESpace->FEColl()),
-                            *(L2FESpace->FEColl()), rom_com, sample_dofs_merged,
-                            num_sample_dofs_per_proc_merged, sample_pmesh, sprows, all_sprows, s2sp, st2sp, sp_H1_space, sp_L2_space,
-                            basename + "/sampleElems_" + std::to_string(window));
+    CAROM::CreateSampleMesh(*pmesh, fespace, rom_com,
+                            sample_dofs_merged, num_sample_dofs_per_proc_merged,
+                            sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace,
+			    basename + "/sampleElems_" + std::to_string(window));
+
+    ParFiniteElementSpace *sp_H1_space = spfespace[0];
+    ParFiniteElementSpace *sp_L2_space = spfespace[1];
+
+    spaceOS.assign(nspaces + 1, 0);
+    spaceOSSP.assign(nspaces, 0);
+
+    for (int i=0; i<nspaces; ++i)
+    {
+        spaceOS[i+1] = spaceOS[i] + fespace[i]->GetVSize();
+    }
 
     if (rank == 0)
     {
+        for (int i=0; i<nspaces - 1; ++i)
+        {
+            spaceOSSP[i+1] = spaceOSSP[i] + spfespace[i]->GetVSize();
+        }
+
         sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
         //SetBdryAttrForVelocity(sample_pmesh);
         SetBdryAttrForVelocity_Cartesian(sample_pmesh);
@@ -1430,18 +1439,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }  // if (rank == 0)
 
     // This gathers only to rank 0.
-#ifdef FULL_DOF_STENCIL
-    const int NR = H1FESpace->GetVSize();
-    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BXsp, *BEsp);
-    // TODO: this redundantly gathers BEsp again, but only once per simulation.
-    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BVsp, *BEsp);
+    GatherDistributedMatrixRows(*basisX, rdimx, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BXsp);
+    GatherDistributedMatrixRows(*basisE, rdime, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BEsp);
+    GatherDistributedMatrixRows(*basisV, rdimv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BVsp);
 
-    GatherDistributedMatrixRows(*basisFv, *basisFe, rdimfv, rdimfe, NR, *H1FESpace, *L2FESpace, st2sp, sprows, all_sprows, *BFvsp, *BFesp);
-#else
-    GatherDistributedMatrixRows(*basisX, *basisE, rdimx, rdime, st2sp, sprows, all_sprows, *BXsp, *BEsp);
-    // TODO: this redundantly gathers BEsp again, but only once per simulation.
-    GatherDistributedMatrixRows(*basisV, *basisE, rdimv, rdime, st2sp, sprows, all_sprows, *BVsp, *BEsp);
-#endif
+    GatherDistributedMatrixRows(*basisFv, rdimfv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BFvsp);
+    GatherDistributedMatrixRows(*basisFe, rdimfe, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BFesp);
 
     delete sp_H1_space;
     delete sp_L2_space;
@@ -3320,10 +3323,10 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
     }
 }
 
-CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
+CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
-    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    CAROM::GreedySampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);
 
     romOptions.greedyErrorIndicatorType = getErrorIndicatorType(greedyErrorIndicatorType);
@@ -3331,14 +3334,14 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     ifstream f(outputPath + "/greedy_algorithm_data");
     if (f.good())
     {
-        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+        parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
             outputPath + "/greedy_algorithm_data",
             outputPath + "/greedy_algorithm_log.txt");
     }
     else
     {
         bool latin_hypercube = sampleType == latinHypercubeSampling;
-        parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+        parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
             romOptions.greedyParamSpaceMin, romOptions.greedyParamSpaceMax,
             romOptions.greedyParamSpaceSize, true, romOptions.greedyTol, romOptions.greedyAlpha,
             romOptions.greedyMaxClamp, romOptions.greedySubsetSize, romOptions.greedyConvergenceSubsetSize,
@@ -3510,15 +3513,15 @@ CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, do
     return parameterPointGreedySampler;
 }
 
-CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
+CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString)
 {
 
-    CAROM::GreedyParameterPointSampler* parameterPointGreedySampler = NULL;
+    CAROM::GreedySampler* parameterPointGreedySampler = NULL;
 
     ifstream f(outputPath + "/greedy_algorithm_data");
     MFEM_VERIFY(f.good(), "The greedy algorithm has not been run yet.")
 
-    parameterPointGreedySampler = new CAROM::GreedyParameterPointRandomSampler(
+    parameterPointGreedySampler = new CAROM::GreedyRandomSampler(
         outputPath + "/greedy_algorithm_data");
     double* greedyParam = getGreedyParam(romOptions,greedyParamString);
 

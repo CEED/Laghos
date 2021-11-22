@@ -3,9 +3,9 @@
 
 #include "mfem.hpp"
 
-#include "BasisGenerator.h"
-#include "BasisReader.h"
-#include "GreedyParameterPointRandomSampler.h"
+#include "linalg/BasisGenerator.h"
+#include "linalg/BasisReader.h"
+#include "algo/greedy/GreedyRandomSampler.h"
 
 #include "laghos_solver.hpp"
 
@@ -735,6 +735,7 @@ private:
     CAROM::Vector *rE2 = 0;
 
     // For hyperreduction
+    std::vector<int> spaceOS, spaceOSSP;
     std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
     std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
@@ -1023,9 +1024,9 @@ private:
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 };
 
-CAROM::GreedyParameterPointSampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
+CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
         bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
-CAROM::GreedyParameterPointSampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
+CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
 
 #endif // MFEM_LAGHOS_ROM
