@@ -415,23 +415,24 @@ int main(int argc, char *argv[])
 
    // Set the initial condition based on the materials.
    Coefficient *rho_coeff = &rho0_coeff;
-   GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
+   GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
+   rho_coeff = &rho0_gf_coeff;
    if (v_shift_type > 0 || e_shift_type > 0)
    {
       if (problem == 8)
       {
          hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
       else if (problem == 9)
       {
          hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
       else if (problem == 10)
       {
          hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
    }
 
@@ -726,6 +727,12 @@ int main(int argc, char *argv[])
          // ALE step.
          if (last_step)
          {
+            double mass_in     = hydro.Mass(),
+                   momentum_in = hydro.Momentum(v_gf),
+                   internal_in = hydro.InternalEnergy(e_gf),
+                   kinetic_in  = hydro.KineticEnergy(v_gf),
+                   total_in    = internal_in + kinetic_in;
+
             // Remap to x0 (the remesh always goes back to x0).
             RemapAdvector adv(*pmesh, order_v, order_e);
             adv.InitFromLagr(x_gf, dist, v_gf,
@@ -736,13 +743,36 @@ int main(int argc, char *argv[])
             // Move the mesh back and transfer the result from the remap.
             x_gf = x0;
             adv.TransferToLagr(dist, v_gf,
-                               hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
+                               hydro.GetIntRule(), hydro.GetRhoDetJw(),
+                               rho0_gf, e_gf);
+
+            // rho0_gf is changed to reflect the mass matrices Coefficient.
+            rho_coeff = &rho0_gf_coeff;
+
+            hydro.UpdateMassMatrices(*rho_coeff);
+
+            double mass_out     = hydro.Mass(),
+                   momentum_out = hydro.Momentum(v_gf),
+                   internal_out = hydro.InternalEnergy(e_gf),
+                   kinetic_out  = hydro.KineticEnergy(v_gf),
+                   total_out    = internal_out + kinetic_out;
 
             ConstantCoefficient zero(0.0);
             double err = dist.ComputeL1Error(zero);
             if (myid == 0)
             {
-               cout << std::setprecision(12) << "error: " << err << endl;
+               cout << std::setprecision(12) << "dist error: " << err << endl;
+            }
+
+            if (myid == 0)
+            {
+               cout << "ALE step: "
+                    << std::scientific << std::setprecision(4) << endl
+                    << "mass err:       " << mass_out - mass_in << endl
+                    << "momentum err:   " << momentum_out - momentum_in << endl
+                    << "internal_e err: " << internal_out - internal_in << endl
+                    << "kinetic_e err:  " << kinetic_out - kinetic_in << endl
+                    << "total_e err:    " << total_out - total_in << endl;
             }
          }
 

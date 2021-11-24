@@ -112,7 +112,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    }
 
    v_max = std::sqrt(v_max);
-   double dt = 0.1 * h_min / v_max;
+   double dt = 0.2 * h_min / v_max;
 
    double t = 0.0;
    bool last_step = false;
@@ -132,11 +132,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
 void RemapAdvector::TransferToLagr(ParGridFunction &dist,
                                    ParGridFunction &vel,
                                    const IntegrationRule &ir_rho,
-                                   Vector &rhoDetJw, ParGridFunction &energy)
+                                   Vector &rhoDetJw,
+                                   ParGridFunction &rho0,
+                                   ParGridFunction &energy)
 {
    dist = d;
    vel  = v;
 
+   rho0 = rho;
    const int NE = pfes_L2.GetNE(), nqp = ir_rho.GetNPoints();
    Vector rho_vals(nqp);
    for (int k = 0; k < NE; k++)

@@ -162,6 +162,7 @@ public:
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
+   void UpdateMassMatrices(Coefficient &rho_coeff);
 
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
@@ -208,6 +209,7 @@ public:
       p_func.UpdatePressure(e);
       return p_func.GetPressure();
    }
+   double Mass() const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
    double Momentum(const ParGridFunction &v) const;

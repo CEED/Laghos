@@ -404,6 +404,25 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
    H1.GetParMesh()->NewNodes(x_gf, false);
 }
 
+void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
+{
+   // Assumption is Mv was connected to the same Coefficient from the input.
+   Mv.BilinearForm::operator=(0.0);
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
+
+   MassIntegrator mi(rho_coeff, &ir);
+   for (int k = 0; k < NE; k++)
+   {
+      DenseMatrixInverse inv(&Me(k));
+      const FiniteElement &fe = *L2.GetFE(k);
+      ElementTransformation &Tr = *L2.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, Tr, Me(k));
+      inv.Factor();
+      inv.GetInverseMatrix(Me_inv(k));
+   }
+}
+
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
    UpdateMesh(S);
@@ -419,7 +438,7 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator:: ComputeDensity(ParGridFunction &rho,
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho,
                                              bool keep_bounds) const
 {
    DenseMatrix Mrho(l2dofs_cnt);
@@ -443,7 +462,14 @@ void LagrangianHydroOperator:: ComputeDensity(ParGridFunction &rho,
    }
 }
 
-double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
+double LagrangianHydroOperator::Mass() const
+{
+   double mass = qdata.rho0DetJ0w.Sum();
+   MPI_Allreduce(MPI_IN_PLACE, &mass, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
+   return mass;
+}
+
+double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e) const
 {
    double glob_ie = 0.0;
 
@@ -451,11 +477,11 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
    one = 1.0;
    Array<int> l2dofs;
    double loc_ie = 0.0;
-   for (int e = 0; e < NE; e++)
+   for (int k = 0; k < NE; k++)
    {
-      L2.GetElementDofs(e, l2dofs);
-      gf.GetSubVector(l2dofs, loc_e);
-      loc_ie += Me(e).InnerProduct(loc_e, one);
+      L2.GetElementDofs(k, l2dofs);
+      e.GetSubVector(l2dofs, loc_e);
+      loc_ie += Me(k).InnerProduct(loc_e, one);
    }
    MPI_Comm comm = H1.GetParMesh()->GetComm();
    MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
@@ -477,7 +503,7 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 {
    Vector one(Mv_spmat_copy.Height());
    one = 1.0;
-   double loc_m = Mv_spmat_copy.InnerProduct(one, v);
+   double loc_m = Mv_spmat_copy.InnerProduct(one, one);
 
    double glob_m;
    MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,

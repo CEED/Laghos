@@ -57,6 +57,7 @@ public:
 
    void TransferToLagr(ParGridFunction &dist, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
+                       ParGridFunction &rho0,
                        ParGridFunction &energy);
 };
 
