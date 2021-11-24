@@ -729,13 +729,14 @@ int main(int argc, char *argv[])
             // Remap to x0 (the remesh always goes back to x0).
             RemapAdvector adv(*pmesh, order_v, order_e);
             adv.InitFromLagr(x_gf, dist, v_gf,
-                             hydro.GetIntRule(), hydro.GetRhoDetJw());
+                             hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
+
             adv.ComputeAtNewPosition(x0);
 
             // Move the mesh back and transfer the result from the remap.
             x_gf = x0;
             adv.TransferToLagr(dist, v_gf,
-                               hydro.GetIntRule(), hydro.GetRhoDetJw());
+                               hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
 
             ConstantCoefficient zero(0.0);
             double err = dist.ComputeL1Error(zero);

@@ -50,12 +50,14 @@ public:
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &dist, const ParGridFunction &v,
-                     const IntegrationRule &rho_ir, const Vector &rhoDetJw);
+                     const IntegrationRule &rho_ir, const Vector &rhoDetJw,
+                     const ParGridFunction &energy);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes);
 
    void TransferToLagr(ParGridFunction &dist, ParGridFunction &vel,
-                       const IntegrationRule &ir_rho, Vector &rhoDetJw);
+                       const IntegrationRule &ir_rho, Vector &rhoDetJw,
+                       ParGridFunction &energy);
 };
 
 // Performs a single remap advection step.
@@ -66,8 +68,11 @@ protected:
    Vector &x_now;
    GridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
-   mutable ParBilinearForm M, K;
-   mutable ParBilinearForm M_L2, K_L2;
+   GridFunctionCoefficient rho_coeff;
+   ScalarVectorProductCoefficient rho_u_coeff;
+   mutable ParBilinearForm M_H1, K_H1;
+   mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
+   mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
 
    void ComputeElementsMinMax(const ParGridFunction &u,
@@ -79,7 +84,8 @@ protected:
 public:
    /** Here @a pfes is the ParFESpace of the function that will be moved. Note
        that Mult() moves the nodes of the mesh corresponding to @a pfes. */
-   AdvectorOper(int size, const Vector &x_start, GridFunction &velocity,
+   AdvectorOper(int size, const Vector &x_start,
+                GridFunction &velocity, GridFunction &rho,
                 ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
 
    virtual void Mult(const Vector &U, Vector &dU) const;
