@@ -167,6 +167,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
      u(velocity),
      u_coeff(&u), rho_coeff(&rho), rho_u_coeff(rho_coeff, u_coeff),
      M_H1(&pfes_H1), K_H1(&pfes_H1),
+     Mr_H1(&pfes_H1), Kr_H1(&pfes_H1),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
 {
@@ -177,6 +178,14 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    K_H1.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
    K_H1.Assemble(0);
    K_H1.Finalize(0);
+
+   Mr_H1.AddDomainIntegrator(new MassIntegrator(rho_coeff));
+   Mr_H1.Assemble(0);
+   Mr_H1.Finalize(0);
+
+   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
+   Kr_H1.Assemble(0);
+   Kr_H1.Finalize(0);
 
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -228,32 +237,31 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
    dU = 0.0;
 
-   // Assemble on the H1 forms on the new mesh.
-   K_H1.BilinearForm::operator=(0.0);
-   K_H1.Assemble();
-   M_H1.BilinearForm::operator=(0.0);
-   M_H1.Assemble();
-   OperatorHandle Mop;
-   Mop.Reset(M_H1.ParallelAssemble());
-
    // Arrangement: distance (dim), velocity (dim), density (1), energy (1).
    Vector *Uptr = const_cast<Vector *>(&U);
 
+   // Solver for H1 fields (no monotonicity).
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
    CGSolver lin_solver(pfes_H1.GetComm());
    lin_solver.SetPreconditioner(prec);
-   lin_solver.SetOperator(*Mop);
    lin_solver.SetRelTol(1e-8);
    lin_solver.SetAbsTol(0.0);
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
+   OperatorHandle Mass_oper;
 
    const Operator *P_H1 = pfes_H1.GetProlongationMatrix();
-   Vector dist, d_dist, v, d_v;
-   Vector rhs_H1(size_H1),
-          RHS_H1(P_H1->Width()),
-          X(P_H1->Width());
+   Vector rhs_H1(size_H1), RHS_H1(P_H1->Width()), X(P_H1->Width());
+
+   // Distance remap.
+   M_H1.BilinearForm::operator=(0.0);
+   M_H1.Assemble();
+   K_H1.BilinearForm::operator=(0.0);
+   K_H1.Assemble();
+   Mass_oper.Reset(M_H1.ParallelAssemble());
+   lin_solver.SetOperator(*Mass_oper);
+   Vector dist, d_dist;
    for (int d = 0; d < dim; d++)
    {
       // Distance component.
@@ -264,11 +272,22 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       X = 0.0;
       lin_solver.Mult(RHS_H1, X);
       P_H1->Mult(X, d_dist);
+   }
 
+   // Velocity remap.
+   Mr_H1.BilinearForm::operator=(0.0);
+   Mr_H1.Assemble();
+   Kr_H1.BilinearForm::operator=(0.0);
+   Kr_H1.Assemble();
+   Mass_oper.Reset(Mr_H1.ParallelAssemble());
+   lin_solver.SetOperator(*Mass_oper);
+   Vector v, d_v;
+   for (int d = 0; d < dim; d++)
+   {
       // Velocity component.
       v.MakeRef(*Uptr, (dim + d) * size_H1, size_H1);
       d_v.MakeRef(dU,  (dim + d) * size_H1, size_H1);
-      K_H1.Mult(v, rhs_H1);
+      Kr_H1.Mult(v, rhs_H1);
       P_H1->MultTranspose(rhs_H1, RHS_H1);
       X = 0.0;
       lin_solver.Mult(RHS_H1, X);

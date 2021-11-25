@@ -503,7 +503,7 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 {
    Vector one(Mv_spmat_copy.Height());
    one = 1.0;
-   double loc_m = Mv_spmat_copy.InnerProduct(one, one);
+   double loc_m = Mv_spmat_copy.InnerProduct(one, v);
 
    double glob_m;
    MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
