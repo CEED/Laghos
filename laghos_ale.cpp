@@ -112,7 +112,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    }
 
    v_max = std::sqrt(v_max);
-   double dt = 0.2 * h_min / v_max;
+   double dt = 0.1 * h_min / v_max;
 
    double t = 0.0;
    bool last_step = false;
@@ -127,6 +127,10 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
       oper.SetDt(dt);
       ode_solver.Step(S, t, dt);
    }
+
+   double mom_out = oper.Momentum(v, 1.0),
+          dist_out = oper.Distance(d, 1.0),
+          e_out = oper.Energy(e, 1.0);
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &dist,
@@ -294,15 +298,13 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       P_H1->Mult(X, d_v);
    }
 
-   // Assemble the L2 forms on the new mesh.
+   // Density remap.
    K_L2.BilinearForm::operator=(0.0);
    K_L2.Assemble();
    M_L2.BilinearForm::operator=(0.0);
    M_L2.Assemble();
    M_L2_Lump.BilinearForm::operator=(0.0);
    M_L2_Lump.Assemble();
-
-   // Density remap.
    Vector rho, d_rho, d_rho_HO(size_L2), d_rho_LO(size_L2);
    rho.MakeRef(*Uptr, 2 * dim * size_H1, size_L2);
    d_rho.MakeRef(dU,  2 * dim * size_H1, size_L2);
@@ -350,6 +352,57 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                              lo_e_solver.GetKmap(), Mr_L2.SpMat());
    fct_e_solver.CalcFCTSolution(e_gf, lumpedM, d_e_HO, d_e_LO,
                                 e_min, e_max, d_e);
+}
+
+double AdvectorOper::Momentum(ParGridFunction &v, double t)
+{
+   add(x0, t, u, x_now);
+
+   Mr_H1.BilinearForm::operator=(0.0);
+   Mr_H1.Assemble();
+
+   Vector one(Mr_H1.SpMat().Height());
+   one = 1.0;
+   double loc_m  = Mr_H1.InnerProduct(one, v);
+
+   double glob_m;
+   MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
+                 Mr_H1.ParFESpace()->GetComm());
+   return glob_m;
+}
+
+double AdvectorOper::Distance(ParGridFunction &d, double t)
+{
+   add(x0, t, u, x_now);
+
+   M_H1.BilinearForm::operator=(0.0);
+   M_H1.Assemble();
+
+   Vector one(M_H1.SpMat().Height());
+   one = 1.0;
+   double loc_d  = M_H1.InnerProduct(one, d);
+
+   double glob_d;
+   MPI_Allreduce(&loc_d, &glob_d, 1, MPI_DOUBLE, MPI_SUM,
+                 M_H1.ParFESpace()->GetComm());
+   return glob_d;
+}
+
+double AdvectorOper::Energy(ParGridFunction &e, double t)
+{
+   add(x0, t, u, x_now);
+
+   Mr_L2.BilinearForm::operator=(0.0);
+   Mr_L2.Assemble();
+
+   Vector one(Mr_L2.SpMat().Height());
+   one = 1.0;
+   double loc_e = Mr_L2.InnerProduct(one, e);
+
+   double glob_e;
+   MPI_Allreduce(&loc_e, &glob_e, 1, MPI_DOUBLE, MPI_SUM,
+                 Mr_L2.ParFESpace()->GetComm());
+   return glob_e;
 }
 
 void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &u,

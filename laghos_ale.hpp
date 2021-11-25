@@ -93,6 +93,10 @@ public:
    virtual void Mult(const Vector &U, Vector &dU) const;
 
    void SetDt(double delta_t) { dt = delta_t; }
+
+   double Momentum(ParGridFunction &v, double t);
+   double Distance(ParGridFunction &d, double t);
+   double Energy(ParGridFunction &e, double t);
 };
 
 // Transfers of data between Lagrange and remap phases.
