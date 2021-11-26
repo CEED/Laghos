@@ -127,10 +127,6 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
       oper.SetDt(dt);
       ode_solver.Step(S, t, dt);
    }
-
-   double mom_out = oper.Momentum(v, 1.0),
-          dist_out = oper.Distance(d, 1.0),
-          e_out = oper.Energy(e, 1.0);
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &dist,
