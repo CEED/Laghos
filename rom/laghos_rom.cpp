@@ -2321,17 +2321,17 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
 void ROM_Basis::writePDweights(const int id, const int window) const
 {
-    std::string pd_weight_outPath = testing_parameter_basename + "/pd_weight" + to_string(window);
-    std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
     if (id >= 0)
     {
+        std::string pd_weight_outPath = testing_parameter_basename + "/pd_weight" + to_string(window);
+        std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
         for (int i=0; i < rdimx; ++i)
         {
             outfile_pd_weight << basisX->item(id,i) << endl;
         }
         if (offsetInit) outfile_pd_weight << initX->item(id) << endl;
+        outfile_pd_weight.close();
     }
-    outfile_pd_weight.close();
 }
 
 void ROM_Operator::ComputeReducedMv()
