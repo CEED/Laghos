@@ -1316,7 +1316,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
     CAROM::CreateSampleMesh(*pmesh, fespace, rom_com,
                             sample_dofs_merged, num_sample_dofs_per_proc_merged,
-                            sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace);
+                            sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace,
+			    basename + "/sampleElems_" + std::to_string(window));
 
     ParFiniteElementSpace *sp_H1_space = spfespace[0];
     ParFiniteElementSpace *sp_L2_space = spfespace[1];
