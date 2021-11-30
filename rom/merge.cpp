@@ -8,9 +8,9 @@ using namespace std;
 using namespace mfem;
 
 
-void MergePhysicalTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName, const std::string& basisIdentifier,
-                             const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim, const int totalSamples,
-                             const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+void MergePhysicalTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
+                             const std::string& basisIdentifier, const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim,
+                             const int totalSamples, const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     std::unique_ptr<CAROM::BasisGenerator> basis_generator;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
@@ -18,7 +18,7 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
 
     if (usingWindows)
     {
-        cout << "Loading snapshots for " << varName << " in sample time window " << basisWindow << endl; // sampleWindow = basisWindow
+        cout << "Loading snapshots for " << varName << " in physical time window " << basisWindow << endl; // sampleWindow = basisWindow
     }
     else
     {
@@ -33,7 +33,7 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
 
     if (usingWindows)
     {
-        cout << "Computing SVD for " << varName << " in basis time window " << basisWindow << endl;
+        cout << "Computing SVD for " << varName << " in physical time window " << basisWindow << endl;
     }
     else
     {
@@ -44,22 +44,22 @@ void MergePhysicalTimeWindow(const int rank, const double energyFraction, const 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
         PrintSingularValues(rank, basename, varName + basisIdentifier, basis_generator.get(), usingWindows, basisWindow);
     }
 }
 
-void MergeSamplingTimeWindow(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                             const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
-                             const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                             const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+void MergeSamplingWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+                         const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
+                         const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
+                         const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
-    std::unique_ptr<CAROM::BasisGenerator> basis_generator, window_basis_generator;
+    std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
 
     int windowSamples = 0;
-    for (int paramID=0; paramID<nsets; ++paramID)
+    for (int paramID = 0; paramID < nsets; ++paramID)
     {
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
         int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v];
@@ -70,20 +70,24 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
     CAROM::Options window_static_svd_options(dim, windowSamples);
     window_basis_generator.reset(new CAROM::BasisGenerator(window_static_svd_options, false, basis_filename));
 
-    cout << "Loading snapshots for " << varName << " in basis time window " << basisWindow << endl;
+    cout << "Loading snapshots for " << varName << " in basis window " << basisWindow << endl;
 
-    for (int paramID=0; paramID<nsets; ++paramID)
+    for (int paramID = 0; paramID < nsets; ++paramID)
     {
         std::string snapshot_filename = basename + "/param" + std::to_string(paramID) + "_var" + varName + "0" + basisIdentifier + "_snapshot";
-        basis_generator.reset(new CAROM::BasisGenerator(static_svd_options, false, basis_filename));
-        basis_generator->loadSamples(snapshot_filename,"snapshot");
+        std::unique_ptr<CAROM::BasisReader> basis_reader(new CAROM::BasisReader(snapshot_filename));
 
+        // getSnapshotMatrix is 1-indexed, so we need to add 1.
         int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
-        const CAROM::Matrix* mat = basis_generator->getSnapshotMatrix();
-        MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
-        MFEM_VERIFY(num_snap == mat->numColumns(), "Inconsistent number of snapshots");
-        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v];
+        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
+
+        // getSnapshotMatrix includes the final column, so we don't add 1.
         int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+        int num_cols = col_ub - col_lb + 1;
+        std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
+        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(0.0, col_lb, col_ub);
+        MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
+        MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
 
         if (offsetInit && offsetType == interpolateOffset)
         {
@@ -91,37 +95,40 @@ void MergeSamplingTimeWindow(const int rank, const double energyFraction, const 
             CAROM::Vector *init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
-            for (int i = 0; i<dim; ++i)
+            for (int i = 0; i < dim; ++i)
             {
-                (*init)(i) += mat->item(i,col_lb);
+                (*init)(i) += mat->item(i,0);
             }
             init->write(path_init + varName + std::to_string(basisWindow));
+            delete init;
         }
 
         Vector tmp;
         tmp.SetSize(dim);
-        for (int j = col_lb; j < col_ub; ++j)
+        for (int j = 0; j < num_cols; ++j)
         {
             for (int i = 0; i < dim; ++i)
             {
-                tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,col_lb) : mat->item(i,j);
+                tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,0) : mat->item(i,j);
             }
             window_basis_generator->takeSample(tmp.GetData(), 0.0, 1.0);
         }
+
+        delete mat;
     }
 
-    cout << "Computing SVD for " << varName << " in basis time window " << basisWindow << endl;
+    cout << "Computing SVD for " << varName << " in basis window " << basisWindow << endl;
     window_basis_generator->endSamples();  // save the basis file
 
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(window_basis_generator.get(), energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(window_basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
         PrintSingularValues(rank, basename, varName + basisIdentifier, window_basis_generator.get(), true, basisWindow);
     }
 }
 
-void LoadSampleSets(const int rank, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
+void LoadSampleSets(const int rank, const double energyFraction, const int sv_shift, const int nsets, const std::string& basename, VariableName v,
                     const std::string& basisIdentifier, const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
                     const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
                     const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
@@ -146,14 +153,15 @@ void LoadSampleSets(const int rank, const double energyFraction, const int nsets
     }
     std::string basis_filename = basename + "/basis" + varName + std::to_string(basisWindow) + basisIdentifier;
 
+    int first_sv = (useOffset && offsetType == useInitialState && basisWindow > 0) && (v == X || v == V || v == E) ? sv_shift : 0;
     if (windowNumSamples > 0)
     {
-        MergeSamplingTimeWindow(rank, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
-                                useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
+        MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
+                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
     }
     else
     {
-        MergePhysicalTimeWindow(rank, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
+        MergePhysicalTimeWindow(rank, first_sv, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
     }
 }
 
@@ -408,6 +416,8 @@ int main(int argc, char *argv[])
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for the greedy algorithm.");
     args.AddOption(&romOptions.energyFraction, "-ef", "--rom-ef", "Energy fraction for recommended ROM basis sizes.");
+    args.AddOption(&romOptions.sv_shift, "-sv-shift", "--sv-shift",
+                   "Number of shifted singular values in energy fraction calculation when window-dependent offsets are not used.");
     args.AddOption(&romOptions.useOffset, "-romos", "--romoffset", "-no-romoffset", "--no-romoffset",
                    "Enable or disable initial state offset for ROM.");
     args.AddOption(&offsetType, "-rostype", "--romoffsettype",
@@ -544,18 +554,18 @@ int main(int argc, char *argv[])
         int lastBasisWindow = (windowNumSamples > 0) ? numBasisWindows - 1 : sampleWindow;
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
-            LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+            LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                            basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
 
             if (!romOptions.SNS)
             {
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
-                LoadSampleSets(myid, romOptions.energyFraction, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
+                LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
                                basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
             }
 

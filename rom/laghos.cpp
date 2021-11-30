@@ -264,6 +264,8 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended ROM basis sizes.");
     args.AddOption(&romOptions.energyFraction_X, "-efx", "--rom-efx",
                    "Energy fraction for recommended X ROM basis size.");
+    args.AddOption(&romOptions.sv_shift, "-sv-shift", "--sv-shift",
+                   "Number of shifted singular values in energy fraction calculation when window-dependent offsets are not used.");
     args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for parametric case.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");
@@ -355,8 +357,22 @@ int main(int argc, char *argv[])
     romOptions.basename = &outputPath;
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
-
     romOptions.initSamples_basename = std::string(initSamples_basename);
+
+    if (mpi.Root()) {
+        const char path_delim = '/';
+        std::string::size_type pos = 0;
+        do {
+            pos = outputPath.find(path_delim, pos+1);
+            std::string subdir = outputPath.substr(0, pos);
+            mkdir(subdir.c_str(), 0777);
+        }
+        while (pos != std::string::npos);
+        if (std::string(testing_parameter_basename) != "")
+            mkdir(testing_parameter_outputPath.c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMoffset").c_str(), 0777);
+        mkdir((testing_parameter_outputPath + "/ROMsol").c_str(), 0777);
+    }
 
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");

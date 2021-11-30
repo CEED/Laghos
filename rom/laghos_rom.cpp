@@ -204,28 +204,28 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV)
         {
             cout << "X basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_X, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_X, first_sv, energyFraction_X, cutoff[0], basename + "/" + "rdimX" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "X" + input.basisIdentifier, generator_X);
         }
 
         if (!useVX)
         {
             cout << "V basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_V, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_V, first_sv, energyFraction, cutoff[1], basename + "/" + "rdimV" + input.basisIdentifier);
             PrintSingularValues(rank, basename, "V" + input.basisIdentifier, generator_V);
         }
 
         cout << "E basis summary output: " << endl;
-        BasisGeneratorFinalSummary(generator_E, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
+        BasisGeneratorFinalSummary(generator_E, first_sv, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
         if (!sns)
         {
             cout << "Fv basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fv, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fv, 0, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
 
             cout << "Fe basis summary output: " << endl;
-            BasisGeneratorFinalSummary(generator_Fe, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
+            BasisGeneratorFinalSummary(generator_Fe, 0, energyFraction, cutoff[4], basename + "/" + "rdimFe" + input.basisIdentifier);
         }
     }
 
@@ -1579,7 +1579,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 0.0;
         }
 
-        BasisGeneratorFinalSummary(&generator_XV, energyFraction_X, rdimx, "", false);
+        BasisGeneratorFinalSummary(&generator_XV, 0, energyFraction_X, rdimx, "", false);
         rdimv = rdimx;
 
         cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
@@ -2321,17 +2321,17 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
 void ROM_Basis::writePDweights(const int id, const int window) const
 {
-    std::string pd_weight_outPath = testing_parameter_basename + "/pd_weight" + to_string(window);
-    std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
     if (id >= 0)
     {
+        std::string pd_weight_outPath = testing_parameter_basename + "/pd_weight" + to_string(window);
+        std::ofstream outfile_pd_weight(pd_weight_outPath.c_str());
         for (int i=0; i < rdimx; ++i)
         {
-            outfile_pd_weight << (*basisX)(id,i) << endl;
+            outfile_pd_weight << basisX->item(id,i) << endl;
         }
-        if (offsetInit) outfile_pd_weight << (*initX)(id) << endl;
+        if (offsetInit) outfile_pd_weight << initX->item(id) << endl;
+        outfile_pd_weight.close();
     }
-    outfile_pd_weight.close();
 }
 
 void ROM_Operator::ComputeReducedMv()
@@ -3324,7 +3324,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
 }
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
+                                       bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType)
 {
     CAROM::GreedySampler* parameterPointGreedySampler = NULL;
     samplingType sampleType = getSamplingType(greedySamplingType);

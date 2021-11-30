@@ -169,6 +169,7 @@ struct ROM_Options
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
+    int sv_shift = 0; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used) 
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = -1; // index of parameters chosen for this Laghos simulation
@@ -351,6 +352,7 @@ public:
                 initX->read(path_init + "X0");
                 initV->read(path_init + "V0");
                 initE->read(path_init + "E0");
+                first_sv = input.sv_shift;
             }
             else
             {
@@ -383,6 +385,7 @@ public:
                 }
             }
         }
+        else first_sv = input.sv_shift;
     }
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
@@ -412,6 +415,7 @@ private:
     const int tL2size;
 
     const int rank;
+    int first_sv = 0;
     double energyFraction;
     double energyFraction_X;
 
@@ -1025,7 +1029,7 @@ private:
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
-        bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
+                                       bool& rom_offline, bool& rom_online, bool& rom_restore, const bool usingWindows, bool& rom_calc_error_indicator, bool& rom_calc_rel_error_nonlocal, bool& rom_calc_rel_error_local, bool& rom_read_greedy_twparam, const char* greedyParamString, const char* greedyErrorIndicatorType, const char* greedySamplingType);
 
 CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, const std::string outputPath, const char* greedyParamString);
 

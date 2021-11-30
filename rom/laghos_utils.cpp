@@ -197,7 +197,8 @@ void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     opin.close();
 }
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFraction, int & cutoff, const std::string cutoffOutputPath, const bool printout)
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, const double energyFraction,
+                                int & cutoff, const std::string cutoffOutputPath, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const CAROM::Vector* sing_vals = bg->getSingularValues();
@@ -205,7 +206,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
     MFEM_VERIFY(rom_dim <= sing_vals->dim(), "");
 
     double sum = 0.0;
-    for (int sv = 0; sv < sing_vals->dim(); ++sv) {
+    for (int sv = first_sv; sv < sing_vals->dim(); ++sv) {
         sum += (*sing_vals)(sv);
     }
 
@@ -213,7 +214,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const double energyFr
     bool reached_cutoff = false;
 
     double partialSum = 0.0;
-    for (int sv = 0; sv < sing_vals->dim(); ++sv) {
+    for (int sv = first_sv; sv < sing_vals->dim(); ++sv) {
         partialSum += (*sing_vals)(sv);
         if (printout)
         {
