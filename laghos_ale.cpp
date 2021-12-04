@@ -32,7 +32,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e)
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
      pfes_H1_s(&pmesh, &fec_H1, 1),
      offsets(5), S(),
-     ls(), v(), rho(), e(), x0()
+     xi(), v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
@@ -44,21 +44,21 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e)
    offsets[4] = offsets[3] + vsize_L2;
    S.Update(offsets);
 
-   ls.MakeRef(&pfes_H1_s, S, offsets[0]);
+   xi.MakeRef(&pfes_H1_s, S, offsets[0]);
    v.MakeRef(&pfes_H1, S, offsets[1]);
    rho.MakeRef(&pfes_L2, S, offsets[2]);
    e.MakeRef(&pfes_L2, S, offsets[3]);
 }
 
 void RemapAdvector::InitFromLagr(const Vector &nodes0,
-                                 const ParGridFunction &i_ls,
+                                 const ParGridFunction &interface,
                                  const ParGridFunction &vel,
                                  const IntegrationRule &rho_ir,
                                  const Vector &rhoDetJw,
                                  const ParGridFunction &energy)
 {
    x0 = nodes0;
-   ls = i_ls;
+   xi = interface;
    v  = vel;
    e  = energy;
 
@@ -78,7 +78,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    GridFunction u(x->FESpace());
    subtract(new_nodes, x0, u);
 
-   // Define a scalar FE space for the solution, and the advection operator.
+   // Define scalar FE spaces for the solution, and the advection operator.
    ParFiniteElementSpace pfes_H1(&pmesh, &fec_H1, 1);
    ParFiniteElementSpace pfes_L2(&pmesh, &fec_L2, 1);
    AdvectorOper oper(S.Size(), x0, u, rho, pfes_H1, pfes_L2);
@@ -86,9 +86,9 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
 
    // Compute some time step [mesh_size / speed].
    double h_min = std::numeric_limits<double>::infinity();
-   for (int i = 0; i < pmesh.GetNE(); i++)
+   for (int k = 0; k < pmesh.GetNE(); k++)
    {
-      h_min = std::min(h_min, pmesh.GetElementSize(i));
+      h_min = std::min(h_min, pmesh.GetElementSize(k));
    }
    double v_max = 0.0;
    const int s = vsize_H1 / dim;
@@ -107,7 +107,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    MPI_Allreduce(&v_loc, &v_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1.GetComm());
    MPI_Allreduce(&h_loc, &h_min, 1, MPI_DOUBLE, MPI_MIN, pfes_H1.GetComm());
 
-   if (v_max == 0.0) // No need to change the field.
+   if (v_max == 0.0) // No need to change the fields.
    {
       return;
    }
@@ -130,14 +130,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    }
 }
 
-void RemapAdvector::TransferToLagr(ParGridFunction &interface_ls,
+void RemapAdvector::TransferToLagr(ParGridFunction &interface,
                                    ParGridFunction &vel,
                                    const IntegrationRule &ir_rho,
                                    Vector &rhoDetJw,
                                    ParGridFunction &rho0,
                                    ParGridFunction &energy)
 {
-   interface_ls = ls;
+   interface = xi;
    vel = v;
 
    rho0 = rho;
@@ -160,13 +160,13 @@ void RemapAdvector::TransferToLagr(ParGridFunction &interface_ls,
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
-                           GridFunction &velocity, GridFunction &rho,
+                           GridFunction &mesh_vel, GridFunction &rho,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_L2)
    : TimeDependentOperator(size),
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
-     u(velocity),
-     u_coeff(&u), rho_coeff(&rho), rho_u_coeff(rho_coeff, u_coeff),
+     u(mesh_vel), u_coeff(&u),
+     rho_coeff(&rho), rho_u_coeff(rho_coeff, u_coeff),
      M_H1(&pfes_H1), K_H1(&pfes_H1),
      Mr_H1(&pfes_H1), Kr_H1(&pfes_H1),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
@@ -197,8 +197,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    M_L2_Lump.Finalize();
 
    K_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
-   DGTraceIntegrator *dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
-   DGTraceIntegrator *dgt_b = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   auto dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   auto dgt_b = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
    K_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_i));
    K_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_b));
    K_L2.KeepNbrBlock(true);
@@ -215,8 +215,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Mr_L2_Lump.Finalize();
 
    Kr_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
-   DGTraceIntegrator *dgt_ir = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
-   DGTraceIntegrator *dgt_br = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
+   auto dgt_ir = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
+   auto dgt_br = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
    Kr_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir));
    Kr_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br));
    Kr_L2.KeepNbrBlock(true);
@@ -238,8 +238,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
    dU = 0.0;
 
-   // Arrangement: distance (dim), velocity (dim), density (1), energy (1).
-   Vector *Uptr = const_cast<Vector *>(&U);
+   // Arrangement: interface (1), velocity (dim), density (1), energy (1).
+   Vector *U_ptr = const_cast<Vector *>(&U);
 
    // Solver for H1 fields (no monotonicity).
    HypreSmoother prec;
@@ -262,14 +262,14 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    K_H1.Assemble();
    Mass_oper.Reset(M_H1.ParallelAssemble());
    lin_solver.SetOperator(*Mass_oper);
-   Vector ls, d_ls;
-   ls.MakeRef(*Uptr, 0, size_H1);
-   d_ls.MakeRef(dU,  0, size_H1);
-   K_H1.Mult(ls, rhs_H1);
+   Vector xi, d_xi;
+   xi.MakeRef(*U_ptr, 0, size_H1);
+   d_xi.MakeRef(dU,  0, size_H1);
+   K_H1.Mult(xi, rhs_H1);
    P_H1->MultTranspose(rhs_H1, RHS_H1);
    X = 0.0;
    lin_solver.Mult(RHS_H1, X);
-   P_H1->Mult(X, d_ls);
+   P_H1->Mult(X, d_xi);
 
    // Velocity remap.
    Mr_H1.BilinearForm::operator=(0.0);
@@ -282,7 +282,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    for (int d = 0; d < dim; d++)
    {
       // Velocity component.
-      v.MakeRef(*Uptr, (1 + d) * size_H1, size_H1);
+      v.MakeRef(*U_ptr, (1 + d) * size_H1, size_H1);
       d_v.MakeRef(dU,  (1 + d) * size_H1, size_H1);
       Kr_H1.Mult(v, rhs_H1);
       P_H1->MultTranspose(rhs_H1, RHS_H1);
@@ -290,6 +290,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       lin_solver.Mult(RHS_H1, X);
       P_H1->Mult(X, d_v);
    }
+
+   Vector el_min(NE), el_max(NE);
 
    // Density remap.
    K_L2.BilinearForm::operator=(0.0);
@@ -299,16 +301,14 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    M_L2_Lump.BilinearForm::operator=(0.0);
    M_L2_Lump.Assemble();
    Vector rho, d_rho, d_rho_HO(size_L2), d_rho_LO(size_L2);
-   rho.MakeRef(*Uptr, (1 + dim) * size_H1, size_L2);
+   rho.MakeRef(*U_ptr, (1 + dim) * size_H1, size_L2);
    d_rho.MakeRef(dU,  (1 + dim) * size_H1, size_L2);
-   d_rho = 0.0;
    Vector lumpedM; M_L2_Lump.SpMat().GetDiag(lumpedM);
    DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
    lo_solver.CalcLOSolution(rho, d_rho_LO);
    LocalInverseHOSolver ho_solver(M_L2, K_L2);
    ho_solver.CalcHOSolution(rho, d_rho_HO);
-   Vector el_min(NE), el_max(NE),
-          rho_min(size_L2), rho_max(size_L2);
+   Vector rho_min(size_L2), rho_max(size_L2);
    ParGridFunction rho_gf(&pfes_L2);
    rho_gf = rho;
    rho_gf.ExchangeFaceNbrData();
@@ -327,7 +327,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    Mr_L2_Lump.BilinearForm::operator=(0.0);
    Mr_L2_Lump.Assemble();
    Vector e, d_e, d_e_HO(size_L2), d_e_LO(size_L2);
-   e.MakeRef(*Uptr, (1 + dim) * size_H1 + size_L2, size_L2);
+   e.MakeRef(*U_ptr, (1 + dim) * size_H1 + size_L2, size_L2);
    d_e.MakeRef(dU,  (1 + dim) * size_H1 + size_L2, size_L2);
    Vector lumped;
    Mr_L2_Lump.SpMat().GetDiag(lumped);
@@ -364,7 +364,7 @@ double AdvectorOper::Momentum(ParGridFunction &v, double t)
    return glob_m;
 }
 
-double AdvectorOper::Interface(ParGridFunction &interface_ls, double t)
+double AdvectorOper::Interface(ParGridFunction &xi, double t)
 {
    add(x0, t, u, x_now);
 
@@ -373,7 +373,7 @@ double AdvectorOper::Interface(ParGridFunction &interface_ls, double t)
 
    Vector one(M_H1.SpMat().Height());
    one = 1.0;
-   double loc_d  = M_H1.InnerProduct(one, interface_ls);
+   double loc_d  = M_H1.InnerProduct(one, xi);
 
    double glob_d;
    MPI_Allreduce(&loc_d, &glob_d, 1, MPI_DOUBLE, MPI_SUM,
@@ -398,12 +398,11 @@ double AdvectorOper::Energy(ParGridFunction &e, double t)
    return glob_e;
 }
 
-void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &u,
+void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &gf,
                                          Vector &el_min, Vector &el_max) const
 {
-   ParFiniteElementSpace &pfes = *u.ParFESpace();
+   ParFiniteElementSpace &pfes = *gf.ParFESpace();
    const int NE = pfes.GetNE(), ndof = pfes.GetFE(0)->GetDof();
-   int dof_id;
    for (int k = 0; k < NE; k++)
    {
       el_min(k) = numeric_limits<double>::infinity();
@@ -411,10 +410,8 @@ void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &u,
 
       for (int i = 0; i < ndof; i++)
       {
-         dof_id = k*ndof + i;
-
-         el_min(k) = min(el_min(k), u(dof_id));
-         el_max(k) = max(el_max(k), u(dof_id));
+         el_min(k) = min(el_min(k), gf(k*ndof + i));
+         el_max(k) = max(el_max(k), gf(k*ndof + i));
       }
    }
 }
@@ -422,47 +419,47 @@ void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &u,
 void AdvectorOper::ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
                                          const Vector &el_min,
                                          const Vector &el_max,
-                                         Vector &u_min, Vector &u_max) const
+                                         Vector &dof_min, Vector &dof_max) const
 {
    ParMesh *pmesh = pfes.GetParMesh();
    L2_FECollection fec_bounds(0, pmesh->Dimension());
    ParFiniteElementSpace pfes_bounds(pmesh, &fec_bounds);
-   ParGridFunction x_min(&pfes_bounds), x_max(&pfes_bounds);
-   const int NE = pmesh->GetNE();
-   const int ndofs = u_min.Size() / NE;
+   ParGridFunction el_min_gf(&pfes_bounds), el_max_gf(&pfes_bounds);
+   const int NE = pmesh->GetNE(), ndofs = dof_min.Size() / NE;
 
-   x_min = el_min;
-   x_max = el_max;
+   el_min_gf = el_min;
+   el_max_gf = el_max;
 
-   x_min.ExchangeFaceNbrData(); x_max.ExchangeFaceNbrData();
-   const Vector &minv = x_min.FaceNbrData(), &maxv = x_max.FaceNbrData();
+   el_min_gf.ExchangeFaceNbrData(); el_max_gf.ExchangeFaceNbrData();
+   const Vector &min_nbr = el_min_gf.FaceNbrData(),
+                &max_nbr = el_max_gf.FaceNbrData();
    const Table &el_to_el = pmesh->ElementToElementTable();
    Array<int> face_nbr_el;
-   for (int i = 0; i < NE; i++)
+   for (int k = 0; k < NE; k++)
    {
-      double el_min = x_min(i), el_max = x_max(i);
+      double k_min = el_min_gf(k), k_max = el_max_gf(k);
 
-      el_to_el.GetRow(i, face_nbr_el);
+      el_to_el.GetRow(k, face_nbr_el);
       for (int n = 0; n < face_nbr_el.Size(); n++)
       {
          if (face_nbr_el[n] < NE)
          {
             // Local neighbor.
-            el_min = std::min(el_min, x_min(face_nbr_el[n]));
-            el_max = std::max(el_max, x_max(face_nbr_el[n]));
+            k_min = std::min(k_min, el_min_gf(face_nbr_el[n]));
+            k_max = std::max(k_max, el_max_gf(face_nbr_el[n]));
          }
          else
          {
             // MPI face neighbor.
-            el_min = std::min(el_min, minv(face_nbr_el[n] - NE));
-            el_max = std::max(el_max, maxv(face_nbr_el[n] - NE));
+            k_min = std::min(k_min, min_nbr(face_nbr_el[n] - NE));
+            k_max = std::max(k_max, max_nbr(face_nbr_el[n] - NE));
          }
       }
 
       for (int j = 0; j < ndofs; j++)
       {
-         u_min(i*ndofs + j) = el_min;
-         u_max(i*ndofs + j) = el_max;
+         dof_min(k*ndofs + j) = k_min;
+         dof_max(k*ndofs + j) = k_max;
       }
    }
 }
@@ -523,10 +520,10 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
    // HO solution - FCT_Project.
    const int dof_cnt = rho.Size() / NE;
    DenseMatrix M(dof_cnt), F(dof_cnt);
+   DenseMatrixInverse M_inv(&M);
    Vector rhs(dof_cnt), rho_HO(dof_cnt), rho_z(dof_cnt), ML(dof_cnt),
           beta(dof_cnt), z(dof_cnt), gp(dof_cnt), gm(dof_cnt);
    Array<int> dofs(dof_cnt);
-   DenseMatrixInverse inv(&M);
    MassIntegrator mi(&ir_rho);
    DensityIntegrator di(quad_rho);
    di.SetIntRule(&ir_rho);
@@ -538,8 +535,8 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
       mi.AssembleElementMatrix(fe, T, M);
       M.GetRowSums(ML);
 
-      inv.Factor();
-      inv.Mult(rhs, rho_HO);
+      M_inv.Factor();
+      M_inv.Mult(rhs, rho_HO);
 
       const double rho_avg = rhs.Sum() / ML.Sum();
 
@@ -579,7 +576,6 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
       }
 
       rho_z = rho_avg;
-
       for (int i = 0; i < dof_cnt; i++)
       {
          double rp = max(ML(i) * (rho_max(k) - rho_z(i)), 0.0);

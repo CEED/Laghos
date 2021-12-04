@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
    bool   v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
    // Activate ALE. The ale_period is in physical time.
-   const bool do_ale = false;
+   const bool do_ale = true;
    const double ale_period = 0.1;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
@@ -670,29 +670,31 @@ int main(int argc, char *argv[])
       else if (do_ale && t + 1e-12 > (ale_cnt + 1) * ale_period)
       {
          // ALE step - the next remap period has been reached, the dt was ok.
+
+         // Conserved quantities at the start of the ALE step.
          double mass_in     = hydro.Mass(),
                 momentum_in = hydro.Momentum(v_gf),
                 internal_in = hydro.InternalEnergy(e_gf),
                 kinetic_in  = hydro.KineticEnergy(v_gf),
                 total_in    = internal_in + kinetic_in;
 
-         // Remap to x0 (the remesh always goes back to x0).
+         // Setup and initialize the remap operator.
          RemapAdvector adv(*pmesh, order_v, order_e);
          adv.InitFromLagr(x_gf, xi, v_gf,
                           hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
 
+         // Remap to x0 (the remesh always goes back to x0).
          adv.ComputeAtNewPosition(x0);
 
-         // Move the mesh back and transfer the result from the remap.
+         // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x0;
          adv.TransferToLagr(xi, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             rho0_gf, e_gf);
 
-         // rho0_gf is changed to reflect the mass matrices Coefficient.
+         // Update mass matrices.
+         // Above we changed rho0_gf to reflect the mass matrices Coefficient.
          rho_coeff = &rho0_gf_coeff;
-
-         // Mass matrices.
          hydro.UpdateMassMatrices(*rho_coeff);
 
          // Material marking and visualization function.
@@ -706,6 +708,7 @@ int main(int argc, char *argv[])
 
          ale_cnt++;
 
+         // Conserved quantities at the exit of the ALE step.
          double mass_out     = hydro.Mass(),
                 momentum_out = hydro.Momentum(v_gf),
                 internal_out = hydro.InternalEnergy(e_gf),

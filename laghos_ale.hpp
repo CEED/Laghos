@@ -40,7 +40,7 @@ private:
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
-   ParGridFunction ls, v, rho, e;
+   ParGridFunction xi, v, rho, e;
 
    RK3SSPSolver ode_solver;
    Vector x0;
@@ -49,13 +49,13 @@ public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e);
 
    void InitFromLagr(const Vector &nodes0,
-                     const ParGridFunction &i_ls, const ParGridFunction &v,
+                     const ParGridFunction &interface, const ParGridFunction &v,
                      const IntegrationRule &rho_ir, const Vector &rhoDetJw,
                      const ParGridFunction &energy);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes);
 
-   void TransferToLagr(ParGridFunction &interface_ls, ParGridFunction &vel,
+   void TransferToLagr(ParGridFunction &interface, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
                        ParGridFunction &rho0,
                        ParGridFunction &energy);
@@ -77,29 +77,32 @@ protected:
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
 
-   void ComputeElementsMinMax(const ParGridFunction &u,
+   // Piecewise min and max of gf over all elements.
+   void ComputeElementsMinMax(const ParGridFunction &gf,
                               Vector &el_min, Vector &el_max) const;
+   // Bounds at dofs taking the current element and its face-neighbors.
    void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
                               const Vector &el_min, const Vector &el_max,
-                              Vector &u_min, Vector &u_max) const;
+                              Vector &dof_min, Vector &dof_max) const;
 
 public:
-   /** Here @a pfes is the ParFESpace of the function that will be moved. Note
-       that Mult() moves the nodes of the mesh corresponding to @a pfes. */
+   // Here pfes is the ParFESpace of the function that will be moved.
+   // Mult() moves the nodes of the mesh corresponding to pfes.
    AdvectorOper(int size, const Vector &x_start,
-                GridFunction &velocity, GridFunction &rho,
+                GridFunction &mesh_vel, GridFunction &rho,
                 ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
 
+   // Single RK stage solve for all fields contained in U.
    virtual void Mult(const Vector &U, Vector &dU) const;
 
    void SetDt(double delta_t) { dt = delta_t; }
 
    double Momentum(ParGridFunction &v, double t);
-   double Interface(ParGridFunction &interface_ls, double t);
+   double Interface(ParGridFunction &xi, double t);
    double Energy(ParGridFunction &e, double t);
 };
 
-// Transfers of data between Lagrange and remap phases.
+// Transfer of data between the Lagrange and the remap phases.
 class SolutionMover
 {
    // Integration points for the density.
@@ -108,7 +111,9 @@ class SolutionMover
 public:
    SolutionMover(const IntegrationRule &ir) : ir_rho(ir) { }
 
-   // Density Lagrange -> Remap.
+   // Density transfer: Lagrange -> Remap.
+   // Projects the quad points data to a GridFunction, while preserving the
+   // bounds for rho taken from the current element and its face-neighbors.
    void MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho);
 };
 
@@ -170,8 +175,7 @@ protected:
       SparseMatrix &flux_mat, Vector &du) const;
 
 public:
-   FluxBasedFCT(ParFiniteElementSpace &space,
-                double delta_t,
+   FluxBasedFCT(ParFiniteElementSpace &space, double delta_t,
                 const SparseMatrix &adv_mat, const Array<int> &adv_smap,
                 const SparseMatrix &mass_mat)
       : pfes(space), dt(delta_t),
