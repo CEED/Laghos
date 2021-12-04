@@ -35,12 +35,12 @@ private:
    int dim;
    L2_FECollection fec_L2;
    H1_FECollection fec_H1;
-   ParFiniteElementSpace pfes_L2, pfes_H1;
+   ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1_s;
 
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
-   ParGridFunction d, v, rho, e;
+   ParGridFunction ls, v, rho, e;
 
    RK3SSPSolver ode_solver;
    Vector x0;
@@ -49,13 +49,13 @@ public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e);
 
    void InitFromLagr(const Vector &nodes0,
-                     const ParGridFunction &dist, const ParGridFunction &v,
+                     const ParGridFunction &i_ls, const ParGridFunction &v,
                      const IntegrationRule &rho_ir, const Vector &rhoDetJw,
                      const ParGridFunction &energy);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes);
 
-   void TransferToLagr(ParGridFunction &dist, ParGridFunction &vel,
+   void TransferToLagr(ParGridFunction &interface_ls, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
                        ParGridFunction &rho0,
                        ParGridFunction &energy);
@@ -95,7 +95,7 @@ public:
    void SetDt(double delta_t) { dt = delta_t; }
 
    double Momentum(ParGridFunction &v, double t);
-   double Distance(ParGridFunction &d, double t);
+   double Interface(ParGridFunction &interface_ls, double t);
    double Energy(ParGridFunction &e, double t);
 };
 

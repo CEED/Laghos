@@ -407,6 +407,7 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 {
    // Assumption is Mv was connected to the same Coefficient from the input.
+   Mv.Update();
    Mv.BilinearForm::operator=(0.0);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();

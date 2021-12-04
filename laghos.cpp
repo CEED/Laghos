@@ -23,7 +23,7 @@
 //
 //             High-order Lagrangian Hydrodynamics Miniapp
 //
-// Laghos(LAGrangian High-Order Solver) is a miniapp that solves the
+// Laghos (LAGrangian High-Order Solver) is a miniapp that solves the
 // time-dependent Euler equation of compressible gas dynamics in a moving
 // Lagrangian frame using unstructured high-order finite element spatial
 // discretization and explicit high-order time-stepping. Laghos is based on the
@@ -372,6 +372,9 @@ int main(int argc, char *argv[])
    // Activate the diffusion.
    bool   v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
+   // Activate ALE. The ale_period is in physical time.
+   const bool do_ale = false;
+   const double ale_period = 0.1;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
@@ -630,6 +633,7 @@ int main(int argc, char *argv[])
    double energy_old = energy_init,
           energy_new = energy_init;
 
+   int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -655,14 +659,73 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
-         if (dt < 1e-12)
-         { MFEM_ABORT("The time step crashed!"); }
+         if (dt < 1e-12) { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
          hydro.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
+      }
+      else if (do_ale && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      {
+         // ALE step - the next remap period has been reached, the dt was ok.
+         double mass_in     = hydro.Mass(),
+                momentum_in = hydro.Momentum(v_gf),
+                internal_in = hydro.InternalEnergy(e_gf),
+                kinetic_in  = hydro.KineticEnergy(v_gf),
+                total_in    = internal_in + kinetic_in;
+
+         // Remap to x0 (the remesh always goes back to x0).
+         RemapAdvector adv(*pmesh, order_v, order_e);
+         adv.InitFromLagr(x_gf, xi, v_gf,
+                          hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
+
+         adv.ComputeAtNewPosition(x0);
+
+         // Move the mesh back and transfer the result from the remap.
+         x_gf = x0;
+         adv.TransferToLagr(xi, v_gf,
+                            hydro.GetIntRule(), hydro.GetRhoDetJw(),
+                            rho0_gf, e_gf);
+
+         // rho0_gf is changed to reflect the mass matrices Coefficient.
+         rho_coeff = &rho0_gf_coeff;
+
+         // Mass matrices.
+         hydro.UpdateMassMatrices(*rho_coeff);
+
+         // Material marking and visualization function.
+         for (int k = 0; k < NE; k++)
+         {
+            int mat_id = hydrodynamics::material_id(k, xi);
+            pmesh->SetAttribute(k, mat_id + 1);
+            materials(k) = mat_id;
+         }
+         hydrodynamics::MarkFaceAttributes(pfes_xi);
+
+         ale_cnt++;
+
+         double mass_out     = hydro.Mass(),
+                momentum_out = hydro.Momentum(v_gf),
+                internal_out = hydro.InternalEnergy(e_gf),
+                kinetic_out  = hydro.KineticEnergy(v_gf),
+                total_out    = internal_out + kinetic_out;
+
+         ConstantCoefficient zero(0.0);
+         double err = xi.ComputeL1Error(zero);
+         if (myid == 0)
+         {
+            cout << std::fixed << std::setw(5) << std::setprecision(4)
+                 << "ALE step [" << ale_cnt << "] at " << t << ": "
+                 << std::scientific << std::setprecision(4) << endl
+                 << "mass err:       " << mass_out - mass_in << endl
+                 << "momentum err:   " << momentum_out - momentum_in << endl
+                 << "internal_e err: " << internal_out - internal_in << endl
+                 << "kinetic_e err:  " << kinetic_out - kinetic_in << endl
+                 << "total_e err:    " << total_out - total_in << endl;
+            cout << "interface error:     " << err << endl;
+         }
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
@@ -722,58 +785,6 @@ int main(int argc, char *argv[])
             //  << kinetic_energy+internal_energy;
             cout << std::fixed;
             cout << endl;
-         }
-
-         // ALE step.
-         if (last_step)
-         {
-            double mass_in     = hydro.Mass(),
-                   momentum_in = hydro.Momentum(v_gf),
-                   internal_in = hydro.InternalEnergy(e_gf),
-                   kinetic_in  = hydro.KineticEnergy(v_gf),
-                   total_in    = internal_in + kinetic_in;
-
-            // Remap to x0 (the remesh always goes back to x0).
-            RemapAdvector adv(*pmesh, order_v, order_e);
-            adv.InitFromLagr(x_gf, dist, v_gf,
-                             hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
-
-            adv.ComputeAtNewPosition(x0);
-
-            // Move the mesh back and transfer the result from the remap.
-            x_gf = x0;
-            adv.TransferToLagr(dist, v_gf,
-                               hydro.GetIntRule(), hydro.GetRhoDetJw(),
-                               rho0_gf, e_gf);
-
-            // rho0_gf is changed to reflect the mass matrices Coefficient.
-            rho_coeff = &rho0_gf_coeff;
-
-            hydro.UpdateMassMatrices(*rho_coeff);
-
-            double mass_out     = hydro.Mass(),
-                   momentum_out = hydro.Momentum(v_gf),
-                   internal_out = hydro.InternalEnergy(e_gf),
-                   kinetic_out  = hydro.KineticEnergy(v_gf),
-                   total_out    = internal_out + kinetic_out;
-
-            ConstantCoefficient zero(0.0);
-            double err = dist.ComputeL1Error(zero);
-            if (myid == 0)
-            {
-               cout << std::setprecision(12) << "dist error: " << err << endl;
-            }
-
-            if (myid == 0)
-            {
-               cout << "ALE step: "
-                    << std::scientific << std::setprecision(4) << endl
-                    << "mass err:       " << mass_out - mass_in << endl
-                    << "momentum err:   " << momentum_out - momentum_in << endl
-                    << "internal_e err: " << internal_out - internal_in << endl
-                    << "kinetic_e err:  " << kinetic_out - kinetic_in << endl
-                    << "total_e err:    " << total_out - total_in << endl;
-            }
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating

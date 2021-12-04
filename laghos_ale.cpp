@@ -30,34 +30,35 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e)
      fec_H1(order_v, pmesh.Dimension()),
      pfes_L2(&pmesh, &fec_L2, 1),
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
+     pfes_H1_s(&pmesh, &fec_H1, 1),
      offsets(5), S(),
-     d(), v(), rho(), e(), x0()
+     ls(), v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
-   // Arrangement: distance (dim), velocity (dim), density (1), energy (1).
+   // Arrangement: level_set (1), velocity (dim), density (1), energy (1).
    offsets[0] = 0;
-   offsets[1] = vsize_H1;
+   offsets[1] = vsize_H1 / dim;
    offsets[2] = offsets[1] + vsize_H1;
    offsets[3] = offsets[2] + vsize_L2;
    offsets[4] = offsets[3] + vsize_L2;
    S.Update(offsets);
 
-   d.MakeRef(&pfes_H1, S, offsets[0]);
+   ls.MakeRef(&pfes_H1_s, S, offsets[0]);
    v.MakeRef(&pfes_H1, S, offsets[1]);
    rho.MakeRef(&pfes_L2, S, offsets[2]);
    e.MakeRef(&pfes_L2, S, offsets[3]);
 }
 
 void RemapAdvector::InitFromLagr(const Vector &nodes0,
-                                 const ParGridFunction &dist,
+                                 const ParGridFunction &i_ls,
                                  const ParGridFunction &vel,
                                  const IntegrationRule &rho_ir,
                                  const Vector &rhoDetJw,
                                  const ParGridFunction &energy)
 {
    x0 = nodes0;
-   d  = dist;
+   ls = i_ls;
    v  = vel;
    e  = energy;
 
@@ -129,15 +130,15 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    }
 }
 
-void RemapAdvector::TransferToLagr(ParGridFunction &dist,
+void RemapAdvector::TransferToLagr(ParGridFunction &interface_ls,
                                    ParGridFunction &vel,
                                    const IntegrationRule &ir_rho,
                                    Vector &rhoDetJw,
                                    ParGridFunction &rho0,
                                    ParGridFunction &energy)
 {
-   dist = d;
-   vel  = v;
+   interface_ls = ls;
+   vel = v;
 
    rho0 = rho;
    const int NE = pfes_L2.GetNE(), nqp = ir_rho.GetNPoints();
@@ -254,25 +255,21 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    const Operator *P_H1 = pfes_H1.GetProlongationMatrix();
    Vector rhs_H1(size_H1), RHS_H1(P_H1->Width()), X(P_H1->Width());
 
-   // Distance remap.
+   // Interface level set remap.
    M_H1.BilinearForm::operator=(0.0);
    M_H1.Assemble();
    K_H1.BilinearForm::operator=(0.0);
    K_H1.Assemble();
    Mass_oper.Reset(M_H1.ParallelAssemble());
    lin_solver.SetOperator(*Mass_oper);
-   Vector dist, d_dist;
-   for (int d = 0; d < dim; d++)
-   {
-      // Distance component.
-      dist.MakeRef(*Uptr, d * size_H1, size_H1);
-      d_dist.MakeRef(dU,  d * size_H1, size_H1);
-      K_H1.Mult(dist, rhs_H1);
-      P_H1->MultTranspose(rhs_H1, RHS_H1);
-      X = 0.0;
-      lin_solver.Mult(RHS_H1, X);
-      P_H1->Mult(X, d_dist);
-   }
+   Vector ls, d_ls;
+   ls.MakeRef(*Uptr, 0, size_H1);
+   d_ls.MakeRef(dU,  0, size_H1);
+   K_H1.Mult(ls, rhs_H1);
+   P_H1->MultTranspose(rhs_H1, RHS_H1);
+   X = 0.0;
+   lin_solver.Mult(RHS_H1, X);
+   P_H1->Mult(X, d_ls);
 
    // Velocity remap.
    Mr_H1.BilinearForm::operator=(0.0);
@@ -285,8 +282,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    for (int d = 0; d < dim; d++)
    {
       // Velocity component.
-      v.MakeRef(*Uptr, (dim + d) * size_H1, size_H1);
-      d_v.MakeRef(dU,  (dim + d) * size_H1, size_H1);
+      v.MakeRef(*Uptr, (1 + d) * size_H1, size_H1);
+      d_v.MakeRef(dU,  (1 + d) * size_H1, size_H1);
       Kr_H1.Mult(v, rhs_H1);
       P_H1->MultTranspose(rhs_H1, RHS_H1);
       X = 0.0;
@@ -302,8 +299,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    M_L2_Lump.BilinearForm::operator=(0.0);
    M_L2_Lump.Assemble();
    Vector rho, d_rho, d_rho_HO(size_L2), d_rho_LO(size_L2);
-   rho.MakeRef(*Uptr, 2 * dim * size_H1, size_L2);
-   d_rho.MakeRef(dU,  2 * dim * size_H1, size_L2);
+   rho.MakeRef(*Uptr, (1 + dim) * size_H1, size_L2);
+   d_rho.MakeRef(dU,  (1 + dim) * size_H1, size_L2);
    d_rho = 0.0;
    Vector lumpedM; M_L2_Lump.SpMat().GetDiag(lumpedM);
    DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
@@ -330,8 +327,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    Mr_L2_Lump.BilinearForm::operator=(0.0);
    Mr_L2_Lump.Assemble();
    Vector e, d_e, d_e_HO(size_L2), d_e_LO(size_L2);
-   e.MakeRef(*Uptr, 2 * dim * size_H1 + size_L2, size_L2);
-   d_e.MakeRef(dU,  2 * dim * size_H1 + size_L2, size_L2);
+   e.MakeRef(*Uptr, (1 + dim) * size_H1 + size_L2, size_L2);
+   d_e.MakeRef(dU,  (1 + dim) * size_H1 + size_L2, size_L2);
    Vector lumped;
    Mr_L2_Lump.SpMat().GetDiag(lumped);
    DiscreteUpwindLOSolver lo_e_solver(pfes_L2, Kr_L2.SpMat(), lumped);
@@ -367,7 +364,7 @@ double AdvectorOper::Momentum(ParGridFunction &v, double t)
    return glob_m;
 }
 
-double AdvectorOper::Distance(ParGridFunction &d, double t)
+double AdvectorOper::Interface(ParGridFunction &interface_ls, double t)
 {
    add(x0, t, u, x_now);
 
@@ -376,7 +373,7 @@ double AdvectorOper::Distance(ParGridFunction &d, double t)
 
    Vector one(M_H1.SpMat().Height());
    one = 1.0;
-   double loc_d  = M_H1.InnerProduct(one, d);
+   double loc_d  = M_H1.InnerProduct(one, interface_ls);
 
    double glob_d;
    MPI_Allreduce(&loc_d, &glob_d, 1, MPI_DOUBLE, MPI_SUM,
