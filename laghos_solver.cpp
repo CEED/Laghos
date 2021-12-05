@@ -313,8 +313,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
-   std::cout << "v rhs diff: " << std::scientific
-             << fabs(rhs.Norml2() - vold) << std::endl;
+//   std::cout << "v rhs diff: " << std::scientific
+//             << fabs(rhs.Norml2() - vold) << std::endl;
 
    rhs.Neg();
 
@@ -380,8 +380,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    const double eold = e_rhs.Norml2();
    if (e_shift_type == 1) { FaceForce.AddMult(v, e_rhs, 1.0); }
    if (e_shift_type > 1) { FaceForce_e.Assemble(); e_rhs -= FaceForce_e; }
-   std::cout << "e rhs diff: " << std::scientific
-             << fabs(e_rhs.Norml2() - eold) << std::endl;
+//   std::cout << "e rhs diff: " << std::scientific
+//             << fabs(e_rhs.Norml2() - eold) << std::endl;
 
    if (e_source) { e_rhs += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);

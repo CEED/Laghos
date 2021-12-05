@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
    double v_shift_diffusion_scale = 1.0;
    // Activate ALE. The ale_period is in physical time.
    const bool do_ale = true;
-   const double ale_period = 0.1;
+   const double ale_period = 0.5;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
@@ -738,7 +738,7 @@ int main(int argc, char *argv[])
       pmesh->NewNodes(x_gf, false);
 
       // Shifting-related procedures.
-      if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+      //if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 #ifdef EXTRACT_1D
       //v_extr.WriteValue(t);
       //x_extr.WriteValue(t);
@@ -874,6 +874,14 @@ int main(int argc, char *argv[])
             dacol.Save();
          }
       }
+   }
+
+   ConstantCoefficient zero(0.0);
+   double err = v_gf.ComputeL1Error(zero);
+   if (myid == 0)
+   {
+      cout << std::fixed << std::setprecision(12)
+           << "v norm: " << err << std::endl;
    }
 
    switch (ode_solver_type)

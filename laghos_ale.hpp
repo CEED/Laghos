@@ -89,7 +89,7 @@ public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
    AdvectorOper(int size, const Vector &x_start,
-                GridFunction &mesh_vel, GridFunction &rho,
+                GridFunction &mesh_vel, ParGridFunction &rho,
                 ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
 
    // Single RK stage solve for all fields contained in U.

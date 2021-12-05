@@ -160,7 +160,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &interface,
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
-                           GridFunction &mesh_vel, GridFunction &rho,
+                           GridFunction &mesh_vel, ParGridFunction &rho,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_L2)
    : TimeDependentOperator(size),
@@ -215,11 +215,14 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Mr_L2_Lump.Finalize();
 
    Kr_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
-   auto dgt_ir = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
-   auto dgt_br = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
+   auto dgt_ir = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
+   auto dgt_br = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
    Kr_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir));
    Kr_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br));
    Kr_L2.KeepNbrBlock(true);
+   // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
+   // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
+   rho.ExchangeFaceNbrData();
    Kr_L2.Assemble(0);
    Kr_L2.Finalize(0);
 }
@@ -320,6 +323,10 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                               rho_min, rho_max, d_rho);
 
    // Energy remap.
+   auto rho_gf_const = dynamic_cast<const ParGridFunction *>
+                       (rho_coeff.GetGridFunction());
+   auto rho_pgf = const_cast<ParGridFunction *>(rho_gf_const);
+   rho_pgf->ExchangeFaceNbrData();
    Kr_L2.BilinearForm::operator=(0.0);
    Kr_L2.Assemble();
    Mr_L2.BilinearForm::operator=(0.0);
@@ -619,15 +626,15 @@ void LocalInverseHOSolver::CalcHOSolution(const Vector &u, Vector &du) const
    HypreParMatrix *K_mat = K.ParallelAssemble(&K.SpMat());
    K_mat->Mult(u, rhs);
 
-   const int ne = pfes.GetMesh()->GetNE();
+   const int NE = pfes.GetMesh()->GetNE();
    const int nd = pfes.GetFE(0)->GetDof();
    DenseMatrix M_loc(nd);
    DenseMatrixInverse M_loc_inv(&M_loc);
    Vector rhs_loc(nd), du_loc(nd);
    Array<int> dofs;
-   for (int i = 0; i < ne; i++)
+   for (int k = 0; k < NE; k++)
    {
-      pfes.GetElementDofs(i, dofs);
+      pfes.GetElementDofs(k, dofs);
       rhs.GetSubVector(dofs, rhs_loc);
       M.SpMat().GetSubMatrix(dofs, dofs, M_loc);
       M_loc_inv.Factor();
