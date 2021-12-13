@@ -332,24 +332,25 @@ int main(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    gamma_gf.ProjectCoefficient(mat_coeff);
 
+   hydrodynamics::SIOptions si_options;
    //
    // Shifted interface options.
    //
    // FE space for the pressure reconstruction.
    // L2 or H1.
-   PressureFunction::PressureSpace p_space = PressureFunction::L2;
+   si_options.p_space = PressureSpace::L2;
    // Integration of mass matrices.
    // true  -- the element mass matrices are integrated as mixed.
    // false -- the element mass matrices are integrated as pure.
-   bool mix_mass = false;
+   si_options.mix_mass = false;
    // 0 -- no shifting term.
    // 1 -- the momentum RHS gets this term:  - < [grad_p.d] psi >
    // 2 -- the momentum RHS gets this term:  - < [grad_p.d * grad_psi.d] n >
    // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
    // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [psi+grad_psi.d] n >
    // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [psi+grad_psi.d] n >
-   int v_shift_type = 1;
-   bool shift_momentum = true;
+   si_options.v_shift_type = 1;
+   si_options.shift_momentum = true;
    // 0 -- no shifting terms.
    // 1 -- the energy RHS gets the conservative momentum term:
    //      + < [grad_p.d] v phi >                         for v_shift_type = 1.
@@ -362,23 +363,25 @@ int main(int argc, char *argv[])
    // 5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
    // optionally, a stability term can be added:
    // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   int e_shift_type = 1;
+   si_options.e_shift_type = 1;
    // Scaling of both shifting terms.
-   double shift_scale = 1.0;
+   si_options.shift_scale = 1.0;
    // Activate the diffusion.
-   bool   v_shift_diffusion = false;
-   double v_shift_diffusion_scale = 1.0;
+   si_options.v_shift_diffusion = false;
+   si_options.v_shift_diffusion_scale = 1.0;
 
-   const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
-   const bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
+   const bool pure_test = (si_options.v_shift_type > 0 ||
+                           si_options.e_shift_type > 0) ? false : true;
+   const bool calc_dist = (si_options.v_shift_type > 0 ||
+                           si_options.e_shift_type > 0) ? true : false;
 
-   if (e_shift_type > 1)
+   if (si_options.e_shift_type > 1)
    {
       MFEM_VERIFY(mpi.WorldSize() == 1, "The e terms are not parallel yet.");
    }
-   if (e_shift_type == 1)
+   if (si_options.e_shift_type == 1)
    {
-      MFEM_VERIFY(v_shift_type >= 1 || v_shift_type <= 5,
+      MFEM_VERIFY(si_options.v_shift_type >= 1 || si_options.v_shift_type <= 5,
                  "doesn't match");
    }
 
@@ -411,22 +414,22 @@ int main(int argc, char *argv[])
    // Set the initial condition based on the materials.
    Coefficient *rho_coeff = &rho0_coeff;
    GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
-   if (v_shift_type > 0 || e_shift_type > 0)
+   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       if (problem == 8)
       {
          hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
       }
       else if (problem == 9)
       {
          hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
       }
       else if (problem == 10)
       {
          hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
       }
    }
 
@@ -463,7 +466,8 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    double dt;
-   PressureFunction p_gf(*pmesh, p_space, rho0_gf, order_e, gamma_gf);
+   PressureFunction p_gf(*pmesh, si_options.p_space, rho0_gf, order_e, gamma_gf);
+   p_gf.SetProblem(problem);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 *rho_coeff, rho0_gf, v_gf,
@@ -471,11 +475,7 @@ int main(int argc, char *argv[])
                                                 source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, &dt);
-
-   hydro.SetShiftingOptions(problem, v_shift_type, e_shift_type,
-                            shift_momentum, shift_scale,
-                            v_shift_diffusion, v_shift_diffusion_scale);
+                                                order_q, &dt, si_options);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
    char vishost[] = "localhost";

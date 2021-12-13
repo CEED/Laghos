@@ -39,9 +39,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
 class PressureFunction
 {
-public:
-   enum PressureSpace {L2, H1};
-
 private:
    const int p_order     = 1;
    const int basis_type  = BasisType::GaussLobatto;
@@ -110,8 +107,7 @@ protected:
    mutable LinearForm FaceForce_e;
    mutable Vector one, rhs, e_rhs;
 
-   int v_shift_type = 0, e_shift_type = 0;
-   bool shift_momentum = false;
+   SIOptions &si_options;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -153,7 +149,8 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, double *dt);
+                           const int order_q, double *dt,
+                           SIOptions &si_opt);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -167,37 +164,6 @@ public:
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
-
-   void SetShiftingOptions(int problem, int vs_type, int es_type,
-                           bool shift_v, double scale,
-                           bool v_diffusion, double v_diffusion_scale)
-   {
-      p_func.SetProblem(problem);
-
-      v_shift_type = vs_type;
-      e_shift_type = es_type;
-      shift_momentum = shift_v;
-
-      //auto tfi_v = FaceForce.GetTFBFI();
-      auto tfi_v = FaceForce.GetFBFI();
-      auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
-      v_integ->SetShiftType(v_shift_type);
-      v_integ->SetScale(scale);
-
-      auto tfi = FaceForce_e.GetTLFI();
-      auto en_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi)[0]);
-      en_integ->SetShiftType(e_shift_type);
-
-      if (v_shift_type > 0 || e_shift_type > 0)
-      {
-         // Make a dummy assembly to figure out the sparsity.
-         FaceForce.Assemble(0);
-         FaceForce.Finalize(0);
-      }
-
-      // Done after the dummy assembly to avoid extra calculations.
-      v_integ->SetDiffusion(v_diffusion, v_diffusion_scale);
-   }
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.

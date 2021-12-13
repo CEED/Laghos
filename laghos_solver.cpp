@@ -98,7 +98,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int cgiter,
                                                  double ftz,
                                                  const int oq,
-                                                 double *dt) :
+                                                 double *dt,
+                                                 SIOptions &si_opt) :
    TimeDependentOperator(size),
    H1(h1), L2(l2),
    pmesh(H1.GetParMesh()),
@@ -131,7 +132,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force(&H1, &L2), FaceForce(&H1, &L2), FaceForce_e(&L2),
    one(L2Vsize),
    rhs(H1Vsize),
-   e_rhs(L2Vsize)
+   e_rhs(L2Vsize),
+   si_options(si_opt)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -238,17 +240,35 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        }
    }
 
+   //
+   // Shifted interface setup.
+   //
+
    // Interface forces.
    auto *ffi = new FaceForceIntegrator(p_func.GetPressure(), gamma_gf,
                                        dist_coeff, cfqdata);
    ffi->SetIntRule(cfir);
+   ffi->SetShiftType(si_options.v_shift_type);
+   ffi->SetScale(si_options.v_shift_diffusion_scale);
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
+   Array<int> attr;
    auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
                                              v_gf, dist_coeff, dt);
-   Array<int> attr;
+   efi->SetShiftType(si_options.e_shift_type);
    FaceForce_e.AddTraceFaceIntegrator(efi, attr);
+
+   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
+   {
+      // Make a dummy assembly to figure out the new sparsity.
+      FaceForce.Assemble(0);
+      FaceForce.Finalize(0);
+   }
+
+   // Done after the dummy assembly to avoid extra calculations.
+   ffi->SetDiffusion(si_options.v_shift_diffusion,
+                     si_options.v_shift_diffusion_scale);
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -309,7 +329,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.MultTranspose(one, rhs);
    const double vold = rhs.Norml2();
-   if (v_shift_type >= 1 && v_shift_type <= 5 && shift_momentum)
+   if (si_options.v_shift_type >= 1 &&
+       si_options.v_shift_type <= 5 && si_options.shift_momentum)
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
@@ -378,8 +399,12 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Force.Mult(v, e_rhs);
 
    const double eold = e_rhs.Norml2();
-   if (e_shift_type == 1) { FaceForce.AddMult(v, e_rhs, 1.0); }
-   if (e_shift_type > 1) { FaceForce_e.Assemble(); e_rhs -= FaceForce_e; }
+   if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs, 1.0); }
+   if (si_options.e_shift_type > 1)
+   {
+      FaceForce_e.Assemble();
+      e_rhs -= FaceForce_e;
+   }
    std::cout << "e rhs diff: " << std::scientific
              << fabs(e_rhs.Norml2() - eold) << std::endl;
 
@@ -671,7 +696,7 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 {
    Force = 0.0;
    Force.Assemble();
-   if (v_shift_type > 0 || e_shift_type > 0)
+   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       FaceForce = 0.0;
       FaceForce.Assemble();

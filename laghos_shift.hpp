@@ -26,9 +26,24 @@ namespace mfem
 namespace hydrodynamics
 {
 
+enum PressureSpace {L2, H1};
+
 int material_id(int el_id, const ParGridFunction &g);
 
 void MarkFaceAttributes(ParFiniteElementSpace &pfes);
+
+// Stores the shifted interface options.
+struct SIOptions
+{
+   PressureSpace p_space = PressureSpace::L2;
+   bool mix_mass = false;
+   int v_shift_type = 0;
+   bool shift_momentum = false;
+   int e_shift_type = 0;
+   double shift_scale = 1.0;
+   bool v_shift_diffusion = false;
+   double v_shift_diffusion_scale = 1.0;
+};
 
 // Specifies the material interface, depending on the problem number.
 class InterfaceCoeff : public Coefficient
