@@ -37,12 +37,15 @@ struct SIOptions
 {
    PressureSpace p_space = PressureSpace::L2;
    bool mix_mass = false;
+
    int v_shift_type = 0;
-   bool shift_momentum = false;
-   int e_shift_type = 0;
-   double shift_scale = 1.0;
+   double v_shift_scale = 1.0;
    bool v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
+
+   int e_shift_type = 0;
+   bool e_shift_diffusion = false;
+   double e_shift_diffusion_scale = 1.0;
 };
 
 // Specifies the material interface, depending on the problem number.
@@ -72,7 +75,7 @@ private:
    VectorCoefficient &dist;
 
    int v_shift_type = 0;
-   double scale = 1.0;
+   double v_shift_scale = 1.0;
 
    bool diffuse_v = false;
    double diffuse_v_scale = 1.0;
@@ -97,7 +100,7 @@ private:
                            DenseMatrix &elmat);
 
    void SetShiftType(int type) { v_shift_type = type; }
-   void SetScale(double s) { scale = s; }
+   void SetScale(double s) { v_shift_scale = s; }
    void SetDiffusion(bool d, double s) { diffuse_v = d; diffuse_v_scale = s; }
 
    void SetVelocity(const ParGridFunction &vel) { v = &vel; }
@@ -110,9 +113,12 @@ private:
    const ParGridFunction &p, &v;
    VectorCoefficient &dist;
    double *dt;
-   int e_shift_type = 0;
 
 public:
+   int e_shift_type = 0;
+   bool diffusion = false;
+   double diffusion_scale = 1.0;
+
    EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
                              const ParGridFunction &v_gf,
                              VectorCoefficient &d,
@@ -129,8 +135,6 @@ public:
                                     const FiniteElement &el_2,
                                     FaceElementTransformations &Trans,
                                     Vector &elvect);
-
-   void SetShiftType(int type) { e_shift_type = type; }
 };
 
 void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes);

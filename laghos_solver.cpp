@@ -249,14 +249,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                        dist_coeff, cfqdata);
    ffi->SetIntRule(cfir);
    ffi->SetShiftType(si_options.v_shift_type);
-   ffi->SetScale(si_options.v_shift_diffusion_scale);
+   ffi->SetScale(si_options.v_shift_scale);
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
    auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
                                              v_gf, dist_coeff, dt);
-   efi->SetShiftType(si_options.e_shift_type);
+   efi->e_shift_type    = si_options.e_shift_type;
+   efi->diffusion       = si_options.e_shift_diffusion;
+   efi->diffusion_scale = si_options.e_shift_diffusion_scale;
    FaceForce_e.AddTraceFaceIntegrator(efi, attr);
 
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
@@ -329,8 +331,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.MultTranspose(one, rhs);
    const double vold = rhs.Norml2();
-   if (si_options.v_shift_type >= 1 &&
-       si_options.v_shift_type <= 5 && si_options.shift_momentum)
+   if (si_options.v_shift_type >= 1 && si_options.v_shift_type <= 5)
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }

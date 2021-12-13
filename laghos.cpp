@@ -332,43 +332,50 @@ int main(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    gamma_gf.ProjectCoefficient(mat_coeff);
 
-   hydrodynamics::SIOptions si_options;
    //
    // Shifted interface options.
    //
-   // FE space for the pressure reconstruction.
-   // L2 or H1.
+   hydrodynamics::SIOptions si_options;
+   // FE space for the pressure reconstruction -- L2 or H1.
    si_options.p_space = PressureSpace::L2;
    // Integration of mass matrices.
    // true  -- the element mass matrices are integrated as mixed.
    // false -- the element mass matrices are integrated as pure.
    si_options.mix_mass = false;
-   // 0 -- no shifting term.
-   // 1 -- the momentum RHS gets this term:  - < [grad_p.d] psi >
-   // 2 -- the momentum RHS gets this term:  - < [grad_p.d * grad_psi.d] n >
-   // 3 -- the momentum RHS gets this term:  - < [(p + grad_p.d) * grad_psi.d] n >
-   // 4 -- the momentum RHS gets this term:  - < [(p + grad_p.d)] [psi+grad_psi.d] n >
-   // 5 -- the momentum RHS gets this term:  - < [grad_p.d] [psi+grad_psi.d] n >
+   // Contribution to the momentum RHS:
+   // 0: no shifting terms.
+   // 1: - < [grad_p.d] psi >
+   // 2: - < [grad_p.d * grad_psi.d] n >
+   // 3: - < [(p + grad_p.d) * grad_psi.d] n >
+   // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
+   // 5: - < [grad_p.d] [psi + grad_psi.d] n >
    si_options.v_shift_type = 1;
-   si_options.shift_momentum = true;
-   // 0 -- no shifting terms.
-   // 1 -- the energy RHS gets the conservative momentum term:
-   //      + < [grad_p.d] v phi >                         for v_shift_type = 1.
-   //      + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
-   //      + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
-   //      + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
-   // 2 -- - <[[((nabla v d) . n)n]], {{p phi}} + <v, phi[[\grad p . d]]>
-   // 3 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>  + <v, phi[[\grad p . d]]>
-   // 4 -- - <[[((nabla v d) . n)n]], {{p phi}}
-   // 5 -- - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]> - < {v},{phi}[[p + nabla p . d]]>
-   // optionally, a stability term can be added:
-   // + (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-   si_options.e_shift_type = 1;
-   // Scaling of both shifting terms.
-   si_options.shift_scale = 1.0;
-   // Activate the diffusion.
+   // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
+   si_options.v_shift_scale = -1.0;
+   // Activate the momentum diffusion term.
    si_options.v_shift_diffusion = false;
    si_options.v_shift_diffusion_scale = 1.0;
+   // Contributions to the energy RHS:
+   // 0: no shifting terms.
+   // 1: the energy RHS gets the conservative momentum term:
+   //    + < [grad_p.d] v phi >                         for v_shift_type = 1.
+   //    + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
+   //    + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
+   //    + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
+   // 2: - < [((nabla v d) . n)n], {{p phi}}
+   //    + < v, phi [grad_p.d] >
+   // 3: - <[[((nabla v d) . n)n]], {{p}}{{phi}}
+   //    - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>
+   //    + <v, phi[[\grad p . d]]>
+   // 4: - < [((grad_v.d).n) n] {p phi} >
+   // 5: - < [((grad_v d).n) n] {p} {phi} >
+   //    - < (1-gamma)(gamma) [grad_p.d].[grad_phi] >
+   //    - < {v} {phi} [p + grad_p.d] >
+   si_options.e_shift_type = 4;
+   // Activate the energy diffusion term. The RHS gets:
+   //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
+   si_options.e_shift_diffusion = true;
+   si_options.e_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? false : true;

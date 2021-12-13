@@ -358,7 +358,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                    p_shift_part = grad_p_d1 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
-               p_shift_part *= scale;
+               p_shift_part *= v_shift_scale;
 
                for (int d = 0; d < dim; d++)
                {
@@ -421,7 +421,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                    p_shift_part = grad_p_d1 - grad_p_d2;
                    h1_shape_part += h1_shape(j);
                }
-               p_shift_part *= scale;
+               p_shift_part *= v_shift_scale;
 
                for (int d = 0; d < dim; d++)
                {
@@ -687,7 +687,6 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
       v.GetVectorValue(Trans, ip_f, v_vals);
       const int form = e_shift_type;
-      const bool stability = false;
 
       // For each term, we keep the sign as if it is on the left hand side
       // because in SolveEnergy, this will be multiplied with -1 and added.
@@ -860,8 +859,8 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           }
       }
 
-      // (dt / h) * [[ p + grad p . d ]], [[ phi + grad phi . d]]
-      if (stability)
+      // (dt / h) * [p + grad_p.d], [phi + grad_phi.d]
+      if (diffusion)
       {
             double p_gradp_jump_term = p1 + d_q1 * p_grad_q1 - p2 - d_q2 * p_grad_q2;
             int problem = 8;
@@ -871,7 +870,6 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
             if (problem == 9) {
                 rho = v.ParFESpace()->GetMesh()->GetAttribute(Trans.Elem1No) == 1 ? 1000 : 50.;
             }
-            //dtval *= (v_vals*v_vals);
 
             //1st element
             {
@@ -882,7 +880,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
                 dshapephys.AddMult(d_q1, l2_shape);
 
                 l2_shape *= p_gradp_jump_term;
-                l2_shape *= dtval*ip_f.weight * hinvdx;
+                l2_shape *= diffusion_scale * dtval * ip_f.weight * hinvdx;
                 Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
                 elvect_temp.Add(1., l2_shape);
             }
@@ -897,7 +895,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
                 dshapephys.AddMult(d_q2, l2_shape);
 
                 l2_shape *= p_gradp_jump_term;
-                l2_shape *= dtval*ip_f.weight * hinvdx;
+                l2_shape *= diffusion_scale * dtval * ip_f.weight * hinvdx;
                 Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
                 elvect_temp.Add(-1., l2_shape);
             }
