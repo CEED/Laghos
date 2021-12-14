@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
    double v_shift_diffusion_scale = 1.0;
    // Activate ALE. The ale_period is in physical time.
    const bool do_ale = true;
-   const double ale_period = 0.5;
+   const double ale_period = t_final;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
    bool calc_dist = (v_shift_type > 0 || e_shift_type > 0) ? true : false;
@@ -877,11 +877,13 @@ int main(int argc, char *argv[])
    }
 
    ConstantCoefficient zero(0.0);
-   double err = v_gf.ComputeL1Error(zero);
+   double err_v = v_gf.ComputeL1Error(zero),
+          err_e = e_gf.ComputeL1Error(zero);
    if (myid == 0)
    {
       cout << std::fixed << std::setprecision(12)
-           << "v norm: " << err << std::endl;
+           << "v norm: " << err_v << std::endl
+           << "e norm: " << err_e << std::endl;
    }
 
    switch (ode_solver_type)

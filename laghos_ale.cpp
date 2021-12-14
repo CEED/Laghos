@@ -286,7 +286,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    {
       // Velocity component.
       v.MakeRef(*U_ptr, (1 + d) * size_H1, size_H1);
-      d_v.MakeRef(dU,  (1 + d) * size_H1, size_H1);
+      d_v.MakeRef(dU,   (1 + d) * size_H1, size_H1);
       Kr_H1.Mult(v, rhs_H1);
       P_H1->MultTranspose(rhs_H1, RHS_H1);
       X = 0.0;
@@ -336,8 +336,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    Vector e, d_e, d_e_HO(size_L2), d_e_LO(size_L2);
    e.MakeRef(*U_ptr, (1 + dim) * size_H1 + size_L2, size_L2);
    d_e.MakeRef(dU,  (1 + dim) * size_H1 + size_L2, size_L2);
-   Vector lumped;
-   Mr_L2_Lump.SpMat().GetDiag(lumped);
+   Vector lumped; Mr_L2_Lump.SpMat().GetDiag(lumped);
    DiscreteUpwindLOSolver lo_e_solver(pfes_L2, Kr_L2.SpMat(), lumped);
    lo_e_solver.CalcLOSolution(e, d_e_LO);
    LocalInverseHOSolver ho_e_solver(Mr_L2, Kr_L2);
@@ -350,7 +349,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    ComputeSparsityBounds(pfes_L2, el_min, el_max, e_min, e_max);
    FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_L2.SpMat(),
                              lo_e_solver.GetKmap(), Mr_L2.SpMat());
-   fct_e_solver.CalcFCTSolution(e_gf, lumpedM, d_e_HO, d_e_LO,
+   fct_e_solver.CalcFCTSolution(e_gf, lumped, d_e_HO, d_e_LO,
                                 e_min, e_max, d_e);
 }
 
@@ -476,15 +475,16 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
    ParMesh &pmesh = *rho.ParFESpace()->GetParMesh();
    L2_FECollection fec0(0, pmesh.Dimension());
    ParFiniteElementSpace pfes0(&pmesh, &fec0);
-   ParGridFunction rho_min(&pfes0), rho_max(&pfes0);
+   ParGridFunction rho_min_loc(&pfes0), rho_max_loc(&pfes0);
 
    // Local max / min.
    const int NE = pmesh.GetNE(), nqp = ir_rho.GetNPoints();
+   double rho_sum = 0.0;
    for (int k = 0; k < NE; k++)
    {
       ElementTransformation &T = *pmesh.GetElementTransformation(k);
-      rho_min(k) =   std::numeric_limits<double>::infinity();
-      rho_max(k) = - std::numeric_limits<double>::infinity();
+      rho_min_loc(k) =   std::numeric_limits<double>::infinity();
+      rho_max_loc(k) = - std::numeric_limits<double>::infinity();
 
       for (int q = 0; q < nqp; q++)
       {
@@ -492,16 +492,19 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
          T.SetIntPoint(&ip);
          const double detJ = T.Jacobian().Det();
          const double rho = quad_rho(k * nqp + q) / detJ / ip.weight;
-         rho_min(k) = min(rho_min(k), rho);
-         rho_max(k) = max(rho_max(k), rho);
+         rho_sum += rho;
+         rho_min_loc(k) = std::min(rho_min_loc(k), rho);
+         rho_max_loc(k) = std::max(rho_max_loc(k), rho);
       }
    }
 
+   Vector rho_min(rho_min_loc), rho_max(rho_max_loc);
+
    // One-level face neighbors max / min.
-   rho_min.ExchangeFaceNbrData();
-   rho_max.ExchangeFaceNbrData();
-   const Vector &rho_min_nbr = rho_min.FaceNbrData(),
-                &rho_max_nbr = rho_max.FaceNbrData();
+   rho_min_loc.ExchangeFaceNbrData();
+   rho_max_loc.ExchangeFaceNbrData();
+   const Vector &rho_min_nbr = rho_min_loc.FaceNbrData(),
+                &rho_max_nbr = rho_max_loc.FaceNbrData();
    const Table &el_to_el = pmesh.ElementToElementTable();
    Array<int> face_nbr_el;
    for (int k = 0; k < NE; k++)
@@ -512,14 +515,14 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho)
          if (face_nbr_el[n] < NE)
          {
             // Local neighbor.
-            rho_min(k) = min(rho_min(k), rho_min(face_nbr_el[n]));
-            rho_max(k) = max(rho_max(k), rho_max(face_nbr_el[n]));
+            rho_min(k) = std::min(rho_min(k), rho_min_loc(face_nbr_el[n]));
+            rho_max(k) = std::max(rho_max(k), rho_max_loc(face_nbr_el[n]));
          }
          else
          {
             // MPI face neighbor.
-            rho_min(k) = min(rho_min(k), rho_min_nbr(face_nbr_el[n] - NE));
-            rho_max(k) = max(rho_max(k), rho_max_nbr(face_nbr_el[n] - NE));
+            rho_min(k) = std::min(rho_min(k), rho_min_nbr(face_nbr_el[n] - NE));
+            rho_max(k) = std::max(rho_max(k), rho_max_nbr(face_nbr_el[n] - NE));
          }
       }
    }
