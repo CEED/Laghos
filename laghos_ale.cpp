@@ -66,7 +66,8 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    mover.MoveDensityLR(rhoDetJw, rho);
 }
 
-void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
+void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
+                                         const Array<int> &ess_tdofs)
 {
    const int vsize_H1 = pfes_H1.GetVSize();
 
@@ -79,9 +80,11 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
    subtract(new_nodes, x0, u);
 
    // Define scalar FE spaces for the solution, and the advection operator.
-   ParFiniteElementSpace pfes_H1(&pmesh, &fec_H1, 1);
+   ParFiniteElementSpace pfes_H1(&pmesh, &fec_H1, dim);
+   ParFiniteElementSpace pfes_H1_s(&pmesh, &fec_H1, 1);
    ParFiniteElementSpace pfes_L2(&pmesh, &fec_L2, 1);
-   AdvectorOper oper(S.Size(), x0, u, rho, pfes_H1, pfes_L2);
+   AdvectorOper oper(S.Size(), x0, ess_tdofs, u, rho,
+                     pfes_H1, pfes_H1_s, pfes_L2);
    ode_solver.Init(oper);
 
    // Compute some time step [mesh_size / speed].
@@ -160,15 +163,18 @@ void RemapAdvector::TransferToLagr(ParGridFunction &interface,
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
+                           const Array<int> &v_ess_td,
                            GridFunction &mesh_vel, ParGridFunction &rho,
                            ParFiniteElementSpace &pfes_H1,
+                           ParFiniteElementSpace &pfes_H1_s,
                            ParFiniteElementSpace &pfes_L2)
    : TimeDependentOperator(size),
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
+     v_ess_tdofs(v_ess_td),
      u(mesh_vel), u_coeff(&u),
      rho_coeff(&rho), rho_u_coeff(rho_coeff, u_coeff),
-     M_H1(&pfes_H1), K_H1(&pfes_H1),
-     Mr_H1(&pfes_H1), Kr_H1(&pfes_H1),
+     M_H1(&pfes_H1_s), K_H1(&pfes_H1_s),
+     Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
 {
@@ -180,7 +186,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    K_H1.Assemble(0);
    K_H1.Finalize(0);
 
-   Mr_H1.AddDomainIntegrator(new MassIntegrator(rho_coeff));
+   Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
    Mr_H1.Assemble(0);
    Mr_H1.Finalize(0);
 
@@ -275,24 +281,32 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    P_H1->Mult(X, d_xi);
 
    // Velocity remap.
+   ParFiniteElementSpace &pfes_v = *Mr_H1.ParFESpace();
    Mr_H1.BilinearForm::operator=(0.0);
    Mr_H1.Assemble();
    Kr_H1.BilinearForm::operator=(0.0);
    Kr_H1.Assemble();
    Mass_oper.Reset(Mr_H1.ParallelAssemble());
    lin_solver.SetOperator(*Mass_oper);
-   Vector v, d_v;
+   Vector v, d_v, rhs_v(size_H1*dim);
+   v.MakeRef(*U_ptr, size_H1, size_H1*dim);
+   d_v.MakeRef(dU,   size_H1, size_H1*dim);
+   Vector v_comp, rhs_v_comp;
    for (int d = 0; d < dim; d++)
    {
-      // Velocity component.
-      v.MakeRef(*U_ptr, (1 + d) * size_H1, size_H1);
-      d_v.MakeRef(dU,   (1 + d) * size_H1, size_H1);
-      Kr_H1.Mult(v, rhs_H1);
-      P_H1->MultTranspose(rhs_H1, RHS_H1);
-      X = 0.0;
-      lin_solver.Mult(RHS_H1, X);
-      P_H1->Mult(X, d_v);
+      v_comp.MakeRef(v, d * size_H1, size_H1);
+      rhs_v_comp.MakeRef(rhs_v, d * size_H1, size_H1);
+      Kr_H1.Mult(v_comp, rhs_v_comp);
    }
+   const Operator *P_v = pfes_v.GetProlongationMatrix();
+   Vector RHS_V(P_v->Width()), X_V(P_v->Width());
+   P_v->MultTranspose(rhs_v, RHS_V);
+   X_V = 0.0;
+   OperatorHandle M_elim;
+   M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+   Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+   lin_solver.Mult(RHS_V, X_V);
+   P_v->Mult(X_V, d_v);
 
    Vector el_min(NE), el_max(NE);
 

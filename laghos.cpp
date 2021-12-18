@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
                           hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
 
          // Remap to x0 (the remesh always goes back to x0).
-         adv.ComputeAtNewPosition(x0);
+         adv.ComputeAtNewPosition(x0, ess_tdofs);
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x0;

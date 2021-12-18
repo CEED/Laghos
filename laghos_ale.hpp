@@ -53,7 +53,8 @@ public:
                      const IntegrationRule &rho_ir, const Vector &rhoDetJw,
                      const ParGridFunction &energy);
 
-   virtual void ComputeAtNewPosition(const Vector &new_nodes);
+   virtual void ComputeAtNewPosition(const Vector &new_nodes,
+                                     const Array<int> &ess_tdofs);
 
    void TransferToLagr(ParGridFunction &interface, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
@@ -67,6 +68,7 @@ class AdvectorOper : public TimeDependentOperator
 protected:
    const Vector &x0;
    Vector &x_now;
+   const Array<int> &v_ess_tdofs;
    GridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
@@ -88,9 +90,11 @@ protected:
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
-   AdvectorOper(int size, const Vector &x_start,
+   AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
                 GridFunction &mesh_vel, ParGridFunction &rho,
-                ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_L2);
+                ParFiniteElementSpace &pfes_H1,
+                ParFiniteElementSpace &pfes_H1_s,
+                ParFiniteElementSpace &pfes_L2);
 
    // Single RK stage solve for all fields contained in U.
    virtual void Mult(const Vector &U, Vector &dU) const;
