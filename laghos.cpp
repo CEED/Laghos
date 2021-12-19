@@ -23,7 +23,7 @@
 //
 //             High-order Lagrangian Hydrodynamics Miniapp
 //
-// Laghos(LAGrangian High-Order Solver) is a miniapp that solves the
+// Laghos (LAGrangian High-Order Solver) is a miniapp that solves the
 // time-dependent Euler equation of compressible gas dynamics in a moving
 // Lagrangian frame using unstructured high-order finite element spatial
 // discretization and explicit high-order time-stepping. Laghos is based on the
@@ -37,6 +37,7 @@
 
 #include "laghos_solver.hpp"
 #include "dist_solver.hpp"
+#include "laghos_ale.hpp"
 #include "riemann1D.hpp"
 
 using std::cout;
@@ -292,6 +293,9 @@ int main(int argc, char *argv[])
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
 
+   // Initial mesh positions.
+   ParGridFunction x0(x_gf);
+
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
@@ -376,6 +380,9 @@ int main(int argc, char *argv[])
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = true;
    si_options.e_shift_diffusion_scale = 1.0;
+   // Activate ALE. The ale_period is in physical time.
+   const bool do_ale = false;
+   const double ale_period = t_final;
 
    const bool pure_test = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? false : true;
@@ -420,23 +427,24 @@ int main(int argc, char *argv[])
 
    // Set the initial condition based on the materials.
    Coefficient *rho_coeff = &rho0_coeff;
-   GridFunctionCoefficient rho_gf_coeff(&rho0_gf);
+   GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
+   rho_coeff = &rho0_gf_coeff;
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       if (problem == 8)
       {
          hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
       else if (problem == 9)
       {
          hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
       else if (problem == 10)
       {
          hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho_gf_coeff; }
+         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
       }
    }
 
@@ -488,7 +496,7 @@ int main(int argc, char *argv[])
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
+   ParGridFunction rho_gf(&L2FESpace);
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
@@ -632,6 +640,7 @@ int main(int argc, char *argv[])
    double energy_old = energy_init,
           energy_new = energy_init;
 
+   int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -657,14 +666,76 @@ int main(int argc, char *argv[])
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
          dt *= 0.85;
-         if (dt < 1e-12)
-         { MFEM_ABORT("The time step crashed!"); }
+         if (dt < 1e-12) { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
          hydro.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
+      }
+      else if (do_ale && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      {
+         // ALE step - the next remap period has been reached, the dt was ok.
+
+         // Conserved quantities at the start of the ALE step.
+         double mass_in     = hydro.Mass(),
+                momentum_in = hydro.Momentum(v_gf),
+                internal_in = hydro.InternalEnergy(e_gf),
+                kinetic_in  = hydro.KineticEnergy(v_gf),
+                total_in    = internal_in + kinetic_in;
+
+         // Setup and initialize the remap operator.
+         RemapAdvector adv(*pmesh, order_v, order_e);
+         adv.InitFromLagr(x_gf, xi, v_gf,
+                          hydro.GetIntRule(), hydro.GetRhoDetJw(), e_gf);
+
+         // Remap to x0 (the remesh always goes back to x0).
+         adv.ComputeAtNewPosition(x0, ess_tdofs);
+
+         // Move the mesh to x0 and transfer the result from the remap.
+         x_gf = x0;
+         adv.TransferToLagr(xi, v_gf,
+                            hydro.GetIntRule(), hydro.GetRhoDetJw(),
+                            rho0_gf, e_gf);
+
+         // Update mass matrices.
+         // Above we changed rho0_gf to reflect the mass matrices Coefficient.
+         rho_coeff = &rho0_gf_coeff;
+         hydro.UpdateMassMatrices(*rho_coeff);
+
+         // Material marking and visualization function.
+         for (int k = 0; k < NE; k++)
+         {
+            int mat_id = hydrodynamics::material_id(k, xi);
+            pmesh->SetAttribute(k, mat_id + 1);
+            materials(k) = mat_id;
+         }
+         hydrodynamics::MarkFaceAttributes(pfes_xi);
+
+         ale_cnt++;
+
+         // Conserved quantities at the exit of the ALE step.
+         double mass_out     = hydro.Mass(),
+                momentum_out = hydro.Momentum(v_gf),
+                internal_out = hydro.InternalEnergy(e_gf),
+                kinetic_out  = hydro.KineticEnergy(v_gf),
+                total_out    = internal_out + kinetic_out;
+
+         ConstantCoefficient zero(0.0);
+         double err = xi.ComputeL1Error(zero);
+         if (myid == 0)
+         {
+            cout << std::fixed << std::setw(5) << std::setprecision(4)
+                 << "ALE step [" << ale_cnt << "] at " << t << ": "
+                 << std::scientific << std::setprecision(4) << endl
+                 << "mass err:       " << mass_out - mass_in << endl
+                 << "momentum err:   " << momentum_out - momentum_in << endl
+                 << "internal_e err: " << internal_out - internal_in << endl
+                 << "kinetic_e err:  " << kinetic_out - kinetic_in << endl
+                 << "total_e err:    " << total_out - total_in << endl;
+            cout << "interface error:     " << err << endl;
+         }
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
@@ -674,7 +745,7 @@ int main(int argc, char *argv[])
       pmesh->NewNodes(x_gf, false);
 
       // Shifting-related procedures.
-      if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+      //if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 #ifdef EXTRACT_1D
       //v_extr.WriteValue(t);
       //x_extr.WriteValue(t);
@@ -810,6 +881,16 @@ int main(int argc, char *argv[])
             dacol.Save();
          }
       }
+   }
+
+   ConstantCoefficient zero(0.0);
+   double err_v = v_gf.ComputeL1Error(zero),
+          err_e = e_gf.ComputeL1Error(zero);
+   if (myid == 0)
+   {
+      cout << std::fixed << std::setprecision(12)
+           << "v norm: " << err_v << std::endl
+           << "e norm: " << err_e << std::endl;
    }
 
    switch (ode_solver_type)

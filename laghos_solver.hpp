@@ -159,6 +159,7 @@ public:
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
+   void UpdateMassMatrices(Coefficient &rho_coeff);
 
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
@@ -167,18 +168,23 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho) const;
+   // The FE space of rho must be set before the call.
+   void ComputeDensity(ParGridFunction &rho, bool keep_bounds = false) const;
    ParGridFunction &GetPressure(const ParGridFunction &e)
    {
       p_func.UpdatePressure(e);
       return p_func.GetPressure();
    }
+   double Mass() const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
    double Momentum(const ParGridFunction &v) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
+
+   const IntegrationRule &GetIntRule() { return ir; }
+   Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.
