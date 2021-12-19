@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
    bool   v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
    // Activate ALE. The ale_period is in physical time.
-   const bool do_ale = true;
+   const bool do_ale = false;
    const double ale_period = t_final;
 
    const bool pure_test = (v_shift_type > 0 || e_shift_type > 0) ? false : true;
