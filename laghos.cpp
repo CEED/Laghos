@@ -426,9 +426,16 @@ int main(int argc, char *argv[])
    hydrodynamics::MarkFaceAttributes(pfes_xi);
 
    // Set the initial condition based on the materials.
-   Coefficient *rho_coeff = &rho0_coeff;
    GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
-   rho_coeff = &rho0_gf_coeff;
+   Coefficient *rho_coeff = &rho0_gf_coeff;
+   if (si_options.mix_mass == true)
+   {
+      MFEM_VERIFY(do_ale == false,
+      "The rho is not updated properly in the mass matrices after remap when "
+      "rho_coeff is initialized with the FunctionCoefficient. That is, the "
+      "mass matrices will still use the FunctionCoefficient.");
+      rho_coeff = &rho0_coeff;
+   }
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       if (problem == 8)
@@ -745,7 +752,7 @@ int main(int argc, char *argv[])
       pmesh->NewNodes(x_gf, false);
 
       // Shifting-related procedures.
-      //if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+      if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 #ifdef EXTRACT_1D
       //v_extr.WriteValue(t);
       //x_extr.WriteValue(t);

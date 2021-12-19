@@ -169,7 +169,7 @@ public:
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    // The FE space of rho must be set before the call.
-   void ComputeDensity(ParGridFunction &rho, bool keep_bounds = false) const;
+   void ComputeDensity(ParGridFunction &rho) const;
    ParGridFunction &GetPressure(const ParGridFunction &e)
    {
       p_func.UpdatePressure(e);
