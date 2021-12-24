@@ -43,11 +43,13 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
 
             addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
+            dmd_X->takeSample(Xdiff.GetData(), t);
             generator_X->computeNextSampleTime(Xdiff.GetData(), dXdt.GetData(), t);
         }
         else
         {
             addSample = generator_X->takeSample(X.GetData(), t, dt);
+            dmd_X->takeSample(X.GetData(), t);
             generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
         }
 
@@ -82,11 +84,13 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 }
 
                 addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
+                dmd_V->takeSample(Xdiff.GetData(), t);
                 generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
             }
             else
             {
                 addSample = generator_V->takeSample(V.GetData(), t, dt);
+                dmd_V->takeSample(V.GetData(), t);
                 generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
             }
 
@@ -104,6 +108,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             gfH1.GetTrueDofs(Xdiff);
             bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+            dmd_Fv->takeSample(Xdiff.GetData(), t);
 
             if (writeSnapshots && addSampleF)
             {
@@ -131,12 +136,14 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
+            dmd_E->takeSample(Ediff.GetData(), t);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
 
         }
         else
         {
             addSample = generator_E->takeSample(E.GetData(), t, dt);
+            dmd_E->takeSample(E.GetData(), t);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
@@ -148,6 +155,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             gfL2.GetTrueDofs(Ediff);
             addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+            dmd_Fe->takeSample(Ediff.GetData(), t);
 
             if (writeSnapshots && addSampleF)
             {

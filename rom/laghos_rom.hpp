@@ -5,6 +5,7 @@
 
 #include "linalg/BasisGenerator.h"
 #include "linalg/BasisReader.h"
+#include "algo/AdaptiveDMD.h"
 #include "algo/greedy/GreedyRandomSampler.h"
 
 #include "laghos_solver.hpp"
@@ -159,6 +160,8 @@ struct ROM_Options
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
+    double desired_dt = 0.0;
+    double dmd_epsilon = 1.0;
     double rhoFactor = 1.0; // factor for scaling rho
     double atwoodFactor = 1.0 / 3.0; // factor for Atwood number in Rayleigh-Taylor instability problem
     double blast_energyFactor = 1.0; // factor for scaling blast energy
@@ -169,7 +172,7 @@ struct ROM_Options
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
-    int sv_shift = 1; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used) 
+    int sv_shift = 1; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used)
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = -1; // index of parameters chosen for this Laghos simulation
@@ -291,6 +294,7 @@ public:
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::X + std::to_string(window) + input.basisIdentifier);
+        dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randdimV);
@@ -299,6 +303,7 @@ public:
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::V + std::to_string(window) + input.basisIdentifier);
+        dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
         if (input.randomizedSVD)
         {
             e_options.setRandomizedSVD(true, input.randdimE);
@@ -307,6 +312,7 @@ public:
             e_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
+        dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_epsilon);
         if (!sns)
         {
             if (input.randomizedSVD)
@@ -317,6 +323,7 @@ public:
                 x_options,
                 !staticSVD,
                 staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fv + std::to_string(window) + input.basisIdentifier);
+            dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
             if (input.randomizedSVD)
             {
                 e_options.setRandomizedSVD(true, input.randdimFe);
@@ -325,6 +332,7 @@ public:
                 e_options,
                 !staticSVD,
                 staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fe + std::to_string(window) + input.basisIdentifier);
+            dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_epsilon);
         }
 
         SetStateVariables(S_init);
@@ -407,6 +415,8 @@ public:
     {
         return rank;
     }
+
+    CAROM::AdaptiveDMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
 
 private:
     const int H1size;

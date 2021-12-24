@@ -60,6 +60,7 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "algo/greedy/GreedyRandomSampler.h"
+#include "algo/AdaptiveDMD.h"
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -161,6 +162,7 @@ int main(int argc, char *argv[])
     const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
+    CAROM::AdaptiveDMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -272,6 +274,10 @@ int main(int argc, char *argv[])
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
+    args.AddOption(&romOptions.desired_dt, "-ddt", "--dtime-step",
+                   "Desired Time step.");
+    args.AddOption(&romOptions.dmd_epsilon, "-dmde", "--dmde",
+                   "DMD epsilon.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
                    "Enable or disable write solution.");
@@ -1138,6 +1144,11 @@ int main(int argc, char *argv[])
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
         sampler = new ROM_Sampler(romOptions, *S);
+        dmd_X = sampler->dmd_X;
+        dmd_V = sampler->dmd_V;
+        dmd_E = sampler->dmd_E;
+        dmd_Fv = sampler->dmd_Fv;
+        dmd_Fe = sampler->dmd_Fe;
         sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         samplerTimer.Stop();
     }
@@ -1751,6 +1762,11 @@ int main(int argc, char *argv[])
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
                         sampler = new ROM_Sampler(romOptions, *S);
+                        dmd_X = sampler->dmd_X;
+                        dmd_V = sampler->dmd_V;
+                        dmd_E = sampler->dmd_E;
+                        dmd_Fv = sampler->dmd_Fv;
+                        dmd_Fe = sampler->dmd_Fe;
                         sampler->SampleSolution(t, dt, real_pd, *S);
                     }
                     else sampler = NULL;
@@ -2048,6 +2064,14 @@ int main(int argc, char *argv[])
         ofs_STE.close();
     }
 
+    if (myid == 0)
+    {
+        std::cout << "Creating DMD with energy fraction: " << romOptions.energyFraction << std::endl;
+    }
+    dmd_X->train(romOptions.energyFraction);
+    dmd_V->train(romOptions.energyFraction);
+    dmd_E->train(romOptions.energyFraction);
+
     if (fom_data && (!rom_build_database || greedy_write_solution))
     {
         if (writeSol)
@@ -2056,6 +2080,20 @@ int main(int argc, char *argv[])
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
+
+        CAROM::Vector* result_X = dmd_X->predict(t/romOptions.desired_dt);
+        CAROM::Vector* result_V = dmd_V->predict(t/romOptions.desired_dt);
+        CAROM::Vector* result_E = dmd_E->predict(t/romOptions.desired_dt);
+        Vector m_result_X(result_X->getData(), result_X->dim());
+        Vector m_result_V(result_V->getData(), result_V->dim());
+        Vector m_result_E(result_E->getData(), result_E->dim());
+        *x_gf = m_result_X;
+        *v_gf = m_result_V;
+        *e_gf = m_result_E;
+        if (myid == 0) cout << "dmd relative errors: " << endl;
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position", x_gf);
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity", v_gf);
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy", e_gf);
 
         if (solDiff)
         {
