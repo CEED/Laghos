@@ -60,6 +60,7 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "algo/greedy/GreedyRandomSampler.h"
+#include "algo/DMD.h"
 #include "algo/AdaptiveDMD.h"
 
 #include "laghos_solver.hpp"
@@ -162,7 +163,7 @@ int main(int argc, char *argv[])
     const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
-    CAROM::AdaptiveDMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
+    CAROM::DMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -1329,6 +1330,7 @@ int main(int argc, char *argv[])
 
     StopWatch restoreTimer, timeLoopTimer;
     bool greedy_converged = true;
+    int ti;
     if (rom_restore)
     {
         // -restore phase
@@ -1356,7 +1358,6 @@ int main(int argc, char *argv[])
         {
             infile_tw_steps >> nb_step;
         }
-        int ti;
         for (ti = 1; !last_step; ti++)
         {
             // romS = readCurrentReduceSol(ti);
@@ -1476,7 +1477,7 @@ int main(int argc, char *argv[])
         }
         double windowEndpoint = 0.0;
         double windowOverlapMidpoint = 0.0;
-        for (int ti = 1; !last_step; ti++)
+        for (ti = 1; !last_step; ti++)
         {
             if (t + dt >= t_final)
             {
@@ -2080,27 +2081,29 @@ int main(int argc, char *argv[])
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
-
         CAROM::Vector* result_X = dmd_X->predict(t/romOptions.desired_dt);
         CAROM::Vector* result_V = dmd_V->predict(t/romOptions.desired_dt);
         CAROM::Vector* result_E = dmd_E->predict(t/romOptions.desired_dt);
+        // CAROM::Vector* result_X = dmd_X->predict(ti);
+        // CAROM::Vector* result_V = dmd_V->predict(ti);
+        // CAROM::Vector* result_E = dmd_E->predict(ti);
         Vector m_result_X(result_X->getData(), result_X->dim());
         Vector m_result_V(result_V->getData(), result_V->dim());
         Vector m_result_E(result_E->getData(), result_E->dim());
-        *x_gf = m_result_X;
-        *v_gf = m_result_V;
-        *e_gf = m_result_E;
+        x_gf->SetFromTrueDofs(m_result_X);
+        v_gf->SetFromTrueDofs(m_result_V);
+        e_gf->SetFromTrueDofs(m_result_E);
         if (myid == 0) cout << "dmd relative errors: " << endl;
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position", x_gf);
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity", v_gf);
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy", e_gf);
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
 
         if (solDiff)
         {
             if (myid == 0) cout << "solDiff mode " << endl;
-            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position", x_gf);
-            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity", v_gf);
-            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy", e_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
+            PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
 
         if (visitDiffCycle >= 0)
