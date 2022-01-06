@@ -7,7 +7,6 @@
 
 #include "hyperreduction/DEIM.h"
 #include "hyperreduction/QDEIM.h"
-#include "mfem/SampleMesh.hpp"
 #include "hyperreduction/STSampling.h"
 
 using namespace std;
@@ -347,9 +346,9 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
     return S;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_, const double sFactorX, const double sFactorV,
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV,
                      const std::vector<double> *timesteps)
-    : comm(comm_), rom_com(rom_com_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
+    : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
@@ -716,8 +715,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-        GatherDistributedMatrixRows(FOMX0, 2, spaceOS[0], spaceOS[1], spaceOSSP[0], *input.H1FESpace, st2sp, sprows, all_sprows, spX0mat);
-        GatherDistributedMatrixRows(FOME0, 1, spaceOS[1], spaceOS[2], spaceOSSP[1], *input.L2FESpace, st2sp, sprows, all_sprows, spE0mat);
+	smm->GatherDistributedMatrixRows(0, FOMX0, 2, spX0mat);
+	smm->GatherDistributedMatrixRows(2, FOME0, 1, spE0mat);
 
         if (rank == 0)
         {
@@ -1159,153 +1158,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         }
     }
 
-    // We assume that the same H1 fespace is used for X and V, and a different L2 fespace is used for E.
-    // We merge all sample DOF's for X, V, and E into one set for each process.
-    // The pair of spaces (H1, L2) is used here.
-
-    vector<int> sample_dofs_merged;
-    vector<int> num_sample_dofs_per_proc_merged(nprocs);
-    int os_merged = 0;
-    for (int p=0; p<nprocs; ++p)
-    {
-        std::set<int> sample_dofs_H1, sample_dofs_L2;
-        {
-            int os = 0;
-            for (int q=0; q<p; ++q)
-            {
-                os += num_sample_dofs_per_procX[q];
-            }
-
-            for (int j=0; j<num_sample_dofs_per_procX[p]; ++j)
-            {
-                sample_dofs_H1.insert(sample_dofs_X[os + j]);
-            }
-
-            os = 0;
-            for (int q=0; q<p; ++q)
-            {
-                os += num_sample_dofs_per_procV[q];
-            }
-
-            for (int j=0; j<num_sample_dofs_per_procV[p]; ++j)
-            {
-                sample_dofs_H1.insert(sample_dofs_V[os + j]);
-            }
-
-            os = 0;
-            for (int q=0; q<p; ++q)
-            {
-                os += num_sample_dofs_per_procE[q];
-            }
-
-            for (int j=0; j<num_sample_dofs_per_procE[p]; ++j)
-            {
-                sample_dofs_L2.insert(sample_dofs_E[os + j]);
-            }
-        }
-
-        num_sample_dofs_per_proc_merged[p] = sample_dofs_H1.size() + sample_dofs_L2.size();
-
-        for (std::set<int>::const_iterator it = sample_dofs_H1.begin(); it != sample_dofs_H1.end(); ++it)
-        {
-            sample_dofs_merged.push_back((*it));
-        }
-
-        for (std::set<int>::const_iterator it = sample_dofs_L2.begin(); it != sample_dofs_L2.end(); ++it)
-        {
-            sample_dofs_merged.push_back(nH1[p] + (*it));  // offset by nH1[p] for the mixed spaces (H1, L2)
-        }
-
-        // For each of the num_sample_dofs_per_procX[p] samples, set s2sp_X[] to be its index in sample_dofs_merged.
-        {
-            int os = 0;
-            for (int q=0; q<p; ++q)
-                os += num_sample_dofs_per_procX[q];
-
-            s2sp_X.resize(numSamplesX);
-
-            for (int j=0; j<num_sample_dofs_per_procX[p]; ++j)
-            {
-                const int sample = sample_dofs_X[os + j];
-
-                // Note: this has quadratic complexity and could be improved with a std::map<int, int>, but it should not be a bottleneck.
-                int k = -1;
-                int cnt = 0;
-                for (std::set<int>::const_iterator it = sample_dofs_H1.begin(); it != sample_dofs_H1.end(); ++it, ++cnt)
-                {
-                    if (*it == sample)
-                    {
-                        MFEM_VERIFY(k == -1, "");
-                        k = cnt;
-                    }
-                }
-
-                MFEM_VERIFY(k >= 0, "");
-                s2sp_X[os + j] = os_merged + k;
-            }
-        }
-
-        // For each of the num_sample_dofs_per_procV[p] samples, set s2sp_V[] to be its index in sample_dofs_merged.
-        {
-            int os = 0;
-            for (int q=0; q<p; ++q)
-                os += num_sample_dofs_per_procV[q];
-
-            s2sp_V.resize(numSamplesV);
-
-            for (int j=0; j<num_sample_dofs_per_procV[p]; ++j)
-            {
-                const int sample = sample_dofs_V[os + j];
-
-                // Note: this has quadratic complexity and could be improved with a std::map<int, int>, but it should not be a bottleneck.
-                int k = -1;
-                int cnt = 0;
-                for (std::set<int>::const_iterator it = sample_dofs_H1.begin(); it != sample_dofs_H1.end(); ++it, ++cnt)
-                {
-                    if (*it == sample)
-                    {
-                        MFEM_VERIFY(k == -1, "");
-                        k = cnt;
-                    }
-                }
-
-                MFEM_VERIFY(k >= 0, "");
-                s2sp_V[os + j] = os_merged + k;
-            }
-        }
-
-        // For each of the num_sample_dofs_per_procE[p] samples, set s2sp_E[] to be its index in sample_dofs_merged.
-        {
-            int os = 0;
-            for (int q=0; q<p; ++q)
-                os += num_sample_dofs_per_procE[q];
-
-            s2sp_E.resize(numSamplesE);
-
-            for (int j=0; j<num_sample_dofs_per_procE[p]; ++j)
-            {
-                const int sample = sample_dofs_E[os + j];
-
-                // Note: this has quadratic complexity and could be improved with a std::map<int, int>, but it should not be a bottleneck.
-                int k = -1;
-                int cnt = 0;
-                for (std::set<int>::const_iterator it = sample_dofs_L2.begin(); it != sample_dofs_L2.end(); ++it, ++cnt)
-                {
-                    if (*it == sample)
-                    {
-                        MFEM_VERIFY(k == -1, "");
-                        k = cnt;
-                    }
-                }
-
-                MFEM_VERIFY(k >= 0, "");
-                s2sp_E[os + j] = os_merged + sample_dofs_H1.size() + k;
-            }
-        }
-
-        os_merged += num_sample_dofs_per_proc_merged[p];
-    }  // loop over p
-
     // Construct sample mesh
     const int nspaces = 2;
     std::vector<ParFiniteElementSpace*> fespace(nspaces);
@@ -1314,113 +1166,31 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     fespace[1] = L2FESpace;
 
     // This creates sample_pmesh, sp_H1_space, and sp_L2_space only on rank 0.
-    CAROM::CreateSampleMesh(*pmesh, fespace, rom_com,
-                            sample_dofs_merged, num_sample_dofs_per_proc_merged,
-                            sample_pmesh, sprows, all_sprows, s2sp, st2sp, spfespace,
-			    basename + "/sampleElems_" + std::to_string(window));
+    smm = new CAROM::SampleMeshManager(fespace);
 
-    ParFiniteElementSpace *sp_H1_space = spfespace[0];
-    ParFiniteElementSpace *sp_L2_space = spfespace[1];
+    vector<int> sample_dofs_empty;  // Variables have no sample DOFs.
+    vector<int> num_sample_dofs_per_proc_empty;
+    num_sample_dofs_per_proc_empty.assign(nprocs, 0);
 
-    spaceOS.assign(nspaces + 1, 0);
-    spaceOSSP.assign(nspaces, 0);
+    smm->RegisterSampledVariable(0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // X
+    smm->RegisterSampledVariable(0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // V
+    smm->RegisterSampledVariable(1, sample_dofs_empty, num_sample_dofs_per_proc_empty); // E
 
-    for (int i=0; i<nspaces; ++i)
-    {
-        spaceOS[i+1] = spaceOS[i] + fespace[i]->GetVSize();
-    }
+    smm->RegisterSampledVariable(0, sample_dofs_V, num_sample_dofs_per_procV); // Fv
+    smm->RegisterSampledVariable(1, sample_dofs_E, num_sample_dofs_per_procE); // Fe
 
-    if (rank == 0)
-    {
-        for (int i=0; i<nspaces - 1; ++i)
-        {
-            spaceOSSP[i+1] = spaceOSSP[i] + spfespace[i]->GetVSize();
-        }
+    smm->ConstructSampleMesh();
 
-        sample_pmesh->ReorientTetMesh();  // re-orient the mesh, required for tets, no-op for hex
-        //SetBdryAttrForVelocity(sample_pmesh);
-        SetBdryAttrForVelocity_Cartesian(sample_pmesh);
-        sample_pmesh->EnsureNodes();
-    }
+    ParFiniteElementSpace *sp_H1_space = (rank == 0) ? smm->GetSampleFESpace(0) : NULL;
+    ParFiniteElementSpace *sp_L2_space = (rank == 0) ? smm->GetSampleFESpace(1) : NULL;
 
-    // Set s2sp_H1 and s2sp_L2 from s2sp
-
-    const int NH1sp = (rank == 0) ? sp_H1_space->GetTrueVSize() : 0;
+    size_H1_sp = sp_H1_space->GetTrueVSize();
+    size_L2_sp = sp_L2_space->GetTrueVSize();
 
     if (rank == 0)
     {
-        int offset = 0;
-        for (int p=0; p<nprocs; ++p)
-        {
-            for (int i=0; i<num_sample_dofs_per_proc_merged[p]; ++i)
-            {
-                if (sample_dofs_merged[offset + i] >= nH1[p])
-                    s2sp_L2.push_back(s2sp[offset + i] - NH1sp);
-                else
-                    s2sp_H1.push_back(s2sp[offset + i]);
-            }
-
-            offset += num_sample_dofs_per_proc_merged[p];
-        }
-
-        MFEM_VERIFY(s2sp.size() == offset, "");
-
-        size_H1_sp = sp_H1_space->GetTrueVSize();
-        size_L2_sp = sp_L2_space->GetTrueVSize();
-
-        // Define the map s2sp_X from X samples to sample mesh X dofs.
-        {
-            int os_p = 0;
-            for (int p=0; p<nprocs; ++p)
-            {
-                for (int j=0; j<num_sample_dofs_per_procX[p]; ++j)
-                {
-                    MFEM_VERIFY(sample_dofs_merged[s2sp_X[os_p + j]] < nH1[p], "");
-                    const int spId = s2sp[s2sp_X[os_p + j]];
-                    s2sp_X[os_p + j] = spId;
-                }
-
-                os_p += num_sample_dofs_per_procX[p];
-            }
-
-            MFEM_VERIFY(os_p == numSamplesX, "");
-        }
-
-        // Define the map s2sp_V from V samples to sample mesh V dofs.
-        {
-            int os_p = 0;
-            for (int p=0; p<nprocs; ++p)
-            {
-                for (int j=0; j<num_sample_dofs_per_procV[p]; ++j)
-                {
-                    MFEM_VERIFY(sample_dofs_merged[s2sp_V[os_p + j]] < nH1[p], "");
-                    const int spId = s2sp[s2sp_V[os_p + j]];
-                    s2sp_V[os_p + j] = spId;
-                }
-
-                os_p += num_sample_dofs_per_procV[p];
-            }
-
-            MFEM_VERIFY(os_p == numSamplesV, "");
-        }
-
-        // Define the map s2sp_E from E samples to sample mesh E dofs.
-        {
-            int os_p = 0;
-            for (int p=0; p<nprocs; ++p)
-            {
-                for (int j=0; j<num_sample_dofs_per_procE[p]; ++j)
-                {
-                    MFEM_VERIFY(sample_dofs_merged[s2sp_E[os_p + j]] >= nH1[p], "");
-                    const int spId = s2sp[s2sp_E[os_p + j]];
-                    s2sp_E[os_p + j] = spId - NH1sp;
-                }
-
-                os_p += num_sample_dofs_per_procE[p];
-            }
-
-            MFEM_VERIFY(os_p == numSamplesE, "");
-        }
+      sample_pmesh = smm->GetSampleMesh();
+      SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
         BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -1436,15 +1206,15 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
         BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
         BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
-    }  // if (rank == 0)
+    }
 
     // This gathers only to rank 0.
-    GatherDistributedMatrixRows(*basisX, rdimx, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BXsp);
-    GatherDistributedMatrixRows(*basisE, rdime, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BEsp);
-    GatherDistributedMatrixRows(*basisV, rdimv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BVsp);
+    smm->GatherDistributedMatrixRows(0, *basisX, rdimx, *BXsp);
+    smm->GatherDistributedMatrixRows(1, *basisV, rdimv, *BVsp);
+    smm->GatherDistributedMatrixRows(2, *basisE, rdime, *BEsp);
 
-    GatherDistributedMatrixRows(*basisFv, rdimfv, spaceOS[0], spaceOS[1], spaceOSSP[0], *H1FESpace, st2sp, sprows, all_sprows, *BFvsp);
-    GatherDistributedMatrixRows(*basisFe, rdimfe, spaceOS[1], spaceOS[2], spaceOSSP[1], *L2FESpace, st2sp, sprows, all_sprows, *BFesp);
+    smm->GatherDistributedMatrixRows(3, *basisFv, rdimfv, *BFvsp);
+    smm->GatherDistributedMatrixRows(4, *basisFe, rdimfe, *BFesp);
 
     delete sp_H1_space;
     delete sp_L2_space;
@@ -1795,17 +1565,25 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
     const bool useOffset = offsetInit && (!timeDerivative);
 
     // Select entries out of usp on the sample mesh.
+    {
+      Vector spH1(size_H1_sp);
+      Vector spL2(size_L2_sp);
 
-    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
+      for (int i=0; i<size_H1_sp; ++i)
+	spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
 
-    for (int i=0; i<numSamplesX; ++i)
-        (*sX)(i) = useOffset ? usp[s2sp_X[i]] - (*initXsp)(s2sp_X[i]) : usp[s2sp_X[i]];
+      sampleSelector->GetSampledValues(0, spH1, *sX);
 
-    for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = (useOffset && Voffset) ? usp[size_H1_sp + s2sp_V[i]] - (*initVsp)(s2sp_V[i]) : usp[size_H1_sp + s2sp_V[i]];
+      for (int i=0; i<size_H1_sp; ++i)
+	spH1[i] = (useOffset && Voffset) ? usp[size_H1_sp + i] - (*initVsp)(i) : usp[size_H1_sp + i];
 
-    for (int i=0; i<numSamplesE; ++i)
-        (*sE)(i) = useOffset ? usp[(2*size_H1_sp) + s2sp_E[i]] - (*initEsp)(s2sp_E[i]) : usp[(2*size_H1_sp) + s2sp_E[i]];
+      sampleSelector->GetSampledValues(1, spH1, *sV);
+
+      for (int i=0; i<size_L2_sp; ++i)
+	spL2[i] = useOffset ? usp[(2*size_H1_sp) + i] - (*initEsp)(i) : usp[(2*size_H1_sp) + i];
+
+      sampleSelector->GetSampledValues(2, spL2, *sE);
+    }
 
     // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
     BsinvV->transposeMult(*sV, *rV);
@@ -2094,8 +1872,7 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
 
-    for (int i=0; i<numSamplesV; ++i)
-        (*sV)(i) = v[s2sp_V[i]];
+    sampleSelector->GetSampledValues(1, v, *sV);
 
     BsinvV->transposeMult(*sV, *rV);
 
@@ -2111,8 +1888,7 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
 
-    for (int i=0; i<numSamplesE; ++i)
-        (*sE)(i) = e[s2sp_E[i]];
+    sampleSelector->GetSampledValues(2, e, *sE);
 
     BsinvE->transposeMult(*sE, *rE);
 
@@ -2192,9 +1968,9 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
     writeNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
 
-    writeVec(s2sp_X, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
-    writeVec(s2sp_V, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
-    writeVec(s2sp_E, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
+    smm->WriteVariableSampleMap(0, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
+    smm->WriteVariableSampleMap(3, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
+    smm->WriteVariableSampleMap(4, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
 
     writeNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
     writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -2252,20 +2028,21 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
     // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
 
-    std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
-    std::ifstream outfile_spmesh(outfile_string.c_str());
-    sample_pmesh = new ParMesh(comm, outfile_spmesh);
+    std::string infile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::ifstream infile_spmesh(infile_string.c_str());
+    sample_pmesh = new ParMesh(comm, infile_spmesh);
 
     readNum(numSamplesX, hyperreduce_basename + "/" + "numSamplesX" + "_" + to_string(window));
     readNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
     readNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
 
-    readVec(s2sp_X, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
-    readVec(s2sp_V, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
-    readVec(s2sp_E, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
-
     readNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
     readNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
+
+    sampleSelector = new CAROM::SampleDOFSelector();
+    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
+    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
+    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
 
     const int ntsamp = spaceTime ? timeSamples.size() : 1;
 
@@ -2811,16 +2588,23 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     int offset = ti * GetNumSpatialSamples();
 
     // Select entries out of usp on the sample mesh.
-    // Note that s2sp_X maps from X samples to sample mesh H1 dofs, and similarly for V and E.
 
     // TODO: since the X RHS is linear, there should be no sampling of X! A linear operator (stored as a matrix) should simply be applied to the ROM coefficients, not the samples.
 
+    Vector tmp(b->size_H1_sp);
+    CAROM::Vector s(b->numSamplesV, false);
+
     if (spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg) // use V samples for X
     {
-        for (int i=0; i<b->numSamplesV; ++i)
-            u[offset + i] = usp[b->s2sp_V[i]];
+      for (int i=0; i<b->size_H1_sp; ++i)
+	tmp[i] = usp[i];
 
-        offset += b->numSamplesV;
+      b->smm->GetSampledValues(1, tmp, s);
+
+      for (int i=0; i<b->numSamplesV; ++i)
+	u[offset + i] = s(i);
+
+      offset += b->numSamplesV;
     }
     else
     {
@@ -2830,12 +2614,26 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
         offset += b->numSamplesX;
     }
 
+    for (int i=0; i<b->size_H1_sp; ++i)
+      tmp[i] = usp[b->size_H1_sp + i];
+
+    b->smm->GetSampledValues(1, tmp, s);
+
     for (int i=0; i<b->numSamplesV; ++i)
-        u[offset + i] = usp[b->size_H1_sp + b->s2sp_V[i]];
+      u[offset + i] = s(i);
 
     offset += b->numSamplesV;
+
+    tmp.SetSize(b->size_L2_sp);
+    s.setSize(b->numSamplesE);
+
+    for (int i=0; i<b->size_L2_sp; ++i)
+      tmp[i] = usp[(2*b->size_H1_sp) + i];
+
+    b->smm->GetSampledValues(2, tmp, s);
+
     for (int i=0; i<b->numSamplesE; ++i)
-        u[offset + i] = usp[(2*b->size_H1_sp) + b->s2sp_E[i]];
+      u[offset + i] = s(i);
 }
 
 // TODO: remove argument rdim?

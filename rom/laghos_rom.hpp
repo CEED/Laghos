@@ -9,7 +9,8 @@
 
 #include "laghos_solver.hpp"
 
-//using namespace CAROM;
+#include "mfem/SampleMesh.hpp"
+
 using namespace mfem;
 
 
@@ -527,7 +528,7 @@ class ROM_Basis
     friend class STROM_Basis;
 
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_,
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
               const double sFactorX=1.0, const double sFactorV=1.0,
               const std::vector<double> *timesteps=NULL);
 
@@ -685,9 +686,11 @@ public:
     void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
 
     MPI_Comm comm;
-    MPI_Comm rom_com;
 
-    CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
+  CAROM::SampleMeshManager *smm = NULL;
+  CAROM::SampleDOFSelector *sampleSelector = NULL;
+
+  CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
 
@@ -739,19 +742,9 @@ private:
     CAROM::Vector *rE2 = 0;
 
     // For hyperreduction
-    std::vector<int> spaceOS, spaceOSSP;
-    std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
-    std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
-    std::vector<int> s2sp_H1;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
-    std::vector<int> s2sp_L2;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
 
-    std::vector<int> sprows;
-    std::vector<int> all_sprows;
-
-    std::vector<int> s2sp;   // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+), for both F and E
-
-    CAROM::Matrix *BXsp = NULL;
+  CAROM::Matrix *BXsp = NULL;
     CAROM::Matrix *BVsp = NULL;
     CAROM::Matrix *BEsp = NULL;
     CAROM::Matrix *BFvsp = NULL;
