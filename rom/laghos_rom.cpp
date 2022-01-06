@@ -715,8 +715,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-	smm->GatherDistributedMatrixRows(0, FOMX0, 2, spX0mat);
-	smm->GatherDistributedMatrixRows(2, FOME0, 1, spE0mat);
+        smm->GatherDistributedMatrixRows(0, FOMX0, 2, spX0mat);
+        smm->GatherDistributedMatrixRows(2, FOME0, 1, spE0mat);
 
         if (rank == 0)
         {
@@ -1189,8 +1189,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
 
     if (rank == 0)
     {
-      sample_pmesh = smm->GetSampleMesh();
-      SetBdryAttrForVelocity_Cartesian(sample_pmesh);
+        sample_pmesh = smm->GetSampleMesh();
+        SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
         BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -1566,23 +1566,23 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
 
     // Select entries out of usp on the sample mesh.
     {
-      Vector spH1(size_H1_sp);
-      Vector spL2(size_L2_sp);
+        Vector spH1(size_H1_sp);
+        Vector spL2(size_L2_sp);
 
-      for (int i=0; i<size_H1_sp; ++i)
-	spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
+        for (int i=0; i<size_H1_sp; ++i)
+            spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
 
-      sampleSelector->GetSampledValues(0, spH1, *sX);
+        sampleSelector->GetSampledValues(0, spH1, *sX);
 
-      for (int i=0; i<size_H1_sp; ++i)
-	spH1[i] = (useOffset && Voffset) ? usp[size_H1_sp + i] - (*initVsp)(i) : usp[size_H1_sp + i];
+        for (int i=0; i<size_H1_sp; ++i)
+            spH1[i] = (useOffset && Voffset) ? usp[size_H1_sp + i] - (*initVsp)(i) : usp[size_H1_sp + i];
 
-      sampleSelector->GetSampledValues(1, spH1, *sV);
+        sampleSelector->GetSampledValues(1, spH1, *sV);
 
-      for (int i=0; i<size_L2_sp; ++i)
-	spL2[i] = useOffset ? usp[(2*size_H1_sp) + i] - (*initEsp)(i) : usp[(2*size_H1_sp) + i];
+        for (int i=0; i<size_L2_sp; ++i)
+            spL2[i] = useOffset ? usp[(2*size_H1_sp) + i] - (*initEsp)(i) : usp[(2*size_H1_sp) + i];
 
-      sampleSelector->GetSampledValues(2, spL2, *sE);
+        sampleSelector->GetSampledValues(2, spL2, *sE);
     }
 
     // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
@@ -2596,15 +2596,15 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
 
     if (spaceTimeMethod == gnat_lspg || spaceTimeMethod == coll_lspg) // use V samples for X
     {
-      for (int i=0; i<b->size_H1_sp; ++i)
-	tmp[i] = usp[i];
+        for (int i=0; i<b->size_H1_sp; ++i)
+            tmp[i] = usp[i];
 
-      b->smm->GetSampledValues(1, tmp, s);
+        b->smm->GetSampledValues(1, tmp, s);
 
-      for (int i=0; i<b->numSamplesV; ++i)
-	u[offset + i] = s(i);
+        for (int i=0; i<b->numSamplesV; ++i)
+            u[offset + i] = s(i);
 
-      offset += b->numSamplesV;
+        offset += b->numSamplesV;
     }
     else
     {
@@ -2615,12 +2615,12 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     }
 
     for (int i=0; i<b->size_H1_sp; ++i)
-      tmp[i] = usp[b->size_H1_sp + i];
+        tmp[i] = usp[b->size_H1_sp + i];
 
     b->smm->GetSampledValues(1, tmp, s);
 
     for (int i=0; i<b->numSamplesV; ++i)
-      u[offset + i] = s(i);
+        u[offset + i] = s(i);
 
     offset += b->numSamplesV;
 
@@ -2628,12 +2628,12 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     s.setSize(b->numSamplesE);
 
     for (int i=0; i<b->size_L2_sp; ++i)
-      tmp[i] = usp[(2*b->size_H1_sp) + i];
+        tmp[i] = usp[(2*b->size_H1_sp) + i];
 
     b->smm->GetSampledValues(2, tmp, s);
 
     for (int i=0; i<b->numSamplesE; ++i)
-      u[offset + i] = s(i);
+        u[offset + i] = s(i);
 }
 
 // TODO: remove argument rdim?

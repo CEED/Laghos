@@ -170,7 +170,7 @@ struct ROM_Options
     bool SNS = false; // if true, use SNS relation to obtain nonlinear RHS bases by multiplying mass matrix to a solution matrix. See arXiv 1809.04064.
     double energyFraction = 0.9999; // used for recommending basis sizes, depending on singular values
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
-    int sv_shift = 1; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used) 
+    int sv_shift = 1; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used)
     int window = 0; // Laghos-ROM time window index
     int max_dim = 0; // maximimum dimension for libROM basis generator time interval
     int parameterID = -1; // index of parameters chosen for this Laghos simulation
@@ -687,10 +687,10 @@ public:
 
     MPI_Comm comm;
 
-  CAROM::SampleMeshManager *smm = NULL;
-  CAROM::SampleDOFSelector *sampleSelector = NULL;
+    CAROM::SampleMeshManager *smm = NULL;
+    CAROM::SampleDOFSelector *sampleSelector = NULL;
 
-  CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
+    CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
 
@@ -744,7 +744,7 @@ private:
     // For hyperreduction
     ParMesh* sample_pmesh = 0;
 
-  CAROM::Matrix *BXsp = NULL;
+    CAROM::Matrix *BXsp = NULL;
     CAROM::Matrix *BVsp = NULL;
     CAROM::Matrix *BEsp = NULL;
     CAROM::Matrix *BFvsp = NULL;
