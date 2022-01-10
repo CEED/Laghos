@@ -715,8 +715,8 @@ void ROM_Basis::Init(ROM_Options const& input, Vector const& S)
         CAROM::Matrix spX0mat(rank == 0 ? size_H1_sp : 1, 2, false);
         CAROM::Matrix spE0mat(rank == 0 ? size_L2_sp : 1, 1, false);
 
-        smm->GatherDistributedMatrixRows(0, FOMX0, 2, spX0mat);
-        smm->GatherDistributedMatrixRows(2, FOME0, 1, spE0mat);
+        smm->GatherDistributedMatrixRows("X", FOMX0, 2, spX0mat);
+        smm->GatherDistributedMatrixRows("E", FOME0, 1, spE0mat);
 
         if (rank == 0)
         {
@@ -1172,12 +1172,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     vector<int> num_sample_dofs_per_proc_empty;
     num_sample_dofs_per_proc_empty.assign(nprocs, 0);
 
-    smm->RegisterSampledVariable(0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // X
-    smm->RegisterSampledVariable(0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // V
-    smm->RegisterSampledVariable(1, sample_dofs_empty, num_sample_dofs_per_proc_empty); // E
+    smm->RegisterSampledVariable("X", 0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // X
+    smm->RegisterSampledVariable("V", 0, sample_dofs_empty, num_sample_dofs_per_proc_empty); // V
+    smm->RegisterSampledVariable("E", 1, sample_dofs_empty, num_sample_dofs_per_proc_empty); // E
 
-    smm->RegisterSampledVariable(0, sample_dofs_V, num_sample_dofs_per_procV); // Fv
-    smm->RegisterSampledVariable(1, sample_dofs_E, num_sample_dofs_per_procE); // Fe
+    smm->RegisterSampledVariable("Fv", 0, sample_dofs_V, num_sample_dofs_per_procV); // Fv
+    smm->RegisterSampledVariable("Fe", 1, sample_dofs_E, num_sample_dofs_per_procE); // Fe
 
     smm->ConstructSampleMesh();
 
@@ -1209,15 +1209,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }
 
     // This gathers only to rank 0.
-    smm->GatherDistributedMatrixRows(0, *basisX, rdimx, *BXsp);
-    smm->GatherDistributedMatrixRows(1, *basisV, rdimv, *BVsp);
-    smm->GatherDistributedMatrixRows(2, *basisE, rdime, *BEsp);
+    smm->GatherDistributedMatrixRows("X", *basisX, rdimx, *BXsp);
+    smm->GatherDistributedMatrixRows("V", *basisV, rdimv, *BVsp);
+    smm->GatherDistributedMatrixRows("E", *basisE, rdime, *BEsp);
 
-    smm->GatherDistributedMatrixRows(3, *basisFv, rdimfv, *BFvsp);
-    smm->GatherDistributedMatrixRows(4, *basisFe, rdimfe, *BFesp);
-
-    delete sp_H1_space;
-    delete sp_L2_space;
+    smm->GatherDistributedMatrixRows("Fv", *basisFv, rdimfv, *BFvsp);
+    smm->GatherDistributedMatrixRows("Fe", *basisFe, rdimfe, *BFesp);
 }
 
 void ROM_Basis::ComputeReducedMatrices(bool sns1)
@@ -1573,18 +1570,18 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
             for (int i=0; i<size_H1_sp; ++i)
                 spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
 
-        if (sX) sampleSelector->GetSampledValues(0, spH1, *sX);
+        if (sX) sampleSelector->GetSampledValues("X", spH1, *sX);
         */
 
         for (int i=0; i<size_H1_sp; ++i)
             spH1[i] = (useOffset && Voffset) ? usp[size_H1_sp + i] - (*initVsp)(i) : usp[size_H1_sp + i];
 
-        sampleSelector->GetSampledValues(1, spH1, *sV);
+        sampleSelector->GetSampledValues("V", spH1, *sV);
 
         for (int i=0; i<size_L2_sp; ++i)
             spL2[i] = useOffset ? usp[(2*size_H1_sp) + i] - (*initEsp)(i) : usp[(2*size_H1_sp) + i];
 
-        sampleSelector->GetSampledValues(2, spL2, *sE);
+        sampleSelector->GetSampledValues("E", spL2, *sE);
     }
 
     // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
@@ -1874,7 +1871,7 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
 
-    sampleSelector->GetSampledValues(1, v, *sV);
+    sampleSelector->GetSampledValues("V", v, *sV);
 
     BsinvV->transposeMult(*sV, *rV);
 
@@ -1890,7 +1887,7 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     MFEM_VERIFY(useGramSchmidt, "apply reduced mass matrix inverse");
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
 
-    sampleSelector->GetSampledValues(2, e, *sE);
+    sampleSelector->GetSampledValues("E", e, *sE);
 
     BsinvE->transposeMult(*sE, *rE);
 
@@ -1970,9 +1967,9 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeNum(numSamplesV, hyperreduce_basename + "/" + "numSamplesV" + "_" + to_string(window));
     writeNum(numSamplesE, hyperreduce_basename + "/" + "numSamplesE" + "_" + to_string(window));
 
-    smm->WriteVariableSampleMap(0, hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
-    smm->WriteVariableSampleMap(3, hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
-    smm->WriteVariableSampleMap(4, hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
+    smm->WriteVariableSampleMap("X", hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
+    smm->WriteVariableSampleMap("Fv", hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
+    smm->WriteVariableSampleMap("Fe", hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
 
     writeNum(size_H1_sp, hyperreduce_basename + "/" + "size_H1_sp" + "_" + to_string(window));
     writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
@@ -2042,9 +2039,9 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     readNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
     sampleSelector = new CAROM::SampleDOFSelector();
-    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
-    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
-    sampleSelector->ReadMapFromFile(hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
+    sampleSelector->ReadMapFromFile("X", hyperreduce_basename + "/" + "s2sp_X" + "_" + to_string(window));
+    sampleSelector->ReadMapFromFile("V", hyperreduce_basename + "/" + "s2sp_V" + "_" + to_string(window));
+    sampleSelector->ReadMapFromFile("E", hyperreduce_basename + "/" + "s2sp_E" + "_" + to_string(window));
 
     const int ntsamp = spaceTime ? timeSamples.size() : 1;
 
@@ -2601,7 +2598,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
         for (int i=0; i<b->size_H1_sp; ++i)
             tmp[i] = usp[i];
 
-        b->sampleSelector->GetSampledValues(1, tmp, s);
+        b->sampleSelector->GetSampledValues("V", tmp, s);
 
         for (int i=0; i<b->numSamplesV; ++i)
             u[offset + i] = s(i);
@@ -2619,7 +2616,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     for (int i=0; i<b->size_H1_sp; ++i)
         tmp[i] = usp[b->size_H1_sp + i];
 
-    b->sampleSelector->GetSampledValues(1, tmp, s);
+    b->sampleSelector->GetSampledValues("V", tmp, s);
 
     for (int i=0; i<b->numSamplesV; ++i)
         u[offset + i] = s(i);
@@ -2632,7 +2629,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     for (int i=0; i<b->size_L2_sp; ++i)
         tmp[i] = usp[(2*b->size_H1_sp) + i];
 
-    b->sampleSelector->GetSampledValues(2, tmp, s);
+    b->sampleSelector->GetSampledValues("E", tmp, s);
 
     for (int i=0; i<b->numSamplesE; ++i)
         u[offset + i] = s(i);

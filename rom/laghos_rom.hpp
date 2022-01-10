@@ -569,6 +569,8 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        delete smm;
+        delete sampleSelector;
         if (!hyperreduce)
         {
             delete fH1;
