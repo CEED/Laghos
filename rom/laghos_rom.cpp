@@ -1184,11 +1184,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     ParFiniteElementSpace *sp_H1_space = (rank == 0) ? smm->GetSampleFESpace(0) : NULL;
     ParFiniteElementSpace *sp_L2_space = (rank == 0) ? smm->GetSampleFESpace(1) : NULL;
 
-    size_H1_sp = sp_H1_space->GetTrueVSize();
-    size_L2_sp = sp_L2_space->GetTrueVSize();
-
     if (rank == 0)
     {
+        size_H1_sp = sp_H1_space->GetTrueVSize();
+        size_L2_sp = sp_L2_space->GetTrueVSize();
+
         sample_pmesh = smm->GetSampleMesh();
         SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
@@ -1569,10 +1569,12 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
         Vector spH1(size_H1_sp);
         Vector spL2(size_L2_sp);
 
-        for (int i=0; i<size_H1_sp; ++i)
-            spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
+        /* Currently there are no X samples, but this could be used if there are in the future.
+            for (int i=0; i<size_H1_sp; ++i)
+                spH1[i] = useOffset ? usp[i] - (*initXsp)(i) : usp[i];
 
-        sampleSelector->GetSampledValues(0, spH1, *sX);
+        if (sX) sampleSelector->GetSampledValues(0, spH1, *sX);
+        */
 
         for (int i=0; i<size_H1_sp; ++i)
             spH1[i] = (useOffset && Voffset) ? usp[size_H1_sp + i] - (*initVsp)(i) : usp[size_H1_sp + i];
@@ -2599,7 +2601,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
         for (int i=0; i<b->size_H1_sp; ++i)
             tmp[i] = usp[i];
 
-        b->smm->GetSampledValues(1, tmp, s);
+        b->sampleSelector->GetSampledValues(1, tmp, s);
 
         for (int i=0; i<b->numSamplesV; ++i)
             u[offset + i] = s(i);
@@ -2617,7 +2619,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     for (int i=0; i<b->size_H1_sp; ++i)
         tmp[i] = usp[b->size_H1_sp + i];
 
-    b->smm->GetSampledValues(1, tmp, s);
+    b->sampleSelector->GetSampledValues(1, tmp, s);
 
     for (int i=0; i<b->numSamplesV; ++i)
         u[offset + i] = s(i);
@@ -2630,7 +2632,7 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
     for (int i=0; i<b->size_L2_sp; ++i)
         tmp[i] = usp[(2*b->size_H1_sp) + i];
 
-    b->smm->GetSampledValues(2, tmp, s);
+    b->sampleSelector->GetSampledValues(2, tmp, s);
 
     for (int i=0; i<b->numSamplesE; ++i)
         u[offset + i] = s(i);
