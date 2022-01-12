@@ -582,10 +582,15 @@ int main(int argc, char *argv[])
    }
    MFEM_VERIFY(H1FESpace.GetNRanks() == 1,
                "Point extraction works inly in serial.");
+
    const double dx = 1.0 / NE;
    ParGridFunction &pe_gf = hydro.GetPressure(e_gf);
    Vector point_interface(1), point_face(1);
    point_interface(0) = 0.5;
+   if (problem ==8)
+   {
+      point_interface(0) = (pure_test) ? 0.5 : 0.5 + 0.5*dx;
+   }
    if (problem == 9)
    {
       point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
@@ -593,7 +598,8 @@ int main(int argc, char *argv[])
    point_face(0) = zone_id_R * dx;
    std::cout << zone_id_L << " " << zone_id_R << std::endl;
    std::cout << "True interface: " << point_interface(0) << std::endl
-             << "Surrogate:      " << point_face(0) <<  std::endl;
+             << "Surrogate:      " << point_face(0) <<  std::endl
+             << "dx:             " << dx << std::endl;
    hydrodynamics::PrintCellNumbers(point_interface, H1FESpace);
    hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
    // By construction, the interface is in the left zone.
