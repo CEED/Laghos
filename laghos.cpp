@@ -382,7 +382,7 @@ int main(int argc, char *argv[])
    si_options.e_shift_diffusion_scale = 1.0;
    // Activate ALE. The ale_period is in physical time.
    const bool do_ale = false;
-   const double ale_period = t_final;
+   const double ale_period = 1.0;
 
    const bool pure_test = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? false : true;
@@ -436,23 +436,20 @@ int main(int argc, char *argv[])
       "mass matrices will still use the FunctionCoefficient.");
       rho_coeff = &rho0_coeff;
    }
-   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
+   if (problem == 8)
    {
-      if (problem == 8)
-      {
-         hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
-      }
-      else if (problem == 9)
-      {
-         hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
-      }
-      else if (problem == 10)
-      {
-         hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
-         if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
-      }
+      hydrodynamics::InitSod2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
+   }
+   else if (problem == 9)
+   {
+      hydrodynamics::InitWaterAir(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
+   }
+   else if (problem == 10)
+   {
+      hydrodynamics::InitTriPoint2Mat(rho0_gf, v_gf, e_gf, gamma_gf);
+      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
    }
 
    v_gf.SyncAliasMemory(S);

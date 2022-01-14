@@ -147,8 +147,8 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
          const double dx = sqrt(21.0 / glob_NE);
 
          // The middle of the element after x = 1.
-         double waveloc = 1. + 0.75*dx;
-         return tanh(x(0) - waveloc);
+         return (pure_test) ? tanh(x(0) - 1.0)
+                            : tanh(x(0) - (1.0 + 0.65*dx));
       }
       default: MFEM_ABORT("error"); return 0.0;
    }
@@ -606,11 +606,16 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    // Must be done after elvect.SetSize().
    if (Trans.Attribute != 77) { return; }
 
-   Vector l2_shape(l2dofs_cnt);
+   MFEM_VERIFY(Trans.Elem2No >=  0,
+               "not supported yet (TODO) - we assume both sides are present");
 
-   const int ir_order =
-      el_1.GetOrder() + Trans.OrderW();
-   const IntegrationRule *ir = &IntRules.Get(Trans.GetGeometryType(), ir_order);
+   ElementTransformation &Trans_el_1 = Trans.GetElement1Transformation();
+   ElementTransformation &Trans_el_2 = Trans.GetElement2Transformation();
+
+   Vector shape_e(l2dofs_cnt);
+
+   const IntegrationRule *ir = IntRule;
+   MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
    const int nqp_face = ir->GetNPoints();
 
    // grad_p at all quad points, on both sides.
@@ -620,9 +625,9 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    DenseMatrix p_grad_e_1(dof_p, dim), p_grad_e_2(dof_p, dim);
    if (Trans.Elem2No > 0)
    {
-      GradAtLocalDofs(Trans.GetElement2Transformation(), p, p_grad_e_2);
+      GradAtLocalDofs(Trans_el_2, p, p_grad_e_2);
    }
-   GradAtLocalDofs(Trans.GetElement1Transformation(), p, p_grad_e_1);
+   GradAtLocalDofs(Trans_el_1, p, p_grad_e_1);
 
    Vector nor(dim);
 
@@ -700,19 +705,19 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           // 1st element.
           {
              // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, l2_shape);
+             el_1.CalcShape(ip_e1, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i) += l2_shape(i) * gradp_d_jump_term;
+                 elvect(i) += shape_e(i) * gradp_d_jump_term;
              }
           }
           // 2nd element.
           {
              // L2 shape functions in the 2nd element.
-             el_2.CalcShape(ip_e2, l2_shape);
+             el_2.CalcShape(ip_e2, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i + l2dofs_cnt) += l2_shape(i) * gradp_d_jump_term;
+                 elvect(i + l2dofs_cnt) += shape_e(i) * gradp_d_jump_term;
              }
           }
       }
@@ -726,19 +731,19 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           // 1st element.
           {
              // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, l2_shape);
+             el_1.CalcShape(ip_e1, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i) += multfac * l2_shape(i) * p_gradp_jump_term;
+                 elvect(i) += multfac * shape_e(i) * p_gradp_jump_term;
              }
           }
           // 2nd element.
           {
              // L2 shape functions in the 2nd element.
-             el_2.CalcShape(ip_e2, l2_shape);
+             el_2.CalcShape(ip_e2, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i + l2dofs_cnt) += multfac * l2_shape(i) * p_gradp_jump_term;
+                 elvect(i + l2dofs_cnt) += multfac * shape_e(i) * p_gradp_jump_term;
              }
           }
       }
@@ -776,13 +781,13 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           // 1st element.
           {
              // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, l2_shape);
+             el_1.CalcShape(ip_e1, shape_e);
 
-             Vector gradp_d_jump_dot_l2_shape_jump = l2_shape;
+             Vector gradp_d_jump_dot_l2_shape_jump = shape_e;
              gradp_d_jump_dot_l2_shape_jump *= gradp_d_jump;
              gradp_d_jump_dot_l2_shape_jump *= -0.25;
 
-             Vector l2_shape_avg_p_avg = l2_shape;
+             Vector l2_shape_avg_p_avg = shape_e;
              l2_shape_avg_p_avg *= 0.5;
              l2_shape_avg_p_avg *= p_avg;
              gradp_d_jump_dot_l2_shape_jump += l2_shape_avg_p_avg;
@@ -794,14 +799,14 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
           // 2nd element
           {
-              el_2.CalcShape(ip_e2, l2_shape);
+              el_2.CalcShape(ip_e2, shape_e);
 
-              Vector gradp_d_jump_dot_l2_shape_jump = l2_shape;
-              l2_shape *= -1; //l2_shape_jump = phi+ - phi- = -phi-
+              Vector gradp_d_jump_dot_l2_shape_jump = shape_e;
+              shape_e *= -1; //l2_shape_jump = phi+ - phi- = -phi-
               gradp_d_jump_dot_l2_shape_jump *= gradp_d_jump;
               gradp_d_jump_dot_l2_shape_jump *= -0.25;
 
-              Vector l2_shape_avg_p_avg = l2_shape;
+              Vector l2_shape_avg_p_avg = shape_e;
               l2_shape_avg_p_avg *= 0.5;
               l2_shape_avg_p_avg *= p_avg;
               gradp_d_jump_dot_l2_shape_jump += l2_shape_avg_p_avg;
@@ -843,63 +848,56 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           // 1st element.
           {
              // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, l2_shape);
+             el_1.CalcShape(ip_e1, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i) += multfac * l2_shape(i) * p_jump_term;
+                 elvect(i) += multfac * shape_e(i) * p_jump_term;
              }
           }
           // 2nd element.
           {
              // L2 shape functions in the 2nd element.
-             el_2.CalcShape(ip_e2, l2_shape);
+             el_2.CalcShape(ip_e2, shape_e);
              for (int i = 0; i < l2dofs_cnt; i++)
              {
-                 elvect(i + l2dofs_cnt) += multfac * l2_shape(i) * p_jump_term;
+                 elvect(i + l2dofs_cnt) += multfac * shape_e(i) * p_jump_term;
              }
           }
       }
 
-      // (dt / h) * [p + grad_p.d], [phi + grad_phi.d]
+      // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
       if (diffusion)
       {
-            double p_gradp_jump_term = p1 + d_q1 * p_grad_q1 - p2 - d_q2 * p_grad_q2;
-            int problem = 8;
+         double p_gradp_jump = p1 + d_q1 * p_grad_q1 - p2 - d_q2 * p_grad_q2;
 
-            double rho = v.ParFESpace()->GetMesh()->GetAttribute(Trans.Elem1No) == 1 ? 1 : 0.125;
-            double dtval = *dt;
-            if (problem == 9) {
-                rho = v.ParFESpace()->GetMesh()->GetAttribute(Trans.Elem1No) == 1 ? 1000 : 50.;
-            }
+         const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
+         const double rho_1  = qdata_face.rho0DetJ0(idx) /
+                               Trans_el_1.Weight();
+         const double cs_1   = sqrt(gamma(Trans.Elem1No) * p1 / rho_1);
+         const double rho_2  = qdata_face.rho0DetJ0(idx + nqp_face) /
+                               Trans_el_2.Weight();
+         const double cs_2   = sqrt(gamma(Trans.Elem2No) * p2 / rho_2);
+         const double cs_avg = 2.0 * cs_1 * cs_2 / (cs_1 + cs_2);
 
-            //1st element
-            {
-                DenseMatrix dshapephys(dof_p, dim);
-                double hinvdx = nor*nor/Trans.Elem1->Weight();
-                el_1.CalcShape(ip_e1, l2_shape);
-                el_1.CalcPhysDShape(*(Trans.Elem1), dshapephys);
-                dshapephys.AddMult(d_q1, l2_shape);
+         DenseMatrix grad_shape_phys_e(dof_p, dim);
 
-                l2_shape *= p_gradp_jump_term;
-                l2_shape *= diffusion_scale * dtval * ip_f.weight * hinvdx;
-                Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
-                elvect_temp.Add(1., l2_shape);
-            }
+         // 1st element.
+         el_1.CalcShape(ip_e1, shape_e);
+         el_1.CalcPhysDShape(Trans_el_1, grad_shape_phys_e);
+         grad_shape_phys_e.AddMult(d_q1, shape_e);
+         shape_e *= Trans.Weight() * ip_f.weight *
+                     diffusion_scale * cs_avg * p_gradp_jump;
+         Vector elvect_ref_1(elvect.GetData(), l2dofs_cnt);
+         elvect_ref_1.Add(1.0, shape_e);
 
-            //2nd element
-            {
-                DenseMatrix dshapephys(dof_p, dim);
-                double hinvdx = nor*nor/Trans.Elem2->Weight();
-
-                el_2.CalcShape(ip_e2, l2_shape);
-                el_2.CalcPhysDShape(*(Trans.Elem2), dshapephys);
-                dshapephys.AddMult(d_q2, l2_shape);
-
-                l2_shape *= p_gradp_jump_term;
-                l2_shape *= diffusion_scale * dtval * ip_f.weight * hinvdx;
-                Vector elvect_temp(elvect.GetData()+l2dofs_cnt, l2dofs_cnt);
-                elvect_temp.Add(-1., l2_shape);
-            }
+         // 2nd element.
+         el_2.CalcShape(ip_e2, shape_e);
+         el_2.CalcPhysDShape(Trans_el_2, grad_shape_phys_e);
+         grad_shape_phys_e.AddMult(d_q2, shape_e);
+         shape_e *= Trans.Weight() * ip_f.weight *
+                    diffusion_scale * cs_avg * p_gradp_jump;
+         Vector elvect_ref_2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+         elvect_ref_2.Add(-1.0, shape_e);
       }
    }
 }
@@ -1028,7 +1026,7 @@ double ShiftedPointExtractor::GetValue() const
 }
 
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
-                 ParGridFunction &e, ParGridFunction &gamma)
+                 ParGridFunction &e, ParGridFunction &gamma_gf)
 {
    v = 0.0;
 
@@ -1049,7 +1047,7 @@ void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
          r = 0.125; g = 1.4; p = 0.1;
       }
 
-      gamma(i) = g;
+      gamma_gf(i) = g;
       for (int j = 0; j < ndofs; j++)
       {
          rho(i*ndofs + j) = r;
@@ -1059,7 +1057,7 @@ void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
 }
 
 void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
-                  ParGridFunction &e, ParGridFunction &gamma)
+                  ParGridFunction &e, ParGridFunction &gamma_gf)
 {
    v = 0.0;
 
@@ -1074,7 +1072,7 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
          // Left material - water (attribute 1).
          r = 1000; g = 4.4; p = 1.e9;
          double A = 6.0e8;
-         gamma(i) = g;
+         gamma_gf(i) = g;
          for (int j = 0; j < ndofs; j++)
          {
             rho(i*ndofs + j) = r;
@@ -1085,7 +1083,7 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
       {
          // Right material - air (attribute 2).
          r = 50; g = 1.4; p = 1.e5;
-         gamma(i) = g;
+         gamma_gf(i) = g;
          for (int j = 0; j < ndofs; j++)
          {
             rho(i*ndofs + j) = r;
@@ -1096,7 +1094,7 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
 }
 
 void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
-                      ParGridFunction &e, ParGridFunction &gamma)
+                      ParGridFunction &e, ParGridFunction &gamma_gf)
 {
    MFEM_VERIFY(rho.ParFESpace()->GetMesh()->Dimension() == 2, "2D only.");
 
@@ -1120,7 +1118,7 @@ void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
          g = (center(1) < 1.5) ? 1.4 : 1.5;
       }
 
-      gamma(i) = g;
+      gamma_gf(i) = g;
       for (int j = 0; j < ndofs; j++)
       {
          rho(i*ndofs + j) = r;

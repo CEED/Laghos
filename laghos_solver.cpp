@@ -254,8 +254,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
-   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
-                                             v_gf, dist_coeff, dt);
+   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(), v_gf,
+                                             gamma_gf, dist_coeff, cfqdata);
+   efi->SetIntRule(cfir);
    efi->e_shift_type    = si_options.e_shift_type;
    efi->diffusion       = si_options.e_shift_diffusion;
    efi->diffusion_scale = si_options.e_shift_diffusion_scale;
@@ -331,7 +332,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.MultTranspose(one, rhs);
    const double vold = rhs.Norml2();
-   if (si_options.v_shift_type >= 1 && si_options.v_shift_type <= 5)
+   if (si_options.v_shift_type > 0)
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
@@ -786,7 +787,7 @@ void PressureFunction::UpdatePressure(const ParGridFunction &e)
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
          double rho = rho0DetJ0(i * nqp + q) / Tr.Weight();
-         p_L2(i * nqp + q) = (gamma_gf(i) - 1.0) * rho * e_vals(q);
+         p_L2(i * nqp + q) = fmax(1e-5, (gamma_gf(i) - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(i) == 1)
          {

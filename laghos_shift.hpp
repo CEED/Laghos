@@ -110,9 +110,10 @@ private:
 class EnergyInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
-   const ParGridFunction &p, &v;
+   const ParGridFunction &p, &v, &gamma;
    VectorCoefficient &dist;
-   double *dt;
+
+   CutFaceQuadratureData &qdata_face;
 
 public:
    int e_shift_type = 0;
@@ -121,9 +122,10 @@ public:
 
    EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
                              const ParGridFunction &v_gf,
+                             const ParGridFunction &g_gf,
                              VectorCoefficient &d,
-                             double *dt_)
-      : p(p_gf), v(v_gf), dist(d), dt(dt_) { }
+                             CutFaceQuadratureData &cfqdata)
+      : p(p_gf), v(v_gf), gamma(g_gf), dist(d), qdata_face(cfqdata) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -175,13 +177,13 @@ public:
 };
 
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
-                 ParGridFunction &e, ParGridFunction &gamma);
+                 ParGridFunction &e, ParGridFunction &gamma_gf);
 
 void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
-                  ParGridFunction &e, ParGridFunction &gamma);
+                  ParGridFunction &e, ParGridFunction &gamma_gf);
 
 void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
-                      ParGridFunction &e, ParGridFunction &gamma);
+                      ParGridFunction &e, ParGridFunction &gamma_gf);
 } // namespace hydrodynamics
 
 } // namespace mfem
