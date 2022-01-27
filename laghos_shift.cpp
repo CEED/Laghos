@@ -189,10 +189,11 @@ void StrainTensorAtLocalDofs(ElementTransformation &T, const ParGridFunction &g,
       pfes.GetElementVDofs(zone_id, dofs);
       g.GetSubVector(dofs, g_e);
       el.ProjectGrad(el, T, grad_phys);
-      for (int d = 0; d < dim; d++) {
-          Vector g_e_d(g_e.GetData()+d*dof, dof);
-          Vector grad_ptr(grad_g.GetData(0)+d*dof*dim, dof*dim);
-          grad_phys.Mult(g_e_d, grad_ptr);
+      for (int d = 0; d < dim; d++)
+      {
+         Vector g_e_d(g_e.GetData()+d*dof, dof);
+         Vector grad_ptr(grad_g.GetData(0)+d*dof*dim, dof*dim);
+         grad_phys.Mult(g_e_d, grad_ptr);
 //          DenseMatrix grad_g_slice(grad_g.GetData(d), dof, dim);
 //          std::cout << " print slice\n";
 //          grad_g_slice.Print();
@@ -607,10 +608,10 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    if (Trans.Attribute != 77) { return; }
 
    MFEM_VERIFY(Trans.Elem2No >=  0,
-               "not supported yet (TODO) - we assume both sides are present");
+               "Not supported yet (TODO) - we assume both sides are present");
 
-   ElementTransformation &Trans_el_1 = Trans.GetElement1Transformation();
-   ElementTransformation &Trans_el_2 = Trans.GetElement2Transformation();
+   ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
+   ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
 
    Vector shape_e(l2dofs_cnt);
 
@@ -618,32 +619,23 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
    const int nqp_face = ir->GetNPoints();
 
-   // grad_p at all quad points, on both sides.
    const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
    const FiniteElement &el_v = *v.ParFESpace()->GetFE(0);
    const int dof_p = el_p.GetDof(), dof_v = el_v.GetDof();
-   DenseMatrix p_grad_e_1(dof_p, dim), p_grad_e_2(dof_p, dim);
-   if (Trans.Elem2No > 0)
-   {
-      GradAtLocalDofs(Trans_el_2, p, p_grad_e_2);
-   }
-   GradAtLocalDofs(Trans_el_1, p, p_grad_e_1);
 
-   Vector nor(dim);
-
-   Vector p_grad_q1(dim), p_grad_q2(dim), d_q1(dim), d_q2(dim),
-         shape_p(dof_p), v_vals(dim), shape_v(dof_v);
-
+   // grad_v at all dofs, on both sides.
    DenseTensor v_strain_e_1(dof_v, dim, dim), v_strain_e_2(dof_v, dim, dim);
    if (Trans.Elem2No > 0)
    {
-       StrainTensorAtLocalDofs(Trans.GetElement2Transformation(), v, v_strain_e_2);
+       StrainTensorAtLocalDofs(Trans_e2, v, v_strain_e_2);
    }
-   StrainTensorAtLocalDofs(Trans.GetElement1Transformation(), v, v_strain_e_1);
+   StrainTensorAtLocalDofs(Trans_e1, v, v_strain_e_1);
 
+   Vector nor(dim), p_grad_q1(dim), p_grad_q2(dim), d_q1(dim), d_q2(dim),
+         shape_p(dof_p), v_vals(dim), shape_v(dof_v);
    DenseMatrix v_strain_q1(dim), v_strain_q2(dim);
 
-   for (int q = 0; q  < nqp_face; q++)
+   for (int q = 0; q < nqp_face; q++)
    {
       const IntegrationPoint &ip_f = ir->IntPoint(q);
 
@@ -665,9 +657,9 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
       // 1st element stuff.
       el_p.CalcShape(ip_e1, shape_p);
-      const double p1 = p.GetValue(Trans.GetElement1Transformation(), ip_e1);
-      dist.Eval(d_q1, Trans.GetElement1Transformation(), ip_e1);
-      p_grad_e_1.MultTranspose(shape_p, p_grad_q1);
+      const double p1 = p.GetValue(Trans_e1, ip_e1);
+      dist.Eval(d_q1, Trans_e1, ip_e1);
+      p.GetGradient(Trans_e1, p_grad_q1);
 
       el_v.CalcShape(ip_e1, shape_v);
       for (int d = 0; d < dim; d++) {
@@ -681,7 +673,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       el_p.CalcShape(ip_e2, shape_p);
       const double p2 = p.GetValue(Trans.GetElement2Transformation(), ip_e2);
       dist.Eval(d_q2, Trans.GetElement2Transformation(), ip_e2);
-      p_grad_e_2.MultTranspose(shape_p, p_grad_q2);
+      p.GetGradient(Trans_e2, p_grad_q2);
 
       el_v.CalcShape(ip_e2, shape_v);
       for (int d = 0; d < dim; d++) {
@@ -752,7 +744,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       double gradp_d_jump = 0.0;
       double p_avg = 0.0;
 
-      // generic stuff that we need for form 2, 3 and 4
+      // generic stuff that we need for forms 2, 3 and 4
       {
           Vector gradv_d(dim);
           v_strain_q1.Mult(d_q1, gradv_d);
@@ -872,10 +864,10 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
          const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
          const double rho_1  = qdata_face.rho0DetJ0(idx) /
-                               Trans_el_1.Weight();
+                               Trans_e1.Weight();
          const double cs_1   = sqrt(gamma(Trans.Elem1No) * p1 / rho_1);
          const double rho_2  = qdata_face.rho0DetJ0(idx + nqp_face) /
-                               Trans_el_2.Weight();
+                               Trans_e2.Weight();
          const double cs_2   = sqrt(gamma(Trans.Elem2No) * p2 / rho_2);
          const double cs_avg = 2.0 * cs_1 * cs_2 / (cs_1 + cs_2);
 
@@ -883,7 +875,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
          // 1st element.
          el_1.CalcShape(ip_e1, shape_e);
-         el_1.CalcPhysDShape(Trans_el_1, grad_shape_phys_e);
+         el_1.CalcPhysDShape(Trans_e1, grad_shape_phys_e);
          grad_shape_phys_e.AddMult(d_q1, shape_e);
          shape_e *= Trans.Weight() * ip_f.weight *
                      diffusion_scale * cs_avg * p_gradp_jump;
@@ -892,12 +884,22 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
          // 2nd element.
          el_2.CalcShape(ip_e2, shape_e);
-         el_2.CalcPhysDShape(Trans_el_2, grad_shape_phys_e);
+         el_2.CalcPhysDShape(Trans_e2, grad_shape_phys_e);
          grad_shape_phys_e.AddMult(d_q2, shape_e);
          shape_e *= Trans.Weight() * ip_f.weight *
                     diffusion_scale * cs_avg * p_gradp_jump;
          Vector elvect_ref_2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
          elvect_ref_2.Add(-1.0, shape_e);
+
+         if (cs_avg * p_gradp_jump > 100)
+         {
+            std::cout << "dist: " << d_q1(0) << " " << d_q2(0) << std::endl;
+            std::cout << "p grads: " << p_grad_q1(0) << " " << p_grad_q2(0) << std::endl;
+            std::cout << "p1: " << p1 << " " << d_q1 * p_grad_q1 << std::endl;
+            std::cout << "p2: " << p2 << " " << d_q2 * p_grad_q2 << std::endl;
+            std::cout << cs_avg << " " << p_gradp_jump << std::endl;
+            MFEM_ABORT("break");
+         }
       }
    }
 }
