@@ -650,6 +650,10 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       p.GetGradient(Trans_e2, p_grad_q2);
       v.GetVectorGradient(Trans_e2, v_grad_q2);
 
+      MFEM_VERIFY(p1 > 0.0 && p2 > 0.0, "negative pressure");
+      const double gamma_e1 = p1 / (p1 + p2),
+                   gamma_e2 = 1.0 - gamma_e1;
+
       v.GetVectorValue(Trans, ip_f, v_vals);
       const int form = e_shift_type;
 
@@ -712,26 +716,22 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       double p_avg = 0.0;
 
       // generic stuff that we need for forms 2, 3 and 4
-      {
-          Vector gradv_d(dim);
-          v_grad_q1.Mult(d_q, gradv_d);
-          Vector true_normal = d_q;
-          true_normal *= d_q.Norml2() == 0. ? 0 : 1./d_q.Norml2();
-          double gradv_d_n = gradv_d*true_normal;
-          Vector gradv_d_n_n1 = true_normal;
-          gradv_d_n_n1 *= gradv_d_n;
+      Vector gradv_d(dim);
+      v_grad_q1.Mult(d_q, gradv_d);
+      Vector true_normal = d_q;
+      true_normal /= sqrt(d_q * d_q + 1e-12);
+      double gradv_d_n = gradv_d * true_normal;
+      Vector gradv_d_n_n_e1(true_normal);
+      gradv_d_n_n_e1 *= gradv_d_n;
 
-          v_grad_q2.Mult(d_q, gradv_d);
-          true_normal = d_q;
-          true_normal *= d_q.Norml2() == 0. ? 0 : 1./d_q.Norml2();
-          gradv_d_n = gradv_d*true_normal;
-          Vector gradv_d_n_n2 = true_normal;
-          gradv_d_n_n2 *= gradv_d_n;
+      v_grad_q2.Mult(d_q, gradv_d);
+      gradv_d_n = gradv_d * true_normal;
+      Vector gradv_d_n_n_e2(true_normal);
+      gradv_d_n_n_e2 *= gradv_d_n;
 
-          gradv_d_n_n_jump = gradv_d_n_n1*nor - gradv_d_n_n2*nor;
-          gradp_d_jump = p_grad_q1*d_q - p_grad_q2*d_q;
-          p_avg = 0.5*(p1 + p2);
-      }
+      gradv_d_n_n_jump = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
+      gradp_d_jump = p_grad_q1 * d_q - p_grad_q2 * d_q;
+      p_avg = 0.5 * (p1 + p2);
 
       // - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>
       // - <[[((nabla v d) . n)n]], {{p}}{{phi}} - 0.25[[nabla p. d]].[[nabla phi]]>
@@ -776,27 +776,22 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           }
       }
 
-      // TODO look at this carefully, avg seems wrong,
-      // - <[((grad_v d) . n) n], {p phi}>
+      // - [((grad_v d) . n) n], {p phi}
       if (form == 2 || form == 4 || form == 7)
       {
          Vector p_phi_avg(l2dofs_cnt);
 
          // 1st element.
          el_1.CalcShape(ip_e1, p_phi_avg);
-         p_phi_avg *= 0.5 * p1 * gradv_d_n_n_jump * ip_f.weight;
-         {
-            Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
-            elvect_temp.Add(-1., p_phi_avg);
-         }
+         p_phi_avg *= ip_f.weight * (gradv_d_n_n_e1 * nor) * gamma_e1 * p1;
+         Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
+         elvect_e1.Add(-1.0, p_phi_avg);
 
          // 2nd element.
          el_2.CalcShape(ip_e2, p_phi_avg);
-         p_phi_avg *= 0.5 * p2 * gradv_d_n_n_jump * ip_f.weight;
-         {
-            Vector elvect_temp(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-            elvect_temp.Add(-1., p_phi_avg);
-         }
+         p_phi_avg *= ip_f.weight * (gradv_d_n_n_e2 * nor) * gamma_e2 * p2;
+         Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+         elvect_e2.Add(+1.0, p_phi_avg);
       }
 
       if (form == 7)
@@ -836,7 +831,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
          double h = v.ParFESpace()->GetParMesh()->GetElementVolume(cut_zone_id);
          h = pow(h, 1.0 / dim);
          const double cs_avg = sqrt(d_q * d_q) / h *
-                               2.0 * cs_1 * cs_2 / (cs_1 + cs_2);
+                               (gamma_e1 * cs_1 + gamma_e2 * cs_2);
 
          DenseMatrix grad_shape_phys_e(l2dofs_cnt, dim);
 
