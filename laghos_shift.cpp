@@ -232,22 +232,11 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
    const int nqp_face = IntRule->GetNPoints();
 
-   // grad_p at all DOFs of the pressure FE space, on both sides.
-   const FiniteElement &el_p = *p.ParFESpace()->GetFE(0);
-   const int dof_p = el_p.GetDof();
-   DenseMatrix p_grad_e_1(dof_p, dim), p_grad_e_2(dof_p, dim);
-   GradAtLocalDofs(Trans.GetElement1Transformation(), p, p_grad_e_1);
-   if (Trans.Elem2No > 0)
-   {
-      GradAtLocalDofs(Trans.GetElement2Transformation(), p, p_grad_e_2);
-   }
-
    Vector nor(dim);
 
    // The distance vector is a continuous function.
-   Vector dist_q(dim);
-   Vector p_grad_q1(dim), shape_p1(dof_p);
-   Vector p_grad_q2(dim), shape_p2(dof_p);
+   Vector d_q(dim);
+   Vector p_grad_q1(dim), p_grad_q2(dim);
    DenseMatrix h1_grads(h1dofs_cnt, dim), grad_v_q1(dim), grad_v_q2(dim);
    for (int q = 0; q < nqp_face; q++)
    {
@@ -270,12 +259,11 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       nor *= ip_f.weight;
 
       // Compute el1 quantities.
-      el_p.CalcShape(ip_e1, shape_p1);
-      p_grad_e_1.MultTranspose(shape_p1, p_grad_q1);
       ElementTransformation &Trans_el1 = Trans.GetElement1Transformation();
+      p.GetGradient(Trans_el1, p_grad_q1);
       Trans_el1.SetIntPoint(&ip_e1);
-      dist.Eval(dist_q, Trans_el1, ip_e1);
-      const double grad_p_d1 = dist_q * p_grad_q1;
+      dist.Eval(d_q, Trans_el1, ip_e1);
+      const double grad_p_d1 = d_q * p_grad_q1;
       const double p1 = p.GetValue(Trans_el1, ip_e1);
       const double rho1 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
@@ -287,11 +275,10 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       }
 
       // Compute el2 quantities.
-      el_p.CalcShape(ip_e2, shape_p2);
-      p_grad_e_2.MultTranspose(shape_p2, p_grad_q2);
       ElementTransformation &Trans_el2 = Trans.GetElement2Transformation();
+      p.GetGradient(Trans_el2, p_grad_q2);
       Trans_el2.SetIntPoint(&ip_e2);
-      const double grad_p_d2 = dist_q * p_grad_q2;
+      const double grad_p_d2 = d_q * p_grad_q2;
       const double p2 = p.GetValue(Trans_el2, ip_e2);
       const double rho2 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
@@ -306,16 +293,16 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                           (rho1 * cs1 + rho2 * cs2);
 
       // The direction is always the same as the distance vector.
-      Vector true_nor(dist_q);
-      const double norm = dist_q.Norml2();
+      Vector true_nor(d_q);
+      const double norm = d_q.Norml2();
       if (norm > 0.0) { true_nor /= norm; }
 
       double grad_v_d_jump = 0.0;
       if (diffuse_v)
       {
          Vector grad_v_d_1(dim), grad_v_d_2(dim);
-         grad_v_q1.Mult(dist_q, grad_v_d_1);
-         grad_v_q2.Mult(dist_q, grad_v_d_2);
+         grad_v_q1.Mult(d_q, grad_v_d_1);
+         grad_v_q2.Mult(d_q, grad_v_d_2);
          grad_v_d_jump = grad_v_d_1 * true_nor - grad_v_d_2 * true_nor;
       }
 
@@ -339,7 +326,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                {
                   Vector grad_shape_h1;
                   h1_grads.GetRow(j, grad_shape_h1);
-                  h1_shape_part = dist_q * grad_shape_h1;
+                  h1_shape_part = d_q * grad_shape_h1;
                }
 
                double p_shift_part = grad_p_d1;
@@ -369,7 +356,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   {
                      Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
-                     double grad_psi_d = (grad_shape_h1 * dist_q) * true_nor(d);
+                     double grad_psi_d = (grad_shape_h1 * d_q) * true_nor(d);
                      diffuse_term = Trans.Weight() * ip_f.weight *
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
@@ -402,7 +389,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                {
                   Vector grad_shape_h1;
                   h1_grads.GetRow(j, grad_shape_h1);
-                  h1_shape_part = dist_q * grad_shape_h1;
+                  h1_shape_part = d_q * grad_shape_h1;
                }
 
                double p_shift_part = grad_p_d2;
@@ -432,7 +419,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   {
                      Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
-                     double grad_psi_d = (grad_shape_h1 * dist_q) * true_nor(d);
+                     double grad_psi_d = (grad_shape_h1 * d_q) * true_nor(d);
                      diffuse_term = Trans.Weight() * ip_f.weight *
                                     diffuse_v_scale *
                                     rho_cs_avg * grad_psi_d * grad_v_d_jump *
