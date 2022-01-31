@@ -804,7 +804,10 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
       if (diffusion)
       {
-         double p_gradp_jump = p1 + d_q * p_grad_q1 - (p2 + d_q * p_grad_q2);
+         double p1_ext = fmax(p1 + d_q * p_grad_q1, 0.0),
+                p2_ext = fmax(p2 + d_q * p_grad_q2, 0.0);
+
+         double p_gradp_jump = p1_ext - p2_ext;
 
          const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
          const double rho_1  = qdata_face.rho0DetJ0(idx) /
