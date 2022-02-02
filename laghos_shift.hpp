@@ -110,7 +110,8 @@ private:
 class EnergyInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
-   const ParGridFunction &p, &v, &gamma;
+   const ParGridFunction &p, &gamma;
+   const ParGridFunction *v = nullptr, *e = nullptr;
    VectorCoefficient &dist;
 
    CutFaceQuadratureData &qdata_face;
@@ -121,11 +122,10 @@ public:
    double diffusion_scale = 1.0;
 
    EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
-                             const ParGridFunction &v_gf,
                              const ParGridFunction &g_gf,
                              VectorCoefficient &d,
                              CutFaceQuadratureData &cfqdata)
-      : p(p_gf), v(v_gf), gamma(g_gf), dist(d), qdata_face(cfqdata) { }
+      : p(p_gf), gamma(g_gf), dist(d), qdata_face(cfqdata) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -137,6 +137,9 @@ public:
                                     const FiniteElement &el_2,
                                     FaceElementTransformations &Trans,
                                     Vector &elvect);
+   void SetVandE(const ParGridFunction *vel, const ParGridFunction *en)
+   { v = vel; e = en; }
+   void UnsetVandE() { v = nullptr; e = nullptr; }
 };
 
 void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes);

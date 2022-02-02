@@ -378,7 +378,7 @@ int main(int argc, char *argv[])
    si_options.e_shift_type = 4;
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
-   si_options.e_shift_diffusion = true;
+   si_options.e_shift_diffusion = false;
    si_options.e_shift_diffusion_scale = 0.25;
    // Activate ALE. The ale_period is in physical time.
    const bool do_ale = false;

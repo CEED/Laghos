@@ -254,7 +254,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
-   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(), v_gf,
+   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
                                              gamma_gf, dist_coeff, cfqdata);
    efi->SetIntRule(cfir);
    efi->e_shift_type    = si_options.e_shift_type;
@@ -265,6 +265,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       // Make a dummy assembly to figure out the new sparsity.
+      ParGridFunction &p_tmp = p_func.GetPressure();
+      p_tmp = 1.0;
       FaceForce.Assemble(0);
       FaceForce.Finalize(0);
    }
@@ -326,9 +328,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       accel_src_gf.Read();
    }
 
-   Force.Mult(one, rhs);
-   rhs.Neg();
-
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force.MultTranspose(one, rhs);
    const double vold = rhs.Norml2();
@@ -336,8 +335,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
-//   std::cout << "v rhs diff: " << std::scientific
-//             << fabs(rhs.Norml2() - vold) << std::endl;
+   std::cout << "v rhs diff: " << std::scientific
+             << fabs(rhs.Norml2() - vold) << std::endl;
 
    rhs.Neg();
 
@@ -370,12 +369,17 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
-   ParGridFunction vel;
-   Vector* s = const_cast<Vector*>(&v);
-   vel.MakeRef(&H1, *s, H1.GetVSize());
+   ParGridFunction vel, en;
+   Vector *vptr = const_cast<Vector*>(&v);
+   Vector *sptr = const_cast<Vector*>(&S);
+   vel.MakeRef(&H1, *vptr, 0);
+   en.MakeRef(&L2,  *sptr, 2*H1.GetVSize());
    auto tfi_v = FaceForce.GetFBFI();
    auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
+   auto tfi_e = FaceForce_e.GetTLFI();
+   auto e_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e)[0]);
    v_integ->SetVelocity(vel);
+   e_integ->SetVandE(&vel, &en);
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -422,6 +426,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    delete e_source;
 
    v_integ->UnsetVelocity();
+   e_integ->UnsetVandE();
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
