@@ -581,6 +581,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 {
    MFEM_VERIFY(v != nullptr, "Velocity pointer has not been set!");
    MFEM_VERIFY(e != nullptr, "Energy pointer has not been set!");
+   MFEM_VERIFY(e_shift_type != 3 && e_shift_type != 2, "Not implemented");
 
    const int l2dofs_cnt = el_1.GetDof();
    const int dim = el_1.GetDim();
@@ -652,7 +653,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       const double e2 = e->GetValue(Trans_e2, ip_e2);
 
       MFEM_VERIFY(p1 > 0.0 && p2 > 0.0, "negative pressure");
-      const double gamma_e1 = rho_1 / (rho_1 + rho_2),
+      const double gamma_e1 = p1 / (p1 + p2),
                    gamma_e2 = 1.0 - gamma_e1;
 
       v->GetVectorValue(Trans, ip_f, v_vals);
@@ -661,7 +662,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       // For each term, we keep the sign as if it is on the left hand side
       // because in SolveEnergy, this will be multiplied with -1 and added.
       // + <v, phi[[\grad p . d]]>
-      if (form == 1 || form == 2 || form == 3)
+      if (form == 1)
       {
           double gradp_d_jump_term = (d_q * p_grad_q1 - d_q * p_grad_q2) *
                   (ip_f.weight) * (nor * v_vals);
@@ -686,41 +687,35 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
           }
       }
 
-      // - < {v},{phi}[[p + nabla p . d]]>
+      // - < [p + grad_p.d] {phi} v >
+      // - < gamma(1-gamma) [p + grad_p.d].[phi] >
       if (form == 5)
       {
-          double p_gradp_jump_term = 0.5*(p1 + d_q * p_grad_q1 - p2 - d_q * p_grad_q2) *
-                                  (ip_f.weight) * (nor * v_vals); //0.5 for {{phi}}
-          double multfac = -1;
+          double jump_gradp_d = p1 + d_q * p_grad_q1 - p2 - d_q * p_grad_q2;
+
           // 1st element.
-          {
-             // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, shape_e);
-             for (int i = 0; i < l2dofs_cnt; i++)
-             {
-                 elvect(i) += multfac * shape_e(i) * p_gradp_jump_term;
-             }
-          }
+          el_1.CalcShape(ip_e1, shape_e);
+          shape_e *= ip_f.weight * jump_gradp_d *
+                     (gamma_e1 * (nor * v_vals) +
+                      gamma_e1 * gamma_e2 * Trans.Weight());
+          Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
+          elvect_e1.Add(-1.0, shape_e);
+
           // 2nd element.
-          {
-             // L2 shape functions in the 2nd element.
-             el_2.CalcShape(ip_e2, shape_e);
-             for (int i = 0; i < l2dofs_cnt; i++)
-             {
-                 elvect(i + l2dofs_cnt) += multfac * shape_e(i) * p_gradp_jump_term;
-             }
-          }
+          el_2.CalcShape(ip_e2, shape_e);
+          shape_e *= ip_f.weight * jump_gradp_d *
+                     (gamma_e2 * (nor * v_vals) -
+                      gamma_e1 * gamma_e2 * Trans.Weight());
+          Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+          elvect_e2.Add(-1.0, shape_e);
       }
 
-      double gradv_d_n_n_jump = 0.;
-      double gradp_d_jump = 0.0;
-      double p_avg = 0.0;
-
-      // generic stuff that we need for forms 2, 3 and 4
-      Vector gradv_d(dim);
-      v_grad_q1.Mult(d_q, gradv_d);
+      // generic stuff.
       Vector true_normal = d_q;
       true_normal /= sqrt(d_q * d_q + 1e-12);
+      Vector gradv_d(dim);
+
+      v_grad_q1.Mult(d_q, gradv_d);
       double gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e1(true_normal);
       gradv_d_n_n_e1 *= gradv_d_n;
@@ -730,89 +725,42 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       Vector gradv_d_n_n_e2(true_normal);
       gradv_d_n_n_e2 *= gradv_d_n;
 
-      gradv_d_n_n_jump = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
-      gradp_d_jump = p_grad_q1 * d_q - p_grad_q2 * d_q;
-      p_avg = 0.5 * (p1 + p2);
+      double jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
 
-      // - <[[((nabla v d) . n)n]], {{p}}{{phi}} - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>
-      // - <[[((nabla v d) . n)n]], {{p}}{{phi}} - 0.25[[nabla p. d]].[[nabla phi]]>
-      if (form == 3 || form == 5 || form == 6)
+      // + < [((grad_v d).n) n], {p phi} > (form 4)
+      // OR
+      // - < [((grad_v d).n) n], {p phi} > (form 5)
+      if (form == 4 || form == 5)
       {
-          // 1st element.
-          {
-             // L2 shape functions in the 1st element.
-             el_1.CalcShape(ip_e1, shape_e);
-
-             Vector gradp_d_jump_dot_l2_shape_jump = shape_e;
-             gradp_d_jump_dot_l2_shape_jump *= gradp_d_jump;
-             gradp_d_jump_dot_l2_shape_jump *= -0.25;
-
-             Vector l2_shape_avg_p_avg = shape_e;
-             l2_shape_avg_p_avg *= 0.5;
-             l2_shape_avg_p_avg *= p_avg;
-             gradp_d_jump_dot_l2_shape_jump += l2_shape_avg_p_avg;
-             gradp_d_jump_dot_l2_shape_jump *= gradv_d_n_n_jump;
-             gradp_d_jump_dot_l2_shape_jump *= ip_f.weight;
-             Vector elvect_temp(elvect.GetData(), l2dofs_cnt);
-             elvect_temp.Add(-1., gradp_d_jump_dot_l2_shape_jump);
-          }
-
-          // 2nd element
-          {
-              el_2.CalcShape(ip_e2, shape_e);
-
-              Vector gradp_d_jump_dot_l2_shape_jump = shape_e;
-              shape_e *= -1; //l2_shape_jump = phi+ - phi- = -phi-
-              gradp_d_jump_dot_l2_shape_jump *= gradp_d_jump;
-              gradp_d_jump_dot_l2_shape_jump *= -0.25;
-
-              Vector l2_shape_avg_p_avg = shape_e;
-              l2_shape_avg_p_avg *= 0.5;
-              l2_shape_avg_p_avg *= p_avg;
-              gradp_d_jump_dot_l2_shape_jump += l2_shape_avg_p_avg;
-              gradp_d_jump_dot_l2_shape_jump *= gradv_d_n_n_jump;
-              gradp_d_jump_dot_l2_shape_jump *= ip_f.weight;
-              Vector elvect_temp(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-              elvect_temp.Add(-1., gradp_d_jump_dot_l2_shape_jump);
-          }
-      }
-
-      // - [((grad_v d) . n) n], {p phi}
-      if (form == 2 || form == 4 || form == 7)
-      {
-         Vector p_phi_avg(l2dofs_cnt);
-
          // 1st element.
-         el_1.CalcShape(ip_e1, p_phi_avg);
-         p_phi_avg *= ip_f.weight * (gradv_d_n_n_e1 * nor) * gamma_e1 * p1;
+         el_1.CalcShape(ip_e1, shape_e);
+         shape_e *= ip_f.weight * (gradv_d_n_n_e1 * nor) * gamma_e1 * p1;
          Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
-         elvect_e1.Add(+1.0, p_phi_avg);
+         if (form == 5) { elvect_e1.Add(-1.0, shape_e); }
+         else           { elvect_e1.Add(+1.0, shape_e); }
 
          // 2nd element.
-         el_2.CalcShape(ip_e2, p_phi_avg);
-         p_phi_avg *= ip_f.weight * (gradv_d_n_n_e2 * nor) * gamma_e2 * p2;
+         el_2.CalcShape(ip_e2, shape_e);
+         shape_e *= ip_f.weight * (gradv_d_n_n_e2 * nor) * gamma_e2 * p2;
          Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-         elvect_e2.Add(-1.0, p_phi_avg);
+         if (form == 5) { elvect_e2.Add(+1.0, shape_e); }
+         else           { elvect_e2.Add(-1.0, shape_e); }
       }
 
-      if (form == 7)
+      // + < |[((grad_v d).n) n]| [p] [phi] >
+      if (form == 6)
       {
-          double p_jump_term = 0.5*(p1 + d_q * p_grad_q1 - p2 - d_q * p_grad_q2) *
-                                  (ip_f.weight) * (nor * v_vals); //0.5 for {{phi}}
-          double multfac = -1;
-          // 1st element.
-          el_1.CalcShape(ip_e1, shape_e);
-          for (int i = 0; i < l2dofs_cnt; i++)
-          {
-             elvect(i) += multfac * shape_e(i) * p_jump_term;
-          }
+         // 1st element.
+         el_1.CalcShape(ip_e1, shape_e);
+         shape_e *= ip_f.weight * fabs(jump_gradv_d_n_n) * (p1 - p2);
+         Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
+         elvect_e1.Add(+1.0, shape_e);
 
-          // 2nd element.
-          el_2.CalcShape(ip_e2, shape_e);
-          for (int i = 0; i < l2dofs_cnt; i++)
-          {
-             elvect(i + l2dofs_cnt) += multfac * shape_e(i) * p_jump_term;
-          }
+         // 2nd element.
+         el_2.CalcShape(ip_e2, shape_e);
+         shape_e *= ip_f.weight * fabs(jump_gradv_d_n_n) * (p1 - p2);
+         Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+         elvect_e2.Add(-1.0, shape_e);
       }
 
       // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
@@ -851,7 +799,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 //            }
 //         }
          shape_e *= Trans.Weight() * ip_f.weight *
-                     diffusion_scale * cs_avg * p_gradp_jump;
+                    diffusion_scale * cs_avg * p_gradp_jump;
          Vector elvect_ref_1(elvect.GetData(), l2dofs_cnt);
          elvect_ref_1.Add(1.0, shape_e);
 

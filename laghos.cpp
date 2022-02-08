@@ -359,23 +359,19 @@ int main(int argc, char *argv[])
    // Activate the momentum diffusion term.
    si_options.v_shift_diffusion = false;
    si_options.v_shift_diffusion_scale = 1.0;
-   // Contributions to the energy RHS:
+   // Contributions to the energy LHS:
    // 0: no shifting terms.
    // 1: the energy RHS gets the conservative momentum term:
    //    + < [grad_p.d] v phi >                         for v_shift_type = 1.
    //    + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
    //    + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
    //    + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
-   // 2: - < [((nabla v d) . n)n], {{p phi}}
-   //    + < v, phi [grad_p.d] >
-   // 3: - <[[((nabla v d) . n)n]], {{p}}{{phi}}
-   //    - (1-gamma)(gamma)[[nabla p. d]].[[nabla phi]]>
-   //    + <v, phi[[\grad p . d]]>
-   // 4: - < [((grad_v.d).n) n] {p phi} >
-   // 5: - < [((grad_v d).n) n] {p} {phi} >
-   //    - < (1-gamma)(gamma) [grad_p.d].[grad_phi] >
-   //    - < {v} {phi} [p + grad_p.d] >
-   si_options.e_shift_type = 4;
+   // 4: + < [((grad_v.d).n) n] {p phi} >
+   // 5: - < [((grad_v d).n) n] {p phi} >
+   //    - < gamma(1-gamma) [p + grad_p.d].[phi] >
+   //    - < [p + grad_p.d] {phi} v >
+   // 6: + < [((grad_v.d).n) n] [p] [phi] >
+   si_options.e_shift_type = 5;
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
