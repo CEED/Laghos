@@ -367,11 +367,10 @@ int main(int argc, char *argv[])
    //    + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
    //    + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
    // 4: + < [((grad_v.d).n) n] {p phi} >
-   // 5: - < [((grad_v d).n) n] {p phi} >
-   //    - < gamma(1-gamma) [p + grad_p.d].[phi] >
-   //    - < [p + grad_p.d] {phi} v >
-   // 6: + < [((grad_v.d).n) n] [p] [phi] >
-   si_options.e_shift_type = 5;
+   // 5: - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>
+   //    - < [p + grad_p.d].v {phi} >
+   // 6: + < |[((grad_v d).n) n]| [p] [phi] >
+   si_options.e_shift_type = 4;
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
