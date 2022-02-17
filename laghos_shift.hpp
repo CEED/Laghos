@@ -28,9 +28,24 @@ namespace hydrodynamics
 
 enum PressureSpace {L2, H1};
 
-int material_id(int el_id, const ParGridFunction &g);
+class SIMarker
+{
+private:
+   const ParGridFunction &ls;
 
-void MarkFaceAttributes(ParFiniteElementSpace &pfes);
+public:
+   SIMarker(const ParGridFunction &ls_gf) : ls(ls_gf) { }
+
+   // LS < 0 everywhere (mat 1) --> attribute  1.
+   // mixed                     --> attribute -1.
+   // LS > 0 everywhere (mat 2) --> attribute  2.
+   int GetMaterialID(int el_id);
+
+   // Mixed / mat 1 --> attribute 1.
+   // Mixed / mat 2 --> attribute 2.
+   // all other     --> attribute 0.
+   void MarkFaceAttributes(ParFiniteElementSpace &pfes);
+};
 
 // Stores the shifted interface options.
 struct SIOptions

@@ -405,10 +405,11 @@ int main(int argc, char *argv[])
 
    // Material marking and visualization function.
    ParGridFunction materials(&mat_fes);
+   SIMarker marker(xi);
    int zone_id_L, zone_id_R;
    for (int i = 0; i < NE; i++)
    {
-      int mat_id = hydrodynamics::material_id(i, xi);
+      int mat_id = marker.GetMaterialID(i);
       pmesh->SetAttribute(i, mat_id + 1);
       materials(i) = mat_id;
       if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
@@ -418,7 +419,7 @@ int main(int argc, char *argv[])
          zone_id_R = i;
       }
    }
-   hydrodynamics::MarkFaceAttributes(pfes_xi);
+   marker.MarkFaceAttributes(pfes_xi);
 
    // Set the initial condition based on the materials.
    GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
@@ -712,11 +713,11 @@ int main(int argc, char *argv[])
          // Material marking and visualization function.
          for (int k = 0; k < NE; k++)
          {
-            int mat_id = hydrodynamics::material_id(k, xi);
+            int mat_id = marker.GetMaterialID(k);
             pmesh->SetAttribute(k, mat_id + 1);
             materials(k) = mat_id;
          }
-         hydrodynamics::MarkFaceAttributes(pfes_xi);
+         marker.MarkFaceAttributes(pfes_xi);
 
          ale_cnt++;
 

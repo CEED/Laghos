@@ -24,50 +24,56 @@ namespace mfem
 namespace hydrodynamics
 {
 
-// LS < 0 --> material 0.
-// mixed  --> material 0.
-// LS > 0 --> material 1.
-int material_id(int el_id, const ParGridFunction &g)
+int SIMarker::GetMaterialID(int el_id)
 {
-   const ParFiniteElementSpace &pfes =  *g.ParFESpace();
-   const FiniteElement *fe = pfes.GetFE(el_id);
-   Vector g_vals;
-   const IntegrationRule &ir =
-      IntRules.Get(fe->GetGeomType(), pfes.GetOrder(el_id) + 7);
+   IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
-   double integral = 0.0;
+   const ParFiniteElementSpace &pfes =  *ls.ParFESpace();
+   const FiniteElement *fe = pfes.GetFE(el_id);
+   Vector ls_vals;
+   const IntegrationRule &ir =
+      IntRulesLo.Get(fe->GetGeomType(), pfes.GetOrder(el_id) + 7);
+
    bool has_pos_value = false, has_neg_value = false;
-   g.GetValues(el_id, ir, g_vals);
+   ls.GetValues(el_id, ir, ls_vals);
    ElementTransformation *Tr = pfes.GetMesh()->GetElementTransformation(el_id);
    for (int q = 0; q < ir.GetNPoints(); q++)
    {
       const IntegrationPoint &ip = ir.IntPoint(q);
       Tr->SetIntPoint(&ip);
-      integral += ip.weight * g_vals(q) * Tr->Weight();
-      if (g_vals(q) - 1e-12 > 0.0) { has_pos_value = true; }
-      if (g_vals(q) + 1e-12 < 0.0) { has_neg_value = true; }
+      if (ls_vals(q) - 1e-12 > 0.0) { has_pos_value = true; }
+      if (ls_vals(q) + 1e-12 < 0.0) { has_neg_value = true; }
    }
 
-   if (has_pos_value == false) { return 0; }
-   if (has_neg_value == false) { return 1; }
-   return 0;
-
-   //return (integral > 0.0) ? 1 : 0;
+   if (has_pos_value == false) { return 1; }
+   if (has_neg_value == false) { return 2; }
+   return -1;
 }
 
-void MarkFaceAttributes(ParFiniteElementSpace &pfes)
+void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
 {
+   auto get_face_attr = [&](int a1, int a2)
+   {
+      if (a1 == -1 && a2 ==  1) { return 1; }
+      if (a1 ==  1 && a2 == -1) { return 1; }
+      if (a1 == -1 && a2 ==  2) { return 2; }
+      if (a1 ==  2 && a2 == -1) { return 2; }
+      return 0;
+   };
+
    ParMesh *pmesh = pfes.GetParMesh();
    pmesh->ExchangeFaceNbrNodes();
    // Set face_attribute = 77 to faces that are on the material interface.
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {
+      pmesh->SetFaceAttribute(f, 0);
+
       auto *ft = pmesh->GetFaceElementTransformations(f, 3);
-      if (ft->Elem2No > 0 &&
-          pmesh->GetAttribute(ft->Elem1No) != pmesh->GetAttribute(ft->Elem2No))
-      {
-         pmesh->SetFaceAttribute(f, 77);
-      }
+      if (ft->Elem2No < 0) { continue; }
+
+      const int attr1 = pmesh->GetAttribute(ft->Elem1No),
+                attr2 = pmesh->GetAttribute(ft->Elem2No);
+      pmesh->SetFaceAttribute(f, get_face_attr(attr1, attr2));
    }
 
    for (int f = 0; f < pmesh->GetNSharedFaces(); f++)
@@ -79,7 +85,7 @@ void MarkFaceAttributes(ParFiniteElementSpace &pfes)
        int attr1 = pmesh->GetAttribute(ftr->Elem1No);
        int attr2 = nbrftr->Attribute;
 
-       if (attr1 != attr2) { pmesh->SetFaceAttribute(faceno, 77); }
+       pmesh->SetFaceAttribute(faceno, get_face_attr(attr1, attr2));
    }
 }
 
