@@ -45,25 +45,24 @@ int SIMarker::GetMaterialID(int el_id)
       if (ls_vals(q) + 1e-12 < 0.0) { has_neg_value = true; }
    }
 
-   if (has_pos_value == false) { return 1; }
-   if (has_neg_value == false) { return 2; }
-   return -1;
+   if (has_pos_value == false) { return 10; }
+   if (has_neg_value == false) { return 20; }
+   return 15;
 }
 
 void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
 {
    auto get_face_attr = [&](int a1, int a2)
    {
-      if (a1 == -1 && a2 ==  1) { return 1; }
-      if (a1 ==  1 && a2 == -1) { return 1; }
-      if (a1 == -1 && a2 ==  2) { return 2; }
-      if (a1 ==  2 && a2 == -1) { return 2; }
+      if (a1 == 15 && a2 == 10) { return 10; }
+      if (a1 == 10 && a2 == 15) { return 10; }
+      if (a1 == 15 && a2 == 20) { return 20; }
+      if (a1 == 20 && a2 == 15) { return 20; }
       return 0;
    };
 
    ParMesh *pmesh = pfes.GetParMesh();
    pmesh->ExchangeFaceNbrNodes();
-   // Set face_attribute = 77 to faces that are on the material interface.
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {
       pmesh->SetFaceAttribute(f, 0);
@@ -89,6 +88,24 @@ void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
    }
 }
 
+void SIMarker::GetFaceAttributeGF(ParGridFunction &fa_gf)
+{
+   fa_gf.SetSpace(ls.ParFESpace());
+   fa_gf = 0.0;
+
+   ParMesh &pmesh = *ls.ParFESpace()->GetParMesh();
+   Array<int> face_dofs;
+   for (int f = 0; f < pmesh.GetNumFaces(); f++)
+   {
+      ls.ParFESpace()->GetFaceDofs(f, face_dofs);
+      for (int i = 0; i < face_dofs.Size(); i++)
+      {
+         fa_gf(face_dofs[i]) = fmax(fa_gf(face_dofs[i]),
+                                    pmesh.GetFaceAttribute(f));
+      }
+   }
+}
+
 double InterfaceCoeff::Eval(ElementTransformation &T,
                             const IntegrationPoint &ip)
 {
@@ -101,7 +118,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-  const int mode_TG = 0;
+  const int mode_TG = 2;
 
    switch (problem)
    {

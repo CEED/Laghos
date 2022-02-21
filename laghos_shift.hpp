@@ -36,15 +36,17 @@ private:
 public:
    SIMarker(const ParGridFunction &ls_gf) : ls(ls_gf) { }
 
-   // LS < 0 everywhere (mat 1) --> attribute  1.
-   // mixed                     --> attribute -1.
-   // LS > 0 everywhere (mat 2) --> attribute  2.
+   // LS < 0 everywhere (mat 1) --> attribute  10.
+   // mixed                     --> attribute  15.
+   // LS > 0 everywhere (mat 2) --> attribute  20.
    int GetMaterialID(int el_id);
 
-   // Mixed / mat 1 --> attribute 1.
-   // Mixed / mat 2 --> attribute 2.
+   // Mixed / mat 1 --> attribute 10.
+   // Mixed / mat 2 --> attribute 20.
    // all other     --> attribute 0.
    void MarkFaceAttributes(ParFiniteElementSpace &pfes);
+
+   void GetFaceAttributeGF(ParGridFunction &fa_gf);
 };
 
 // Stores the shifted interface options.

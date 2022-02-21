@@ -48,6 +48,10 @@ using namespace hydrodynamics;
 // Choice for the problem setup.
 static int problem, dim;
 
+char vishost[] = "localhost";
+int  visport   = 19916;
+ const int Ww = 500, Wh = 500;
+
 // Forward declarations.
 double e0(const Vector &);
 double rho0(const Vector &);
@@ -384,16 +388,6 @@ int main(int argc, char *argv[])
    const bool calc_dist = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? true : false;
 
-   if (si_options.e_shift_type > 1)
-   {
-      MFEM_VERIFY(mpi.WorldSize() == 1, "The e terms are not parallel yet.");
-   }
-   if (si_options.e_shift_type == 1)
-   {
-      MFEM_VERIFY(si_options.v_shift_type >= 1 || si_options.v_shift_type <= 5,
-                 "doesn't match");
-   }
-
 //#define EXTRACT_1D
 
    // Interface function.
@@ -403,15 +397,15 @@ int main(int argc, char *argv[])
    xi.ProjectCoefficient(coeff_xi_0);
    GridFunctionCoefficient coeff_xi(&xi);
 
-   // Material marking and visualization function.
+   // Material marking and visualization functions.
    ParGridFunction materials(&mat_fes);
    SIMarker marker(xi);
    int zone_id_L, zone_id_R;
    for (int i = 0; i < NE; i++)
    {
       int mat_id = marker.GetMaterialID(i);
-      pmesh->SetAttribute(i, mat_id + 1);
-      materials(i) = mat_id;
+      pmesh->SetAttribute(i, mat_id);
+      materials(i) = pmesh->GetAttribute(i);
       if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
       {
          // Relevant only for the 1D tests.
@@ -420,6 +414,41 @@ int main(int argc, char *argv[])
       }
    }
    marker.MarkFaceAttributes(pfes_xi);
+   ParGridFunction face_attr;
+   marker.GetFaceAttributeGF(face_attr);
+
+   socketstream vis_mat, vis_faces;
+   if (visualization)
+   {
+      vis_mat.precision(8);
+      hydrodynamics::VisualizeField(vis_mat, vishost, visport, materials,
+                                    "Materials", 0, 0, Ww, Wh);
+
+      hydrodynamics::VisualizeField(vis_faces, vishost, visport, face_attr,
+                                    "Materials", Ww, 0, Ww, Wh);
+   }
+
+   ConstantCoefficient czero(0.0);
+   const double m_err = materials.ComputeL1Error(czero),
+                f_err = face_attr.ComputeL1Error(czero);
+   if (myid == 0)
+   {
+      std::cout << std::fixed << std::setprecision(12)
+                << "Material marker: " << m_err << endl
+                << "Face marker:     " << f_err << endl;
+   }
+   return 0;
+
+   // Some verifications.
+   if (si_options.e_shift_type > 1)
+   {
+      MFEM_VERIFY(mpi.WorldSize() == 1, "The e terms are not parallel yet.");
+   }
+   if (si_options.e_shift_type == 1)
+   {
+      MFEM_VERIFY(si_options.v_shift_type >= 1 || si_options.v_shift_type <= 5,
+                 "doesn't match");
+   }
 
    // Set the initial condition based on the materials.
    GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
@@ -492,9 +521,7 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q, &dt, si_options);
 
-   socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist, vis_mat;
-   char vishost[] = "localhost";
-   int  visport   = 19916;
+   socketstream vis_rho, vis_v, vis_e, vis_p, vis_xi, vis_dist;
 
    ParGridFunction rho_gf(&L2FESpace);
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }

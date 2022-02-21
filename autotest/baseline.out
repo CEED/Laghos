@@ -1,0 +1,12 @@
+mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.5 -rs 3 -vs 1
+Material marker: 17.265625000000
+Face marker:     1.891199602849
+
+mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.2
+Material marker: 14.950000000000
+Face marker:     0.128190114295
+
+mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 3.0 -rs 1
+Material marker: 382.500000000000
+Face marker:     19.228517144192
+
