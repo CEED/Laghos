@@ -86,7 +86,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
-                                                 ParGridFunction &v_gf,
                                                  ParGridFunction &gamma,
                                                  VectorCoefficient &dist_coeff,
                                                  PressureFunction &pressure,
@@ -98,8 +97,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int cgiter,
                                                  double ftz,
                                                  const int oq,
-                                                 double *dt,
-                                                 SIOptions &si_opt) :
+                                                 SIOptions &si_opt,
+                                                 MaterialData &m_data) :
    TimeDependentOperator(size),
    H1(h1), L2(l2),
    pmesh(H1.GetParMesh()),
@@ -133,7 +132,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    one(L2Vsize),
    rhs(H1Vsize),
    e_rhs(L2Vsize),
-   si_options(si_opt)
+   si_options(si_opt), mat_data(m_data)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -166,10 +165,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    double Volume, vol = 0.0;
 
    const int NQ = ir.GetNPoints();
-   Vector rho_vals(NQ);
+   Vector rho1_vals(NQ), rho2_vals(NQ);
    for (int e = 0; e < NE; e++)
    {
-      rho0_gf.GetValues(e, ir, rho_vals);
+      mat_data.rho0_1.GetValues(e, ir, rho1_vals);
+      mat_data.rho0_2.GetValues(e, ir, rho2_vals);
       ElementTransformation &Tr = *H1.GetElementTransformation(e);
       for (int q = 0; q < NQ; q++)
       {
@@ -177,8 +177,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Tr.SetIntPoint(&ip);
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-         const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-         qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
+         qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight *
+                                        Tr.Weight() * rho1_vals(q);
+         qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight *
+                                        Tr.Weight() * rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -471,14 +473,16 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
+void LagrangianHydroOperator::ComputeDensity(int mat_id,
+                                             ParGridFunction &rho) const
 {
    DenseMatrix Mrho(l2dofs_cnt);
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
-   DensityIntegrator di(qdata.rho0DetJ0w);
+   Vector &rhoDetJ = (mat_id == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
+   DensityIntegrator di(rhoDetJ);
    di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {
@@ -496,7 +500,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 
 double LagrangianHydroOperator::Mass() const
 {
-   double mass = qdata.rho0DetJ0w.Sum();
+   double mass = qdata.rho0DetJ0w_1.Sum();
    MPI_Allreduce(MPI_IN_PLACE, &mass, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
    return mass;
 }
@@ -614,7 +618,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
             gamma_b[idx] = gamma_gf(z_id);
-            rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
+            rho_b[idx] = qdata.rho0DetJ0w_1(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = fmax(0.0, e_vals(q));
          }
          ++z_id;

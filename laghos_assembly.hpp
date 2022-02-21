@@ -45,7 +45,7 @@ struct QuadratureData
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
-   Vector rho0DetJ0w;
+   Vector rho0DetJ0w_1, rho0DetJ0w_2;
 
    // Initial length scale. This represents a notion of local mesh size.
    // We assume that all initial zones have similar size.
@@ -58,7 +58,7 @@ struct QuadratureData
    QuadratureData(int dim, int NE, int quads_per_el)
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
-        rho0DetJ0w(NE * quads_per_el) { }
+        rho0DetJ0w_1(NE * quads_per_el), rho0DetJ0w_2(NE * quads_per_el) { }
 };
 
 // Container for all data needed at quadrature points.

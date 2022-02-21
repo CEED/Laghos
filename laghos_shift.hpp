@@ -196,6 +196,10 @@ public:
    void PrintDofId() const { std::cout << dof_id << std::endl; }
 };
 
+void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
+                ParGridFunction &e1, ParGridFunction &e2,
+                ParGridFunction &gamma1, ParGridFunction &gamma2);
+
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
                  ParGridFunction &e, ParGridFunction &gamma_gf);
 
@@ -208,4 +212,4 @@ void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
 
 } // namespace mfem
 
-#endif // MFEM_LAGHOS_TMOP
+#endif // MFEM_LAGHOS_SHIFT

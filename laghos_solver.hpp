@@ -20,6 +20,7 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 #include "laghos_shift.hpp"
+#include "laghos_materials.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -108,6 +109,7 @@ protected:
    mutable Vector one, rhs, e_rhs;
 
    SIOptions &si_options;
+   MaterialData &mat_data;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -141,7 +143,7 @@ public:
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
-                           ParGridFunction &rho0_gf, ParGridFunction &v_gf,
+                           ParGridFunction &rho0_gf,
                            ParGridFunction &gamma,
                            VectorCoefficient &dist_coeff,
                            PressureFunction &pressure,
@@ -149,8 +151,8 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, double *dt,
-                           SIOptions &si_opt);
+                           const int order_q,
+                           SIOptions &si_opt, MaterialData &m_data);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -169,7 +171,7 @@ public:
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    // The FE space of rho must be set before the call.
-   void ComputeDensity(ParGridFunction &rho) const;
+   void ComputeDensity(int mat_id, ParGridFunction &rho) const;
    ParGridFunction &GetPressure(const ParGridFunction &e)
    {
       p_func.UpdatePressure(e);
@@ -184,7 +186,7 @@ public:
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
    const IntegrationRule &GetIntRule() { return ir; }
-   Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
+   Vector &GetRhoDetJw() { return qdata.rho0DetJ0w_1; }
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

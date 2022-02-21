@@ -247,7 +247,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    elmat = 0.0;
 
    // Must be done after elmat.SetSize().
-   if (Trans.Attribute != 77) { return; }
+   if (Trans.Attribute != 10 && Trans.Attribute != 20) { return; }
 
    h1_shape.SetSize(h1dofs_cnt);
    l2_shape.SetSize(l2dofs_cnt);
@@ -619,7 +619,7 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    elvect = 0.0;
 
    // Must be done after elvect.SetSize().
-   if (Trans.Attribute != 77) { return; }
+   if (Trans.Attribute != 10 && Trans.Attribute != 20) { return; }
 
    MFEM_VERIFY(Trans.Elem2No >=  0,
                "Not supported yet (TODO) - we assume both sides are present");
@@ -1003,7 +1003,35 @@ double ShiftedPointExtractor::GetValue() const
    }
 
    return res;
+}
 
+// Initially they are all initialized as the single material version.
+// This only zeroes them out in the empty zones.
+void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
+                ParGridFunction &e1, ParGridFunction &e2,
+                ParGridFunction &gamma1, ParGridFunction &gamma2)
+{
+   ParFiniteElementSpace &pfes = *rho1.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = rho1.Size() / NE;
+
+   rho1 = 1.0;
+
+   rho2   = 0.0;
+   gamma2 = 0.0;
+   for (int k = 0; k < NE; k++)
+   {
+      const int attr = pfes.GetParMesh()->GetAttribute(k);
+
+      if (attr == 20 || attr == 15)
+      {
+         for (int i = 0; i < ndofs; i++)
+         {
+            rho2(k*ndofs + i) = 1.0;
+            gamma2(k)         = 5.0 / 3.0;
+         }
+      }
+   }
 }
 
 void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
