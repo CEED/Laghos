@@ -53,7 +53,7 @@ char vishost[] = "localhost";
 int  visport   = 19916;
 const int ws = 280; // window size
 socketstream vis_mat, vis_faces, vis_rho_1, vis_rho_2,
-             vis_v, vis_e, vis_p, vis_xi, vis_dist;
+             vis_v, vis_e_1, vis_e_2, vis_p, vis_xi, vis_dist;
 
 // Forward declarations.
 double e0(const Vector &);
@@ -285,11 +285,12 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_h1 = H1FESpace.GetVSize();
    const int Vsize_l2 = L2FESpace.GetVSize();
-   Array<int> offset(4);
+   Array<int> offset(5);
    offset[0] = 0;
    offset[1] = offset[0] + Vsize_h1;
    offset[2] = offset[1] + Vsize_h1;
    offset[3] = offset[2] + Vsize_l2;
+   offset[4] = offset[3] + Vsize_l2;
    BlockVector S(offset);
 
    MaterialData mat_data;
@@ -302,7 +303,7 @@ int main(int argc, char *argv[])
    x_gf.MakeRef(&H1FESpace, S, offset[0]);
    v_gf.MakeRef(&H1FESpace, S, offset[1]);
    mat_data.e_1.MakeRef(&L2FESpace, S, offset[2]);
-   mat_data.e_2.SetSpace(&L2FESpace);
+   mat_data.e_2.MakeRef(&L2FESpace, S, offset[3]);
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
@@ -369,7 +370,7 @@ int main(int argc, char *argv[])
    // 3: - < [(p + grad_p.d) * grad_psi.d] n >
    // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
    // 5: - < [grad_p.d] [psi + grad_psi.d] n >
-   si_options.v_shift_type = 0;
+   si_options.v_shift_type = 1;
    // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
    si_options.v_shift_scale = -1.0;
    // Activate the momentum diffusion term.
@@ -484,9 +485,6 @@ int main(int argc, char *argv[])
       hydrodynamics::InitTriPoint2Mat(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
       if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
    }
-
-   v_gf.SyncAliasMemory(S);
-   mat_data.e_1.SyncAliasMemory(S);
 
    // Distance vector.
    ParGridFunction dist(&H1FESpace);
@@ -873,13 +871,15 @@ int main(int argc, char *argv[])
    }
 
    ConstantCoefficient zero(0.0);
-   double err_v = v_gf.ComputeL1Error(zero),
-          err_e = mat_data.e_1.ComputeL1Error(zero);
+   double err_v  = v_gf.ComputeL1Error(zero),
+          err_e_1 = mat_data.e_1.ComputeL1Error(zero),
+          err_e_2 = mat_data.e_2.ComputeL1Error(zero);
    if (myid == 0)
    {
       cout << std::fixed << std::setprecision(12)
-           << "v norm: " << err_v << std::endl
-           << "e norm: " << err_e << std::endl;
+           << "v norm:  " << err_v << std::endl
+           << "e1 norm: " << err_e_1 << std::endl
+           << "e2 norm: " << err_e_2 << std::endl;
    }
 
    switch (ode_solver_type)
@@ -939,7 +939,7 @@ int main(int argc, char *argv[])
    if (visualization)
    {
       vis_v.close();
-      vis_e.close();
+      vis_e_1.close();
    }
 
    // Free the used memory.
@@ -1172,7 +1172,7 @@ void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
    hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,
                                  mat_data.rho0_1, "Density 1",
                                  0, wy, ws, ws);
-   hydrodynamics::VisualizeField(vis_e, vishost, visport,
+   hydrodynamics::VisualizeField(vis_e_1, vishost, visport,
                                  mat_data.e_1, "Spec Internal Energy 1",
                                  ws, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_p, vishost, visport,
@@ -1183,6 +1183,9 @@ void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
    hydrodynamics::VisualizeField(vis_rho_2, vishost, visport,
                                  mat_data.rho0_2, "Density 2",
                                  0, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_e_2, vishost, visport,
+                                 mat_data.e_2, "Spec Internal Energy 2",
+                                 ws, wy, ws, ws);
 }
 
 static void display_banner(std::ostream &os)

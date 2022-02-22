@@ -19,14 +19,13 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_materials.hpp"
 
 namespace mfem
 {
 
 namespace hydrodynamics
 {
-
-enum PressureSpace {L2, H1};
 
 class SIMarker
 {

@@ -104,7 +104,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),
    L2Vsize(L2.GetVSize()),
-   block_offsets(4),
+   block_offsets(5),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
    dim(pmesh->Dimension()),
@@ -118,8 +118,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    gamma_gf(gamma),
    p_func(pressure),
    Mv(&H1), Mv_spmat_copy(),
-   Me(l2dofs_cnt, l2dofs_cnt, NE),
-   Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
+   Me_1(l2dofs_cnt, l2dofs_cnt, NE), Me_2(l2dofs_cnt, l2dofs_cnt, NE),
+   Me_1_inv(l2dofs_cnt, l2dofs_cnt, NE), Me_2_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    cfir(NULL),
@@ -138,21 +138,38 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
    block_offsets[3] = block_offsets[2] + L2Vsize;
+   block_offsets[4] = block_offsets[3] + L2Vsize;
    one = 1.0;
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   MassIntegrator mi(rho0_coeff, &ir);
+   GridFunctionCoefficient rho_1_coeff(&mat_data.rho0_1),
+                           rho_2_coeff(&mat_data.rho0_2);
+   MassIntegrator mi_1(rho_1_coeff, &ir), mi_2(rho_2_coeff);
    for (int e = 0; e < NE; e++)
    {
-      DenseMatrixInverse inv(&Me(e));
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &Tr = *L2.GetElementTransformation(e);
-      mi.AssembleElementMatrix(fe, Tr, Me(e));
+      const int attr = pmesh->GetAttribute(e);
+
+      // Material 1.
+      mi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
+      DenseMatrixInverse inv(&Me_1(e));
       inv.Factor();
-      inv.GetInverseMatrix(Me_inv(e));
+      inv.GetInverseMatrix(Me_1_inv(e));
+
+      // Material 2.
+      if (attr == 15 || attr == 20)
+      {
+         mi_2.AssembleElementMatrix(fe, Tr, Me_2(e));
+         DenseMatrixInverse inv(&Me_2(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_2_inv(e));
+      }
+      else { Me_2(e) = 0.0; Me_2_inv(e) = 0.0; }
    }
+
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv.AddDomainIntegrator(vmi);
@@ -387,9 +404,10 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
-   ParGridFunction de;
-   de.MakeRef(&L2, dS_dt, H1Vsize*2);
-   de = 0.0;
+   ParGridFunction de_1, de_2;
+   de_1.MakeRef(&L2, dS_dt, H1Vsize*2);
+   de_2.MakeRef(&L2, dS_dt, H1Vsize*2 + L2Vsize);
+   de_1 = 0.0; de_2 = 0.0;
 
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = nullptr;
@@ -420,10 +438,20 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    for (int e = 0; e < NE; e++)
    {
+      const int attr = pmesh->GetAttribute(e);
       L2.GetElementDofs(e, l2dofs);
       e_rhs.GetSubVector(l2dofs, loc_rhs);
-      Me_inv(e).Mult(loc_rhs, loc_de);
-      de.SetSubVector(l2dofs, loc_de);
+
+      // Material 1.
+      Me_1_inv(e).Mult(loc_rhs, loc_de);
+      de_1.SetSubVector(l2dofs, loc_de);
+
+      // Material 2.
+      if (attr == 15 || attr == 20)
+      {
+         Me_2_inv(e).Mult(loc_rhs, loc_de);
+         de_2.SetSubVector(l2dofs, loc_de);
+      }
    }
    delete e_source;
 
@@ -449,12 +477,12 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
    MassIntegrator mi(rho_coeff, &ir);
    for (int k = 0; k < NE; k++)
    {
-      DenseMatrixInverse inv(&Me(k));
+      DenseMatrixInverse inv(&Me_1(k));
       const FiniteElement &fe = *L2.GetFE(k);
       ElementTransformation &Tr = *L2.GetElementTransformation(k);
-      mi.AssembleElementMatrix(fe, Tr, Me(k));
+      mi.AssembleElementMatrix(fe, Tr, Me_1(k));
       inv.Factor();
-      inv.GetInverseMatrix(Me_inv(k));
+      inv.GetInverseMatrix(Me_1_inv(k));
    }
 }
 
@@ -517,7 +545,7 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e) const
    {
       L2.GetElementDofs(k, l2dofs);
       e.GetSubVector(l2dofs, loc_e);
-      loc_ie += Me(k).InnerProduct(loc_e, one);
+      loc_ie += Me_1(k).InnerProduct(loc_e, one);
    }
    MPI_Comm comm = H1.GetParMesh()->GetComm();
    MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
@@ -741,77 +769,6 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    }
    //FaceForce_v.Assemble();
    forcemat_is_assembled = true;
-}
-
-PressureFunction::PressureFunction(ParMesh &pmesh, PressureSpace space,
-                                   ParGridFunction &rho0, int e_order,
-                                   ParGridFunction &gamma)
-   : p_space(space),
-     p_fec_L2(p_order, pmesh.Dimension(), basis_type),
-     p_fec_H1(p_order, pmesh.Dimension(), basis_type),
-     p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
-     p_L2(&p_fes_L2), p_H1(&p_fes_H1),
-     rho0DetJ0(p_L2.Size()), gamma_gf(gamma)
-{
-   p_L2 = 0.0;
-   p_H1 = 0.0;
-
-   const int NE = pmesh.GetNE();
-   const int nqp = rho0DetJ0.Size() / NE;
-
-   Vector rho_vals(nqp);
-   for (int i = 0; i < NE; i++)
-   {
-      // The points (and their numbering) coincide with the nodes of p.
-      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
-      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
-
-      rho0.GetValues(Tr, ir, rho_vals);
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir.IntPoint(q);
-         Tr.SetIntPoint(&ip);
-         rho0DetJ0(i * nqp + q) = Tr.Weight() * rho_vals(q);
-      }
-   }
-}
-
-void PressureFunction::UpdatePressure(const ParGridFunction &e)
-{
-   const int NE = p_fes_L2.GetParMesh()->GetNE();
-   Vector e_vals;
-
-   // Compute L2 pressure element by element.
-   for (int i = 0; i < NE; i++)
-   {
-      // The points (and their numbering) coincide with the nodes of p.
-      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
-      const int nqp = ir.GetNPoints();
-      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
-
-      e.GetValues(Tr, ir, e_vals);
-
-      for (int q = 0; q < ir.GetNPoints(); q++)
-      {
-         const IntegrationPoint &ip = ir.IntPoint(q);
-         Tr.SetIntPoint(&ip);
-         double rho = rho0DetJ0(i * nqp + q) / Tr.Weight();
-         p_L2(i * nqp + q) = fmax(1e-5, (gamma_gf(i) - 1.0) * rho * e_vals(q));
-
-         if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(i) == 1)
-         {
-            // Water pressure in the water/air test.
-            p_L2(i * nqp + q) -= gamma_gf(i) * 6.0e8;
-         }
-      }
-   }
-
-   // If H1 pressure is needed, average on the shared faces.
-   if (p_space == H1)
-   {
-      GridFunctionCoefficient p_coeff(&p_L2);
-      p_H1.ProjectDiscCoefficient(p_coeff, GridFunction::ARITHMETIC);
-   }
 }
 
 } // namespace hydrodynamics
