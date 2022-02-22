@@ -51,7 +51,7 @@ static int problem, dim;
 
 char vishost[] = "localhost";
 int  visport   = 19916;
-const int ws = 300; // window size
+const int ws = 280; // window size
 socketstream vis_mat, vis_faces, vis_rho_1, vis_rho_2,
              vis_v, vis_e, vis_p, vis_xi, vis_dist;
 
@@ -1151,42 +1151,41 @@ void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &xi,
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
 
-   int Wx = 0, Wy = 0; // window position
-   int offx = ws + 10; // window offsets
-
-   hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,
-                                 mat_data.rho0_1, "Density 1",
-                                 0, 3*ws, ws, ws);
-   hydrodynamics::VisualizeField(vis_rho_2, vishost, visport,
-                                 mat_data.rho0_2, "Density 2",
-                                 ws, 3*ws, ws, ws);
-   Wx += offx;
-   hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                 v, "Velocity",
-                                 Wx, Wy, ws, ws);
-   Wx += offx;
-   hydrodynamics::VisualizeField(vis_e, vishost, visport,
-                                 mat_data.e_1, "Spec Internal Energy 1",
-                                 Wx, Wy, ws, ws);
-   Wy += ws + ws/5;
-   Wx = 0;
-   hydrodynamics::VisualizeField(vis_p, vishost, visport,
-                                 p, "Pressure",
-                                 Wx, Wy, ws, ws);
-   Wx += offx;
-   hydrodynamics::VisualizeField(vis_xi, vishost, visport,
-                                 xi, "Interface",
-                                 Wx, Wy, ws, ws);
-   Wx += offx;
-   hydrodynamics::VisualizeField(vis_dist, vishost, visport,
-                                 dist, "Distances",
-                                 Wx, Wy, ws, ws);
+   int wy;
 
    hydrodynamics::VisualizeField(vis_mat, vishost, visport,
                                  materials, "Materials",
                                  0, 0, ws, ws);
-   hydrodynamics::VisualizeField(vis_faces, vishost, visport, faces,
-                                 "Face Marking", ws, 0, ws, ws);
+   hydrodynamics::VisualizeField(vis_faces, vishost, visport,
+                                 faces, "Face Marking",
+                                 ws, 0, ws, ws);
+
+   wy = ws + 65;
+   hydrodynamics::VisualizeField(vis_v, vishost, visport,
+                                 v, "Velocity",
+                                 0, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_xi, vishost, visport,
+                                 xi, "Interface",
+                                 ws, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_dist, vishost, visport,
+                                 dist, "Distances",
+                                 2*ws, wy, ws, ws);
+
+   wy = 2*ws + 100;
+   hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,
+                                 mat_data.rho0_1, "Density 1",
+                                 0, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_e, vishost, visport,
+                                 mat_data.e_1, "Spec Internal Energy 1",
+                                 ws, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                 p, "Pressure 1",
+                                 2*ws, wy, ws, ws);
+
+   wy = 3*ws + 125;
+   hydrodynamics::VisualizeField(vis_rho_2, vishost, visport,
+                                 mat_data.rho0_2, "Density 2",
+                                 0, wy, ws, ws);
 }
 
 static void display_banner(std::ostream &os)
