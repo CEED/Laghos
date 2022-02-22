@@ -61,11 +61,10 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
-void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &xi,
+void visualize(MaterialData mat_data, ParGridFunction &v,
                ParGridFunction &dist,
                ParGridFunction &materials, ParGridFunction &faces,
                ParGridFunction &p);
-
 static void display_banner(std::ostream&);
 
 int main(int argc, char *argv[])
@@ -405,14 +404,14 @@ int main(int argc, char *argv[])
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
-   ParGridFunction xi(&pfes_xi);
-   hydrodynamics::InterfaceCoeff coeff_xi_0(problem, *pmesh, pure_test);
-   xi.ProjectCoefficient(coeff_xi_0);
-   GridFunctionCoefficient coeff_xi(&xi);
+   mat_data.level_set.SetSpace(&pfes_xi);
+   hydrodynamics::InterfaceCoeff coeff_ls_0(problem, *pmesh, pure_test);
+   mat_data.level_set.ProjectCoefficient(coeff_ls_0);
+   GridFunctionCoefficient coeff_xi(&mat_data.level_set);
 
    // Material marking and visualization functions.
    ParGridFunction materials(&mat_fes);
-   SIMarker marker(xi);
+   SIMarker marker(mat_data.level_set);
    int zone_id_L, zone_id_R;
    for (int i = 0; i < NE; i++)
    {
@@ -545,7 +544,7 @@ int main(int argc, char *argv[])
 
    if (visualization)
    {
-      visualize(mat_data, v_gf, xi, dist,
+      visualize(mat_data, v_gf, dist,
                 materials, face_attr, hydro.GetPressure(mat_data.e_1));
    }
 
@@ -699,7 +698,7 @@ int main(int argc, char *argv[])
 
          // Setup and initialize the remap operator.
          RemapAdvector adv(*pmesh, order_v, order_e);
-         adv.InitFromLagr(x_gf, xi, v_gf,
+         adv.InitFromLagr(x_gf, mat_data.level_set, v_gf,
                           hydro.GetIntRule(), hydro.GetRhoDetJw(), mat_data.e_1);
 
          // Remap to x0 (the remesh always goes back to x0).
@@ -707,7 +706,7 @@ int main(int argc, char *argv[])
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x0;
-         adv.TransferToLagr(xi, v_gf,
+         adv.TransferToLagr(mat_data.level_set, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             mat_data.rho0_1, mat_data.e_1);
 
@@ -735,7 +734,7 @@ int main(int argc, char *argv[])
                 total_out    = internal_out + kinetic_out;
 
          ConstantCoefficient zero(0.0);
-         double err = xi.ComputeL1Error(zero);
+         double err = mat_data.level_set.ComputeL1Error(zero);
          if (myid == 0)
          {
             cout << std::fixed << std::setw(5) << std::setprecision(4)
@@ -820,7 +819,7 @@ int main(int argc, char *argv[])
          }
          if (visualization)
          {
-            visualize(mat_data, v_gf, xi, dist,
+            visualize(mat_data, v_gf, dist,
                       materials, face_attr, hydro.GetPressure(mat_data.e_1));
          }
 
@@ -862,7 +861,7 @@ int main(int argc, char *argv[])
             ParaViewDataCollection dacol("ParaViewLaghos", pmesh);
             dacol.SetLevelsOfDetail(10);
             dacol.SetHighOrderOutput(true);
-            dacol.RegisterField("interface", &xi);
+            dacol.RegisterField("interface", &mat_data.level_set);
             dacol.RegisterField("density", &rho_gf_1);
             dacol.RegisterField("velocity", &v_gf);
             dacol.RegisterField("materials", &materials);
@@ -1144,28 +1143,26 @@ double e0(const Vector &x)
    }
 }
 
-void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &xi,
-               ParGridFunction &dist,
+void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
                ParGridFunction &materials, ParGridFunction &faces,
                ParGridFunction &p)
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
 
-   int wy;
-
+   int wy = 0;
    hydrodynamics::VisualizeField(vis_mat, vishost, visport,
                                  materials, "Materials",
-                                 0, 0, ws, ws);
+                                 0, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_faces, vishost, visport,
                                  faces, "Face Marking",
-                                 ws, 0, ws, ws);
+                                 ws, wy, ws, ws);
 
    wy = ws + 65;
    hydrodynamics::VisualizeField(vis_v, vishost, visport,
                                  v, "Velocity",
                                  0, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_xi, vishost, visport,
-                                 xi, "Interface",
+                                 mat_data.level_set, "Interface",
                                  ws, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_dist, vishost, visport,
                                  dist, "Distances",
