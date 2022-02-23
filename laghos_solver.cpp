@@ -88,7 +88,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParGridFunction &rho0_gf,
                                                  ParGridFunction &gamma,
                                                  VectorCoefficient &dist_coeff,
-                                                 PressureFunction &pressure,
                                                  const int source,
                                                  const double cfl,
                                                  const bool visc,
@@ -116,7 +115,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    use_vorticity(vort),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    gamma_gf(gamma),
-   p_func(pressure),
    Mv(&H1), Mv_spmat_copy(),
    Me_1(l2dofs_cnt, l2dofs_cnt, NE), Me_2(l2dofs_cnt, l2dofs_cnt, NE),
    Me_1_inv(l2dofs_cnt, l2dofs_cnt, NE), Me_2_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -264,7 +262,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    //
 
    // Interface forces.
-   auto *ffi = new FaceForceIntegrator(p_func.GetPressure(), gamma_gf,
+   auto *ffi = new FaceForceIntegrator(mat_data.p_1->GetPressure(), gamma_gf,
                                        dist_coeff, cfqdata);
    ffi->SetIntRule(cfir);
    ffi->SetShiftType(si_options.v_shift_type);
@@ -273,7 +271,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
-   auto *efi = new EnergyInterfaceIntegrator(p_func.GetPressure(),
+   auto *efi = new EnergyInterfaceIntegrator(mat_data.p_1->GetPressure(),
                                              gamma_gf, dist_coeff, cfqdata);
    efi->SetIntRule(cfir);
    efi->e_shift_type    = si_options.e_shift_type;
@@ -284,7 +282,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       // Make a dummy assembly to figure out the new sparsity.
-      ParGridFunction &p_tmp = p_func.GetPressure();
+      ParGridFunction &p_tmp = mat_data.p_1->GetPressure();
       p_tmp = 1.0;
       FaceForce.Assemble(0);
       FaceForce.Finalize(0);
@@ -602,7 +600,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the pressure values (used for the shifted interface method).
-   p_func.UpdatePressure(e);
+   mat_data.p_1->UpdatePressure(e);
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this

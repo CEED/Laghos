@@ -53,7 +53,7 @@ char vishost[] = "localhost";
 int  visport   = 19916;
 const int ws = 280; // window size
 socketstream vis_mat, vis_faces, vis_rho_1, vis_rho_2,
-             vis_v, vis_e_1, vis_e_2, vis_p, vis_xi, vis_dist;
+             vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_xi, vis_dist;
 
 // Forward declarations.
 double e0(const Vector &);
@@ -61,10 +61,9 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
-void visualize(MaterialData mat_data, ParGridFunction &v,
-               ParGridFunction &dist,
-               ParGridFunction &materials, ParGridFunction &faces,
-               ParGridFunction &p);
+void visualize(MaterialData &mat_data, ParGridFunction &v,
+               ParGridFunction &dist, ParGridFunction &materials,
+               ParGridFunction &faces);
 static void display_banner(std::ostream&);
 
 int main(int argc, char *argv[])
@@ -451,8 +450,6 @@ int main(int argc, char *argv[])
                  "doesn't match");
    }
 
-   std::cout << "before init" << std::endl;
-
    // Set the initial condition based on the materials.
    GridFunctionCoefficient rho0_gf_coeff(&mat_data.rho0_1);
    Coefficient *rho_coeff = &rho0_gf_coeff;
@@ -515,13 +512,14 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   PressureFunction p_gf(*pmesh, si_options.p_space,
-                         mat_data.rho0_1, order_e, mat_data.gamma_1);
-   p_gf.SetProblem(problem);
+   mat_data.p_1 = new PressureFunction(problem, *pmesh, si_options.p_space,
+                                       mat_data.rho0_1, mat_data.gamma_1);
+   mat_data.p_2 = new PressureFunction(problem, *pmesh, si_options.p_space,
+                                       mat_data.rho0_2, mat_data.gamma_2);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 *rho_coeff, mat_data.rho0_1,
-                                                mat_data.gamma_1, dist_coeff, p_gf,
+                                                mat_data.gamma_1, dist_coeff,
                                                 source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -542,8 +540,7 @@ int main(int argc, char *argv[])
 
    if (visualization)
    {
-      visualize(mat_data, v_gf, dist,
-                materials, face_attr, hydro.GetPressure(mat_data.e_1));
+      visualize(mat_data, v_gf, dist, materials, face_attr);
    }
 
    // Save data for VisIt visualization.
@@ -817,8 +814,7 @@ int main(int argc, char *argv[])
          }
          if (visualization)
          {
-            visualize(mat_data, v_gf, dist,
-                      materials, face_attr, hydro.GetPressure(mat_data.e_1));
+            visualize(mat_data, v_gf, dist, materials, face_attr);
          }
 
          if (visit)
@@ -1143,11 +1139,14 @@ double e0(const Vector &x)
    }
 }
 
-void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
-               ParGridFunction &materials, ParGridFunction &faces,
-               ParGridFunction &p)
+void visualize(MaterialData &mat_data, ParGridFunction &v,
+               ParGridFunction &dist, ParGridFunction &materials,
+               ParGridFunction &faces)
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
+
+   ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.e_1),
+                   &pressure_2 = mat_data.p_2->ComputePressure(mat_data.e_2);
 
    int wy = 0;
    hydrodynamics::VisualizeField(vis_mat, vishost, visport,
@@ -1175,8 +1174,8 @@ void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
    hydrodynamics::VisualizeField(vis_e_1, vishost, visport,
                                  mat_data.e_1, "Spec Internal Energy 1",
                                  ws, wy, ws, ws);
-   hydrodynamics::VisualizeField(vis_p, vishost, visport,
-                                 p, "Pressure 1",
+   hydrodynamics::VisualizeField(vis_p_1, vishost, visport,
+                                 pressure_1, "Pressure 1",
                                  2*ws, wy, ws, ws);
 
    wy = 3*ws + 125;
@@ -1186,6 +1185,9 @@ void visualize(MaterialData mat_data, ParGridFunction &v, ParGridFunction &dist,
    hydrodynamics::VisualizeField(vis_e_2, vishost, visport,
                                  mat_data.e_2, "Spec Internal Energy 2",
                                  ws, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_p_2, vishost, visport,
+                                 pressure_2, "Pressure 2",
+                                 2*ws, wy, ws, ws);
 }
 
 static void display_banner(std::ostream &os)

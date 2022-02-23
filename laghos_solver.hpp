@@ -51,7 +51,6 @@ protected:
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
-   PressureFunction &p_func;
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
@@ -119,7 +118,6 @@ public:
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma,
                            VectorCoefficient &dist_coeff,
-                           PressureFunction &pressure,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort,
@@ -145,10 +143,10 @@ public:
    // are projected as a ParGridFunction.
    // The FE space of rho must be set before the call.
    void ComputeDensity(int mat_id, ParGridFunction &rho) const;
-   ParGridFunction &GetPressure(const ParGridFunction &e)
+   ParGridFunction &ComputePressure(const ParGridFunction &e)
    {
-      p_func.UpdatePressure(e);
-      return p_func.GetPressure();
+      mat_data.p_1->UpdatePressure(e);
+      return mat_data.p_1->GetPressure();
    }
    double Mass() const;
    double InternalEnergy(const ParGridFunction &e) const;
