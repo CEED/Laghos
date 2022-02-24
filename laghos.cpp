@@ -360,10 +360,6 @@ int main(int argc, char *argv[])
    hydrodynamics::SIOptions si_options;
    // FE space for the pressure reconstruction -- L2 or H1.
    si_options.p_space = PressureSpace::L2;
-   // Integration of mass matrices.
-   // true  -- the element mass matrices are integrated as mixed.
-   // false -- the element mass matrices are integrated as pure.
-   si_options.mix_mass = false;
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >
@@ -454,16 +450,6 @@ int main(int argc, char *argv[])
    }
 
    // Set the initial condition based on the materials.
-   GridFunctionCoefficient rho0_gf_coeff(&mat_data.rho0_1);
-   Coefficient *rho_coeff = &rho0_gf_coeff;
-   if (si_options.mix_mass == true)
-   {
-      MFEM_VERIFY(do_ale == false,
-      "The rho is not updated properly in the mass matrices after remap when "
-      "rho_coeff is initialized with the FunctionCoefficient. That is, the "
-      "mass matrices will still use the FunctionCoefficient.");
-      rho_coeff = &rho0_coeff;
-   }
    if (problem == 0)
    {
       hydrodynamics::InitTG2Mat(mat_data.rho0_1, mat_data.rho0_2,
@@ -473,18 +459,17 @@ int main(int argc, char *argv[])
    if (problem == 8)
    {
       hydrodynamics::InitSod2Mat(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
-      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
    }
    else if (problem == 9)
    {
       hydrodynamics::InitWaterAir(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
-      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
    }
    else if (problem == 10)
    {
       hydrodynamics::InitTriPoint2Mat(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
-      if (si_options.mix_mass == false) { rho_coeff = &rho0_gf_coeff; }
    }
+   InterfaceRhoCoeff rho_jump_coeff(mat_data.level_set,
+                                    mat_data.rho0_1, mat_data.rho0_2);
 
    // Distance vector.
    ParGridFunction dist(&H1FESpace);
@@ -521,7 +506,7 @@ int main(int argc, char *argv[])
                                        mat_data.rho0_2, mat_data.gamma_2);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
-                                                *rho_coeff,
+                                                rho_jump_coeff,
                                                 dist_coeff, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -708,8 +693,7 @@ int main(int argc, char *argv[])
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
-         rho_coeff = &rho0_gf_coeff;
-         hydro.UpdateMassMatrices(*rho_coeff);
+         hydro.UpdateMassMatrices(rho_jump_coeff);
 
          // Material marking and visualization function.
          for (int k = 0; k < NE; k++)

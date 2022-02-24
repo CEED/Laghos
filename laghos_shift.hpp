@@ -52,7 +52,6 @@ public:
 struct SIOptions
 {
    PressureSpace p_space = PressureSpace::L2;
-   bool mix_mass = false;
 
    int v_shift_type = 0;
    double v_shift_scale = 1.0;

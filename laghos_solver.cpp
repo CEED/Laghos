@@ -350,6 +350,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force_1.MultTranspose(one, rhs);
+   Force_2.AddMultTranspose(one, rhs);
    const double vold = rhs.Norml2();
    if (si_options.v_shift_type > 0)
    {
@@ -604,7 +605,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    v.MakeRef(&H1, *sptr, H1.GetVSize());
    e_1.MakeRef(&L2, *sptr, 2*H1.GetVSize());
    e_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
-   Vector e_vals;
+   Vector e_vals, ls_vals;
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the pressure values (used for the shifted interface method).
@@ -619,10 +620,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    const int nbatches =  NE / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
    double *gamma_b = new double[nqp_batch],
-   *rho_b = new double[nqp_batch],
-   *e_b   = new double[nqp_batch],
-   *p_b   = new double[nqp_batch],
-   *cs_b  = new double[nqp_batch];
+          *rho_b   = new double[nqp_batch],
+          *e_b     = new double[nqp_batch],
+          *p_b     = new double[nqp_batch],
+          *cs_b    = new double[nqp_batch],
+          *ls_b    = new double[nqp_batch];
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
@@ -654,6 +656,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             ElementTransformation *T = H1.GetElementTransformation(z_id);
             Jpr_b[z].SetSize(dim, dim, nqp);
             e_k.GetValues(z_id, ir, e_vals);
+            mat_data.level_set.GetValues(z_id, ir, ls_vals);
             for (int q = 0; q < nqp; q++)
             {
                const IntegrationPoint &ip = ir.IntPoint(q);
@@ -664,8 +667,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const int idx = z * nqp + q;
                // Assuming piecewise constant gamma that moves with the mesh.
                gamma_b[idx] = gamma_k(z_id);
-               rho_b[idx] = r0DJ_k(z_id*nqp + q) / detJ / ip.weight;
-               e_b[idx] = fmax(0.0, e_vals(q));
+               rho_b[idx]   = r0DJ_k(z_id*nqp + q) / detJ / ip.weight;
+               e_b[idx]     = fmax(0.0, e_vals(q));
+               ls_b[idx]    = ls_vals(q);
             }
             ++z_id;
          }
@@ -686,7 +690,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const DenseMatrix &Jpr = Jpr_b[z](q);
                CalcInverse(Jpr, Jinv);
                const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
-                            p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
+                            p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q],
+                            ls = ls_b[z*nqp+q];
                stress = 0.0;
                for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
                double visc_coeff = 0.0;
@@ -755,6 +760,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                }
                MultABt(stress, Jinv, stressJiT);
                stressJiT *= ir.IntPoint(q).weight * detJ;
+
+               if (k == 1 && ls > 0.0) { stressJiT = 0.0; }
+               if (k == 2 && ls < 0.0) { stressJiT = 0.0; }
+
                for (int vd = 0 ; vd < dim; vd++)
                {
                   for (int gd = 0; gd < dim; gd++)
