@@ -85,7 +85,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho0_coeff,
-                                                 ParGridFunction &rho0_gf,
                                                  VectorCoefficient &dist_coeff,
                                                  const int source,
                                                  const double cfl,
@@ -249,12 +248,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                ElementTransformation &Tr1 = *H1.GetElementTransformation(Elem1No);
                Tr1.SetIntPoint(&ip_e1);
                cfqdata.rho0DetJ0(f*nqp_face*2 + 0*nqp_face + q ) =
-                       Tr1.Weight() * rho0_gf.GetValue(Elem1No, ip_e1);
+                       Tr1.Weight() * mat_data.rho0_1.GetValue(Elem1No, ip_e1);
 
                ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
                Tr2.SetIntPoint(&ip_e2);
                cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
-                       Tr2.Weight() * rho0_gf.GetValue(Elem2No, ip_e2);
+                       Tr2.Weight() * mat_data.rho0_1.GetValue(Elem2No, ip_e2);
            }
        }
    }

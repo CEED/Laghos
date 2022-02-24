@@ -114,7 +114,6 @@ public:
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
-                           ParGridFunction &rho0_gf,
                            VectorCoefficient &dist_coeff,
                            const int source,
                            const double cfl,

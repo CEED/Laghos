@@ -61,9 +61,10 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
-void visualize(MaterialData &mat_data, ParGridFunction &v,
-               ParGridFunction &dist, ParGridFunction &materials,
-               ParGridFunction &faces);
+void visualize(MaterialData &mat_data,
+               ParGridFunction &rho_1, ParGridFunction &rho_2,
+               ParGridFunction &v, ParGridFunction &dist,
+               ParGridFunction &materials, ParGridFunction &faces);
 static void display_banner(std::ostream&);
 
 int main(int argc, char *argv[])
@@ -342,6 +343,7 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    mat_data.e_1.ProjectGridFunction(l2_e);
+   mat_data.e_2.ProjectGridFunction(l2_e);
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
@@ -519,7 +521,7 @@ int main(int argc, char *argv[])
                                        mat_data.rho0_2, mat_data.gamma_2);
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
-                                                *rho_coeff, mat_data.rho0_1,
+                                                *rho_coeff,
                                                 dist_coeff, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -540,7 +542,7 @@ int main(int argc, char *argv[])
 
    if (visualization)
    {
-      visualize(mat_data, v_gf, dist, materials, face_attr);
+      visualize(mat_data, rho_gf_1, rho_gf_2, v_gf, dist, materials, face_attr);
    }
 
    // Save data for VisIt visualization.
@@ -813,7 +815,8 @@ int main(int argc, char *argv[])
          }
          if (visualization)
          {
-            visualize(mat_data, v_gf, dist, materials, face_attr);
+            visualize(mat_data, rho_gf_1, rho_gf_2,
+                      v_gf, dist, materials, face_attr);
          }
 
          if (visit)
@@ -1138,9 +1141,10 @@ double e0(const Vector &x)
    }
 }
 
-void visualize(MaterialData &mat_data, ParGridFunction &v,
-               ParGridFunction &dist, ParGridFunction &materials,
-               ParGridFunction &faces)
+void visualize(MaterialData &mat_data,
+               ParGridFunction &rho_1, ParGridFunction &rho_2,
+               ParGridFunction &v, ParGridFunction &dist,
+               ParGridFunction &materials, ParGridFunction &faces)
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
 
@@ -1168,7 +1172,7 @@ void visualize(MaterialData &mat_data, ParGridFunction &v,
 
    wy = 2*ws + 100;
    hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,
-                                 mat_data.rho0_1, "Density 1",
+                                 rho_1, "Density 1",
                                  0, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_e_1, vishost, visport,
                                  mat_data.e_1, "Spec Internal Energy 1",
@@ -1179,7 +1183,7 @@ void visualize(MaterialData &mat_data, ParGridFunction &v,
 
    wy = 3*ws + 125;
    hydrodynamics::VisualizeField(vis_rho_2, vishost, visport,
-                                 mat_data.rho0_2, "Density 2",
+                                 rho_2, "Density 2",
                                  0, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_e_2, vishost, visport,
                                  mat_data.e_2, "Spec Internal Energy 2",

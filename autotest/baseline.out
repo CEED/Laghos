@@ -3,14 +3,14 @@ Material marker: 17.265625000000
 Face marker:     1.891199602849
 v norm:  0.405257931255
 e1 norm: 1.500030418180
-e2 norm: 1.302230580615
+e2 norm: 1.303626150601
 
 mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.0
 Material marker: 14.950000000000
 Face marker:     0.128190114295
 v norm:  0.000000000000
 e1 norm: 2.000000000000
-e2 norm: 0.000000000000
+e2 norm: 2.000000000000
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.0 -rs 1
 Material marker: 382.500000000000

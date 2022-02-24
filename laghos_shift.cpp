@@ -1005,8 +1005,8 @@ double ShiftedPointExtractor::GetValue() const
    return res;
 }
 
-// Initially they are all initialized as the single material version.
-// This only zeroes them out in the empty zones.
+// Initially the energies are initialized as the single material version, due
+// the special Bernstein projection. This only zeroes them in the empty zones.
 void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
                 ParGridFunction &e1, ParGridFunction &e2,
                 ParGridFunction &gamma1, ParGridFunction &gamma2)
@@ -1014,31 +1014,26 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
    ParFiniteElementSpace &pfes = *e1.ParFESpace();
    const int NE    = pfes.GetNE();
    const int ndofs = rho1.Size() / NE;
-   Vector pos;
 
    rho1 = 1.0;
 
    rho2   = 0.0;
    gamma2 = 0.0;
-   e2     = 0.0;
    for (int k = 0; k < NE; k++)
    {
       const int attr = pfes.GetParMesh()->GetAttribute(k);
-      const IntegrationRule &ir = pfes.GetFE(k)->GetNodes();
-      ElementTransformation &tr = *pfes.GetElementTransformation(k);
 
-      if (attr == 20 || attr == 15)
+      if (attr == 10)
+      {
+         for (int i = 0; i < ndofs; i++) { e2(k*ndofs + i) = 0.0; }
+      }
+
+      if (attr == 15 || attr == 20)
       {
          for (int i = 0; i < ndofs; i++)
          {
             rho2(k*ndofs + i) = 1.0;
             gamma2(k)         = 5.0 / 3.0;
-
-            const IntegrationPoint &ip = ir.IntPoint(i);
-            tr.SetIntPoint(&ip);
-            tr.Transform(ip, pos);
-            double p = 1.0 + (cos(2*M_PI*pos(0)) + cos(2*M_PI*pos(1))) / 4.0;
-            e2(k*ndofs + i) = p / rho2(k*ndofs + i) / (gamma2(k) - 1.0);
          }
       }
    }
