@@ -58,7 +58,6 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
@@ -76,9 +75,9 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force, FaceForce;
+   mutable MixedBilinearForm Force_1, Force_2, FaceForce;
    mutable LinearForm FaceForce_e;
-   mutable Vector one, rhs, e_rhs;
+   mutable Vector one, rhs;
 
    SIOptions &si_options;
    MaterialData &mat_data;
@@ -116,7 +115,6 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
-                           ParGridFunction &gamma,
                            VectorCoefficient &dist_coeff,
                            const int source,
                            const double cfl,

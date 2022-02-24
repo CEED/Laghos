@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
    // 3: - < [(p + grad_p.d) * grad_psi.d] n >
    // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
    // 5: - < [grad_p.d] [psi + grad_psi.d] n >
-   si_options.v_shift_type = 1;
+   si_options.v_shift_type = 0;
    // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
    si_options.v_shift_scale = -1.0;
    // Activate the momentum diffusion term.
@@ -395,8 +395,9 @@ int main(int argc, char *argv[])
    const bool do_ale = false;
    const double ale_period = 1.0;
 
-   const bool pure_test = (si_options.v_shift_type > 0 ||
-                           si_options.e_shift_type > 0) ? false : true;
+//   const bool pure_test = (si_options.v_shift_type > 0 ||
+//                           si_options.e_shift_type > 0) ? false : true;
+   const bool pure_test = false;
    const bool calc_dist = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? true : false;
 
@@ -519,8 +520,7 @@ int main(int argc, char *argv[])
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 *rho_coeff, mat_data.rho0_1,
-                                                mat_data.gamma_1, dist_coeff,
-                                                source, cfl,
+                                                dist_coeff, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q,
@@ -661,7 +661,6 @@ int main(int argc, char *argv[])
 
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance. The function does t += dt.
-
       ode_solver->Step(S, t, dt);
       steps++;
 
