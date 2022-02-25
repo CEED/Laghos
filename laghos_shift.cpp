@@ -1015,9 +1015,9 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
    const int NE    = pfes.GetNE();
    const int ndofs = rho1.Size() / NE;
 
-   rho1 = 1.0;
-
+   rho1   = 0.0;
    rho2   = 0.0;
+   gamma1 = 0.0;
    gamma2 = 0.0;
    for (int k = 0; k < NE; k++)
    {
@@ -1026,6 +1026,15 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
       if (attr == 10)
       {
          for (int i = 0; i < ndofs; i++) { e2(k*ndofs + i) = 0.0; }
+      }
+
+      if (attr == 10 || attr == 15)
+      {
+         for (int i = 0; i < ndofs; i++)
+         {
+            rho1(k*ndofs + i) = 1.0;
+            gamma1(k)         = 5.0 / 3.0;
+         }
       }
 
       if (attr == 15 || attr == 20)

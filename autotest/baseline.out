@@ -2,7 +2,7 @@ mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.5 -rs 3 -vs 1
 Material marker: 17.265625000000
 Face marker:     1.891199602849
 v norm:  0.405258262236
-e1 norm: 1.500034259295
+e1 norm: 1.499672668608
 e2 norm: 1.303623646836
 
 mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.0

@@ -148,10 +148,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       const int attr = pmesh->GetAttribute(e);
 
       // Material 1.
-      mi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
-      DenseMatrixInverse inv(&Me_1(e));
-      inv.Factor();
-      inv.GetInverseMatrix(Me_1_inv(e));
+      if (attr == 10 || attr == 15)
+      {
+         mi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
+         DenseMatrixInverse inv(&Me_1(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_1_inv(e));
+      }
+      else { Me_1(e) = 0.0; Me_1_inv(e) = 0.0; }
 
       // Material 2.
       if (attr == 15 || attr == 20)
@@ -447,9 +451,12 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       L2.GetElementDofs(e, l2dofs);
 
       // Material 1.
-      e_rhs_1.GetSubVector(l2dofs, loc_rhs);
-      Me_1_inv(e).Mult(loc_rhs, loc_de);
-      de_1.SetSubVector(l2dofs, loc_de);
+      if (attr == 10 || attr == 15)
+      {
+         e_rhs_1.GetSubVector(l2dofs, loc_rhs);
+         Me_1_inv(e).Mult(loc_rhs, loc_de);
+         de_1.SetSubVector(l2dofs, loc_de);
+      }
 
       // Material 2.
       if (attr == 15 || attr == 20)
