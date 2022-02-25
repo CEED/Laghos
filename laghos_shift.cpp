@@ -1027,6 +1027,10 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
       {
          for (int i = 0; i < ndofs; i++) { e2(k*ndofs + i) = 0.0; }
       }
+      if (attr == 20)
+      {
+         for (int i = 0; i < ndofs; i++) { e1(k*ndofs + i) = 0.0; }
+      }
 
       if (attr == 10 || attr == 15)
       {
