@@ -1013,31 +1013,31 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
 {
    ParFiniteElementSpace &pfes = *e1.ParFESpace();
    const int NE    = pfes.GetNE();
-   const int ndofs = rho1.Size() / NE;
+   const int ndofs = e1.Size() / NE;
 
-   rho1   = 0.0;
-   rho2   = 0.0;
    gamma1 = 0.0;
    gamma2 = 0.0;
-   for (int k = 0; k < NE; k++)
+   rho1   = 0.0;
+   rho2   = 0.0;
+   for (int e = 0; e < NE; e++)
    {
-      const int attr = pfes.GetParMesh()->GetAttribute(k);
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
 
       if (attr == 10)
       {
-         for (int i = 0; i < ndofs; i++) { e2(k*ndofs + i) = 0.0; }
+         for (int i = 0; i < ndofs; i++) { e2(e*ndofs + i) = 0.0; }
       }
       if (attr == 20)
       {
-         for (int i = 0; i < ndofs; i++) { e1(k*ndofs + i) = 0.0; }
+         for (int i = 0; i < ndofs; i++) { e1(e*ndofs + i) = 0.0; }
       }
 
       if (attr == 10 || attr == 15)
       {
          for (int i = 0; i < ndofs; i++)
          {
-            rho1(k*ndofs + i) = 1.0;
-            gamma1(k)         = 5.0 / 3.0;
+            gamma1(e)         = 5.0 / 3.0;
+            rho1(e*ndofs + i) = 1.0;
          }
       }
 
@@ -1045,40 +1045,53 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
       {
          for (int i = 0; i < ndofs; i++)
          {
-            rho2(k*ndofs + i) = 1.0;
-            gamma2(k)         = 5.0 / 3.0;
+            gamma2(e)         = 5.0 / 3.0;
+            rho2(e*ndofs + i) = 1.0;
          }
       }
    }
 }
 
-void InitSod2Mat(ParGridFunction &rho, ParGridFunction &v,
-                 ParGridFunction &e, ParGridFunction &gamma_gf)
+void InitSod2Mat(MaterialData &mat_data)
 {
-   v = 0.0;
-
-   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   std::cout << "Init" << std::endl;
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
-   const int ndofs = rho.Size() / NE;
+   const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
-   for (int i = 0; i < NE; i++)
+
+   mat_data.gamma_1 = 0.0;
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.gamma_2 = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
    {
-      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+
+      if (attr == 10 || attr == 15)
       {
          // Left material (high pressure).
-         r = 1.000; g = 2.0; p = 2.0;
+         r = 1.0, g = 2.0, p = 2.0;
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.gamma_1(e)          = g;
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
+         }
       }
-      else
+
+      if (attr == 15 || attr == 20)
       {
          // Right material (low pressure).
          r = 0.125; g = 1.4; p = 0.1;
-      }
-
-      gamma_gf(i) = g;
-      for (int j = 0; j < ndofs; j++)
-      {
-         rho(i*ndofs + j) = r;
-         e(i*ndofs + j)   = p / r / (g - 1.0);
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.gamma_2(e)          = g;
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
+         }
       }
    }
 }

@@ -458,7 +458,7 @@ int main(int argc, char *argv[])
    }
    if (problem == 8)
    {
-      hydrodynamics::InitSod2Mat(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
+      hydrodynamics::InitSod2Mat(mat_data);
    }
    else if (problem == 9)
    {

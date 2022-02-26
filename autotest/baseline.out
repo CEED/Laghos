@@ -5,12 +5,12 @@ v norm:  0.405258262236
 e1 norm: 0.375140055543
 e2 norm: 1.303623646836
 
-mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.0
+mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.2
 Material marker: 14.950000000000
 Face marker:     0.128190114295
-v norm:  0.000000000000
-e1 norm: 2.000000000000
-e2 norm: 2.000000000000
+v norm:  0.799320066673
+e1 norm: 1.023775920425
+e2 norm: 0.716126348614
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.0 -rs 1
 Material marker: 382.500000000000

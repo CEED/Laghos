@@ -24,7 +24,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Sod 1D
-params="-p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.0"
+params="-p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.2"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
