@@ -1007,37 +1007,35 @@ double ShiftedPointExtractor::GetValue() const
 
 // Initially the energies are initialized as the single material version, due
 // the special Bernstein projection. This only zeroes them in the empty zones.
-void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
-                ParGridFunction &e1, ParGridFunction &e2,
-                ParGridFunction &gamma1, ParGridFunction &gamma2)
+void InitTG2Mat(MaterialData &mat_data)
 {
-   ParFiniteElementSpace &pfes = *e1.ParFESpace();
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
-   const int ndofs = e1.Size() / NE;
+   const int ndofs = mat_data.e_1.Size() / NE;
 
-   gamma1 = 0.0;
-   gamma2 = 0.0;
-   rho1   = 0.0;
-   rho2   = 0.0;
+   mat_data.gamma_1 = 0.0;
+   mat_data.rho0_1  = 0.0;
+   mat_data.gamma_2 = 0.0;
+   mat_data.rho0_2  = 0.0;
    for (int e = 0; e < NE; e++)
    {
       const int attr = pfes.GetParMesh()->GetAttribute(e);
 
       if (attr == 10)
       {
-         for (int i = 0; i < ndofs; i++) { e2(e*ndofs + i) = 0.0; }
+         for (int i = 0; i < ndofs; i++) { mat_data.e_2(e*ndofs + i) = 0.0; }
       }
       if (attr == 20)
       {
-         for (int i = 0; i < ndofs; i++) { e1(e*ndofs + i) = 0.0; }
+         for (int i = 0; i < ndofs; i++) { mat_data.e_1(e*ndofs + i) = 0.0; }
       }
 
       if (attr == 10 || attr == 15)
       {
          for (int i = 0; i < ndofs; i++)
          {
-            gamma1(e)         = 5.0 / 3.0;
-            rho1(e*ndofs + i) = 1.0;
+            mat_data.gamma_1(e)          = 5.0 / 3.0;
+            mat_data.rho0_1(e*ndofs + i) = 1.0;
          }
       }
 
@@ -1045,8 +1043,8 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
       {
          for (int i = 0; i < ndofs; i++)
          {
-            gamma2(e)         = 5.0 / 3.0;
-            rho2(e*ndofs + i) = 1.0;
+            mat_data.gamma_2(e)          = 5.0 / 3.0;
+            mat_data.rho0_2(e*ndofs + i) = 1.0;
          }
       }
    }
@@ -1054,7 +1052,6 @@ void InitTG2Mat(ParGridFunction &rho1, ParGridFunction &rho2,
 
 void InitSod2Mat(MaterialData &mat_data)
 {
-   std::cout << "Init" << std::endl;
    ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
    const int ndofs = mat_data.e_1.Size() / NE;
@@ -1133,36 +1130,49 @@ void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
    }
 }
 
-void InitTriPoint2Mat(ParGridFunction &rho, ParGridFunction &v,
-                      ParGridFunction &e, ParGridFunction &gamma_gf)
+void InitTriPoint2Mat(MaterialData &mat_data)
 {
-   MFEM_VERIFY(rho.ParFESpace()->GetMesh()->Dimension() == 2, "2D only.");
-
-   v = 0.0;
-   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
-   const int ndofs = rho.Size() / NE;
+   const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
-   for (int i = 0; i < NE; i++)
+
+   mat_data.gamma_1 = 0.0;
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.gamma_2 = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
    {
-      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+
+      if (attr == 10 || attr == 15)
       {
+         // Left material (high pressure).
          r = 1.0; g = 1.5; p = 1.0;
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.gamma_1(e)          = g;
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
+         }
       }
-      else
+
+      if (attr == 15 || attr == 20)
       {
+         // Right material (low pressure).
          p = 0.1;
          Vector center(2);
-         pfes.GetParMesh()->GetElementCenter(i, center);
+         pfes.GetParMesh()->GetElementCenter(e, center);
          r = (center(1) < 1.5) ? 1.0 : 0.125;
          g = (center(1) < 1.5) ? 1.4 : 1.5;
-      }
-
-      gamma_gf(i) = g;
-      for (int j = 0; j < ndofs; j++)
-      {
-         rho(i*ndofs + j) = r;
-         e(i*ndofs + j)   = p / r / (g - 1.0);
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.gamma_2(e)          = g;
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
+         }
       }
    }
 }

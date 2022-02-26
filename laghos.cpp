@@ -450,24 +450,13 @@ int main(int argc, char *argv[])
    }
 
    // Set the initial condition based on the materials.
-   if (problem == 0)
-   {
-      hydrodynamics::InitTG2Mat(mat_data.rho0_1, mat_data.rho0_2,
-                                mat_data.e_1, mat_data.e_2,
-                                mat_data.gamma_1, mat_data.gamma_2);
-   }
-   if (problem == 8)
-   {
-      hydrodynamics::InitSod2Mat(mat_data);
-   }
+   if (problem == 0) { hydrodynamics::InitTG2Mat(mat_data); }
+   if (problem == 8) { hydrodynamics::InitSod2Mat(mat_data); }
    else if (problem == 9)
    {
       hydrodynamics::InitWaterAir(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
    }
-   else if (problem == 10)
-   {
-      hydrodynamics::InitTriPoint2Mat(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
-   }
+   else if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
    InterfaceRhoCoeff rho_jump_coeff(mat_data.level_set,
                                     mat_data.rho0_1, mat_data.rho0_2);
 
