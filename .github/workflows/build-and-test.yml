@@ -46,8 +46,8 @@ jobs:
       if: steps.hypre-cache.outputs.cache-hit != 'true'
       uses: mfem/github-actions/build-hypre@master
       with:
-        hypre-archive: ${{ env.HYPRE_ARCHIVE }}
-        hypre-dir: ${{ env.HYPRE_TOP_DIR }}
+        archive: ${{ env.HYPRE_ARCHIVE }}
+        dir: ${{ env.HYPRE_TOP_DIR }}
 
     # Get Metis through cache, or build it.
     # Install will only run on cache miss.
@@ -62,8 +62,8 @@ jobs:
       if: steps.metis-cache.outputs.cache-hit != 'true'
       uses: mfem/github-actions/build-metis@master
       with:
-        metis-archive: ${{ env.METIS_ARCHIVE }}
-        metis-dir: ${{ env.METIS_TOP_DIR }}
+        archive: ${{ env.METIS_ARCHIVE }}
+        dir: ${{ env.METIS_TOP_DIR }}
 
     # make generic links to libraries for MFEM install
     # Those links are already created by build-mfem action, but not when the cache is used...
