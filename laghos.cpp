@@ -52,7 +52,7 @@ static int problem, dim;
 char vishost[] = "localhost";
 int  visport   = 19916;
 const int ws = 280; // window size
-socketstream vis_mat, vis_faces, vis_rho_1, vis_rho_2,
+socketstream vis_mat, vis_faces, vis_alpha, vis_rho_1, vis_rho_2,
              vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_xi, vis_dist;
 
 // Forward declarations.
@@ -351,6 +351,8 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    mat_data.gamma_1.SetSpace(&mat_fes);
    mat_data.gamma_2.SetSpace(&mat_fes);
+   mat_data.alpha_1.SetSpace(&mat_fes);
+   mat_data.alpha_1 = 77.0;
    FunctionCoefficient mat_coeff(gamma_func);
    mat_data.gamma_1.ProjectCoefficient(mat_coeff);
 
@@ -844,13 +846,15 @@ int main(int argc, char *argv[])
    ConstantCoefficient zero(0.0);
    double err_v  = v_gf.ComputeL1Error(zero),
           err_e_1 = mat_data.e_1.ComputeL1Error(zero),
-          err_e_2 = mat_data.e_2.ComputeL1Error(zero);
+          err_e_2 = mat_data.e_2.ComputeL1Error(zero),
+          err_a   = mat_data.alpha_1.ComputeL1Error(zero);
    if (myid == 0)
    {
       cout << std::fixed << std::setprecision(12)
-           << "v norm:  " << err_v << std::endl
-           << "e1 norm: " << err_e_1 << std::endl
-           << "e2 norm: " << err_e_2 << std::endl;
+           << "alpha norm: " << err_a << std::endl
+           << "v norm:     " << err_v << std::endl
+           << "e1 norm:    " << err_e_1 << std::endl
+           << "e2 norm:    " << err_e_2 << std::endl;
    }
 
    switch (ode_solver_type)
@@ -1131,6 +1135,10 @@ void visualize(MaterialData &mat_data,
    hydrodynamics::VisualizeField(vis_faces, vishost, visport,
                                  faces, "Face Marking",
                                  ws, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_alpha, vishost, visport,
+                                 mat_data.alpha_1, "Volume Fraction 1",
+                                 2*ws, wy, ws, ws, false,
+                                 "mAcRjlpppppppppppppppppppppp");
 
    wy = ws + 65;
    hydrodynamics::VisualizeField(vis_v, vishost, visport,

@@ -31,7 +31,7 @@ namespace hydrodynamics
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
-                    int x, int y, int w, int h, bool vec)
+                    int x, int y, int w, int h, bool vec, const char *keys_in)
 {
    gf.HostRead();
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
@@ -68,7 +68,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
          sock << "window_title '" << title << "'\n"
               << "window_geometry "
               << x << " " << y << " " << w << " " << h << "\n"
-              << "keys " << keys;
+              << "keys " << (keys_in ? keys_in : keys);
          if ( vec ) { sock << "vvv"; }
          sock << std::endl;
       }
@@ -620,6 +620,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // Update the pressure values (used for the shifted interface method).
    mat_data.p_1->UpdatePressure(e_1);
    mat_data.p_2->UpdatePressure(e_2);
+   mat_data.UpdateAlpha();
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this

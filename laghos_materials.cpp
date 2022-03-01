@@ -24,6 +24,31 @@ namespace mfem
 namespace hydrodynamics
 {
 
+void MaterialData::UpdateAlpha()
+{
+   auto pfes = *alpha_1.ParFESpace();
+   const IntegrationRule &ir = IntRules.Get(pfes.GetFE(0)->GetGeomType(), 20);
+   const int NE = alpha_1.ParFESpace()->GetNE(),
+             nqp = ir.GetNPoints();
+   Vector ls_vals;
+
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation &Tr = *pfes.GetElementTransformation(e);
+      level_set.GetValues(Tr, ir, ls_vals);
+      double volume_1 = 0.0, volume = 0.0;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         volume   += ip.weight * Tr.Weight();
+         volume_1 += ip.weight * Tr.Weight() *
+                     ((ls_vals(q) < 0.0) ? 1.0 : 0.0);
+      }
+      alpha_1(e) = volume_1 / volume;
+   }
+}
+
 PressureFunction::PressureFunction(int prob, ParMesh &pmesh,
                                    PressureSpace space,
                                    ParGridFunction &rho0,
