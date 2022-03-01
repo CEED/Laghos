@@ -29,8 +29,8 @@ PressureFunction::PressureFunction(int prob, ParMesh &pmesh,
                                    ParGridFunction &rho0,
                                    ParGridFunction &gamma)
    : problem(prob), p_space(space),
-     p_fec_L2(p_order, pmesh.Dimension(), basis_type),
-     p_fec_H1(p_order, pmesh.Dimension(), basis_type),
+     p_fec_L2(p_order, pmesh.Dimension(), BasisType::GaussLegendre),
+     p_fec_H1(p_order, pmesh.Dimension(), BasisType::GaussLobatto),
      p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
      p_L2(&p_fes_L2), p_H1(&p_fes_H1),
      rho0DetJ0(p_L2.Size()), gamma_gf(gamma)
@@ -42,48 +42,48 @@ PressureFunction::PressureFunction(int prob, ParMesh &pmesh,
    const int nqp = rho0DetJ0.Size() / NE;
 
    Vector rho_vals(nqp);
-   for (int i = 0; i < NE; i++)
+   for (int e = 0; e < NE; e++)
    {
       // The points (and their numbering) coincide with the nodes of p.
-      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
-      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
+      const IntegrationRule &ir = p_fes_L2.GetFE(e)->GetNodes();
+      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
 
       rho0.GetValues(Tr, ir, rho_vals);
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         rho0DetJ0(i * nqp + q) = Tr.Weight() * rho_vals(q);
+         rho0DetJ0(e * nqp + q) = Tr.Weight() * rho_vals(q);
       }
    }
 }
 
-void PressureFunction::UpdatePressure(const ParGridFunction &e)
+void PressureFunction::UpdatePressure(const ParGridFunction &energy)
 {
    const int NE = p_fes_L2.GetParMesh()->GetNE();
    Vector e_vals;
 
    // Compute L2 pressure element by element.
-   for (int i = 0; i < NE; i++)
+   for (int e = 0; e < NE; e++)
    {
       // The points (and their numbering) coincide with the nodes of p.
-      const IntegrationRule &ir = p_fes_L2.GetFE(i)->GetNodes();
+      const IntegrationRule &ir = p_fes_L2.GetFE(e)->GetNodes();
       const int nqp = ir.GetNPoints();
-      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(i);
+      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
 
-      e.GetValues(Tr, ir, e_vals);
+      energy.GetValues(Tr, ir, e_vals);
 
       for (int q = 0; q < ir.GetNPoints(); q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         double rho = rho0DetJ0(i * nqp + q) / Tr.Weight();
-         p_L2(i * nqp + q) = fmax(1e-5, (gamma_gf(i) - 1.0) * rho * e_vals(q));
+         double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+         p_L2(e * nqp + q) = fmax(1e-5, (gamma_gf(e) - 1.0) * rho * e_vals(q));
 
-         if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(i) == 1)
+         if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(e) == 1)
          {
             // Water pressure in the water/air test.
-            p_L2(i * nqp + q) -= gamma_gf(i) * 6.0e8;
+            p_L2(e * nqp + q) -= gamma_gf(e) * 6.0e8;
          }
       }
    }

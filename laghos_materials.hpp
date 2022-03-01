@@ -33,7 +33,6 @@ private:
    const int problem;
    PressureSpace p_space;
    const int p_order     = 1;
-   const int basis_type  = BasisType::GaussLobatto;
 
    L2_FECollection p_fec_L2;
    H1_FECollection p_fec_H1;
@@ -47,7 +46,7 @@ public:
    PressureFunction(int prob, ParMesh &pmesh, PressureSpace space,
                     ParGridFunction &rho0, ParGridFunction &gamma);
 
-   void UpdatePressure(const ParGridFunction &e);
+   void UpdatePressure(const ParGridFunction &energy);
 
    ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
 

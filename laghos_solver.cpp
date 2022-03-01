@@ -21,6 +21,8 @@
 
 #ifdef MFEM_USE_MPI
 
+using namespace std;
+
 namespace mfem
 {
 
