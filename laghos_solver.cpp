@@ -269,9 +269,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    //
 
    // Interface forces.
-   auto *ffi = new FaceForceIntegrator(mat_data.p_1->GetPressure(),
-                                       mat_data.gamma_1,
-                                       dist_coeff, cfqdata);
+   auto *ffi = new FaceForceIntegrator(mat_data, dist_coeff, cfqdata);
    ffi->SetIntRule(cfir);
    ffi->SetShiftType(si_options.v_shift_type);
    ffi->SetScale(si_options.v_shift_scale);

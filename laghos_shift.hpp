@@ -85,7 +85,7 @@ class FaceForceIntegrator : public BilinearFormIntegrator
 {
 private:
    Vector h1_shape_face, h1_shape, l2_shape;
-   const ParGridFunction &p, &gamma;
+   const MaterialData &mat_data;
    const ParGridFunction *v = nullptr;
    VectorCoefficient &dist;
 
@@ -97,9 +97,9 @@ private:
    CutFaceQuadratureData &qdata;
 
   public:
-   FaceForceIntegrator(const ParGridFunction &p_gf, const ParGridFunction &g_gf,
-                       VectorCoefficient &d, CutFaceQuadratureData &cfqdata)
-   : p(p_gf), gamma(g_gf), dist(d), qdata(cfqdata) { }
+   FaceForceIntegrator(const MaterialData &mdata, VectorCoefficient &d,
+                       CutFaceQuadratureData &cfqdata)
+   : mat_data(mdata), dist(d), qdata(cfqdata) { }
 
    // Goes over all H1 volumetric dofs in both cells around the interface.
    void AssembleFaceMatrix(const FiniteElement &trial_fe,
