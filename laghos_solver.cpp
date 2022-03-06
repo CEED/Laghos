@@ -125,7 +125,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    cfqdata(),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force_1(&H1, &L2), Force_2(&H1, &L2), FaceForce(&H1, &L2), FaceForce_e(&L2),
+   Force_1(&H1, &L2), Force_2(&H1, &L2), FaceForce(&H1, &L2),
+   FaceForceEnergy_1(&L2), FaceForceEnergy_2(&L2),
    one(L2Vsize),
    rhs(H1Vsize),
    si_options(si_opt), mat_data(m_data)
@@ -277,14 +278,20 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForce.AddFaceIntegrator(ffi);
 
    Array<int> attr;
-   auto *efi = new EnergyInterfaceIntegrator(mat_data.p_1->GetPressure(),
-                                             mat_data.gamma_1,
-                                             dist_coeff, cfqdata);
-   efi->SetIntRule(cfir);
-   efi->e_shift_type    = si_options.e_shift_type;
-   efi->diffusion       = si_options.e_shift_diffusion;
-   efi->diffusion_scale = si_options.e_shift_diffusion_scale;
-   FaceForce_e.AddTraceFaceIntegrator(efi, attr);
+   auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data,
+                                               dist_coeff, cfqdata);
+   efi_1->SetIntRule(cfir);
+   efi_1->e_shift_type    = si_options.e_shift_type;
+   efi_1->diffusion       = si_options.e_shift_diffusion;
+   efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
+   FaceForceEnergy_1.AddTraceFaceIntegrator(efi_1, attr);
+   auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data,
+                                               dist_coeff, cfqdata);
+   efi_2->SetIntRule(cfir);
+   efi_2->e_shift_type    = si_options.e_shift_type;
+   efi_2->diffusion       = si_options.e_shift_diffusion;
+   efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
+   FaceForceEnergy_2.AddTraceFaceIntegrator(efi_2, attr);
 
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
@@ -394,17 +401,22 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
-   ParGridFunction vel, en;
+   ParGridFunction vel, energy_1, energy_2;
    Vector *vptr = const_cast<Vector*>(&v);
    Vector *sptr = const_cast<Vector*>(&S);
    vel.MakeRef(&H1, *vptr, 0);
-   en.MakeRef(&L2,  *sptr, 2*H1.GetVSize());
+   energy_1.MakeRef(&L2,  *sptr, 2*H1.GetVSize());
+   energy_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
    auto tfi_v = FaceForce.GetFBFI();
    auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
-   auto tfi_e = FaceForce_e.GetTLFI();
-   auto e_integ = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e)[0]);
+   auto tfi_e_1 = FaceForceEnergy_1.GetTLFI();
+   auto e_integ_1 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_1)[0]);
+   auto tfi_e_2 = FaceForceEnergy_2.GetTLFI();
+   auto e_integ_2 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_2)[0]);
    v_integ->SetVelocity(vel);
-   e_integ->SetVandE(&vel, &en);
+   e_integ_1->SetVandE(&vel, &energy_1);
+   e_integ_2->SetVandE(&vel, &energy_2);
+
    UpdateQuadratureData(S);
    AssembleForceMatrix();
 
@@ -437,8 +449,10 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs_1, 1.0); }
    if (si_options.e_shift_type > 1)
    {
-      FaceForce_e.Assemble();
-      e_rhs_1 -= FaceForce_e;
+      FaceForceEnergy_1.Assemble();
+      e_rhs_1 -= FaceForceEnergy_1;
+      FaceForceEnergy_2.Assemble();
+      e_rhs_2 -= FaceForceEnergy_2;
    }
 //   std::cout << "e rhs diff: " << std::scientific
 //             << fabs(e_rhs_1.Norml2() - eold) << std::endl;
@@ -469,7 +483,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    delete e_source;
 
    v_integ->UnsetVelocity();
-   e_integ->UnsetVandE();
+   e_integ_1->UnsetVandE();
+   e_integ_2->UnsetVandE();
 }
 
 void LagrangianHydroOperator::UpdateMesh(const Vector &S) const

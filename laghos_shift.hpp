@@ -125,7 +125,9 @@ private:
 class EnergyInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
-   const ParGridFunction &p, &gamma;
+   // What's the material that uses it to construct energy RHS.
+   const int mat_id;
+   const MaterialData &mat_data;
    const ParGridFunction *v = nullptr, *e = nullptr;
    VectorCoefficient &dist;
 
@@ -136,11 +138,10 @@ public:
    bool diffusion = false;
    double diffusion_scale = 1.0;
 
-   EnergyInterfaceIntegrator(const ParGridFunction &p_gf,
-                             const ParGridFunction &g_gf,
+   EnergyInterfaceIntegrator(int m_id, const MaterialData &mdata,
                              VectorCoefficient &d,
                              CutFaceQuadratureData &cfqdata)
-      : p(p_gf), gamma(g_gf), dist(d), qdata_face(cfqdata) { }
+      : mat_id(m_id), mat_data(mdata), dist(d), qdata_face(cfqdata) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,
