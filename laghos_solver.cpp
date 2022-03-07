@@ -293,11 +293,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
    FaceForceEnergy_2.AddTraceFaceIntegrator(efi_2, attr);
 
-   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
+   if (si_options.v_shift_type > 0)
    {
       // Make a dummy assembly to figure out the new sparsity.
-      ParGridFunction &p_tmp = mat_data.p_1->GetPressure();
-      p_tmp = 1.0;
+      ParGridFunction &p_tmp_1 = mat_data.p_1->GetPressure(),
+                      &p_tmp_2 = mat_data.p_2->GetPressure();
+      p_tmp_1 = 1.0;
+      p_tmp_2 = 1.0;
+      mat_data.UpdateAlpha();
       FaceForce.Assemble(0);
       FaceForce.Finalize(0);
    }
@@ -367,8 +370,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
-//   std::cout << "v rhs diff: " << std::scientific
-//             << fabs(rhs.Norml2() - vold) << std::endl;
+   std::cout << "v rhs diff: " << std::scientific
+             << fabs(rhs.Norml2() - vold) << std::endl;
 
    rhs.Neg();
 
@@ -445,7 +448,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
 
-   const double eold = e_rhs_1.Norml2();
+   const double eold_1 = e_rhs_1.Norml2(),
+                eold_2 = e_rhs_2.Norml2();
    if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs_1, 1.0); }
    if (si_options.e_shift_type > 1)
    {
@@ -454,8 +458,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       FaceForceEnergy_2.Assemble();
       e_rhs_2 -= FaceForceEnergy_2;
    }
-//   std::cout << "e rhs diff: " << std::scientific
-//             << fabs(e_rhs_1.Norml2() - eold) << std::endl;
+   cout << "e rhs diff: " << std::scientific
+        << fabs(e_rhs_1.Norml2() - eold_1) << " "
+        << fabs(e_rhs_2.Norml2() - eold_2) << endl;
 
    if (e_source) { e_rhs_1 += *e_source; e_rhs_2 += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
@@ -814,7 +819,7 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    Force_1.Assemble();
    Force_2 = 0.0;
    Force_2.Assemble();
-   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
+   if (si_options.v_shift_type > 0)
    {
       FaceForce = 0.0;
       FaceForce.Assemble();

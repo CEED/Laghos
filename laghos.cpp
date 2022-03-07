@@ -102,6 +102,10 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
 
+   bool multimat = true;
+   int  shift_v  = 0;
+   int  shift_e  = 0;
+
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&zones, "-z", "--zones_1d", "1D zones for problem 8.");
@@ -146,6 +150,10 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&multimat, "-mm", "--multimat", "-no-mm", "--no-multimat",
+                  "Enable multiple materials with mixed zones.");
+   args.AddOption(&shift_v, "-s_v", "--shift_v", "Shift v type");
+   args.AddOption(&shift_e, "-s_e", "--shift_e", "Shift e type");
    args.Parse();
    if (!args.Good())
    {
@@ -369,7 +377,7 @@ int main(int argc, char *argv[])
    // 3: - < [(p + grad_p.d) * grad_psi.d] n >
    // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
    // 5: - < [grad_p.d] [psi + grad_psi.d] n >
-   si_options.v_shift_type = 0;
+   si_options.v_shift_type = shift_v;
    // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
    si_options.v_shift_scale = -1.0;
    // Activate the momentum diffusion term.
@@ -386,7 +394,7 @@ int main(int argc, char *argv[])
    // 5: - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>
    //    - < [p + grad_p.d].v {phi} >
    // 6: + < |[((grad_v d).n) n]| [p] [phi] >
-   si_options.e_shift_type = 0;
+   si_options.e_shift_type = shift_e;
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
@@ -395,9 +403,7 @@ int main(int argc, char *argv[])
    const bool do_ale = false;
    const double ale_period = 1.0;
 
-//   const bool pure_test = (si_options.v_shift_type > 0 ||
-//                           si_options.e_shift_type > 0) ? false : true;
-   const bool pure_test = false;
+   const bool pure_test = (multimat == false);
    const bool calc_dist = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? true : false;
 
@@ -414,16 +420,21 @@ int main(int argc, char *argv[])
    ParGridFunction materials(&mat_fes);
    SIMarker marker(mat_data.level_set);
    int zone_id_L, zone_id_R;
-   for (int i = 0; i < NE; i++)
+   for (int e = 0; e < NE; e++)
    {
-      int mat_id = marker.GetMaterialID(i);
-      pmesh->SetAttribute(i, mat_id);
-      materials(i) = pmesh->GetAttribute(i);
-      if (i > 0 && materials(i-1) == 0 && materials(i) == 1)
+      int mat_id = marker.GetMaterialID(e);
+      pmesh->SetAttribute(e, mat_id);
+      materials(e) = pmesh->GetAttribute(e);
+
+      // Relevant only for the 1D tests.
+      if (e > 0 && materials(e-1) == 10 && materials(e) != 10)
       {
-         // Relevant only for the 1D tests.
-         zone_id_L = i-1;
-         zone_id_R = i;
+
+         zone_id_L = e-1;
+      }
+      if (e > 0 && materials(e-1) != 20 && materials(e) == 20)
+      {
+         zone_id_R = e;
       }
    }
    marker.MarkFaceAttributes(pfes_xi);
@@ -555,7 +566,8 @@ int main(int argc, char *argv[])
                "Point extraction works inly in serial.");
 
    const double dx = 1.0 / NE;
-   ParGridFunction &pe_gf = hydro.GetPressure(e_gf);
+   ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.e_1);
+   ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.e_2);
    Vector point_interface(1), point_face(1);
    point_interface(0) = 0.5;
    if (problem ==8)
@@ -567,7 +579,7 @@ int main(int argc, char *argv[])
       point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
    }
    point_face(0) = zone_id_R * dx;
-   std::cout << zone_id_L << " " << zone_id_R << std::endl;
+   cout << "Elements: " << zone_id_L << " " << zone_id_R << endl;
    std::cout << "True interface: " << point_interface(0) << std::endl
              << "Surrogate:      " << point_face(0) <<  std::endl
              << "dx:             " << dx << std::endl;
@@ -591,17 +603,21 @@ int main(int argc, char *argv[])
 
    //hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
    //hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
-   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face, e_gf, enameFL);
-   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face, e_gf, enameFR);
-   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face, e_gf,
+   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face,
+                                          mat_data.e_1, enameFL);
+   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face,
+                                          mat_data.e_2, enameFR);
+   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face,
+                                                  mat_data.e_1,
                                                   dist, enameSL);
-   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_R, point_face, e_gf,
+   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_R, point_face,
+                                                  mat_data.e_2,
                                                   dist, enameSR);
-   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, pe_gf, pnameFL);
-   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, pe_gf, pnameFR);
-   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, pe_gf,
+   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, p_1_gf, pnameFL);
+   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, p_2_gf, pnameFR);
+   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, p_1_gf,
                                                   dist, pnameSL);
-   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, pe_gf,
+   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, p_2_gf,
                                                   dist, pnameSR);
    //v_extr.WriteValue(0.0);
    //x_extr.WriteValue(0.0);

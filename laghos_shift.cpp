@@ -131,14 +131,17 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
             const double dx = sqrt(1.0 / glob_NE);
 
             // The middle of the element after x = 0.5.
-            return tanh(x(0) - (0.5 + dx/2.0));
+            return (pure_test) ? tanh(x(0) - 0.5)
+                               : tanh(x(0) - (0.5 + 0.5 * dx));
          }
          else if (mode_TG == 1)
          {
+            MFEM_VERIFY(pure_test == false, "Can't do a pure diagonal.");
             return tanh(x(0) - x(1));
          }
          else if (mode_TG == 2)
          {
+            MFEM_VERIFY(pure_test == false, "Can't do a pure circle.");
             double center[3] = {0.5, 0.5, 0.5};
             double rad = 0.0;
             for (int d = 0; d < dim; d++)
@@ -319,7 +322,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       dist.Eval(d_q, Trans_e1, ip_e1);
       const double grad_p_d_q1 = d_q * p_grad_q1;
-      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+      const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
       const double rho1 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
             Trans_e1.Weight();
@@ -333,7 +336,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       Trans_e2.SetIntPoint(&ip_e2);
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       const double grad_p_d2 = d_q * p_grad_q2;
-      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+      const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
       const double rho2 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
             Trans_e2.Weight();
@@ -731,13 +734,13 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       else { CalcOrtho(Trans.Jacobian(), nor); }
 
       // 1st element stuff.
-      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+      const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
       dist.Eval(d_q, Trans_e1, ip_e1);
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       v->GetVectorGradient(Trans_e1, v_grad_q1);
 
       // 2nd element stuff.
-      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+      const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       v->GetVectorGradient(Trans_e2, v_grad_q2);
 
