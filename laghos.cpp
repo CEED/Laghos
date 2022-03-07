@@ -53,7 +53,7 @@ char vishost[] = "localhost";
 int  visport   = 19916;
 const int ws = 280; // window size
 socketstream vis_mat, vis_faces, vis_alpha, vis_rho_1, vis_rho_2,
-             vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_xi, vis_dist;
+             vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_p, vis_xi, vis_dist;
 
 // Forward declarations.
 double e0(const Vector &);
@@ -506,6 +506,7 @@ int main(int argc, char *argv[])
                                        mat_data.rho0_1, mat_data.gamma_1);
    mat_data.p_2 = new PressureFunction(problem, *pmesh, si_options.p_space,
                                        mat_data.rho0_2, mat_data.gamma_2);
+   mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho_jump_coeff,
@@ -1143,6 +1144,7 @@ void visualize(MaterialData &mat_data,
 
    ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.e_1),
                    &pressure_2 = mat_data.p_2->ComputePressure(mat_data.e_2);
+   mat_data.ComputeTotalPressure(pressure_1, pressure_2);
 
    int wy = 0;
    hydrodynamics::VisualizeField(vis_mat, vishost, visport,
@@ -1166,6 +1168,9 @@ void visualize(MaterialData &mat_data,
    hydrodynamics::VisualizeField(vis_dist, vishost, visport,
                                  dist, "Distances",
                                  2*ws, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_p, vishost, visport,
+                                 mat_data.p, "Pressure",
+                                 3*ws, wy, ws, ws);
 
    wy = 2*ws + 100;
    hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,

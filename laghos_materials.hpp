@@ -66,11 +66,14 @@ struct MaterialData
    ParGridFunction  rho0_1, rho0_2;   // not updated - use only at time zero!
    ParGridFunction  e_1, e_2;         // evolved by the ODESolver.
    PressureFunction *p_1, *p_2;       // recomputed in UpdateQuadratureData().
+   ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1;          // recomputed in UpdateQuadratureData().
 
    MaterialData() : p_1(nullptr), p_2(nullptr) { }
 
    void UpdateAlpha();
+   void ComputeTotalPressure(const ParGridFunction &p1_gf,
+                             const ParGridFunction &p2_gf);
 
    ~MaterialData()
    {

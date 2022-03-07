@@ -49,6 +49,26 @@ void MaterialData::UpdateAlpha()
    }
 }
 
+void MaterialData::ComputeTotalPressure(const ParGridFunction &p1_gf,
+                                        const ParGridFunction &p2_gf)
+{
+   auto pfes = *p1_gf.ParFESpace();
+   const int NE = pfes.GetNE();
+   Vector ls_vals;
+   for (int e = 0; e < NE; e++)
+   {
+      const IntegrationRule &ir = pfes.GetFE(e)->GetNodes();
+      ElementTransformation &Tr = *pfes.GetElementTransformation(e);
+      level_set.GetValues(Tr, ir, ls_vals);
+      const int nqp = ir.GetNPoints();
+      for (int q = 0; q < nqp; q++)
+      {
+         p(e * nqp + q) = (ls_vals(q) < 0.0) ? p1_gf(e * nqp + q)
+                                             : p2_gf(e * nqp + q);
+      }
+   }
+}
+
 PressureFunction::PressureFunction(int prob, ParMesh &pmesh,
                                    PressureSpace space,
                                    ParGridFunction &rho0,
