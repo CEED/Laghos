@@ -960,61 +960,20 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    }
 }
 
-int FindPointDOF(const int z_id, const Vector &xyz,
-                 const ParFiniteElementSpace &pfes)
-{
-   const IntegrationRule &ir = pfes.GetFE(z_id)->GetNodes();
-   const int dofs_cnt = ir.GetNPoints(), dim = pfes.GetParMesh()->Dimension();
-   ElementTransformation &tr = *pfes.GetElementTransformation(z_id);
-   Vector position;
-   Array<int> dofs;
-   double eps = 1e-8;
-   pfes.GetElementDofs(z_id, dofs);
-   for (int j = 0; j < dofs_cnt; j++)
-   {
-      pfes.GetElementDofs(z_id, dofs);
-      const IntegrationPoint &ip = ir.IntPoint(j);
-      tr.SetIntPoint(&ip);
-      tr.Transform(ip, position);
-      bool found = true;
-      for (int d = 0; d < dim; d++)
-      {
-        //std::cout << j << " " << dofs[j] << " " << position(d) << " " << xyz(d) << std::endl;
-         if (fabs(position(d) - xyz(d)) > eps) { found = false; break; }
-      }
-
-      if (found) { return dofs[j]; }
-   }
-   return -1;
-}
-
-void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes)
-{
-   MFEM_VERIFY(pfes.GetNRanks() == 1, "PointExtractor works only in serial.");
-
-   const int NE = pfes.GetNE();
-   int dof_id;
-   for (int i = 0; i < NE; i++)
-   {
-      dof_id = FindPointDOF(i, xyz, pfes);
-      if (dof_id > 0)
-      {
-         std::cout << "Element " << i << "; Dof: " << dof_id << endl;
-      }
-   }
-}
-
-PointExtractor::PointExtractor(int z_id, Vector &xyz,
-                               const ParGridFunction &gf,
-                               std::string filename)
-   : g(gf), dof_id(-1), fstream(filename)
+PointExtractor::PointExtractor(int zone, Vector &xyz, const ParGridFunction &gf,
+                               const IntegrationRule &ir, std::string filename)
+   : g(gf), z_id(zone), ip(), fstream(filename)
 {
    ParFiniteElementSpace &pfes = *gf.ParFESpace();
    MFEM_VERIFY(pfes.GetNRanks() == 1, "PointExtractor works only in serial.");
+   MFEM_VERIFY(pfes.GetMesh()->Dimension() == 1, "Only implemented in 1D.");
 
-   dof_id = FindPointDOF(z_id, xyz, pfes);
-   MFEM_VERIFY(dof_id > -1,
-               "Wrong zone specification for extraction " << filename);
+   // Find the integration point and copy it.
+   int q_id = FindIntegrPoint(zone, xyz, ir);
+   ip = ir.IntPoint(q_id);
+   MFEM_VERIFY(q_id > -1,
+               "Integration point not found " << filename);
+   cout << filename << ": Element " << zone << "; Quad: " << q_id << endl;
 
    fstream.precision(8);
 }
@@ -1025,61 +984,36 @@ void PointExtractor::WriteValue(double time)
    fstream.flush();
 }
 
-ShiftedPointExtractor::ShiftedPointExtractor(int z_id, Vector &xyz,
-                                             const ParGridFunction &gf,
-                                             const ParGridFunction &d,
-                                             string filename)
-   : PointExtractor(z_id, xyz, gf, filename),
-     dist(d), zone_id(z_id), dist_dof_id(-1)
+int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
+                                    const IntegrationRule &ir)
 {
-   ParFiniteElementSpace &pfes = *dist.ParFESpace();
-   MFEM_VERIFY(pfes.GetNRanks() == 1,
-               "ShiftedPointExtractor works only in serial.");
-
-   dist_dof_id = FindPointDOF(z_id, xyz, pfes);
-   MFEM_VERIFY(dist_dof_id > -1,
-               "Wrong zone specification for extraction (distance field).");
+   const int nqp = ir.GetNPoints();
+   ElementTransformation &tr =
+         *g.ParFESpace()->GetMesh()->GetElementTransformation(z_id);
+   Vector position;
+   const double eps = 1e-8;
+   for (int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = ir.IntPoint(q);
+      tr.SetIntPoint(&ip);
+      tr.Transform(ip, position);
+      // Assumes 1D.
+      if (fabs(position(0) - xyz(0)) < eps) { return q; }
+   }
+   return -1;
 }
 
 double ShiftedPointExtractor::GetValue() const
 {
    ParFiniteElementSpace &pfes = *g.ParFESpace();
-   const FiniteElement &el = *pfes.GetFE(zone_id);
-   const int dim = el.GetDim(), dof = el.GetDof();
+   Vector grad_g(1);
 
-   DenseMatrix grad_e;
+   ElementTransformation &tr = *pfes.GetElementTransformation(z_id);
+   tr.SetIntPoint(&ip);
+   g.GetGradient(*pfes.GetElementTransformation(z_id), grad_g);
 
-   // It it Bernstein?
-   auto pfe = dynamic_cast<const PositiveFiniteElement *>(&el);
-   if (pfe)
-   {
-      const IntegrationRule &ir = el.GetNodes();
-      g.GetGradients(*pfes.GetElementTransformation(zone_id), ir, grad_e);
-      grad_e.Transpose();
-   }
-   else
-   {
-      // Gradient of the field at the point.
-      GradAtLocalDofs(*pfes.GetElementTransformation(zone_id), g, grad_e);
-   }
-
-   Array<int> dofs;
-   pfes.GetElementDofs(zone_id, dofs);
-   int loc_dof_id = -1;
-   for (int i = 0; i < dof; i++)
-   {
-      if (dofs[i] == dof_id) { loc_dof_id = i; break; }
-   }
-   MFEM_VERIFY(loc_dof_id >= 0, "Can't find the dof in the zone!");
-
-   double res = g(dof_id);
-   const int dsize = dist.Size();
-   for (int d = 0; d < dim; d++)
-   {
-      res += dist(dsize*d + dist_dof_id) * grad_e(loc_dof_id, d);
-   }
-
-   return res;
+   // Assumes 1D.
+   return g.GetValue(z_id, ip) + dist.GetValue(z_id, ip) * grad_g(0);
 }
 
 // Initially the energies are initialized as the single material version, due

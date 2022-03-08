@@ -158,7 +158,8 @@ public:
    void UnsetVandE() { v = nullptr; e = nullptr; }
 };
 
-void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes);
+void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes,
+                      std::string text);
 
 class PointExtractor
 {
@@ -167,17 +168,21 @@ protected:
 
    const ParGridFunction &g;
    // -1 if the point is not in the current MPI task.
-   int dof_id;
+   int z_id;
+   IntegrationPoint ip;
+
+   int FindIntegrPoint(const int z_id, const Vector &xyz,
+                       const IntegrationRule &ir);
 
 public:
    // The assumption is that the point concides with one of the DOFs of the
    // input GridFunction's nodes.
-   PointExtractor(int z_id, Vector &xyz, const ParGridFunction &gf,
-                  std::string filename);
+   PointExtractor(int zone, Vector &xyz, const ParGridFunction &gf,
+                  const IntegrationRule &ir, std::string filename);
 
    ~PointExtractor() { fstream.close(); }
 
-   virtual double GetValue() const { return g(dof_id); }
+   virtual double GetValue() const { return g.GetValue(z_id, ip); }
    void WriteValue(double time);
 };
 
@@ -185,14 +190,14 @@ class ShiftedPointExtractor : public PointExtractor
 {
 protected:
    const ParGridFunction &dist;
-   int zone_id, dist_dof_id;
 
 public:
-   ShiftedPointExtractor(int z_id, Vector &xyz, const ParGridFunction &gf,
-                         const ParGridFunction &d, std::string filename);
+   ShiftedPointExtractor(int zone, Vector &xyz,
+                         const ParGridFunction &gf, const ParGridFunction &d,
+                         const IntegrationRule &ir, std::string filename)
+      : PointExtractor(zone, xyz, gf, ir, filename), dist(d) { }
 
    virtual double GetValue() const;
-   void PrintDofId() const { std::cout << dof_id << std::endl; }
 };
 
 void InitTG2Mat(MaterialData &mat_data);

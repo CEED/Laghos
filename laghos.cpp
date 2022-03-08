@@ -419,7 +419,7 @@ int main(int argc, char *argv[])
    // Material marking and visualization functions.
    ParGridFunction materials(&mat_fes);
    SIMarker marker(mat_data.level_set);
-   int zone_id_L, zone_id_R;
+   int zone_id_10, zone_id_15 = -1, zone_id_20;
    for (int e = 0; e < NE; e++)
    {
       int mat_id = marker.GetMaterialID(e);
@@ -429,14 +429,19 @@ int main(int argc, char *argv[])
       // Relevant only for the 1D tests.
       if (e > 0 && materials(e-1) == 10 && materials(e) != 10)
       {
-
-         zone_id_L = e-1;
+         zone_id_10 = e-1;
+      }
+      if (materials(e) == 15)
+      {
+         zone_id_15 = e;
       }
       if (e > 0 && materials(e-1) != 20 && materials(e) == 20)
       {
-         zone_id_R = e;
+         zone_id_20 = e;
       }
    }
+   // No mixed zone case.
+   if (zone_id_15 == -1) { zone_id_15 = zone_id_10; }
    marker.MarkFaceAttributes(pfes_xi);
    ParGridFunction face_attr;
    marker.GetFaceAttributeGF(face_attr);
@@ -559,17 +564,15 @@ int main(int argc, char *argv[])
    // Shifting - related extractors.
 #ifdef EXTRACT_1D
 
-   if (problem != 8 && problem != 9)
-   {
-      MFEM_ABORT("Please comment out extract1D\n.");
-   }
+   if (problem != 8 && problem != 9) { MFEM_ABORT("Disable EXTRACT_1D"); }
+
    MFEM_VERIFY(H1FESpace.GetNRanks() == 1,
                "Point extraction works inly in serial.");
 
    const double dx = 1.0 / NE;
    ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.e_1);
    ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.e_2);
-   Vector point_interface(1), point_face(1);
+   Vector point_interface(1), point_face_10(1), point_face_20(1);
    point_interface(0) = 0.5;
    if (problem ==8)
    {
@@ -579,14 +582,14 @@ int main(int argc, char *argv[])
    {
       point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
    }
-   point_face(0) = zone_id_R * dx;
-   cout << "Elements: " << zone_id_L << " " << zone_id_R << endl;
-   std::cout << "True interface: " << point_interface(0) << std::endl
-             << "Surrogate:      " << point_face(0) <<  std::endl
-             << "dx:             " << dx << std::endl;
-   hydrodynamics::PrintCellNumbers(point_interface, H1FESpace);
-   hydrodynamics::PrintCellNumbers(point_face, L2FESpace);
-   // By construction, the interface is in the left zone.
+   point_face_10(0) = (zone_id_10 + 1) * dx;
+   point_face_20(0) = zone_id_20 * dx;
+   cout << "Elements: " << zone_id_10 << " " << zone_id_20 << endl;
+   std::cout << "True interface: " << point_interface(0) << endl
+             << "Surrogate 10:   " << point_face_10(0)   << endl
+             << "Surrogate 20:   " << point_face_20(0)   << endl
+             << "dx:             " << dx << endl;
+
    std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
                enameFL, enameFR, enameSL, enameSR;
 
@@ -602,24 +605,33 @@ int main(int argc, char *argv[])
    pnameSL = prefix + "p_shift_L.out";
    pnameSR = prefix + "p_shift_R.out";
 
-   //hydrodynamics::PointExtractor v_extr(zone_id_L, point_interface, v_gf, vname);
+   IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
+   const IntegrationRule &ir_extr =
+         IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
+
+   hydrodynamics::PointExtractor v_extr(zone_id_15, point_interface,
+                                        v_gf, ir_extr, vname);
    //hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
-   hydrodynamics::PointExtractor e_L_extr(zone_id_L, point_face,
-                                          mat_data.e_1, enameFL);
-   hydrodynamics::PointExtractor e_R_extr(zone_id_R, point_face,
-                                          mat_data.e_2, enameFR);
-   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_L, point_face,
-                                                  mat_data.e_1,
-                                                  dist, enameSL);
-   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_R, point_face,
-                                                  mat_data.e_2,
-                                                  dist, enameSR);
-   hydrodynamics::PointExtractor p_L_extr(zone_id_L, point_face, p_1_gf, pnameFL);
-   hydrodynamics::PointExtractor p_R_extr(zone_id_R, point_face, p_2_gf, pnameFR);
-   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_L, point_face, p_1_gf,
-                                                  dist, pnameSL);
-   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_R, point_face, p_2_gf,
-                                                  dist, pnameSR);
+   hydrodynamics::PointExtractor e_L_extr(zone_id_10, point_face_10,
+                                          mat_data.e_1, ir_extr, enameFL);
+   hydrodynamics::PointExtractor e_R_extr(zone_id_20, point_face_20,
+                                          mat_data.e_2, ir_extr, enameFR);
+   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_10, point_face_10,
+                                                  mat_data.e_1, dist,
+                                                  ir_extr, enameSL);
+   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_20, point_face_20,
+                                                  mat_data.e_2, dist,
+                                                  ir_extr, enameSR);
+   hydrodynamics::PointExtractor p_L_extr(zone_id_10, point_face_10,
+                                          p_1_gf, ir_extr, pnameFL);
+   hydrodynamics::PointExtractor p_R_extr(zone_id_20, point_face_20,
+                                          p_2_gf, ir_extr, pnameFR);
+   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_10, point_face_10,
+                                                  p_1_gf, dist,
+                                                  ir_extr, pnameSL);
+   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_20, point_face_20,
+                                                  p_2_gf, dist,
+                                                  ir_extr, pnameSR);
    //v_extr.WriteValue(0.0);
    //x_extr.WriteValue(0.0);
    if (pure_test)
