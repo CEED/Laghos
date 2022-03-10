@@ -38,7 +38,7 @@ struct QuadratureData
    // At each quadrature point, it combines the stress, inverse Jacobian,
    // determinant of the Jacobian and the integration weight.
    // It must be recomputed in every time step.
-   DenseTensor stressJinvT_1, stressJinvT_2;
+   DenseTensor stressJinvT_1, stressJinvT_2, stressJinvT_tot;
 
    // Quadrature data used for full/partial assembly of the mass matrices.
    // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
@@ -59,6 +59,7 @@ struct QuadratureData
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT_1(NE * quads_per_el, dim, dim),
         stressJinvT_2(NE * quads_per_el, dim, dim),
+        stressJinvT_tot(NE * quads_per_el, dim, dim),
         rho0DetJ0w_1(NE * quads_per_el), rho0DetJ0w_2(NE * quads_per_el) { }
 };
 
@@ -96,10 +97,11 @@ public:
 class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
-   const int mat_id;
-   const QuadratureData &qdata;
+   const DenseTensor &stressJinvT;
+
 public:
-   ForceIntegrator(int m, QuadratureData &qdata) : mat_id(m), qdata(qdata) { }
+   ForceIntegrator(const DenseTensor &stressJiT) : stressJinvT(stressJiT) { }
+
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
                                        ElementTransformation &Tr,

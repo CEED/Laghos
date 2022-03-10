@@ -125,8 +125,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    cfqdata(),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force_1(&H1, &L2), Force_2(&H1, &L2), FaceForce(&H1, &L2),
-   FaceForceEnergy_1(&L2), FaceForceEnergy_2(&L2),
+   Force_1(&H1, &L2), Force_2(&H1, &L2), Force_tot(&H1, &L2),
+   FaceForce(&H1, &L2), FaceForceEnergy_1(&L2), FaceForceEnergy_2(&L2),
    one(L2Vsize),
    rhs(H1Vsize),
    si_options(si_opt), mat_data(m_data)
@@ -216,17 +216,22 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    qdata.h0 /= (double) H1.GetOrder(0);
 
-   ForceIntegrator *fi_1 = new ForceIntegrator(1, qdata),
-                   *fi_2 = new ForceIntegrator(2, qdata);
+   ForceIntegrator *fi_1 = new ForceIntegrator(qdata.stressJinvT_1),
+                   *fi_2 = new ForceIntegrator(qdata.stressJinvT_2),
+                   *fi_tot = new ForceIntegrator(qdata.stressJinvT_tot);
    fi_1->SetIntRule(&ir);
    fi_2->SetIntRule(&ir);
+   fi_tot->SetIntRule(&ir);
    Force_1.AddDomainIntegrator(fi_1);
    Force_2.AddDomainIntegrator(fi_2);
+   Force_tot.AddDomainIntegrator(fi_tot);
    // Make a dummy assembly to figure out the sparsity.
    Force_1.Assemble(0);
    Force_1.Finalize(0);
    Force_2.Assemble(0);
    Force_2.Finalize(0);
+   Force_tot.Assemble(0);
+   Force_tot.Finalize(0);
 
    // Get rho0detJ0 for integration points on marked faces.
    FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
@@ -363,8 +368,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    }
 
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
-   Force_1.MultTranspose(one, rhs);
-   Force_2.AddMultTranspose(one, rhs);
+//   Force_1.MultTranspose(one, rhs);
+//   Force_2.AddMultTranspose(one, rhs);
+   Force_tot.MultTranspose(one, rhs);
    const double vold = rhs.Norml2();
    if (si_options.v_shift_type > 0)
    {
@@ -657,6 +663,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
 
+   qdata.stressJinvT_tot = 0.0;
    for (int k = 1; k <= 2; k++)
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
@@ -789,14 +796,22 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                MultABt(stress, Jinv, stressJiT);
                stressJiT *= ir.IntPoint(q).weight * detJ;
 
-               if (k == 1 && ls > 0.0) { stressJiT = 0.0; }
-               if (k == 2 && ls < 0.0) { stressJiT = 0.0; }
+               if (si_options.e_volume_cut)
+               {
+                  if (k == 1 && ls > 0.0) { stressJiT = 0.0; }
+                  if (k == 2 && ls < 0.0) { stressJiT = 0.0; }
+               }
 
                for (int vd = 0 ; vd < dim; vd++)
                {
                   for (int gd = 0; gd < dim; gd++)
                   {
                      stressJinvT_k(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
+
+                     double s = stressJiT(vd, gd);
+                     if (k == 1 && ls > 0.0) { s = 0.0; }
+                     if (k == 2 && ls < 0.0) { s = 0.0; }
+                     qdata.stressJinvT_tot(vd)(z_id*nqp + q, gd) += s;
                   }
                }
             }
@@ -819,6 +834,8 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    Force_1.Assemble();
    Force_2 = 0.0;
    Force_2.Assemble();
+   Force_tot = 0.0;
+   Force_tot.Assemble();
    if (si_options.v_shift_type > 0)
    {
       FaceForce = 0.0;

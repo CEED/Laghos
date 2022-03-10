@@ -59,6 +59,7 @@ struct SIOptions
    double v_shift_diffusion_scale = 1.0;
 
    int e_shift_type = 0;
+   bool e_volume_cut = true;
    bool e_shift_diffusion = false;
    double e_shift_diffusion_scale = 1.0;
 };
