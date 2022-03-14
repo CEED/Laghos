@@ -9,16 +9,16 @@ e2 norm:    1.303280785554
 mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.1 -mm -s_v 0 -s_e 0
 Material marker: 14.950000000000
 Face marker:     0.128190114295
-alpha norm: 0.630262845919
-v norm:     0.398942751668
-e1 norm:    1.026803889095
-e2 norm:    0.861546483132
+alpha norm: 0.626639305490
+v norm:     0.398652230640
+e1 norm:    1.024480116048
+e2 norm:    0.859971350071
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 1.0 -rs 1 -mm -s_v 0 -s_e 0
 Material marker: 382.500000000000
 Face marker:     19.228517144192
-alpha norm: 5.424892099474
-v norm:     4.336172415714
-e1 norm:    10.535874392172
-e2 norm:    16.152655801219
+alpha norm: 5.027978118213
+v norm:     4.151828594951
+e1 norm:    10.555651450367
+e2 norm:    16.133008028311
 
