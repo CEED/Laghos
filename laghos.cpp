@@ -360,7 +360,7 @@ int main(int argc, char *argv[])
    mat_data.gamma_1.SetSpace(&mat_fes);
    mat_data.gamma_2.SetSpace(&mat_fes);
    mat_data.alpha_1.SetSpace(&mat_fes);
-   mat_data.alpha_1 = 77.0;
+   mat_data.alpha_2.SetSpace(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
    mat_data.gamma_1.ProjectCoefficient(mat_coeff);
 
@@ -378,6 +378,10 @@ int main(int argc, char *argv[])
    // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
    // 5: - < [grad_p.d] [psi + grad_psi.d] n >
    si_options.v_shift_type = shift_v;
+   // How to treat the volumetric momentum integrals in a mixe zone:
+   // true:  average the two material integrals with the alpha fractions.
+   // false: each quadrature point takes its correct pressure based on the LS.
+   si_options.v_volume_avg = true;
    // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
    si_options.v_shift_scale = -1.0;
    // Activate the momentum diffusion term.

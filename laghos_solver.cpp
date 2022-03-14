@@ -216,9 +216,19 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    qdata.h0 /= (double) H1.GetOrder(0);
 
-   ForceIntegrator *fi_1 = new ForceIntegrator(qdata.stressJinvT_1),
-                   *fi_2 = new ForceIntegrator(qdata.stressJinvT_2),
-                   *fi_tot = new ForceIntegrator(qdata.stressJinvT_tot);
+   ForceIntegrator *fi_1, *fi_2, *fi_tot;
+   // The total stress is always taken pointwise, based on the LS value.
+   fi_tot = new ForceIntegrator(qdata.stressJinvT_tot, NULL);
+   if (si_options.v_volume_avg == false)
+   {
+      fi_1 = new ForceIntegrator(qdata.stressJinvT_1, NULL);
+      fi_2 = new ForceIntegrator(qdata.stressJinvT_2, NULL);
+   }
+   else
+   {
+      fi_1 = new ForceIntegrator(qdata.stressJinvT_1, &mat_data.alpha_1);
+      fi_2 = new ForceIntegrator(qdata.stressJinvT_2, &mat_data.alpha_2);
+   }
    fi_1->SetIntRule(&ir);
    fi_2->SetIntRule(&ir);
    fi_tot->SetIntRule(&ir);
@@ -368,9 +378,15 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    }
 
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
-//   Force_1.MultTranspose(one, rhs);
-//   Force_2.AddMultTranspose(one, rhs);
-   Force_tot.MultTranspose(one, rhs);
+   if (si_options.v_volume_avg == true)
+   {
+      Force_1.MultTranspose(one, rhs);
+      Force_2.AddMultTranspose(one, rhs);
+   }
+   else
+   {
+      Force_tot.MultTranspose(one, rhs);
+   }
    const double vold = rhs.Norml2();
    if (si_options.v_shift_type > 0)
    {
@@ -453,6 +469,28 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
+   if (si_options.v_volume_avg)
+   {
+      // Undo the alpha scaling.
+      for (int e = 0; e < NE; e++)
+      {
+         const int attr = pmesh->GetAttribute(e);
+         if (attr == 10 || attr == 15)
+         {
+            for (int i = 0; i < l2dofs_cnt; i++)
+            {
+               e_rhs_1(e*l2dofs_cnt + i) /= mat_data.alpha_1(e);
+            }
+         }
+         if (attr == 15 || attr == 20)
+         {
+            for (int i = 0; i < l2dofs_cnt; i++)
+            {
+               e_rhs_2(e*l2dofs_cnt + i) /= mat_data.alpha_2(e);
+            }
+         }
+      }
+   }
 
    const double eold_1 = e_rhs_1.Norml2(),
                 eold_2 = e_rhs_2.Norml2();

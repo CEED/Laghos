@@ -46,6 +46,7 @@ void MaterialData::UpdateAlpha()
                      ((ls_vals(q) < 0.0) ? 1.0 : 0.0);
       }
       alpha_1(e) = volume_1 / volume;
+      alpha_2(e) = 1.0 - alpha_1(e);
    }
 }
 

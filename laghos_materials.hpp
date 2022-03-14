@@ -67,7 +67,7 @@ struct MaterialData
    ParGridFunction  e_1, e_2;         // evolved by the ODESolver.
    PressureFunction *p_1, *p_2;       // recomputed in UpdateQuadratureData().
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
-   ParGridFunction  alpha_1;          // recomputed in UpdateQuadratureData().
+   ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
 
    MaterialData() : p_1(nullptr), p_2(nullptr) { }
 

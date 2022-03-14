@@ -54,6 +54,9 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    elmat = 0.0;
    DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
+   Vector alpha_vals(nqp);
+   alpha_vals = 1.0;
+   if (alpha) { alpha->GetValues(Tr, *IntRule, alpha_vals); }
    for (int q = 0; q < nqp; q++)
    {
       const IntegrationPoint &ip = IntRule->IntPoint(q);
@@ -72,6 +75,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
          }
       }
       test_fe.CalcShape(ip, shape);
+      shape *= alpha_vals(q);
       AddMultVWt(shape, Vloc_force, elmat);
    }
 }
