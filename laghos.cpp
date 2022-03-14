@@ -884,14 +884,16 @@ int main(int argc, char *argv[])
    double err_v  = v_gf.ComputeL1Error(zero),
           err_e_1 = mat_data.e_1.ComputeL1Error(zero),
           err_e_2 = mat_data.e_2.ComputeL1Error(zero),
-          err_a   = mat_data.alpha_1.ComputeL1Error(zero);
+          err_a   = mat_data.alpha_1.ComputeL1Error(zero),
+          err_dis = dist.ComputeL1Error(zero);
    if (myid == 0)
    {
       cout << std::fixed << std::setprecision(12)
-           << "alpha norm: " << err_a << std::endl
-           << "v norm:     " << err_v << std::endl
-           << "e1 norm:    " << err_e_1 << std::endl
-           << "e2 norm:    " << err_e_2 << std::endl;
+           << "alpha norm: " << err_a << endl
+           << "v norm:     " << err_v << endl
+           << "e1 norm:    " << err_e_1 << endl
+           << "e2 norm:    " << err_e_2 << endl
+           << "dist norm:  " << err_dis << endl;
    }
 
    switch (ode_solver_type)
