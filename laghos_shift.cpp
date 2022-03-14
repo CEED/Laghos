@@ -118,7 +118,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-  const int mode_TG = 2;
+  const int mode_TG = (pure_test) ? 0 : 2;
 
    switch (problem)
    {

@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
 
-   bool multimat = true;
+   bool multimat = false;
    int  shift_v  = 0;
    int  shift_e  = 0;
 
