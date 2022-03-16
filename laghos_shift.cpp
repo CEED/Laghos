@@ -1082,9 +1082,9 @@ void InitSod2Mat(MaterialData &mat_data)
       {
          // Left material (high pressure).
          r = 1.0, g = 2.0, p = 2.0;
+         mat_data.gamma_1(e) = g;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_1(e)          = g;
             mat_data.rho0_1(e*ndofs + i) = r;
             mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
          }
@@ -1094,9 +1094,9 @@ void InitSod2Mat(MaterialData &mat_data)
       {
          // Right material (low pressure).
          r = 0.125; g = 1.4; p = 0.1;
+         mat_data.gamma_2(e) = g;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_2(e)          = g;
             mat_data.rho0_2(e*ndofs + i) = r;
             mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
          }
@@ -1104,38 +1104,43 @@ void InitSod2Mat(MaterialData &mat_data)
    }
 }
 
-void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
-                  ParGridFunction &e, ParGridFunction &gamma_gf)
+void InitWaterAir(MaterialData &mat_data)
 {
-   v = 0.0;
-
-   ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
-   const int ndofs = rho.Size() / NE;
+   const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
-   for (int i = 0; i < NE; i++)
+
+   mat_data.gamma_1 = 0.0;
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.gamma_2 = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
    {
-      if (pfes.GetParMesh()->GetAttribute(i) == 1)
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+
+      if (attr == 10 || attr == 15)
       {
-         // Left material - water (attribute 1).
+         // Left material - water (high pressure).
          r = 1000; g = 4.4; p = 1.e9;
-         double A = 6.0e8;
-         gamma_gf(i) = g;
-         for (int j = 0; j < ndofs; j++)
+         mat_data.gamma_1(e) = g;
+         for (int i = 0; i < ndofs; i++)
          {
-            rho(i*ndofs + j) = r;
-            e(i*ndofs + j)   = (p + g*A) / r / (g - 1.0);
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = (p + g * 6.0e8) / r / (g - 1.0);
          }
       }
       else
       {
-         // Right material - air (attribute 2).
+         // Right material - air (low pressure).
          r = 50; g = 1.4; p = 1.e5;
-         gamma_gf(i) = g;
-         for (int j = 0; j < ndofs; j++)
+         mat_data.gamma_2(e) = g;
+         for (int i = 0; i < ndofs; i++)
          {
-            rho(i*ndofs + j) = r;
-            e(i*ndofs + j)   = p / r / (g - 1.0);
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
          }
       }
    }

@@ -203,13 +203,10 @@ public:
 };
 
 void InitTG2Mat(MaterialData &mat_data);
-
 void InitSod2Mat(MaterialData &mat_data);
-
-void InitWaterAir(ParGridFunction &rho, ParGridFunction &v,
-                  ParGridFunction &e, ParGridFunction &gamma_gf);
-
+void InitWaterAir(MaterialData &mat_data);
 void InitTriPoint2Mat(MaterialData &mat_data);
+
 } // namespace hydrodynamics
 
 } // namespace mfem

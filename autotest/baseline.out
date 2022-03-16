@@ -52,6 +52,15 @@ e1 norm:    1.024856252277
 e2 norm:    0.984595094499
 dist norm:  0.195855485716
 
+mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4
+Material marker: 13.000000000000
+Face marker:     0.000000000000
+alpha norm: 0.74851693
+v norm:     126.46599880
+e1 norm:    774849.05691657
+e2 norm:    2858.99107306
+dist norm:  0.00000000
+
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 1 -rs 1
 Material marker: 390.000000000000
 Face marker:     0.000000000000

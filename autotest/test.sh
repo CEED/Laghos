@@ -71,6 +71,14 @@ echo -e $com_line >> $file
 $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
+# Water-Air 1D pure
+params="-p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4"
+run_line=$command" "$params
+com_line=$comment" "$params
+echo -e $com_line >> $file
+$run_line | grep -e 'marker:' -e 'norm:' >> $file
+echo -e >> $file
+
 # Triple Point 2D pure
 params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 1 -rs 1"
 run_line=$command" "$params

@@ -70,11 +70,11 @@ void MaterialData::ComputeTotalPressure(const ParGridFunction &p1_gf,
    }
 }
 
-PressureFunction::PressureFunction(int prob, ParMesh &pmesh,
+PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
                                    PressureSpace space,
                                    ParGridFunction &rho0,
                                    ParGridFunction &gamma)
-   : problem(prob), p_space(space),
+   : problem(prob), mat_id(mid), p_space(space),
      p_fec_L2(p_order, pmesh.Dimension(), BasisType::GaussLegendre),
      p_fec_H1(p_order, pmesh.Dimension(), BasisType::GaussLobatto),
      p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
@@ -118,7 +118,6 @@ void PressureFunction::UpdatePressure(const ParGridFunction &energy)
       ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
 
       energy.GetValues(Tr, ir, e_vals);
-
       for (int q = 0; q < ir.GetNPoints(); q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
@@ -126,7 +125,7 @@ void PressureFunction::UpdatePressure(const ParGridFunction &energy)
          double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma_gf(e) - 1.0) * rho * e_vals(q));
 
-         if (problem == 9 && p_fes_L2.GetParMesh()->GetAttribute(e) == 1)
+         if (problem == 9 && mat_id == 1)
          {
             // Water pressure in the water/air test.
             p_L2(e * nqp + q) -= gamma_gf(e) * 6.0e8;

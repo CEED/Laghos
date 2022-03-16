@@ -476,13 +476,10 @@ int main(int argc, char *argv[])
    }
 
    // Set the initial condition based on the materials.
-   if (problem == 0) { hydrodynamics::InitTG2Mat(mat_data); }
-   if (problem == 8) { hydrodynamics::InitSod2Mat(mat_data); }
-   else if (problem == 9)
-   {
-      hydrodynamics::InitWaterAir(mat_data.rho0_1, v_gf, mat_data.e_1, mat_data.gamma_1);
-   }
-   else if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
+   if (problem == 0)  { hydrodynamics::InitTG2Mat(mat_data); }
+   if (problem == 8)  { hydrodynamics::InitSod2Mat(mat_data); }
+   if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
+   if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
    InterfaceRhoCoeff rho_jump_coeff(mat_data.level_set,
                                     mat_data.rho0_1, mat_data.rho0_2);
 
@@ -515,9 +512,9 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   mat_data.p_1 = new PressureFunction(problem, *pmesh, si_options.p_space,
+   mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
                                        mat_data.rho0_1, mat_data.gamma_1);
-   mat_data.p_2 = new PressureFunction(problem, *pmesh, si_options.p_space,
+   mat_data.p_2 = new PressureFunction(problem, 2, *pmesh, si_options.p_space,
                                        mat_data.rho0_2, mat_data.gamma_2);
    mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
@@ -582,7 +579,7 @@ int main(int argc, char *argv[])
    ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.e_2);
    Vector point_interface(1), point_face_10(1), point_face_20(1);
    point_interface(0) = 0.5;
-   if (problem ==8)
+   if (problem == 8)
    {
       point_interface(0) = (pure_test) ? 0.5 : 0.5 + 0.5*dx;
    }
@@ -617,9 +614,9 @@ int main(int argc, char *argv[])
    const IntegrationRule &ir_extr =
          IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
 
-   hydrodynamics::PointExtractor v_extr(zone_id_15, point_interface,
-                                        v_gf, ir_extr, vname);
-   //hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
+//   hydrodynamics::PointExtractor v_extr(zone_id_15, point_interface,
+//                                        v_gf, ir_extr, vname);
+//   hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
    hydrodynamics::PointExtractor e_L_extr(zone_id_10, point_face_10,
                                           mat_data.e_1, ir_extr, enameFL);
    hydrodynamics::PointExtractor e_R_extr(zone_id_20, point_face_20,
@@ -888,7 +885,7 @@ int main(int argc, char *argv[])
           err_dis = dist.ComputeL1Error(zero);
    if (myid == 0)
    {
-      cout << std::fixed << std::setprecision(12)
+      cout << std::fixed << std::setprecision((problem == 9) ? 8 : 12)
            << "alpha norm: " << err_a << endl
            << "v norm:     " << err_v << endl
            << "e1 norm:    " << err_e_1 << endl
