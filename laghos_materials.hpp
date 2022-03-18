@@ -85,14 +85,33 @@ struct MaterialData
 class InterfaceRhoCoeff : public Coefficient
 {
 private:
-   const ParGridFunction &level_set, &rho_1, &rho_2;
+   const ParGridFunction &alpha_1, &alpha_2, &rho_1, &rho_2;
 
 public:
-   InterfaceRhoCoeff(const ParGridFunction &ls,
+   InterfaceRhoCoeff(const ParGridFunction &a1, const ParGridFunction &a2,
                      const ParGridFunction &r1, const ParGridFunction &r2)
-      : level_set(ls), rho_1(r1), rho_2(r2) { }
+      : alpha_1(a1), alpha_2(a2), rho_1(r1), rho_2(r2) { }
 
-   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip);
+   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   {
+      return alpha_1(T.ElementNo) * rho_1.GetValue(T, ip) +
+             alpha_2(T.ElementNo) * rho_2.GetValue(T, ip);
+   }
+};
+
+class AlphaRhoCoeff : public Coefficient
+{
+private:
+   const ParGridFunction &alpha, &rho;
+
+public:
+   AlphaRhoCoeff(const ParGridFunction &a, const ParGridFunction &r)
+      : alpha(a), rho(r) { }
+
+   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   {
+      return alpha(T.ElementNo) * rho.GetValue(T, ip);
+   }
 };
 
 } // namespace hydrodynamics

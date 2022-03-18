@@ -113,7 +113,7 @@ public:
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
-                           Coefficient &rho0_coeff,
+                           Coefficient &rho_mixed_coeff,
                            VectorCoefficient &dist_coeff,
                            const int source,
                            const double cfl,

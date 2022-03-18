@@ -86,7 +86,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
-                                                 Coefficient &rho0_coeff,
+                                                 Coefficient &rho_mixed_coeff,
                                                  VectorCoefficient &dist_coeff,
                                                  const int source,
                                                  const double cfl,
@@ -138,12 +138,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[4] = block_offsets[3] + L2Vsize;
    one = 1.0;
 
+   // Needed for mass matrices, masses, etc.
+   mat_data.UpdateAlpha();
+
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   GridFunctionCoefficient rho_1_coeff(&mat_data.rho0_1),
-                           rho_2_coeff(&mat_data.rho0_2);
-   MassIntegrator mi_1(rho_1_coeff, &ir), mi_2(rho_2_coeff);
+   AlphaRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.rho0_1),
+                 arho_2_coeff(mat_data.alpha_2, mat_data.rho0_2);
+   MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff);
    for (int e = 0; e < NE; e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
@@ -172,7 +175,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
 
    // Standard assembly for the velocity mass matrix.
-   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho_mixed_coeff, &ir);
    Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
@@ -195,10 +198,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Tr.SetIntPoint(&ip);
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-         qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight *
-                                        Tr.Weight() * rho1_vals(q);
-         qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight *
-                                        Tr.Weight() * rho2_vals(q);
+         qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                        mat_data.alpha_1(e) * rho1_vals(q);
+         qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                        mat_data.alpha_2(e) * rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -469,28 +472,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
-   if (si_options.v_volume_avg)
-   {
-      // Undo the alpha scaling.
-      for (int e = 0; e < NE; e++)
-      {
-         const int attr = pmesh->GetAttribute(e);
-         if (attr == 10 || attr == 15)
-         {
-            for (int i = 0; i < l2dofs_cnt; i++)
-            {
-               e_rhs_1(e*l2dofs_cnt + i) /= mat_data.alpha_1(e);
-            }
-         }
-         if (attr == 15 || attr == 20)
-         {
-            for (int i = 0; i < l2dofs_cnt; i++)
-            {
-               e_rhs_2(e*l2dofs_cnt + i) /= mat_data.alpha_2(e);
-            }
-         }
-      }
-   }
 
    const double eold_1 = e_rhs_1.Norml2(),
                 eold_2 = e_rhs_2.Norml2();
@@ -586,7 +567,10 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
+
    Vector &rhoDetJ = (mat_id == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
+   ParGridFunction &alpha = (mat_id == 1) ? mat_data.alpha_1 : mat_data.alpha_2;
+
    DensityIntegrator di(rhoDetJ);
    di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
@@ -594,8 +578,10 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
       di.AssembleRHSElementVect(fe, eltr, rhs);
+      if (alpha(e) > 1e-12) { rhs /= alpha(e); }
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
+
       inv.Mult(rhs, rho_z);
 
       L2.GetElementDofs(e, dofs);
@@ -705,10 +691,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    for (int k = 1; k <= 2; k++)
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
+      ParGridFunction &alpha_k = (k == 1) ? mat_data.alpha_1 : mat_data.alpha_2;
       ParGridFunction &gamma_k = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
       ParGridFunction &e_k     = (k == 1) ? e_1 : e_2;
-      DenseTensor &stressJinvT_k = (k == 1) ?
-                                   qdata.stressJinvT_1 : qdata.stressJinvT_2;
+      DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
+                                            : qdata.stressJinvT_2;
       nzones_batch = 3;
       nqp_batch    = nqp * nzones_batch;
 
@@ -740,7 +727,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const int idx = z * nqp + q;
                // Assuming piecewise constant gamma that moves with the mesh.
                gamma_b[idx] = gamma_k(z_id);
-               rho_b[idx]   = r0DJ_k(z_id*nqp + q) / detJ / ip.weight;
+               rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
+                              detJ / ip.weight;
+               if (alpha_k(z_id) > 1e-12) { rho_b[idx] /= alpha_k(z_id); }
                e_b[idx]     = fmax(0.0, e_vals(q));
                ls_b[idx]    = ls_vals(q);
             }

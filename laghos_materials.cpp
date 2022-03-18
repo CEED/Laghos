@@ -141,13 +141,6 @@ void PressureFunction::UpdatePressure(const ParGridFunction &energy)
    }
 }
 
-double InterfaceRhoCoeff::Eval(ElementTransformation &T,
-                               const IntegrationPoint &ip)
-{
-   return (level_set.GetValue(T, ip) < 0.0) ? rho_1.GetValue(T, ip)
-                                            : rho_2.GetValue(T, ip);
-}
-
 } // namespace hydrodynamics
 
 } // namespace mfem

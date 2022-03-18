@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
    if (problem == 8)  { hydrodynamics::InitSod2Mat(mat_data); }
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
    if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
-   InterfaceRhoCoeff rho_jump_coeff(mat_data.level_set,
+   InterfaceRhoCoeff rho_mixed_coeff(mat_data.alpha_1, mat_data.alpha_2,
                                     mat_data.rho0_1, mat_data.rho0_2);
 
    // Distance vector.
@@ -519,7 +519,7 @@ int main(int argc, char *argv[])
    mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
-                                                rho_jump_coeff,
+                                                rho_mixed_coeff,
                                                 dist_coeff, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -718,7 +718,7 @@ int main(int argc, char *argv[])
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
-         hydro.UpdateMassMatrices(rho_jump_coeff);
+         hydro.UpdateMassMatrices(rho_mixed_coeff);
 
          // Material marking and visualization function.
          for (int k = 0; k < NE; k++)
