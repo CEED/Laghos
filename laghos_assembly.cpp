@@ -67,7 +67,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               loc_force(i, vd) +=  stressJinvT(vd)(eq, gd) * vshape(i,gd);
+               loc_force(i, vd) += stressJinvT(vd)(eq, gd) * vshape(i,gd);
             }
          }
       }

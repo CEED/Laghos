@@ -144,9 +144,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   AlphaRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.rho0_1),
-                 arho_2_coeff(mat_data.alpha_2, mat_data.rho0_2);
-   MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff);
+   InterfaceRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.alpha_2,
+                                  mat_data.rho0_1, mat_data.rho0_2),
+                     arho_2_coeff(mat_data.alpha_1, mat_data.alpha_2,
+                                  mat_data.rho0_1, mat_data.rho0_2);
+   // AlphaRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.rho0_1),
+   //               arho_2_coeff(mat_data.alpha_2, mat_data.rho0_2);
+   MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff, &ir);
+
    for (int e = 0; e < NE; e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
@@ -731,8 +736,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                const DenseMatrix &Jpr = Jpr_b[z](q);
                CalcInverse(Jpr, Jinv);
                const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
-                            p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q],
-                            ls = ls_b[z*nqp+q];
+                            p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
                stress = 0.0;
                for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
                double visc_coeff = 0.0;
