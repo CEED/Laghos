@@ -125,7 +125,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    cfqdata(),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force_1(&H1, &L2), Force_2(&H1, &L2), Force_tot(&H1, &L2),
+   Force_1(&H1, &L2), Force_2(&H1, &L2),
    FaceForce(&H1, &L2), FaceForceEnergy_1(&L2), FaceForceEnergy_2(&L2),
    one(L2Vsize),
    rhs(H1Vsize),
@@ -219,32 +219,19 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    qdata.h0 /= (double) H1.GetOrder(0);
 
-   ForceIntegrator *fi_1, *fi_2, *fi_tot;
+   ForceIntegrator *fi_1, *fi_2;
    // The total stress is always taken pointwise, based on the LS value.
-   fi_tot = new ForceIntegrator(qdata.stressJinvT_tot, NULL);
-   if (si_options.v_volume_avg == false)
-   {
-      fi_1 = new ForceIntegrator(qdata.stressJinvT_1, NULL);
-      fi_2 = new ForceIntegrator(qdata.stressJinvT_2, NULL);
-   }
-   else
-   {
-      fi_1 = new ForceIntegrator(qdata.stressJinvT_1, &mat_data.alpha_1);
-      fi_2 = new ForceIntegrator(qdata.stressJinvT_2, &mat_data.alpha_2);
-   }
+   fi_1 = new ForceIntegrator(qdata.stressJinvT_1, &mat_data.alpha_1);
+   fi_2 = new ForceIntegrator(qdata.stressJinvT_2, &mat_data.alpha_2);
    fi_1->SetIntRule(&ir);
    fi_2->SetIntRule(&ir);
-   fi_tot->SetIntRule(&ir);
    Force_1.AddDomainIntegrator(fi_1);
    Force_2.AddDomainIntegrator(fi_2);
-   Force_tot.AddDomainIntegrator(fi_tot);
    // Make a dummy assembly to figure out the sparsity.
    Force_1.Assemble(0);
    Force_1.Finalize(0);
    Force_2.Assemble(0);
    Force_2.Finalize(0);
-   Force_tot.Assemble(0);
-   Force_tot.Finalize(0);
 
    // Get rho0detJ0 for integration points on marked faces.
    FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
@@ -381,15 +368,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    }
 
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
-   if (si_options.v_volume_avg == true)
-   {
-      Force_1.MultTranspose(one, rhs);
-      Force_2.AddMultTranspose(one, rhs);
-   }
-   else
-   {
-      Force_tot.MultTranspose(one, rhs);
-   }
+   Force_1.MultTranspose(one, rhs);
+   Force_2.AddMultTranspose(one, rhs);
    const double vold = rhs.Norml2();
    if (si_options.v_shift_type > 0)
    {
@@ -861,8 +841,6 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    Force_1.Assemble();
    Force_2 = 0.0;
    Force_2.Assemble();
-   Force_tot = 0.0;
-   Force_tot.Assemble();
    if (si_options.v_shift_type > 0)
    {
       FaceForce = 0.0;

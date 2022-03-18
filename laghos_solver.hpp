@@ -75,7 +75,7 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force_1, Force_2, Force_tot, FaceForce;
+   mutable MixedBilinearForm Force_1, Force_2, FaceForce;
    mutable LinearForm FaceForceEnergy_1, FaceForceEnergy_2;
    mutable Vector one, rhs;
 

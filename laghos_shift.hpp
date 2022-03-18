@@ -54,7 +54,6 @@ struct SIOptions
    PressureSpace p_space = PressureSpace::L2;
 
    int v_shift_type = 0;
-   bool v_volume_avg = false;
    double v_shift_scale = 1.0;
    bool v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
