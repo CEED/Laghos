@@ -667,7 +667,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
 
-   qdata.stressJinvT_tot = 0.0;
    for (int k = 1; k <= 2; k++)
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
@@ -803,22 +802,11 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                MultABt(stress, Jinv, stressJiT);
                stressJiT *= ir.IntPoint(q).weight * detJ;
 
-               if (si_options.e_volume_cut)
-               {
-                  if (k == 1 && ls > 0.0) { stressJiT = 0.0; }
-                  if (k == 2 && ls < 0.0) { stressJiT = 0.0; }
-               }
-
                for (int vd = 0 ; vd < dim; vd++)
                {
                   for (int gd = 0; gd < dim; gd++)
                   {
                      stressJinvT_k(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
-
-                     double s = stressJiT(vd, gd);
-                     if (k == 1 && ls > 0.0) { s = 0.0; }
-                     if (k == 2 && ls < 0.0) { s = 0.0; }
-                     qdata.stressJinvT_tot(vd)(z_id*nqp + q, gd) += s;
                   }
                }
             }

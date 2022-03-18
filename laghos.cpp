@@ -395,10 +395,6 @@ int main(int argc, char *argv[])
    //    - < [p + grad_p.d].v {phi} >
    // 6: + < |[((grad_v d).n) n]| [p] [phi] >
    si_options.e_shift_type = shift_e;
-   // How do we treat volumetric energy integrals in a mixed zone:
-   // true:  stuff at non-material quadrature points are set to zero.
-   // false: the zone is treated as pure, all points are integrated.
-   si_options.e_volume_cut = false;
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
