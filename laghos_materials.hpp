@@ -32,29 +32,32 @@ class PressureFunction
 private:
    const int problem, mat_id;
    PressureSpace p_space;
-   const int p_order     = 1;
+   const int p_order = 1;
 
    L2_FECollection p_fec_L2;
    H1_FECollection p_fec_H1;
    ParFiniteElementSpace p_fes_L2, p_fes_H1;
    ParGridFunction p_L2, p_H1;
-   // Stores rho0 * det(J0)  at the pressure GF's nodes.
+   // Stores alpha * rho0 * det(J0)  at the pressure GF's nodes.
    Vector rho0DetJ0;
    ParGridFunction &gamma_gf;
 
 public:
    PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,
-                    ParGridFunction &rho0, ParGridFunction &gamma);
+                    ParGridFunction &alpha0, ParGridFunction &rho0,
+                    ParGridFunction &gamma);
 
-   void UpdatePressure(const ParGridFunction &energy);
+   void UpdatePressure(const ParGridFunction &alpha,
+                       const ParGridFunction &energy);
 
-   ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
-
-   ParGridFunction &ComputePressure(const ParGridFunction &e)
+   ParGridFunction &ComputePressure(const ParGridFunction &alpha,
+                                    const ParGridFunction &energy)
    {
-      UpdatePressure(e);
+      UpdatePressure(alpha, energy);
       return GetPressure();
    }
+
+   ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
 };
 
 // Stores the shifted interface options.

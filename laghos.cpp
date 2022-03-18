@@ -504,10 +504,13 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   mat_data.UpdateAlpha();
    mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
-                                       mat_data.rho0_1, mat_data.gamma_1);
+                                       mat_data.alpha_1, mat_data.rho0_1,
+                                       mat_data.gamma_1);
    mat_data.p_2 = new PressureFunction(problem, 2, *pmesh, si_options.p_space,
-                                       mat_data.rho0_2, mat_data.gamma_2);
+                                       mat_data.alpha_2, mat_data.rho0_2,
+                                       mat_data.gamma_2);
    mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
@@ -1153,8 +1156,10 @@ void visualize(MaterialData &mat_data,
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
 
-   ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.e_1),
-                   &pressure_2 = mat_data.p_2->ComputePressure(mat_data.e_2);
+   ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.alpha_1,
+                                                               mat_data.e_1),
+                   &pressure_2 = mat_data.p_2->ComputePressure(mat_data.alpha_2,
+                                                               mat_data.e_2);
    mat_data.ComputeTotalPressure(pressure_1, pressure_2);
 
    int wy = 0;

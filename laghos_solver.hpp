@@ -140,11 +140,6 @@ public:
    // are projected as a ParGridFunction.
    // The FE space of rho must be set before the call.
    void ComputeDensity(int mat_id, ParGridFunction &rho) const;
-   ParGridFunction &ComputePressure(const ParGridFunction &e)
-   {
-      mat_data.p_1->UpdatePressure(e);
-      return mat_data.p_1->GetPressure();
-   }
    double Mass() const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;

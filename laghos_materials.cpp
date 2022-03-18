@@ -72,6 +72,7 @@ void MaterialData::ComputeTotalPressure(const ParGridFunction &p1_gf,
 
 PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
                                    PressureSpace space,
+                                   ParGridFunction &alpha0,
                                    ParGridFunction &rho0,
                                    ParGridFunction &gamma)
    : problem(prob), mat_id(mid), p_space(space),
@@ -99,12 +100,13 @@ PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         rho0DetJ0(e * nqp + q) = Tr.Weight() * rho_vals(q);
+         rho0DetJ0(e * nqp + q) = Tr.Weight() * alpha0(e) * rho_vals(q);
       }
    }
 }
 
-void PressureFunction::UpdatePressure(const ParGridFunction &energy)
+void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
+                                      const ParGridFunction &energy)
 {
    const int NE = p_fes_L2.GetParMesh()->GetNE();
    Vector e_vals;
@@ -122,7 +124,7 @@ void PressureFunction::UpdatePressure(const ParGridFunction &energy)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+         const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma_gf(e) - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && mat_id == 1)

@@ -221,8 +221,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    ForceIntegrator *fi_1, *fi_2;
    // The total stress is always taken pointwise, based on the LS value.
-   fi_1 = new ForceIntegrator(qdata.stressJinvT_1, &mat_data.alpha_1);
-   fi_2 = new ForceIntegrator(qdata.stressJinvT_2, &mat_data.alpha_2);
+   fi_1 = new ForceIntegrator(qdata.stressJinvT_1, mat_data.alpha_1);
+   fi_2 = new ForceIntegrator(qdata.stressJinvT_2, mat_data.alpha_2);
    fi_1->SetIntRule(&ir);
    fi_2->SetIntRule(&ir);
    Force_1.AddDomainIntegrator(fi_1);
@@ -646,9 +646,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the pressure values (used for the shifted interface method).
-   mat_data.p_1->UpdatePressure(e_1);
-   mat_data.p_2->UpdatePressure(e_2);
    mat_data.UpdateAlpha();
+   mat_data.p_1->UpdatePressure(mat_data.alpha_1, e_1);
+   mat_data.p_2->UpdatePressure(mat_data.alpha_2, e_2);
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this

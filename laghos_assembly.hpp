@@ -97,10 +97,10 @@ class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
    const DenseTensor &stressJinvT;
-   const ParGridFunction *alpha;
+   const ParGridFunction &alpha;
 
 public:
-   ForceIntegrator(const DenseTensor &stressJiT, const ParGridFunction *a)
+   ForceIntegrator(const DenseTensor &stressJiT, const ParGridFunction &a)
       : stressJinvT(stressJiT), alpha(a) { }
 
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
