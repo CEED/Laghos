@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
    int order_q = -1;
    int ode_solver_type = 4;
    double t_final = 0.6;
+   double ale_period = -1.0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -127,6 +128,8 @@ int main(int argc, char *argv[])
                   "            7 - RK2Avg.");
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
+   args.AddOption(&ale_period, "-ale", "--ale-period",
+                  "ALE period interval in physical time.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
@@ -399,9 +402,6 @@ int main(int argc, char *argv[])
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
    si_options.e_shift_diffusion_scale = 0.25;
-   // Activate ALE. The ale_period is in physical time.
-   const bool do_ale = false;
-   const double ale_period = 1.0;
 
    const bool pure_test = (multimat == false);
    const bool calc_dist = (si_options.v_shift_type > 0 ||
@@ -688,7 +688,7 @@ int main(int argc, char *argv[])
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
-      else if (do_ale && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
       {
          // ALE step - the next remap period has been reached, the dt was ok.
 
@@ -701,8 +701,8 @@ int main(int argc, char *argv[])
 
          // Setup and initialize the remap operator.
          RemapAdvector adv(*pmesh, order_v, order_e);
-         adv.InitFromLagr(x_gf, mat_data.level_set, v_gf,
-                          hydro.GetIntRule(), hydro.GetRhoDetJw(), mat_data.e_1);
+         adv.InitFromLagr(x_gf, mat_data.level_set, v_gf, hydro.GetIntRule(),
+                          hydro.GetRhoDetJw(1), hydro.GetRhoDetJw(2), mat_data);
 
          // Remap to x0 (the remesh always goes back to x0).
          adv.ComputeAtNewPosition(x0, ess_tdofs);
@@ -710,21 +710,23 @@ int main(int argc, char *argv[])
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x0;
          adv.TransferToLagr(mat_data.level_set, v_gf,
-                            hydro.GetIntRule(), hydro.GetRhoDetJw(),
-                            mat_data.rho0_1, mat_data.e_1);
+                            hydro.GetIntRule(),
+                            hydro.GetRhoDetJw(1), hydro.GetRhoDetJw(2),
+                            mat_data);
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
          hydro.UpdateMassMatrices(rho_mixed_coeff);
 
          // Material marking and visualization function.
-         for (int k = 0; k < NE; k++)
+         for (int e = 0; e < NE; e++)
          {
-            int mat_id = marker.GetMaterialID(k);
-            pmesh->SetAttribute(k, mat_id + 1);
-            materials(k) = mat_id;
+            int mat_id = marker.GetMaterialID(e);
+            pmesh->SetAttribute(e, mat_id);
+            materials(e) = pmesh->GetAttribute(e);
          }
          marker.MarkFaceAttributes(pfes_xi);
+         marker.GetFaceAttributeGF(face_attr);
 
          ale_cnt++;
 

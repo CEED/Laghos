@@ -26,6 +26,7 @@ namespace hydrodynamics
 {
 
 class SolutionMover;
+struct MaterialData;
 
 // Performs the full remap advection loop.
 class RemapAdvector
@@ -40,7 +41,7 @@ private:
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
-   ParGridFunction xi, v, rho, e;
+   ParGridFunction xi, v, rho, e_1, e_2;
 
    RK3SSPSolver ode_solver;
    Vector x0;
@@ -50,16 +51,17 @@ public:
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &interface, const ParGridFunction &v,
-                     const IntegrationRule &rho_ir, const Vector &rhoDetJw,
-                     const ParGridFunction &energy);
+                     const IntegrationRule &rho_ir,
+                     const Vector &rhoDetJw_1, const Vector &rhoDetJw_2,
+                     const MaterialData &mat_data);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes,
                                      const Array<int> &ess_tdofs);
 
    void TransferToLagr(ParGridFunction &interface, ParGridFunction &vel,
-                       const IntegrationRule &ir_rho, Vector &rhoDetJw,
-                       ParGridFunction &rho0,
-                       ParGridFunction &energy);
+                       const IntegrationRule &ir_rho,
+                       Vector &rhoDetJw_1, Vector &rhoDetJw_2,
+                       MaterialData &mat_data);
 };
 
 // Performs a single remap advection step.
@@ -118,7 +120,8 @@ public:
    // Density transfer: Lagrange -> Remap.
    // Projects the quad points data to a GridFunction, while preserving the
    // bounds for rho taken from the current element and its face-neighbors.
-   void MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho);
+   void MoveDensityLR(const Vector &quad_rho_1, const Vector &quad_rho_2,
+                      ParGridFunction &rho);
 };
 
 class LocalInverseHOSolver

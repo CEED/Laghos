@@ -72,6 +72,11 @@ struct MaterialData
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
 
+   // Remap influence:
+   // * level set is remmaped, then updates alpha_1 and alpha_2 after remap.
+   // * e_1 and e_2 are remapped.
+   // * rho0_1 and rho0_2 are updated after remap.
+
    MaterialData() : p_1(nullptr), p_2(nullptr) { }
 
    void UpdateAlpha();
