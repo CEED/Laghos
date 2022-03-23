@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
    const bool calc_dist = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? true : false;
 
-//#define EXTRACT_1D
+// #define EXTRACT_1D
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
@@ -570,8 +570,10 @@ int main(int argc, char *argv[])
                "Point extraction works inly in serial.");
 
    const double dx = 1.0 / NE;
-   ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.e_1);
-   ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.e_2);
+   ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.alpha_1,
+                                                           mat_data.e_1);
+   ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.alpha_2,
+                                                           mat_data.e_2);
    Vector point_interface(1), point_face_10(1), point_face_20(1);
    point_interface(0) = 0.5;
    if (problem == 8)
