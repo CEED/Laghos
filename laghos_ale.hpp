@@ -58,8 +58,7 @@ public:
    virtual void ComputeAtNewPosition(const Vector &new_nodes,
                                      const Array<int> &ess_tdofs);
 
-   void TransferToLagr(ParGridFunction &interface, ParGridFunction &vel,
-                       const IntegrationRule &ir_rho,
+   void TransferToLagr(ParGridFunction &vel, const IntegrationRule &ir_rho,
                        Vector &rhoDetJw_1, Vector &rhoDetJw_2,
                        MaterialData &mat_data);
 };

@@ -138,13 +138,12 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    }
 }
 
-void RemapAdvector::TransferToLagr(ParGridFunction &interface,
-                                   ParGridFunction &vel,
+void RemapAdvector::TransferToLagr(ParGridFunction &vel,
                                    const IntegrationRule &ir_rho,
                                    Vector &rhoDetJw_1, Vector &rhoDetJw_2,
                                    MaterialData &mat_data)
 {
-   interface = xi;
+   mat_data.level_set = xi;
    mat_data.UpdateAlpha();
    vel = v;
 
@@ -171,6 +170,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &interface,
 
    mat_data.e_1 = e_1;
    mat_data.e_2 = e_2;
+
+   mat_data.p_1->UpdatePressure(mat_data.alpha_1, mat_data.e_1);
+   mat_data.p_2->UpdatePressure(mat_data.alpha_2, mat_data.e_2);
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,

@@ -518,14 +518,31 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
    Mv_spmat_copy = Mv.SpMat();
 
    MassIntegrator mi(rho_coeff, &ir);
-   for (int k = 0; k < NE; k++)
+   for (int e = 0; e < NE; e++)
    {
-      DenseMatrixInverse inv(&Me_1(k));
-      const FiniteElement &fe = *L2.GetFE(k);
-      ElementTransformation &Tr = *L2.GetElementTransformation(k);
-      mi.AssembleElementMatrix(fe, Tr, Me_1(k));
-      inv.Factor();
-      inv.GetInverseMatrix(Me_1_inv(k));
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      const int attr = pmesh->GetAttribute(e);
+
+      // Material 1.
+      if (attr == 10 || attr == 15)
+      {
+         mi.AssembleElementMatrix(fe, Tr, Me_1(e));
+         DenseMatrixInverse inv(&Me_1(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_1_inv(e));
+      }
+      else { Me_1(e) = 0.0; Me_1_inv(e) = 0.0; }
+
+      // Material 2.
+      if (attr == 15 || attr == 20)
+      {
+         mi.AssembleElementMatrix(fe, Tr, Me_2(e));
+         DenseMatrixInverse inv(&Me_2(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_2_inv(e));
+      }
+      else { Me_2(e) = 0.0; Me_2_inv(e) = 0.0; }
    }
 }
 

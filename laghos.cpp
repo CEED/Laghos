@@ -473,7 +473,7 @@ int main(int argc, char *argv[])
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
    if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
    InterfaceRhoCoeff rho_mixed_coeff(mat_data.alpha_1, mat_data.alpha_2,
-                                    mat_data.rho0_1, mat_data.rho0_2);
+                                     mat_data.rho0_1, mat_data.rho0_2);
 
    // Distance vector.
    ParGridFunction dist(&H1FESpace);
@@ -709,8 +709,7 @@ int main(int argc, char *argv[])
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x0;
-         adv.TransferToLagr(mat_data.level_set, v_gf,
-                            hydro.GetIntRule(),
+         adv.TransferToLagr(v_gf, hydro.GetIntRule(),
                             hydro.GetRhoDetJw(1), hydro.GetRhoDetJw(2),
                             mat_data);
 

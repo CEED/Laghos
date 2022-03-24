@@ -119,13 +119,26 @@ void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
       const int nqp = ir.GetNPoints();
       ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
 
+      if (alpha(e) < 1e-12)
+      {
+         for (int q = 0; q < nqp; q++) { p_L2(e * nqp + q) = 0.0; }
+         continue;
+      }
+
       energy.GetValues(Tr, ir, e_vals);
-      for (int q = 0; q < ir.GetNPoints(); q++)
+      for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
          const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma_gf(e) - 1.0) * rho * e_vals(q));
+
+         if (p_L2(e * nqp + q) > 100)
+         {
+            cout << "*** " << rho0DetJ0(e * nqp + q) << " " << alpha(e) << " " << Tr.Weight() << endl;
+            cout << "--- " << p_L2(e * nqp + q) << " " << rho << " " << e_vals(q) << endl;
+            MFEM_ABORT("error");
+         }
 
          if (problem == 9 && mat_id == 1)
          {
