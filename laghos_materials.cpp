@@ -133,13 +133,6 @@ void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
          const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma_gf(e) - 1.0) * rho * e_vals(q));
 
-         if (p_L2(e * nqp + q) > 100)
-         {
-            cout << "*** " << rho0DetJ0(e * nqp + q) << " " << alpha(e) << " " << Tr.Weight() << endl;
-            cout << "--- " << p_L2(e * nqp + q) << " " << rho << " " << e_vals(q) << endl;
-            MFEM_ABORT("error");
-         }
-
          if (problem == 9 && mat_id == 1)
          {
             // Water pressure in the water/air test.

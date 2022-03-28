@@ -417,25 +417,24 @@ int main(int argc, char *argv[])
    GridFunctionCoefficient coeff_xi(&mat_data.level_set);
 
    // Material marking and visualization functions.
-   ParGridFunction materials(&mat_fes);
-   SIMarker marker(mat_data.level_set);
+   SIMarker marker(mat_data.level_set, mat_fes);
    int zone_id_10, zone_id_15 = -1, zone_id_20;
    for (int e = 0; e < NE; e++)
    {
       int mat_id = marker.GetMaterialID(e);
       pmesh->SetAttribute(e, mat_id);
-      materials(e) = pmesh->GetAttribute(e);
+      marker.mat_attr(e) = pmesh->GetAttribute(e);
 
       // Relevant only for the 1D tests.
-      if (e > 0 && materials(e-1) == 10 && materials(e) != 10)
+      if (e > 0 && marker.mat_attr(e-1) == 10 && marker.mat_attr(e) != 10)
       {
          zone_id_10 = e-1;
       }
-      if (materials(e) == 15)
+      if (marker.mat_attr(e) == 15)
       {
          zone_id_15 = e;
       }
-      if (e > 0 && materials(e-1) != 20 && materials(e) == 20)
+      if (e > 0 && marker.mat_attr(e-1) != 20 && marker.mat_attr(e) == 20)
       {
          zone_id_20 = e;
       }
@@ -447,7 +446,7 @@ int main(int argc, char *argv[])
    marker.GetFaceAttributeGF(face_attr);
 
    ConstantCoefficient czero(0.0);
-   const double m_err = materials.ComputeL1Error(czero),
+   const double m_err = marker.mat_attr.ComputeL1Error(czero),
                 f_err = face_attr.ComputeL1Error(czero);
    if (myid == 0)
    {
@@ -535,7 +534,8 @@ int main(int argc, char *argv[])
 
    if (visualization)
    {
-      visualize(mat_data, rho_gf_1, rho_gf_2, v_gf, dist, materials, face_attr);
+      visualize(mat_data, rho_gf_1, rho_gf_2, v_gf, dist,
+                marker.mat_attr, face_attr);
    }
 
    // Save data for VisIt visualization.
@@ -722,9 +722,11 @@ int main(int argc, char *argv[])
          {
             int mat_id = marker.GetMaterialID(e);
             pmesh->SetAttribute(e, mat_id);
-            materials(e) = pmesh->GetAttribute(e);
+            marker.mat_attr(e) = pmesh->GetAttribute(e);
          }
+         MPI_Barrier(pmesh->GetComm());
          marker.MarkFaceAttributes(pfes_xi);
+         MPI_Barrier(pmesh->GetComm());
          marker.GetFaceAttributeGF(face_attr);
 
          ale_cnt++;
@@ -823,7 +825,7 @@ int main(int argc, char *argv[])
          if (visualization)
          {
             visualize(mat_data, rho_gf_1, rho_gf_2,
-                      v_gf, dist, materials, face_attr);
+                      v_gf, dist, marker.mat_attr, face_attr);
          }
 
          if (visit)
@@ -867,7 +869,7 @@ int main(int argc, char *argv[])
             dacol.RegisterField("interface", &mat_data.level_set);
             dacol.RegisterField("density", &rho_gf_1);
             dacol.RegisterField("velocity", &v_gf);
-            dacol.RegisterField("materials", &materials);
+            dacol.RegisterField("materials", &marker.mat_attr);
             dacol.SetTime(1.0);
             dacol.SetCycle(1);
             dacol.Save();

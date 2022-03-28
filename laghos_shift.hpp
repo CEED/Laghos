@@ -33,7 +33,8 @@ private:
    const ParGridFunction &ls;
 
 public:
-   SIMarker(const ParGridFunction &ls_gf) : ls(ls_gf) { }
+   SIMarker(const ParGridFunction &ls_gf, ParFiniteElementSpace &mat_fes)
+      : ls(ls_gf), mat_attr(&mat_fes) { }
 
    // LS < 0 everywhere (mat 1) --> attribute  10.
    // mixed                     --> attribute  15.
@@ -46,6 +47,9 @@ public:
    void MarkFaceAttributes(ParFiniteElementSpace &pfes);
 
    void GetFaceAttributeGF(ParGridFunction &fa_gf);
+
+   // Piecewise constant material attributes.
+   ParGridFunction mat_attr;
 };
 
 // Stores the shifted interface options.

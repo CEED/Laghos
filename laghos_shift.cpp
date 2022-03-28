@@ -70,21 +70,21 @@ void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
       auto *ft = pmesh->GetFaceElementTransformations(f, 3);
       if (ft->Elem2No < 0) { continue; }
 
-      const int attr1 = pmesh->GetAttribute(ft->Elem1No),
-                attr2 = pmesh->GetAttribute(ft->Elem2No);
+      const int attr1 = mat_attr(ft->Elem1No),
+                attr2 = mat_attr(ft->Elem2No);
       pmesh->SetFaceAttribute(f, get_face_attr(attr1, attr2));
    }
 
+   mat_attr.ExchangeFaceNbrData();
    for (int f = 0; f < pmesh->GetNSharedFaces(); f++)
    {
-       auto *ftr = pmesh->GetSharedFaceTransformations(f, 3);
-       int faceno = pmesh->GetSharedFace(f);
-       int Elem2NbrNo = ftr->Elem2No - pmesh->GetNE();
-       auto *nbrftr = pfes.GetFaceNbrElementTransformation(Elem2NbrNo);
-       int attr1 = pmesh->GetAttribute(ftr->Elem1No);
-       int attr2 = nbrftr->Attribute;
+      auto *ftr = pmesh->GetSharedFaceTransformations(f, true);
+      int attr1 = mat_attr(ftr->Elem1No);
+      IntegrationPoint ip; ip.Init(0);
+      int attr2 = mat_attr.GetValue(*ftr->Elem2, ip);
 
-       pmesh->SetFaceAttribute(faceno, get_face_attr(attr1, attr2));
+      int faceno = pmesh->GetSharedFace(f);
+      pmesh->SetFaceAttribute(faceno, get_face_attr(attr1, attr2));
    }
 }
 
