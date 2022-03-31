@@ -37,6 +37,7 @@
 
 #include "laghos_solver.hpp"
 #include "dist_solver.hpp"
+#include "extrapolator.hpp"
 #include "laghos_ale.hpp"
 #include "laghos_materials.hpp"
 #include "riemann1D.hpp"
@@ -946,6 +947,23 @@ int main(int argc, char *argv[])
               << "L_2    error: " << error_l2 << endl;
       }
    }
+
+   // material 1, level_set < 0.
+   ParGridFunction lset_1(mat_data.level_set);
+   lset_1 *= -1.0;
+   GridFunctionCoefficient lset_coeff_1(&lset_1);
+   ParGridFunction xtrap_1(mat_data.e_1);
+   Extrapolator xtrap;
+   xtrap.xtrap_type     = Extrapolator::ASLAM;
+   xtrap.advection_mode = AdvectionOper::LO;
+   xtrap.xtrap_degree   = 1;
+   xtrap.Extrapolate(lset_coeff_1, mat_data.alpha_1,
+                     mat_data.e_1, 2.0, xtrap_1);
+
+   socketstream vis_xtrap;
+   hydrodynamics::VisualizeField(vis_xtrap, vishost, visport,
+                                 xtrap_1, "e_1_xtrap",
+                                 3*ws, 3*ws + 100, ws, ws);
 
    if (visualization)
    {
