@@ -139,7 +139,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    one = 1.0;
 
    // Needed for mass matrices, masses, etc.
-   mat_data.UpdateAlpha();
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
@@ -310,7 +310,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                       &p_tmp_2 = mat_data.p_2->GetPressure();
       p_tmp_1 = 1.0;
       p_tmp_2 = 1.0;
-      mat_data.UpdateAlpha();
+      UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
       FaceForce.Assemble(0);
       FaceForce.Finalize(0);
    }
@@ -668,7 +668,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the pressure values (used for the shifted interface method).
-   mat_data.UpdateAlpha();
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
    mat_data.p_1->UpdatePressure(mat_data.alpha_1, e_1);
    mat_data.p_2->UpdatePressure(mat_data.alpha_2, e_2);
 

@@ -37,7 +37,6 @@
 
 #include "laghos_solver.hpp"
 #include "dist_solver.hpp"
-#include "extrapolator.hpp"
 #include "laghos_ale.hpp"
 #include "laghos_materials.hpp"
 #include "riemann1D.hpp"
@@ -442,7 +441,7 @@ int main(int argc, char *argv[])
    }
    // No mixed zone case.
    if (zone_id_15 == -1) { zone_id_15 = zone_id_10; }
-   marker.MarkFaceAttributes(pfes_xi);
+   marker.MarkFaceAttributes();
    ParGridFunction face_attr;
    marker.GetFaceAttributeGF(face_attr);
 
@@ -504,7 +503,7 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   mat_data.UpdateAlpha();
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
    mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
                                        mat_data.alpha_1, mat_data.rho0_1,
                                        mat_data.gamma_1);
@@ -712,22 +711,13 @@ int main(int argc, char *argv[])
          x_gf = x0;
          adv.TransferToLagr(v_gf, hydro.GetIntRule(),
                             hydro.GetRhoDetJw(1), hydro.GetRhoDetJw(2),
-                            mat_data);
+                            mat_data, marker);
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
          hydro.UpdateMassMatrices(rho_mixed_coeff);
 
          // Material marking and visualization function.
-         for (int e = 0; e < NE; e++)
-         {
-            int mat_id = marker.GetMaterialID(e);
-            pmesh->SetAttribute(e, mat_id);
-            marker.mat_attr(e) = pmesh->GetAttribute(e);
-         }
-         MPI_Barrier(pmesh->GetComm());
-         marker.MarkFaceAttributes(pfes_xi);
-         MPI_Barrier(pmesh->GetComm());
          marker.GetFaceAttributeGF(face_attr);
 
          ale_cnt++;
@@ -884,11 +874,18 @@ int main(int argc, char *argv[])
           err_e_2 = mat_data.e_2.ComputeL1Error(zero),
           err_a   = mat_data.alpha_1.ComputeL1Error(zero),
           err_dis = dist.ComputeL1Error(zero);
+   double rho_1_sum = hydro.GetRhoDetJw(1).Sum(),
+          rho_2_sum = hydro.GetRhoDetJw(2).Sum();
+   MPI_Comm comm = pmesh->GetComm();
+   MPI_Allreduce(MPI_IN_PLACE, &rho_1_sum, 1, MPI_DOUBLE, MPI_SUM, comm);
+   MPI_Allreduce(MPI_IN_PLACE, &rho_2_sum, 1, MPI_DOUBLE, MPI_SUM, comm);
    if (myid == 0)
    {
       cout << std::fixed << std::setprecision((problem == 9) ? 8 : 12)
            << "alpha norm: " << err_a << endl
            << "v norm:     " << err_v << endl
+           << "rho1 norm:  " << rho_1_sum << endl
+           << "rho2 norm:  " << rho_2_sum << endl
            << "e1 norm:    " << err_e_1 << endl
            << "e2 norm:    " << err_e_2 << endl
            << "dist norm:  " << err_dis << endl;
@@ -946,29 +943,6 @@ int main(int argc, char *argv[])
               << "L_1    error: " << error_l1 << endl
               << "L_2    error: " << error_l2 << endl;
       }
-   }
-
-   // material 1, level_set < 0.
-   ParGridFunction lset_1(mat_data.level_set);
-   lset_1 *= -1.0;
-   GridFunctionCoefficient lset_coeff_1(&lset_1);
-   ParGridFunction xtrap_1(mat_data.e_1);
-   Extrapolator xtrap;
-   xtrap.xtrap_type     = Extrapolator::ASLAM;
-   xtrap.advection_mode = AdvectionOper::LO;
-   xtrap.xtrap_degree   = 1;
-   xtrap.Extrapolate(lset_coeff_1, mat_data.alpha_1,
-                     mat_data.e_1, 2.0, xtrap_1);
-
-   socketstream vis_xtrap;
-   hydrodynamics::VisualizeField(vis_xtrap, vishost, visport,
-                                 xtrap_1, "e_1_xtrap",
-                                 3*ws, 3*ws + 100, ws, ws);
-
-   if (visualization)
-   {
-      vis_v.close();
-      vis_e_1.close();
    }
 
    // Free the used memory.

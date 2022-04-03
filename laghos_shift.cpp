@@ -50,7 +50,7 @@ int SIMarker::GetMaterialID(int el_id)
    return 15;
 }
 
-void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
+void SIMarker::MarkFaceAttributes()
 {
    auto get_face_attr = [&](int a1, int a2)
    {
@@ -61,7 +61,7 @@ void SIMarker::MarkFaceAttributes(ParFiniteElementSpace &pfes)
       return 0;
    };
 
-   ParMesh *pmesh = pfes.GetParMesh();
+   ParMesh *pmesh = ls.ParFESpace()->GetParMesh();
    pmesh->ExchangeFaceNbrNodes();
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {

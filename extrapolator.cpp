@@ -225,7 +225,8 @@ void Extrapolator::Extrapolate(Coefficient &level_set,
    rhs_bf.AddInteriorFaceIntegrator(trace_i);
    rhs_bf.KeepNbrBlock(true);
 
-   ls_gf.ExchangeFaceNbrData();
+   pmesh.ExchangeFaceNbrNodes();
+   lsn_gf.ExchangeFaceNbrData();
    lhs_bf.Assemble();
    lhs_bf.Finalize();
    rhs_bf.Assemble(0);
@@ -368,7 +369,6 @@ void Extrapolator::TimeLoop(ParGridFunction &sltn, ODESolver &ode_solver,
       }
    }
 }
-
 
 
 DiscreteUpwindLOSolver::DiscreteUpwindLOSolver(ParFiniteElementSpace &space,

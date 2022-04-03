@@ -60,6 +60,9 @@ public:
    ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
 };
 
+void UpdateAlpha(const ParGridFunction &level_set,
+                 ParGridFunction &alpha_1, ParGridFunction &alpha_2);
+
 // Stores the shifted interface options.
 struct MaterialData
 {
@@ -76,10 +79,11 @@ struct MaterialData
    // * level set is remmaped, then updates alpha_1 and alpha_2 after remap.
    // * e_1 and e_2 are remapped.
    // * rho0_1 and rho0_2 are updated after remap.
+   // * gamma_1 and gamma_2 are updated after remap.
+   // * the fields inside p_1 and p_2 are updated after remap.
 
    MaterialData() : p_1(nullptr), p_2(nullptr) { }
 
-   void UpdateAlpha();
    void ComputeTotalPressure(const ParGridFunction &p1_gf,
                              const ParGridFunction &p2_gf);
 
@@ -93,17 +97,25 @@ struct MaterialData
 class InterfaceRhoCoeff : public Coefficient
 {
 private:
-   const ParGridFunction &alpha_1, &alpha_2, &rho_1, &rho_2;
+   ParGridFunction &alpha_1, &alpha_2, &rho_1, &rho_2;
 
 public:
-   InterfaceRhoCoeff(const ParGridFunction &a1, const ParGridFunction &a2,
-                     const ParGridFunction &r1, const ParGridFunction &r2)
+   InterfaceRhoCoeff(ParGridFunction &a1, ParGridFunction &a2,
+                     ParGridFunction &r1, ParGridFunction &r2)
       : alpha_1(a1), alpha_2(a2), rho_1(r1), rho_2(r2) { }
 
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
       return alpha_1(T.ElementNo) * rho_1.GetValue(T, ip) +
              alpha_2(T.ElementNo) * rho_2.GetValue(T, ip);
+   }
+
+   void ExchangeFaceNbrData()
+   {
+      alpha_1.ExchangeFaceNbrData();
+      alpha_2.ExchangeFaceNbrData();
+      rho_1.ExchangeFaceNbrData();
+      rho_2.ExchangeFaceNbrData();
    }
 };
 

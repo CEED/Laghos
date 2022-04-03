@@ -18,6 +18,8 @@
 #define MFEM_LAGHOS_ALE
 
 #include "mfem.hpp"
+#include "laghos_materials.hpp"
+#include "laghos_shift.hpp"
 
 namespace mfem
 {
@@ -41,7 +43,7 @@ private:
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
-   ParGridFunction xi, v, rho, e_1, e_2;
+   ParGridFunction xi, v, rho_1, rho_2, e_1, e_2;
 
    RK3SSPSolver ode_solver;
    Vector x0;
@@ -60,24 +62,30 @@ public:
 
    void TransferToLagr(ParGridFunction &vel, const IntegrationRule &ir_rho,
                        Vector &rhoDetJw_1, Vector &rhoDetJw_2,
-                       MaterialData &mat_data);
+                       MaterialData &mat_data, SIMarker &marker);
 };
 
 // Performs a single remap advection step.
 class AdvectorOper : public TimeDependentOperator
 {
 protected:
+   L2_FECollection fec_alpha;
+   ParFiniteElementSpace pfes_alpha;
+   mutable ParGridFunction alpha_1, alpha_2;
+
    const Vector &x0;
    Vector &x_now;
    const Array<int> &v_ess_tdofs;
    GridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
-   GridFunctionCoefficient rho_coeff;
-   ScalarVectorProductCoefficient rho_u_coeff;
+   mutable InterfaceRhoCoeff rho_coeff;
+   GridFunctionCoefficient rho_1_coeff, rho_2_coeff;
+   ScalarVectorProductCoefficient rho_u_coeff, rho_1_u_coeff, rho_2_u_coeff;
    mutable ParBilinearForm M_H1, K_H1;
    mutable ParBilinearForm Mr_H1, Kr_H1;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
-   mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
+   mutable ParBilinearForm Mr_1_L2, Mr_1_L2_Lump, Kr_1_L2,
+                           Mr_2_L2, Mr_2_L2_Lump, Kr_2_L2;
    double dt = 0.0;
 
    // Piecewise min and max of gf over all elements.
@@ -92,7 +100,8 @@ public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
    AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
-                GridFunction &mesh_vel, ParGridFunction &rho,
+                GridFunction &mesh_vel,
+                ParGridFunction &rho_1, ParGridFunction &rho_2,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2);
@@ -119,8 +128,7 @@ public:
    // Density transfer: Lagrange -> Remap.
    // Projects the quad points data to a GridFunction, while preserving the
    // bounds for rho taken from the current element and its face-neighbors.
-   void MoveDensityLR(const Vector &quad_rho_1, const Vector &quad_rho_2,
-                      ParGridFunction &rho);
+   void MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho);
 };
 
 class LocalInverseHOSolver

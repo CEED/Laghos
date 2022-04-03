@@ -24,7 +24,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
-void MaterialData::UpdateAlpha()
+void UpdateAlpha(const ParGridFunction &level_set,
+                 ParGridFunction &alpha_1, ParGridFunction &alpha_2)
 {
    auto pfes = *alpha_1.ParFESpace();
    const IntegrationRule &ir = IntRules.Get(pfes.GetFE(0)->GetGeomType(), 20);

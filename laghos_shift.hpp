@@ -44,7 +44,7 @@ public:
    // Mixed / mat 1 --> attribute 10.
    // Mixed / mat 2 --> attribute 20.
    // all other     --> attribute 0.
-   void MarkFaceAttributes(ParFiniteElementSpace &pfes);
+   void MarkFaceAttributes();
 
    void GetFaceAttributeGF(ParGridFunction &fa_gf);
 
