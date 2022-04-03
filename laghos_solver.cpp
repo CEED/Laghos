@@ -693,7 +693,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
       ParGridFunction &alpha_k = (k == 1) ? mat_data.alpha_1 : mat_data.alpha_2;
-      ParGridFunction &gamma_k = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
+      double gamma_k = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
       ParGridFunction &e_k     = (k == 1) ? e_1 : e_2;
       DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
                                             : qdata.stressJinvT_2;
@@ -727,7 +727,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                min_detJ = fmin(min_detJ, detJ);
                const int idx = z * nqp + q;
                // Assuming piecewise constant gamma that moves with the mesh.
-               gamma_b[idx] = gamma_k(z_id);
+               gamma_b[idx] = gamma_k;
                rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
                               detJ / ip.weight;
                if (alpha_k(z_id) > 1e-12) { rho_b[idx] /= alpha_k(z_id); }

@@ -40,12 +40,11 @@ private:
    ParGridFunction p_L2, p_H1;
    // Stores alpha * rho0 * det(J0)  at the pressure GF's nodes.
    Vector rho0DetJ0;
-   ParGridFunction &gamma_gf;
+   const double gamma;
 
 public:
    PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,
-                    ParGridFunction &alpha0, ParGridFunction &rho0,
-                    ParGridFunction &gamma);
+                    ParGridFunction &alpha0, ParGridFunction &rho0, double g);
 
    void UpdatePressure(const ParGridFunction &alpha,
                        const ParGridFunction &energy);
@@ -68,7 +67,7 @@ struct MaterialData
 {
    ParGridFunction  level_set;        // constant in time (moves with the mesh).
 
-   ParGridFunction  gamma_1, gamma_2; // constant in time (moves with the mesh).
+   double           gamma_1, gamma_2; // constant values.
    ParGridFunction  rho0_1, rho0_2;   // not updated - use only at time zero!
    ParGridFunction  e_1, e_2;         // evolved by the ODESolver.
    PressureFunction *p_1, *p_2;       // recomputed in UpdateQuadratureData().
@@ -79,7 +78,6 @@ struct MaterialData
    // * level set is remmaped, then updates alpha_1 and alpha_2 after remap.
    // * e_1 and e_2 are remapped.
    // * rho0_1 and rho0_2 are updated after remap.
-   // * gamma_1 and gamma_2 are updated after remap.
    // * the fields inside p_1 and p_2 are updated after remap.
 
    MaterialData() : p_1(nullptr), p_2(nullptr) { }

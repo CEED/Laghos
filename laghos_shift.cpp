@@ -258,22 +258,23 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
    const int attr_e1 = Trans_e1.Attribute;
-   const ParGridFunction *p_e1, *p_e2, *gamma_e1, *gamma_e2;
+   const ParGridFunction *p_e1, *p_e2;
+   double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
       p_e1     = &mat_data.p_1->GetPressure();
-      gamma_e1 = &mat_data.gamma_1;
+      gamma_e1 = mat_data.gamma_1;
       p_e2     = &mat_data.p_2->GetPressure();
-      gamma_e2 = &mat_data.gamma_2;
+      gamma_e2 = mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
    {
       p_e1     = &mat_data.p_2->GetPressure();
-      gamma_e1 = &mat_data.gamma_2;
+      gamma_e1 = mat_data.gamma_2;
       p_e2     = &mat_data.p_1->GetPressure();
-      gamma_e2 = &mat_data.gamma_1;
+      gamma_e2 = mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); }
 
@@ -326,7 +327,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       const double rho1 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
             Trans_e1.Weight();
-      const double cs1 = sqrt((*gamma_e1)(Trans.Elem1No) * p_q1 / rho1);
+      const double cs1 = sqrt(gamma_e1 * p_q1 / rho1);
       if (diffuse_v)
       {
          v->GetVectorGradient(Trans_e1, v_grad_q1);
@@ -340,7 +341,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       const double rho2 =
             qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
             Trans_e2.Weight();
-      const double cs2 = sqrt((*gamma_e2)(Trans.Elem2No) * p_q2 / rho2);
+      const double cs2 = sqrt(gamma_e2 * p_q2 / rho2);
       if (diffuse_v)
       {
          v->GetVectorGradient(Trans_e2, v_grad_q2);
@@ -677,22 +678,23 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
 
    const int attr_e1 = Trans_e1.Attribute;
-   const ParGridFunction *p_e1, *p_e2, *gamma_e1, *gamma_e2;
+   const ParGridFunction *p_e1, *p_e2;
+   double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
       p_e1     = &mat_data.p_1->GetPressure();
-      gamma_e1 = &mat_data.gamma_1;
+      gamma_e1 = mat_data.gamma_1;
       p_e2     = &mat_data.p_2->GetPressure();
-      gamma_e2 = &mat_data.gamma_2;
+      gamma_e2 = mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
    {
       p_e1     = &mat_data.p_2->GetPressure();
-      gamma_e1 = &mat_data.gamma_2;
+      gamma_e1 = mat_data.gamma_2;
       p_e2     = &mat_data.p_1->GetPressure();
-      gamma_e2 = &mat_data.gamma_1;
+      gamma_e2 = mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); }
 
@@ -903,10 +905,10 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
          const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
          const double rho_1  = qdata_face.rho0DetJ0(idx) /
                                Trans_e1.Weight();
-         const double cs_1   = sqrt((*gamma_e1)(Trans.Elem1No) * p_q1 / rho_1);
+         const double cs_1   = sqrt(gamma_e1 * p_q1 / rho_1);
          const double rho_2  = qdata_face.rho0DetJ0(idx + nqp_face) /
                                Trans_e2.Weight();
-         const double cs_2   = sqrt((*gamma_e2)(Trans.Elem2No) * p_q2 / rho_2);
+         const double cs_2   = sqrt(gamma_e2* p_q2 / rho_2);
 
          int cut_zone_id = (d_q * nor > 0.0) ? Trans.Elem2No : Trans.Elem1No;
          double h = v->ParFESpace()->GetParMesh()->GetElementVolume(cut_zone_id);
@@ -1024,9 +1026,7 @@ void InitTG2Mat(MaterialData &mat_data)
    const int NE    = pfes.GetNE();
    const int ndofs = mat_data.e_1.Size() / NE;
 
-   mat_data.gamma_1 = 0.0;
    mat_data.rho0_1  = 0.0;
-   mat_data.gamma_2 = 0.0;
    mat_data.rho0_2  = 0.0;
    for (int e = 0; e < NE; e++)
    {
@@ -1043,18 +1043,18 @@ void InitTG2Mat(MaterialData &mat_data)
 
       if (attr == 10 || attr == 15)
       {
+         mat_data.gamma_1 = 5.0 / 3.0;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_1(e)          = 5.0 / 3.0;
             mat_data.rho0_1(e*ndofs + i) = 1.0;
          }
       }
 
       if (attr == 15 || attr == 20)
       {
+         mat_data.gamma_2 = 5.0 / 3.0;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_2(e)          = 5.0 / 3.0;
             mat_data.rho0_2(e*ndofs + i) = 1.0;
          }
       }
@@ -1068,10 +1068,8 @@ void InitSod2Mat(MaterialData &mat_data)
    const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
 
-   mat_data.gamma_1 = 0.0;
    mat_data.rho0_1  = 0.0;
    mat_data.e_1     = 0.0;
-   mat_data.gamma_2 = 0.0;
    mat_data.rho0_2  = 0.0;
    mat_data.e_2     = 0.0;
    for (int e = 0; e < NE; e++)
@@ -1082,7 +1080,7 @@ void InitSod2Mat(MaterialData &mat_data)
       {
          // Left material (high pressure).
          r = 1.0, g = 2.0, p = 2.0;
-         mat_data.gamma_1(e) = g;
+         mat_data.gamma_1 = g;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_1(e*ndofs + i) = r;
@@ -1094,7 +1092,7 @@ void InitSod2Mat(MaterialData &mat_data)
       {
          // Right material (low pressure).
          r = 0.125; g = 1.4; p = 0.1;
-         mat_data.gamma_2(e) = g;
+         mat_data.gamma_2 = g;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;
@@ -1111,10 +1109,8 @@ void InitWaterAir(MaterialData &mat_data)
    const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
 
-   mat_data.gamma_1 = 0.0;
    mat_data.rho0_1  = 0.0;
    mat_data.e_1     = 0.0;
-   mat_data.gamma_2 = 0.0;
    mat_data.rho0_2  = 0.0;
    mat_data.e_2     = 0.0;
    for (int e = 0; e < NE; e++)
@@ -1125,7 +1121,7 @@ void InitWaterAir(MaterialData &mat_data)
       {
          // Left material - water (high pressure).
          r = 1000; g = 4.4; p = 1.e9;
-         mat_data.gamma_1(e) = g;
+         mat_data.gamma_1 = g;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_1(e*ndofs + i) = r;
@@ -1136,7 +1132,7 @@ void InitWaterAir(MaterialData &mat_data)
       {
          // Right material - air (low pressure).
          r = 50; g = 1.4; p = 1.e5;
-         mat_data.gamma_2(e) = g;
+         mat_data.gamma_2 = g;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;
@@ -1153,10 +1149,8 @@ void InitTriPoint2Mat(MaterialData &mat_data)
    const int ndofs = mat_data.e_1.Size() / NE;
    double r, g, p;
 
-   mat_data.gamma_1 = 0.0;
    mat_data.rho0_1  = 0.0;
    mat_data.e_1     = 0.0;
-   mat_data.gamma_2 = 0.0;
    mat_data.rho0_2  = 0.0;
    mat_data.e_2     = 0.0;
    for (int e = 0; e < NE; e++)
@@ -1167,9 +1161,9 @@ void InitTriPoint2Mat(MaterialData &mat_data)
       {
          // Left material (high pressure).
          r = 1.0; g = 1.5; p = 1.0;
+         mat_data.gamma_1 = g;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_1(e)          = g;
             mat_data.rho0_1(e*ndofs + i) = r;
             mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
          }
@@ -1183,9 +1177,10 @@ void InitTriPoint2Mat(MaterialData &mat_data)
          pfes.GetParMesh()->GetElementCenter(e, center);
          r = (center(1) < 1.5) ? 1.0 : 0.125;
          g = (center(1) < 1.5) ? 1.4 : 1.5;
+         g = 1.4;
+         mat_data.gamma_2 = g;
          for (int i = 0; i < ndofs; i++)
          {
-            mat_data.gamma_2(e)          = g;
             mat_data.rho0_2(e*ndofs + i) = r;
             mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
          }

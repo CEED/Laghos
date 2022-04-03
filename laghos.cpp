@@ -360,12 +360,8 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   mat_data.gamma_1.SetSpace(&mat_fes);
-   mat_data.gamma_2.SetSpace(&mat_fes);
    mat_data.alpha_1.SetSpace(&mat_fes);
    mat_data.alpha_2.SetSpace(&mat_fes);
-   FunctionCoefficient mat_coeff(gamma_func);
-   mat_data.gamma_1.ProjectCoefficient(mat_coeff);
 
    //
    // Shifted interface options.
