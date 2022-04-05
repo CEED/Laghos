@@ -46,6 +46,9 @@ public:
    PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,
                     ParGridFunction &alpha0, ParGridFunction &rho0, double g);
 
+   void UpdateRho0Alpha0(const ParGridFunction &alpha0,
+                         const ParGridFunction &rho0);
+
    void UpdatePressure(const ParGridFunction &alpha,
                        const ParGridFunction &energy);
 

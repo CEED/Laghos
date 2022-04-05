@@ -70,7 +70,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    Extrapolator xtrap;
    xtrap.xtrap_type     = Extrapolator::ASLAM;
    xtrap.advection_mode = AdvectionOper::LO;
-   xtrap.xtrap_degree   = 1;
+   xtrap.xtrap_degree   = 0;
    ParGridFunction lset_1(xi), lset_2(xi);
    // First material is for level_set < 0, so we need to flip.
    lset_1 *= -1;
@@ -222,6 +222,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       }
    }
 
+   mat_data.p_1->UpdateRho0Alpha0(mat_data.alpha_1, mat_data.rho0_1);
+   mat_data.p_2->UpdateRho0Alpha0(mat_data.alpha_2, mat_data.rho0_2);
    mat_data.p_1->UpdatePressure(mat_data.alpha_1, mat_data.e_1);
    mat_data.p_2->UpdatePressure(mat_data.alpha_2, mat_data.e_2);
 }

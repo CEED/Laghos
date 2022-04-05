@@ -112,7 +112,15 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Triple Point 2D shifted
-params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf .1 -rs 1 -mm -s_v 1 -s_e 4"
+params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4"
+run_line=$command1" "$params
+com_line=$comment1" "$params
+echo -e $com_line >> $file
+$run_line | grep -e 'marker:' -e 'norm:' >> $file
+echo -e >> $file
+
+# Triple Point 2D shifted ALE
+params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4"
 run_line=$command1" "$params
 com_line=$comment1" "$params
 echo -e $com_line >> $file

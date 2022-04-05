@@ -283,8 +283,11 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                                         : mat_data.alpha_1(Trans_e2.ElementNo);
    // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
-   MFEM_VERIFY(alpha_scale > 1e-12 && alpha_scale < 1.0-1e-12,
-               "The mixed zone is a 1-material zone! Check it.");
+   if (alpha_scale < 1e-13 || (alpha_scale > 1.0 - 1e-13))
+   {
+      cout << "---/n Bad alpha value: " << alpha_scale << endl;
+      MFEM_ABORT("bad alpha value");
+   }
 
    h1_shape.SetSize(h1dofs_cnt);
    l2_shape.SetSize(l2dofs_cnt);

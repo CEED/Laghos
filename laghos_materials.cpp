@@ -84,11 +84,16 @@ PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
 {
    p_L2 = 0.0;
    p_H1 = 0.0;
+   UpdateRho0Alpha0(alpha0, rho0);
+}
 
-   const int NE = pmesh.GetNE();
+void PressureFunction::UpdateRho0Alpha0(const ParGridFunction &alpha0,
+                                        const ParGridFunction &rho0)
+{
+   const int NE = p_fes_L2.GetParMesh()->GetNE();
    const int nqp = rho0DetJ0.Size() / NE;
-
    Vector rho_vals(nqp);
+
    for (int e = 0; e < NE; e++)
    {
       // The points (and their numbering) coincide with the nodes of p.
