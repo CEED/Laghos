@@ -119,7 +119,7 @@ e1 norm:    10.646893780439
 e2 norm:    19.543287145405
 dist norm:  0.000000000000
 
-mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf .1 -rs 1 -mm -s_v 1 -s_e 4
+mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4
 Material marker: 382.500000000000
 Face marker:     19.228517144192
 alpha norm: 3.651084457032
@@ -129,4 +129,15 @@ rho2 norm:  9.760695135492
 e1 norm:    9.182367297247
 e2 norm:    20.258320550928
 dist norm:  65.015504748871
+
+mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
+Material marker: 382.500000000000
+Face marker:     19.228517144192
+alpha norm: 3.852346907542
+v norm:     1.057973558156
+rho1 norm:  3.125670338703
+rho2 norm:  9.396148770666
+e1 norm:    9.004450753123
+e2 norm:    20.460602343538
+dist norm:  64.405746225768
 
