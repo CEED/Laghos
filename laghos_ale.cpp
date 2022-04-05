@@ -169,10 +169,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
                                    MaterialData &mat_data, SIMarker &marker)
 {
    mat_data.level_set = xi;
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
    vel = v;
 
-   // Remark.
+   // Re-mark the elements and faces.
    ParMesh &pmesh_lagr = *vel.ParFESpace()->GetParMesh();
    const int NE = pmesh_lagr.GetNE();
    for (int e = 0; e < NE; e++)
@@ -183,6 +182,10 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
    }
    marker.MarkFaceAttributes();
 
+   // Update the volume fractions.
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
+
+   // This will affect the update of mass matrices.
    mat_data.rho0_1 = rho_1;
    mat_data.rho0_2 = rho_2;
 

@@ -31,8 +31,7 @@ int SIMarker::GetMaterialID(int el_id)
    const ParFiniteElementSpace &pfes =  *ls.ParFESpace();
    const FiniteElement *fe = pfes.GetFE(el_id);
    Vector ls_vals;
-   const IntegrationRule &ir =
-      IntRulesLo.Get(fe->GetGeomType(), pfes.GetOrder(el_id) + 7);
+   const IntegrationRule &ir = IntRulesLo.Get(fe->GetGeomType(), 20);
 
    bool has_pos_value = false, has_neg_value = false;
    ls.GetValues(el_id, ir, ls_vals);
@@ -285,7 +284,7 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
    if (alpha_scale < 1e-13 || (alpha_scale > 1.0 - 1e-13))
    {
-      cout << "---/n Bad alpha value: " << alpha_scale << endl;
+      cout << "\n--- Bad alpha value: " << alpha_scale << endl;
       MFEM_ABORT("bad alpha value");
    }
 

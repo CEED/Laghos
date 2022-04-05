@@ -27,14 +27,19 @@ namespace hydrodynamics
 void UpdateAlpha(const ParGridFunction &level_set,
                  ParGridFunction &alpha_1, ParGridFunction &alpha_2)
 {
+   IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
    auto pfes = *alpha_1.ParFESpace();
-   const IntegrationRule &ir = IntRules.Get(pfes.GetFE(0)->GetGeomType(), 20);
+   const IntegrationRule &ir = IntRulesLo.Get(pfes.GetFE(0)->GetGeomType(), 20);
    const int NE = alpha_1.ParFESpace()->GetNE(),
              nqp = ir.GetNPoints();
    Vector ls_vals;
 
    for (int e = 0; e < NE; e++)
    {
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+      if (attr == 10) { alpha_1(e) = 1.0; alpha_2(e) = 0.0; continue; }
+      if (attr == 20) { alpha_1(e) = 0.0; alpha_2(e) = 1.0; continue; }
+
       ElementTransformation &Tr = *pfes.GetElementTransformation(e);
       level_set.GetValues(Tr, ir, ls_vals);
       double volume_1 = 0.0, volume = 0.0;
