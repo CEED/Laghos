@@ -852,6 +852,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] e_b;
    delete [] p_b;
    delete [] cs_b;
+   delete [] ls_b;
    delete [] Jpr_b;
 }
 
