@@ -25,13 +25,15 @@ namespace mfem
 namespace hydrodynamics
 {
 
-RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e)
+RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
+                             double cfl)
    : pmesh(m, true), dim(pmesh.Dimension()),
      fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
      fec_H1(order_v, pmesh.Dimension()),
      pfes_L2(&pmesh, &fec_L2, 1),
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
      pfes_H1_s(&pmesh, &fec_H1, 1),
+     cfl_factor(cfl),
      offsets(7), S(),
      xi(), v(), rho_1(), rho_2(), e_1(), e_2(), x0()
 {
@@ -82,6 +84,12 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    // Extrapolate e_2.
    xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
                      mat_data.e_2, 5.0, e_2);
+
+   e_1_max = e_1.Max();
+   MPI_Allreduce(MPI_IN_PLACE, &e_1_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+   e_2_max = e_2.Max();
+   MPI_Allreduce(MPI_IN_PLACE, &e_2_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+
 
    // Get densities as GridFunctions.
    SolutionMover mover(rho_ir);
@@ -143,7 +151,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    }
 
    v_max = std::sqrt(v_max);
-   double dt = 0.1 * h_min / v_max;
+   double dt = cfl_factor * h_min / v_max;
 
    double t = 0.0;
    bool last_step = false;
@@ -157,6 +165,21 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
 
       oper.SetDt(dt);
       ode_solver.Step(S, t, dt);
+
+      double e_1_max_new = e_1.Max();
+      MPI_Allreduce(MPI_IN_PLACE, &e_1_max_new, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+      double e_2_max_new = e_2.Max();
+      MPI_Allreduce(MPI_IN_PLACE, &e_2_max_new, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+      if (e_1_max_new > e_1_max)
+      {
+         cout << e_1_max << " " << e_1_max_new << endl;
+         MFEM_ABORT("e1 max remap violation");
+      }
+      if (e_2_max_new > e_2_max)
+      {
+         cout << e_2_max << " " << e_2_max_new << endl;
+         MFEM_ABORT("e2 max remap violation");
+      }
    }
 }
 
@@ -291,8 +314,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
 
    auto *minteg_1 = new MassIntegrator(rho_1_coeff);
    Mr_1_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg_1));
-   Mr_1_L2_Lump.Assemble(0);
-   Mr_1_L2_Lump.Finalize(0);
+   Mr_1_L2_Lump.Assemble();
+   Mr_1_L2_Lump.Finalize();
 
    Kr_1_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_1_u_coeff));
    auto dgt_ir_1 = new DGTraceIntegrator(rho_1_coeff, u_coeff, -1.0, -0.5);
@@ -302,7 +325,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Kr_1_L2.KeepNbrBlock(true);
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
-   u.ExchangeFaceNbrData();
    rho_1.ExchangeFaceNbrData();
    Kr_1_L2.Assemble(0);
    Kr_1_L2.Finalize(0);
@@ -313,8 +335,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
 
    auto *minteg_2 = new MassIntegrator(rho_2_coeff);
    Mr_2_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg_2));
-   Mr_2_L2_Lump.Assemble(0);
-   Mr_2_L2_Lump.Finalize(0);
+   Mr_2_L2_Lump.Assemble();
+   Mr_2_L2_Lump.Finalize();
 
    Kr_2_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_2_u_coeff));
    auto dgt_ir_2 = new DGTraceIntegrator(rho_2_coeff, u_coeff, -1.0, -0.5);
@@ -324,7 +346,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Kr_2_L2.KeepNbrBlock(true);
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
-   u.ExchangeFaceNbrData();
    rho_2.ExchangeFaceNbrData();
    Kr_2_L2.Assemble(0);
    Kr_2_L2.Finalize(0);
@@ -430,7 +451,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                            K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
    // Density 1.
    rho_1.MakeRef(*U_ptr, (1 + dim) * size_H1, size_L2);
-   d_rho_1.MakeRef(dU,  (1 + dim) * size_H1, size_L2);
+   d_rho_1.MakeRef(dU,   (1 + dim) * size_H1, size_L2);
    lo_solver.CalcLOSolution(rho_1, d_rho_LO);
    ho_solver.CalcHOSolution(rho_1, d_rho_HO);
    rho_gf = rho_1;
@@ -441,7 +462,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                               rho_min, rho_max, d_rho_1);
    // Density 2.
    rho_2.MakeRef(*U_ptr, (1 + dim) * size_H1 + size_L2, size_L2);
-   d_rho_2.MakeRef(dU,  (1 + dim) * size_H1 + size_L2, size_L2);
+   d_rho_2.MakeRef(dU,   (1 + dim) * size_H1 + size_L2, size_L2);
    lo_solver.CalcLOSolution(rho_2, d_rho_LO);
    ho_solver.CalcHOSolution(rho_2, d_rho_HO);
    rho_gf = rho_2;
@@ -453,7 +474,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
    // Energy 1 remap.
    auto rho_1_gf_const = dynamic_cast<const ParGridFunction *>
-                       (rho_1_coeff.GetGridFunction());
+                         (rho_1_coeff.GetGridFunction());
    auto rho_1_pgf = const_cast<ParGridFunction *>(rho_1_gf_const);
    rho_1_pgf->ExchangeFaceNbrData();
    Kr_1_L2.BilinearForm::operator=(0.0);
@@ -471,7 +492,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_1_L2.SpMat(),
                              lo_e_solver.GetKmap(), Mr_1_L2.SpMat());
    e_1.MakeRef(*U_ptr, (1 + dim) * size_H1 + 2 * size_L2, size_L2);
-   d_e_1.MakeRef(dU,  (1 + dim) * size_H1 + 2 * size_L2, size_L2);
+   d_e_1.MakeRef(dU,   (1 + dim) * size_H1 + 2 * size_L2, size_L2);
    lo_e_solver.CalcLOSolution(e_1, d_e_LO);
    ho_e_solver.CalcHOSolution(e_1, d_e_HO);
    e_gf = e_1;
@@ -497,7 +518,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    FluxBasedFCT fct_e_2_solver(pfes_L2, dt, Kr_2_L2.SpMat(),
                                lo_e_2_solver.GetKmap(), Mr_2_L2.SpMat());
    e_2.MakeRef(*U_ptr, (1 + dim) * size_H1 + 3 * size_L2, size_L2);
-   d_e_2.MakeRef(dU,  (1 + dim) * size_H1 + 3 * size_L2, size_L2);
+   d_e_2.MakeRef(dU,   (1 + dim) * size_H1 + 3 * size_L2, size_L2);
    lo_e_2_solver.CalcLOSolution(e_2, d_e_LO);
    ho_e_2_solver.CalcHOSolution(e_2, d_e_HO);
    e_gf = e_2;

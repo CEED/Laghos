@@ -40,16 +40,20 @@ private:
    H1_FECollection fec_H1;
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1_s;
 
+   const double cfl_factor;
+
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
    ParGridFunction xi, v, rho_1, rho_2, e_1, e_2;
 
+   double e_1_max, e_2_max;
+
    RK3SSPSolver ode_solver;
    Vector x0;
 
 public:
-   RemapAdvector(const ParMesh &m, int order_v, int order_e);
+   RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &interface, const ParGridFunction &v,

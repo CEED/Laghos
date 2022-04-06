@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
    double t_final = 0.6;
    double ale_period = -1.0;
    double cfl = 0.5;
+   double cfl_remap = 0.1;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
    int cg_max_iter = 300;
@@ -131,6 +132,8 @@ int main(int argc, char *argv[])
    args.AddOption(&ale_period, "-ale", "--ale-period",
                   "ALE period interval in physical time.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
+   args.AddOption(&cfl_remap, "-cflr", "--cfl-remap",
+                  "CFL-condition number for remap.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&ftz_tol, "-ftz", "--ftz-tol",
@@ -696,7 +699,7 @@ int main(int argc, char *argv[])
                 total_in    = internal_in + kinetic_in;
 
          // Setup and initialize the remap operator.
-         RemapAdvector adv(*pmesh, order_v, order_e);
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap);
          adv.InitFromLagr(x_gf, mat_data.level_set, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(1), hydro.GetRhoDetJw(2), mat_data);
 
