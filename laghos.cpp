@@ -737,7 +737,7 @@ int main(int argc, char *argv[])
                  << "internal_e err: " << internal_out - internal_in << endl
                  << "kinetic_e err:  " << kinetic_out - kinetic_in << endl
                  << "total_e err:    " << total_out - total_in << endl;
-            cout << "interface error:     " << err << endl;
+            cout << "interface err:  " << err << endl;
          }
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }

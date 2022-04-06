@@ -106,13 +106,10 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    *x = x0;
 
    // Velocity of the positions.
-   GridFunction u(x->FESpace());
+   ParGridFunction u(&pfes_H1);
    subtract(new_nodes, x0, u);
 
    // Define scalar FE spaces for the solution, and the advection operator.
-   ParFiniteElementSpace pfes_H1(&pmesh, &fec_H1, dim);
-   ParFiniteElementSpace pfes_H1_s(&pmesh, &fec_H1, 1);
-   ParFiniteElementSpace pfes_L2(&pmesh, &fec_L2, 1);
    AdvectorOper oper(S.Size(), x0, ess_tdofs, u, rho_1, rho_2,
                      pfes_H1, pfes_H1_s, pfes_L2);
    ode_solver.Init(oper);
@@ -233,7 +230,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
                            const Array<int> &v_ess_td,
-                           GridFunction &mesh_vel,
+                           ParGridFunction &mesh_vel,
                            ParGridFunction &rho_1, ParGridFunction &rho_2,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_H1_s,
@@ -305,6 +302,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Kr_1_L2.KeepNbrBlock(true);
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
+   u.ExchangeFaceNbrData();
    rho_1.ExchangeFaceNbrData();
    Kr_1_L2.Assemble(0);
    Kr_1_L2.Finalize(0);
@@ -326,6 +324,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Kr_2_L2.KeepNbrBlock(true);
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
+   u.ExchangeFaceNbrData();
    rho_2.ExchangeFaceNbrData();
    Kr_2_L2.Assemble(0);
    Kr_2_L2.Finalize(0);

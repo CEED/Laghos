@@ -76,7 +76,7 @@ protected:
    const Vector &x0;
    Vector &x_now;
    const Array<int> &v_ess_tdofs;
-   GridFunction &u;
+   ParGridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
    mutable InterfaceRhoCoeff rho_coeff;
    GridFunctionCoefficient rho_1_coeff, rho_2_coeff;
@@ -100,7 +100,7 @@ public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
    AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
-                GridFunction &mesh_vel,
+                ParGridFunction &mesh_vel,
                 ParGridFunction &rho_1, ParGridFunction &rho_2,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,

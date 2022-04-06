@@ -16,8 +16,6 @@ using namespace std;
 namespace mfem
 {
 
-const char vishost[] = "localhost";
-const int  visport   = 19916;
 int wsize            = 350; // glvis window size
 
 AdvectionOper::AdvectionOper(Array<bool> &zones, ParBilinearForm &Mbf,

@@ -730,9 +730,20 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                gamma_b[idx] = gamma_k;
                rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
                               detJ / ip.weight;
-               if (alpha_k(z_id) > 1e-12) { rho_b[idx] /= alpha_k(z_id); }
+               if (alpha_k(z_id) > 1e-14) { rho_b[idx] /= alpha_k(z_id); }
                e_b[idx]     = fmax(0.0, e_vals(q));
                ls_b[idx]    = ls_vals(q);
+
+               if (IsFinite(rho_b[idx]) == false)
+               {
+                  cout << z_id << " " << q << endl;
+
+                  T->Jacobian().Print();
+                  pmesh->GetNodes()->Print();
+                  std::cout << detJ << " " << rho_b[idx] << " "
+                            << gamma_b[idx] << " " << min_detJ << std::endl;
+                  MFEM_ABORT("rho bad");
+               }
             }
             ++z_id;
          }

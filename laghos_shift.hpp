@@ -168,12 +168,11 @@ void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes,
 class PointExtractor
 {
 protected:
-   std::ofstream fstream;
-
    const ParGridFunction &g;
    // -1 if the point is not in the current MPI task.
    int z_id;
    IntegrationPoint ip;
+   std::ofstream fstream;
 
    int FindIntegrPoint(const int z_id, const Vector &xyz,
                        const IntegrationRule &ir);
