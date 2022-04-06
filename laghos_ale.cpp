@@ -163,6 +163,8 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          last_step = true;
       }
 
+      if (pmesh.GetMyRank() == 0) { cout << "." << flush; }
+
       oper.SetDt(dt);
       ode_solver.Step(S, t, dt);
 
@@ -173,14 +175,15 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       if (e_1_max_new > e_1_max)
       {
          cout << e_1_max << " " << e_1_max_new << endl;
-         MFEM_ABORT("e1 max remap violation");
+         MFEM_ABORT("e_1 max remap violation");
       }
       if (e_2_max_new > e_2_max)
       {
          cout << e_2_max << " " << e_2_max_new << endl;
-         MFEM_ABORT("e2 max remap violation");
+         MFEM_ABORT("e_2 max remap violation");
       }
    }
+   if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &vel,

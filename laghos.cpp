@@ -690,6 +690,11 @@ int main(int argc, char *argv[])
       else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
       {
          // ALE step - the next remap period has been reached, the dt was ok.
+         if (myid == 0)
+         {
+            cout << std::fixed << std::setw(5)
+                 << "ALE step [" << ale_cnt << "] at " << t << ": " << endl;
+         }
 
          // Conserved quantities at the start of the ALE step.
          double mass_in     = hydro.Mass(),
@@ -732,8 +737,7 @@ int main(int argc, char *argv[])
          double err = mat_data.level_set.ComputeL1Error(zero);
          if (myid == 0)
          {
-            cout << std::fixed << std::setw(5) << std::setprecision(4)
-                 << "ALE step [" << ale_cnt << "] at " << t << ": "
+            cout << std::fixed << std::setw(5)
                  << std::scientific << std::setprecision(4) << endl
                  << "mass err:       " << mass_out - mass_in << endl
                  << "momentum err:   " << momentum_out - momentum_in << endl

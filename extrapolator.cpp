@@ -351,6 +351,7 @@ void Extrapolator::TimeLoop(ParGridFunction &sltn, ODESolver &ode_solver,
    const int myid  = sltn.ParFESpace()->GetMyRank();
    bool done = false;
    double t = 0.0;
+   if (myid == 0) { cout << vis_name << ": "; }
    for (int ti = 0; !done;)
    {
       double dt_real = min(dt, t_final - t);
@@ -362,10 +363,11 @@ void Extrapolator::TimeLoop(ParGridFunction &sltn, ODESolver &ode_solver,
       {
          if (myid == 0)
          {
-            cout << vis_name+" / time step: " << ti << ", time: " << t << endl;
+            cout << "x" << flush;
          }
       }
    }
+   if (myid == 0) { cout << endl; }
 }
 
 
