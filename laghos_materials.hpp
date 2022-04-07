@@ -31,7 +31,7 @@ class PressureFunction
 {
 private:
    const int p_order = 1;
-   const double gamma_mat;
+   const double gamma;
    const int problem, mat_id;
    PressureSpace p_space;
 

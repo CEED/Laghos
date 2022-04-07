@@ -80,7 +80,7 @@ PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
                                    PressureSpace space,
                                    ParGridFunction &alpha0,
                                    ParGridFunction &rho0, double g)
-   : gamma_mat(g), problem(prob), mat_id(mid), p_space(space),
+   : gamma(g), problem(prob), mat_id(mid), p_space(space),
      p_fec_L2(p_order, pmesh.Dimension(), BasisType::GaussLegendre),
      p_fec_H1(p_order, pmesh.Dimension(), BasisType::GaussLobatto),
      p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
@@ -143,12 +143,12 @@ void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
          const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
-         p_L2(e * nqp + q) = fmax(1e-5, (gamma_mat - 1.0) * rho * e_vals(q));
+         p_L2(e * nqp + q) = fmax(1e-5, (gamma - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && mat_id == 1)
          {
             // Water pressure in the water/air test.
-            p_L2(e * nqp + q) -= gamma_mat * 6.0e8;
+            p_L2(e * nqp + q) -= gamma * 6.0e8;
          }
       }
    }

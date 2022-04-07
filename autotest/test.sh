@@ -120,7 +120,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Triple Point 2D ALE
-params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1"
+params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -ale 0.5"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
