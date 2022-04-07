@@ -33,7 +33,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec, const char *keys_in)
 {
-   gf.HostRead();
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
    MPI_Comm comm = pmesh.GetComm();
 
@@ -375,13 +374,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force_1.MultTranspose(one, rhs);
    Force_2.AddMultTranspose(one, rhs);
-   const double vold = rhs.Norml2();
+//   const double vold = rhs.Norml2();
    if (si_options.v_shift_type > 0)
    {
        FaceForce.AddMultTranspose(one, rhs, 1.0);
    }
-   std::cout << "v rhs diff: " << std::scientific
-             << fabs(rhs.Norml2() - vold) << std::endl;
+//   std::cout << "v rhs diff: " << std::scientific
+//             << fabs(rhs.Norml2() - vold) << std::endl;
 
    rhs.Neg();
 
@@ -405,6 +404,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    cg.SetAbsTol(0.0);
    cg.SetMaxIter(cg_max_iter);
    cg.SetPrintLevel(-1);
+
    cg.Mult(B, X);
    Mv.RecoverFEMSolution(X, rhs, dv);
 
@@ -418,7 +418,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Vector *vptr = const_cast<Vector*>(&v);
    Vector *sptr = const_cast<Vector*>(&S);
    vel.MakeRef(&H1, *vptr, 0);
-   energy_1.MakeRef(&L2,  *sptr, 2*H1.GetVSize());
+   energy_1.MakeRef(&L2, *sptr, 2*H1.GetVSize());
    energy_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
    auto tfi_v = FaceForce.GetFBFI();
    auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
@@ -458,8 +458,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
 
-   const double eold_1 = e_rhs_1.Norml2(),
-                eold_2 = e_rhs_2.Norml2();
+//   const double eold_1 = e_rhs_1.Norml2(),
+//                eold_2 = e_rhs_2.Norml2();
    if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs_1, 1.0); }
    if (si_options.e_shift_type > 1)
    {
@@ -468,9 +468,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       FaceForceEnergy_2.Assemble();
       e_rhs_2 -= FaceForceEnergy_2;
    }
-   cout << "e rhs diff: " << std::scientific
-        << fabs(e_rhs_1.Norml2() - eold_1) << " "
-        << fabs(e_rhs_2.Norml2() - eold_2) << endl;
+//   cout << "e rhs diff: " << std::scientific
+//        << fabs(e_rhs_1.Norml2() - eold_1) << " "
+//        << fabs(e_rhs_2.Norml2() - eold_2) << endl;
 
    if (e_source) { e_rhs_1 += *e_source; e_rhs_2 += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);

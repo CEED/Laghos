@@ -175,11 +175,11 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       if (e_1_max_new > e_1_max)
       {
          cout << e_1_max << " " << e_1_max_new << endl;
-         MFEM_ABORT("e_1 max remap violation");
+         MFEM_ABORT("\n e_1 max remap violation");
       }
       if (e_2_max_new > e_2_max)
       {
-         cout << e_2_max << " " << e_2_max_new << endl;
+         cout << endl << e_2_max << " " << e_2_max_new << endl;
          MFEM_ABORT("e_2 max remap violation");
       }
    }
@@ -311,18 +311,23 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    K_L2.Assemble(0);
    K_L2.Finalize(0);
 
-   Mr_1_L2.AddDomainIntegrator(new MassIntegrator(rho_1_coeff));
+//   Mr_1_L2.AddDomainIntegrator(new MassIntegrator(rho_1_coeff));
+   Mr_1_L2.AddDomainIntegrator(new MassIntegrator());
    Mr_1_L2.Assemble(0);
    Mr_1_L2.Finalize(0);
 
-   auto *minteg_1 = new MassIntegrator(rho_1_coeff);
+//   auto *minteg_1 = new MassIntegrator(rho_1_coeff);
+   auto *minteg_1 = new MassIntegrator();
    Mr_1_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg_1));
    Mr_1_L2_Lump.Assemble();
    Mr_1_L2_Lump.Finalize();
 
-   Kr_1_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_1_u_coeff));
-   auto dgt_ir_1 = new DGTraceIntegrator(rho_1_coeff, u_coeff, -1.0, -0.5);
-   auto dgt_br_1 = new DGTraceIntegrator(rho_1_coeff, u_coeff, -1.0, -0.5);
+//   Kr_1_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_1_u_coeff));
+//   auto dgt_ir_1 = new DGTraceIntegrator(rho_1_coeff, u_coeff, -1.0, -0.5);
+//   auto dgt_br_1 = new DGTraceIntegrator(rho_1_coeff, u_coeff, -1.0, -0.5);
+   Kr_1_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
+   auto dgt_ir_1 = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   auto dgt_br_1 = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
    Kr_1_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir_1));
    Kr_1_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br_1));
    Kr_1_L2.KeepNbrBlock(true);
@@ -332,18 +337,23 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Kr_1_L2.Assemble(0);
    Kr_1_L2.Finalize(0);
 
-   Mr_2_L2.AddDomainIntegrator(new MassIntegrator(rho_2_coeff));
+//   Mr_2_L2.AddDomainIntegrator(new MassIntegrator(rho_2_coeff));
+   Mr_2_L2.AddDomainIntegrator(new MassIntegrator());
    Mr_2_L2.Assemble(0);
    Mr_2_L2.Finalize(0);
 
-   auto *minteg_2 = new MassIntegrator(rho_2_coeff);
+//   auto *minteg_2 = new MassIntegrator(rho_2_coeff);
+   auto *minteg_2 = new MassIntegrator();
    Mr_2_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg_2));
    Mr_2_L2_Lump.Assemble();
    Mr_2_L2_Lump.Finalize();
 
-   Kr_2_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_2_u_coeff));
-   auto dgt_ir_2 = new DGTraceIntegrator(rho_2_coeff, u_coeff, -1.0, -0.5);
-   auto dgt_br_2 = new DGTraceIntegrator(rho_2_coeff, u_coeff, -1.0, -0.5);
+//   Kr_2_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_2_u_coeff));
+//   auto dgt_ir_2 = new DGTraceIntegrator(rho_2_coeff, u_coeff, -1.0, -0.5);
+//   auto dgt_br_2 = new DGTraceIntegrator(rho_2_coeff, u_coeff, -1.0, -0.5);
+   Kr_2_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
+   auto dgt_ir_2 = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   auto dgt_br_2 = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
    Kr_2_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir_2));
    Kr_2_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br_2));
    Kr_2_L2.KeepNbrBlock(true);

@@ -30,9 +30,10 @@ enum PressureSpace {L2, H1};
 class PressureFunction
 {
 private:
+   const int p_order = 1;
+   const double gamma_mat;
    const int problem, mat_id;
    PressureSpace p_space;
-   const int p_order = 1;
 
    L2_FECollection p_fec_L2;
    H1_FECollection p_fec_H1;
@@ -40,7 +41,6 @@ private:
    ParGridFunction p_L2, p_H1;
    // Stores alpha * rho0 * det(J0)  at the pressure GF's nodes.
    Vector rho0DetJ0;
-   const double gamma;
 
 public:
    PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,

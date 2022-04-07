@@ -1149,8 +1149,10 @@ void InitTriPoint2Mat(MaterialData &mat_data)
    ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
    const int ndofs = mat_data.e_1.Size() / NE;
-   double r, g, p;
+   double r, p;
 
+   mat_data.gamma_1 = 1.5;
+   mat_data.gamma_2 = 1.4;
    mat_data.rho0_1  = 0.0;
    mat_data.e_1     = 0.0;
    mat_data.rho0_2  = 0.0;
@@ -1162,12 +1164,11 @@ void InitTriPoint2Mat(MaterialData &mat_data)
       if (attr == 10 || attr == 15)
       {
          // Left material (high pressure).
-         r = 1.0; g = 1.5; p = 1.0;
-         mat_data.gamma_1 = g;
+         r = 1.0; p = 1.0;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_1(e*ndofs + i) = r;
-            mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
+            mat_data.e_1(e*ndofs + i)    = p / r / (mat_data.gamma_1 - 1.0);
          }
       }
 
@@ -1178,13 +1179,10 @@ void InitTriPoint2Mat(MaterialData &mat_data)
          Vector center(2);
          pfes.GetParMesh()->GetElementCenter(e, center);
          r = (center(1) < 1.5) ? 1.0 : 0.125;
-         g = (center(1) < 1.5) ? 1.4 : 1.5;
-         g = 1.4;
-         mat_data.gamma_2 = g;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;
-            mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
+            mat_data.e_2(e*ndofs + i)    = p / r / (mat_data.gamma_2 - 1.0);
          }
       }
    }

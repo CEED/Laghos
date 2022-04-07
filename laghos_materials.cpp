@@ -80,12 +80,12 @@ PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
                                    PressureSpace space,
                                    ParGridFunction &alpha0,
                                    ParGridFunction &rho0, double g)
-   : problem(prob), mat_id(mid), p_space(space),
+   : gamma_mat(g), problem(prob), mat_id(mid), p_space(space),
      p_fec_L2(p_order, pmesh.Dimension(), BasisType::GaussLegendre),
      p_fec_H1(p_order, pmesh.Dimension(), BasisType::GaussLobatto),
      p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),
      p_L2(&p_fes_L2), p_H1(&p_fes_H1),
-     rho0DetJ0(p_L2.Size()), gamma(g)
+     rho0DetJ0(p_L2.Size())
 {
    p_L2 = 0.0;
    p_H1 = 0.0;
@@ -124,29 +124,31 @@ void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
    // Compute L2 pressure element by element.
    for (int e = 0; e < NE; e++)
    {
+      const int attr = p_fes_L2.GetParMesh()->GetAttribute(e);
+
       // The points (and their numbering) coincide with the nodes of p.
       const IntegrationRule &ir = p_fes_L2.GetFE(e)->GetNodes();
       const int nqp = ir.GetNPoints();
-      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
 
-      if (alpha(e) < 1e-12)
+      if ((attr == 10 && mat_id == 2) || (attr == 20 && mat_id == 1))
       {
          for (int q = 0; q < nqp; q++) { p_L2(e * nqp + q) = 0.0; }
          continue;
       }
 
+      ElementTransformation &Tr = *p_fes_L2.GetElementTransformation(e);
       energy.GetValues(Tr, ir, e_vals);
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
          const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
-         p_L2(e * nqp + q) = fmax(1e-5, (gamma - 1.0) * rho * e_vals(q));
+         p_L2(e * nqp + q) = fmax(1e-5, (gamma_mat - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && mat_id == 1)
          {
             // Water pressure in the water/air test.
-            p_L2(e * nqp + q) -= gamma * 6.0e8;
+            p_L2(e * nqp + q) -= gamma_mat * 6.0e8;
          }
       }
    }

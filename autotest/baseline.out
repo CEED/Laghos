@@ -134,21 +134,21 @@ mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -
 Material marker: 382.500000000000
 Face marker:     19.228517144192
 alpha norm: 3.750000000000
-v norm:     0.953762555031
-rho1 norm:  3.103079274422
-rho2 norm:  9.410782498303
-e1 norm:    8.839674720870
-e2 norm:    20.415755453839
+v norm:     0.952060898470
+rho1 norm:  3.103752569668
+rho2 norm:  9.410651251217
+e1 norm:    8.881690210423
+e2 norm:    20.390001407228
 dist norm:  0.000000000000
 
 mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
 Material marker: 382.500000000000
 Face marker:     19.228517144192
 alpha norm: 3.750000000000
-v norm:     1.052897377753
-rho1 norm:  3.102028736724
-rho2 norm:  9.411375570269
-e1 norm:    9.026680813823
-e2 norm:    20.476497785695
-dist norm:  64.380350539671
+v norm:     1.052818264978
+rho1 norm:  3.102363979460
+rho2 norm:  9.411312479623
+e1 norm:    9.042858497151
+e2 norm:    20.428130443615
+dist norm:  64.371243076206
 

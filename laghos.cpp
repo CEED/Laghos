@@ -490,14 +490,14 @@ int main(int argc, char *argv[])
       case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
-      case 3: visc = true; S.HostRead(); break;
+      case 3: visc = true; break;
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
       case 7: source = 2; visc = true; vorticity = true;  break;
       case 8: visc = true; break;
       case 9: visc = true; break;
-      case 10: visc = true; S.HostRead(); break;
+      case 10: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -689,6 +689,8 @@ int main(int argc, char *argv[])
       }
       else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
       {
+         pmesh->NewNodes(x_gf, false);
+
          // ALE step - the next remap period has been reached, the dt was ok.
          if (myid == 0)
          {
@@ -746,6 +748,8 @@ int main(int argc, char *argv[])
                  << "total_e err:    " << total_out - total_in << endl;
             cout << "interface err:  " << err << endl;
          }
+
+         hydro.ResetQuadratureData();
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
