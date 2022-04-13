@@ -51,7 +51,7 @@ static int problem, dim;
 
 char vishost[] = "localhost";
 int  visport   = 19916;
-const int ws = 280; // window size
+const int ws   = 200; // window size
 socketstream vis_mat, vis_faces, vis_alpha, vis_rho_1, vis_rho_2,
              vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_p, vis_xi, vis_dist;
 
@@ -187,7 +187,8 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-         if (problem == 10) {
+         if (problem == 10 || problem == 11)
+         {
              mesh = new Mesh(8, 4, Element::QUADRILATERAL, true, 7, 3);
              //mesh = new Mesh(2, 2, Element::QUADRILATERAL, true);
          }
@@ -469,7 +470,8 @@ int main(int argc, char *argv[])
    if (problem == 0)  { hydrodynamics::InitTG2Mat(mat_data); }
    if (problem == 8)  { hydrodynamics::InitSod2Mat(mat_data); }
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
-   if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
+   if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data, 0); }
+   if (problem == 11) { hydrodynamics::InitTriPoint2Mat(mat_data, 1); }
    InterfaceRhoCoeff rho_mixed_coeff(mat_data.alpha_1, mat_data.alpha_2,
                                      mat_data.rho0_1, mat_data.rho0_2);
 
@@ -498,6 +500,7 @@ int main(int argc, char *argv[])
       case 8: visc = true; break;
       case 9: visc = true; break;
       case 10: visc = true; break;
+      case 11: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -833,18 +836,24 @@ int main(int argc, char *argv[])
             visit_dc.Save();
          }
 
-         if (last_step && gfprint)
+         if (last_step || gfprint)
          {
-            std::ostringstream mesh_name, rho_name, v_name, e_name;
+            std::ostringstream mesh_name, rho_name, v_name, e_name, ls_name;
             mesh_name << basename << "_" << ti << "_mesh";
             rho_name  << basename << "_" << ti << "_rho";
             v_name << basename << "_" << ti << "_v";
             e_name << basename << "_" << ti << "_e";
+            ls_name << basename << "_" << ti << "_ls";
 
             std::ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
             pmesh->PrintAsOne(mesh_ofs);
             mesh_ofs.close();
+
+            std::ofstream ls_ofs(ls_name.str().c_str());
+            ls_ofs.precision(8);
+            mat_data.level_set.SaveAsOne(ls_ofs);
+            ls_ofs.close();
 
             std::ofstream rho_ofs(rho_name.str().c_str());
             rho_ofs.precision(8);
@@ -986,6 +995,7 @@ double rho0(const Vector &x)
       case 8: return (x(0) < 0.5) ? 1.0 : 0.125;
       case 9: return (x(0) < 0.7) ? 1000.0 : 50.;
       case 10: return (x(0) > 1.1 && x(1) > 1.5) ? 0.125 : 1.0; // initialized by another function.
+      case 11: return 0.0; // initialized by another  function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -1005,6 +1015,7 @@ double gamma_func(const Vector &x)
       case 8: return (x(0) < 0.5) ? 2.0 : 1.4;
       case 9: return (x(0) < 0.7) ? 4.4 : 1.4;
       case 10: return 0.0; // initialized by another function.
+      case 11: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -1075,6 +1086,7 @@ void v0(const Vector &x, Vector &v)
       case 8: v = 0.0; break;
       case 9: v = 0.0; break;
       case 10: v = 0.0; break;
+      case 11: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -1102,7 +1114,7 @@ double e0(const Vector &x)
       case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
                         : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
       case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+                                  : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
       case 4:
       {
          const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
@@ -1149,6 +1161,7 @@ double e0(const Vector &x)
       case 9: return (x(0) < 0.7) ? (1.0e9+gamma_func(x)*6.0e8) / rho0(x) / (gamma_func(x) - 1.0)
                                   : 1.0e5 / rho0(x) / (gamma_func(x) - 1.0);
       case 10: return 0.0; // initialized by another function.
+      case 11: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
