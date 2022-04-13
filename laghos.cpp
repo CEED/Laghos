@@ -484,6 +484,9 @@ int main(int argc, char *argv[])
    dist_solver.print_level = 0;
    if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
    else           { dist = 0.0; }
+   ParGridFunction xi_new(&pfes_xi);
+   dist_solver.ComputeScalarDistance(coeff_xi, xi_new);
+   mat_data.level_set = xi_new;
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;

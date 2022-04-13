@@ -12,24 +12,24 @@ dist norm:  0.000000000000
 mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.25 -rs 3 -vs 1 -mm -s_v 0 -s_e 0
 Material marker: 17.265625000000
 Face marker:     1.891199602849
-alpha norm: 0.282836539016
-v norm:     0.405259872043
-rho1 norm:  0.282811578277
-rho2 norm:  0.717188421723
-e1 norm:    0.375025404478
-e2 norm:    1.303285729731
+alpha norm: 0.268383927790
+v norm:     0.405259865646
+rho1 norm:  0.268358069999
+rho2 norm:  0.731641930001
+e1 norm:    0.375026274065
+e2 norm:    1.303285032445
 dist norm:  0.000000000000
 
 mpirun -np 1 laghos -p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 1 -s_e 4
 Material marker: 17.265625000000
 Face marker:     1.891199602849
-alpha norm: 0.282791476293
-v norm:     0.405294672150
-rho1 norm:  0.282811578277
-rho2 norm:  0.717188421723
-e1 norm:    0.375440388741
-e2 norm:    1.303628189099
-dist norm:  0.063588455199
+alpha norm: 0.268341316906
+v norm:     0.405298254192
+rho1 norm:  0.268358069999
+rho2 norm:  0.731641930001
+e1 norm:    0.375446619703
+e2 norm:    1.303636183887
+dist norm:  0.065079476719
 
 mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.1
 Material marker: 15.000000000000
@@ -56,13 +56,13 @@ dist norm:  0.000000000000
 mpirun -np 1 laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4
 Material marker: 14.950000000000
 Face marker:     0.128190114295
-alpha norm: 0.524043152370
-v norm:     0.082472561208
+alpha norm: 0.524185901239
+v norm:     0.082039855052
 rho1 norm:  0.505000000000
 rho2 norm:  0.061875000000
-e1 norm:    1.028808984654
-e2 norm:    0.990306433837
-dist norm:  0.195352914387
+e1 norm:    1.027620726719
+e2 norm:    0.990130173239
+dist norm:  0.195139110194
 
 mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4
 Material marker: 13.000000000000
@@ -89,13 +89,13 @@ dist norm:  0.00000000
 mpirun -np 1 laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4
 Material marker: 12.950000000000
 Face marker:     0.128190114295
-alpha norm: 0.75283571
-v norm:     129.14340954
+alpha norm: 0.75278131
+v norm:     128.99040812
 rho1 norm:  705.00000000
 rho2 norm:  14.50000000
-e1 norm:    785920.39458695
-e2 norm:    3698.78945842
-dist norm:  0.26317153
+e1 norm:    785923.90106924
+e2 norm:    3629.28208355
+dist norm:  0.26321159
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 1 -rs 1
 Material marker: 390.000000000000
@@ -122,33 +122,33 @@ dist norm:  0.000000000000
 mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4
 Material marker: 382.500000000000
 Face marker:     19.228517144192
-alpha norm: 3.753319591926
-v norm:     0.483542264036
+alpha norm: 3.753386119106
+v norm:     0.482568085793
 rho1 norm:  3.750000000000
 rho2 norm:  9.703125000000
-e1 norm:    9.201123288198
-e2 norm:    20.270755717342
-dist norm:  65.008615974824
+e1 norm:    9.194827439161
+e2 norm:    20.270466931335
+dist norm:  64.742149697715
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -ale 0.5
 Material marker: 382.500000000000
 Face marker:     19.228517144192
-alpha norm: 7.448648778694
-v norm:     6.452148613569
-rho1 norm:  3.044353623352
-rho2 norm:  8.829448236851
-e1 norm:    12.217166139523
-e2 norm:    18.073026832075
+alpha norm: 7.223474814407
+v norm:     6.436129665823
+rho1 norm:  2.880800570950
+rho2 norm:  8.945384224293
+e1 norm:    12.251602269402
+e2 norm:    19.963803573250
 dist norm:  0.000000000000
 
 mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
 Material marker: 382.500000000000
 Face marker:     19.228517144192
 alpha norm: 3.750000000000
-v norm:     1.052818264978
-rho1 norm:  3.102363979460
-rho2 norm:  9.411312479623
-e1 norm:    9.042858497151
-e2 norm:    20.428130443615
-dist norm:  64.371243076206
+v norm:     1.048106789665
+rho1 norm:  3.102571649302
+rho2 norm:  9.411250277676
+e1 norm:    9.030382757783
+e2 norm:    20.426484595073
+dist norm:  63.986215597067
 
