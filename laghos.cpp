@@ -877,7 +877,8 @@ int main(int argc, char *argv[])
             dacol.SetLevelsOfDetail(10);
             dacol.SetHighOrderOutput(true);
             dacol.RegisterField("interface", &mat_data.level_set);
-            dacol.RegisterField("density", &rho_gf_1);
+            dacol.RegisterField("density 1", &rho_gf_1);
+            dacol.RegisterField("density 2", &rho_gf_2);
             dacol.RegisterField("velocity", &v_gf);
             dacol.RegisterField("materials", &marker.mat_attr);
             dacol.SetTime(1.0);
