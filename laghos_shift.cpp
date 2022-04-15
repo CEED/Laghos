@@ -186,7 +186,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
       }
       case 12:
       {
-         if (x(0) >= 0.5   && x(0) <= 0.626) { return -1.0; }
+         if (x(0) >= 0.5   && x(0) <= 0.625) { return -1.0; }
          if (x(0) >= 0.25  && x(0) <= 0.5 &&
              x(1) >= 0.375 && x(1) <= 0.625) { return -1.0; }
          return 1.0;
@@ -1222,7 +1222,7 @@ void InitImpact(MaterialData &mat_data, ParGridFunction &v)
    Array<int> vdofs;
 
    v = 0.0;
-   mat_data.gamma_1 = 1.5;
+   mat_data.gamma_1 = 10.0;
    mat_data.gamma_2 = 1.4;
    mat_data.rho0_1  = 0.0;
    mat_data.e_1     = 0.0;
@@ -1241,7 +1241,8 @@ void InitImpact(MaterialData &mat_data, ParGridFunction &v)
       if (attr == 10 || attr == 15)
       {
          // Impactor and Wall.
-         r = 2.0; p = 2.0;
+         r = 10.0; p = 1.0;
+         if (x <= 0.5) { r = 20.0; }
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_1(e*ndofs + i) = r;
@@ -1254,7 +1255,7 @@ void InitImpact(MaterialData &mat_data, ParGridFunction &v)
             {
                v(vdofs[i]) = max(v(vdofs[i]), 0.0);
             }
-            else { v(vdofs[i]) = 1.0; }
+            else { v(vdofs[i]) = 0.5; }
          }
       }
 
