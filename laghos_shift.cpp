@@ -40,6 +40,7 @@ int SIMarker::GetMaterialID(int el_id)
    {
       const IntegrationPoint &ip = ir.IntPoint(q);
       Tr->SetIntPoint(&ip);
+
       if (ls_vals(q) - 1e-12 > 0.0) { has_pos_value = true; }
       if (ls_vals(q) + 1e-12 < 0.0) { has_neg_value = true; }
    }
@@ -182,6 +183,13 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
 
          // The middle of the element after x = 1.
          return 0.2 * fmin(x(0) - 1.0, 1.5 - x(1));
+      }
+      case 12:
+      {
+         if (x(0) >= 0.5   && x(0) <= 0.626) { return -1.0; }
+         if (x(0) >= 0.25  && x(0) <= 0.5 &&
+             x(1) >= 0.375 && x(1) <= 0.625) { return -1.0; }
+         return 1.0;
       }
       default: MFEM_ABORT("error"); return 0.0;
    }
@@ -1195,6 +1203,65 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
          {
             r = 0.125;
          }
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (mat_data.gamma_2 - 1.0);
+         }
+      }
+   }
+}
+
+void InitImpact(MaterialData &mat_data, ParGridFunction &v)
+{
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
+   ParFiniteElementSpace &pfes_v = *v.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = mat_data.e_1.Size() / NE;
+   double r, p;
+   Array<int> vdofs;
+
+   v = 0.0;
+   mat_data.gamma_1 = 1.5;
+   mat_data.gamma_2 = 1.4;
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+      Vector center(2);
+      pfes.GetParMesh()->GetElementCenter(e, center);
+      const double x = center(0), y = center(1);
+
+      pfes_v.GetElementVDofs(e, vdofs);
+      const int nvdof = vdofs.Size() / 2;
+
+      if (attr == 10 || attr == 15)
+      {
+         // Impactor and Wall.
+         r = 2.0; p = 2.0;
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = p / r / (mat_data.gamma_1 - 1.0);
+         }
+         for (int i = 0; i < nvdof; i++)
+         {
+            v(vdofs[nvdof + i]) = 0.0;
+            if (x >= 0.5 || y <= 0.375 || y >= 0.625)
+            {
+               v(vdofs[i]) = max(v(vdofs[i]), 0.0);
+            }
+            else { v(vdofs[i]) = 1.0; }
+         }
+      }
+
+      if (attr == 15 || attr == 20)
+      {
+         // Background.
+         r = 1.0; p = 1.0;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;

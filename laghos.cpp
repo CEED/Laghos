@@ -409,12 +409,21 @@ int main(int argc, char *argv[])
 
 // #define EXTRACT_1D
 
+   // Distance vector and distance solver setup.
+   ParGridFunction dist(&H1FESpace);
+   dist = 0.0;
+   VectorGridFunctionCoefficient dist_coeff(&dist);
+   PLapDistanceSolver dist_solver(7);
+   dist_solver.print_level = 0;
+
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
    mat_data.level_set.SetSpace(&pfes_xi);
    hydrodynamics::InterfaceCoeff coeff_ls_0(problem, *pmesh, pure_test);
-   mat_data.level_set.ProjectCoefficient(coeff_ls_0);
+   dist_solver.ComputeScalarDistance(coeff_ls_0, mat_data.level_set);
    GridFunctionCoefficient coeff_xi(&mat_data.level_set);
+
+   if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 
    // Material marking and visualization functions.
    SIMarker marker(mat_data.level_set, mat_fes);
@@ -472,21 +481,9 @@ int main(int argc, char *argv[])
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
    if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data, 0); }
    if (problem == 11) { hydrodynamics::InitTriPoint2Mat(mat_data, 1); }
+   if (problem == 12) { hydrodynamics::InitImpact(mat_data, v_gf); }
    InterfaceRhoCoeff rho_mixed_coeff(mat_data.alpha_1, mat_data.alpha_2,
                                      mat_data.rho0_1, mat_data.rho0_2);
-
-   // Distance vector.
-   ParGridFunction dist(&H1FESpace);
-   VectorGridFunctionCoefficient dist_coeff(&dist);
-   PLapDistanceSolver dist_solver(7);
-   //HeatDistanceSolver dist_solver(2.0);
-   //dist_solver.diffuse_iter = 1;
-   dist_solver.print_level = 0;
-   if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
-   else           { dist = 0.0; }
-   ParGridFunction xi_new(&pfes_xi);
-   dist_solver.ComputeScalarDistance(coeff_xi, xi_new);
-   mat_data.level_set = xi_new;
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
@@ -504,6 +501,7 @@ int main(int argc, char *argv[])
       case 9: visc = true; break;
       case 10: visc = true; break;
       case 11: visc = true; break;
+      case 12: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -1000,6 +998,7 @@ double rho0(const Vector &x)
       case 9: return (x(0) < 0.7) ? 1000.0 : 50.;
       case 10: return (x(0) > 1.1 && x(1) > 1.5) ? 0.125 : 1.0; // initialized by another function.
       case 11: return 0.0; // initialized by another  function.
+      case 12: return 0.0; // initialized by another  function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -1020,6 +1019,7 @@ double gamma_func(const Vector &x)
       case 9: return (x(0) < 0.7) ? 4.4 : 1.4;
       case 10: return 0.0; // initialized by another function.
       case 11: return 0.0; // initialized by another function.
+      case 12: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -1091,6 +1091,7 @@ void v0(const Vector &x, Vector &v)
       case 9: v = 0.0; break;
       case 10: v = 0.0; break;
       case 11: v = 0.0; break;
+      case 12: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -1166,6 +1167,7 @@ double e0(const Vector &x)
                                   : 1.0e5 / rho0(x) / (gamma_func(x) - 1.0);
       case 10: return 0.0; // initialized by another function.
       case 11: return 0.0; // initialized by another function.
+      case 12: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
