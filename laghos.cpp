@@ -425,6 +425,13 @@ int main(int argc, char *argv[])
 
    if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
 
+   ConstantCoefficient z(0.0);
+   double ed = dist.ComputeL1Error(z);
+   if (myid == 0)
+   {
+      cout << std::setprecision(12) << "init dist norm: " << ed << endl;
+   }
+
    // Material marking and visualization functions.
    SIMarker marker(mat_data.level_set, mat_fes);
    int zone_id_10, zone_id_15 = -1, zone_id_20;
@@ -464,11 +471,6 @@ int main(int argc, char *argv[])
                 << "Face marker:     " << f_err << endl;
    }
 
-   // Some verifications.
-   if (si_options.e_shift_type > 1)
-   {
-      MFEM_VERIFY(mpi.WorldSize() == 1, "The e terms are not parallel yet.");
-   }
    if (si_options.e_shift_type == 1)
    {
       MFEM_VERIFY(si_options.v_shift_type >= 1 || si_options.v_shift_type <= 5,

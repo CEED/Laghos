@@ -73,7 +73,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    xtrap.xtrap_type     = Extrapolator::ASLAM;
    xtrap.advection_mode = AdvectionOper::LO;
    xtrap.xtrap_degree   = 0;
-   ParGridFunction lset_1(xi), lset_2(xi);
+   ParGridFunction lset_1(mat_data.level_set), lset_2(mat_data.level_set);
    // First material is for level_set < 0, so we need to flip.
    lset_1 *= -1;
    GridFunctionCoefficient lset_1_coeff(&lset_1), lset_2_coeff(&lset_2);
@@ -90,18 +90,19 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    e_2_max = e_2.Max();
    MPI_Allreduce(MPI_IN_PLACE, &e_2_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
 
-
    // Get densities as GridFunctions.
    SolutionMover mover(rho_ir);
-   mover.MoveDensityLR(rhoDetJw_1, rho_1);
-   mover.MoveDensityLR(rhoDetJw_2, rho_2);
+   ParGridFunction r1(mat_data.e_1.ParFESpace()),
+                   r2(mat_data.e_1.ParFESpace());
+   mover.MoveDensityLR(rhoDetJw_1, r1);
+   mover.MoveDensityLR(rhoDetJw_2, r2);
 
    // Extrapolate rho_1.
    xtrap.Extrapolate(lset_1_coeff, mat_data.alpha_1,
-                     rho_1, 5.0, rho_1);
+                     r1, 5.0, rho_1);
    // Extrapolate rho_2.
    xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
-                     rho_2, 5.0, rho_2);
+                     r2, 5.0, rho_2);
 }
 
 void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,

@@ -153,10 +153,10 @@ public:
                                        Vector &elvect)
    { MFEM_ABORT("should not be used"); }
 
-   virtual void AssembleRHSFaceVect(const FiniteElement &el_1,
-                                    const FiniteElement &el_2,
-                                    FaceElementTransformations &Trans,
-                                    Vector &elvect);
+   virtual void AssembleRHSElementVect(const FiniteElement &el_1,
+                                       const FiniteElement &el_2,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
    void SetVandE(const ParGridFunction *vel, const ParGridFunction *en)
    { v = vel; e = en; }
    void UnsetVandE() { v = nullptr; e = nullptr; }

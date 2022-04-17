@@ -661,10 +661,9 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_face_fe,
    //delete h1_vol_fe;
 }
 
-void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
-                                                    const FiniteElement &el_2,
-                                                    FaceElementTransformations &Trans,
-                                                    Vector &elvect)
+void EnergyInterfaceIntegrator::AssembleRHSElementVect(
+      const FiniteElement &el_1, const FiniteElement &el_2,
+      FaceElementTransformations &Trans, Vector &elvect)
 {
    MFEM_VERIFY(v != nullptr, "Velocity pointer has not been set!");
    MFEM_VERIFY(e != nullptr, "Energy pointer has not been set!");
@@ -673,14 +672,16 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
    const int l2dofs_cnt = el_1.GetDof();
    const int dim = el_1.GetDim();
+   const int NE = mat_data.alpha_1.FESpace()->GetNE();
+   const bool local_face = (Trans.Elem2No < NE);
 
-   if (Trans.Elem2No < 0)
+   if (local_face == false)
    {
-      // This case should take care of shared (MPI) faces. They will get
-      // processed by both MPI tasks.
+      // This is a shared face between mpi tasks.
+      // Each task assembles only its side, but uses info from the neighbor.
       elvect.SetSize(l2dofs_cnt);
    }
-   elvect.SetSize(l2dofs_cnt * 2);
+   else { elvect.SetSize(l2dofs_cnt * 2); }
    elvect = 0.0;
 
    // The early return must be done after elvect.SetSize().
@@ -688,9 +689,6 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    const int attr_face = Trans.Attribute;
    if (mat_id == 1 && attr_face != 20) { return; }
    if (mat_id == 2 && attr_face != 10) { return; }
-
-   MFEM_VERIFY(Trans.Elem2No >=  0,
-               "Not supported yet (TODO) - we assume both sides are present");
 
    ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
@@ -717,8 +715,12 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
    else { MFEM_ABORT("Invalid marking configuration."); }
 
    // The alpha scaling is always taken from the mixed element.
-   double alpha_scale = (attr_e1 == 15) ? mat_data.alpha_1(Trans_e1.ElementNo)
-                                        : mat_data.alpha_1(Trans_e2.ElementNo);
+   // GetValue() is used so that this can work in parallel.
+   double alpha_scale = (attr_e1 == 15)
+      ? mat_data.alpha_1.GetValue(Trans_e1,
+                                  Geometries.GetCenter(el_1.GetGeomType()))
+      : mat_data.alpha_1.GetValue(Trans_e2,
+                                  Geometries.GetCenter(el_2.GetGeomType()));
    // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
    MFEM_VERIFY(alpha_scale > 1e-12 && alpha_scale < 1.0-1e-12,
@@ -761,8 +763,11 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
 
       // 2nd element stuff.
       const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
-      p_e2->GetGradient(Trans_e2, p_grad_q2);
-      v->GetVectorGradient(Trans_e2, v_grad_q2);
+      if (local_face)
+      {
+         p_e2->GetGradient(Trans_e2, p_grad_q2);
+         v->GetVectorGradient(Trans_e2, v_grad_q2);
+      }
 
 //      const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
 //      const double rho_1  = qdata_face.rho0DetJ0(idx) /
@@ -829,12 +834,16 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
       Vector gradv_d_n_n_e1(true_normal);
       gradv_d_n_n_e1 *= gradv_d_n;
 
-      v_grad_q2.Mult(d_q, gradv_d);
-      gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e2(true_normal);
-      gradv_d_n_n_e2 *= gradv_d_n;
+      double jump_gradv_d_n_n = 0.0;
+      if (local_face)
+      {
+         v_grad_q2.Mult(d_q, gradv_d);
+         gradv_d_n = gradv_d * true_normal;
+         gradv_d_n_n_e2 *= gradv_d_n;
 
-      double jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
+         jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
+      }
 
       // + < [((grad_v d).n) n], {p phi} > (form 4)
       if (form == 4)
@@ -847,11 +856,14 @@ void EnergyInterfaceIntegrator::AssembleRHSFaceVect(const FiniteElement &el_1,
          elvect_e1.Add(+1.0, shape_e);
 
          // 2nd element.
-         el_2.CalcShape(ip_e2, shape_e);
-         shape_e *= ip_f.weight * alpha_scale *
-                    (gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
-         Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-         elvect_e2.Add(-1.0, shape_e);
+         if (local_face)
+         {
+            el_2.CalcShape(ip_e2, shape_e);
+            shape_e *= ip_f.weight * alpha_scale *
+                       (gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
+            Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+            elvect_e2.Add(-1.0, shape_e);
+         }
       }
 
       // - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>

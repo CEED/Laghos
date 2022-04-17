@@ -60,6 +60,8 @@ public:
    }
 
    ParGridFunction &GetPressure() { return (p_space == L2) ? p_L2 : p_H1; }
+
+   void ExchangeFaceNbrData() { GetPressure().ExchangeFaceNbrData(); }
 };
 
 void UpdateAlpha(const ParGridFunction &level_set,

@@ -286,21 +286,20 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
-   Array<int> attr;
    auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data,
                                                dist_coeff, cfqdata);
    efi_1->SetIntRule(cfir);
    efi_1->e_shift_type    = si_options.e_shift_type;
    efi_1->diffusion       = si_options.e_shift_diffusion;
    efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
-   FaceForceEnergy_1.AddTraceFaceIntegrator(efi_1, attr);
+   FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
    auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data,
                                                dist_coeff, cfqdata);
    efi_2->SetIntRule(cfir);
    efi_2->e_shift_type    = si_options.e_shift_type;
    efi_2->diffusion       = si_options.e_shift_diffusion;
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
-   FaceForceEnergy_2.AddTraceFaceIntegrator(efi_2, attr);
+   FaceForceEnergy_2.AddInteriorFaceIntegrator(efi_2);
 
    if (si_options.v_shift_type > 0)
    {
@@ -395,6 +394,14 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    HypreParMatrix A;
    Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 
+//   double ff = B.Norml1();
+//   MPI_Allreduce(MPI_IN_PLACE, &ff, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+//   if (H1.GetMyRank() == 0)
+//   {
+//      cout << "v rhs: " << scientific << ff << endl;
+//   }
+//   MFEM_ABORT("velocity parallel stop");
+
    CGSolver cg(H1.GetParMesh()->GetComm());
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
@@ -422,9 +429,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    energy_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
    auto tfi_v = FaceForce.GetFBFI();
    auto v_integ = dynamic_cast<FaceForceIntegrator *>((*tfi_v)[0]);
-   auto tfi_e_1 = FaceForceEnergy_1.GetTLFI();
+   auto tfi_e_1 = FaceForceEnergy_1.GetIFLFI();
    auto e_integ_1 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_1)[0]);
-   auto tfi_e_2 = FaceForceEnergy_2.GetTLFI();
+   auto tfi_e_2 = FaceForceEnergy_2.GetIFLFI();
    auto e_integ_2 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_2)[0]);
    v_integ->SetVelocity(vel);
    e_integ_1->SetVandE(&vel, &energy_1);
@@ -458,19 +465,27 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
 
-//   const double eold_1 = e_rhs_1.Norml2(),
-//                eold_2 = e_rhs_2.Norml2();
    if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs_1, 1.0); }
    if (si_options.e_shift_type > 1)
    {
+      pmesh->ExchangeFaceNbrNodes();
+      mat_data.alpha_1.ExchangeFaceNbrData();
+      mat_data.alpha_2.ExchangeFaceNbrData();
+      mat_data.p_1->ExchangeFaceNbrData();
+      mat_data.p_2->ExchangeFaceNbrData();
       FaceForceEnergy_1.Assemble();
       e_rhs_1 -= FaceForceEnergy_1;
       FaceForceEnergy_2.Assemble();
       e_rhs_2 -= FaceForceEnergy_2;
    }
-//   cout << "e rhs diff: " << std::scientific
-//        << fabs(e_rhs_1.Norml2() - eold_1) << " "
-//        << fabs(e_rhs_2.Norml2() - eold_2) << endl;
+//   double ff1 = FaceForceEnergy_1.Norml1(),
+//          ff2 = FaceForceEnergy_2.Norml1();
+//   MPI_Allreduce(MPI_IN_PLACE, &ff1, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+//   MPI_Allreduce(MPI_IN_PLACE, &ff2, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+//   if (H1.GetMyRank() == 0)
+//   {
+//      cout << "e rhs diff: " << scientific << ff1 << " " << ff2  << endl;
+//   }
 
    if (e_source) { e_rhs_1 += *e_source; e_rhs_2 += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
