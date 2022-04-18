@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
       {
          int n = 2;
          if (problem == 8 || problem == 9) { n = zones; }
-         mesh = new Mesh(n);
+         mesh = new Mesh(Mesh::MakeCartesian1D(n));
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
@@ -189,11 +189,13 @@ int main(int argc, char *argv[])
       {
          if (problem == 10 || problem == 11)
          {
-             mesh = new Mesh(8, 4, Element::QUADRILATERAL, true, 7, 3);
+             mesh = new Mesh(Mesh::MakeCartesian2D(8, 4, Element::QUADRILATERAL,
+                                                   true, 7, 3));
              //mesh = new Mesh(2, 2, Element::QUADRILATERAL, true);
          }
          else
-         { mesh = new Mesh(2, 2, Element::QUADRILATERAL, true); }
+         { mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
+                                                 true)); }
 
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
@@ -205,7 +207,8 @@ int main(int argc, char *argv[])
       }
       if (dim == 3)
       {
-         mesh = new Mesh(2, 2, 2, Element::HEXAHEDRON, true);
+         mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2,
+                                               Element::HEXAHEDRON, true));
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
          {
