@@ -386,10 +386,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    if (si_options.v_shift_type > 0)
    {
       pmesh->ExchangeFaceNbrNodes();
-      mat_data.alpha_1.ExchangeFaceNbrData();
-      mat_data.alpha_2.ExchangeFaceNbrData();
-      mat_data.p_1->ExchangeFaceNbrData();
-      mat_data.p_2->ExchangeFaceNbrData();
       FaceForceMomentum.Assemble();
       rhs += FaceForceMomentum;
    }
@@ -474,10 +470,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    if (si_options.e_shift_type > 1)
    {
       pmesh->ExchangeFaceNbrNodes();
-      mat_data.alpha_1.ExchangeFaceNbrData();
-      mat_data.alpha_2.ExchangeFaceNbrData();
-      mat_data.p_1->ExchangeFaceNbrData();
-      mat_data.p_2->ExchangeFaceNbrData();
       FaceForceEnergy_1.Assemble();
       e_rhs_1 -= FaceForceEnergy_1;
       FaceForceEnergy_2.Assemble();
@@ -691,6 +683,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
    mat_data.p_1->UpdatePressure(mat_data.alpha_1, e_1);
    mat_data.p_2->UpdatePressure(mat_data.alpha_2, e_2);
+   if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
+   {
+      // Needed for shifted face integrals in parallel.
+      mat_data.alpha_1.ExchangeFaceNbrData();
+      mat_data.alpha_2.ExchangeFaceNbrData();
+      mat_data.p_1->ExchangeFaceNbrData();
+      mat_data.p_2->ExchangeFaceNbrData();
+   }
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this
