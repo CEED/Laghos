@@ -661,6 +661,159 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_face_fe,
    //delete h1_vol_fe;
 }
 
+void MomentumInterfaceIntegrator::AssembleRHSElementVect(
+      const FiniteElement &el_1, const FiniteElement &el_2,
+      FaceElementTransformations &Trans, Vector &elvect)
+{
+   MFEM_VERIFY(v_shift_type == 1, "Implemented only for type 1.");
+
+   const int h1dofs_cnt = el_1.GetDof();
+   const int dim = el_1.GetDim();
+   const int NE = mat_data.alpha_1.FESpace()->GetNE();
+   const bool local_face = (Trans.Elem2No < NE);
+
+   if (local_face == false)
+   {
+      // This is a shared face between mpi tasks.
+      // Each task assembles only its side, but uses info from the neighbor.
+      elvect.SetSize(h1dofs_cnt * dim);
+   }
+   else { elvect.SetSize(h1dofs_cnt * dim * 2); }
+   elvect = 0.0;
+
+   // The early return must be done after elmat.SetSize().
+   const int attr_face = Trans.Attribute;
+   if (attr_face != 10 && attr_face != 20) { return; }
+
+   ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
+   ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
+
+   const int attr_e1 = Trans_e1.Attribute;
+   const ParGridFunction *p_e1, *p_e2;
+   double gamma_e1, gamma_e2;
+   if ( (attr_face == 10 && attr_e1 == 10) ||
+        (attr_face == 20 && attr_e1 == 15) )
+   {
+      p_e1     = &mat_data.p_1->GetPressure();
+      gamma_e1 = mat_data.gamma_1;
+      p_e2     = &mat_data.p_2->GetPressure();
+      gamma_e2 = mat_data.gamma_2;
+   }
+   else if ( (attr_face == 10 && attr_e1 == 15) ||
+             (attr_face == 20 && attr_e1 == 20) )
+   {
+      p_e1     = &mat_data.p_2->GetPressure();
+      gamma_e1 = mat_data.gamma_2;
+      p_e2     = &mat_data.p_1->GetPressure();
+      gamma_e2 = mat_data.gamma_1;
+   }
+   else { MFEM_ABORT("Invalid marking configuration."); }
+
+   // The alpha scaling is always taken from the mixed element.
+   // GetValue() is used so that this can work in parallel.
+   double alpha_scale = (attr_e1 == 15)
+      ? mat_data.alpha_1.GetValue(Trans_e1,
+                                  Geometries.GetCenter(el_1.GetGeomType()))
+      : mat_data.alpha_1.GetValue(Trans_e2,
+                                  Geometries.GetCenter(el_2.GetGeomType()));
+   // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
+   if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
+   MFEM_VERIFY(alpha_scale > 1e-12 && alpha_scale < 1.0-1e-12,
+               "The mixed zone is a 1-material zone! Check it.");
+
+   Vector h1_shape(h1dofs_cnt);
+   Vector nor(dim);
+
+   const IntegrationRule *ir = IntRule;
+   MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
+   const int nqp_face = IntRule->GetNPoints();
+
+   // The distance vector is a continuous function.
+   Vector d_q(dim);
+   Vector p_grad_q1(dim), p_grad_q2(dim);
+
+   for (int q = 0; q < nqp_face; q++)
+   {
+      // Set the integration point in the face and the neighboring elements
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+      const IntegrationPoint &ip_e2 = Trans.GetElement2IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+      nor *= ip_f.weight;
+
+      // Compute el1 quantities.
+      Trans_e1.SetIntPoint(&ip_e1);
+      p_e1->GetGradient(Trans_e1, p_grad_q1);
+      dist.Eval(d_q, Trans_e1, ip_e1);
+      const double grad_p_d_q1 = d_q * p_grad_q1;
+      const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
+
+      // Compute el2 quantities.
+      Trans_e2.SetIntPoint(&ip_e2);
+      p_e2->GetGradient(Trans_e2, p_grad_q2);
+      const double grad_p_d_q2 = d_q * p_grad_q2;
+      const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
+
+      MFEM_VERIFY(p_q1 > 0.0 && p_q2 > 0.0, "negative pressure");
+      const double gamma_avg = p_q1 / (p_q1 + p_q2);
+
+      // 1st element.
+      {
+         // Shape functions in the 1st element.
+         el_1.CalcShape(ip_e1, h1_shape);
+
+         for (int j = 0; j < h1dofs_cnt; j++)
+         {
+            double h1_shape_part = h1_shape(j);
+            double p_shift_part = grad_p_d_q1;
+
+            // Scalings: (i) user parameter and (ii) cut volume fraction.
+            p_shift_part *= v_shift_scale;
+            p_shift_part *= alpha_scale;
+
+            for (int d = 0; d < dim; d++)
+            {
+               elvect(d*h1dofs_cnt + j)
+                  += p_shift_part * h1_shape_part * nor(d);
+            }
+         }
+      }
+      // 2nd element if there is such (subtracting from the 1st).
+      if (local_face)
+      {
+         // L2 shape functions on the 2nd element.
+         el_2.CalcShape(ip_e2, h1_shape);
+
+         for (int j = 0; j < h1dofs_cnt; j++)
+         {
+            double h1_shape_part = h1_shape(j);
+            double p_shift_part = grad_p_d_q2;
+
+            // Scalings: (i) user parameter and (ii) cut volume fraction.
+            p_shift_part *= v_shift_scale;
+            p_shift_part *= alpha_scale;
+
+            for (int d = 0; d < dim; d++)
+            {
+               elvect(dim*h1dofs_cnt + d*h1dofs_cnt + j)
+                  -= p_shift_part * h1_shape_part * nor(d);
+            }
+         }
+      }
+   }
+}
+
 void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       const FiniteElement &el_1, const FiniteElement &el_2,
       FaceElementTransformations &Trans, Vector &elvect)

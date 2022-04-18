@@ -22,7 +22,7 @@ e1 norm:    0.375026274065
 e2 norm:    1.303285032445
 dist norm:  0.000000000000
 
-mpirun -np 1 laghos -p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 1 -s_e 4
 init dist norm: 0.0652179042989
 Material marker: 17.265625000000
 Face marker:     1.891199602849
@@ -58,7 +58,7 @@ e1 norm:    1.025244492122
 e2 norm:    0.866544893621
 dist norm:  0.000000000000
 
-mpirun -np 1 laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4
 init dist norm: 0.196333510219
 Material marker: 14.950000000000
 Face marker:     0.128190114295
@@ -94,7 +94,7 @@ e1 norm:    785833.50382092
 e2 norm:    3216.89810678
 dist norm:  0.00000000
 
-mpirun -np 1 laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4
 init dist norm: 0.240829852107
 Material marker: 12.950000000000
 Face marker:     0.128190114295
@@ -130,7 +130,7 @@ e1 norm:    10.736205835741
 e2 norm:    19.685329558901
 dist norm:  0.000000000000
 
-mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4
 init dist norm: 64.7418661092
 Material marker: 382.500000000000
 Face marker:     19.228517144192
@@ -154,7 +154,7 @@ e1 norm:    12.258937082769
 e2 norm:    19.858450543049
 dist norm:  0.000000000000
 
-mpirun -np 1 laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
+mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
 init dist norm: 64.7418661092
 Material marker: 382.500000000000
 Face marker:     19.228517144192
@@ -164,5 +164,5 @@ rho1 norm:  3.102536825332
 rho2 norm:  9.411270389595
 e1 norm:    9.029539889090
 e2 norm:    20.426551557233
-dist norm:  63.973270814579
+dist norm:  63.973270814578
 
