@@ -1377,16 +1377,14 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
    }
 }
 
-void InitImpact(MaterialData &mat_data, ParGridFunction &v)
+void InitImpact(MaterialData &mat_data)
 {
    ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
-   ParFiniteElementSpace &pfes_v = *v.ParFESpace();
    const int NE    = pfes.GetNE();
    const int ndofs = mat_data.e_1.Size() / NE;
    double r, p;
    Array<int> vdofs;
 
-   v = 0.0;
    mat_data.gamma_1 = 10.0;
    mat_data.gamma_2 = 1.4;
    mat_data.rho0_1  = 0.0;
@@ -1400,9 +1398,6 @@ void InitImpact(MaterialData &mat_data, ParGridFunction &v)
       pfes.GetParMesh()->GetElementCenter(e, center);
       const double x = center(0), y = center(1);
 
-      pfes_v.GetElementVDofs(e, vdofs);
-      const int nvdof = vdofs.Size() / 2;
-
       if (attr == 10 || attr == 15)
       {
          // Impactor and Wall.
@@ -1412,15 +1407,6 @@ void InitImpact(MaterialData &mat_data, ParGridFunction &v)
          {
             mat_data.rho0_1(e*ndofs + i) = r;
             mat_data.e_1(e*ndofs + i)    = p / r / (mat_data.gamma_1 - 1.0);
-         }
-         for (int i = 0; i < nvdof; i++)
-         {
-            v(vdofs[nvdof + i]) = 0.0;
-            if (x >= 0.5 || y <= 0.375 || y >= 0.625)
-            {
-               v(vdofs[i]) = max(v(vdofs[i]), 0.0);
-            }
-            else { v(vdofs[i]) = 0.5; }
          }
       }
 

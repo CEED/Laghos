@@ -486,7 +486,7 @@ int main(int argc, char *argv[])
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
    if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data, 0); }
    if (problem == 11) { hydrodynamics::InitTriPoint2Mat(mat_data, 1); }
-   if (problem == 12) { hydrodynamics::InitImpact(mat_data, v_gf); }
+   if (problem == 12) { hydrodynamics::InitImpact(mat_data); }
    InterfaceRhoCoeff rho_mixed_coeff(mat_data.alpha_1, mat_data.alpha_2,
                                      mat_data.rho0_1, mat_data.rho0_2);
 
@@ -1096,7 +1096,16 @@ void v0(const Vector &x, Vector &v)
       case 9: v = 0.0; break;
       case 10: v = 0.0; break;
       case 11: v = 0.0; break;
-      case 12: v = 0.0; break;
+      case 12:
+      {
+         v(1) = 0.0;
+         if (x(0) < 0.25 || x(0) > 0.5 || x(1) < 0.375 || x(1) > 0.625)
+         {
+            v(0) = 0.0;
+         }
+         else { v(0) = 0.5; }
+         break;
+      }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
