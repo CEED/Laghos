@@ -603,53 +603,52 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    }
 }
 
-double LagrangianHydroOperator::Mass() const
+double LagrangianHydroOperator::Mass(int mat_id) const
 {
-   double mass = qdata.rho0DetJ0w_1.Sum();
+   double mass = (mat_id == 1) ? qdata.rho0DetJ0w_1.Sum()
+                               : qdata.rho0DetJ0w_2.Sum();
    MPI_Allreduce(MPI_IN_PLACE, &mass, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
    return mass;
 }
 
-double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e) const
+double LagrangianHydroOperator::InternalEnergy(
+   const ParGridFunction &alpha_1, const ParGridFunction &e_1,
+   const ParGridFunction &alpha_2, const ParGridFunction &e_2) const
 {
-   double glob_ie = 0.0;
-
-   Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
+   Vector one(l2dofs_cnt), loc_e_1(l2dofs_cnt), loc_e_2(l2dofs_cnt);
    one = 1.0;
    Array<int> l2dofs;
-   double loc_ie = 0.0;
+   double ie = 0.0;
    for (int k = 0; k < NE; k++)
    {
       L2.GetElementDofs(k, l2dofs);
-      e.GetSubVector(l2dofs, loc_e);
-      loc_ie += Me_1(k).InnerProduct(loc_e, one);
+      e_1.GetSubVector(l2dofs, loc_e_1);
+      e_2.GetSubVector(l2dofs, loc_e_2);
+      ie += alpha_1(k) * Me_1(k).InnerProduct(loc_e_1, one) +
+                alpha_2(k) * Me_2(k).InnerProduct(loc_e_2, one);
    }
-   MPI_Comm comm = H1.GetParMesh()->GetComm();
-   MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
+   MPI_Allreduce(MPI_IN_PLACE, &ie, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
 
-   return glob_ie;
+   return ie;
 }
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
    double glob_ke = 0.0;
-   // This should be turned into a kernel so that it could be displayed in pa
-   double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
-   MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
-                 H1.GetParMesh()->GetComm());
-   return glob_ke;
+   double ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+
+   MPI_Allreduce(MPI_IN_PLACE, &ke, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
+   return ke;
 }
 
 double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 {
    Vector one(Mv_spmat_copy.Height());
    one = 1.0;
-   double loc_m = Mv_spmat_copy.InnerProduct(one, v);
+   double momentum = Mv_spmat_copy.InnerProduct(one, v);
 
-   double glob_m;
-   MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
-                 H1.GetParMesh()->GetComm());
-   return glob_m;
+   MPI_Allreduce(MPI_IN_PLACE, &momentum, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
+   return momentum;
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].

@@ -536,9 +536,12 @@ int main(int argc, char *argv[])
       hydro.ComputeDensity(2, rho_gf_2);
    }
 
-   const double energy_init = hydro.InternalEnergy(mat_data.e_1) +
-                              hydro.KineticEnergy(v_gf);
-   const double momentum_init = hydro.Momentum(v_gf);
+   const double mass_init   = hydro.Mass(1);
+   const double energy_init =
+         hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
+                              mat_data.alpha_2, mat_data.e_2) +
+         hydro.KineticEnergy(v_gf);
+   const double moment_init = hydro.Momentum(v_gf);
 
    if (visualization)
    {
@@ -708,9 +711,11 @@ int main(int argc, char *argv[])
          }
 
          // Conserved quantities at the start of the ALE step.
-         double mass_in     = hydro.Mass(),
+         double mass_in     = hydro.Mass(1),
                 momentum_in = hydro.Momentum(v_gf),
-                internal_in = hydro.InternalEnergy(mat_data.e_1),
+                internal_in = hydro.InternalEnergy(
+                                 mat_data.alpha_1, mat_data.e_1,
+                                 mat_data.alpha_2, mat_data.e_2),
                 kinetic_in  = hydro.KineticEnergy(v_gf),
                 total_in    = internal_in + kinetic_in;
 
@@ -738,9 +743,11 @@ int main(int argc, char *argv[])
          ale_cnt++;
 
          // Conserved quantities at the exit of the ALE step.
-         double mass_out     = hydro.Mass(),
+         double mass_out     = hydro.Mass(1),
                 momentum_out = hydro.Momentum(v_gf),
-                internal_out = hydro.InternalEnergy(mat_data.e_1),
+                internal_out = hydro.InternalEnergy(
+                                  mat_data.alpha_1, mat_data.e_1,
+                                  mat_data.alpha_2, mat_data.e_2),
                 kinetic_out  = hydro.KineticEnergy(v_gf),
                 total_out    = internal_out + kinetic_out;
 
@@ -791,8 +798,10 @@ int main(int argc, char *argv[])
       if (last_step || (ti % vis_steps) == 0)
       {
          energy_old = energy_new;
-         energy_new = hydro.InternalEnergy(mat_data.e_1) + hydro.KineticEnergy(v_gf);
-
+         energy_new =
+            hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
+                                 mat_data.alpha_2, mat_data.e_2) +
+            hydro.KineticEnergy(v_gf);
 
          double lnorm = mat_data.e_1 * mat_data.e_1, norm;
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
@@ -924,16 +933,24 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
 
-   const double energy_final = hydro.InternalEnergy(mat_data.e_1) +
-                               hydro.KineticEnergy(v_gf);
-   const double momentum_final = hydro.Momentum(v_gf);
+   const double mass_final   = hydro.Mass(1);
+   const double energy_final =
+         hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
+                              mat_data.alpha_2, mat_data.e_2) +
+         hydro.KineticEnergy(v_gf);
+   const double moment_final = hydro.Momentum(v_gf);
    if (mpi.Root())
    {
       cout << endl;
-      cout << "Energy  diff: " << std::scientific << std::setprecision(2)
-           << fabs(energy_init - energy_final) << endl;
+      cout << "Mass diff:     " << std::scientific << std::setprecision(2)
+           << fabs(mass_init - mass_final) << "   "
+           << fabs((mass_init - mass_final) / mass_init)*100 << endl;
+      cout << "Energy diff:   " << std::scientific << std::setprecision(2)
+           << fabs(energy_init - energy_final) << "   "
+           << fabs((energy_init - energy_final) / energy_init)*100 << endl;
       cout << "Momentum diff: " << std::scientific << std::setprecision(2)
-           << fabs(momentum_init - momentum_final) << endl;
+           << fabs(moment_init - moment_final) << "   "
+           << fabs((moment_init - moment_final) / moment_init)*100 << endl;
    }
 
    // Print the error.
