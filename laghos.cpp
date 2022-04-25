@@ -893,6 +893,7 @@ int main(int argc, char *argv[])
             dacol.RegisterField("density 2", &rho_gf_2);
             dacol.RegisterField("velocity", &v_gf);
             dacol.RegisterField("materials", &marker.mat_attr);
+            dacol.RegisterField("vol frac 1", &mat_data.alpha_1);
             dacol.SetTime(1.0);
             dacol.SetCycle(1);
             dacol.Save();
