@@ -181,8 +181,11 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
          // The domain area for the 3point is 21.
          const double dx = sqrt(21.0 / glob_NE);
 
-         // The middle of the element after x = 1.
-         return 0.2 * fmin(x(0) - 1.0, 1.5 - x(1));
+         // The middle of the element before x = 1.
+         // The middle of the element above y = 1.5.
+         if (x(0) < 1.0 - 0.25 * dx) { return -1.0; }
+         if (x(1) > 1.5 + 0.5 * dx) { return -1.0; }
+         return 1.0;
       }
       case 12:
       {
@@ -1347,7 +1350,7 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
 
       if (attr == 10 || attr == 15)
       {
-         // Left material (high pressure).
+         // Left/Top material.
          r = 1.0; p = 1.0;
          if (variant == 1 && x > 1.0)
          {
@@ -1362,12 +1365,8 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
 
       if (attr == 15 || attr == 20)
       {
-         // Right material (low pressure).
+         // Right/Bottom material.
          r = 1.0; p = 0.1;
-         if (variant == 0 && y > 1.5)
-         {
-            r = 0.125;
-         }
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;
