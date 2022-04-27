@@ -162,7 +162,7 @@ void Extrapolator::Extrapolate(Coefficient &level_set,
                                const ParGridFunction &alpha_gf,
                                const ParGridFunction &input,
                                const double time_period,
-                               ParGridFunction &xtrap)
+                               ParGridFunction &xtrap, bool from_pure)
 {
    ParMesh &pmesh = *input.ParFESpace()->GetParMesh();
    const int order = input.ParFESpace()->GetOrder(0),
@@ -178,8 +178,14 @@ void Extrapolator::Extrapolate(Coefficient &level_set,
    Array<bool> active_zones(NE);
    for (int k = 0; k < NE; k++)
    {
-      // Extrapolation is done in zones that are CUT or OUTSIDE.
-      active_zones[k] = (alpha_gf(k) < 1e-12) ? true : false;
+      if (from_pure)
+      {
+         active_zones[k] = (alpha_gf(k) < 1.0 - 1e-12) ? true : false;
+      }
+      else
+      {
+         active_zones[k] = (alpha_gf(k) < 1e-12) ? true : false;
+      }
    }
 
    // Setup a VectorCoefficient for n = - grad_ls / |grad_ls|.

@@ -183,7 +183,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
 
          // The middle of the element before x = 1.
          // The middle of the element above y = 1.5.
-         if (x(0) < 1.0 - 0.25 * dx) { return -1.0; }
+         if (x(0) < 1.0 - 0.5 * dx) { return -1.0; }
          if (x(1) > 1.5 + 0.5 * dx) { return -1.0; }
          return 1.0;
       }

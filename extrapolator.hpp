@@ -71,7 +71,8 @@ public:
    void Extrapolate(Coefficient &level_set,
                     const ParGridFunction &alpha_gf,
                     const ParGridFunction &input,
-                    const double time_period, ParGridFunction &xtrap);
+                    const double time_period, ParGridFunction &xtrap,
+                    bool from_pure = false);
 
 private:
    void TimeLoop(ParGridFunction &sltn, ODESolver &ode_solver, double t_final,
