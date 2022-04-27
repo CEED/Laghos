@@ -1366,7 +1366,11 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
       if (attr == 15 || attr == 20)
       {
          // Right/Bottom material.
-         r = 1.0; p = 0.1;
+         r = 1.0; p = 0.1;   
+         if (variant == 0 && y > 1.5)
+         {
+            r = 0.125;
+         }
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;
