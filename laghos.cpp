@@ -862,42 +862,61 @@ int main(int argc, char *argv[])
 
 double rho0(const Vector &x)
 {
-   if (dim == 1) { return 1./M_PI; }
    switch (problem)
    {
       case 0: return 1.0;
       case 1: return 1.0;
       case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-                        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-                                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+      case 3:
+         if (dim == 1) { return (x(0) > 0.5) ? 0.125 : 1.0; }
+         else if (dim == 2)
+         {
+            return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+         }
+         else if (dim == 3)
+         {
+            return  x(0) > 1.0 &&
+                    ((x(1) < 1.5 && x(2) < 1.5) ||
+                     (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
+         }
       case 4: return 1.0;
       case 5:
       {
+         if (dim == 1)
+         {
+            if (x(0) >= 0.5) { return 0.5313; }
+            if (x(0) <  0.5) { return 0.8; }
+         }
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; }
          return 1.0;
       }
       case 6:
       {
+         if (dim == 1)
+         {
+            if (x(0) <  0.5) { return 2.0; }
+            if (x(0) >= 0.5) { return 3.0; }
+         }
          if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; }
          if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
          return 1.0;
       }
-      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 7: return (dim ==1 ? x(0) : x(1)) >= 0.0 ? 2.0 : 1.0;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
 
 double gamma_func(const Vector &x)
 {
-   if (dim == 1) { return 1.4; }
    switch (problem)
    {
       case 0: return 5.0 / 3.0;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 3:
+         if (dim == 1) { return (x(0) > 0.5) ? 1.4 : 1.5; }
+         else { return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5; }
       case 4: return 5.0 / 3.0;
       case 5: return 1.4;
       case 6: return 1.4;
@@ -910,65 +929,99 @@ static double rad(double x, double y) { return sqrt(x*x + y*y); }
 
 void v0(const Vector &x, Vector &v)
 {
-   if (problem==2) { v = 0.0; return; }
-   if (dim == 1) { v(0) = sin(M_PI*x(0)); return; }
-   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+   auto atenuate = [](const Vector &x)
+   { return pow((x(0)*(1.0-x(0))*4.0*x(1)*(1.0-x(1))*4.0), 0.4); };
+
+   v = 0.0;
    switch (problem)
    {
       case 0:
+         if (dim == 1) { v(0) = sin(M_PI*x(0)); break; }
          v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
          v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
          if (x.Size() == 3)
          {
             v(0) *= cos(M_PI*x(2));
             v(1) *= cos(M_PI*x(2));
-            v(2) = 0.0;
          }
          break;
-      case 1: v = 0.0; break;
-      case 2: v = 0.0; break;
-      case 3: v = 0.0; break;
+      case 1: break;
+      case 2: break;
+      case 3: break;
       case 4:
       {
-         v = 0.0;
-         const double r = rad(x(0), x(1));
-         if (r < 0.2)
+         if (dim == 1)
          {
-            v(0) =  5.0 * x(1);
-            v(1) = -5.0 * x(0);
+            const double r = x(0);
+            if (r < 0.2) { v(0) = 5.0 * x(0); }
+            else if (r < 0.4) { v(0) = 2.0 * x(0) / r; }
+            else { }
          }
-         else if (r < 0.4)
+         else
          {
-            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
-            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+            const double r = rad(x(0), x(1));
+            if (r < 0.2)
+            {
+               v(0) =  5.0 * x(1);
+               v(1) = -5.0 * x(0);
+            }
+            else if (r < 0.4)
+            {
+               v(0) =  2.0 * x(1) / r - 5.0 * x(1);
+               v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+            }
+            else { }
          }
-         else { }
          break;
       }
       case 5:
       {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
+         if (dim ==1)
+         {
+            const double atn = pow((x(0)*(1.0-x(0))*4.0), 0.4);
+            if (x(0) >= 0.5) { v(0)=0.0*atn; return;}
+            if (x(0) <  0.5) { v(0)=0.7276*atn; return;}
+         }
+         else
+         {
+            const double atn = atenuate(x);
+            if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+            if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
+            if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
+            if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
+         }
          MFEM_ABORT("Error in problem 5!");
          return;
       }
       case 6:
       {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
+         if (dim ==1)
+         {
+            const double atn = pow((x(0)*(1.0-x(0))*4.0), 0.4);
+            if (x(0) >= 0.5) { v(0)=+0.75*atn; return;}
+            if (x(0) <  0.5) { v(0)=+0.75*atn; return;}
+         }
+         else
+         {
+            const double atn = atenuate(x);
+            if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
+            if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
+            if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
+            if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
+         }
          MFEM_ABORT("Error in problem 6!");
          return;
       }
       case 7:
       {
-         v = 0.0;
-         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         if (dim == 1)
+         {
+            v(0) = 0.02 * exp(-2*M_PI*x(0)*x(0)) * cos(2*M_PI*x(0));
+         }
+         else
+         {
+            v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         }
          break;
       }
       default: MFEM_ABORT("Bad number given for problem id!");
@@ -977,14 +1030,17 @@ void v0(const Vector &x, Vector &v)
 
 double e0(const Vector &x)
 {
-   if (dim == 1) { return 1.0 / rho0(x) / (gamma_func(x) - 1.0); }
    switch (problem)
    {
       case 0:
       {
          const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
          double val;
-         if (x.Size() == 2)
+         if (dim == 1)
+         {
+            val = 1.0 + cos(2*M_PI*x(0)) / 2.0;
+         }
+         else if (dim == 2)
          {
             val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
          }
@@ -996,13 +1052,17 @@ double e0(const Vector &x)
          return val/denom;
       }
       case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+      case 2: return (x(0) < 0.5) ?
+                        1.0 / rho0(x) / (gamma_func(x) - 1.0):
+                        0.1 / rho0(x) / (gamma_func(x) - 1.0);
+      case 3: return (x(0) > 1.0) ?
+                        0.1 / rho0(x) / (gamma_func(x) - 1.0):
+                        1.0 / rho0(x) / (gamma_func(x) - 1.0);
       case 4:
       {
-         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
+         const bool dim1 = dim == 1;
+         const double r = dim1 ? x(0) : rad(x(0), x(1)),
+                      rsq = x(0) * x(0) + (!dim1 ? x(1) * x(1) : 0.0);
          const double gamma = 5.0 / 3.0;
          if (r < 0.2)
          {
@@ -1019,6 +1079,11 @@ double e0(const Vector &x)
       case 5:
       {
          const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+         if (dim == 1)
+         {
+            if (x(0) >= 0.5) { return 0.4 * irg; }
+            if (x(0) <  0.5) { return 1.0 * irg; }
+         }
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
@@ -1029,17 +1094,22 @@ double e0(const Vector &x)
       case 6:
       {
          const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+         if (dim == 1)
+         {
+            if (x(0) >= 0.5) { return 1.0 * irg; }
+            if (x(0) <  0.5) { return 1.0 * irg; }
+         }
          if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
          if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         MFEM_ABORT("Error in problem 5!");
+         MFEM_ABORT("Error in problem 6!");
          return 0.0;
       }
       case 7:
       {
          const double rho = rho0(x), gamma = gamma_func(x);
-         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+         return (6.0 - rho * (dim == 1 ? x(0) : x(1))) / (gamma - 1.0) / rho;
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -1089,14 +1159,14 @@ static void Checks(const int ti, const double nrm, int &chk)
    const double it_norms[3][8][2][2] = // dim, problem, {it,norm}
    {
       {
-         {{5, 1.627454138951118e+01}, { 19, 1.617198487368303e+01}},
-         {{5, 1.225951333086363e+00}, { 24, 1.393052999554519e+00}},
-         {{5, 1.570796326794897e+01}, { 27, 1.570796326794897e+01}},
-         {{5, 1.601863798218989e+01}, { 39, 1.620944078552756e+01}},
-         {{5, 1.627454138951118e+01}, { 19, 1.617198487368303e+01}},
-         {{5, 1.601863798218989e+01}, { 32, 1.611667139272230e+01}},
-         {{5, 1.601863798218989e+01}, { 32, 1.611667139272230e+01}},
-         {{5, 1.601863798218989e+01}, { 32, 1.611667139272230e+01}},
+         {{5, 3.505604510342595e+00}, { 32, 3.397118153130280e+00}},
+         {{5, 9.402107722604514e-01}, {  9, 8.988790687876078e-01}},
+         {{5, 5.095606252285629e+00}, { 53, 8.192729419802136e+00}},
+         {{5, 2.842534080710380e+01}, { 43, 2.842534080710380e+01}},
+         {{5, 1.842686249719798e+01}, { 38, 1.691932120073142e+01}},
+         {{5, 5.210440800112285e+00}, { 25, 5.308725400819955e+00}},
+         {{5, 2.280268164416241e+00}, { 27, 2.406592956858105e+00}},
+         {{5, 7.548125886100191e+00}, { 27, 7.509157124351768e+00}},
       },
       {
          {{5, 6.543443002078340e+00}, { 27, 7.517386301454239e+00}},
