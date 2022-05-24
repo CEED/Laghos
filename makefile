@@ -168,7 +168,7 @@ style:
 ECHO=echo
 SED=sed -e
 ranks=1
-dims=2 3
+dims=1 2 3
 problems=0 1 2 3 4 5 6 7
 OPTS=-cgt 1.e-14 -rs 0 --checks
 USE_CUDA := $(MFEM_USE_CUDA:NO=)
@@ -190,7 +190,7 @@ $(foreach p, $(problems), $(foreach d, $(dims), $(foreach o, $(optioni), $(forea
 	$(eval $(call laghos_checks_template,$(p),$(d),$(o),$(r)))))))
 # Output info on all Laghos checks template targets
 #$(foreach p, $(problems), $(foreach d, $(dims), $(foreach o, $(optioni), $(foreach r, $(ranks),\
-#   $(info $(call laghos_checks_template,$(p),$(d),$(o),$(r)))))))
+#	$(info $(call laghos_checks_template,$(p),$(d),$(o),$(r)))))))
 checks: laghos
 checks: |$(foreach p,$(problems), $(foreach d,$(dims), $(foreach o,$(optioni), $(foreach r,$(ranks), laghos_$(p)_$(d)_$(o)_$(r)))))
 

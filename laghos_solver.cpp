@@ -17,6 +17,7 @@
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
+#include "fem/fespace.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
@@ -118,8 +119,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ess_tdofs(ess_tdofs),
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()),
-   l2dofs_cnt(L2.GetFE(0)->GetDof()),
-   h1dofs_cnt(H1.GetFE(0)->GetDof()),
+   l2dofs_cnt(L2.GetNE() > 0 ? L2.GetFE(0)->GetDof() : 0),
+   h1dofs_cnt(H1.GetNE() > 0 ? H1.GetFE(0)->GetDof() : 0),
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
@@ -129,8 +130,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
-   ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   ir(IntRules.Get(NE > 0 ? pmesh->GetElementBaseGeometry(0):Geometry::POINT,
+                   (oq > 0) ? oq :
+                   3 * (H1.GetNE() > 0 ? H1.GetOrder(0):0) +
+                   (L2.GetNE() > 0 ? L2.GetOrder(0):0) - 1)),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -237,8 +240,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
-   switch (pmesh->GetElementBaseGeometry(0))
+   Geometry::Type geom =
+      NE > 0 ? pmesh->GetElementBaseGeometry(0) : Geometry::INVALID;
+   switch (geom)
    {
+      case Geometry::INVALID: qdata.h0 = 0.0; break; // empty mesh
       case Geometry::SEGMENT: qdata.h0 = Volume / Ne; break;
       case Geometry::SQUARE: qdata.h0 = sqrt(Volume / Ne); break;
       case Geometry::TRIANGLE: qdata.h0 = sqrt(2.0 * Volume / Ne); break;
@@ -246,7 +252,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       case Geometry::TETRAHEDRON: qdata.h0 = pow(6.0 * Volume / Ne, 1./3.); break;
       default: MFEM_ABORT("Unknown zone type!");
    }
-   qdata.h0 /= (double) H1.GetOrder(0);
+   if (H1.GetNE() > 0) { qdata.h0 /= (double) H1.GetOrder(0); }
 
    if (p_assembly)
    {
@@ -496,7 +502,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector Drhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -506,106 +512,112 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
+      di.AssembleRHSElementVect(fe, eltr, Drhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(rhs, rho_z);
+      inv.Mult(Drhs, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
 }
 
-
-
-double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,
-                             const int Q1D,const int VDIM,const double ln_norm,
-                             const mfem::Vector& mass, const mfem::Vector& f)
+double ComputeVolumeIntegral(const ParFiniteElementSpace &pfes,
+                             const int DIM, const int NE, const int NQ,
+                             const int Q1D, const int VDIM, const double norm,
+                             const Vector& mass, const Vector& f)
 {
+   MFEM_VERIFY(pfes.GetNE() > 0, "Empty local mesh should have been handled!");
+   MFEM_VERIFY(DIM==1 || DIM==2 || DIM==3, "Unsuported dimension!");
+   const bool use_tensors = UsesTensorBasis(pfes);
+   const int QX = use_tensors ? Q1D : NQ,
+             QY = use_tensors ? Q1D :  1,
+             QZ = use_tensors ? Q1D :  1;
 
-   auto f_vals = mfem::Reshape(f.Read(),VDIM,NQ, NE);
-   mfem::Vector integrand(NE*NQ);
+   auto f_vals = mfem::Reshape(f.Read(), VDIM, NQ, NE);
+   Vector integrand(NE*NQ);
    auto I = Reshape(integrand.Write(), NQ, NE);
 
    if (DIM == 1)
    {
-      for (int e=0; e < NE; ++e)
+      MFEM_FORALL(e, NE,
       {
          for (int q = 0; q < NQ; ++q)
          {
             double vmag = 0;
             for (int k = 0; k < VDIM; k++)
             {
-               vmag += pow(f_vals(k,q,e),ln_norm);
+               vmag += pow(f_vals(k,q,e), norm);
             }
             I(q,e) = vmag;
          }
-      }
+      });
    }
    else if (DIM == 2)
    {
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      MFEM_FORALL_2D(e, NE, QX, QY, 1,
       {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         MFEM_FOREACH_THREAD(qy,y,QY)
          {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            MFEM_FOREACH_THREAD(qx,x,QX)
             {
-               const int q = qx + qy * Q1D;
-               double vmag = 0;
+               const int q = qx + qy * QX;
+               double vmag = 0.0;
                for (int k = 0; k < VDIM; k++)
                {
-                  vmag += pow(f_vals(k,q,e),ln_norm);
+                  vmag += pow(f_vals(k, q, e), norm);
                }
-               I(q,e) = vmag;
+               I(q, e) = vmag;
             }
          }
       });
    }
    else if (DIM == 3)
    {
-      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      MFEM_FORALL_3D(e, NE, QX, QY, QZ,
       {
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         MFEM_FOREACH_THREAD(qz,z,QZ)
          {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            MFEM_FOREACH_THREAD(qy,y,QY)
             {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               MFEM_FOREACH_THREAD(qx,x,QX)
                {
-                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  const int q = qx + (qy + qz * QY) * QX;
                   double vmag = 0;
                   for (int k = 0; k < VDIM; k++)
                   {
-                     vmag += pow(f_vals(k,q,e),ln_norm);
+                     vmag += pow(f_vals(k, q, e), norm);
                   }
-                  I(q,e) = vmag;
+                  I(q, e) = vmag;
                }
             }
          }
       });
-
    }
-   const double integral = integrand * mass;
-   return integral;
+   return integrand * mass;
 
 }
 double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 {
-   double glob_ie = 0.0;
+   double glob_ie = 0.0, internal_energy = 0.0;
 
-   // get the restriction and interpolator objects
-   const QuadratureInterpolator* l2_interpolator = L2.GetQuadratureInterpolator(
-                                                      ir);
-   l2_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-   auto L2r = L2.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-   const int NQ = ir.GetNPoints();
-   const int ND = L2.GetFE(0)->GetDof();
-   Vector e_vector(NE*ND), eintQ(NE*NQ);
-
-   // Get internal energy at the quadrature points
-   L2r->Mult(gf, e_vector);
-   l2_interpolator->Values(e_vector, eintQ);
-
-   double internal_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,1,1.0,
-                                                  qdata.rho0DetJ0w,eintQ);
+   if (L2.GetNE() > 0) // UsesTensorBasis does not handle empty local mesh
+   {
+      auto L2ordering =
+         UsesTensorBasis(L2) ?
+         ElementDofOrdering::LEXICOGRAPHIC : ElementDofOrdering::NATIVE;
+      // get the restriction and interpolator objects
+      auto L2qi = L2.GetQuadratureInterpolator(ir);
+      L2qi->SetOutputLayout(QVectorLayout::byVDIM);
+      auto L2r = L2.GetElementRestriction(L2ordering);
+      const int NQ = ir.GetNPoints();
+      const int ND = L2.GetFE(0)->GetDof();
+      Vector e_vec(NE*ND), q_val(NE*NQ);
+      // Get internal energy at the quadrature points
+      L2r->Mult(gf, e_vec);
+      L2qi->Values(e_vec, q_val);
+      internal_energy =
+         ComputeVolumeIntegral(L2, dim, NE, NQ, Q1D,  1, 1.0, qdata.rho0DetJ0w, q_val);
+   }
 
    MPI_Allreduce(&internal_energy, &glob_ie, 1, MPI_DOUBLE, MPI_SUM,
                  L2.GetParMesh()->GetComm());
@@ -615,25 +627,27 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-   double glob_ke = 0.0;
+   double glob_ke = 0.0, kinetic_energy = 0.0;
 
-   // get the restriction and interpolator objects
-   const QuadratureInterpolator* h1_interpolator = H1.GetQuadratureInterpolator(
-                                                      ir);
-   h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
-   auto H1r = H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC);
-   const int NQ = ir.GetNPoints();
-   const int ND = H1.GetFE(0)->GetDof();
-   Vector e_vector(dim*NE*ND), ekinQ(dim*NE*NQ);
-
-   // Get internal energy at the quadrature points
-   H1r->Mult(v, e_vector);
-   h1_interpolator->Values(e_vector, ekinQ);
-
-   // Get the IE, initial weighted mass
-
-   double kinetic_energy = ComputeVolumeIntegral(dim,NE,NQ,Q1D,dim,2.0,
-                                                 qdata.rho0DetJ0w,ekinQ);
+   if (H1.GetNE() > 0) // UsesTensorBasis does not handle empty local mesh
+   {
+      auto H1ordering =
+         UsesTensorBasis(H1) ?
+         ElementDofOrdering::LEXICOGRAPHIC : ElementDofOrdering::NATIVE;
+      // get the restriction and interpolator objects
+      auto h1_interpolator = H1.GetQuadratureInterpolator(ir);
+      h1_interpolator->SetOutputLayout(QVectorLayout::byVDIM);
+      auto H1r = H1.GetElementRestriction(H1ordering);
+      const int NQ = ir.GetNPoints();
+      const int ND = H1.GetFE(0)->GetDof();
+      Vector e_vec(dim*NE*ND), q_val(dim*NE*NQ);
+      // Get internal energy at the quadrature points
+      H1r->Mult(v, e_vec);
+      h1_interpolator->Values(e_vec, q_val);
+      // Get the IE, initial weighted mass
+      kinetic_energy =
+         ComputeVolumeIntegral(H1, dim, NE, NQ, Q1D, dim, 2.0, qdata.rho0DetJ0w, q_val);
+   }
 
    MPI_Allreduce(&kinetic_energy, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
                  H1.GetParMesh()->GetComm());
