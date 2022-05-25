@@ -17,7 +17,6 @@
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
-#include "fem/fespace.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
@@ -119,8 +118,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ess_tdofs(ess_tdofs),
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()),
-   l2dofs_cnt(L2.GetNE() > 0 ? L2.GetFE(0)->GetDof() : 0),
-   h1dofs_cnt(H1.GetNE() > 0 ? H1.GetFE(0)->GetDof() : 0),
+   l2dofs_cnt(L2.GetFE(0)->GetDof()),
+   h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
@@ -130,10 +129,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
-   ir(IntRules.Get(NE > 0 ? pmesh->GetElementBaseGeometry(0):Geometry::POINT,
-                   (oq > 0) ? oq :
-                   3 * (H1.GetNE() > 0 ? H1.GetOrder(0):0) +
-                   (L2.GetNE() > 0 ? L2.GetOrder(0):0) - 1)),
+   ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
+                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -240,11 +237,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
-   Geometry::Type geom =
-      NE > 0 ? pmesh->GetElementBaseGeometry(0) : Geometry::INVALID;
-   switch (geom)
+   switch (pmesh->GetElementBaseGeometry(0))
    {
-      case Geometry::INVALID: qdata.h0 = 0.0; break; // empty mesh
       case Geometry::SEGMENT: qdata.h0 = Volume / Ne; break;
       case Geometry::SQUARE: qdata.h0 = sqrt(Volume / Ne); break;
       case Geometry::TRIANGLE: qdata.h0 = sqrt(2.0 * Volume / Ne); break;
@@ -252,7 +246,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       case Geometry::TETRAHEDRON: qdata.h0 = pow(6.0 * Volume / Ne, 1./3.); break;
       default: MFEM_ABORT("Unknown zone type!");
    }
-   if (H1.GetNE() > 0) { qdata.h0 /= (double) H1.GetOrder(0); }
+   qdata.h0 /= (double) H1.GetOrder(0);
 
    if (p_assembly)
    {
@@ -436,7 +430,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
       e_source->AddDomainIntegrator(d);
-      e_source->Assemble();
+      e_source->Assemble(false);
    }
 
    Array<int> l2dofs;
@@ -502,7 +496,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector Drhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -512,10 +506,10 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, Drhs);
+      di.AssembleRHSElementVect(fe, eltr, rhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(Drhs, rho_z);
+      inv.Mult(rhs, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }

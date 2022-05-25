@@ -226,8 +226,7 @@ public:
    virtual void Eval(Vector &V, ElementTransformation &T,
                      const IntegrationPoint &ip)
    {
-      V = 0.0;
-      if (V.Size() > 1) { V(1) = -1.0; }
+      V = 0.0; V(1) = -1.0;
    }
 };
 
