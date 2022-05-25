@@ -94,7 +94,7 @@ Other computational motives in Laghos include the following:
   partially assembled) and is applied just twice per "assembly". Both the
   preparation and the application costs are important for this operator.
 - Domain-decomposed MPI parallelism.
-- Automatic mesh refinement (AMR) with parallel partitioning and load balancing
+- Adaptive mesh refinement (AMR) with parallel partitioning and load balancing
   based on MFEM's non-conforming mesh algorithm that partitions a space-filling 
   curve. Only the Sedov problem (#1) is supported.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output

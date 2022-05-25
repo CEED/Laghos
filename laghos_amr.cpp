@@ -23,11 +23,90 @@ namespace mfem
 namespace amr
 {
 
-void EstimatorIntegrator::ComputeElementFlux1(const FiniteElement &el,
-                                              ElementTransformation &Trans,
-                                              const Vector &u,
-                                              const FiniteElement &fluxelem,
-                                              Vector &flux)
+static const char *EstimatorName(const int est)
+{
+   switch (static_cast<amr::estimator>(est))
+   {
+      case amr::estimator::custom: return "Custom";
+      case amr::estimator::jjt: return "JJt";
+      case amr::estimator::zz: return "ZZ";
+      case amr::estimator::kelly: return "Kelly";
+      default: MFEM_ABORT("Unknown estimator!");
+   }
+   return nullptr;
+}
+
+static void FindElementsWithVertex(const Mesh* mesh, const Vertex &vert,
+                                   const double size, Array<int> &elements)
+{
+   Array<int> v;
+
+   for (int i = 0; i < mesh->GetNE(); i++)
+   {
+      mesh->GetElementVertices(i, v);
+      for (int j = 0; j < v.Size(); j++)
+      {
+         double dist = 0.0;
+         for (int l = 0; l < mesh->SpaceDimension(); l++)
+         {
+            double d = vert(l) - mesh->GetVertex(v[j])[l];
+            dist += d*d;
+         }
+         if (dist <= size*size) { elements.Append(i); break; }
+      }
+   }
+}
+
+static void Pow(Vector &vec, double p)
+{
+   for (int i = 0; i < vec.Size(); i++)
+   {
+      vec(i) = std::pow(vec(i), p);
+   }
+}
+
+static void GetPerElementMinMax(const GridFunction &gf,
+                                Vector &elem_min, Vector &elem_max,
+                                int int_order = -1)
+{
+   const FiniteElementSpace *space = gf.FESpace();
+   int ne = space->GetNE();
+
+   if (int_order < 0) { int_order = space->GetOrder(0) + 1; }
+
+   elem_min.SetSize(ne);
+   elem_max.SetSize(ne);
+
+   Vector vals, tmp;
+   for (int i = 0; i < ne; i++)
+   {
+      int geom = space->GetFE(i)->GetGeomType();
+      const IntegrationRule &ir = IntRules.Get(geom, int_order);
+
+      gf.GetValues(i, ir, vals);
+
+      if (space->GetVDim() > 1)
+      {
+         Pow(vals, 2.0);
+         for (int vd = 1; vd < space->GetVDim(); vd++)
+         {
+            gf.GetValues(i, ir, tmp, vd+1);
+            Pow(tmp, 2.0);
+            vals += tmp;
+         }
+         Pow(vals, 0.5);
+      }
+
+      elem_min(i) = vals.Min();
+      elem_max(i) = vals.Max();
+   }
+}
+
+void AMREstimatorIntegrator::ComputeElementFlux1(const FiniteElement &el,
+                                                 ElementTransformation &Trans,
+                                                 const Vector &u,
+                                                 const FiniteElement &fluxelem,
+                                                 Vector &flux)
 {
    const int dof = el.GetDof();
    const int dim = el.GetDim();
@@ -58,11 +137,11 @@ void EstimatorIntegrator::ComputeElementFlux1(const FiniteElement &el,
    }
 }
 
-void EstimatorIntegrator::ComputeElementFlux2(const int e,
-                                              const FiniteElement &el,
-                                              ElementTransformation &Trans,
-                                              const FiniteElement &fluxelem,
-                                              Vector &flux)
+void AMREstimatorIntegrator::ComputeElementFlux2(const int e,
+                                                 const FiniteElement &el,
+                                                 ElementTransformation &Trans,
+                                                 const FiniteElement &fluxelem,
+                                                 Vector &flux)
 {
    const int dim = el.GetDim();
    const int sdim = Trans.GetSpaceDim();
@@ -103,13 +182,15 @@ void EstimatorIntegrator::ComputeElementFlux2(const int e,
    }
 }
 
-void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
-                                             ElementTransformation &Trans,
-                                             Vector &u,
-                                             const FiniteElement &fluxelem,
-                                             Vector &flux,
-                                             bool with_coef)
+void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
+                                                ElementTransformation &Trans,
+                                                Vector &u,
+                                                const FiniteElement &fluxelem,
+                                                Vector &flux,
+                                                bool with_coef,
+                                                const IntegrationRule *ir)
 {
+   MFEM_VERIFY(ir == NULL, "ir not supported");
    MFEM_VERIFY(NE == pmesh->GetNE(), "");
    // ZZ comes with with_coef set to true, not Kelly
    switch (flux_mode)
@@ -134,16 +215,16 @@ void EstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
    }
 }
 
-Operator::Operator(ParMesh *pmesh,
-                   int estimator,
-                   double ref_t,
-                   double jac_t,
-                   double deref_t,
-                   int max_level,
-                   int nc_limit,
-                   double size_b,
-                   double energy_b,
-                   double *xyz_b):
+AMR::AMR(ParMesh *pmesh,
+         int estimator,
+         double ref_t,
+         double jac_t,
+         double deref_t,
+         int max_level,
+         int nc_limit,
+         double size_b,
+         double energy_b,
+         double *xyz_b):
    pmesh(pmesh),
    myid(pmesh->GetMyRank()),
    dim(pmesh->Dimension()),
@@ -153,12 +234,12 @@ Operator::Operator(ParMesh *pmesh,
    opt(
 {
    estimator, ref_t, jac_t, deref_t, max_level, nc_limit,
-              size_b, energy_b, Vertex(xyz_b[0], xyz_b[1], xyz_b[2])
+   size_b, energy_b, Vertex(xyz_b[0], xyz_b[1], xyz_b[2])
 }) { }
 
-Operator::~Operator() { }
+AMR::~AMR() { }
 
-void Operator::Setup(ParGridFunction &x_gf)
+void AMR::Setup(ParGridFunction &x_gf)
 {
    if (myid == 0)
    {
@@ -169,8 +250,8 @@ void Operator::Setup(ParGridFunction &x_gf)
 
    if (opt.estimator == amr::estimator::zz)
    {
-      integ = new amr::EstimatorIntegrator(pmesh, opt.max_level,
-                                           opt.jac_threshold);
+      integ = new AMREstimatorIntegrator(pmesh, opt.max_level,
+                                         opt.jac_threshold);
       smooth_flux_fec = new RT_FECollection(order-1, dim);
       auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
       estimator = new L2ZienkiewiczZhuEstimator(*integ, x_gf, &flux_fes,
@@ -179,8 +260,7 @@ void Operator::Setup(ParGridFunction &x_gf)
 
    if (opt.estimator == amr::estimator::kelly)
    {
-      integ = new amr::EstimatorIntegrator(pmesh, opt.max_level,
-                                           opt.jac_threshold);
+      integ = new AMREstimatorIntegrator(pmesh, opt.max_level, opt.jac_threshold);
       estimator = new KellyErrorEstimator(*integ, x_gf, flux_fes);
    }
 
@@ -201,25 +281,67 @@ void Operator::Setup(ParGridFunction &x_gf)
    }
 }
 
-void Operator::Reset()
+void AMR::Reset()
 {
    if (integ) { integ->Reset(); }
    if (refiner) { refiner->Reset(); }
    if (derefiner) { derefiner->Reset(); }
 }
 
-void Operator::Update(hydrodynamics::LagrangianHydroOperator &hydro,
-                      ODESolver *ode_solver,
-                      BlockVector &S,
-                      BlockVector &S_old,
-                      ParGridFunction &x,
-                      ParGridFunction &v,
-                      ParGridFunction &e,
-                      ParGridFunction &m,
-                      Array<int> &true_offset,
-                      const int bdr_attr_max,
-                      Array<int> &ess_tdofs,
-                      Array<int> &ess_vdofs)
+static void Update(BlockVector &S, BlockVector &S_tmp,
+                   Array<int> &true_offset,
+                   ParGridFunction &x_gf,
+                   ParGridFunction &v_gf,
+                   ParGridFunction &e_gf,
+                   ParGridFunction &m_gf)
+{
+   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
+   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
+   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
+
+   H1FESpace->Update();
+   L2FESpace->Update();
+   MEFESpace->Update();
+
+   const int Vsize_h1 = H1FESpace->GetVSize();
+   const int Vsize_l2 = L2FESpace->GetVSize();
+
+   true_offset[0] = 0;
+   true_offset[1] = true_offset[0] + Vsize_h1;
+   true_offset[2] = true_offset[1] + Vsize_h1;
+   true_offset[3] = true_offset[2] + Vsize_l2;
+
+   S_tmp = S;
+   S.Update(true_offset);
+   const Operator* H1Update = H1FESpace->GetUpdateOperator();
+   const Operator* L2Update = L2FESpace->GetUpdateOperator();
+   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
+   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
+   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
+
+   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
+   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
+   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
+   x_gf.SyncAliasMemory(S);
+   v_gf.SyncAliasMemory(S);
+   e_gf.SyncAliasMemory(S);
+
+   S_tmp.Update(true_offset);
+   m_gf.Update();
+}
+
+void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
+                 ODESolver *ode_solver,
+                 BlockVector &S,
+                 BlockVector &S_old,
+                 ParGridFunction &x,
+                 ParGridFunction &v,
+                 ParGridFunction &e,
+                 ParGridFunction &m,
+                 Array<int> &true_offset,
+                 const int bdr_attr_max,
+                 Array<int> &ess_tdofs,
+                 Array<int> &ess_vdofs)
 {
    Vector v_max, v_min;
    Array<Refinement> refs;

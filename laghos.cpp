@@ -70,7 +70,7 @@
 using namespace mfem;
 
 static long GetMaxRssMB();
-static void NonRegressionTests(const int, const int, const double, int&);
+static void NonRegressionTests(const int, const double, int&);
 static void DisplayBanner(std::ostream &os)
 {
    os << std::endl
@@ -600,19 +600,19 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
    // AMR operator
-   amr::Operator *AMR =nullptr;
+   amr::AMR *AMR = nullptr;
    if (amr)
    {
-      AMR = new amr::Operator(pmesh,
-                              amr_estimator,
-                              amr_ref_threshold,
-                              amr_jac_threshold,
-                              amr_deref_threshold,
-                              amr_max_level,
-                              amr_nc_limit,
-                              amr_blast_eps,
-                              blast_energy,
-                              blast_position);
+      AMR = new amr::AMR(pmesh,
+                         amr_estimator,
+                         amr_ref_threshold,
+                         amr_jac_threshold,
+                         amr_deref_threshold,
+                         amr_max_level,
+                         amr_nc_limit,
+                         amr_blast_eps,
+                         blast_energy,
+                         blast_position);
       AMR->Setup(x_gf);
    }
 
@@ -845,7 +845,7 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(cfl==0.5, "check: cfl");
          MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
          MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         NonRegressionTests(dim, ti, e_norm, checks);
+         NonRegressionTests(ti, e_norm, checks);
       }
    }
    MFEM_VERIFY(!check || checks == 2, "Check error!");
@@ -918,13 +918,12 @@ static bool Check(const double a, const double v, const double eps)
    return fmax(err_a, err_v) < eps;
 }
 
-static void NonRegressionTests(const int dim, const int ti, const double nrm,
-                               int &chk)
+static void NonRegressionTests(const int ti, const double nrm, int &chk)
 {
    const int pb = problem;
    const double eps = 1.e-13;
    printf("%.15e\n",nrm);
-   if (dim==2)
+   if (dim == 2)
    {
       constexpr double p0_05 = 6.54653862453438e+00;
       constexpr double p0_27 = 7.58857635779292e+00;
@@ -959,7 +958,8 @@ static void NonRegressionTests(const int dim, const int ti, const double nrm,
       if (pb==7 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p7_05,eps),"P7, #05");}
       if (pb==7 && ti==25) {chk++; MFEM_VERIFY(Check(nrm,p7_25,eps),"P7, #25");}
    }
-   if (dim==3)
+
+   if (dim == 3)
    {
       constexpr double  p0_05 = 1.198510951452527e+03;
       constexpr double p0_188 = 1.199384410059154e+03;
