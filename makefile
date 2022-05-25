@@ -168,7 +168,7 @@ style:
 ECHO=echo
 SED=sed -e
 ranks=1
-dims=1 2 3
+dims=2 3
 problems=0 1 2 3 4 5 6 7
 OPTS=-cgt 1.e-14 -rs 0 --checks
 USE_CUDA := $(MFEM_USE_CUDA:NO=)
