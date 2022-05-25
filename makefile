@@ -236,7 +236,7 @@ tests:
 	cat RUN.dat | tail -n 21 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(shell cat << EOF > BASELINE.dat)
-	$(shell echo 'step = 0339, dt = 0.000702, |e| = 4.9695537349e+01' >> BASELINE.dat)
+	$(shell echo 'step = 0339, dt = 0.000702, |e| = 4.9692294385e+01' >> BASELINE.dat)
 	$(shell echo 'step = 1041, dt = 0.000121, |e| = 3.3909635545e+03' >> BASELINE.dat)
 	$(shell echo 'step = 1154, dt = 0.001655, |e| = 4.6303396053e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0560, dt = 0.002449, |e| = 1.3408616722e+02' >> BASELINE.dat)
