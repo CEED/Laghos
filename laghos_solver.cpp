@@ -426,6 +426,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = nullptr;
    if (source_type == 1) // 2D Taylor-Green.
    {
+      // Needed since the Assemble() defaults to PA.
       L2.GetMesh()->DeleteGeometricFactors();
       e_source = new LinearForm(&L2);
       TaylorCoefficient coeff;
