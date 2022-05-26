@@ -35,7 +35,9 @@ static double gamma_func(const Vector &x)
       case 0: return 5.0 / 3.0;
       case 1: return 1.4;
       case 2: return 1.4;
-      case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
+      case 3:
+         if (dim == 1) { return (x(0) > 0.5) ? 1.4 : 1.5; }
+         else { return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5; }
       case 4: return 5.0 / 3.0;
       case 5: return 1.4;
       case 6: return 1.4;
@@ -75,7 +77,7 @@ static double rho0(const Vector &x)
 
 static double radius(double x, double y) { return sqrt(x*x + y*y); }
 
-static double e0(const Vector &x)
+inline double e0(const Vector &x)
 {
    switch (problem)
    {
@@ -132,7 +134,7 @@ static double e0(const Vector &x)
          if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
          if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
          if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         MFEM_ABORT("Error in problem 5!");
+         MFEM_ABORT("Error in problem 6!");
          return 0.0;
       }
       case 7:
@@ -144,9 +146,10 @@ static double e0(const Vector &x)
    }
 }
 
-static void v0(const Vector &x, Vector &v)
+inline void v0(const Vector &x, Vector &v)
 {
-   const double atn = pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4);
+   const double atn =
+      dim!=1 ? pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),0.4) : 0.0;
    switch (problem)
    {
       case 0:
@@ -209,10 +212,9 @@ static void v0(const Vector &x, Vector &v)
    }
 }
 
-static void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
+inline void GetZeroBCDofs(ParMesh *pmesh, ParFiniteElementSpace &H1,
                           const int bdr_attr_max,
-                          Array<int> &ess_tdofs,
-                          Array<int> &ess_vdofs)
+                          Array<int> &ess_tdofs, Array<int> &ess_vdofs)
 {
    ess_tdofs.SetSize(0);
    ess_vdofs.SetSize(0);
@@ -352,8 +354,8 @@ public:
                            ParGridFunction &gamma_gf,
                            const int source,
                            const double cfl,
-                           const bool visc, const bool vort,
-                           const bool p_assembly, const bool amr,
+                           const bool visc, const bool vort, const bool pa,
+									const bool amr,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
@@ -449,7 +451,8 @@ class RTCoefficient : public VectorCoefficient
 public:
    RTCoefficient(int dim) : VectorCoefficient(dim) { }
    using VectorCoefficient::Eval;
-   virtual void Eval(Vector &V, ElementTransformation&, const IntegrationPoint&)
+   virtual void Eval(Vector &V, ElementTransformation &T,
+                     const IntegrationPoint &ip)
    {
       V = 0.0; V(1) = -1.0;
    }

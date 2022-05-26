@@ -60,28 +60,19 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include <fstream>
-#include <iostream>
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include "laghos_amr.hpp"
+#include "laghos_amr.hpp" // problem, dim, e0, rho0, gamma_func, v0
 #include "laghos_solver.hpp"
 
+using std::cout;
+using std::endl;
 using namespace mfem;
 
 static long GetMaxRssMB();
-static void NonRegressionTests(const int, const double, int&);
-static void DisplayBanner(std::ostream &os)
-{
-   os << std::endl
-      << "       __                __                 " << std::endl
-      << "      / /   ____  ____  / /_  ____  _____   " << std::endl
-      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << std::endl
-      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << std::endl
-      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << std::endl
-      << "               /____/                       " << std::endl
-      << std::endl;
-}
+static void display_banner(std::ostream&);
+static void Checks(const int ti, const double norm, int &checks);
 
 int main(int argc, char *argv[])
 {
@@ -90,7 +81,7 @@ int main(int argc, char *argv[])
    const int myid = mpi.WorldRank();
 
    // Print the banner.
-   if (mpi.Root()) { DisplayBanner(std::cout); }
+   if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
    problem = 1;
@@ -221,13 +212,13 @@ int main(int argc, char *argv[])
    args.Parse();
    if (!args.Good())
    {
-      if (mpi.Root()) { args.PrintUsage(std::cout); }
+      if (mpi.Root()) { args.PrintUsage(cout); }
       return 1;
    }
 
    amr_max_level = std::max(amr_max_level, rs_levels + rp_levels);
 
-   if (mpi.Root()) { args.PrintOptions(std::cout); }
+   if (mpi.Root()) { args.PrintOptions(cout); }
 
    // Check AMR configuration: only Sedov problem (#1) is supported for now
    if (amr && problem != 1)
@@ -243,9 +234,9 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
 
-   // On all processors, use the default builtin 1D/2D/3D mesh
-   // or read the serial one given on the command line.
-   Mesh *mesh = nullptr;
+   // On all processors, use the default builtin 1D/2D/3D mesh or read the
+   // serial one given on the command line.
+   Mesh *mesh = NULL;
    if (strncmp(mesh_file, "default", 7) != 0)
    {
       mesh = new Mesh(mesh_file, true, true);
@@ -292,8 +283,7 @@ int main(int argc, char *argv[])
       p_assembly = false;
       if (mpi.Root())
       {
-         std::cout << "Laghos does not support PA in 1D. Switching to FA."
-                   << std::endl;
+         cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
    }
 
@@ -315,7 +305,7 @@ int main(int argc, char *argv[])
    const int mesh_NE = mesh->GetNE();
    if (mpi.Root())
    {
-      std::cout << "Number of zones in the serial mesh: " << mesh_NE << std::endl;
+      cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
    }
 
    // Parallel partitioning of the mesh.
@@ -403,7 +393,7 @@ int main(int argc, char *argv[])
       default:
          if (myid == 0)
          {
-            std::cout << "Unknown partition type: " << partition_type << '\n';
+            cout << "Unknown partition type: " << partition_type << '\n';
          }
          delete mesh;
          MPI_Finalize();
@@ -411,7 +401,7 @@ int main(int argc, char *argv[])
    }
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
-   const bool cartesian_partitioning = (cxyz.Size() > 0) ? true : false;
+   const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
    if (product == num_tasks || cartesian_partitioning)
    {
       if (cartesian_partitioning)
@@ -434,7 +424,7 @@ int main(int argc, char *argv[])
    {
       if (myid == 0)
       {
-         std::cout << "Non-Cartesian partitioning through METIS will be used.\n";
+         cout << "Non-Cartesian partitioning through METIS will be used.\n";
 #ifndef MFEM_USE_METIS
          cout << "MFEM was built without METIS. "
               << "Adjust the number of tasks to use a Cartesian split." << endl;
@@ -455,7 +445,7 @@ int main(int argc, char *argv[])
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
    if (myid == 0)
-   { std::cout << "Zones min/max: " << ne_min << " " << ne_max << std::endl; }
+   { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -472,7 +462,7 @@ int main(int argc, char *argv[])
    GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
 
    // Define the explicit ODE solver used for time integration.
-   ODESolver *ode_solver = nullptr;
+   ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
    {
       case 1: ode_solver = new ForwardEulerSolver; break;
@@ -484,7 +474,7 @@ int main(int argc, char *argv[])
       default:
          if (myid == 0)
          {
-            std::cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
          }
          delete pmesh;
          MPI_Finalize();
@@ -495,10 +485,10 @@ int main(int argc, char *argv[])
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
    if (mpi.Root())
    {
-      std::cout << "Number of kinematic (position, velocity) dofs: "
-                << glob_size_h1 << '\n';
-      std::cout << "Number of specific internal energy dofs: "
-                << glob_size_l2 << '\n';
+      cout << "Number of kinematic (position, velocity) dofs: "
+           << glob_size_h1 << endl;
+      cout << "Number of specific internal energy dofs: "
+           << glob_size_l2 << endl;
    }
 
    // The monolithic BlockVector stores unknown fields as:
@@ -528,10 +518,14 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
-   // Initialize the velocity and sync the data of v_gf with its base, S
+   // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
-   for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
+   for (int i = 0; i < ess_vdofs.Size(); i++)
+   {
+      v_gf(ess_vdofs[i]) = 0.0;
+   }
+   // Sync the data location of v_gf with its base, S
    v_gf.SyncAliasMemory(S);
 
    // Initialize density and specific internal energy values. We interpolate in
@@ -569,9 +563,9 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction m_gf(&mat_fes);
+   ParGridFunction mat_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
-   m_gf.ProjectCoefficient(mat_coeff);
+   mat_gf.ProjectCoefficient(mat_coeff);
 
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
@@ -594,7 +588,7 @@ int main(int argc, char *argv[])
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                m_gf, source, cfl,
+                                                mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 p_assembly, amr,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -635,7 +629,7 @@ int main(int argc, char *argv[])
       vis_e.precision(8);
       int Wx = 0, Wy = 0; // window position
       const int Ww = 350, Wh = 350; // window size
-      int offx = Ww + 10; // window offsets
+      int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -676,9 +670,29 @@ int main(int argc, char *argv[])
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
-   long mem = 0, mmax = 0, msum = 0;
+   long mem=0, mmax=0, msum=0;
    int checks = 0;
-
+   //   const double internal_energy = hydro.InternalEnergy(e_gf);
+   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   if (mpi.Root())
+   //   {
+   //      cout << std::fixed;
+   //      cout << "step " << std::setw(5) << 0
+   //            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+   //            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+   //            << ",\t|IE| = " << std::setprecision(10) << std::scientific
+   //            << internal_energy
+   //            << ",\t|KE| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy
+   //            << ",\t|E| = " << std::setprecision(10) << std::scientific
+   //            << kinetic_energy+internal_energy;
+   //      cout << std::fixed;
+   //      if (mem_usage)
+   //      {
+   //         cout << ", mem: " << mmax << "/" << msum << " MB";
+   //      }
+   //      cout << endl;
+   //   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -711,7 +725,7 @@ int main(int argc, char *argv[])
          t = t_old;
          S = S_old;
          hydro.ResetQuadratureData();
-         if (mpi.Root()) { std::cout << "Repeating step " << ti << '\n'; }
+         if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
@@ -739,22 +753,30 @@ int main(int argc, char *argv[])
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
+         // const double internal_energy = hydro.InternalEnergy(e_gf);
+         // const double kinetic_energy = hydro.KineticEnergy(v_gf);
          if (mpi.Root())
          {
             const double sqrt_norm = sqrt(norm);
 
-            std::cout << std::fixed;
-            std::cout << "step " << std::setw(5) << ti
-                      << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-                      << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-                      << ",\t|e| = " << std::setprecision(10) << std::scientific
-                      << sqrt_norm;
-            std::cout << std::fixed;
+            cout << std::fixed;
+            cout << "step " << std::setw(5) << ti
+                 << ",\tt = " << std::setw(5) << std::setprecision(4) << t
+                 << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
+                 << ",\t|e| = " << std::setprecision(10) << std::scientific
+                 << sqrt_norm;
+            //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
+            //  << internal_energy
+            //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy
+            //   << ",\t|E| = " << std::setprecision(10) << std::scientific
+            //  << kinetic_energy+internal_energy;
+            cout << std::fixed;
             if (mem_usage)
             {
-               std::cout << ", mem: " << mmax << "/" << msum << " MB";
+               cout << ", mem: " << mmax << "/" << msum << " MB";
             }
-            std::cout << std::endl;
+            cout << endl;
          }
 
          // Make sure all ranks have sent their 'v' solution before initiating
@@ -766,7 +788,7 @@ int main(int argc, char *argv[])
          {
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
-            int offx = Ww + 10; // window offsets
+            int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
@@ -822,12 +844,12 @@ int main(int argc, char *argv[])
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
-      } // last_step or vis_steps
+      }
 
       // AMR update
       if (amr)
       {
-         AMR->Update(hydro, ode_solver, S, S_old, x_gf, v_gf, e_gf, m_gf,
+         AMR->Update(hydro, ode_solver, S, S_old, x_gf, v_gf, e_gf, mat_gf,
                      offset, bdr_attr_max, ess_tdofs, ess_vdofs);
       }
 
@@ -845,7 +867,7 @@ int main(int argc, char *argv[])
          MFEM_VERIFY(cfl==0.5, "check: cfl");
          MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
          MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         NonRegressionTests(ti, e_norm, checks);
+         Checks(ti, e_norm, checks);
       }
    }
    MFEM_VERIFY(!check || checks == 2, "Check error!");
@@ -872,13 +894,13 @@ int main(int argc, char *argv[])
                                hydro.KineticEnergy(v_gf);
    if (mpi.Root())
    {
-      std::cout << std::endl;
-      std::cout << "Energy  diff: " << std::scientific << std::setprecision(2)
-                << fabs(energy_init - energy_final) << std::endl;
+      cout << endl;
+      cout << "Energy  diff: " << std::scientific << std::setprecision(2)
+           << fabs(energy_init - energy_final) << endl;
       if (mem_usage)
       {
-         std::cout << "Maximum memory resident set size: "
-                   << mmax << "/" << msum << " MB" << std::endl;
+         cout << "Maximum memory resident set size: "
+              << mmax << "/" << msum << " MB" << endl;
       }
    }
 
@@ -891,9 +913,9 @@ int main(int argc, char *argv[])
                    error_l2  = v_gf.ComputeL2Error(v_coeff);
       if (mpi.Root())
       {
-         std::cout << "L_inf  error: " << error_max << std::endl
-                   << "L_1    error: " << error_l1 << std::endl
-                   << "L_2    error: " << error_l2 << std::endl;
+         cout << "L_inf  error: " << error_max << endl
+              << "L_1    error: " << error_l1 << endl
+              << "L_2    error: " << error_l2 << endl;
       }
    }
 
@@ -910,101 +932,78 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-static bool Check(const double a, const double v, const double eps)
+static void display_banner(std::ostream &os)
 {
-   MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
-   const double err_a = fabs((a-v)/a);
-   const double err_v = fabs((a-v)/v);
-   return fmax(err_a, err_v) < eps;
+   os << endl
+      << "       __                __                 " << endl
+      << "      / /   ____  ____  / /_  ____  _____   " << endl
+      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << endl
+      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
+      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
+      << "               /____/                       " << endl << endl;
 }
 
-static void NonRegressionTests(const int ti, const double nrm, int &chk)
-{
-   const int pb = problem;
-   const double eps = 1.e-13;
-   printf("%.15e\n",nrm);
-   if (dim == 2)
-   {
-      constexpr double p0_05 = 6.54653862453438e+00;
-      constexpr double p0_27 = 7.58857635779292e+00;
-      if (pb==0 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==27) {chk++; MFEM_VERIFY(Check(nrm,p0_27,eps),"P0, #27");}
-      constexpr double p1_05 = 3.50825494522579e+00;
-      constexpr double p1_15 = 2.75644459682321e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==15) {chk++; MFEM_VERIFY(Check(nrm,p1_15,eps),"P1, #15");}
-      constexpr double p2_05 = 1.02074579565124e+01;
-      constexpr double p2_59 = 1.72159020590190e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(Check(nrm,p2_59,eps),"P2, #59");}
-      constexpr double p3_05 = 8.0;
-      constexpr double p3_16 = 8.0;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(Check(nrm,p3_16,eps),"P3, #16");}
-      constexpr double p4_05 = 3.446324942352448e+01;
-      constexpr double p4_18 = 3.446844033767240e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(Check(nrm,p4_18,eps),"P4, #18");}
-      constexpr double p5_05 = 1.030899557252528e+01;
-      constexpr double p5_36 = 1.057362418574309e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p5_36,eps),"P5, #36");}
-      constexpr double p6_05 = 8.039707010835693e+00;
-      constexpr double p6_36 = 8.316970976817373e+00;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p6_36,eps),"P6, #36");}
-      constexpr double p7_05 = 1.514929259650760e+01;
-      constexpr double p7_25 = 1.514931278155159e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==25) {chk++; MFEM_VERIFY(Check(nrm,p7_25,eps),"P7, #25");}
-   }
-
-   if (dim == 3)
-   {
-      constexpr double  p0_05 = 1.198510951452527e+03;
-      constexpr double p0_188 = 1.199384410059154e+03;
-      if (pb==0 && ti==005) {chk++; MFEM_VERIFY(Check(nrm,p0_05,eps),"P0, #05");}
-      if (pb==0 && ti==188) {chk++; MFEM_VERIFY(Check(nrm,p0_188,eps),"P0, #188");}
-      constexpr double p1_05 = 1.33916371859257e+01;
-      constexpr double p1_28 = 7.52107367739800e+00;
-      if (pb==1 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p1_05,eps),"P1, #05");}
-      if (pb==1 && ti==28) {chk++; MFEM_VERIFY(Check(nrm,p1_28,eps),"P1, #28");}
-      constexpr double p2_05 = 2.041491591302486e+01;
-      constexpr double p2_59 = 3.443180411803796e+01;
-      if (pb==2 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p2_05,eps),"P2, #05");}
-      if (pb==2 && ti==59) {chk++; MFEM_VERIFY(Check(nrm,p2_59,eps),"P2, #59");}
-      constexpr double p3_05 = 1.600000000000000e+01;
-      constexpr double p3_16 = 1.600000000000000e+01;
-      if (pb==3 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p3_05,eps),"P3, #05");}
-      if (pb==3 && ti==16) {chk++; MFEM_VERIFY(Check(nrm,p3_16,eps),"P3, #16");}
-      constexpr double p4_05 = 6.892649884704898e+01;
-      constexpr double p4_18 = 6.893688067534482e+01;
-      if (pb==4 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p4_05,eps),"P4, #05");}
-      if (pb==4 && ti==18) {chk++; MFEM_VERIFY(Check(nrm,p4_18,eps),"P4, #18");}
-      constexpr double p5_05 = 2.061984481890964e+01;
-      constexpr double p5_36 = 2.114519664792607e+01;
-      if (pb==5 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p5_05,eps),"P5, #05");}
-      if (pb==5 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p5_36,eps),"P5, #36");}
-      constexpr double p6_05 = 1.607988713996459e+01;
-      constexpr double p6_36 = 1.662736010353023e+01;
-      if (pb==6 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p6_05,eps),"P6, #05");}
-      if (pb==6 && ti==36) {chk++; MFEM_VERIFY(Check(nrm,p6_36,eps),"P6, #36");}
-      constexpr double p7_05 = 3.029858112572883e+01;
-      constexpr double p7_24 = 3.029858832743707e+01;
-      if (pb==7 && ti==05) {chk++; MFEM_VERIFY(Check(nrm,p7_05,eps),"P7, #05");}
-      if (pb==7 && ti==24) {chk++; MFEM_VERIFY(Check(nrm,p7_24,eps),"P7, #24");}
-   }
-}
-
-// Get current process information: max resident set size
 static long GetMaxRssMB()
 {
    struct rusage usage;
    if (getrusage(RUSAGE_SELF, &usage)) { return -1; }
 #ifndef __APPLE__
-   constexpr long unit = 1024;
+   const long unit = 1024; // kilo
 #else
-   constexpr long unit = 1024*1024;
+   const long unit = 1024*1024; // mega
 #endif
-   return usage.ru_maxrss / unit;
+   return usage.ru_maxrss/unit; // mega bytes
+}
+
+static void Checks(const int ti, const double nrm, int &chk)
+{
+   const double eps = 1.e-13;
+   //printf("\033[33m%.15e\033[m\n",nrm);
+
+   auto check = [&](int p, int i, const double res)
+   {
+      auto rerr = [](const double a, const double v, const double eps)
+      {
+         MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
+         const double err_a = fabs((a-v)/a);
+         const double err_v = fabs((a-v)/v);
+         return fmax(err_a, err_v) < eps;
+      };
+      if (problem == p && ti == i)
+      { chk++; MFEM_VERIFY(rerr(nrm, res, eps), "P"<<problem<<", #"<<i); }
+   };
+
+   const double it_norms[2][8][2][2] = // dim, problem, {it,norm}
+   {
+      {
+         {{5, 6.546538624534384e+00}, { 27, 7.588576357792927e+00}},
+         {{5, 3.508254945225794e+00}, { 15, 2.756444596823211e+00}},
+         {{5, 1.020745795651244e+01}, { 59, 1.721590205901898e+01}},
+         {{5, 8.000000000000000e+00}, { 16, 8.000000000000000e+00}},
+         {{5, 3.446324942352448e+01}, { 18, 3.446844033767240e+01}},
+         {{5, 1.030899557252528e+01}, { 36, 1.057362418574309e+01}},
+         {{5, 8.039707010835693e+00}, { 36, 8.316970976817373e+00}},
+         {{5, 1.514929259650760e+01}, { 25, 1.514931278155159e+01}},
+      },
+      {
+         {{5, 1.198510951452527e+03}, {188, 1.199384410059154e+03}},
+         {{5, 1.339163718592566e+01}, { 28, 7.521073677397994e+00}},
+         {{5, 2.041491591302486e+01}, { 59, 3.443180411803796e+01}},
+         {{5, 1.600000000000000e+01}, { 16, 1.600000000000000e+01}},
+         {{5, 6.892649884704898e+01}, { 18, 6.893688067534482e+01}},
+         {{5, 2.061984481890964e+01}, { 36, 2.114519664792607e+01}},
+         {{5, 1.607988713996459e+01}, { 36, 1.662736010353023e+01}},
+         {{5, 3.029858112572883e+01}, { 24, 3.029858832743707e+01}}
+      }
+   };
+
+   for (int p=0; p<8; p++)
+   {
+      for (int i=0; i<2; i++)
+      {
+         const int it = it_norms[dim-2][p][i][0];
+         const double norm = it_norms[dim-2][p][i][1];
+         check(p, it, norm);
+      }
+   }
 }

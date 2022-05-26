@@ -706,13 +706,13 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
    static std::unordered_map<int, fForceMult> call =
    {
       // 2D
-      {0x234, &ForceMult2D<2,3,4,2>},
-      {0x246, &ForceMult2D<2,4,6,3>},
-      {0x258, &ForceMult2D<2,5,8,4>},
+      {0x234,&ForceMult2D<2,3,4,2>},
+      {0x246,&ForceMult2D<2,4,6,3>},
+      {0x258,&ForceMult2D<2,5,8,4>},
       // 3D
-      {0x334, &ForceMult3D<3,3,4,2>},
-      {0x346, &ForceMult3D<3,4,6,3>},
-      {0x358, &ForceMult3D<3,5,8,4>},
+      {0x334,&ForceMult3D<3,3,4,2>},
+      {0x346,&ForceMult3D<3,4,6,3>},
+      {0x358,&ForceMult3D<3,5,8,4>},
    };
    if (!call[id])
    {
