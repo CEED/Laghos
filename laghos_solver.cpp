@@ -426,11 +426,12 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    LinearForm *e_source = nullptr;
    if (source_type == 1) // 2D Taylor-Green.
    {
+      L2.GetMesh()->DeleteGeometricFactors();
       e_source = new LinearForm(&L2);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
       e_source->AddDomainIntegrator(d);
-      e_source->Assemble(false);
+      e_source->Assemble();
    }
 
    Array<int> l2dofs;

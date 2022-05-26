@@ -1069,7 +1069,7 @@ static long GetMaxRssMB()
 static void Checks(const int ti, const double nrm, int &chk)
 {
    const double eps = 1.e-13;
-   printf("\033[33m%.15e\033[m\n",nrm);
+   //printf("\033[33m%.15e\033[m\n",nrm);
 
    auto check = [&](int p, int i, const double res)
    {
@@ -1087,7 +1087,7 @@ static void Checks(const int ti, const double nrm, int &chk)
    const double it_norms[2][8][2][2] = // dim, problem, {it,norm}
    {
       {
-         {{5, 6.546538624534382e+00}, { 27, 7.588576357792928e+00}},
+         {{5, 6.546538624534384e+00}, { 27, 7.588576357792927e+00}},
          {{5, 3.508254945225794e+00}, { 15, 2.756444596823211e+00}},
          {{5, 1.020745795651244e+01}, { 59, 1.721590205901898e+01}},
          {{5, 8.000000000000000e+00}, { 16, 8.000000000000000e+00}},
