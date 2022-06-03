@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_assembly.hpp"
+#include "general/jit/jit.hpp" // for MFEM_JIT
 #include <unordered_map>
 
 namespace mfem
@@ -142,23 +143,27 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    H1D2Q(&H1.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    X(L2sz), Y(H1sz) { }
 
-template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
-void ForceMult2D(const int NE,
-                 const Array<double> &B_,
-                 const Array<double> &Bt_,
-                 const Array<double> &Gt_,
-                 const DenseTensor &sJit_,
-                 const Vector &x, Vector &y)
+MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1>
+static void ForceMult2D(const int NE,
+                        const ConstDeviceMatrix &b,
+                        const ConstDeviceMatrix &bt,
+                        const ConstDeviceMatrix &gt,
+                        const DeviceTensor<5,const double> &sJit,
+                        const DeviceTensor<3,const double> &energy,
+                        DeviceTensor<4,double> &velocity,
+                        int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   auto b = Reshape(B_.Read(), Q1D, L1D);
-   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
-   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
-   auto energy = Reshape(x.Read(), L1D, L1D, NE);
+   MFEM_CONTRACT_VAR(d1d);
+   MFEM_CONTRACT_VAR(q1d);
+   MFEM_CONTRACT_VAR(l1d);
+
+   constexpr int D1D = T_D1D;
+   constexpr int Q1D = T_Q1D;
+   constexpr int L1D = T_L1D;
+   constexpr int NBZ = 1;
+
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(y.Write(), D1D, D1D, DIM, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
    {
@@ -230,7 +235,7 @@ void ForceMult2D(const int NE,
       }
       MFEM_SYNC_THREAD;
 
-      for (int c = 0; c < DIM; ++c)
+      for (int c = 0; c < 2; ++c)
       {
          MFEM_FOREACH_THREAD(qy,y,Q1D)
          {
@@ -275,7 +280,7 @@ void ForceMult2D(const int NE,
          }
          MFEM_SYNC_THREAD;
       }
-      for (int c = 0; c < DIM; ++c)
+      for (int c = 0; c < 2; ++c)
       {
          MFEM_FOREACH_THREAD(dy,y,D1D)
          {
@@ -293,23 +298,26 @@ void ForceMult2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D> static
-void ForceMult3D(const int NE,
-                 const Array<double> &B_,
-                 const Array<double> &Bt_,
-                 const Array<double> &Gt_,
-                 const DenseTensor &sJit_,
-                 const Vector &x, Vector &y)
+MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1>
+static void ForceMult3D(const int NE,
+                        const ConstDeviceMatrix &b,
+                        const ConstDeviceMatrix &bt,
+                        const ConstDeviceMatrix &gt,
+                        const DeviceTensor<6,const double> &sJit,
+                        const DeviceTensor<4,const double> &energy,
+                        DeviceTensor<5,double> &velocity,
+                        int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   auto b = Reshape(B_.Read(), Q1D, L1D);
-   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
-   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
-   auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
+   MFEM_CONTRACT_VAR(d1d);
+   MFEM_CONTRACT_VAR(q1d);
+   MFEM_CONTRACT_VAR(l1d);
+
+   constexpr int D1D = T_D1D;
+   constexpr int Q1D = T_Q1D;
+   constexpr int L1D = T_L1D;
+
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
-   auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
@@ -522,15 +530,20 @@ typedef void (*fForceMult)(const int E,
 
 static void ForceMult(const int DIM, const int D1D, const int Q1D,
                       const int L1D, const int H1D, const int NE,
-                      const Array<double> &B,
-                      const Array<double> &Bt,
-                      const Array<double> &Gt,
+                      const Array<double> &b,
+                      const Array<double> &bt,
+                      const Array<double> &gt,
                       const DenseTensor &stressJinvT,
                       const Vector &e,
                       Vector &v)
 {
+   const auto B  = Reshape(b.Read(), Q1D, L1D);
+   const auto Bt = Reshape(bt.Read(), D1D, Q1D);
+   const auto Gt = Reshape(gt.Read(), D1D, Q1D);
+
    MFEM_VERIFY(D1D==H1D, "D1D!=H1D");
    MFEM_VERIFY(L1D==D1D-1,"L1D!=D1D-1");
+#ifndef MFEM_USE_JIT
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMult> call =
    {
@@ -549,6 +562,24 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
       MFEM_ABORT("Unknown kernel");
    }
    call[id](NE, B, Bt, Gt, stressJinvT, e, v);
+#else
+   if (DIM==2)
+   {
+      const auto StressJinvT = Read(stressJinvT.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+      const auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+      const auto energy = Reshape(e.Read(), L1D, L1D, NE);
+      auto velocity = Reshape(v.Write(), D1D, D1D, DIM, NE);
+      ForceMult2D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+   }
+   if (DIM==3)
+   {
+      const auto StressJinvT = Read(stressJinvT.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+      const auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+      const auto energy = Reshape(e.Read(), L1D, L1D, L1D, NE);
+      auto velocity = Reshape(v.Write(), D1D, D1D, D1D, DIM, NE);
+      ForceMult3D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+   }
+#endif
 }
 
 void ForcePAOperator::Mult(const Vector &x, Vector &y) const
