@@ -223,6 +223,7 @@ struct ROM_Options
     bool useVX = false; // If true, use X-X0 basis for V.
 
     bool qdeim = false; // If true, use QDEIM instead of GNAT.
+    bool sopt = false; // If true, use S_OPT instead of GNAT.
 
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
@@ -803,7 +804,7 @@ protected:
 
     double energyFraction_X;
 
-    const bool use_qdeim;
+    const bool use_qdeim, use_sopt;
 
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
                              const std::vector<double> *timesteps);
