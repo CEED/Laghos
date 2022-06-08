@@ -1010,7 +1010,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-MFEM_JIT template<int T_DIM = 1, int T_Q1D = 1> static
+MFEM_JIT template<int T_DIM = 2, int T_Q1D = 1> static
 void QKernel(const int NE, const int NQ,
              const bool use_viscosity,
              const bool use_vorticity,
@@ -1027,7 +1027,7 @@ void QKernel(const int NE, const int NQ,
              const double *d_Jac0inv,
              double *d_dt_est,
              double *d_stressJinvT,
-             int dim = 0, int q1d = 0)
+             int dim = 2, int q1d = 1)
 {
    MFEM_CONTRACT_VAR(dim);
    MFEM_CONTRACT_VAR(q1d);
