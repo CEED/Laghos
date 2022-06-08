@@ -118,6 +118,7 @@ all:;@$(MAKE) -j $(NPROC) laghos
 
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 
+override jit = $(if $(MFEM_USE_JIT:YES=),,YES)
 ifeq ($(MFEM_USE_CUDA),YES)
         JIT_LANG  = $(if $(jit),-x cu)
 endif
