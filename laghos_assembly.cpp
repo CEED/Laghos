@@ -15,7 +15,6 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_assembly.hpp"
-#include "general/jit/jit.hpp" // for MFEM_JIT
 #include <unordered_map>
 
 namespace mfem
@@ -521,13 +520,6 @@ static void ForceMult3D(const int NE,
    });
 }
 
-typedef void (*fForceMult)(const int E,
-                           const Array<double> &B,
-                           const Array<double> &Bt,
-                           const Array<double> &Gt,
-                           const DenseTensor &stressJinvT,
-                           const Vector &X, Vector &Y);
-
 static void ForceMult(const int DIM, const int D1D, const int Q1D,
                       const int L1D, const int H1D, const int NE,
                       const Array<double> &b,
@@ -545,41 +537,44 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
    MFEM_VERIFY(L1D==D1D-1,"L1D!=D1D-1");
 #ifndef MFEM_USE_JIT
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
-   static std::unordered_map<int, fForceMult> call =
-   {
-      // 2D
-      {0x234,&ForceMult2D<2,3,4,2>},
-      {0x246,&ForceMult2D<2,4,6,3>},
-      {0x258,&ForceMult2D<2,5,8,4>},
-      // 3D
-      {0x334,&ForceMult3D<3,3,4,2>},
-      {0x346,&ForceMult3D<3,4,6,3>},
-      {0x358,&ForceMult3D<3,5,8,4>},
-   };
-   if (!call[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
-   }
-   call[id](NE, B, Bt, Gt, stressJinvT, e, v);
-#else
+#endif
+
    if (DIM==2)
    {
-      const auto StressJinvT = Read(stressJinvT.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
-      const auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+      const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, NE, DIM, DIM);
       const auto energy = Reshape(e.Read(), L1D, L1D, NE);
       auto velocity = Reshape(v.Write(), D1D, D1D, DIM, NE);
+#ifndef MFEM_USE_JIT
+      static std::unordered_map<int, decltype(&ForceMult2D<>)> ForceMult =
+      {
+         {0x234,&ForceMult2D<3,4,2>},
+         {0x246,&ForceMult2D<4,6,3>},
+         {0x258,&ForceMult2D<5,8,4>}
+      };
+      MFEM_VERIFY(ForceMult[id], "No kernel 0x" << std::hex << id << std::dec);
+      ForceMult[id](NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+#else
       ForceMult2D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+#endif
    }
    if (DIM==3)
    {
-      const auto StressJinvT = Read(stressJinvT.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-      const auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+      const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, Q1D, NE, DIM, DIM);
       const auto energy = Reshape(e.Read(), L1D, L1D, L1D, NE);
       auto velocity = Reshape(v.Write(), D1D, D1D, D1D, DIM, NE);
+#ifndef MFEM_USE_JIT
+      static std::unordered_map<int, decltype(&ForceMult3D<>)> ForceMult =
+      {
+         {0x334,&ForceMult3D<3,4,2>},
+         {0x346,&ForceMult3D<4,6,3>},
+         {0x358,&ForceMult3D<5,8,4>}
+      };
+      MFEM_VERIFY(ForceMult[id], "No kernel 0x" << std::hex << id << std::dec);
+      ForceMult[id](NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+#else
       ForceMult3D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
-   }
 #endif
+   }
 }
 
 void ForcePAOperator::Mult(const Vector &x, Vector &y) const

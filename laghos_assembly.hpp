@@ -21,6 +21,12 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 
+#ifndef MFEM_USE_JIT
+#define MFEM_JIT
+#else
+#include "general/jit/jit.hpp" // for MFEM_JIT
+#endif
+
 namespace mfem
 {
 
