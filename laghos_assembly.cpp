@@ -544,36 +544,40 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
       const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, NE, DIM, DIM);
       const auto energy = Reshape(e.Read(), L1D, L1D, NE);
       auto velocity = Reshape(v.Write(), D1D, D1D, DIM, NE);
+      decltype(&ForceMult2D<>) force = nullptr;
 #ifndef MFEM_USE_JIT
-      static std::unordered_map<int, decltype(&ForceMult2D<>)> ForceMult =
+      static std::unordered_map<int, decltype(force)> ForceMult =
       {
          {0x234,&ForceMult2D<3,4,2>},
          {0x246,&ForceMult2D<4,6,3>},
          {0x258,&ForceMult2D<5,8,4>}
       };
       MFEM_VERIFY(ForceMult[id], "No kernel 0x" << std::hex << id << std::dec);
-      ForceMult[id](NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+      force = ForceMult[id];
 #else
-      ForceMult2D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+      force = ForceMult2D;
 #endif
+      force(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
    }
    if (DIM==3)
    {
       const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, Q1D, NE, DIM, DIM);
       const auto energy = Reshape(e.Read(), L1D, L1D, L1D, NE);
       auto velocity = Reshape(v.Write(), D1D, D1D, D1D, DIM, NE);
+      decltype(&ForceMult3D<>) force = nullptr;
 #ifndef MFEM_USE_JIT
-      static std::unordered_map<int, decltype(&ForceMult3D<>)> ForceMult =
+      static std::unordered_map<int, decltype(force)> ForceMult =
       {
          {0x334,&ForceMult3D<3,4,2>},
          {0x346,&ForceMult3D<4,6,3>},
          {0x358,&ForceMult3D<5,8,4>}
       };
       MFEM_VERIFY(ForceMult[id], "No kernel 0x" << std::hex << id << std::dec);
-      ForceMult[id](NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+      force = ForceMult[id];
 #else
-      ForceMult3D(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
+      force = ForceMult3D;
 #endif
+      force(NE, B, Bt, Gt, sJit, energy, velocity, D1D, Q1D, L1D);
    }
 }
 
@@ -587,21 +591,25 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
    H1R->MultTranspose(Y, y);
 }
 
-template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
+MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1> static
 void ForceMultTranspose2D(const int NE,
-                          const Array<double> &Bt_,
-                          const Array<double> &B_,
-                          const Array<double> &G_,
-                          const DenseTensor &sJit_,
-                          const Vector &x, Vector &y)
+                          const ConstDeviceMatrix &bt,
+                          const ConstDeviceMatrix &b,
+                          const ConstDeviceMatrix &g,
+                          const DeviceTensor<5,const double> &sJit,
+                          const DeviceTensor<4,const double> &velocity,
+                          DeviceTensor<3,double> &energy,
+                          int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   auto b = Reshape(B_.Read(), Q1D, D1D);
-   auto g = Reshape(G_.Read(), Q1D, D1D);
-   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
-   auto velocity = Reshape(x.Read(), D1D, D1D, DIM, NE);
-   auto energy = Reshape(y.Write(), L1D, L1D, NE);
+   MFEM_CONTRACT_VAR(d1d);
+   MFEM_CONTRACT_VAR(q1d);
+   MFEM_CONTRACT_VAR(l1d);
+
+   constexpr int D1D = T_D1D;
+   constexpr int Q1D = T_Q1D;
+   constexpr int L1D = T_L1D;
+   constexpr int NBZ = 1;
+   constexpr int DIM = 2;
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
    {
@@ -735,22 +743,24 @@ void ForceMultTranspose2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D> static
+MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1> static
 void ForceMultTranspose3D(const int NE,
-                          const Array<double> &Bt_,
-                          const Array<double> &B_,
-                          const Array<double> &G_,
-                          const DenseTensor &sJit_,
-                          const Vector &v_,
-                          Vector &e_)
+                          const ConstDeviceMatrix &bt,
+                          const ConstDeviceMatrix &b,
+                          const ConstDeviceMatrix &g,
+                          const DeviceTensor<6,const double> &sJit,
+                          const DeviceTensor<5,const double> &velocity,
+                          DeviceTensor<4,double> &energy,
+                          int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   auto b = Reshape(B_.Read(), Q1D, D1D);
-   auto g = Reshape(G_.Read(), Q1D, D1D);
-   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
-   auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
-   auto energy = Reshape(e_.Write(), L1D, L1D, L1D, NE);
+   MFEM_CONTRACT_VAR(d1d);
+   MFEM_CONTRACT_VAR(q1d);
+   MFEM_CONTRACT_VAR(l1d);
+
+   constexpr int D1D = T_D1D;
+   constexpr int Q1D = T_Q1D;
+   constexpr int L1D = T_L1D;
+   constexpr int DIM = 3;
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
@@ -946,13 +956,6 @@ void ForceMultTranspose3D(const int NE,
    });
 }
 
-typedef void (*fForceMultTranspose)(const int NE,
-                                    const Array<double> &Bt,
-                                    const Array<double> &B,
-                                    const Array<double> &G,
-                                    const DenseTensor &sJit,
-                                    const Vector &X, Vector &Y);
-
 static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
                                const int L1D, const int NE,
                                const Array<double> &L2Bt,
@@ -962,24 +965,57 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
                                const Vector &v,
                                Vector &e)
 {
+   const auto l2bt = Reshape(L2Bt.Read(), L1D, Q1D);
+   const auto h1b = Reshape(H1B.Read(), Q1D, D1D);
+   const auto h1g = Reshape(H1G.Read(), Q1D, D1D);
+
    // DIM, D1D, Q1D, L1D(=D1D-1)
    MFEM_VERIFY(L1D==D1D-1, "L1D!=D1D-1");
+#ifndef MFEM_USE_JIT
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
-   static std::unordered_map<int, fForceMultTranspose> call =
+#endif
+
+   if (DIM==2)
    {
-      {0x234,&ForceMultTranspose2D<2,3,4,2>},
-      {0x246,&ForceMultTranspose2D<2,4,6,3>},
-      {0x258,&ForceMultTranspose2D<2,5,8,4>},
-      {0x334,&ForceMultTranspose3D<3,3,4,2>},
-      {0x346,&ForceMultTranspose3D<3,4,6,3>},
-      {0x358,&ForceMultTranspose3D<3,5,8,4>}
-   };
-   if (!call[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
+      const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, NE, DIM, DIM);
+      const auto velocity = Reshape(v.Read(), D1D, D1D, DIM, NE);
+      auto energy = Reshape(e.Write(), L1D, L1D, NE);
+      decltype(&ForceMultTranspose2D<>) forceT = nullptr;
+#ifndef MFEM_USE_JIT
+      static std::unordered_map<int, decltype(forceT)> call =
+      {
+         {0x234,&ForceMultTranspose2D<3,4,2>},
+         {0x246,&ForceMultTranspose2D<4,6,3>},
+         {0x258,&ForceMultTranspose2D<5,8,4>}
+      };
+      MFEM_VERIFY(call[id], "No kernel 0x" << std::hex << id << std::dec);
+      forceT = call[id];
+#else
+      forceT = ForceMultTranspose2D;
+#endif
+      forceT(NE, l2bt, h1b, h1g, sJit, velocity, energy, D1D, Q1D, L1D);
    }
-   call[id](NE, L2Bt, H1B, H1G, stressJinvT, v, e);
+
+   if (DIM==3)
+   {
+      const auto sJit = Reshape(stressJinvT.Read(), Q1D, Q1D, Q1D, NE, DIM, DIM);
+      const auto velocity = Reshape(v.Read(), D1D, D1D, D1D, DIM, NE);
+      auto energy = Reshape(e.Write(), L1D, L1D, L1D, NE);
+      decltype(&ForceMultTranspose3D<>) forceT = nullptr;
+#ifndef MFEM_USE_JIT
+      static std::unordered_map<int, decltype(forceT)> call =
+      {
+         {0x334,&ForceMultTranspose3D<3,4,2>},
+         {0x346,&ForceMultTranspose3D<4,6,3>},
+         {0x358,&ForceMultTranspose3D<5,8,4>}
+      };
+      MFEM_VERIFY(call[id], "No kernel 0x" << std::hex << id << std::dec);
+      forceT = call[id];
+#else
+      forceT = ForceMultTranspose3D;
+#endif
+      forceT(NE, l2bt, h1b, h1g, sJit, velocity, energy, D1D, Q1D, L1D);
+   }
 }
 
 void ForcePAOperator::MultTranspose(const Vector &x, Vector &y) const

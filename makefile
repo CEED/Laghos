@@ -97,7 +97,7 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 
 override jit = $(if $(MFEM_USE_JIT:YES=),,YES)
 ifeq ($(MFEM_USE_JIT),YES)
-JITTED_FILES = laghos_assembly.cpp
+JITTED_FILES = laghos_assembly.cpp laghos_solver.cpp
 SOURCE_FILES = $(filter-out $(JITTED_FILES), $(sort $(wildcard *.cpp)))
 HEADER_FILES = $(sort $(wildcard *.hpp))
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
