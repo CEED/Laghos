@@ -142,24 +142,20 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
    H1D2Q(&H1.GetFE(0)->GetDofToQuad(ir, DofToQuad::TENSOR)),
    X(L2sz), Y(H1sz) { }
 
-MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1>
-static void ForceMult2D(const int NE,
-                        const ConstDeviceMatrix &b,
-                        const ConstDeviceMatrix &bt,
-                        const ConstDeviceMatrix &gt,
-                        const DeviceTensor<5,const double> &sJit,
-                        const DeviceTensor<3,const double> &energy,
-                        DeviceTensor<4,double> &velocity,
-                        int d1d = 0, int q1d = 0, int l1d = 0)
+MFEM_JIT template<int T_D1D = 0, int T_Q1D = 0, int T_L1D = 0> static
+void ForceMult2D(const int NE,
+                 const ConstDeviceMatrix &b,
+                 const ConstDeviceMatrix &bt,
+                 const ConstDeviceMatrix &gt,
+                 const DeviceTensor<5,const double> &sJit,
+                 const DeviceTensor<3,const double> &energy,
+                 DeviceTensor<4,double> &velocity,
+                 int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   MFEM_CONTRACT_VAR(d1d);
-   MFEM_CONTRACT_VAR(q1d);
-   MFEM_CONTRACT_VAR(l1d);
-
-   constexpr int D1D = T_D1D;
-   constexpr int Q1D = T_Q1D;
-   constexpr int L1D = T_L1D;
    constexpr int NBZ = 1;
+   constexpr int D1D = T_D1D ? T_D1D : d1d;
+   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
+   constexpr int L1D = T_L1D ? T_L1D : l1d;
 
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
@@ -297,23 +293,19 @@ static void ForceMult2D(const int NE,
    });
 }
 
-MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1>
-static void ForceMult3D(const int NE,
-                        const ConstDeviceMatrix &b,
-                        const ConstDeviceMatrix &bt,
-                        const ConstDeviceMatrix &gt,
-                        const DeviceTensor<6,const double> &sJit,
-                        const DeviceTensor<4,const double> &energy,
-                        DeviceTensor<5,double> &velocity,
-                        int d1d = 0, int q1d = 0, int l1d = 0)
+MFEM_JIT template<int T_D1D = 0, int T_Q1D = 01, int T_L1D = 0> static
+void ForceMult3D(const int NE,
+                 const ConstDeviceMatrix &b,
+                 const ConstDeviceMatrix &bt,
+                 const ConstDeviceMatrix &gt,
+                 const DeviceTensor<6,const double> &sJit,
+                 const DeviceTensor<4,const double> &energy,
+                 DeviceTensor<5,double> &velocity,
+                 int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   MFEM_CONTRACT_VAR(d1d);
-   MFEM_CONTRACT_VAR(q1d);
-   MFEM_CONTRACT_VAR(l1d);
-
-   constexpr int D1D = T_D1D;
-   constexpr int Q1D = T_Q1D;
-   constexpr int L1D = T_L1D;
+   constexpr int D1D = T_D1D ? T_D1D : d1d;
+   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
+   constexpr int L1D = T_L1D ? T_L1D : l1d;
 
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
@@ -591,7 +583,7 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
    H1R->MultTranspose(Y, y);
 }
 
-MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1> static
+MFEM_JIT template<int T_D1D = 0, int T_Q1D = 0, int T_L1D = 0> static
 void ForceMultTranspose2D(const int NE,
                           const ConstDeviceMatrix &bt,
                           const ConstDeviceMatrix &b,
@@ -601,15 +593,11 @@ void ForceMultTranspose2D(const int NE,
                           DeviceTensor<3,double> &energy,
                           int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   MFEM_CONTRACT_VAR(d1d);
-   MFEM_CONTRACT_VAR(q1d);
-   MFEM_CONTRACT_VAR(l1d);
-
-   constexpr int D1D = T_D1D;
-   constexpr int Q1D = T_Q1D;
-   constexpr int L1D = T_L1D;
    constexpr int NBZ = 1;
    constexpr int DIM = 2;
+   constexpr int D1D = T_D1D ? T_D1D : d1d;
+   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
+   constexpr int L1D = T_L1D ? T_L1D : l1d;
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
    {
@@ -743,7 +731,7 @@ void ForceMultTranspose2D(const int NE,
    });
 }
 
-MFEM_JIT template<int T_D1D = 1, int T_Q1D = 1, int T_L1D = 1> static
+MFEM_JIT template<int T_D1D = 0, int T_Q1D = 0, int T_L1D = 0> static
 void ForceMultTranspose3D(const int NE,
                           const ConstDeviceMatrix &bt,
                           const ConstDeviceMatrix &b,
@@ -753,14 +741,10 @@ void ForceMultTranspose3D(const int NE,
                           DeviceTensor<4,double> &energy,
                           int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   MFEM_CONTRACT_VAR(d1d);
-   MFEM_CONTRACT_VAR(q1d);
-   MFEM_CONTRACT_VAR(l1d);
-
-   constexpr int D1D = T_D1D;
-   constexpr int Q1D = T_Q1D;
-   constexpr int L1D = T_L1D;
    constexpr int DIM = 3;
+   constexpr int D1D = T_D1D ? T_D1D : d1d;
+   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
+   constexpr int L1D = T_L1D ? T_L1D : l1d;
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {

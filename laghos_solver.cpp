@@ -498,7 +498,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector rhs_z(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -508,10 +508,10 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
+      di.AssembleRHSElementVect(fe, eltr, rhs_z);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(rhs, rho_z);
+      inv.Mult(rhs_z, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
@@ -1010,7 +1010,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-MFEM_JIT template<int T_DIM = 2, int T_Q1D = 1> static
+MFEM_JIT template<int T_DIM = 0, int T_Q1D = 0> static
 void QKernel(const int NE, const int NQ,
              const bool use_viscosity,
              const bool use_vorticity,
@@ -1027,14 +1027,12 @@ void QKernel(const int NE, const int NQ,
              const double *d_Jac0inv,
              double *d_dt_est,
              double *d_stressJinvT,
-             int dim = 2, int q1d = 1)
+             int dim = 0, int q1d = 0)
 {
-   MFEM_CONTRACT_VAR(dim);
-   MFEM_CONTRACT_VAR(q1d);
-   constexpr int DIM = T_DIM;
-   constexpr int Q1D = T_Q1D;
+   constexpr int DIM = T_DIM ? T_DIM : dim;
+   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
+   constexpr int Q1Z = DIM == 3 ? Q1D : 1;
    constexpr int DIM2 = DIM*DIM;
-   const int Q1Z = DIM == 3 ? Q1D : 1;
 
    // Trace of a square matrix
    auto Trace = [](const double *data)
@@ -1065,7 +1063,6 @@ void QKernel(const int NE, const int NQ,
       }
       return s_factor*sqrt(s_fnorm2);
    };
-
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1Z,
    {
