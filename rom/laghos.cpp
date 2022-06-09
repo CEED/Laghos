@@ -150,6 +150,7 @@ int main(int argc, char *argv[])
     bool match_end_time = false;
     const char *normtype_char = "l2";
     const char *testing_parameter_basename = "";
+    const char *hyperreductionSamplingType = "gnat";
     const char *spaceTimeMethod = "spatial";
     const char *offsetType = "initial";
     const char *indicatorType = "time";
@@ -326,10 +327,8 @@ int main(int argc, char *argv[])
                    "Enable or disable use of X-X0 basis for V.");
     args.AddOption(&romOptions.mergeXV, "-romxandv", "--romusexandv", "-no-romxandv", "--no-romusexandv",
                    "Enable or disable merging of X-X0 and V bases.");
-    args.AddOption(&romOptions.qdeim, "-qdeim", "--romuseqdeim", "-no-qdeim", "--no-romuseqdeim",
-                   "Enable or disable use of QDEIM.");
-    args.AddOption(&romOptions.sopt, "-sopt", "--romusesopt", "-no-sopt", "--no-romusesopt",
-                   "Enable or disable use of S_OPT.");
+    args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
+                  "Sampling type for the hyperreduction.");
     args.Parse();
     if (!args.Good())
     {
@@ -374,13 +373,13 @@ int main(int argc, char *argv[])
     MFEM_VERIFY(!(romOptions.useXV && romOptions.useVX), "");
     MFEM_VERIFY(!(romOptions.useXV && romOptions.mergeXV) && !(romOptions.useVX && romOptions.mergeXV), "");
     MFEM_VERIFY(!(romOptions.hyperreduce && romOptions.hyperreduce_prep), "");
-    MFEM_VERIFY(!(romOptions.qdeim && romOptions.sopt), "");
 
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
+    romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
 

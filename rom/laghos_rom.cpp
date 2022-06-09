@@ -359,8 +359,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-      energyFraction_X(input.energyFraction_X), use_qdeim(input.qdeim), use_sopt(input.sopt), basisIdentifier(input.basisIdentifier),
-      spaceTimeMethod(input.spaceTimeMethod), spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
+      energyFraction_X(input.energyFraction_X), basisIdentifier(input.basisIdentifier),
+      hyperreductionSamplingType(input.hyperreductionSamplingType), spaceTimeMethod(input.spaceTimeMethod),
+      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -1116,7 +1117,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     }
     else // not spaceTime
     {
-        if (use_qdeim)
+        if (hyperreductionSamplingType == qdeim)
         {
             CAROM::QDEIM(basisFv,
                          rdimfv,
@@ -1136,7 +1137,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          nprocs,
                          numSamplesE);
         }
-        else if (use_sopt)
+        else if (hyperreductionSamplingType == sopt)
         {
             CAROM::S_OPT(basisFv,
                          rdimfv,
