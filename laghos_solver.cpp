@@ -1010,7 +1010,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-MFEM_JIT template<int T_DIM = 0, int T_Q1D = 0> static
+MFEM_JIT template<int T_DIM = 2, int T_Q1D = 0> static
 void QKernel(const int NE, const int NQ,
              const bool use_viscosity,
              const bool use_vorticity,
@@ -1029,13 +1029,15 @@ void QKernel(const int NE, const int NQ,
              double *d_stressJinvT,
              int dim = 0, int q1d = 0)
 {
-   const int DIM = T_DIM ? T_DIM : dim;
-   const int Q1D = T_Q1D ? T_Q1D : q1d;
-   const int Q1Z = DIM == 3 ? Q1D : 1;
-   const int DIM2 = DIM*DIM;
+   MFEM_CONTRACT_VAR(dim);
+   MFEM_CONTRACT_VAR(q1d);
+   constexpr int DIM = T_DIM;
+   constexpr int Q1D = T_Q1D;
+   constexpr int Q1Z = DIM == 3 ? Q1D : 1;
+   constexpr int DIM2 = DIM*DIM;
 
    // Trace of a square matrix
-   auto Trace = [&](const double *data)
+   auto Trace = [](const double *data)
    {
       double t = 0.0;
       for (int i = 0; i < DIM; i++) { t += data[i+i*DIM]; }
