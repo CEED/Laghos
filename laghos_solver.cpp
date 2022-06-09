@@ -1037,7 +1037,7 @@ void QKernel(const int NE, const int NQ,
    constexpr int DIM2 = DIM*DIM;
 
    // Trace of a square matrix
-   auto Trace = [](const double *data)
+   auto Trace = [] MFEM_HOST_DEVICE (const double *data)
    {
       double t = 0.0;
       for (int i = 0; i < DIM; i++) { t += data[i+i*DIM]; }
@@ -1045,7 +1045,7 @@ void QKernel(const int NE, const int NQ,
    };
 
    // Compute the Frobenius norm of the matrix
-   auto FNorm = [&](const double *data)
+   auto FNorm = [] MFEM_HOST_DEVICE (const double *data)
    {
       double s_factor = 0.0, s_fnorm2 = 0.0;
       double max_norm = 0.0, fnorm2 = 0.0;
