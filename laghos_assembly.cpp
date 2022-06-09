@@ -153,9 +153,9 @@ void ForceMult2D(const int NE,
                  int d1d = 0, int q1d = 0, int l1d = 0)
 {
    constexpr int NBZ = 1;
-   constexpr int D1D = T_D1D ? T_D1D : d1d;
-   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
-   constexpr int L1D = T_L1D ? T_L1D : l1d;
+   const int D1D = T_D1D ? T_D1D : d1d;
+   const int Q1D = T_Q1D ? T_Q1D : q1d;
+   const int L1D = T_L1D ? T_L1D : l1d;
 
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
@@ -303,9 +303,9 @@ void ForceMult3D(const int NE,
                  DeviceTensor<5,double> &velocity,
                  int d1d = 0, int q1d = 0, int l1d = 0)
 {
-   constexpr int D1D = T_D1D ? T_D1D : d1d;
-   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
-   constexpr int L1D = T_L1D ? T_L1D : l1d;
+   const int D1D = T_D1D ? T_D1D : d1d;
+   const int Q1D = T_Q1D ? T_Q1D : q1d;
+   const int L1D = T_L1D ? T_L1D : l1d;
 
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
@@ -595,9 +595,9 @@ void ForceMultTranspose2D(const int NE,
 {
    constexpr int NBZ = 1;
    constexpr int DIM = 2;
-   constexpr int D1D = T_D1D ? T_D1D : d1d;
-   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
-   constexpr int L1D = T_L1D ? T_L1D : l1d;
+   const int D1D = T_D1D ? T_D1D : d1d;
+   const int Q1D = T_Q1D ? T_Q1D : q1d;
+   const int L1D = T_L1D ? T_L1D : l1d;
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
    {
@@ -742,9 +742,9 @@ void ForceMultTranspose3D(const int NE,
                           int d1d = 0, int q1d = 0, int l1d = 0)
 {
    constexpr int DIM = 3;
-   constexpr int D1D = T_D1D ? T_D1D : d1d;
-   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
-   constexpr int L1D = T_L1D ? T_L1D : l1d;
+   const int D1D = T_D1D ? T_D1D : d1d;
+   const int Q1D = T_Q1D ? T_Q1D : q1d;
+   const int L1D = T_L1D ? T_L1D : l1d;
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {

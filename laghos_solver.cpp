@@ -1029,13 +1029,13 @@ void QKernel(const int NE, const int NQ,
              double *d_stressJinvT,
              int dim = 0, int q1d = 0)
 {
-   constexpr int DIM = T_DIM ? T_DIM : dim;
-   constexpr int Q1D = T_Q1D ? T_Q1D : q1d;
-   constexpr int Q1Z = DIM == 3 ? Q1D : 1;
-   constexpr int DIM2 = DIM*DIM;
+   const int DIM = T_DIM ? T_DIM : dim;
+   const int Q1D = T_Q1D ? T_Q1D : q1d;
+   const int Q1Z = DIM == 3 ? Q1D : 1;
+   const int DIM2 = DIM*DIM;
 
    // Trace of a square matrix
-   auto Trace = [](const double *data)
+   auto Trace = [&](const double *data)
    {
       double t = 0.0;
       for (int i = 0; i < DIM; i++) { t += data[i+i*DIM]; }
