@@ -66,6 +66,26 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     return iter->second;
 }
 
+enum HyperreductionSamplingType
+{
+    gnat,       // Default, GNAT
+    qdeim,      // QDEIM
+    sopt,      // S-OPT
+};
+
+static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
+{
+    static std::unordered_map<std::string, HyperreductionSamplingType> SamplingTypeMap =
+    {
+        {"gnat", gnat},
+        {"qdeim", qdeim},
+        {"sopt", sopt}
+    };
+    auto iter = SamplingTypeMap.find(sampling_type);
+    MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
+    return iter->second;
+}
+
 enum SpaceTimeMethod
 {
     no_space_time, // Default, spatial ROM
@@ -222,8 +242,7 @@ struct ROM_Options
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
 
-    bool qdeim = false; // If true, use QDEIM instead of GNAT.
-
+    HyperreductionSamplingType hyperreductionSamplingType = gnat;
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
@@ -803,8 +822,6 @@ protected:
 
     double energyFraction_X;
 
-    const bool use_qdeim;
-
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
                              const std::vector<double> *timesteps);
 
@@ -823,6 +840,7 @@ private:
 
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
+    const HyperreductionSamplingType hyperreductionSamplingType;
     const SpaceTimeMethod spaceTimeMethod;
     const bool spaceTime;  // whether space-time is used
     int temporalSize = 0;
