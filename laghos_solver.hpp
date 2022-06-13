@@ -57,7 +57,9 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
+   const ParGridFunction &rho0_gf;
    const ParGridFunction &gamma_gf;
+   
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
@@ -65,16 +67,20 @@ protected:
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   const IntegrationRule &b_ir;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
-   mutable bool qdata_is_current, forcemat_is_assembled;
+   mutable FaceQuadratureData f_qdata; 
+  mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
-   mutable Vector X, B, one, rhs, e_rhs;
+   mutable MixedBilinearForm VelocityBoundaryForce;
+   mutable MixedBilinearForm EnergyBoundaryForce;
+   mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -88,7 +94,10 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
+   void UpdateSurfaceNormalStressData(const Vector &S) const;
    void AssembleForceMatrix() const;
+   void AssembleVelocityBoundaryForceMatrix() const;
+   void AssembleEnergyBoundaryForceMatrix() const;
 
 public:
    LagrangianHydroOperator(const int size,

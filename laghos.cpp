@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs, ess_vdofs;
-   {
+   /*  {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
       for (int d = 0; d < pmesh->Dimension(); d++)
       {
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
          ess_vdofs.Append(dofs_list);
       }
    }
-
+*/
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)

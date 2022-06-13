@@ -77,6 +77,99 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    }
 }
 
+void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
+                                             const FiniteElement &test_fe1,
+					     FaceElementTransformations &Tr,
+                                             DenseMatrix &elmat)
+{
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = test_fe1.GetDim();
+  const int h1dofs_cnt = test_fe1.GetDof();
+  const int l2dofs_cnt = trial_fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
+  elmat = 0.0;
+  
+  DenseMatrix loc_force(h1dofs_cnt, dim);
+  Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
+  const int Elem1No = Tr.Elem1No;
+      
+  for (int q = 0; q  < nqp_face; q++)
+    {
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      // Set the integration point in the face and the neighboring elements
+      Tr.SetAllIntPoints(&ip_f);
+      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+      test_fe1.CalcShape(eip, te_shape);
+      loc_force = 0.0;
+      for (int i = 0; i < h1dofs_cnt; i++)
+	{
+	  for (int vd = 0; vd < dim; vd++) // Velocity components.
+	    {
+	      const int eq = Elem1No*nqp_face + q;
+	      loc_force(i, vd) += qdata.weightedNormalStress(eq,vd) * te_shape(i);
+	    }
+	}
+      trial_fe.CalcShape(eip, tr_shape);
+      AddMultVWt(Vloc_force,tr_shape,elmat);
+    }
+}
+
+void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
+                                             const FiniteElement &test_fe1,
+					     FaceElementTransformations &Tr,
+                                             DenseMatrix &elmat)
+{
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = trial_fe.GetDim();
+  const int h1dofs_cnt = test_fe1.GetDof();
+  const int l2dofs_cnt = trial_fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
+  elmat = 0.0;
+  DenseMatrix loc_force(h1dofs_cnt, dim);
+  Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
+  const int Elem1No = Tr.Elem1No;
+      
+  for (int q = 0; q  < nqp_face; q++)
+    {
+      const int eq = Elem1No*nqp_face + q;
+	     
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      // Set the integration point in the face and the neighboring elements
+      Tr.SetAllIntPoints(&ip_f);
+      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+      Vector nor;
+      nor.SetSize(dim);
+
+      if (dim == 1)
+	{
+	  nor(0) = 2*eip.x - 1.0;
+	}
+      else
+	{
+	  CalcOrtho(Tr.Jacobian(), nor);
+	}   
+
+      test_fe1.CalcShape(eip, te_shape);
+      loc_force = 0.0;
+      double normalStressProjNormal = 0.0;
+      double nor_norm = 0.0;
+      for (int s = 0; s < dim; s++){
+	normalStressProjNormal = qdata.weightedNormalStress(eq,s) * nor(s);
+	nor_norm += nor(s) * nor(s);
+      }
+      normalStressProjNormal /= nor_norm;
+      for (int i = 0; i < h1dofs_cnt; i++)
+	{
+	  for (int vd = 0; vd < dim; vd++) // Velocity components.
+	    {
+	      loc_force(i, vd) += normalStressProjNormal * te_shape(i) * nor(vd)/nor_norm;
+	    }
+	}
+      trial_fe.CalcShape(eip, tr_shape);
+      AddMultVWt(Vloc_force,tr_shape,elmat);
+    }
+}
+ 
 } // namespace hydrodynamics
 
 } // namespace mfem

@@ -61,6 +61,18 @@ struct QuadratureData
         rho0DetJ0w(NE * quads_per_el) { }
 };
 
+  // Container for all data needed at quadrature points.
+struct FaceQuadratureData
+{
+   // Quadrature data used for full/partial assembly of the force operator.
+   // At each quadrature point, it combines the stress, inverse Jacobian,
+   // determinant of the Jacobian and the integration weight.
+   // It must be recomputed in every time step.
+   DenseMatrix weightedNormalStress;
+
+  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim) { }
+};
+
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.
@@ -88,6 +100,32 @@ public:
                                        const FiniteElement &test_fe,
                                        ElementTransformation &Tr,
                                        DenseMatrix &elmat);
+};
+
+  // Performs full assembly for the boundary force operator on the momentum equation.
+class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
+{
+private:
+  FaceQuadratureData &qdata;
+public:
+  VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+   virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
+				   const FiniteElement &test_fe1,
+				   FaceElementTransformations &Tr,
+				   DenseMatrix &elmat);
+};
+
+    // Performs full assembly for the boundary force operator on the momentum equation.
+class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
+{
+private:
+  FaceQuadratureData &qdata;
+public:
+  EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+   virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
+				   const FiniteElement &test_fe1,
+				   FaceElementTransformations &Tr,
+				   DenseMatrix &elmat);
 };
 
 } // namespace hydrodynamics
