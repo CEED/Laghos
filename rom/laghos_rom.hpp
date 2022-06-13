@@ -10,7 +10,8 @@
 
 #include "laghos_solver.hpp"
 
-//using namespace CAROM;
+#include "mfem/SampleMesh.hpp"
+
 using namespace mfem;
 
 
@@ -63,6 +64,26 @@ static offsetStyle getOffsetStyle(const char* offsetType)
     };
     auto iter = offsetMap.find(offsetType);
     MFEM_VERIFY(iter != std::end(offsetMap), "Invalid input for offset type");
+    return iter->second;
+}
+
+enum HyperreductionSamplingType
+{
+    gnat,       // Default, GNAT
+    qdeim,      // QDEIM
+    sopt,      // S-OPT
+};
+
+static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
+{
+    static std::unordered_map<std::string, HyperreductionSamplingType> SamplingTypeMap =
+    {
+        {"gnat", gnat},
+        {"qdeim", qdeim},
+        {"sopt", sopt}
+    };
+    auto iter = SamplingTypeMap.find(sampling_type);
+    MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
     return iter->second;
 }
 
@@ -174,7 +195,7 @@ struct ROM_Options
     double energyFraction_X = 0.9999; // used for recommending basis sizes, depending on singular values
     int sv_shift = 1; // Number of shifted singular values in energy fraction calculation (to avoid one singular occupies almost all energy when window-dependent offsets are not used)
     int window = 0; // Laghos-ROM time window index
-    int max_dim = 0; // maximimum dimension for libROM basis generator time interval
+    int max_dim = 0; // maximum dimension for libROM basis generator time interval
     int parameterID = -1; // index of parameters chosen for this Laghos simulation
     hydrodynamics::LagrangianHydroOperator *FOMoper = NULL; // FOM operator
 
@@ -224,8 +245,7 @@ struct ROM_Options
     bool useXV = false; // If true, use V basis for X-X0.
     bool useVX = false; // If true, use X-X0 basis for V.
 
-    bool qdeim = false; // If true, use QDEIM instead of GNAT.
-
+    HyperreductionSamplingType hyperreductionSamplingType = gnat;
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
@@ -537,7 +557,7 @@ class ROM_Basis
     friend class STROM_Basis;
 
 public:
-    ROM_Basis(ROM_Options const& input, MPI_Comm comm_, MPI_Comm rom_com_,
+    ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
               const double sFactorX=1.0, const double sFactorV=1.0,
               const std::vector<double> *timesteps=NULL);
 
@@ -578,6 +598,8 @@ public:
         delete BXXinv;
         delete BVVinv;
         delete BEEinv;
+        delete smm;
+        delete sampleSelector;
         if (!hyperreduce)
         {
             delete fH1;
@@ -695,7 +717,9 @@ public:
     void ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut);
 
     MPI_Comm comm;
-    MPI_Comm rom_com;
+
+    CAROM::SampleMeshManager *smm = NULL;
+    CAROM::SampleDOFSelector *sampleSelector = NULL;
 
     CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
     CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
@@ -749,17 +773,7 @@ private:
     CAROM::Vector *rE2 = 0;
 
     // For hyperreduction
-    std::vector<int> spaceOS, spaceOSSP;
-    std::vector<int> s2sp_X, s2sp_V, s2sp_E;
     ParMesh* sample_pmesh = 0;
-    std::vector<int> st2sp;  // mapping from stencil dofs in original mesh (st) to stencil dofs in sample mesh (s+)
-    std::vector<int> s2sp_H1;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
-    std::vector<int> s2sp_L2;  // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+)
-
-    std::vector<int> sprows;
-    std::vector<int> all_sprows;
-
-    std::vector<int> s2sp;   // mapping from sample dofs in original mesh (s) to stencil dofs in sample mesh (s+), for both F and E
 
     CAROM::Matrix *BXsp = NULL;
     CAROM::Matrix *BVsp = NULL;
@@ -818,8 +832,6 @@ protected:
 
     double energyFraction_X;
 
-    const bool use_qdeim;
-
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
                              const std::vector<double> *timesteps);
 
@@ -838,6 +850,7 @@ private:
 
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
+    const HyperreductionSamplingType hyperreductionSamplingType;
     const SpaceTimeMethod spaceTimeMethod;
     const bool spaceTime;  // whether space-time is used
     int temporalSize = 0;
