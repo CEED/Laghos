@@ -183,7 +183,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     bool   dmd = false;
-    double dmd_tbegin = -1.0;
+    double dmd_tbegin = 0.0;
     double desired_dt = 0.0;
     double dmd_closest_rbf = 0.9;
     bool   dmd_nonuniform = false;

@@ -389,8 +389,6 @@ int main(int argc, char *argv[])
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 
-    if (romOptions.dmd && rom_offline) MFEM_VERIFY(romOptions.dmd_tbegin >= 0.0, "tbegin must be greater than or equal to zero.");
-
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
