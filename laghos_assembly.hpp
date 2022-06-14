@@ -106,7 +106,7 @@ public:
 class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
-  FaceQuadratureData &qdata;
+  const FaceQuadratureData &qdata;
 public:
   VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
@@ -119,7 +119,7 @@ public:
 class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
-  FaceQuadratureData &qdata;
+  const FaceQuadratureData &qdata;
 public:
   EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,

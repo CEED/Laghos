@@ -124,7 +124,10 @@ public:
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
-   void ResetQuadratureData() const { qdata_is_current = false; }
+   void ResetQuadratureData() const {
+    qdata_is_current = false;
+    bv_qdata_is_current = false;
+    be_qdata_is_current = false;}
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.

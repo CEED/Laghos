@@ -68,7 +68,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             {
                const int eq = e*nqp + q;
                const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
-               loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
+	       loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
             }
          }
       }
@@ -88,13 +88,15 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
   const int l2dofs_cnt = trial_fe.GetDof();
   elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
   elmat = 0.0;
-  
+
   DenseMatrix loc_force(h1dofs_cnt, dim);
   Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
-  const int Elem1No = Tr.Elem1No;
-      
+  const int Elem1No = Tr.ElementNo;
+
   for (int q = 0; q  < nqp_face; q++)
     {
+      const int eq = Elem1No*nqp_face + q;
+
       const IntegrationPoint &ip_f = IntRule->IntPoint(q);
       // Set the integration point in the face and the neighboring elements
       Tr.SetAllIntPoints(&ip_f);
@@ -105,7 +107,6 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
 	{
 	  for (int vd = 0; vd < dim; vd++) // Velocity components.
 	    {
-	      const int eq = Elem1No*nqp_face + q;
 	      loc_force(i, vd) += qdata.weightedNormalStress(eq,vd) * te_shape(i);
 	    }
 	}
@@ -127,7 +128,7 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
   elmat = 0.0;
   DenseMatrix loc_force(h1dofs_cnt, dim);
   Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
-  const int Elem1No = Tr.Elem1No;
+  const int Elem1No = Tr.ElementNo;
       
   for (int q = 0; q  < nqp_face; q++)
     {

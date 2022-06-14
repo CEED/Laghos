@@ -121,7 +121,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    b_ir(IntRules.Get((pmesh->GetFaceElementTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetFaceElementTransformations(0))->OrderW() )),
 	Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
-   f_qdata(dim, NE, b_ir.GetNPoints()),
+   f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
    qdata_is_current(false),
    forcemat_is_assembled(false),
    bv_qdata_is_current(false),
@@ -255,7 +255,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 {
    UpdateQuadratureData(S); 
    UpdateSurfaceNormalStressData(S);
-   
+
    AssembleForceMatrix();
    AssembleVelocityBoundaryForceMatrix();
    // The monolithic BlockVector stores the unknown fields as follows:
@@ -274,7 +274,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    Force.Mult(one, rhs);
    rhs.Neg();
+   //rhs.Print();
    VelocityBoundaryForce.Mult(one,b_rhs);
+   //std::cout << " printing " << std::endl;
+   //b_rhs.Print(mfem::out,1);
    rhs += b_rhs;
   		      
    if (source_type == 2)
@@ -328,8 +331,11 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 
    Array<int> l2dofs;
    Force.MultTranspose(v, e_rhs);
+   
    EnergyBoundaryForce.MultTranspose(v, be_rhs);
-   e_rhs += be_rhs;
+   //   be_rhs.Print();
+
+   e_rhs -= be_rhs;
    if (e_source) { e_rhs += *e_source; }
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    for (int e = 0; e < NE; e++)
@@ -618,11 +624,23 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    weightedNormalStress.SetSize(dim);
    for (int i = 0; i < H1.GetNBE(); i++)
      {
+       Vector rho_vals(nqp_face);
+       Vector e_vals(nqp_face);
+       Vector gamma_vals(nqp_face);
        const FiniteElement &be = *H1.GetBE(i);
        FaceElementTransformations *eltrans = pmesh->GetFaceElementTransformations(i);
-       const int Elem1No = eltrans->Elem1No;
+       const int faceElemNo = eltrans->ElementNo;
+       const int boundaryElem = eltrans->Elem1No;
+       rho0_gf.GetValues(boundaryElem, b_ir, rho_vals);
+       gamma_gf.GetValues(boundaryElem, b_ir, gamma_vals);
+       e.GetValues(boundaryElem, b_ir, e_vals);
+       
        for (int q = 0; q  < nqp_face; q++)
 	 {
+	   stress = 0.0;
+	   double p = (gamma_vals(q) - 1) * rho_vals(q) * e_vals(q); 
+	   for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
+       
 	   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 	   eltrans->SetAllIntPoints(&ip_f);
 	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
@@ -635,20 +653,12 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	     {
 	       CalcOrtho(eltrans->Jacobian(), nor);
 	     }
-  
-	   double b_rho = rho0_gf.GetValue(Elem1No, ip_f);
-	   double b_gamma = gamma_gf.GetValue(Elem1No, ip_f);
-	   double b_e = e.GetValue(Elem1No, ip_f);
-	   stress = 0.0;
-	   double p = (b_gamma - 1) * b_rho * b_e; 
-	   for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 	   // Quadrature data for partial assembly of the force operator.
 	   stress.Mult( nor, weightedNormalStress);
 	   for (int vd = 0 ; vd < dim; vd++)
 	     {
-	       f_qdata.weightedNormalStress(Elem1No*nqp_face + q, vd) =
-		 weightedNormalStress(vd) * ip_f.weight;
- 	     }
+	       f_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;	       
+	     }
 	 }
      }
 }
