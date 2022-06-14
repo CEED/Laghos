@@ -286,9 +286,9 @@ public:
         }
         else
         {
-            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
-            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
-            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
+            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
+            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
         }
 
         if (!sns)
@@ -300,8 +300,8 @@ public:
             }
             else
             {
-                dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
-                dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+                dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
+                dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
             }
         }
 
