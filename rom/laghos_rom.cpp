@@ -13,6 +13,113 @@
 
 using namespace std;
 
+
+void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
+{
+    SetStateVariables(S);
+    SetStateVariableRates(dt);
+
+    Vector dSdt;
+    if (!sns)
+    {
+        dSdt.SetSize(S.Size());
+        lhoper->Mult(S, dSdt);
+    }
+
+    if (!useXV)
+    {
+        if (rank == 0)
+        {
+            cout << "X taking sample at t " << t << endl;
+        }
+
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] = X[i] - (*initX)(i);
+            }
+
+            dmd_X->takeSample(Xdiff.GetData(), t);
+        }
+        else
+        {
+            dmd_X->takeSample(X.GetData(), t);
+        }
+    }
+
+    if (!useVX)
+    {
+        if (rank == 0)
+        {
+            cout << "V taking sample at t " << t << endl;
+        }
+
+        if (offsetInit && Voffset)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] = V[i] - (*initV)(i);
+            }
+
+            dmd_V->takeSample(Xdiff.GetData(), t);
+        }
+        else
+        {
+            dmd_V->takeSample(V.GetData(), t);
+        }
+    }
+
+    if (!sns)
+    {
+        MFEM_VERIFY(gfH1.Size() == H1size, "");
+        for (int i=0; i<H1size; ++i)
+            gfH1[i] = dSdt[H1size + i];  // Fv
+
+        gfH1.GetTrueDofs(Xdiff);
+        dmd_Fv->takeSample(Xdiff.GetData(), t);
+    }
+
+    if (rank == 0)
+    {
+        cout << "E taking sample at t " << t << endl;
+    }
+
+    if (offsetInit)
+    {
+        for (int i=0; i<tL2size; ++i)
+        {
+            Ediff[i] = E[i] - (*initE)(i);
+        }
+
+        dmd_E->takeSample(Ediff.GetData(), t);
+
+    }
+    else
+    {
+        dmd_E->takeSample(E.GetData(), t);
+    }
+
+    if (!sns)
+    {
+        MFEM_VERIFY(gfL2.Size() == L2size, "");
+        for (int i=0; i<L2size; ++i)
+            gfL2[i] = dSdt[(2*H1size) + i];  // Fe
+
+        gfL2.GetTrueDofs(Ediff);
+        dmd_Fe->takeSample(Ediff.GetData(), t);
+    }
+
+    // Write timeSamples to file
+    if (rank == 0)
+    {
+        std::string filename = basename + "/timeSamples.csv";
+        std::ofstream outfile(filename, std::ios_base::app);
+        outfile << to_string(window) << " " << t << "\n";
+        outfile.close();    
+    }
+}
+
 void ROM_Sampler::SampleSolution(const double t, const double dt, const double pd, Vector const& S)
 {
     SetStateVariables(S);
@@ -44,13 +151,11 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
 
             addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
-            dmd_X->takeSample(Xdiff.GetData(), t);
             generator_X->computeNextSampleTime(Xdiff.GetData(), dXdt.GetData(), t);
         }
         else
         {
             addSample = generator_X->takeSample(X.GetData(), t, dt);
-            dmd_X->takeSample(X.GetData(), t);
             generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
         }
 
@@ -85,13 +190,11 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 }
 
                 addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
-                dmd_V->takeSample(Xdiff.GetData(), t);
                 generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
             }
             else
             {
                 addSample = generator_V->takeSample(V.GetData(), t, dt);
-                dmd_V->takeSample(V.GetData(), t);
                 generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
             }
 
@@ -109,7 +212,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             gfH1.GetTrueDofs(Xdiff);
             bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-            dmd_Fv->takeSample(Xdiff.GetData(), t);
 
             if (writeSnapshots && addSampleF)
             {
@@ -137,14 +239,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
-            dmd_E->takeSample(Ediff.GetData(), t);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
 
         }
         else
         {
             addSample = generator_E->takeSample(E.GetData(), t, dt);
-            dmd_E->takeSample(E.GetData(), t);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
@@ -156,7 +256,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             gfL2.GetTrueDofs(Ediff);
             addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-            dmd_Fe->takeSample(Ediff.GetData(), t);
 
             if (writeSnapshots && addSampleF)
             {
@@ -181,6 +280,34 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     {
         outfile_tSnap << i << endl;
     }
+}
+
+void DMD_Sampler::Finalize(ROM_Options& input)
+{
+    std::cout << "Creating dmd_X with ef " << input.energyFraction_X << " and rdim " << input.dimX << std::endl;
+    dmd_X->train(input.dimX == -1 ? input.energyFraction_X : input.dimX);
+    dmd_X->save(basename + "/" + "dmdX" + input.basisIdentifier + "_" + to_string(window));
+    std::cout << "Creating dmd_V with ef " << input.energyFraction << " and rdim " << input.dimV << std::endl;
+    dmd_V->train(input.dimV == -1 ? input.energyFraction : input.dimV);
+    dmd_V->save(basename + "/" + "dmdV" + input.basisIdentifier + "_" + to_string(window));
+    std::cout << "Creating dmd_E with ef " << input.energyFraction << " and rdim " << input.dimE << std::endl;
+    dmd_E->train(input.dimE == -1 ? input.energyFraction : input.dimE);
+    dmd_E->save(basename + "/" + "dmdE" + input.basisIdentifier + "_" + to_string(window));
+
+    delete dmd_X, dmd_V, dmd_E;
+    if (!sns)
+    {
+        std::cout << "Creating dmd_Fv with ef " << input.energyFraction << " and rdim " << input.dimFv << std::endl;
+        dmd_Fv->train(input.dimFv == -1 ? input.energyFraction : input.dimFv);
+        dmd_Fv->save(basename + "/" + "dmdFv" + input.basisIdentifier + "_" + to_string(window));
+        std::cout << "Creating dmd_Fe with ef " << input.energyFraction << " and rdim " << input.dimFe << std::endl;
+        dmd_Fe->train(input.dimFe == -1 ? input.energyFraction : input.dimFe);
+        dmd_Fe->save(basename + "/" + "dmdFe" + input.basisIdentifier + "_" + to_string(window));
+
+        delete dmd_Fv, dmd_Fe;
+    }
+
+    finalized = true;
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)

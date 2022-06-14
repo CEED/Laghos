@@ -6,6 +6,7 @@
 #include "linalg/BasisGenerator.h"
 #include "linalg/BasisReader.h"
 #include "algo/AdaptiveDMD.h"
+#include "algo/NonuniformDMD.h"
 #include "algo/greedy/GreedyRandomSampler.h"
 
 #include "laghos_solver.hpp"
@@ -181,8 +182,10 @@ struct ROM_Options
 
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
+    bool   dmd = false;
     double desired_dt = 0.0;
-    double dmd_epsilon = 1.0;
+    double dmd_closest_rbf = 0.9;
+    bool   dmd_nonuniform = false;
     double rhoFactor = 1.0; // factor for scaling rho
     double atwoodFactor = 1.0 / 3.0; // factor for Atwood number in Rayleigh-Taylor instability problem
     double blast_energyFactor = 1.0; // factor for scaling blast energy
@@ -262,6 +265,210 @@ static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
     return iter->second;
 }
 
+class DMD_Sampler
+{
+public:
+    DMD_Sampler(ROM_Options const& input, Vector const& S_init)
+        : rank(input.rank), window(input.window), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
+          H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
+          X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
+          gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
+          energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper),
+          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
+    {
+        if (input.dmd_nonuniform)
+        {
+            dmd_X = new CAROM::NonuniformDMD(tH1size);
+            dmd_V = new CAROM::NonuniformDMD(tH1size);
+            dmd_E = new CAROM::NonuniformDMD(tL2size);
+        }
+        else
+        {
+            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+        }
+
+        if (!sns)
+        {
+            if (input.dmd_nonuniform)
+            {
+                dmd_Fv = new CAROM::NonuniformDMD(tH1size);
+                dmd_Fe = new CAROM::NonuniformDMD(tL2size);
+            }
+            else
+            {
+                dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+                dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_closest_rbf);
+            }
+        }
+
+        SetStateVariables(S_init);
+
+        dXdt = 0.0;
+        dVdt = 0.0;
+        dEdt = 0.0;
+
+        X0 = 0.0;
+        V0 = 0.0;
+        E0 = 0.0;
+
+        if (offsetInit)
+        {
+            std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset" + input.basisIdentifier + "/init";
+            initX = new CAROM::Vector(tH1size, true);
+            initV = new CAROM::Vector(tH1size, true);
+            initE = new CAROM::Vector(tL2size, true);
+            Xdiff.SetSize(tH1size);
+            Ediff.SetSize(tL2size);
+
+            if (input.offsetType == useInitialState && input.window > 0)
+            {
+                // Read the initial state in the offline phase
+                initX->read(path_init + "X0");
+                initV->read(path_init + "V0");
+                initE->read(path_init + "E0");
+                first_sv = input.sv_shift;
+            }
+            else
+            {
+                // Compute and save offsets for the current window in the offline phase
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initX)(i) = X[i];
+                }
+
+                for (int i=0; i<tH1size; ++i)
+                {
+                    (*initV)(i) = V[i];
+                }
+
+                for (int i=0; i<tL2size; ++i)
+                {
+                    (*initE)(i) = E[i];
+                }
+
+                initX->write(path_init + "X" + std::to_string(window));
+                initV->write(path_init + "V" + std::to_string(window));
+                initE->write(path_init + "E" + std::to_string(window));
+
+                if (window == 0)
+                {
+                    const double Vnorm = initV->norm();
+                    int osVT = (Vnorm == 0.0) ? 1 : 0;
+
+                    MFEM_VERIFY(VTos == osVT, "");
+                }
+            }
+        }
+        else first_sv = input.sv_shift;
+    }
+
+    void SampleSolution(const double t, const double dt, Vector const& S);
+
+    void Finalize(ROM_Options& input);
+
+    int MaxNumSamples()
+    {
+        return std::max(std::max(dmd_X->getNumSamples(), dmd_V->getNumSamples()), dmd_E->getNumSamples());
+    }
+
+    int FinalNumberOfSamples()
+    {
+        MFEM_VERIFY(finalized, "ROM_Sampler not finalized");
+        return finalNumSamples;
+    }
+
+    int GetRank()
+    {
+        return rank;
+    }
+
+    CAROM::DMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
+
+private:
+    const int H1size;
+    const int L2size;
+    const int tH1size;
+    const int tL2size;
+
+    const int window;
+
+    const int rank;
+    int first_sv = 0;
+    double energyFraction;
+    double energyFraction_X;
+
+    const int parameterID;
+
+    std::string basename = "run";
+
+    Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
+
+    const bool offsetInit;
+    CAROM::Vector *initX = 0;
+    CAROM::Vector *initV = 0;
+    CAROM::Vector *initE = 0;
+
+    ParGridFunction gfH1, gfL2;
+
+    const bool sns;
+
+    const bool Voffset;
+    const bool useXV;
+    const bool useVX;
+
+    bool finalized = false;
+    int finalNumSamples = 0;
+
+    hydrodynamics::LagrangianHydroOperator *lhoper;
+
+    int VTos = 0; // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
+
+    void SetStateVariables(Vector const& S)
+    {
+        X0 = X;
+        V0 = V;
+        E0 = E;
+
+        for (int i=0; i<H1size; ++i)
+        {
+            gfH1[i] = S[i];
+        }
+
+        gfH1.GetTrueDofs(X);
+
+        for (int i=0; i<H1size; ++i)
+        {
+            gfH1[i] = S[H1size + i];
+        }
+
+        gfH1.GetTrueDofs(V);
+
+        for (int i=0; i<L2size; ++i)
+        {
+            gfL2[i] = S[(2*H1size) + i];
+        }
+
+        gfL2.GetTrueDofs(E);
+    }
+
+    void SetStateVariableRates(const double dt)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            dXdt[i] = (X[i] - X0[i]) / dt;
+            dVdt[i] = (V[i] - V0[i]) / dt;
+        }
+
+        for (int i=0; i<tL2size; ++i)
+        {
+            dEdt[i] = (E[i] - E0[i]) / dt;
+        }
+    }
+};
+
 class ROM_Sampler
 {
 public:
@@ -305,6 +512,7 @@ public:
             e_options.setMaxBasisDimension(max_model_dim);
             e_options.setSingularValueTol(input.incSVD_singular_value_tol);
         }
+
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randdimX);
@@ -314,7 +522,7 @@ public:
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::X, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::X + std::to_string(window) + input.basisIdentifier);
-        dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
+
         if (input.randomizedSVD)
         {
             x_options.setRandomizedSVD(true, input.randdimV);
@@ -323,7 +531,7 @@ public:
             x_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::V, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::V + std::to_string(window) + input.basisIdentifier);
-        dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
+
         if (input.randomizedSVD)
         {
             e_options.setRandomizedSVD(true, input.randdimE);
@@ -332,7 +540,7 @@ public:
             e_options,
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
-        dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_epsilon);
+
         if (!sns)
         {
             if (input.randomizedSVD)
@@ -343,7 +551,7 @@ public:
                 x_options,
                 !staticSVD,
                 staticSVD ? BasisFileName(basename, VariableName::Fv, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fv + std::to_string(window) + input.basisIdentifier);
-            dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "LS", "G", input.dmd_epsilon);
+
             if (input.randomizedSVD)
             {
                 e_options.setRandomizedSVD(true, input.randdimFe);
@@ -352,7 +560,6 @@ public:
                 e_options,
                 !staticSVD,
                 staticSVD ? BasisFileName(basename, VariableName::Fe, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::Fe + std::to_string(window) + input.basisIdentifier);
-            dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "LS", "G", input.dmd_epsilon);
         }
 
         SetStateVariables(S_init);
@@ -435,8 +642,6 @@ public:
     {
         return rank;
     }
-
-    CAROM::AdaptiveDMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
 
 private:
     const int H1size;

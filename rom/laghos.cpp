@@ -60,8 +60,8 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 #include "algo/greedy/GreedyRandomSampler.h"
-#include "algo/DMD.h"
 #include "algo/AdaptiveDMD.h"
+#include "algo/NonuniformDMD.h"
 
 #include "laghos_solver.hpp"
 #include "laghos_timeinteg.hpp"
@@ -159,7 +159,6 @@ int main(int argc, char *argv[])
     const char *greedyParam = "bef";
     const char *greedySamplingType = "random";
     const char *greedyErrorIndicatorType = "useLastLifted";
-    CAROM::DMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
@@ -271,10 +270,14 @@ int main(int argc, char *argv[])
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
+    args.AddOption(&romOptions.dmd, "-dmd", "--dmd", "-dmd", "--dmd",
+                    "Do DMD calculations.");
     args.AddOption(&romOptions.desired_dt, "-ddt", "--dtime-step",
                    "Desired Time step.");
-    args.AddOption(&romOptions.dmd_epsilon, "-dmde", "--dmde",
-                   "DMD epsilon.");
+    args.AddOption(&romOptions.dmd_closest_rbf, "-dmdcrbf", "--dmdcrbf",
+                   "DMD RBF value between two closes training parameter points.");
+    args.AddOption(&romOptions.dmd_nonuniform, "-dmdnuf", "--dmdnuf", "-dmdnuf", "--dmdnuf",
+                    "Use NonuniformDMD rather than AdaptiveDMD.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
                    "Enable or disable write solution.");
@@ -1122,6 +1125,8 @@ int main(int argc, char *argv[])
     if (fom_data) oper->ResetTimeStepEstimate();
 
     StopWatch samplerTimer, basisConstructionTimer;
+    DMD_Sampler *dmd_sampler = NULL;
+    DMD_Sampler *dmd_samplerLast = NULL;
     ROM_Sampler *sampler = NULL;
     ROM_Sampler *samplerLast = NULL;
     std::ofstream outfile_twp, outfile_time;
@@ -1141,13 +1146,16 @@ int main(int argc, char *argv[])
         const double tf = (usingWindows && windowNumSamples == 0) ? twep[0] : t_final;
         romOptions.t_final = tf;
         romOptions.initial_dt = dt;
-        sampler = new ROM_Sampler(romOptions, *S);
-        dmd_X = sampler->dmd_X;
-        dmd_V = sampler->dmd_V;
-        dmd_E = sampler->dmd_E;
-        dmd_Fv = sampler->dmd_Fv;
-        dmd_Fe = sampler->dmd_Fe;
-        sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
+        if (romOptions.dmd)
+        {
+            dmd_sampler = new DMD_Sampler(romOptions, *S);
+            dmd_sampler->SampleSolution(0, 0, *S);
+        }
+        else
+        {
+            sampler = new ROM_Sampler(romOptions, *S);
+            sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
+        }
         samplerTimer.Stop();
     }
 
@@ -1328,129 +1336,211 @@ int main(int argc, char *argv[])
     StopWatch restoreTimer, timeLoopTimer;
     bool greedy_converged = true;
     int ti;
+
+    CAROM::DMD* dmd_X = NULL;
+    CAROM::DMD* dmd_V = NULL;
+    CAROM::DMD* dmd_E = NULL;
+
+    CAROM::Vector* result_X = NULL;
+    CAROM::Vector* result_V = NULL;
+    CAROM::Vector* result_E = NULL;
     if (rom_restore)
     {
-        // -restore phase
-        // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
-        // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
-        std::ifstream infile_tw_steps(testing_parameter_outputPath + "/tw_steps");
-        int nb_step(0);
-        restoreTimer.Start();
-        if (usingWindows) {
-            SetWindowParameters(twparam, romOptions);
-        }
-
-        basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-        basis[0]->Init(romOptions, *S);
-
-        if (romOptions.mergeXV)
+        if (romOptions.dmd)
         {
-            romOptions.dimX = basis[0]->GetDimX();
-            romOptions.dimV = basis[0]->GetDimV();
-        }
+            restoreTimer.Start();
+            std::string filename = outputPath + "/timeSamples.csv";
+            std::ifstream infile_romS(filename.c_str());
+            MFEM_VERIFY(infile_romS.good(), "timeSamples.csv can not be opened.")
+            int prev_window = -1;
+            int curr_window;
+            double curr_time;
+            double window_start_time;
+            while (infile_romS >> curr_window >> curr_time)
+            {
+                if (prev_window != curr_window)
+                {
+                    if (curr_window != 0)
+                    {
+                        delete dmd_X, dmd_V, dmd_E;
+                    }
 
-        int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
-        romS.SetSize(romSsize);
-        if (infile_tw_steps.good())
-        {
-            infile_tw_steps >> nb_step;
+                    if (romOptions.dmd_nonuniform)
+                    {
+                        dmd_X = new CAROM::NonuniformDMD(outputPath + "/" + "dmdX" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                        dmd_V = new CAROM::NonuniformDMD(outputPath + "/" + "dmdV" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                        dmd_E = new CAROM::NonuniformDMD(outputPath + "/" + "dmdE" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                    }
+                    else
+                    {
+                        dmd_X = new CAROM::DMD(outputPath + "/" + "dmdX" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                        dmd_V = new CAROM::DMD(outputPath + "/" + "dmdV" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                        dmd_E = new CAROM::DMD(outputPath + "/" + "dmdE" + romOptions.basisIdentifier + "_" + to_string(curr_window));
+                    }
+
+                    prev_window = curr_window;
+                    window_start_time = curr_time;
+
+                    // Skip first sample of each subsequent window except the first.
+                    if (curr_window != 0)
+                    {
+                        continue;
+                    }
+                }
+
+                if (result_X != NULL) delete result_X;
+                if (result_V != NULL) delete result_V;
+                if (result_E != NULL) delete result_E;
+
+                result_X = dmd_X->predict(curr_time - window_start_time);
+                result_V = dmd_V->predict(curr_time - window_start_time);
+                result_E = dmd_E->predict(curr_time - window_start_time);
+                for (int i = 0; i < result_V->dim(); i++)
+                {
+                    std::cout << result_V->item(i) << std::endl;
+                }
+                abort();
+                Vector m_result_X(result_X->getData(), result_X->dim());
+                Vector m_result_V(result_V->getData(), result_V->dim());
+                Vector m_result_E(result_E->getData(), result_E->dim());
+                x_gf->SetFromTrueDofs(m_result_X);
+                v_gf->SetFromTrueDofs(m_result_V);
+                e_gf->SetFromTrueDofs(m_result_E);
+
+                if (visit)
+                {
+                    oper->ComputeDensity(*rho_gf);
+                    visit_dc->SetCycle(ti);
+                    visit_dc->SetTime(t);
+                    visit_dc->Save();
+                }
+            }
+            restoreTimer.Stop();
         }
-        for (ti = 1; !last_step; ti++)
+        else
         {
-            // romS = readCurrentReduceSol(ti);
-            // read ROM solution from a file.
-            // TODO: it needs to be read from the format of HDF5 format
-            // TODO: how about parallel version? introduce rank in filename
+            // -restore phase
+            // No need to specify t_final because the loop in -restore phase is determined by the files in ROMsol folder.
+            // When -romhr or --romhr are used in -online phase, then -restore phase needs to be called to project rom solution back to FOM size
+            std::ifstream infile_tw_steps(testing_parameter_outputPath + "/tw_steps");
+            int nb_step(0);
+            restoreTimer.Start();
+            if (usingWindows) {
+                SetWindowParameters(twparam, romOptions);
+            }
+
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            basis[0]->Init(romOptions, *S);
+
+            if (romOptions.mergeXV)
+            {
+                romOptions.dimX = basis[0]->GetDimX();
+                romOptions.dimV = basis[0]->GetDimV();
+            }
+
+            int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
+            romS.SetSize(romSsize);
+            if (infile_tw_steps.good())
+            {
+                infile_tw_steps >> nb_step;
+            }
+            for (ti = 1; !last_step; ti++)
+            {
+                // romS = readCurrentReduceSol(ti);
+                // read ROM solution from a file.
+                // TODO: it needs to be read from the format of HDF5 format
+                // TODO: how about parallel version? introduce rank in filename
+                std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
+                std::ifstream infile_romS(filename.c_str());
+                if (infile_romS.good())
+                {
+                    if ( (ti % vis_steps) == 0 )
+                    {
+                        if (myid == 0)
+                            cout << "Restoring " << ti << "-th solution" << endl;
+                        for (int k=0; k<romSsize; ++k)
+                        {
+                            infile_romS >> romS(k);
+                        }
+
+                        infile_romS.close();
+                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+
+                        if (visit)
+                        {
+                            oper->ComputeDensity(*rho_gf);
+                            visit_dc->SetCycle(ti);
+                            visit_dc->SetTime(t);
+                            visit_dc->Save();
+                        }
+                    }
+                }
+                else
+                {
+                    // get out of the loop when no more file is found
+                    last_step = true;
+                    break;
+                }
+                if (ti == nb_step) {
+                    if (infile_tw_steps.good())
+                    {
+                        infile_tw_steps >> nb_step;
+                    }
+                    romOptions.window++;
+                    SetWindowParameters(twparam, romOptions);
+                    basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
+                    delete basis[romOptions.window-1];
+                    basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                    basis[romOptions.window]->Init(romOptions, *S);
+
+                    if (romOptions.mergeXV)
+                    {
+                        romOptions.dimX = basis[romOptions.window]->GetDimX();
+                        romOptions.dimV = basis[romOptions.window]->GetDimV();
+                    }
+
+                    romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
+                    romS.SetSize(romSsize);
+                }
+
+                if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
+                {
+                    std::string nextfilename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
+                    std::string next2filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
+                    std::ifstream nextfile_romS(nextfilename.c_str());
+                    std::ifstream next2file_romS(next2filename.c_str());
+                    if (nextfile_romS.good() && !next2file_romS.good())
+                    {
+                        lastLiftedSolution = *S;
+                        ode_solver_dat->Init(*oper);
+                        ode_solver_dat->Step(lastLiftedSolution, t, dt);
+                    }
+                    nextfile_romS.close();
+                    next2file_romS.close();
+                }
+            } // time loop in "restore" phase
+            ti--;
             std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
             std::ifstream infile_romS(filename.c_str());
-            if (infile_romS.good())
+            if (myid == 0)
+                cout << "Restoring " << ti << "-th solution" << endl;
+            for (int k=0; k<romSsize; ++k)
             {
-                if ( (ti % vis_steps) == 0 )
-                {
-                    if (myid == 0)
-                        cout << "Restoring " << ti << "-th solution" << endl;
-                    for (int k=0; k<romSsize; ++k)
-                    {
-                        infile_romS >> romS(k);
-                    }
-
-                    infile_romS.close();
-                    basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-
-                    if (visit)
-                    {
-                        oper->ComputeDensity(*rho_gf);
-                        visit_dc->SetCycle(ti);
-                        visit_dc->SetTime(t);
-                        visit_dc->Save();
-                    }
-                }
+                infile_romS >> romS(k);
             }
-            else
+            infile_romS.close();
+            basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+
+            if (visit)
             {
-                // get out of the loop when no more file is found
-                last_step = true;
-                break;
+                oper->ComputeDensity(*rho_gf);
+                visit_dc->SetCycle(ti);
+                visit_dc->SetTime(t);
+                visit_dc->Save();
             }
-            if (ti == nb_step) {
-                if (infile_tw_steps.good())
-                {
-                    infile_tw_steps >> nb_step;
-                }
-                romOptions.window++;
-                SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
-                delete basis[romOptions.window-1];
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-                basis[romOptions.window]->Init(romOptions, *S);
-
-                if (romOptions.mergeXV)
-                {
-                    romOptions.dimX = basis[romOptions.window]->GetDimX();
-                    romOptions.dimV = basis[romOptions.window]->GetDimV();
-                }
-
-                romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
-                romS.SetSize(romSsize);
-            }
-
-            if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
-            {
-                std::string nextfilename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 1);
-                std::string next2filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti + 2);
-                std::ifstream nextfile_romS(nextfilename.c_str());
-                std::ifstream next2file_romS(next2filename.c_str());
-                if (nextfile_romS.good() && !next2file_romS.good())
-                {
-                    lastLiftedSolution = *S;
-                    ode_solver_dat->Init(*oper);
-                    ode_solver_dat->Step(lastLiftedSolution, t, dt);
-                }
-                nextfile_romS.close();
-                next2file_romS.close();
-            }
-        } // time loop in "restore" phase
-        ti--;
-        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
-        std::ifstream infile_romS(filename.c_str());
-        if (myid == 0)
-            cout << "Restoring " << ti << "-th solution" << endl;
-        for (int k=0; k<romSsize; ++k)
-        {
-            infile_romS >> romS(k);
+            restoreTimer.Stop();
+            infile_tw_steps.close();
         }
-        infile_romS.close();
-        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
-
-        if (visit)
-        {
-            oper->ComputeDensity(*rho_gf);
-            visit_dc->SetCycle(ti);
-            visit_dc->SetTime(t);
-            visit_dc->Save();
-        }
-        restoreTimer.Stop();
-        infile_tw_steps.close();
     }
     else if (rom_online && spaceTime)
     {
@@ -1667,8 +1757,16 @@ int main(int argc, char *argv[])
                                 real_pd = romOptions.atwoodFactor * RKTime[RKidx] * RKTime[RKidx];
                             }
                         }
-                        sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
-                        if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        if (romOptions.dmd)
+                        {
+                            dmd_sampler->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
+                            if (dmd_samplerLast) dmd_samplerLast->SampleSolution(RKTime[RKidx], last_dt, RKStages[RKidx]);
+                        }
+                        else
+                        {
+                            sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                            if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
+                        }
                         if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
@@ -1688,7 +1786,14 @@ int main(int argc, char *argv[])
                         real_pd = romOptions.atwoodFactor * t * t;
                     }
                 }
-                sampler->SampleSolution(t, last_dt, real_pd, *S);
+                if (romOptions.dmd)
+                {
+                    dmd_sampler->SampleSolution(t, last_dt, *S);
+                }
+                else
+                {
+                    sampler->SampleSolution(t, last_dt, real_pd, *S);
+                }
 
                 bool endWindow = false;
                 if (usingWindows)
@@ -1699,37 +1804,79 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
+                        if (romOptions.dmd)
+                        {
+                            endWindow = (dmd_sampler->MaxNumSamples() >= windowNumSamples);
+                        }
+                        else
+                        {
+                            endWindow = (sampler->MaxNumSamples() >= windowNumSamples);
+                        }
                     }
                 }
 
-                if (samplerLast)
+                if (romOptions.dmd)
                 {
-                    samplerLast->SampleSolution(t, last_dt, real_pd, *S);
-                    if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
-                        windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
-
-                    if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
+                    if (dmd_samplerLast)
                     {
-                        samplerLast->Finalize(cutoff, romOptions);
-                        if (last_step)
-                        {
-                            // Let samplerLast define the final window, discarding the sampler window.
+                        dmd_samplerLast->SampleSolution(t, last_dt, *S);
+                        if (dmd_samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
                             windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
-                            sampler = NULL;
-                        }
 
-                        MFEM_VERIFY(windowOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
-                        if (myid == 0 && romOptions.parameterID == -1) {
-                            outfile_twp << windowOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
-                            if (romOptions.SNS)
-                                outfile_twp << "\n";
-                            else
-                                outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
+                        if (dmd_samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
+                        {
+                            dmd_samplerLast->Finalize(romOptions);
+                            if (last_step)
+                            {
+                                // Let samplerLast define the final window, discarding the sampler window.
+                                windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+                                dmd_sampler = NULL;
+                            }
+
+                            MFEM_VERIFY(windowOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
+                            if (myid == 0 && romOptions.parameterID == -1) {
+                                outfile_twp << windowOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                                if (romOptions.SNS)
+                                    outfile_twp << "\n";
+                                else
+                                    outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
+                            }
+                            delete dmd_samplerLast;
+                            dmd_samplerLast = NULL;
+                            windowOverlapMidpoint = 0.0;
                         }
-                        delete samplerLast;
-                        samplerLast = NULL;
-                        windowOverlapMidpoint = 0.0;
+                    }
+                }
+                else
+                {
+                    if (samplerLast)
+                    {
+                        samplerLast->SampleSolution(t, last_dt, real_pd, *S);
+                        if (samplerLast->MaxNumSamples() == windowNumSamples + (windowOverlapSamples/2))
+                            windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+
+                        if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
+                        {
+                            samplerLast->Finalize(cutoff, romOptions);
+                            if (last_step)
+                            {
+                                // Let samplerLast define the final window, discarding the sampler window.
+                                windowOverlapMidpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
+                                sampler = NULL;
+                            }
+
+                            MFEM_VERIFY(windowOverlapMidpoint > 0.0, "Overlapping window endpoint undefined.");
+                            if (myid == 0 && romOptions.parameterID == -1) {
+                                outfile_twp << windowOverlapMidpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
+                                if (romOptions.SNS)
+                                    outfile_twp << "\n";
+                                else
+                                    outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
+                            }
+                            delete samplerLast;
+                            samplerLast = NULL;
+                            windowOverlapMidpoint = 0.0;
+                        }
                     }
                 }
 
@@ -1738,11 +1885,25 @@ int main(int argc, char *argv[])
                     windowEndpoint = (romOptions.indicatorType == physicalTime) ? t : real_pd;
                     if (numWindows == 0 && windowOverlapSamples > 0)
                     {
-                        samplerLast = sampler;
+                        if (romOptions.dmd)
+                        {
+                            dmd_samplerLast = dmd_sampler;
+                        }
+                        else
+                        {
+                            samplerLast = sampler;
+                        }
                     }
                     else
                     {
-                        sampler->Finalize(cutoff, romOptions);
+                        if (romOptions.dmd)
+                        {
+                            dmd_sampler->Finalize(romOptions);
+                        }
+                        else
+                        {
+                            sampler->Finalize(cutoff, romOptions);
+                        }
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
                             if (romOptions.SNS)
@@ -1750,7 +1911,14 @@ int main(int argc, char *argv[])
                             else
                                 outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
                         }
-                        delete sampler;
+                        if (romOptions.dmd)
+                        {
+                            delete dmd_sampler;
+                        }
+                        else
+                        {
+                            delete sampler;
+                        }
                     }
 
                     romOptions.window++;
@@ -1759,15 +1927,29 @@ int main(int argc, char *argv[])
                         romOptions.t_final = (usingWindows && windowNumSamples == 0) ? twep[romOptions.window] : t_final;
                         romOptions.initial_dt = dt;
                         romOptions.window = romOptions.window;
-                        sampler = new ROM_Sampler(romOptions, *S);
-                        dmd_X = sampler->dmd_X;
-                        dmd_V = sampler->dmd_V;
-                        dmd_E = sampler->dmd_E;
-                        dmd_Fv = sampler->dmd_Fv;
-                        dmd_Fe = sampler->dmd_Fe;
-                        sampler->SampleSolution(t, dt, real_pd, *S);
+
+                        if (romOptions.dmd)
+                        {
+                            dmd_sampler = new DMD_Sampler(romOptions, *S);
+                            dmd_sampler->SampleSolution(t, dt, *S);
+                        }
+                        else
+                        {
+                            sampler = new ROM_Sampler(romOptions, *S);
+                            sampler->SampleSolution(t, dt, real_pd, *S);
+                        }
                     }
-                    else sampler = NULL;
+                    else
+                    {
+                        if (romOptions.dmd)
+                        {
+                            dmd_sampler = NULL;
+                        }
+                        else
+                        {
+                            sampler = NULL;
+                        }
+                    }
                 }
                 samplerTimer.Stop();
                 timeLoopTimer.Start();
@@ -1986,10 +2168,20 @@ int main(int argc, char *argv[])
     {
         samplerTimer.Start();
         basisConstructionTimer.Start();
-        if (samplerLast)
-            samplerLast->Finalize(cutoff, romOptions);
-        else if (sampler)
-            sampler->Finalize(cutoff, romOptions);
+        if (romOptions.dmd)
+        {
+            if (dmd_samplerLast)
+                dmd_samplerLast->Finalize(romOptions);
+            else if (dmd_sampler)
+                dmd_sampler->Finalize(romOptions);
+        }
+        else
+        {
+            if (samplerLast)
+                samplerLast->Finalize(cutoff, romOptions);
+            else if (sampler)
+                sampler->Finalize(cutoff, romOptions);
+        }
         basisConstructionTimer.Stop();
 
         if (outputTimes)
@@ -2006,7 +2198,7 @@ int main(int argc, char *argv[])
             // snapshots.
         }
 
-        if (myid == 0 && usingWindows && sampler != NULL && romOptions.parameterID == -1) {
+        if (myid == 0 && usingWindows && (sampler != NULL || dmd_sampler != NULL) && romOptions.parameterID == -1) {
             double real_pd = -1.0;
             if (problem == 7)
             {
@@ -2030,12 +2222,25 @@ int main(int argc, char *argv[])
             else
                 outfile_twp << ", " << cutoff[3] << ", " << cutoff[4] << "\n";
         }
-        if (samplerLast == sampler)
-            delete sampler;
+        if (romOptions.dmd)
+        {
+            if (dmd_samplerLast == dmd_sampler)
+                delete dmd_sampler;
+            else
+            {
+                delete dmd_sampler;
+                delete dmd_samplerLast;
+            }
+        }
         else
         {
-            delete sampler;
-            delete samplerLast;
+            if (samplerLast == sampler)
+                delete sampler;
+            else
+            {
+                delete sampler;
+                delete samplerLast;
+            }
         }
 
         samplerTimer.Stop();
@@ -2062,14 +2267,6 @@ int main(int argc, char *argv[])
         ofs_STE.close();
     }
 
-    if (myid == 0)
-    {
-        std::cout << "Creating DMD with energy fraction: " << romOptions.energyFraction << std::endl;
-    }
-    dmd_X->train(romOptions.energyFraction);
-    dmd_V->train(romOptions.energyFraction);
-    dmd_E->train(romOptions.energyFraction);
-
     if (fom_data && (!rom_build_database || greedy_write_solution))
     {
         if (writeSol)
@@ -2078,22 +2275,6 @@ int main(int argc, char *argv[])
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
             PrintParGridFunction(myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
         }
-        CAROM::Vector* result_X = dmd_X->predict(t/romOptions.desired_dt);
-        CAROM::Vector* result_V = dmd_V->predict(t/romOptions.desired_dt);
-        CAROM::Vector* result_E = dmd_E->predict(t/romOptions.desired_dt);
-        // CAROM::Vector* result_X = dmd_X->predict(ti);
-        // CAROM::Vector* result_V = dmd_V->predict(ti);
-        // CAROM::Vector* result_E = dmd_E->predict(ti);
-        Vector m_result_X(result_X->getData(), result_X->dim());
-        Vector m_result_V(result_V->getData(), result_V->dim());
-        Vector m_result_E(result_E->getData(), result_E->dim());
-        x_gf->SetFromTrueDofs(m_result_X);
-        v_gf->SetFromTrueDofs(m_result_V);
-        e_gf->SetFromTrueDofs(m_result_E);
-        if (myid == 0) cout << "dmd relative errors: " << endl;
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Position" + romOptions.basisIdentifier, x_gf);
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Velocity" + romOptions.basisIdentifier, v_gf);
-        PrintDiffParGridFunction(normtype, myid, testing_parameter_outputPath + "/Sol_Energy" + romOptions.basisIdentifier, e_gf);
 
         if (solDiff)
         {
@@ -2392,6 +2573,12 @@ int main(int argc, char *argv[])
     if (vis_e != nullptr) delete vis_e;
     if (visit_dc != nullptr) delete visit_dc;
     if (v_coeff != nullptr) delete v_coeff;
+
+    if (romOptions.dmd && rom_restore)
+    {
+        delete dmd_X, dmd_V, dmd_E;
+        delete result_X, result_V, result_E;
+    }
 
     return 0;
 }
