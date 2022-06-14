@@ -272,6 +272,8 @@ int main(int argc, char *argv[])
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&romOptions.dmd, "-dmd", "--dmd", "-dmd", "--dmd",
                     "Do DMD calculations.");
+    args.AddOption(&romOptions.dmd_tbegin, "-dmdtbegin", "--dmdtbegin",
+                    "Time to begin DMD. If DMD starts from t = 0, it will not work due to an zero initial vectors.");
     args.AddOption(&romOptions.desired_dt, "-ddt", "--dtime-step",
                    "Desired Time step.");
     args.AddOption(&romOptions.dmd_closest_rbf, "-dmdcrbf", "--dmdcrbf",
@@ -386,6 +388,8 @@ int main(int argc, char *argv[])
 
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
+
+    if (romOptions.dmd && rom_offline) MFEM_VERIFY(romOptions.dmd_tbegin >= 0.0, "tbegin must be greater than or equal to zero.");
 
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
@@ -1392,14 +1396,11 @@ int main(int argc, char *argv[])
                 if (result_V != NULL) delete result_V;
                 if (result_E != NULL) delete result_E;
 
+                if (myid == 0) cout << "Predicting time t " << curr_time << " using DMD window " << curr_window << " with initial start time " << window_start_time << std::endl;
+
                 result_X = dmd_X->predict(curr_time - window_start_time);
                 result_V = dmd_V->predict(curr_time - window_start_time);
                 result_E = dmd_E->predict(curr_time - window_start_time);
-                for (int i = 0; i < result_V->dim(); i++)
-                {
-                    std::cout << result_V->item(i) << std::endl;
-                }
-                abort();
                 Vector m_result_X(result_X->getData(), result_X->dim());
                 Vector m_result_V(result_V->getData(), result_V->dim());
                 Vector m_result_E(result_E->getData(), result_E->dim());

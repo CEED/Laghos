@@ -40,11 +40,11 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 Xdiff[i] = X[i] - (*initX)(i);
             }
 
-            dmd_X->takeSample(Xdiff.GetData(), t);
+            if (t > tbegin) dmd_X->takeSample(Xdiff.GetData(), t);
         }
         else
         {
-            dmd_X->takeSample(X.GetData(), t);
+            if (t > tbegin) dmd_X->takeSample(X.GetData(), t);
         }
     }
 
@@ -62,11 +62,11 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
                 Xdiff[i] = V[i] - (*initV)(i);
             }
 
-            dmd_V->takeSample(Xdiff.GetData(), t);
+            if (t > tbegin) dmd_V->takeSample(Xdiff.GetData(), t);
         }
         else
         {
-            dmd_V->takeSample(V.GetData(), t);
+            if (t > tbegin) dmd_V->takeSample(V.GetData(), t);
         }
     }
 
@@ -77,7 +77,7 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             gfH1[i] = dSdt[H1size + i];  // Fv
 
         gfH1.GetTrueDofs(Xdiff);
-        dmd_Fv->takeSample(Xdiff.GetData(), t);
+        if (t > tbegin) dmd_Fv->takeSample(Xdiff.GetData(), t);
     }
 
     if (rank == 0)
@@ -92,12 +92,11 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             Ediff[i] = E[i] - (*initE)(i);
         }
 
-        dmd_E->takeSample(Ediff.GetData(), t);
-
+        if (t > tbegin) dmd_E->takeSample(Ediff.GetData(), t);
     }
     else
     {
-        dmd_E->takeSample(E.GetData(), t);
+        if (t > tbegin) dmd_E->takeSample(E.GetData(), t);
     }
 
     if (!sns)
@@ -107,16 +106,16 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
             gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
         gfL2.GetTrueDofs(Ediff);
-        dmd_Fe->takeSample(Ediff.GetData(), t);
+        if (t > tbegin) dmd_Fe->takeSample(Ediff.GetData(), t);
     }
 
     // Write timeSamples to file
-    if (rank == 0)
+    if (rank == 0 && t > tbegin)
     {
         std::string filename = basename + "/timeSamples.csv";
         std::ofstream outfile(filename, std::ios_base::app);
         outfile << to_string(window) << " " << t << "\n";
-        outfile.close();    
+        outfile.close();
     }
 }
 

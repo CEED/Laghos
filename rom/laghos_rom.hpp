@@ -183,6 +183,7 @@ struct ROM_Options
     double t_final = 0.0; // simulation final time
     double initial_dt = 0.0; // initial timestep size
     bool   dmd = false;
+    double dmd_tbegin = -1.0;
     double desired_dt = 0.0;
     double dmd_closest_rbf = 0.9;
     bool   dmd_nonuniform = false;
@@ -269,7 +270,7 @@ class DMD_Sampler
 {
 public:
     DMD_Sampler(ROM_Options const& input, Vector const& S_init)
-        : rank(input.rank), window(input.window), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
+        : rank(input.rank), window(input.window), tbegin(input.dmd_tbegin), tH1size(input.H1FESpace->GetTrueVSize()), tL2size(input.L2FESpace->GetTrueVSize()),
           H1size(input.H1FESpace->GetVSize()), L2size(input.L2FESpace->GetVSize()),
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
@@ -394,6 +395,8 @@ private:
     const int tL2size;
 
     const int window;
+
+    const double tbegin;
 
     const int rank;
     int first_sv = 0;
