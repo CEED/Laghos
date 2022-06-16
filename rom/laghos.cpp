@@ -278,8 +278,12 @@ int main(int argc, char *argv[])
                    "Desired Time step.");
     args.AddOption(&romOptions.dmd_closest_rbf, "-dmdcrbf", "--dmdcrbf",
                    "DMD RBF value between two closes training parameter points.");
-    args.AddOption(&romOptions.dmd_nonuniform, "-dmdnuf", "--dmdnuf", "-dmdnuf", "--dmdnuf",
+    args.AddOption(&romOptions.dmd_nonuniform, "-dmdnuf", "--dmdnuf", "-no-dmdnuf", "--no-dmdnuf",
                     "Use NonuniformDMD rather than AdaptiveDMD.");
+    args.AddOption(&romOptions.dmd_mean_os_s, "-dmdoss", "--dmdoss", "-no-dmdoss", "--no-dmdoss",
+                    "Use state offset for DMD.");
+    args.AddOption(&romOptions.dmd_mean_os_d, "-dmdosd", "--dmdosd", "-no-dmdosd", "--no-dmdosd",
+                    "Use derivative offset for DMD.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
                    "Enable or disable write solution.");
