@@ -69,8 +69,8 @@ struct FaceQuadratureData
    // determinant of the Jacobian and the integration weight.
    // It must be recomputed in every time step.
    DenseMatrix weightedNormalStress;
-
-  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim) { }
+   Vector normalVelocityPenaltyScaling;
+  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel) { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
@@ -126,6 +126,19 @@ public:
 				   const FiniteElement &test_fe1,
 				   FaceElementTransformations &Tr,
 				   DenseMatrix &elmat);
+};
+
+// Performs full assembly for the normal velocity mass matrix operator.
+class NormalVelocityMassIntegrator : public BilinearFormIntegrator
+{
+private:
+   const FaceQuadratureData &qdata;
+public:
+   NormalVelocityMassIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+   virtual void AssembleFaceMatrix(const FiniteElement &fe,
+				   const FiniteElement &fe2,
+                                       FaceElementTransformations &Tr,
+                                       DenseMatrix &elmat);
 };
 
 } // namespace hydrodynamics

@@ -223,6 +223,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    EnergyBoundaryForce.Assemble(0);
    EnergyBoundaryForce.Finalize(0);
 
+   NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata);
+   nvmi->SetIntRule(&b_ir);
+   //Mv.AddBdrFaceIntegrator(nvmi);
+
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -672,7 +676,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = e.GetValue(Trans_el1, eip);
-	
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = rho_vals * sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   
  	   stress = 0.0;
 	   
 	   double p = (gamma_vals - 1) * rho_vals * e_vals; 

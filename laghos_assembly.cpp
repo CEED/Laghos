@@ -176,7 +176,64 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
       AddMultVWt(Vloc_force,tr_shape,elmat);
     }
 }
- 
+
+
+void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
+						      const FiniteElement &fe2,
+                                             FaceElementTransformations &Tr,
+                                             DenseMatrix &elmat)
+{
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = fe.GetDim();
+  const int h1dofs_cnt = fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim, h1dofs_cnt*dim);
+  elmat = 0.0;
+  Vector shape(h1dofs_cnt);
+  const int Elem1No = Tr.ElementNo;
+  shape = 0.0;
+  for (int q = 0; q  < nqp_face; q++)
+    {
+      const int eq = Elem1No*nqp_face + q;
+	     
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      // Set the integration point in the face and the neighboring elements
+      Tr.SetAllIntPoints(&ip_f);
+      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+      Vector nor;
+      nor.SetSize(dim);
+      nor = 0.0;
+      if (dim == 1)
+	{
+	  nor(0) = 2*eip.x - 1.0;
+	}
+      else
+	{
+	  CalcOrtho(Tr.Jacobian(), nor);
+	}        
+      fe.CalcShape(eip, shape);
+      double nor_norm = 0.0;
+      for (int s = 0; s < dim; s++){
+	nor_norm += nor(s) * nor(s);
+      }
+      nor_norm = sqrt(nor_norm);
+      
+      for (int i = 0; i < h1dofs_cnt; i++)
+	{
+	  for (int vd = 0; vd < dim; vd++) // Velocity components.
+	    {
+	      for (int j = 0; j < h1dofs_cnt; j++)
+		{
+		  for (int md = 0; md < dim; md++) // Velocity components.
+		    {
+
+		      elmat(i * dim + vd, j * dim + md) += shape(i) * nor(vd) * shape(j) * nor(md)/nor_norm * qdata.normalVelocityPenaltyScaling(eq);
+		    }
+		}
+	    }
+	}
+    }
+}
+  
 } // namespace hydrodynamics
 
 } // namespace mfem
