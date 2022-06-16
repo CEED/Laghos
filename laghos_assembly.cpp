@@ -83,7 +83,7 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
                                              DenseMatrix &elmat)
 {
   const int nqp_face = IntRule->GetNPoints();
-  const int dim = test_fe1.GetDim();
+  const int dim = trial_fe.GetDim();
   const int h1dofs_cnt = test_fe1.GetDof();
   const int l2dofs_cnt = trial_fe.GetDof();
   elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
@@ -92,7 +92,10 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
   DenseMatrix loc_force(h1dofs_cnt, dim);
   Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
   const int Elem1No = Tr.ElementNo;
-
+  te_shape = 0.0;
+  tr_shape = 0.0;
+  Vloc_force = 0.0;
+  
   for (int q = 0; q  < nqp_face; q++)
     {
       const int eq = Elem1No*nqp_face + q;
@@ -129,7 +132,9 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
   DenseMatrix loc_force(h1dofs_cnt, dim);
   Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
   const int Elem1No = Tr.ElementNo;
-      
+  te_shape = 0.0;
+  tr_shape = 0.0;
+  Vloc_force = 0.0;
   for (int q = 0; q  < nqp_face; q++)
     {
       const int eq = Elem1No*nqp_face + q;
@@ -140,7 +145,7 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
       const IntegrationPoint &eip = Tr.GetElement1IntPoint();
       Vector nor;
       nor.SetSize(dim);
-
+      nor = 0.0;
       if (dim == 1)
 	{
 	  nor(0) = 2*eip.x - 1.0;
@@ -148,17 +153,18 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
       else
 	{
 	  CalcOrtho(Tr.Jacobian(), nor);
-	}   
-
+	}        
       test_fe1.CalcShape(eip, te_shape);
       loc_force = 0.0;
       double normalStressProjNormal = 0.0;
       double nor_norm = 0.0;
       for (int s = 0; s < dim; s++){
-	normalStressProjNormal = qdata.weightedNormalStress(eq,s) * nor(s);
+	normalStressProjNormal += qdata.weightedNormalStress(eq,s) * nor(s);
 	nor_norm += nor(s) * nor(s);
       }
-      normalStressProjNormal /= nor_norm;
+      nor_norm = sqrt(nor_norm);
+      normalStressProjNormal = normalStressProjNormal/nor_norm;
+      
       for (int i = 0; i < h1dofs_cnt; i++)
 	{
 	  for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -174,3 +180,4 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
 } // namespace hydrodynamics
 
 } // namespace mfem
+
