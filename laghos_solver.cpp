@@ -225,7 +225,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata);
    nvmi->SetIntRule(&b_ir);
-   //Mv.AddBdrFaceIntegrator(nvmi);
+   Mv.AddBdrFaceIntegrator(nvmi);
 
 }
 
@@ -259,7 +259,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 {
    UpdateQuadratureData(S); 
    UpdateSurfaceNormalStressData(S);
-
+   Mv.Update();
+   Mv.Assemble();
    AssembleForceMatrix();
    AssembleVelocityBoundaryForceMatrix();
    // The monolithic BlockVector stores the unknown fields as follows:
