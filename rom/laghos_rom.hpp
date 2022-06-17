@@ -187,6 +187,8 @@ struct ROM_Options
     double desired_dt = 0.0;
     double dmd_closest_rbf = 0.9;
     bool   dmd_nonuniform = false;
+    bool   dmd_init_os_s = false;
+    bool   dmd_init_os_d = false;
     bool   dmd_mean_os_s = false;
     bool   dmd_mean_os_d = false;
     double rhoFactor = 1.0; // factor for scaling rho
@@ -282,9 +284,9 @@ public:
     {
         if (input.dmd_nonuniform)
         {
-            dmd_X = new CAROM::NonuniformDMD(tH1size, input.dmd_mean_os_s, input.dmd_mean_os_d);
-            dmd_V = new CAROM::NonuniformDMD(tH1size, input.dmd_mean_os_s, input.dmd_mean_os_d);
-            dmd_E = new CAROM::NonuniformDMD(tL2size, input.dmd_mean_os_s, input.dmd_mean_os_d);
+            dmd_X = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
+            dmd_V = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
+            dmd_E = new CAROM::NonuniformDMD(tL2size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
         }
         else
         {
@@ -297,8 +299,8 @@ public:
         {
             if (input.dmd_nonuniform)
             {
-                dmd_Fv = new CAROM::NonuniformDMD(tH1size, input.dmd_mean_os_s, input.dmd_mean_os_d);
-                dmd_Fe = new CAROM::NonuniformDMD(tL2size, input.dmd_mean_os_s, input.dmd_mean_os_d);
+                dmd_Fv = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
+                dmd_Fe = new CAROM::NonuniformDMD(tL2size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
             }
             else
             {

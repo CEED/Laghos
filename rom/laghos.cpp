@@ -280,10 +280,14 @@ int main(int argc, char *argv[])
                    "DMD RBF value between two closes training parameter points.");
     args.AddOption(&romOptions.dmd_nonuniform, "-dmdnuf", "--dmdnuf", "-no-dmdnuf", "--no-dmdnuf",
                     "Use NonuniformDMD rather than AdaptiveDMD.");
+    args.AddOption(&romOptions.dmd_init_os_s, "-dmdiss", "--dmdiss", "-no-dmdiss", "--no-dmdiss",
+                    "Use init state offset for DMD.");
+    args.AddOption(&romOptions.dmd_init_os_d, "-dmdisd", "--dmdisd", "-no-dmdisd", "--no-dmdisd",
+                    "Use init derivative offset for DMD.");
     args.AddOption(&romOptions.dmd_mean_os_s, "-dmdoss", "--dmdoss", "-no-dmdoss", "--no-dmdoss",
-                    "Use state offset for DMD.");
+                    "Use mean state offset for DMD.");
     args.AddOption(&romOptions.dmd_mean_os_d, "-dmdosd", "--dmdosd", "-no-dmdosd", "--no-dmdosd",
-                    "Use derivative offset for DMD.");
+                    "Use mean derivative offset for DMD.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
                    "Enable or disable write solution.");
