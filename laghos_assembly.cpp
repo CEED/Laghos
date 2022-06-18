@@ -186,7 +186,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   const int nqp_face = IntRule->GetNPoints();
   const int dim = fe.GetDim();
   const int h1dofs_cnt = fe.GetDof();
-  elmat.SetSize(h1dofs_cnt*dim, h1dofs_cnt*dim);
+  elmat.SetSize(h1dofs_cnt*dim);
   elmat = 0.0;
   Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim);;
   const int Elem1No = Tr.ElementNo;
@@ -223,13 +223,15 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 	{
 	  for (int vd = 0; vd < dim; vd++) // Velocity components.
 	    {
-	      
-	      loc_force1(i, vd) = shape(i) * nor(vd);
-	      loc_force2(i + vd * h1dofs_cnt) = shape(i) * (nor(vd)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
+	      for (int j = 0; j < h1dofs_cnt; j++)
+		{
+		  for (int md = 0; md < dim; md++) // Velocity components.
+		    {	      
+		      elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
+		    }
+		}
 	    }
 	}
-      AddMultVWt(Vloc_force,loc_force2,elmat);
-      
     }
 }
   
