@@ -81,7 +81,7 @@ protected:
    mutable MixedBilinearForm VelocityBoundaryForce;
    mutable MixedBilinearForm EnergyBoundaryForce;
    mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
-
+   const double penaltyParameter;
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -111,7 +111,7 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q);
+                           const int order_q, const double penaltyParameter);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.

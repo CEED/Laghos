@@ -94,7 +94,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq) :
+                                                 const int oq,
+						 const double penaltyParameter) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -110,7 +111,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
-   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
+   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
    rho0_gf(rho0_gf),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
@@ -677,7 +678,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = e.GetValue(Trans_el1, eip);
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = rho_vals * sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
 	   
  	   stress = 0.0;
 	   

@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.6;
    double cfl = 0.5;
+   double penaltyParameter = 1.0;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
    int cg_max_iter = 300;
@@ -129,6 +130,9 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
+   args.AddOption(&penaltyParameter, "-penPar", "--penaltyParameter",
+                  "Value of the penalty parameter");
+
    args.Parse();
    if (!args.Good())
    {
@@ -343,7 +347,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q);
+                                                order_q, penaltyParameter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
