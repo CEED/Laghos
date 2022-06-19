@@ -186,6 +186,29 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
       }
    }
+
+   const int nqp_face = b_ir.GetNPoints();
+   
+   for (int i = 0; i < L2.GetNBE(); i++)
+     {
+       FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
+       const int faceElemNo = eltrans->ElementNo;
+       
+       for (int q = 0; q  < nqp_face; q++)
+	 {
+	   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	   // Compute el1 quantities.
+	   // Set the integration point in the face and the neighboring elements
+	   eltrans->SetAllIntPoints(&ip_f);
+	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	   Trans_el1.SetIntPoint(&eip);
+	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
+	   const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
+	   f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
+	 }
+     }
+   
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
 
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
@@ -674,11 +697,13 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	  
 	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 	   Trans_el1.SetIntPoint(&eip);
-
-	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
-	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
-	   double e_vals = e.GetValue(Trans_el1, eip);
-	   double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   const double detJ = (Trans_el1.Jacobian()).Det();
+            
+	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);	   
+	   double e_vals_pen = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals_pen);
 	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
 	   
  	   stress = 0.0;

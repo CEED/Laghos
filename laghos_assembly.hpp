@@ -70,7 +70,15 @@ struct FaceQuadratureData
    // It must be recomputed in every time step.
    DenseMatrix weightedNormalStress;
    Vector normalVelocityPenaltyScaling;
-  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel) { }
+
+  // Quadrature data used for full/partial assembly of the mass matrices.
+   // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+   // quadrature point. Note the at any other time, we can compute
+   // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+   // conservation.
+   Vector rho0DetJ0w;
+
+  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel), rho0DetJ0w(NE * quads_per_faceel) { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
