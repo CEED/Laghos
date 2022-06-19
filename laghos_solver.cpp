@@ -678,7 +678,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = e.GetValue(Trans_el1, eip);
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
 	   
  	   stress = 0.0;
 	   
