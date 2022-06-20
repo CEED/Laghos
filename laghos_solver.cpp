@@ -194,7 +194,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
        const int faceElemNo = eltrans->ElementNo;
        
-       for (int q = 0; q  < nqp_face; q++)
+       for (int q = 0; q < nqp_face; q++)
 	 {
 	   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 	   // Compute el1 quantities.
@@ -203,6 +203,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 	   Trans_el1.SetIntPoint(&eip);
+	   DenseMatrixInverse Jinv(Trans_el1.Jacobian());
+	   Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));
+         
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
 	   f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
@@ -668,9 +671,46 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    DenseMatrix stress(dim);
    weightedNormalStress.SetSize(dim);
    weightedNormalStress = 0.0;
+
+   double max_rho = 0.0;
+   double max_sound_speed = 0.0;
    
    for (int i = 0; i < L2.GetNBE(); i++)
      {
+       FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
+       const int faceElemNo = eltrans->ElementNo;
+       
+       for (int q = 0; q  < nqp_face; q++)
+	 {
+	   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	   // Compute el1 quantities.
+	   // Set the integration point in the face and the neighboring elements
+	   eltrans->SetAllIntPoints(&ip_f);
+	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	   Trans_el1.SetIntPoint(&eip);
+	   const double detJ = (Trans_el1.Jacobian()).Det();
+
+	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);	   
+	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   if (sound_speed > max_sound_speed){
+	     max_sound_speed = sound_speed;
+	   }
+	   if (rho_vals > max_rho){
+	     max_rho = rho_vals;
+	   }
+	   
+	 }
+     }
+    double global_max_rho = 0.0;
+    double global_max_sound_speed = 0.0;
+    MPI_Allreduce(&max_rho, &global_max_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+    MPI_Allreduce(&max_sound_speed, &global_max_sound_speed, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+
+    for (int i = 0; i < L2.GetNBE(); i++)
+      {
        FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
        const int faceElemNo = eltrans->ElementNo;
        
@@ -700,17 +740,49 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   const double detJ = (Trans_el1.Jacobian()).Det();
             
 	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
-	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);	   
-	   double e_vals_pen = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals_pen);
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
 	   
+	   //double e_vals_pen = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   //double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals_pen);
+	   //	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+
  	   stress = 0.0;
 	   
 	   double p = (gamma_vals - 1) * rho_vals * e_vals; 
 	   for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-       
+	   double visc_coeff = 0.0;
+	   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+
+	   if (use_viscosity)
+            {
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity lgradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.
+               v.GetVectorGradient(Trans_el1, sgrad_v);
+
+               sgrad_v.Symmetrize();
+               double eig_val_data[3], eig_vec_data[9];
+               if (dim==1)
+               {
+                  eig_val_data[0] = sgrad_v(0, 0);
+                  eig_vec_data[0] = 1.;
+               }
+               else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+               Vector compr_dir(eig_vec_data, dim);
+               // Computes the initial->physical transformation Jacobian.
+               mfem::Mult(Trans_el1.Jacobian(), f_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
+               Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = qdata.h0 * ph_dir.Norml2() /
+                                compr_dir.Norml2();
+               // Measure of maximal compression.
+               const double mu = eig_val_data[0];
+               visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
+               stress.Add(visc_coeff, sgrad_v);
+            }
 	   // Quadrature data for partial assembly of the force operator.
 	   stress.Mult( nor, weightedNormalStress);
 	   for (int vd = 0 ; vd < dim; vd++)
