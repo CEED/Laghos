@@ -184,7 +184,7 @@ struct ROM_Options
     double initial_dt = 0.0; // initial timestep size
     bool   dmd = false;
     double dmd_tbegin = 0.0;
-    double desired_dt = 0.0;
+    double desired_dt = -1.0;
     double dmd_closest_rbf = 0.9;
     bool   dmd_nonuniform = false;
     bool   dmd_init_os_s = false;
