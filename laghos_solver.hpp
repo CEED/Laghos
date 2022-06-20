@@ -117,7 +117,7 @@ public:
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
 
-   void SolveVelocity(const Vector &S, Vector &dS_dt) const;
+  void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
 
@@ -182,9 +182,10 @@ class RK2AvgSolver : public HydroODESolver
 {
 protected:
    Vector V;
-   BlockVector dS_dt, S0;
+  BlockVector dS_dt, S0, S_init;
+  int counter;
 public:
-   RK2AvgSolver() { }
+  RK2AvgSolver():counter(0) { }
    virtual void Init(TimeDependentOperator &_f);
    virtual void Step(Vector &S, double &t, double &dt);
 };

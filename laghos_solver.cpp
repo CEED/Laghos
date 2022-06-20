@@ -274,7 +274,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
-   SolveVelocity(S, dS_dt);
+   SolveVelocity(S, dS_dt,S);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
    bv_qdata_is_current = false;
@@ -282,14 +282,19 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
-                                            Vector &dS_dt) const
+                                            Vector &dS_dt,
+					    const Vector &S_init) const
 {
-   UpdateQuadratureData(S); 
-   UpdateSurfaceNormalStressData(S);
-   Mv.Update();
-   Mv.Assemble();
-   AssembleForceMatrix();
-   AssembleVelocityBoundaryForceMatrix();
+  Mv.Update();
+  UpdateMesh(S_init);
+  Mv.AssembleDomainIntegrators();
+  UpdateMesh(S);
+  UpdateQuadratureData(S); 
+  UpdateSurfaceNormalStressData(S);
+  //Mv.Update();
+  Mv.AssembleBoundaryFaceIntegrators();
+  AssembleForceMatrix();
+  AssembleVelocityBoundaryForceMatrix();
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
@@ -744,8 +749,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
 	   
 	   //double e_vals_pen = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   //double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals_pen);
-	   //	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
+	   //double sound_speed =  sqrt(gamma_vals * (gamma_vals - 1) * e_vals);
+	   //f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * rho_vals * sound_speed;
 	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
 
  	   stress = 0.0;
@@ -831,10 +836,15 @@ void RK2AvgSolver::Init(TimeDependentOperator &tdop)
    dS_dt.Update(block_offsets, mem_type);
    dS_dt = 0.0;
    S0.Update(block_offsets, mem_type);
+   S_init.Update(block_offsets, mem_type);
 }
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
+  if (counter == 0){
+    S_init.Vector::operator=(S);
+    counter++;
+  }
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    S0.Vector::operator=(S);
@@ -851,7 +861,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
+   hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
    hydro_oper->SolveEnergy(S, V, dS_dt);
@@ -862,7 +872,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
-   hydro_oper->SolveVelocity(S, dS_dt);
+   hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
    hydro_oper->SolveEnergy(S, V, dS_dt);
