@@ -760,7 +760,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double visc_coeff = 0.0;
 	   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
 
-	   if (use_viscosity)
+	   /*if (use_viscosity)
             {
                // Compression-based length scale at the point. The first
                // eigenvector of the symmetric velocity lgradient gives the
@@ -787,7 +787,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
                const double mu = eig_val_data[0];
                visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
                stress.Add(visc_coeff, sgrad_v);
-            }
+            }*/
 	   // Quadrature data for partial assembly of the force operator.
 	   stress.Mult( nor, weightedNormalStress);
 	   for (int vd = 0 ; vd < dim; vd++)
