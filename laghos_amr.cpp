@@ -137,13 +137,13 @@ void AMREstimatorIntegrator::ComputeElementFlux1(const FiniteElement &el,
    }
 }
 
-void AMREstimatorIntegrator::ComputeElementFlux2(const int e,
-                                                 const FiniteElement &el,
+void AMREstimatorIntegrator::ComputeElementFlux2(const int el,
+                                                 const FiniteElement &fe,
                                                  ElementTransformation &Trans,
                                                  const FiniteElement &fluxelem,
                                                  Vector &flux)
 {
-   const int dim = el.GetDim();
+   const int dim = fe.GetDim();
    const int sdim = Trans.GetSpaceDim();
 
    DenseMatrix Jadjt(dim, sdim), Jadj(dim, sdim);
@@ -156,7 +156,7 @@ void AMREstimatorIntegrator::ComputeElementFlux2(const int e,
    double minW = +NL_DMAX;
    double maxW = -NL_DMAX;
 
-   const int depth = pmesh->pncmesh->GetElementDepth(e);
+   const int depth = pmesh->pncmesh->GetElementDepth(el);
 
    for (int q = 0; q < NQ; q++)
    {
@@ -182,8 +182,8 @@ void AMREstimatorIntegrator::ComputeElementFlux2(const int e,
    }
 }
 
-void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
-                                                ElementTransformation &Trans,
+void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &fe,
+                                                ElementTransformation &Tr,
                                                 Vector &u,
                                                 const FiniteElement &fluxelem,
                                                 Vector &flux,
@@ -197,34 +197,28 @@ void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &el,
    {
       case mode::diffusion:
       {
-         DiffusionIntegrator::ComputeElementFlux(el, Trans, u,
+         DiffusionIntegrator::ComputeElementFlux(fe, Tr, u,
                                                  fluxelem, flux, with_coef);
          break;
       }
       case mode::one:
       {
-         ComputeElementFlux1(el, Trans, u, fluxelem, flux);
+         AMREstimatorIntegrator::ComputeElementFlux1(fe, Tr, u, fluxelem, flux);
          break;
       }
       case mode::two:
       {
-         ComputeElementFlux2(e++, el, Trans, fluxelem, flux);
+         AMREstimatorIntegrator::ComputeElementFlux2(e++, fe, Tr, fluxelem, flux);
          break;
       }
       default: MFEM_ABORT("Unknown mode!");
    }
 }
 
-AMR::AMR(ParMesh *pmesh,
-         int estimator,
-         double ref_t,
-         double jac_t,
-         double deref_t,
-         int max_level,
-         int nc_limit,
-         double size_b,
-         double energy_b,
-         double *xyz_b):
+AMR::AMR(ParMesh *pmesh, int estimator,
+         double ref_t, double jac_t, double deref_t,
+         int max_level,  int nc_limit,
+         double size_b, double energy_b, double *xyz_b):
    pmesh(pmesh),
    myid(pmesh->GetMyRank()),
    dim(pmesh->Dimension()),
@@ -288,48 +282,6 @@ void AMR::Reset()
    if (derefiner) { derefiner->Reset(); }
 }
 
-static void Update(BlockVector &S, BlockVector &S_tmp,
-                   Array<int> &true_offset,
-                   ParGridFunction &x_gf,
-                   ParGridFunction &v_gf,
-                   ParGridFunction &e_gf,
-                   ParGridFunction &m_gf)
-{
-   ParFiniteElementSpace* H1FESpace = x_gf.ParFESpace();
-   ParFiniteElementSpace* L2FESpace = e_gf.ParFESpace();
-   ParFiniteElementSpace* MEFESpace = m_gf.ParFESpace();
-
-   H1FESpace->Update();
-   L2FESpace->Update();
-   MEFESpace->Update();
-
-   const int Vsize_h1 = H1FESpace->GetVSize();
-   const int Vsize_l2 = L2FESpace->GetVSize();
-
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-
-   S_tmp = S;
-   S.Update(true_offset);
-   const Operator* H1Update = H1FESpace->GetUpdateOperator();
-   const Operator* L2Update = L2FESpace->GetUpdateOperator();
-   H1Update->Mult(S_tmp.GetBlock(0), S.GetBlock(0));
-   H1Update->Mult(S_tmp.GetBlock(1), S.GetBlock(1));
-   L2Update->Mult(S_tmp.GetBlock(2), S.GetBlock(2));
-
-   x_gf.MakeRef(H1FESpace, S, true_offset[0]);
-   v_gf.MakeRef(H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(L2FESpace, S, true_offset[2]);
-   x_gf.SyncAliasMemory(S);
-   v_gf.SyncAliasMemory(S);
-   e_gf.SyncAliasMemory(S);
-
-   S_tmp.Update(true_offset);
-   m_gf.Update();
-}
-
 void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                  ODESolver *ode_solver,
                  BlockVector &S,
@@ -357,13 +309,13 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
       case amr::estimator::custom:
       {
          Vector &error_est = hydro.GetZoneMaxVisc();
-         for (int e = 0; e < NE; e++)
+         for (int el = 0; el < NE; el++)
          {
-            if (error_est(e) > opt.ref_threshold &&
-                pmesh->pncmesh->GetElementDepth(e) < opt.max_level &&
-                (v_min(e) < 1e-3)) // only refine the still area
+            if (error_est(el) > opt.ref_threshold &&
+                pmesh->pncmesh->GetElementDepth(el) < opt.max_level &&
+                (v_min(el) < 1e-3)) // only refine the still area
             {
-               refs.Append(Refinement(e));
+               refs.Append(Refinement(el));
             }
          }
          break;
@@ -372,17 +324,17 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
       case amr::estimator::jjt:
       {
          const double art = opt.ref_threshold;
-         const int order = H1FESpace.GetOrder(0) + 1;
+         const int h1_order = H1FESpace.GetOrder(0) + 1;
          DenseMatrix Jadjt, Jadj(dim, pmesh->SpaceDimension());
          MFEM_VERIFY(art >= 0.0, "AMR threshold should be positive");
-         for (int e = 0; e < NE; e++)
+         for (int el = 0; el < NE; el++)
          {
             double minW = +NL_DMAX;
             double maxW = -NL_DMAX;
-            const int depth = pmesh->pncmesh->GetElementDepth(e);
-            ElementTransformation *eTr = pmesh->GetElementTransformation(e);
-            const Geometry::Type &type = pmesh->GetElement(e)->GetGeometryType();
-            const IntegrationRule *ir = &IntRules.Get(type, order);
+            const int depth = pmesh->pncmesh->GetElementDepth(el);
+            ElementTransformation *eTr = pmesh->GetElementTransformation(el);
+            const Geometry::Type &type = pmesh->GetElement(el)->GetGeometryType();
+            const IntegrationRule *ir = &IntRules.Get(type, h1_order);
             const int NQ = ir->GetNPoints();
             for (int q = 0; q < NQ; q++)
             {
@@ -401,7 +353,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                MFEM_VERIFY(rho <= 1.0, "");
                if (rho < opt.jac_threshold && depth < opt.max_level)
                {
-                  refs.Append(Refinement(e));
+                  refs.Append(Refinement(el));
                }
             }
          }
@@ -476,10 +428,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
       MFEM_VERIFY(derefiner,"");
       if (derefiner->Apply(*pmesh))
       {
-         if (myid == 0)
-         {
-            std::cout << "\nDerefined elements." << std::endl;
-         }
+         //if (myid == 0) { std::cout << "\nDerefined elements." << std::endl; }
       }
       if (derefiner->Derefined()) { mesh_refined = true; }
    }
@@ -487,15 +436,52 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
 
    if (mesh_refined)
    {
+      auto Update = [&]()
+      {
+         ParFiniteElementSpace* H1FESpace = x.ParFESpace();
+         ParFiniteElementSpace* L2FESpace = e.ParFESpace();
+         ParFiniteElementSpace* MEFESpace = m.ParFESpace();
+
+         H1FESpace->Update();
+         L2FESpace->Update();
+         MEFESpace->Update();
+
+         const int Vsize_h1 = H1FESpace->GetVSize();
+         const int Vsize_l2 = L2FESpace->GetVSize();
+
+         true_offset[0] = 0;
+         true_offset[1] = true_offset[0] + Vsize_h1;
+         true_offset[2] = true_offset[1] + Vsize_h1;
+         true_offset[3] = true_offset[2] + Vsize_l2;
+
+         S_old = S;
+         S.Update(true_offset);
+         const Operator* H1Update = H1FESpace->GetUpdateOperator();
+         const Operator* L2Update = L2FESpace->GetUpdateOperator();
+         H1Update->Mult(S_old.GetBlock(0), S.GetBlock(0));
+         H1Update->Mult(S_old.GetBlock(1), S.GetBlock(1));
+         L2Update->Mult(S_old.GetBlock(2), S.GetBlock(2));
+
+         x.MakeRef(H1FESpace, S, true_offset[0]);
+         v.MakeRef(H1FESpace, S, true_offset[1]);
+         e.MakeRef(L2FESpace, S, true_offset[2]);
+         x.SyncAliasMemory(S);
+         v.SyncAliasMemory(S);
+         e.SyncAliasMemory(S);
+
+         S_old.Update(true_offset);
+         m.Update();
+      };
+
       constexpr bool quick = true;
 
-      amr::Update(S, S_old, true_offset, x, v, e, m);
+      Update();
       hydro.AMRUpdate(S, quick);
 
       pmesh->Rebalance();
 
-      amr::Update(S, S_old, true_offset, x, v, e, m);
-      hydro.AMRUpdate(S, !quick);
+      Update();
+      hydro.AMRUpdate(S, not quick);
 
       GetZeroBCDofs(pmesh, H1FESpace, bdr_attr_max, ess_tdofs, ess_vdofs);
       ode_solver->Init(hydro);
