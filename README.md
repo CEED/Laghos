@@ -279,6 +279,19 @@ To make sure the results are correct, we tabulate reference final iterations
 |  9. | 2462 | 0.000050 | 1.1792848684e+02 |
 
 
+| `run` | `step` | `dt` | `e` |
+| ----- | ------ | ---- | --- |
+|  1. |  341 | 0.000135 | 4.9690389942e+01 |
+|  2. | 1058 | 0.000019 | 3.3911847806e+03 |
+|  3. | 1194 | 0.001472 | 4.6385431679e+01 |
+|  4. |  557 | 0.002337 | 1.3414569917e+02 |
+|  5. |  413 | 0.000470 |  |
+|  6. | 2848 | 0.000331 | 5.6552739943e+01 |
+|  7. |  848 | 0.002043 | 5.6695704957e+01 |
+|  8. |  776 | 0.000045 | 4.0982440219e+02 |
+|  9. | 3215 | 0.000116 | 1.1850834148e+02 |
+
+
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
 
