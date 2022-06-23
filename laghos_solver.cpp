@@ -95,7 +95,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int cgiter,
                                                  double ftz,
                                                  const int oq,
-						 const double penaltyParameter) :
+						 const double penaltyParameter,
+						 const double nitscheVersion) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -112,6 +113,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    use_viscosity(visc),
    use_vorticity(vort),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
+   nitscheVersion(nitscheVersion),
    rho0_gf(rho0_gf),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
@@ -233,7 +235,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
 
-void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
+void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt, const Vector &S_init) const
 {
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
@@ -249,7 +251,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
-   SolveVelocity(S, dS_dt,S);
+   SolveVelocity(S, dS_dt, S_init);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
    bv_qdata_is_current = false;
@@ -260,13 +262,19 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt,
 					    const Vector &S_init) const
 {
+  // reset mesh, needed to update the normal velocity penalty term.
   Mv.Update();
+  // set the state at the initial one
   UpdateMesh(S_init);
+  // assemble the velocity mass matrix at that state
   Mv.AssembleDomainIntegrators();
+  // reset the mesh state at the current one
   UpdateMesh(S);
+  //Compute quadrature quantities
   UpdateQuadratureData(S); 
   UpdateSurfaceNormalStressData(S);
-  //Mv.Update();
+
+  // assemble boundary terms at the most recent state.
   Mv.AssembleBoundaryFaceIntegrators();
   AssembleForceMatrix();
   AssembleVelocityBoundaryForceMatrix();
@@ -286,6 +294,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    Array<int> l2dofs;
    Force.Mult(one, rhs);
    rhs.Neg();
+   // populate a vector of ones only at the boundary dofs.
    Vector loc_one(L2Vsize);
    loc_one = 0.0;
    for (int i = 0; i < L2.GetNBE(); i++)
@@ -351,6 +360,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Array<int> h1dofs;
    
    Force.MultTranspose(v, e_rhs);
+   // populate the velocity values only at the boundary dofs.
    Vector loc_v(H1Vsize);
    loc_v = 0.0;
    for (int i = 0; i < H1.GetNBE(); i++)
@@ -363,8 +373,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
      }
    
    EnergyBoundaryForce.MultTranspose(loc_v, be_rhs);
+   be_rhs *= nitscheVersion;
+   e_rhs += be_rhs;
    
-   e_rhs -= be_rhs;
    Array<int> l2dofs;
    
    if (e_source) { e_rhs += *e_source; }
@@ -658,6 +669,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    ParGridFunction rho_gf;
    ComputeDensity(rho_gf);
 
+   // compute the maximum vorticity, density (rho), artificial viscosity (mu), and sound speed
+   // over all faces/edges of the domain.
    double max_vorticity = 0.0;
    double max_rho = 0.0;
    double max_sound_speed = 0.0;
@@ -731,12 +744,16 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    double global_max_rho = 0.0;
    double global_max_sound_speed = 0.0;
    double global_max_mu = 0.0;
-   
+   // parallel calls
    MPI_Allreduce(&max_rho, &global_max_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_sound_speed, &global_max_sound_speed, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_mu, &global_max_mu, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_vorticity, &global_max_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
+   // compute normal stress at each quadrature point on all the boundary faces and
+   // store it in f_qdata.weightedNormalStress
+   // compute the penalty scaling and store it in f_qdata.normalVelocityPenaltyScaling.
+   // expression of the penalty is defined in the FaceQuadratureData in laghos_solver.hpp
     for (int i = 0; i < L2.GetNBE(); i++)
       {
        FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
@@ -845,6 +862,13 @@ void RK2AvgSolver::Init(TimeDependentOperator &tdop)
 
 void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 {
+  // storing the initial state at S_init.
+  // counter is need to prevent continuous update.
+  // S_init will be used to compute the velocity mass matrix which is stays fixed throughout the calculation
+  // Velocity mass matrix Cannot be computed like with the strong b.c enforcement scenario
+  // since the normal velocity penalty term has to be assembled to that mass matrix
+  // and needs to be continuously updated at not be fixed at S_init.
+  // So, S_init will preserve the initial state which is solely used to compute the velocity mass matrix
   if (counter == 0){
     S_init.Vector::operator=(S);
     counter++;

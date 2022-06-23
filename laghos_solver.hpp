@@ -73,7 +73,7 @@ protected:
    const int Q1D;
    mutable QuadratureData qdata;
    mutable FaceQuadratureData f_qdata; 
-  mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
+   mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
@@ -82,6 +82,7 @@ protected:
    mutable MixedBilinearForm EnergyBoundaryForce;
    mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
    const double penaltyParameter;
+   const double nitscheVersion;
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -111,13 +112,14 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, const double penaltyParameter);
+                           const int order_q, const double penaltyParameter,
+			   const double nitscheVersion);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
-   virtual void Mult(const Vector &S, Vector &dS_dt) const;
+   virtual void Mult(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
 
-  void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
+   void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
 
@@ -181,7 +183,8 @@ public:
 class RK2AvgSolver : public HydroODESolver
 {
 protected:
-   Vector V;
+  Vector V;
+  // S_init is needed to store the initial solution state (x, v, e)
   BlockVector dS_dt, S0, S_init;
   int counter;
 public:
@@ -195,3 +198,4 @@ public:
 #endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS
+

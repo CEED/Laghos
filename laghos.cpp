@@ -62,6 +62,8 @@ int main(int argc, char *argv[])
    if (mpi.Root()) { display_banner(cout); }
 
    // Parse command-line options.
+   // penalty parameter is a user-defined non-dimensional constant for the penalty term: suggested value 10.0, but default set to 1.
+   // Weak boundary imposition code is functional solely using solver option 7: i.e RK2AvgSolver
    problem = 1;
    dim = 3;
    const char *mesh_file = "default";
@@ -74,6 +76,7 @@ int main(int argc, char *argv[])
    double t_final = 0.6;
    double cfl = 0.5;
    double penaltyParameter = 1.0;
+   double nitscheVersion = -1.0;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
    int cg_max_iter = 300;
@@ -132,6 +135,8 @@ int main(int argc, char *argv[])
                   "Name of the visit dump files");
    args.AddOption(&penaltyParameter, "-penPar", "--penaltyParameter",
                   "Value of the penalty parameter");
+   args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
+                  "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
 
    args.Parse();
    if (!args.Good())
@@ -212,24 +217,10 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
-   // that the boundaries are straight.
+   // Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
+   // We need to define ess_tdofs and ess_vdofs, but they will be kept empty
    Array<int> ess_tdofs, ess_vdofs;
-   /*  {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-      for (int d = 0; d < pmesh->Dimension(); d++)
-      {
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-         // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-         ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-         ess_tdofs.Append(dofs_list);
-         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-         ess_vdofs.Append(dofs_list);
-      }
-   }
-*/
+
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
@@ -347,7 +338,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, penaltyParameter);
+                                                order_q, penaltyParameter, nitscheVersion);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

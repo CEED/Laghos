@@ -64,11 +64,16 @@ struct QuadratureData
   // Container for all data needed at quadrature points.
 struct FaceQuadratureData
 {
-   // Quadrature data used for full/partial assembly of the force operator.
-   // At each quadrature point, it combines the stress, inverse Jacobian,
-   // determinant of the Jacobian and the integration weight.
-   // It must be recomputed in every time step.
+   // evaluation of the norma stress at the face quadrature points
    DenseMatrix weightedNormalStress;
+
+   // Scaling of the penalty term evaluated at the face quadrature points:
+   // tau * (c_s * (rho + mu / h) + rho * vorticity * h)
+   // tau: user-defined non-dimensional constant 
+   // c_s: max. sound speed over all boundary faces/edges
+   // rho: max. density over all boundary faces/edges
+   // mu: max. artificial viscosity over all boundary faces/edges
+   // vorticity: max. vorticity over all boundary faces/edges
    Vector normalVelocityPenaltyScaling;
 
   FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel) { }
@@ -104,6 +109,7 @@ public:
 };
 
   // Performs full assembly for the boundary force operator on the momentum equation.
+   // < sigma_{ij} n_{j} , \psi_{i} > 
 class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
@@ -116,7 +122,8 @@ public:
 				   DenseMatrix &elmat);
 };
 
-    // Performs full assembly for the boundary force operator on the momentum equation.
+  // Performs full assembly for the boundary force operator on the energy equation.
+  // < sigma_{ij} n_{j} n_{i}, \phi * v.n > 
 class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
