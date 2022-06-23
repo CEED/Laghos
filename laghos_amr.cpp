@@ -190,7 +190,7 @@ void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &fe,
                                                 bool with_coef,
                                                 const IntegrationRule *ir)
 {
-   MFEM_VERIFY(ir == NULL, "ir not supported");
+   MFEM_VERIFY(ir == nullptr, "ir not supported");
    MFEM_VERIFY(NE == pmesh->GetNE(), "");
    // ZZ comes with with_coef set to true, not Kelly
    switch (flux_mode)
@@ -218,7 +218,7 @@ void AMREstimatorIntegrator::ComputeElementFlux(const FiniteElement &fe,
 AMR::AMR(ParMesh *pmesh, int estimator,
          double ref_t, double jac_t, double deref_t,
          int max_level,  int nc_limit,
-         double size_b, double energy_b, double *xyz_b):
+         double size_b, double energy_b, double *blast_xyz):
    pmesh(pmesh),
    myid(pmesh->GetMyRank()),
    dim(pmesh->Dimension()),
@@ -228,7 +228,7 @@ AMR::AMR(ParMesh *pmesh, int estimator,
    opt(
 {
    estimator, ref_t, jac_t, deref_t, max_level, nc_limit,
-   size_b, energy_b, Vertex(xyz_b[0], xyz_b[1], xyz_b[2])
+   size_b, energy_b, Vertex(blast_xyz[0], blast_xyz[1], blast_xyz[2])
 }) { }
 
 AMR::~AMR() { }
@@ -244,8 +244,7 @@ void AMR::Setup(ParGridFunction &x_gf)
 
    if (opt.estimator == amr::estimator::zz)
    {
-      integ = new AMREstimatorIntegrator(pmesh, opt.max_level,
-                                         opt.jac_threshold);
+      integ = new AMREstimatorIntegrator(pmesh, opt.max_level, opt.jac_threshold);
       smooth_flux_fec = new RT_FECollection(order-1, dim);
       auto smooth_flux_fes = new ParFiniteElementSpace(pmesh, smooth_flux_fec);
       estimator = new L2ZienkiewiczZhuEstimator(*integ, x_gf, &flux_fes,
@@ -296,8 +295,8 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                  Array<int> &ess_vdofs)
 {
    Vector v_max, v_min;
-   Array<Refinement> refs;
-   bool mesh_refined = false;
+   Array<Refinement> refined;
+   bool mesh_updated = false;
    const int NE = pmesh->GetNE();
    ParFiniteElementSpace &H1FESpace = *x.ParFESpace();
    constexpr double NL_DMAX = std::numeric_limits<double>::max();
@@ -315,7 +314,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                 pmesh->pncmesh->GetElementDepth(el) < opt.max_level &&
                 (v_min(el) < 1e-3)) // only refine the still area
             {
-               refs.Append(Refinement(el));
+               refined.Append(Refinement(el));
             }
          }
          break;
@@ -353,7 +352,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                MFEM_VERIFY(rho <= 1.0, "");
                if (rho < opt.jac_threshold && depth < opt.max_level)
                {
-                  refs.Append(Refinement(el));
+                  refined.Append(Refinement(el));
                }
             }
          }
@@ -364,28 +363,27 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
       case amr::estimator::kelly:
       {
          refiner->Apply(*pmesh);
-         if (refiner->Refined()) { mesh_refined = true; }
-         MFEM_VERIFY(!refiner->Derefined(),"");
-         MFEM_VERIFY(!refiner->Rebalanced(),"");
+         if (refiner->Refined()) { mesh_updated = true; }
+         MFEM_VERIFY(!refiner->Derefined() && !refiner->Rebalanced(), "");
          break;
       }
       default: MFEM_ABORT("Unknown AMR estimator!");
    }
 
-   // custom and JJt uses refs, ZZ and Kelly will set mesh_refined
-   const int nref = pmesh->ReduceInt(refs.Size());
-   if (nref && !mesh_refined)
+   // custom and JJt use 'refined', ZZ and Kelly will set 'mesh_updated'
+   const int nref = pmesh->ReduceInt(refined.Size());
+   if (nref && !mesh_updated)
    {
       constexpr int non_conforming = 1;
-      pmesh->GeneralRefinement(refs, non_conforming, opt.nc_limit);
-      mesh_refined = true;
+      pmesh->GeneralRefinement(refined, non_conforming, opt.nc_limit);
+      mesh_updated = true;
       if (myid == 0)
       {
          std::cout << "Refined " << nref << " elements." << std::endl;
       }
    }
    else if (opt.estimator == amr::estimator::custom &&
-            opt.deref_threshold >= 0.0 && !mesh_refined)
+            opt.deref_threshold >= 0.0 && !mesh_updated)
    {
       ParGridFunction rho_gf;
       Vector rho_max, rho_min;
@@ -400,8 +398,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
 
       // make sure the blast point is never derefined
       Array<int> elements;
-      FindElementsWithVertex(pmesh, opt.blast_position,
-                             opt.blast_size, elements);
+      FindElementsWithVertex(pmesh, opt.blast_position, opt.blast_size, elements);
       for (int i = 0; i < elements.Size(); i++)
       {
          int index = elements[i];
@@ -414,27 +411,26 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          if (v_min(i) < 0.1) { rho_max(i) = NL_DMAX; }
       }
 
-      const int op = 2; // maximum value of fine elements
-      mesh_refined = pmesh->DerefineByError(rho_max, threshold,
-                                            opt.nc_limit, op);
-      if (mesh_refined && myid == 0)
+      const int op = 2; // operatoe on the 'maximum' value of the fine elements
+      mesh_updated = pmesh->DerefineByError(rho_max, threshold, opt.nc_limit, op);
+      if (mesh_updated && myid == 0)
       {
          std::cout << "Derefined, threshold = " << threshold << std::endl;
       }
    }
    else if ((opt.estimator == amr::estimator::zz ||
-             opt.estimator == amr::estimator::kelly) && !mesh_refined)
+             opt.estimator == amr::estimator::kelly) && !mesh_updated)
    {
       MFEM_VERIFY(derefiner,"");
       if (derefiner->Apply(*pmesh))
       {
          //if (myid == 0) { std::cout << "\nDerefined elements." << std::endl; }
       }
-      if (derefiner->Derefined()) { mesh_refined = true; }
+      if (derefiner->Derefined()) { mesh_updated = true; }
    }
    else { /* nothing to do */ }
 
-   if (mesh_refined)
+   if (mesh_updated)
    {
       auto Update = [&]()
       {
@@ -446,21 +442,21 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          L2FESpace->Update();
          MEFESpace->Update();
 
-         const int Vsize_h1 = H1FESpace->GetVSize();
-         const int Vsize_l2 = L2FESpace->GetVSize();
+         const int h1_vsize = H1FESpace->GetVSize();
+         const int l2_vsize = L2FESpace->GetVSize();
 
          true_offset[0] = 0;
-         true_offset[1] = true_offset[0] + Vsize_h1;
-         true_offset[2] = true_offset[1] + Vsize_h1;
-         true_offset[3] = true_offset[2] + Vsize_l2;
+         true_offset[1] = true_offset[0] + h1_vsize;
+         true_offset[2] = true_offset[1] + h1_vsize;
+         true_offset[3] = true_offset[2] + l2_vsize;
 
          S_old = S;
          S.Update(true_offset);
-         const Operator* H1Update = H1FESpace->GetUpdateOperator();
-         const Operator* L2Update = L2FESpace->GetUpdateOperator();
-         H1Update->Mult(S_old.GetBlock(0), S.GetBlock(0));
-         H1Update->Mult(S_old.GetBlock(1), S.GetBlock(1));
-         L2Update->Mult(S_old.GetBlock(2), S.GetBlock(2));
+         const Operator* h1_update = H1FESpace->GetUpdateOperator();
+         const Operator* l2_update = L2FESpace->GetUpdateOperator();
+         h1_update->Mult(S_old.GetBlock(0), S.GetBlock(0));
+         h1_update->Mult(S_old.GetBlock(1), S.GetBlock(1));
+         l2_update->Mult(S_old.GetBlock(2), S.GetBlock(2));
 
          x.MakeRef(H1FESpace, S, true_offset[0]);
          v.MakeRef(H1FESpace, S, true_offset[1]);

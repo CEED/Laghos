@@ -338,8 +338,8 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
 
    // go back to initial mesh configuration temporarily
    int own_nodes = 0;
-   GridFunction *x_gf = &x0_gf;
-   pmesh->SwapNodes(x_gf, own_nodes);
+   GridFunction *x0 = &x0_gf;
+   pmesh->SwapNodes(x0, own_nodes);
 
    if (p_assembly)
    {
@@ -375,8 +375,8 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
 
       // Setup the preconditioner of the velocity mass operator.
       // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> ess_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+      Array<int> empty;
+      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty);
       CG_VMass.SetPreconditioner(*VMassPA_Jprec);
 
       CG_VMass.SetOperator(*VMassPA);
@@ -455,7 +455,7 @@ void LagrangianHydroOperator::AMRUpdate(const Vector &S, const bool quick)
    qdata.h0 /= (double) H1.GetOrder(0);
 
    // swap back to deformed mesh configuration
-   pmesh->SwapNodes(x_gf, own_nodes);
+   pmesh->SwapNodes(x0, own_nodes);
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
@@ -664,7 +664,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector rhs_z(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -674,10 +674,10 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
+      di.AssembleRHSElementVect(fe, eltr, rhs_z);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(rhs, rho_z);
+      inv.Mult(rhs_z, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }

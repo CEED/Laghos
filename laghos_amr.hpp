@@ -26,7 +26,14 @@ namespace mfem
 namespace amr
 {
 
-enum estimator: int { custom = 0, jjt = 1, zz = 2, kelly = 3 };
+enum estimator: int
+{
+   custom = 0, // adapted from the amr subdir: uses visc and vgrad per element
+   jjt = 1,    // uses rho = minW/maxW, with W is the determinant of the
+   // adjugate of the transformation's Jacobian.
+   zz = 2,
+   kelly = 3
+};
 
 class AMREstimatorIntegrator: public DiffusionIntegrator
 {
