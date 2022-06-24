@@ -256,25 +256,25 @@ The latter produces the following specific internal energy plot (notice the `-vi
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -s 7 -penPar 5.0`
-2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -s 7 -penPar 5.0`
-3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 5.0`
-4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -s 7 -penPar 5.0`
-5. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -s 7 -penPar 5.0`
-6. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -s 7 -penPar 5.0`
-7. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -penPar 5.0`
-8. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -s 7 -penPar 5.0`
+1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -s 7 -penPar 1.0`
+2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -s 7 -penPar 1.0`
+3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 1.0`
+4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -s 7 -penPar 1.0`
+5. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -s 7 -penPar 1.0`
+6. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -s 7 -penPar 1.0`
+7. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -penPar 1.0`
+8. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -s 7 -penPar 1.0`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
-|  1. |  340 | 0.000192 | 4.9691036484e+01 |
-|  2. | 1045 | 0.000025 | 3.3909408472e+03 |
-|  3. | 1194 | 0.001482 | 4.6385909978e+01 |
-|  4. |  577 | 0.002337 | 1.3414240114e+02 |
-|  5. | 2849 | 0.000016 | 5.6552715153e+01 |
-|  6. |  850 | 0.000792 | 5.6692697486e+01 |
-|  7. |  776 | 0.000045 | 4.0982431184e+02 |
-|  8. | 2539 | 0.000087 | 1.1835838781e+02 |
+|  1. |  341 | 0.000135 | 4.9690389942e+01 |
+|  2. | 1058 | 0.000019 | 3.3911847806e+03 |
+|  3. | 1194 | 0.001472 | 4.6385431679e+01 |
+|  4. |  577 | 0.002337 | 1.3414569917e+02 |
+|  5. | 2848 | 0.000382 | 5.6553003166e+01 |
+|  6. |  848 | 0.002043 | 5.6695704957e+01 |
+|  7. |  776 | 0.000045 | 4.0982440219e+02 |
+|  8. | 3215 | 0.000116 | 1.1850834148e+02 |
 
 
 An implementation is considered valid if the final energy values are all within
