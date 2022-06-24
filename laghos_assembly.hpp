@@ -76,6 +76,10 @@ struct FaceQuadratureData
    // vorticity: max. vorticity over all boundary faces/edges
    Vector normalVelocityPenaltyScaling;
 
+  // Reference to physical Jacobian for the initial mesh.
+   // These are computed only at time zero and stored here.
+   DenseTensor Jac0inv;
+
     // Quadrature data used for full/partial assembly of the mass matrices.
    // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
    // quadrature point. Note the at any other time, we can compute
@@ -83,7 +87,7 @@ struct FaceQuadratureData
    // conservation.
    Vector rho0DetJ0w;
 
-  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel), rho0DetJ0w(NE * quads_per_faceel) { }
+  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel), rho0DetJ0w(NE * quads_per_faceel),Jac0inv(dim, dim, NE * quads_per_faceel) { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each

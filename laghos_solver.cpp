@@ -205,7 +205,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 	   Trans_el1.SetIntPoint(&eip);
-	 
+	   DenseMatrixInverse Jinv(Trans_el1.Jacobian());
+	   Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));
+         
+
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
 	   f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
@@ -695,7 +698,9 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    double max_rho = 0.0;
    double max_sound_speed = 0.0;
    double max_mu = 0.0;
-   
+   double min_h = 10000.0;
+   double max_h = 0.0;
+    
    for (int i = 0; i < L2.GetNBE(); i++)
      {
        FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
@@ -752,11 +757,22 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
                }
                else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
                Vector compr_dir(eig_vec_data, dim);
+	       mfem::Mult(Trans_el1.Jacobian(), f_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
+               Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+               // Change of the initial mesh size in the compression direction.
+               const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
                // Measure of maximal compression.
                const double mu = fabs(eig_val_data[0]);
 	       if( max_mu < mu){
 		 max_mu = mu;
 	       }
+	       if( h < min_h){
+		 min_h = h;
+	       }
+	       if( h > max_h){
+		 max_h = h;
+	       }
+
 	    }
 	 }
      }
@@ -765,11 +781,16 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    double global_max_rho = 0.0;
    double global_max_sound_speed = 0.0;
    double global_max_mu = 0.0;
+   double global_min_h = 1000.0;
+   double global_max_h = 0.0;
+    
    // parallel calls
    MPI_Allreduce(&max_rho, &global_max_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_sound_speed, &global_max_sound_speed, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_mu, &global_max_mu, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    MPI_Allreduce(&max_vorticity, &global_max_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+   MPI_Allreduce(&min_h, &global_min_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+   MPI_Allreduce(&max_h, &global_max_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
    // compute normal stress at each quadrature point on all the boundary faces and
    // store it in f_qdata.weightedNormalStress
@@ -823,11 +844,11 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
 	   if (use_viscosity)
 	     {
-               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed * nor_norm / eltrans->Elem1->Weight();
+               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h /*nor_norm / eltrans->Elem1->Weight()*/;
 	       
 	       if (use_vorticity)
 		 {
-		   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * eltrans->Elem1->Weight() / nor_norm;
+		   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
 		 }
 	    }
 	   // Quadrature data for partial assembly of the force operator.
