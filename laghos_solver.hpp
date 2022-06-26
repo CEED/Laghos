@@ -59,7 +59,7 @@ protected:
    const double ftz_tol;
    const ParGridFunction &rho0_gf;
    const ParGridFunction &gamma_gf;
-   
+   const Array<Array<int> *> &bdr_attr;    
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
@@ -112,7 +112,8 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q, const double penaltyParameter,
+                           const int order_q, const Array<Array<int> *> &bdr_attr,
+			   const double penaltyParameter,
 			   const double nitscheVersion);
    ~LagrangianHydroOperator();
 

@@ -95,6 +95,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int cgiter,
                                                  double ftz,
                                                  const int oq,
+						 const Array<Array<int> *> &bdr_attr,
 						 const double penaltyParameter,
 						 const double nitscheVersion) :
    TimeDependentOperator(size),
@@ -112,6 +113,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
+   bdr_attr(bdr_attr),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
    nitscheVersion(nitscheVersion),
    rho0_gf(rho0_gf),
@@ -237,26 +239,26 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force.Assemble(0);
    Force.Finalize(0);
 
-   VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata);
-   v_bfi->SetIntRule(&b_ir);
-   VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
-
-   // Make a dummy assembly to figure out the sparsity.
-   VelocityBoundaryForce.Assemble(0);
-   VelocityBoundaryForce.Finalize(0);
-
-   EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(f_qdata);
-   e_bfi->SetIntRule(&b_ir);
-   EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);
-
-   // Make a dummy assembly to figure out the sparsity.
-   EnergyBoundaryForce.Assemble(0);
-   EnergyBoundaryForce.Finalize(0);
-
-   NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata);
-   nvmi->SetIntRule(&b_ir);
-   Mv.AddBdrFaceIntegrator(nvmi);
-
+   for (int s = 0; s < bdr_attr.Size(); s++){
+     VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata);
+     v_bfi->SetIntRule(&b_ir);
+     VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi,*bdr_attr[s]);
+       
+     EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(f_qdata);
+     e_bfi->SetIntRule(&b_ir);
+     EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi,*bdr_attr[s]);
+     
+     NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata);
+     nvmi->SetIntRule(&b_ir);
+     Mv.AddBdrFaceIntegrator(nvmi,*bdr_attr[s]);
+   }
+     // Make a dummy assembly to figure out the sparsity.
+     VelocityBoundaryForce.Assemble(0);
+     VelocityBoundaryForce.Finalize(0);
+    // Make a dummy assembly to figure out the sparsity.
+     EnergyBoundaryForce.Assemble(0);
+     EnergyBoundaryForce.Finalize(0);
+      
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }

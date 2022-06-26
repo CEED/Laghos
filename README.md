@@ -256,9 +256,9 @@ The latter produces the following specific internal energy plot (notice the `-vi
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -s 7 -penPar 1.0`
+1. `mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -dim 2 -rs 3 -tf 0.75 -s 7 -penPar 1.0`
 2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -s 7 -penPar 1.0`
-3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 1.0`
+3. `mpirun -np 8 ./laghos -m data/square01_quad.mesh -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 1.0`
 4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -s 7 -penPar 1.0`
 5. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -s 7 -penPar 1.0`
 6. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -s 7 -penPar 1.0`
@@ -271,7 +271,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  2. | 1058 | 0.000019 | 3.3911847806e+03 |
 |  3. | 1194 | 0.001472 | 4.6385431679e+01 |
 |  4. |  577 | 0.002337 | 1.3414569917e+02 |
-|  5. | 2848 | 0.000382 | 5.6553003166e+01 |
+|  5. | 2848 | 0.000331 | 5.6552739943e+01 |
 |  6. |  848 | 0.002043 | 5.6695704957e+01 |
 |  7. |  776 | 0.000045 | 4.0982440219e+02 |
 |  8. | 3215 | 0.000116 | 1.1850834148e+02 |

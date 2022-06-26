@@ -202,7 +202,13 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
-
+   Array<Array<int> *> bdr_attr(pmesh->bdr_attributes.Max());
+   for (int s = 0; s < bdr_attr.Size(); s++){
+     bdr_attr[s] = new Array<int>(pmesh->bdr_attributes.Max());
+     *(bdr_attr[s]) = 0;
+     (*(bdr_attr[s]))[s] = 1;
+   }
+   
    int NE = pmesh->GetNE(), ne_min, ne_max;
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
@@ -338,7 +344,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, penaltyParameter, nitscheVersion);
+                                                order_q, bdr_attr, penaltyParameter, nitscheVersion);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
