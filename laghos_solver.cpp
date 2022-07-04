@@ -97,7 +97,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int oq,
 						 const Array<Array<int> *> &bdr_attr,
 						 const double penaltyParameter,
-						 const double nitscheVersion) :
+						 const double nitscheVersion,
+						 AnalyticalSurface *analyticalSurface) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -116,6 +117,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    bdr_attr(bdr_attr),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
    nitscheVersion(nitscheVersion),
+   analyticalSurface(analyticalSurface),
    rho0_gf(rho0_gf),
    gamma_gf(gamma_gf),
    Mv(&H1), Mv_spmat_copy(),
@@ -210,7 +212,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	   DenseMatrixInverse Jinv(Trans_el1.Jacobian());
 	   Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));
          
-
 	   double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	   const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
 	   f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
@@ -884,6 +885,20 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    be_forcemat_is_assembled = true;
 }
 
+ void LagrangianHydroOperator::SetupEmbeddedDataStructure(){
+   if (analyticalSurface != NULL){  
+     analyticalSurface->SetupElementStatus();
+     analyticalSurface->SetupFaceTags();
+     analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
+   }
+ }
+
+  void LagrangianHydroOperator::ResetEmbeddedData(){
+    if (analyticalSurface != NULL){
+      analyticalSurface->ResetData();
+    }
+  }
+
 } // namespace hydrodynamics
 
 void HydroODESolver::Init(TimeDependentOperator &tdop)
@@ -933,6 +948,8 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
+   hydro_oper->ResetEmbeddedData();
+   hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
@@ -944,6 +961,8 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
+   //   hydro_oper->ResetEmbeddedData();
+   //  hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
@@ -956,6 +975,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    hydro_oper->ResetQuadratureData();
    t += dt;
 }
+
 
 } // namespace mfem
 

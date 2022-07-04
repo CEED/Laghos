@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "AnalyticalSurface.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -83,6 +84,7 @@ protected:
    mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
    const double penaltyParameter;
    const double nitscheVersion;
+   AnalyticalSurface *analyticalSurface;
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
@@ -114,7 +116,8 @@ public:
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q, const Array<Array<int> *> &bdr_attr,
 			   const double penaltyParameter,
-			   const double nitscheVersion);
+			   const double nitscheVersion,
+			   AnalyticalSurface *analyticalSurface);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -123,7 +126,8 @@ public:
    void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
-
+   void SetupEmbeddedDataStructure();
+   void ResetEmbeddedData();
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
@@ -189,9 +193,9 @@ protected:
   BlockVector dS_dt, S0, S_init;
   int counter;
 public:
-  RK2AvgSolver():counter(0) { }
-   virtual void Init(TimeDependentOperator &_f);
-   virtual void Step(Vector &S, double &t, double &dt);
+  RK2AvgSolver():counter(0){ }
+  virtual void Init(TimeDependentOperator &_f);
+  virtual void Step(Vector &S, double &t, double &dt);
 };
 
 } // namespace mfem
@@ -199,4 +203,3 @@ public:
 #endif // MFEM_USE_MPI
 
 #endif // MFEM_LAGHOS
-

@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// CopyrighAt (c) 2017, Lawrence Livermore National Security, LLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -89,6 +89,8 @@ int main(int argc, char *argv[])
    const char *basename = "results/Laghos";
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
+   bool useEmbedded = false;
+   int geometricShape = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -137,7 +139,12 @@ int main(int argc, char *argv[])
                   "Value of the penalty parameter");
    args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
                   "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
-
+   args.AddOption(&useEmbedded, "-emb", "--use-embedded", "-no-emb",
+                  "--no-embedded",
+                  "Use Embedded when there is surface that will be embedded in a pre-existing mesh");
+   args.AddOption(&geometricShape, "-gS", "--geometricShape",
+                  "Shape of the embedded geometry that will be embedded");
+  
    args.Parse();
    if (!args.Good())
    {
@@ -338,13 +345,17 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   AnalyticalSurface *analyticalSurface = NULL;
+   if (useEmbedded){
+     analyticalSurface = new AnalyticalSurface(geometricShape, H1FESpace, L2FESpace);
+   }
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, bdr_attr, penaltyParameter, nitscheVersion);
+                                                order_q, bdr_attr, penaltyParameter, nitscheVersion, analyticalSurface);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -574,6 +585,7 @@ int main(int argc, char *argv[])
 
    return 0;
 }
+
 
 double rho0(const Vector &x)
 {
