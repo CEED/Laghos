@@ -344,13 +344,21 @@ int main(int argc, char *argv[])
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
-
    AnalyticalSurface *analyticalSurface = NULL;
    if (useEmbedded){
      analyticalSurface = new AnalyticalSurface(geometricShape, H1FESpace, L2FESpace);
+     analyticalSurface->ResetData();
+     analyticalSurface->SetupElementStatus();
+     analyticalSurface->SetupFaceTags();
+     analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
+ 
+     Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
+     H1FESpace.Synchronize(ess_inactive_dofs);
+     H1FESpace.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_tdofs);
+     H1FESpace.MarkerToList(ess_tdofs, ess_vdofs);
    }
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-                                                H1FESpace, L2FESpace, ess_tdofs,
+                                                H1FESpace, L2FESpace, ess_vdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,

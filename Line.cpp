@@ -24,7 +24,8 @@ namespace mfem{
 
   Line::~Line(){}
   
-  void Line::SetupElementStatus(Array<int> &elemStatus){
+  void Line::SetupElementStatus(Array<int> &elemStatus, Array<int> &ess_inactive){
+    const int max_elem_attr = (pmesh->attributes).Max();   
     //std::cout << " get D " << H1.GetNDofs() << std::endl;    
   // Check elements on the current MPI rank
   for (int i = 0; i < H1.GetNE(); i++)
@@ -38,6 +39,7 @@ namespace mfem{
 	const IntegrationPoint &ip = ir.IntPoint(j);
 	Vector x(3);
 	T.Transform(ip,x);
+	//	std::cout << " x " << x(0) << " y " << x(1) << std::endl;
 	double ptOnLine = slope * x(0) + yIntercept;
 	if ( x(1) <= ptOnLine){
 	  count++;
@@ -45,16 +47,23 @@ namespace mfem{
       }
       if (count == ir.GetNPoints()){
 	elemStatus[i] = SBElementType::INSIDE;
+	Array<int> dofs;
+	H1.GetElementVDofs(i, dofs);
+	for (int k = 0; k < dofs.Size(); k++)
+	  {
+	    ess_inactive[dofs[k]] = 0;	       
+	  }
       }
       else if ( (count > 0) && (count < ir.GetNPoints())){
 	elemStatus[i] = SBElementType::CUT;
+	pmesh->SetAttribute(i, max_elem_attr+1);
       }
       else if (count == 0){
 	elemStatus[i] = SBElementType::OUTSIDE;
+	pmesh->SetAttribute(i, max_elem_attr+1);
       }
     }
 
-  
   pmesh->ExchangeFaceNbrNodes();
   for (int i = H1.GetNE(); i < (H1.GetNE() + pmesh->GetNSharedFaces()) ; i++){
     FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNE());
@@ -88,9 +97,11 @@ namespace mfem{
       
     }
   }
+
+  pmesh->SetAttributes();
   }
 
-  void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags){
+  void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags, int maxBTag){
     //elemStatus.Print();
     //std::cout << " get NF " << H1.GetNF() << std::endl;
     for (int i = 0; i < H1.GetNF() ; i++){
@@ -104,7 +115,7 @@ namespace mfem{
 	  faceTags[i] = 5;
 	}
 	else {
-	  faceTags[i] = -1;
+	  faceTags[i] = maxBTag + 2;
 	}
       }
     }
@@ -122,7 +133,7 @@ namespace mfem{
 	  faceTags[i] = 5;
 	}
 	else {
-	  faceTags[i] = -1;
+	  faceTags[i] = maxBTag + 2;
 	}
       }
     }
@@ -134,12 +145,14 @@ namespace mfem{
 	const int faceElemNo = eltrans_bound->ElementNo;
 	ElementTransformation &Trans_el1 = eltrans_bound->GetElement1Transformation();
 	if (elemStatus[Trans_el1.ElementNo] != SBElementType::INSIDE){ 
-	  pmesh->SetBdrAttribute(faceElemNo, -1);
+	  pmesh->SetBdrAttribute(faceElemNo, maxBTag+2);
 	}
 	else {
 	  pmesh->SetBdrAttribute(faceElemNo, initialBoundaryFaceTags[faceElemNo]);
 	}
       }
+    pmesh->SetAttributes();
+
   }
   void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal){
     // MPI_Comm comm = pmesh->GetComm();

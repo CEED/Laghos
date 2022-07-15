@@ -109,6 +109,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ess_tdofs(ess_tdofs),
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()),
+   ess_elem(pmesh->attributes.Max()),
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
    h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
@@ -151,7 +152,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[2] = block_offsets[1] + H1Vsize;
    block_offsets[3] = block_offsets[2] + L2Vsize;
    one = 1.0;
-
+   ess_elem = 1;
+   if (analyticalSurface != NULL){
+     for (int s = 1; s < ess_elem.Size(); s++){
+       ess_elem[s] = 0;
+     }
+   }
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
@@ -161,13 +167,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       DenseMatrixInverse inv(&Me(e));
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &Tr = *L2.GetElementTransformation(e);
-      mi.AssembleElementMatrix(fe, Tr, Me(e));
+       mi.AssembleElementMatrix(fe, Tr, Me(e));
       inv.Factor();
       inv.GetInverseMatrix(Me_inv(e));
    }
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-   Mv.AddDomainIntegrator(vmi);
+   Mv.AddDomainIntegrator(vmi, ess_elem);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
 
@@ -235,7 +241,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    ForceIntegrator *fi = new ForceIntegrator(qdata);
    fi->SetIntRule(&ir);
-   Force.AddDomainIntegrator(fi);
+   Force.AddDomainIntegrator(fi, ess_elem);
    // Make a dummy assembly to figure out the sparsity.
    Force.Assemble(0);
    Force.Finalize(0);
@@ -253,8 +259,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      nvmi->SetIntRule(&b_ir);
      Mv.AddBdrFaceIntegrator(nvmi,*bdr_attr[s]);
    }
+
      // Make a dummy assembly to figure out the sparsity.
-     VelocityBoundaryForce.Assemble(0);
+     VelocityBoundaryForce.Assemble(0);    
      VelocityBoundaryForce.Finalize(0);
     // Make a dummy assembly to figure out the sparsity.
      EnergyBoundaryForce.Assemble(0);
@@ -343,9 +350,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
       rhs += rhs_accel;
    }
-   
+
    HypreParMatrix A;
-   
    Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
    CGSolver cg(H1.GetParMesh()->GetComm());
    HypreSmoother prec;
@@ -374,7 +380,8 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    ParGridFunction de;
    de.MakeRef(&L2, dS_dt, H1Vsize*2);
    de = 0.0;
-
+   Array<int> temp(ess_elem);
+   
    // Solve for energy, assemble the energy source if such exists.
    LinearForm *e_source = nullptr;
    if (source_type == 1) // 2D Taylor-Green.
@@ -382,7 +389,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       e_source = new LinearForm(&L2);
       TaylorCoefficient coeff;
       DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
-      e_source->AddDomainIntegrator(d);
+      e_source->AddDomainIntegrator(d, temp);
       e_source->Assemble();
    }
 
@@ -961,8 +968,8 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
-   //   hydro_oper->ResetEmbeddedData();
-   //  hydro_oper->SetupEmbeddedDataStructure();
+   hydro_oper->ResetEmbeddedData();
+   hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);

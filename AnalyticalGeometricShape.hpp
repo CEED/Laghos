@@ -32,11 +32,11 @@ public:
     /// Element type related to shifted boundaries (not interfaces).
    /// For more than 1 level-set, we set the marker to CUT+level_set_index
    /// to discern between different level-sets.
-   enum SBElementType {INSIDE = 0, OUTSIDE = 1, CUT = 2};
+    enum SBElementType {OUTSIDE = 0, INSIDE = 1, CUT = 2};
 
   AnalyticalGeometricShape(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes);
-  virtual void SetupElementStatus(Array<int> &elemStatus) = 0;
-    virtual void SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags) = 0;
+  virtual void SetupElementStatus(Array<int> &elemStatus, Array<int> &ess_inactive) = 0;
+    virtual void SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags, int maxBTag) = 0;
   virtual void ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal) = 0;
 
   virtual  ~AnalyticalGeometricShape();

@@ -45,6 +45,7 @@ protected:
    ParFiniteElementSpace &H1, &L2;
    mutable ParFiniteElementSpace H1c;
    ParMesh *pmesh;
+   Array<int> ess_elem;
    // FE spaces local and global sizes
    const int H1Vsize;
    const int L2Vsize;

@@ -41,6 +41,9 @@ namespace mfem
     Array<int> elementalStatus;
     Array<int> faceTags;
     Array<int> initialBoundaryFaceTags;
+    Array<int> initialElementTags;
+    Array<int> ess_edofs;
+    int maxBoundaryTag;
 
   //    Array<int> isFaceIntersectedStatus;
   
@@ -59,6 +62,7 @@ namespace mfem
   void SetupFaceTags();
   void ComputeDistanceAndNormalAtQuadraturePoints();
   void ResetData();
+  Array<int>& GetEss_Vdofs();
   ~AnalyticalSurface();
   };
 }
