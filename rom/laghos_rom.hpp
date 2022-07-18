@@ -295,20 +295,6 @@ public:
             dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
         }
 
-        if (!sns)
-        {
-            if (input.dmd_nonuniform)
-            {
-                dmd_Fv = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
-                dmd_Fe = new CAROM::NonuniformDMD(tL2size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
-            }
-            else
-            {
-                dmd_Fv = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
-                dmd_Fe = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
-            }
-        }
-
         SetStateVariables(S_init);
 
         dXdt = 0.0;
@@ -390,7 +376,7 @@ public:
         return rank;
     }
 
-    CAROM::DMD *dmd_X, *dmd_V, *dmd_E, *dmd_Fv, *dmd_Fe;
+    CAROM::DMD *dmd_X, *dmd_V, *dmd_E;
 
 private:
     const int H1size;
