@@ -353,6 +353,7 @@ int main(int argc, char *argv[])
      analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
  
      Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
+     //ess_inactive_dofs.Print(std::cout,1);
      H1FESpace.Synchronize(ess_inactive_dofs);
      H1FESpace.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_tdofs);
      H1FESpace.MarkerToList(ess_tdofs, ess_vdofs);

@@ -52,7 +52,7 @@ namespace mfem{
 	H1.GetElementVDofs(i, dofs);
 	for (int k = 0; k < dofs.Size(); k++)
 	  {
-	    ess_inactive[dofs[k]] = 0;	       
+	    ess_inactive[dofs[k]] = 1;	       
 	  }
       }
       else if ( (count > 0) && (count < ir.GetNPoints())){
@@ -99,7 +99,6 @@ namespace mfem{
       
     }
   }*/
-
   pmesh->SetAttributes();
   }
 
