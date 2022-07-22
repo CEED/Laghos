@@ -99,5 +99,11 @@ namespace mfem
   Array<int>& AnalyticalSurface::GetEss_Vdofs(){
     return ess_edofs;
   }
+  Array<int>& AnalyticalSurface::GetFace_Tags(){
+    return faceTags;
+  }
+  Array<int>& AnalyticalSurface::GetElement_Status(){
+    return elementalStatus;
+  }
 
 }

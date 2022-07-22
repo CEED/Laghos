@@ -74,15 +74,19 @@ protected:
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
-   mutable FaceQuadratureData f_qdata; 
-   mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
+   mutable FaceQuadratureData f_qdata;
+   mutable FaceQuadratureData interiorf_qdata; 
+  mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled, bvemb_qdata_is_current, beemb_qdata_is_current, bvemb_forcemat_is_assembled, beemb_forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
    mutable MixedBilinearForm VelocityBoundaryForce;
    mutable MixedBilinearForm EnergyBoundaryForce;
-   mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
+   mutable ParMixedBilinearForm ShiftedVelocityBoundaryForce;
+   mutable ParMixedBilinearForm ShiftedEnergyBoundaryForce;
+
+   mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, shiftedb_rhs, shiftedbe_rhs;
    const double penaltyParameter;
    const double nitscheVersion;
    AnalyticalSurface *analyticalSurface;
@@ -99,6 +103,7 @@ protected:
 
    void UpdateQuadratureData(const Vector &S) const;
    void UpdateSurfaceNormalStressData(const Vector &S) const;
+   void UpdateEmbeddedSurfaceNormalStressData(const Vector &S) const;
    void AssembleForceMatrix() const;
    void AssembleVelocityBoundaryForceMatrix() const;
    void AssembleEnergyBoundaryForceMatrix() const;

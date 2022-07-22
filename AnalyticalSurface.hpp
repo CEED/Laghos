@@ -63,6 +63,8 @@ namespace mfem
   void ComputeDistanceAndNormalAtQuadraturePoints();
   void ResetData();
   Array<int>& GetEss_Vdofs();
+  Array<int>& GetFace_Tags();
+  Array<int>& GetElement_Status();
   ~AnalyticalSurface();
   };
 }

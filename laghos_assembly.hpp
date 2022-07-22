@@ -20,6 +20,7 @@
 #include "mfem.hpp"
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
+#include "AnalyticalGeometricShape.hpp"
 
 namespace mfem
 {
@@ -87,7 +88,7 @@ struct FaceQuadratureData
    // conservation.
    Vector rho0DetJ0w;
 
-  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel), rho0DetJ0w(NE * quads_per_faceel),Jac0inv(dim, dim, NE * quads_per_faceel) { }
+  FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(NE * quads_per_faceel), rho0DetJ0w(NE * quads_per_faceel), Jac0inv(dim, dim, NE * quads_per_faceel) { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
@@ -125,8 +126,10 @@ class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
   const FaceQuadratureData &qdata;
+  Array<int> elemStatus;
+
 public:
-  VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+  VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				   const FiniteElement &test_fe1,
 				   FaceElementTransformations &Tr,
@@ -139,8 +142,10 @@ class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
   const FaceQuadratureData &qdata;
+  Array<int> elemStatus;
+
 public:
-  EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+  EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				   const FiniteElement &test_fe1,
 				   FaceElementTransformations &Tr,
@@ -152,15 +157,76 @@ class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
 private:
    const FaceQuadratureData &qdata;
+  Array<int> elemStatus;
+
 public:
-   NormalVelocityMassIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+  NormalVelocityMassIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				   const FiniteElement &fe2,
                                        FaceElementTransformations &Tr,
                                        DenseMatrix &elmat);
+
 };
 
-} // namespace hydrodynamics
+  // Performs full assembly for the boundary force operator on the momentum equation.
+   // < sigma_{ij} n_{j} , \psi_{i} > 
+class ShiftedVelocityBoundaryForceIntegrator : public BilinearFormIntegrator
+{
+private:
+  const ParMesh *pmesh;
+  const FaceQuadratureData &qdata;
+  Array<int> elemStatus;
+  Array<int> faceTags;
+  
+public:
+  ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
+  virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
+				  const FiniteElement &trial_fe2,
+				  const FiniteElement &test_fe1,
+				  const FiniteElement &test_fe2,
+				  FaceElementTransformations &Trans,
+				  DenseMatrix &elmat);
+};
+
+  // Performs full assembly for the boundary force operator on the energy equation.
+  // < sigma_{ij} n_{j} n_{i}, \phi * v.n > 
+class ShiftedEnergyBoundaryForceIntegrator : public BilinearFormIntegrator
+{
+private:
+   const ParMesh *pmesh;
+   const FaceQuadratureData &qdata;
+   Array<int> elemStatus;
+   Array<int> faceTags;
+  
+public:
+  ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag){ }
+   virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
+				   const FiniteElement &trial_fe2,
+				   const FiniteElement &test_fe1,
+				   const FiniteElement &test_fe2,
+				   FaceElementTransformations &Trans,
+				   DenseMatrix &elmat);
+};
+
+// Performs full assembly for the normal velocity mass matrix operator.
+class ShiftedNormalVelocityMassIntegrator : public BilinearFormIntegrator
+{
+private:
+   const ParMesh *pmesh;
+   const FaceQuadratureData &qdata;
+   Array<int> elemStatus;
+   Array<int> faceTags;
+  
+public:
+  ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
+  virtual void AssembleFaceMatrix(const FiniteElement &fe1,
+				  const FiniteElement &fe2,
+				  FaceElementTransformations &Trans,
+				  DenseMatrix &elmat);
+  
+};
+  
+}// namespace hydrodynamics
 
 } // namespace mfem
 
