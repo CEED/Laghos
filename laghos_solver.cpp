@@ -377,7 +377,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      Array<int> dummyElem_Status;
      dummyElem_Status.SetSize(0);
      for (int s = 0; s < bdr_attr.Size(); s++){
-       //  (*bdr_attr[s]).Print();
        VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata, dummyElem_Status);
        v_bfi->SetIntRule(&b_ir);
        VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi,*bdr_attr[s]);
@@ -423,6 +422,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt, const Vector 
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
    bv_qdata_is_current = false;
+   bvemb_qdata_is_current = false;
    be_qdata_is_current = false;
    beemb_qdata_is_current = false;
 }
@@ -504,8 +504,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
   VelocityBoundaryForce.Mult(loc_one,b_rhs);
   rhs += b_rhs;
-  //  std::cout << " rhs Print " << std::endl;
-  //  rhs.Print(std::cout,1);
   if (analyticalSurface != NULL){
     Array<int> shiftedl2dofs;
     Vector shiftedloc_one(L2Vsize);
@@ -553,10 +551,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 	}
       }
       }*/
-    //  ShiftedVelocityBoundaryForce.Print();
     ShiftedVelocityBoundaryForce.Mult(shiftedloc_one,shiftedb_rhs);
     rhs += shiftedb_rhs;
-   
   }
 		  
   
@@ -566,9 +562,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
       rhs += rhs_accel;
     }
-
-  //  std::cout << " rhs final " << std::endl;
-  //  rhs.Print(std::cout,1);
 
   HypreParMatrix A;
   //Array<int> ess_tempdofs;
@@ -584,22 +577,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   cg.SetPrintLevel(-1);
   cg.Mult(B, X);
   Mv.RecoverFEMSolution(X, rhs, dv);
-  //  std::cout << " dv Print " << std::endl;
-  //  dv.Print(std::cout,1);
-  /*  if (analyticalSurface != NULL){
-    Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-    Array<int> h1dofs_notIn;
-    for (int e = 0; e < NE; e++)
-      {
-	int statusElem1 = elemStatus[e];
-	if (statusElem1 != AnalyticalGeometricShape::SBElementType::INSIDE){
-	  H1.GetElementVDofs(e, h1dofs_notIn);
-	  for (int s = 0; s < h1dofs_notIn.Size(); s++){
-	    dv(h1dofs_notIn[s]) = 0.0;
-	  }
-	}
-      }
-  }*/
 
 }
 
@@ -736,7 +713,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	 int statusElem1 = elemStatus[e];
 	 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 	   L2.GetElementDofs(e, l2dofs_notIn);
-	   e_rhs.GetSubVector(l2dofs, loc_rhs);
+	   e_rhs.GetSubVector(l2dofs_notIn, loc_rhs);
 	   Me_inv(e).Mult(loc_rhs, loc_de);
 	   de.SetSubVector(l2dofs_notIn, loc_de);
 	 }
@@ -749,8 +726,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	 e_rhs.GetSubVector(l2dofs, loc_rhs);
 	 Me_inv(e).Mult(loc_rhs, loc_de);
 	 de.SetSubVector(l2dofs, loc_de);
-       }
-     
+       } 
    }
    delete e_source;
 }
@@ -1039,7 +1015,6 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
    double max_mu = 0.0;
    double min_h = 10000.0;
    double max_h = 0.0;
-    
    for (int i = 0; i < L2.GetNBE(); i++)
      {
        FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
@@ -1202,10 +1177,10 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
 void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector &S) const
 {
-   if (bvemb_qdata_is_current) { return; }
+  if (bvemb_qdata_is_current) { return; }
    bvemb_qdata_is_current = true;
    bvemb_forcemat_is_assembled = false;
-
+   
    // This code is only for the 1D/FA mode
    const int nqp_face = b_ir.GetNPoints();
    ParGridFunction x, v, e;
@@ -1228,6 +1203,7 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
    double max_h = 0.0;
    Array<int> &elemStatus = analyticalSurface->GetElement_Status();
    Array<int> &faceTags = analyticalSurface->GetFace_Tags();
+
    for (int i = 0; i < H1.GetNF(); i++)
      {
        FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
@@ -1303,7 +1279,75 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 		     }	 
 		   }
 	       }
-	     }
+	   }
+	   else {
+	     const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+	     ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+	     Trans_el2.SetIntPoint(&eip);
+	     for (int q = 0; q < nqp_face; q++)
+	       {
+		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+		 eltrans->SetAllIntPoints(&ip_f);
+		 Vector x(3);
+		 eltrans->Transform(ip_f,x);
+		 const double detJ = (Trans_el2.Jacobian()).Det();       
+		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+		 double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
+		 double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
+		 double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
+		 if ( max_rho < rho_vals){
+		   max_rho = rho_vals;
+		 }
+		 if ( max_sound_speed < sound_speed){
+		   max_sound_speed = sound_speed;
+		 }
+		 DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+		 if (use_viscosity)
+		   {
+		     // Compression-based length scale at the point. The first
+		     // eigenvector of the symmetric velocity lgradient gives the
+		     // direction of maximal compression. This is used to define the
+		     // relative change of the initial length scale.
+		     v.GetVectorGradient(Trans_el2, sgrad_v);
+		     
+		     double vorticity_coeff = 1.0;
+		     if (use_vorticity)
+		       {
+			 const double grad_norm = sgrad_v.FNorm();
+			 const double div_v = fabs(sgrad_v.Trace());
+			 vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+			 if (max_vorticity < vorticity_coeff){
+			   max_vorticity = vorticity_coeff;
+			 }
+			 
+		       } 
+		     sgrad_v.Symmetrize();
+		     double eig_val_data[3], eig_vec_data[9];
+		     if (dim==1)
+		       {
+			 eig_val_data[0] = sgrad_v(0, 0);
+			 eig_vec_data[0] = 1.;
+		       }
+		     else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+		     Vector compr_dir(eig_vec_data, dim);
+		     mfem::Mult(Trans_el2.Jacobian(), interiorf_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
+		     Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+		   // Change of the initial mesh size in the compression direction.
+		     const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		     // Measure of maximal compression.
+		     const double mu = fabs(eig_val_data[0]);
+		     if( max_mu < mu){
+		       max_mu = mu;
+		     }
+		     if( h < min_h){
+		       min_h = h;
+		     }
+		     if( h > max_h){
+		     max_h = h;
+		     }	 
+		   }
+	       }
+	   }
 	 }
        }
      }
@@ -1449,7 +1493,8 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 		 
 		 stress = 0.0;
 		 
-		 double p = (gamma_vals - 1) * rho_vals * e_vals; 
+		 double p = (gamma_vals - 1) * rho_vals * e_vals;
+
 		 for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 	   
 		 if (use_viscosity)
@@ -1469,7 +1514,65 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 		     interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
 		   }
 	       }
-	     }
+	   }
+	   else {
+	     const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+	     ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+	     Trans_el2.SetIntPoint(&eip);
+	     for (int q = 0; q  < nqp_face; q++)
+	       {
+		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+		 eltrans->SetAllIntPoints(&ip_f);
+		 Vector nor;
+		 nor.SetSize(dim);
+		 nor = 0.0;
+		 
+		 if (dim == 1)
+		 {
+		   nor(0) = 2*eip.x - 1.0;
+		 }
+		 else
+		   {
+		     CalcOrtho(eltrans->Jacobian(), nor);
+		   }
+		 
+		 double nor_norm = 0.0;
+		 for (int s = 0; s < dim; s++){
+		   nor_norm += nor(s) * nor(s);
+		 }
+		 nor_norm = sqrt(nor_norm);
+		 
+		 const double detJ = (Trans_el2.Jacobian()).Det();
+		 
+		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+		 double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
+		 double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
+		 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+		 
+		 stress = 0.0;
+		 
+		 double p = (gamma_vals - 1) * rho_vals * e_vals;
+
+		 for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
+	   
+		 if (use_viscosity)
+		   {
+		     interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h /*nor_norm / eltrans->Elem1->Weight()*/;
+		     
+		     if (use_vorticity)
+		       {
+			 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+		       }
+		   }
+		 // Quadrature data for partial assembly of the force operator.
+		 stress.Mult( nor, weightedNormalStress);
+		 
+		 for (int vd = 0 ; vd < dim; vd++)
+		   {
+		     interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
+		   }
+	       }
+	   }
 	 }
        }
      }
@@ -1556,7 +1659,7 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
   VelocityBoundaryForce.Assemble();
   if (analyticalSurface != NULL){
     // reset mesh, needed to update the normal velocity penalty term.
-    // std::cout << " calling assemble velocity " << std::endl;
+    //ShiftedVelocityBoundaryForce = 0.0;
     ShiftedVelocityBoundaryForce.Update();
     ShiftedVelocityBoundaryForce.Assemble();
     bvemb_forcemat_is_assembled = true;
@@ -1569,7 +1672,7 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    EnergyBoundaryForce = 0.0;
    EnergyBoundaryForce.Assemble();
    if (analyticalSurface != NULL){
-     //  std::cout << " calling assemble energy " << std::endl;
+     // ShiftedEnergyBoundaryForce = 0.0;
      ShiftedEnergyBoundaryForce.Update();
      ShiftedEnergyBoundaryForce.Assemble();
      beemb_forcemat_is_assembled = true;

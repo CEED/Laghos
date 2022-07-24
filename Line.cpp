@@ -19,15 +19,13 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.7) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.51) {
   }
 
   Line::~Line(){}
   
   void Line::SetupElementStatus(Array<int> &elemStatus, Array<int> &ess_inactive){
     const int max_elem_attr = (pmesh->attributes).Max();
-    //   std::cout << " max attr " << max_elem_attr << std::endl;
-    //std::cout << " get D " << H1.GetNDofs() << std::endl;    
   // Check elements on the current MPI rank
   for (int i = 0; i < H1.GetNE(); i++)
     {
@@ -40,7 +38,6 @@ namespace mfem{
 	const IntegrationPoint &ip = ir.IntPoint(j);
 	Vector x(3);
 	T.Transform(ip,x);
-	//std::cout << " x " << x(0) << " y " << x(1) << std::endl;
 	double ptOnLine = slope * x(0) + yIntercept;
 	if ( x(1) <= ptOnLine){
 	  count++;
@@ -52,7 +49,7 @@ namespace mfem{
 	H1.GetElementVDofs(i, dofs);
 	for (int k = 0; k < dofs.Size(); k++)
 	  {
-	    ess_inactive[dofs[k]] = 1;	       
+	    ess_inactive[dofs[k]] = 0;	       
 	  }
       }
       else if ( (count > 0) && (count < ir.GetNPoints())){
@@ -65,7 +62,6 @@ namespace mfem{
       }
     }
 
-  //ess_inactive.Print();
   /* pmesh->ExchangeFaceNbrNodes();
   for (int i = H1.GetNE(); i < (H1.GetNE() + pmesh->GetNSharedFaces()) ; i++){
     FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNE());
@@ -104,7 +100,6 @@ namespace mfem{
 
   void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags, int maxBTag){
     //elemStatus.Print();
-    //std::cout << " get NF " << H1.GetNF() << std::endl;
     for (int i = 0; i < H1.GetNF() ; i++){
       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
       if (eltrans != NULL){
@@ -217,14 +212,5 @@ namespace mfem{
 	}
       }
       }*/
-    
-    /*  int myid;
-    MPI_Comm_rank(comm, &myid);
-    for (int i = 0; i < ((H1.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints()); i++){
-      std::cout << "myid " << myid <<  " normalX " << quadratureTrueNormal(i,0) << " normalY " << quadratureTrueNormal(i,1) << std::endl;
-    }
-    for (int i = 0; i < H1.GetNE()+pmesh->GetNSharedFaces(); i++){
-      std::cout << " myid " << myid << " status " << elemStatus[i] << std::endl;
-    }*/
   }
 }

@@ -353,10 +353,10 @@ int main(int argc, char *argv[])
      analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
  
      Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
-     //ess_inactive_dofs.Print(std::cout,1);
      H1FESpace.Synchronize(ess_inactive_dofs);
      H1FESpace.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_tdofs);
      H1FESpace.MarkerToList(ess_tdofs, ess_vdofs);
+     for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
    }
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_vdofs,
@@ -648,8 +648,13 @@ void v0(const Vector &x, Vector &v)
    switch (problem)
    {
       case 0:
-         v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
-         v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+	v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
+	v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+	//	v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1)*(4.0/3.0));
+	/*	if (x(1) > 0.75){
+	  v(0) = 0.0;
+	  v(1) = 0.0;
+	  }*/
          if (x.Size() == 3)
          {
             v(0) *= cos(M_PI*x(2));
@@ -718,6 +723,12 @@ double e0(const Vector &x)
          if (x.Size() == 2)
          {
             val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+	    /*   if (x(1) > 0.75){
+	      val = 0.0;
+	    }
+	    else if (x(1) == 0.75){
+	      val = 1.0 + (cos(2*M_PI*x(0)) + 1) / 4.0;
+	      }*/
          }
          else
          {

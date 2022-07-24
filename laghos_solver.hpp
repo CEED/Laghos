@@ -140,7 +140,9 @@ public:
    void ResetQuadratureData() const {
     qdata_is_current = false;
     bv_qdata_is_current = false;
-    be_qdata_is_current = false;}
+    be_qdata_is_current = false;
+    bvemb_qdata_is_current = false;
+    beemb_qdata_is_current = false;}
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
