@@ -23,6 +23,7 @@ namespace mfem
 namespace hydrodynamics
 {
 
+  
 void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
@@ -86,14 +87,14 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
   if (elemStatus.Size() > 0){
     elem1_status = elemStatus[Tr.Elem1No];
   }
-  if (elem1_status == 1){
-    const int nqp_face = IntRule->GetNPoints();
-    const int dim = trial_fe.GetDim();
-    const int h1dofs_cnt = test_fe1.GetDof();
-    const int l2dofs_cnt = trial_fe.GetDof();
-    elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
-    elmat = 0.0;
-    
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = trial_fe.GetDim();
+  const int h1dofs_cnt = test_fe1.GetDof();
+  const int l2dofs_cnt = trial_fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
+  elmat = 0.0;
+  
+  if (elem1_status == 1){  
     DenseMatrix loc_force(h1dofs_cnt, dim);
     Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
     const int Elem1No = Tr.ElementNo;
@@ -133,13 +134,14 @@ void EnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tria
   if (elemStatus.Size() > 0){
     elem1_status = elemStatus[Tr.Elem1No];
   }
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = trial_fe.GetDim();
+  const int h1dofs_cnt = test_fe1.GetDof();
+  const int l2dofs_cnt = trial_fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
+  elmat = 0.0;
+  
   if (elem1_status == 1){ 
-    const int nqp_face = IntRule->GetNPoints();
-    const int dim = trial_fe.GetDim();
-    const int h1dofs_cnt = test_fe1.GetDof();
-    const int l2dofs_cnt = trial_fe.GetDof();
-    elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
-    elmat = 0.0;
     DenseMatrix loc_force(h1dofs_cnt, dim);
     Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
     const int Elem1No = Tr.ElementNo;
@@ -198,12 +200,13 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   if (elemStatus.Size() > 0){
     elem1_status = elemStatus[Tr.Elem1No];
   }
+  const int nqp_face = IntRule->GetNPoints();
+  const int dim = fe.GetDim();
+  const int h1dofs_cnt = fe.GetDof();
+  elmat.SetSize(h1dofs_cnt*dim);
+  elmat = 0.0;
+  
   if (elem1_status == 1){
-    const int nqp_face = IntRule->GetNPoints();
-    const int dim = fe.GetDim();
-    const int h1dofs_cnt = fe.GetDof();
-    elmat.SetSize(h1dofs_cnt*dim);
-    elmat = 0.0;
     Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim);;
     const int Elem1No = Tr.ElementNo;
     shape = 0.0;
@@ -264,7 +267,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   int elemStatus1 = elemStatus[elem1];
   int elemStatus2 = elemStatus[elem2];
   int NEproc = pmesh->GetNE();
-
+    
   const int nqp_face = IntRule->GetNPoints();
   const int dim = test_fe1.GetDim();
   const int h1dofs_cnt = test_fe1.GetDof();
@@ -273,7 +276,6 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   const int l2dofs2_cnt = trial_fe2.GetDof();
 
   elmat.SetSize((h1dofs_cnt+h1dofs2_cnt)*dim, l2dofs_cnt+l2dofs2_cnt);
-  //  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
   elmat = 0.0;
   DenseMatrix loc_force(h1dofs_cnt, dim);
   Vector te_shape(h1dofs_cnt),tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
@@ -281,6 +283,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   te_shape = 0.0;
   tr_shape = 0.0;
   Vloc_force = 0.0;
+  
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
       DenseMatrix temp_elmat;
@@ -315,8 +318,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 
       int h1dofs_offset = h1dofs_cnt * dim;
       int l2dofs_offset = l2dofs_cnt;
-      
-      for (int q = 0; q  < nqp_face; q++)
+      for (int q = 0; q < nqp_face; q++)
 	{
 	  const int eq = e*nqp_face + q;
 	  
@@ -477,6 +479,10 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
 							     FaceElementTransformations &Trans,
 							     DenseMatrix &elmat)
 {
+  MPI_Comm comm = pmesh->GetComm();
+  int myid;
+  MPI_Comm_rank(comm, &myid);
+
   int elem1 = Trans.Elem1No;
   int elem2 = Trans.Elem2No;
   int elemStatus1 = elemStatus[elem1];
@@ -588,7 +594,7 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
 	    }
 	}
       elmat.CopyMN(temp_elmat, h1dofs_offset, h1dofs_offset);
-      }
+    }
   }
 }
 

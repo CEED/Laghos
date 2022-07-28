@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// Copyright (c) 2017OAA, Lawrence Livermore National Security, LLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -167,9 +167,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        ess_elem[s] = 0;
      }
    }
-
+   one = 0.0;  
    if (analyticalSurface != NULL){
     Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+    Array<int> &faceTags = analyticalSurface->GetFace_Tags();
     Array<int> l2dofs_notIn;
     for (int e = 0; e < L2.GetNE(); e++)
       {
@@ -181,10 +182,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	  }
 	}
       }
-  }
+   }
    else{
      one  = 1.0;
    }
+   //  one.Print(std::cout,1);
   
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
@@ -202,8 +204,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv.AddDomainIntegrator(vmi, ess_elem);
-   Mv.Assemble();
-   Mv_spmat_copy = Mv.SpMat();
+   Mv.KeepNbrBlock(true);
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
@@ -293,7 +294,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	   }
 	 }
        }
-     /* for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
+     for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
        FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
        if (eltrans != NULL){
 	 const int faceElemNo = eltrans->ElementNo;	  
@@ -317,7 +318,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	     }
 	 }
        }
-     }*/
+     }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
 
@@ -339,24 +340,25 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    Force.Assemble(0);
    Force.Finalize(0);
-
    if (analyticalSurface != NULL){
      ShiftedVelocityBoundaryForceIntegrator *v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
      v_bfi->SetIntRule(&b_ir);
      ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(v_bfi);
+     ShiftedVelocityBoundaryForce.KeepNbrBlock(true);
      
      ShiftedEnergyBoundaryForceIntegrator *e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, interiorf_qdata,analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
      e_bfi->SetIntRule(&b_ir);
      ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
+     ShiftedEnergyBoundaryForce.KeepNbrBlock(true);
      
      ShiftedNormalVelocityMassIntegrator *nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
      nvmi->SetIntRule(&b_ir);
      Mv.AddInteriorFaceIntegrator(nvmi);
+     Mv.KeepNbrBlock(true);
      
      // Make a dummy assembly to figure out the sparsity.
      ShiftedVelocityBoundaryForce.Assemble(0);    
      ShiftedVelocityBoundaryForce.Finalize(0);
-
      // Make a dummy assembly to figure out the sparsity.
      ShiftedEnergyBoundaryForce.Assemble(0);
      ShiftedEnergyBoundaryForce.Finalize(0);
@@ -390,14 +392,18 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        Mv.AddBdrFaceIntegrator(nvmi,*bdr_attr[s]);
      }
    }
-   
+
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
+     
    // Make a dummy assembly to figure out the sparsity.
    VelocityBoundaryForce.Assemble(0);    
    VelocityBoundaryForce.Finalize(0);
+     
    // Make a dummy assembly to figure out the sparsity.
    EnergyBoundaryForce.Assemble(0);
    EnergyBoundaryForce.Finalize(0);
-   
+     
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -433,6 +439,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 {
   // reset mesh, needed to update the normal velocity penalty term.
   Mv.Update();
+  Mv.KeepNbrBlock(true);
   // set the state at the initial one
   UpdateMesh(S_init);
   // assemble the velocity mass matrix at that state
@@ -457,6 +464,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   ParGridFunction dv;
   dv.MakeRef(&H1, dS_dt, H1Vsize);
   dv = 0.0;
+
   ParGridFunction accel_src_gf;
   if (source_type == 2)
    {
@@ -534,8 +542,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 	  }
 	}
       }
-  
-    /*    for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
+    for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
 	const int faceElemNo = eltrans->ElementNo;	  
@@ -550,7 +557,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 	  }
 	}
       }
-      }*/
+    }
     ShiftedVelocityBoundaryForce.Mult(shiftedloc_one,shiftedb_rhs);
     rhs += shiftedb_rhs;
   }
@@ -565,6 +572,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
   HypreParMatrix A;
   //Array<int> ess_tempdofs;
+  //  std::cout << " priting dofs " << std::endl;
+  //  ess_tdofs.Print(std::cout,1);
   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
   CGSolver cg(H1.GetParMesh()->GetComm());
   HypreSmoother prec;
@@ -577,7 +586,34 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   cg.SetPrintLevel(-1);
   cg.Mult(B, X);
   Mv.RecoverFEMSolution(X, rhs, dv);
-
+  /*  ParGridFunction dv_temp(&H1);
+  dv_temp = 0.0;
+  if (analyticalSurface != NULL){
+    Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+    Array<int> h1dofs_notIn;
+    for (int e = 0; e < NE; e++)
+      {
+	int statusElem1 = elemStatus[e];
+	if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  H1.GetElementDofs(e, h1dofs_notIn);
+	  for (int s = 0; s < h1dofs_notIn.Size(); s++){
+	    dv_temp(h1dofs_notIn[s]) = dv(h1dofs_notIn[s]);
+	  }
+	}
+      }
+    dv = 0.0;
+    // dv_temp.Print(std::cout,1);
+    for (int e = 0; e < NE; e++)
+      {
+	int statusElem1 = elemStatus[e];
+	if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  H1.GetElementDofs(e, h1dofs_notIn);
+	  for (int s = 0; s < h1dofs_notIn.Size(); s++){
+	    dv(h1dofs_notIn[s]) = dv_temp(h1dofs_notIn[s]);
+	  }
+	}
+      }    
+  }*/ 
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -646,7 +682,11 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    EnergyBoundaryForce.MultTranspose(loc_v, be_rhs);
    be_rhs *= nitscheVersion;
    e_rhs += be_rhs;
-   
+
+   MPI_Comm comm = pmesh->GetComm();
+   int myid;
+   MPI_Comm_rank(comm, &myid);
+ 
    if (analyticalSurface != NULL){
      Array<int> shiftedh1dofs;
      Vector shiftedloc_v(H1Vsize);
@@ -677,8 +717,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	   }
 	 }
        }
-
-     /* for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
+     for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
        FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
        if (eltrans != NULL){
 	 const int faceElemNo = eltrans->ElementNo;	  
@@ -693,7 +732,23 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	   }
 	 }
        }
-     }*/
+     }
+     
+         // Now we add interior faces that are on processor boundaries.
+     for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
+      {
+	FaceElementTransformations *tr = pmesh->GetSharedFaceTransformations(i);
+	if (tr != NULL)
+	  {
+	    const int faceElemNo = tr->ElementNo;
+	    if (faceTags[faceElemNo] == 5){
+	      H1.GetFaceNbrFaceVDofs(faceElemNo, shiftedh1dofs);
+	      for (int s = 0; s < shiftedh1dofs.Size(); s++){
+		shiftedloc_v(shiftedh1dofs[s]) = v(shiftedh1dofs[s]);
+	      }
+	    }
+	  }
+      }
      ShiftedEnergyBoundaryForce.MultTranspose(shiftedloc_v, shiftedbe_rhs);
      shiftedbe_rhs *= nitscheVersion;
      e_rhs += shiftedbe_rhs;
@@ -711,11 +766,14 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
      for (int e = 0; e < NE; e++)
        {
 	 int statusElem1 = elemStatus[e];
+	 L2.GetElementDofs(e, l2dofs_notIn);
+	 e_rhs.GetSubVector(l2dofs_notIn, loc_rhs);
 	 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	   L2.GetElementDofs(e, l2dofs_notIn);
-	   e_rhs.GetSubVector(l2dofs_notIn, loc_rhs);
 	   Me_inv(e).Mult(loc_rhs, loc_de);
 	   de.SetSubVector(l2dofs_notIn, loc_de);
+	 }
+	 else {
+	   de.SetSubVector(l2dofs_notIn, 0.0);
 	 }
        }
    }
@@ -784,11 +842,12 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
    one = 1.0;
    Array<int> l2dofs;
    double loc_ie = 0.0;
+
    for (int e = 0; e < NE; e++)
    {
-      L2.GetElementDofs(e, l2dofs);
-      gf.GetSubVector(l2dofs, loc_e);
-      loc_ie += Me(e).InnerProduct(loc_e, one);
+     L2.GetElementDofs(e, l2dofs);
+     gf.GetSubVector(l2dofs, loc_e);
+     loc_ie += Me(e).InnerProduct(loc_e, one);
    }
    MPI_Comm comm = H1.GetParMesh()->GetComm();
    MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
@@ -1351,8 +1410,8 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	 }
        }
      }
-
-   /*  for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
+   pmesh->ExchangeFaceNbrNodes();
+   for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
      FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
      if (eltrans != NULL){
        const int faceElemNo = eltrans->ElementNo;	  
@@ -1427,7 +1486,7 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	     }
 	 }
        }
-   }*/
+   }
     
    double global_max_vorticity = 0.0;
    double global_max_rho = 0.0;
@@ -1576,7 +1635,8 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	 }
        }
      }
-   /*   for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
+   pmesh->ExchangeFaceNbrNodes();   
+   for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
      FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
      if (eltrans != NULL){
        const int faceElemNo = eltrans->ElementNo;	  
@@ -1642,20 +1702,22 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	     }
 	 }
        }
-     }*/
      }
+}
   
   
 void LagrangianHydroOperator::AssembleForceMatrix() const
 {
-   Force = 0.0;
-   Force.Assemble();
-   forcemat_is_assembled = true;
+  //  Force = 0.0;
+  Force.Update();
+  Force.Assemble();
+  forcemat_is_assembled = true;
 }
 
   void LagrangianHydroOperator::AssembleVelocityBoundaryForceMatrix() const
 {   
-  VelocityBoundaryForce = 0.0;
+  //  VelocityBoundaryForce = 0.0;
+  VelocityBoundaryForce.Update();
   VelocityBoundaryForce.Assemble();
   if (analyticalSurface != NULL){
     // reset mesh, needed to update the normal velocity penalty term.
@@ -1669,8 +1731,9 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
  void LagrangianHydroOperator::AssembleEnergyBoundaryForceMatrix() const
 {
-   EnergyBoundaryForce = 0.0;
-   EnergyBoundaryForce.Assemble();
+  //  EnergyBoundaryForce = 0.0;
+  EnergyBoundaryForce.Update();
+  EnergyBoundaryForce.Assemble();
    if (analyticalSurface != NULL){
      // ShiftedEnergyBoundaryForce = 0.0;
      ShiftedEnergyBoundaryForce.Update();

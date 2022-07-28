@@ -25,6 +25,7 @@ namespace mfem{
   Line::~Line(){}
   
   void Line::SetupElementStatus(Array<int> &elemStatus, Array<int> &ess_inactive){
+ 
     const int max_elem_attr = (pmesh->attributes).Max();
   // Check elements on the current MPI rank
   for (int i = 0; i < H1.GetNE(); i++)
@@ -62,13 +63,13 @@ namespace mfem{
       }
     }
 
-  /* pmesh->ExchangeFaceNbrNodes();
+  pmesh->ExchangeFaceNbrNodes();
   for (int i = H1.GetNE(); i < (H1.GetNE() + pmesh->GetNSharedFaces()) ; i++){
     FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNE());
     if (eltrans != NULL){
       int Elem2No = eltrans->Elem2No;
       int Elem2NbrNo = Elem2No - pmesh->GetNE();
-      const FiniteElement *FElem = H1.GetFE(Elem2No);
+      const FiniteElement *FElem = H1.GetFaceNbrFE(Elem2NbrNo);
       const IntegrationRule &ir = FElem->GetNodes();
       ElementTransformation *nbrftr = H1.GetFaceNbrElementTransformation(Elem2NbrNo);
       int count = 0;
@@ -82,23 +83,23 @@ namespace mfem{
 	  count++;
 	}
       }
-
+      //  std::cout << " myid " << myid << " index " << i << " id " << Elem2No << std::endl;
       if (count == ir.GetNPoints()){
-	elemStatus[i] = SBElementType::INSIDE;
+	elemStatus[Elem2No] = SBElementType::INSIDE;
       }
       else if ( (count > 0) && (count < ir.GetNPoints())){
-	elemStatus[i] = SBElementType::CUT;
+	elemStatus[Elem2No] = SBElementType::CUT;
       }
       else if (count == 0){
-	elemStatus[i] = SBElementType::OUTSIDE;
+	elemStatus[Elem2No] = SBElementType::OUTSIDE;
       }
       
     }
-  }*/
+  }
   pmesh->SetAttributes();
   }
 
-  void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &initialBoundaryFaceTags, int maxBTag){
+  void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &ess_inactive, Array<int> &initialBoundaryFaceTags, int maxBTag){
     //elemStatus.Print();
     for (int i = 0; i < H1.GetNF() ; i++){
       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
@@ -117,7 +118,8 @@ namespace mfem{
       }
     }
 
-    /*  pmesh->ExchangeFaceNbrNodes();
+    pmesh->ExchangeFaceNbrNodes();
+    //   std::cout << " size " << faceTags.Size() << std::endl;
     for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
@@ -126,18 +128,34 @@ namespace mfem{
 	int Elem2NbrNo = Elem2No - H1.GetNE();
 	int Elem1No = eltrans->Elem1No;
 	int statusElem1 = elemStatus[Elem1No];
+	//	std::cout << " faceElem " << faceElemNo << std::endl;
 	int statusElem2 = elemStatus[Elem2No];
 	if ( ( (statusElem1 == SBElementType::INSIDE) && (statusElem2 == SBElementType::CUT) ) ||  ( (statusElem1 == SBElementType::CUT) && (statusElem2 == SBElementType::INSIDE) ) ){
 	  faceTags[faceElemNo] = 5;
 	}
 	else {
-	  faceTags[faceElemNo] = maxBTag + 2;
+	  faceTags[faceElemNo] = 0;
 	}
       }
+    }
+    // Now we add interior faces that are on processor boundaries.
+    /*  for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
+      {
+	FaceElementTransformations *tr = pmesh->GetSharedFaceTransformations(i);
+	if (tr != NULL)
+	  {
+	    Array<int> shiftedh1dofs;
+	    const int faceElemNo = tr->ElementNo;
+	    if (faceTags[faceElemNo] == 5){
+	      H1.GetFaceNbrFaceVDofs(faceElemNo, shiftedh1dofs);
+	      for (int s = 0; s < shiftedh1dofs.Size(); s++){
+		ess_inactive[shiftedh1dofs[s]] = 0;
+	      }
+	    }
+	  }
       }*/
   }
   void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal){
-    // MPI_Comm comm = pmesh->GetComm();
     // This code is only for the 1D/FA mode
     const int nqp_face = b_ir.GetNPoints();
     for (int i = 0; i < H1.GetNF() ; i++){
@@ -178,7 +196,7 @@ namespace mfem{
 	}
       }
     }
-    /* pmesh->ExchangeFaceNbrNodes();   
+    pmesh->ExchangeFaceNbrNodes();   
     for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
@@ -211,6 +229,6 @@ namespace mfem{
 	    }
 	}
       }
-      }*/
+    }
   }
 }

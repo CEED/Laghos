@@ -75,7 +75,7 @@ namespace mfem
   }
 
   void AnalyticalSurface::SetupFaceTags(){
-    geometry->SetupFaceTags(elementalStatus, faceTags, initialBoundaryFaceTags, maxBoundaryTag);
+    geometry->SetupFaceTags(elementalStatus, faceTags, ess_edofs, initialBoundaryFaceTags, maxBoundaryTag);
   }
 
   void AnalyticalSurface::ComputeDistanceAndNormalAtQuadraturePoints(){
