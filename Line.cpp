@@ -83,7 +83,6 @@ namespace mfem{
 	  count++;
 	}
       }
-      //  std::cout << " myid " << myid << " index " << i << " id " << Elem2No << std::endl;
       if (count == ir.GetNPoints()){
 	elemStatus[Elem2No] = SBElementType::INSIDE;
       }
@@ -96,10 +95,15 @@ namespace mfem{
       
     }
   }
+  H1.Synchronize(ess_inactive);
   pmesh->SetAttributes();
   }
 
   void Line::SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &ess_inactive, Array<int> &initialBoundaryFaceTags, int maxBTag){
+    MPI_Comm comm = pmesh->GetComm();
+    int myid;
+    MPI_Comm_rank(comm, &myid);
+    
     //elemStatus.Print();
     for (int i = 0; i < H1.GetNF() ; i++){
       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
@@ -119,7 +123,6 @@ namespace mfem{
     }
 
     pmesh->ExchangeFaceNbrNodes();
-    //   std::cout << " size " << faceTags.Size() << std::endl;
     for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
@@ -128,7 +131,6 @@ namespace mfem{
 	int Elem2NbrNo = Elem2No - H1.GetNE();
 	int Elem1No = eltrans->Elem1No;
 	int statusElem1 = elemStatus[Elem1No];
-	//	std::cout << " faceElem " << faceElemNo << std::endl;
 	int statusElem2 = elemStatus[Elem2No];
 	if ( ( (statusElem1 == SBElementType::INSIDE) && (statusElem2 == SBElementType::CUT) ) ||  ( (statusElem1 == SBElementType::CUT) && (statusElem2 == SBElementType::INSIDE) ) ){
 	  faceTags[faceElemNo] = 5;
@@ -138,22 +140,26 @@ namespace mfem{
 	}
       }
     }
+   
     // Now we add interior faces that are on processor boundaries.
-    /*  for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
+    for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
       {
 	FaceElementTransformations *tr = pmesh->GetSharedFaceTransformations(i);
 	if (tr != NULL)
 	  {
 	    Array<int> shiftedh1dofs;
+	    Array<int> shiftedh1dofs_temp;
+	  
 	    const int faceElemNo = tr->ElementNo;
 	    if (faceTags[faceElemNo] == 5){
-	      H1.GetFaceNbrFaceVDofs(faceElemNo, shiftedh1dofs);
+	      H1.GetFaceVDofs(faceElemNo, shiftedh1dofs);
 	      for (int s = 0; s < shiftedh1dofs.Size(); s++){
 		ess_inactive[shiftedh1dofs[s]] = 0;
 	      }
 	    }
 	  }
-      }*/
+      }
+    H1.Synchronize(ess_inactive);
   }
   void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal){
     // This code is only for the 1D/FA mode

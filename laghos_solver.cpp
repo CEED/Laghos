@@ -186,7 +186,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    else{
      one  = 1.0;
    }
-   //  one.Print(std::cout,1);
   
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
@@ -294,6 +293,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	   }
 	 }
        }
+     int NEproc = pmesh->GetNE();
+
      for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
        FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
        if (eltrans != NULL){
@@ -304,7 +305,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	       const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 	       eltrans->SetAllIntPoints(&ip_f);
 	       int Elem1No = eltrans->Elem1No;
+	       int Elem2No = eltrans->Elem2No;
 	       int statusElem1 = elemStatus[Elem1No];
+	       int statusElem2 = elemStatus[Elem2No];
 	       if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 		 const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 		 ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
@@ -313,6 +316,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 		 Jinv.GetInverseMatrix(interiorf_qdata.Jac0inv(faceElemNo*nqp_face+q));
 		 double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 		 const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
+		 interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;	       
+	       }
+	       else if ((Elem2No < NEproc) && (statusElem2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+		 const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+		 ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+		 Trans_el2.SetIntPoint(&eip);
+		 DenseMatrixInverse Jinv(Trans_el2.Jacobian());
+		 Jinv.GetInverseMatrix(interiorf_qdata.Jac0inv(faceElemNo*nqp_face+q));
+		 double rho_vals = rho0_gf.GetValue(Trans_el2, eip);
+		 const double rho0DetJ0 = Trans_el2.Weight() * rho_vals;
 		 interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;	       
 	       }
 	     }
@@ -477,9 +490,12 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   Array<int> l2dofs;
   Force.Mult(one, rhs);
   rhs.Neg();
- 
-  // populate a vector of ones only at the boundary dofs.
-  
+
+  MPI_Comm comm = pmesh->GetComm();
+  int myid;
+  MPI_Comm_rank(comm, &myid);
+   
+  // populate a vector of ones only at the boundary dofs. 
   Vector loc_one(L2Vsize);
   loc_one = 0.0;
   
@@ -542,15 +558,25 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 	  }
 	}
       }
+    int NEproc = pmesh->GetNE();
+    
     for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
 	const int faceElemNo = eltrans->ElementNo;	  
 	if (faceTags[faceElemNo] == 5){
 	  int Elem1No = eltrans->Elem1No;
+	  int Elem2No = eltrans->Elem2No;
 	  int statusElem1 = elemStatus[Elem1No];
+	  int statusElem2 = elemStatus[Elem2No];
 	  if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 	    L2.GetElementDofs(eltrans->Elem1No, shiftedl2dofs);
+	    for (int s = 0; s < shiftedl2dofs.Size(); s++){
+	      shiftedloc_one(shiftedl2dofs[s]) = 1.0;
+	    }
+	  }
+	  else if ((Elem2No < NEproc) && (statusElem2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+	    L2.GetElementDofs(eltrans->Elem2No, shiftedl2dofs);
 	    for (int s = 0; s < shiftedl2dofs.Size(); s++){
 	      shiftedloc_one(shiftedl2dofs[s]) = 1.0;
 	    }
@@ -571,9 +597,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     }
 
   HypreParMatrix A;
-  //Array<int> ess_tempdofs;
-  //  std::cout << " priting dofs " << std::endl;
-  //  ess_tdofs.Print(std::cout,1);
+ 
   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
   CGSolver cg(H1.GetParMesh()->GetComm());
   HypreSmoother prec;
@@ -586,34 +610,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   cg.SetPrintLevel(-1);
   cg.Mult(B, X);
   Mv.RecoverFEMSolution(X, rhs, dv);
-  /*  ParGridFunction dv_temp(&H1);
-  dv_temp = 0.0;
-  if (analyticalSurface != NULL){
-    Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-    Array<int> h1dofs_notIn;
-    for (int e = 0; e < NE; e++)
-      {
-	int statusElem1 = elemStatus[e];
-	if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	  H1.GetElementDofs(e, h1dofs_notIn);
-	  for (int s = 0; s < h1dofs_notIn.Size(); s++){
-	    dv_temp(h1dofs_notIn[s]) = dv(h1dofs_notIn[s]);
-	  }
-	}
-      }
-    dv = 0.0;
-    // dv_temp.Print(std::cout,1);
-    for (int e = 0; e < NE; e++)
-      {
-	int statusElem1 = elemStatus[e];
-	if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	  H1.GetElementDofs(e, h1dofs_notIn);
-	  for (int s = 0; s < h1dofs_notIn.Size(); s++){
-	    dv(h1dofs_notIn[s]) = dv_temp(h1dofs_notIn[s]);
-	  }
-	}
-      }    
-  }*/ 
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -660,7 +656,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	 FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(e);
 	 int statusElem1 = elemStatus[eltrans->Elem1No];
 	 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	   H1.GetElementDofs(eltrans->Elem1No, h1dofs_notIn);
+	   H1.GetElementVDofs(eltrans->Elem1No, h1dofs_notIn);
  	   for (int s = 0; s < h1dofs_notIn.Size(); s++){
 	     loc_v(h1dofs_notIn[s]) = v(h1dofs_notIn[s]);
 	   }
@@ -717,15 +713,25 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	   }
 	 }
        }
+     int NEproc = pmesh->GetNE();
      for (int i = H1.GetNF(); i < (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
        FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
+       
        if (eltrans != NULL){
 	 const int faceElemNo = eltrans->ElementNo;	  
 	 if (faceTags[faceElemNo] == 5){
 	   int Elem1No = eltrans->Elem1No;
+	   int Elem2No = eltrans->Elem2No;
 	   int statusElem1 = elemStatus[Elem1No];
+	   int statusElem2 = elemStatus[Elem2No];
 	   if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 	     H1.GetElementVDofs(eltrans->Elem1No, shiftedh1dofs);
+	     for (int s = 0; s < shiftedh1dofs.Size(); s++){
+	       shiftedloc_v(shiftedh1dofs[s]) = v(shiftedh1dofs[s]);
+	     }
+	   }
+	   else if ((Elem2No < NEproc) && (statusElem2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+	     H1.GetElementVDofs(eltrans->Elem2No, shiftedh1dofs);
 	     for (int s = 0; s < shiftedh1dofs.Size(); s++){
 	       shiftedloc_v(shiftedh1dofs[s]) = v(shiftedh1dofs[s]);
 	     }
@@ -742,7 +748,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	  {
 	    const int faceElemNo = tr->ElementNo;
 	    if (faceTags[faceElemNo] == 5){
-	      H1.GetFaceNbrFaceVDofs(faceElemNo, shiftedh1dofs);
+	      H1.GetFaceVDofs(faceElemNo, shiftedh1dofs);
 	      for (int s = 0; s < shiftedh1dofs.Size(); s++){
 		shiftedloc_v(shiftedh1dofs[s]) = v(shiftedh1dofs[s]);
 	      }
@@ -752,8 +758,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
      ShiftedEnergyBoundaryForce.MultTranspose(shiftedloc_v, shiftedbe_rhs);
      shiftedbe_rhs *= nitscheVersion;
      e_rhs += shiftedbe_rhs;
-   }
-   
+   }  
    
    Array<int> l2dofs;
    
@@ -842,14 +847,26 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
    one = 1.0;
    Array<int> l2dofs;
    double loc_ie = 0.0;
-
-   for (int e = 0; e < NE; e++)
-   {
-     L2.GetElementDofs(e, l2dofs);
-     gf.GetSubVector(l2dofs, loc_e);
-     loc_ie += Me(e).InnerProduct(loc_e, one);
+   if (analyticalSurface != NULL){
+     Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+     for (int e = 0; e < NE; e++)
+       {
+	 if (elemStatus[e] == AnalyticalGeometricShape::SBElementType::INSIDE){
+	   L2.GetElementDofs(e, l2dofs);
+	   gf.GetSubVector(l2dofs, loc_e);
+	   loc_ie += Me(e).InnerProduct(loc_e, one);
+	 }
+       }
    }
-   MPI_Comm comm = H1.GetParMesh()->GetComm();
+   else{
+     for (int e = 0; e < NE; e++)
+       {
+	 L2.GetElementDofs(e, l2dofs);
+	 gf.GetSubVector(l2dofs, loc_e);
+	 loc_ie += Me(e).InnerProduct(loc_e, one);
+       }
+   }
+     MPI_Comm comm = H1.GetParMesh()->GetComm();
    MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
 
    return glob_ie;
@@ -858,8 +875,10 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
    double glob_ke = 0.0;
+   //   v.Print(std::cout,1);
    // This should be turned into a kernel so that it could be displayed in pa
    double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+   //  std::cout << " loc_ke " << loc_ke << std::endl;
    MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
                  H1.GetParMesh()->GetComm());
    return glob_ke;
@@ -1411,6 +1430,8 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
        }
      }
    pmesh->ExchangeFaceNbrNodes();
+   int NEproc = pmesh->GetNE();
+  
    for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
      FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
      if (eltrans != NULL){
@@ -1421,7 +1442,9 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	     const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 	     eltrans->SetAllIntPoints(&ip_f);
 	     int Elem1No = eltrans->Elem1No;
+	     int Elem2No = eltrans->Elem2No;
 	     int statusElem1 = elemStatus[Elem1No];
+	     int statusElem2 = elemStatus[Elem2No];
 	     if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 	       const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 	       ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
@@ -1481,11 +1504,72 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 		     if( h > max_h){
 		       max_h = h;
 		     }	 
-		   }
-	       }
+		 }
 	     }
-	 }
+	     else if ((Elem2No < NEproc) && (statusElem2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+	       const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+	       ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+	       Trans_el2.SetIntPoint(&eip);
+	       const double detJ = (Trans_el2.Jacobian()).Det();       
+	       double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	       double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
+	       double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
+	       double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
+	       if ( max_rho < rho_vals){
+		 max_rho = rho_vals;
+	       }
+	       if ( max_sound_speed < sound_speed){
+		 max_sound_speed = sound_speed;
+	       }
+	       DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+	       if (use_viscosity)
+		 {
+		   // Compression-based length scale at the point. The first
+		   // eigenvector of the symmetric velocity lgradient gives the
+		   // direction of maximal compression. This is used to define the
+		   // relative change of the initial length scale.
+		   v.GetVectorGradient(Trans_el2, sgrad_v);
+		   
+		   double vorticity_coeff = 1.0;
+		   if (use_vorticity)
+		     {
+		       const double grad_norm = sgrad_v.FNorm();
+		       const double div_v = fabs(sgrad_v.Trace());
+		       vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+		       if (max_vorticity < vorticity_coeff){
+			 max_vorticity = vorticity_coeff;
+		       }
+		       
+		     } 
+		   sgrad_v.Symmetrize();
+		   double eig_val_data[3], eig_vec_data[9];
+		   if (dim==1)
+		     {
+		       eig_val_data[0] = sgrad_v(0, 0);
+		       eig_vec_data[0] = 1.;
+		     }
+		   else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+		   Vector compr_dir(eig_vec_data, dim);
+		   mfem::Mult(Trans_el2.Jacobian(), interiorf_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
+		   Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+		   // Change of the initial mesh size in the compression direction.
+		   const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		   // Measure of maximal compression.
+		   const double mu = fabs(eig_val_data[0]);
+		   if( max_mu < mu){
+		     max_mu = mu;
+		   }
+		   if( h < min_h){
+		     min_h = h;
+		   }
+		   if( h > max_h){
+		     max_h = h;
+		   }	 
+		 }		     
+	     }
+	   }
        }
+     }
    }
     
    double global_max_vorticity = 0.0;
@@ -1635,7 +1719,7 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	 }
        }
      }
-   pmesh->ExchangeFaceNbrNodes();   
+   pmesh->ExchangeFaceNbrNodes();
    for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
      FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
      if (eltrans != NULL){
@@ -1646,7 +1730,9 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 	     const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 	     eltrans->SetAllIntPoints(&ip_f);
 	     int Elem1No = eltrans->Elem1No;
+	     int Elem2No = eltrans->Elem2No;
 	     int statusElem1 = elemStatus[Elem1No];
+	     int statusElem2 = elemStatus[Elem2No];
 	     if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 	       const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 	       ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
@@ -1698,11 +1784,63 @@ void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector
 		   {
 		     interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
 		   }
-	       }
 	     }
-	 }
+	     else if ((Elem2No < NEproc) && (statusElem2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+	       const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+	       ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+	       Trans_el2.SetIntPoint(&eip);
+	       
+	       Vector nor;
+	       nor.SetSize(dim);
+	       nor = 0.0;
+	       
+	       if (dim == 1)
+		 {
+		   nor(0) = 2*eip.x - 1.0;
+		 }
+	       else
+		 {
+		   CalcOrtho(eltrans->Jacobian(), nor);
+		 }
+	       
+	       double nor_norm = 0.0;
+	       for (int s = 0; s < dim; s++){
+		 nor_norm += nor(s) * nor(s);
+	       }
+	       nor_norm = sqrt(nor_norm);
+	       
+	       const double detJ = (Trans_el2.Jacobian()).Det();
+	       
+	       double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	       double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
+	       double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
+	       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+	       
+	       stress = 0.0;
+	       
+	       double p = (gamma_vals - 1) * rho_vals * e_vals; 
+	       for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
+	       
+	       if (use_viscosity)
+		 {
+		   interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h;
+		   
+		   if (use_vorticity)
+		     {
+		       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
+		     }
+		 }
+	       // Quadrature data for partial assembly of the force operator.
+	       stress.Mult( nor, weightedNormalStress);
+	       for (int vd = 0 ; vd < dim; vd++)
+		 {
+		   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
+		 }
+	     }
+	   }
        }
      }
+   }
 }
   
   
@@ -1716,12 +1854,12 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
   void LagrangianHydroOperator::AssembleVelocityBoundaryForceMatrix() const
 {   
-  //  VelocityBoundaryForce = 0.0;
-  VelocityBoundaryForce.Update();
+  VelocityBoundaryForce = 0.0;
+  //  VelocityBoundaryForce.Update();
   VelocityBoundaryForce.Assemble();
   if (analyticalSurface != NULL){
     // reset mesh, needed to update the normal velocity penalty term.
-    //ShiftedVelocityBoundaryForce = 0.0;
+    //  ShiftedVelocityBoundaryForce = 0.0;
     ShiftedVelocityBoundaryForce.Update();
     ShiftedVelocityBoundaryForce.Assemble();
     bvemb_forcemat_is_assembled = true;
@@ -1731,11 +1869,11 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
  void LagrangianHydroOperator::AssembleEnergyBoundaryForceMatrix() const
 {
-  //  EnergyBoundaryForce = 0.0;
-  EnergyBoundaryForce.Update();
+  EnergyBoundaryForce = 0.0;
+  //  EnergyBoundaryForce.Update();
   EnergyBoundaryForce.Assemble();
    if (analyticalSurface != NULL){
-     // ShiftedEnergyBoundaryForce = 0.0;
+     //  ShiftedEnergyBoundaryForce = 0.0;
      ShiftedEnergyBoundaryForce.Update();
      ShiftedEnergyBoundaryForce.Assemble();
      beemb_forcemat_is_assembled = true;

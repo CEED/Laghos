@@ -345,6 +345,10 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
    AnalyticalSurface *analyticalSurface = NULL;
+/*  MPI_Comm comm = pmesh->GetComm();
+   int myid;
+   MPI_Comm_rank(comm, &myid);
+   */
    if (useEmbedded){
      analyticalSurface = new AnalyticalSurface(geometricShape, H1FESpace, L2FESpace);
      analyticalSurface->ResetData();
@@ -356,6 +360,7 @@ int main(int argc, char *argv[])
      H1FESpace.Synchronize(ess_inactive_dofs);
      H1FESpace.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_tdofs);
      H1FESpace.MarkerToList(ess_tdofs, ess_vdofs);
+     std::cout << " ess_vodsf " << ess_vdofs.Size() << std::endl;
      for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
    }
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
