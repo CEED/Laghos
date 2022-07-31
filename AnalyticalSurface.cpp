@@ -23,16 +23,16 @@ namespace mfem
     geometryType(geometryType),
     H1(h1_fes),
     L2(l2_fes),
-    pmesh(H1.GetParMesh()),
-    b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
-    elementalStatus(H1.GetNE()+pmesh->GetNSharedFaces()),
-    faceTags(H1.GetNF()+pmesh->GetNSharedFaces()),
-    initialBoundaryFaceTags(H1.GetNBE()),
-    initialElementTags(H1.GetNE()),
-    quadratureDistance((H1.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
-    quadratureTrueNormal((H1.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
+    pmesh(h1_fes.GetParMesh()),
+    b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), h1_fes.GetOrder(0) + l2_fes.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
+    elementalStatus(h1_fes.GetNE()+pmesh->GetNSharedFaces()),
+    faceTags(h1_fes.GetNF()+pmesh->GetNSharedFaces()),
+    initialBoundaryFaceTags(h1_fes.GetNBE()),
+    initialElementTags(h1_fes.GetNE()),
+    quadratureDistance((h1_fes.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
+    quadratureTrueNormal((h1_fes.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
     maxBoundaryTag(0),
-    ess_edofs(H1.GetVSize()),
+    ess_edofs(h1_fes.GetVSize()),
     geometry(NULL)
   {
     ess_edofs = -1;
@@ -47,7 +47,7 @@ namespace mfem
 	  localMaxBoundaryTag = initialBoundaryFaceTags[i];
 	}
       }
-    
+
     MPI_Allreduce(&localMaxBoundaryTag, &maxBoundaryTag, 1, MPI_INT, MPI_MAX, pmesh->GetComm());
     faceTags = maxBoundaryTag;
     for (int i = 0; i < H1.GetNE(); i++)
@@ -56,7 +56,6 @@ namespace mfem
 	const int ElemNo = eltrans->ElementNo;
 	initialElementTags[i] = pmesh->GetAttribute(ElemNo);
       }
-
     switch (geometryType)
       {
       case 1: geometry = new Line(H1, L2); break;

@@ -85,6 +85,12 @@ namespace mfem{
       }
       if (count == ir.GetNPoints()){
 	elemStatus[Elem2No] = SBElementType::INSIDE;
+	Array<int> dofs;
+	H1.GetFaceVDofs(eltrans->ElementNo, dofs);
+	for (int k = 0; k < dofs.Size(); k++)
+	  {
+	    ess_inactive[dofs[k]] = 0;	       
+	  }
       }
       else if ( (count > 0) && (count < ir.GetNPoints())){
 	elemStatus[Elem2No] = SBElementType::CUT;
@@ -95,6 +101,8 @@ namespace mfem{
       
     }
   }
+  //  std::cout << " elemSta " << std::endl;
+  //  elemStatus.Print(`std::cout,1);
   H1.Synchronize(ess_inactive);
   pmesh->SetAttributes();
   }
@@ -103,8 +111,6 @@ namespace mfem{
     MPI_Comm comm = pmesh->GetComm();
     int myid;
     MPI_Comm_rank(comm, &myid);
-    
-    //elemStatus.Print();
     for (int i = 0; i < H1.GetNF() ; i++){
       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
       if (eltrans != NULL){
@@ -131,6 +137,7 @@ namespace mfem{
 	int Elem2NbrNo = Elem2No - H1.GetNE();
 	int Elem1No = eltrans->Elem1No;
 	int statusElem1 = elemStatus[Elem1No];
+	//	int statusElem2 = elemStatus[i - H1.GetNF() + pmesh->GetNE()];
 	int statusElem2 = elemStatus[Elem2No];
 	if ( ( (statusElem1 == SBElementType::INSIDE) && (statusElem2 == SBElementType::CUT) ) ||  ( (statusElem1 == SBElementType::CUT) && (statusElem2 == SBElementType::INSIDE) ) ){
 	  faceTags[faceElemNo] = 5;
@@ -140,16 +147,16 @@ namespace mfem{
 	}
       }
     }
-   
+    //  std::cout << " myid " << myid << " face " << std::endl;
+    //  faceTags.Print(std::cout,1);
     // Now we add interior faces that are on processor boundaries.
-    for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
+    /* for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
       {
 	FaceElementTransformations *tr = pmesh->GetSharedFaceTransformations(i);
 	if (tr != NULL)
 	  {
 	    Array<int> shiftedh1dofs;
 	    Array<int> shiftedh1dofs_temp;
-	  
 	    const int faceElemNo = tr->ElementNo;
 	    if (faceTags[faceElemNo] == 5){
 	      H1.GetFaceVDofs(faceElemNo, shiftedh1dofs);
@@ -158,8 +165,8 @@ namespace mfem{
 	      }
 	    }
 	  }
-      }
-    H1.Synchronize(ess_inactive);
+      }*/
+    // H1.Synchronize(ess_inactive);
   }
   void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal){
     // This code is only for the 1D/FA mode

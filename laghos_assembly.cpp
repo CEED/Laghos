@@ -262,6 +262,10 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								  FaceElementTransformations &Trans,
 								  DenseMatrix &elmat)
   {
+    MPI_Comm comm = pmesh->GetComm();
+    int myid;
+    MPI_Comm_rank(comm, &myid);
+    //  std::cout << " I AM IN ASSEMBLE FACE " << std::endl;
   int elem1 = Trans.Elem1No;
   int elem2 = Trans.Elem2No;
   int elemStatus1 = elemStatus[elem1];
@@ -285,7 +289,9 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   Vloc_force = 0.0;
   
   if (faceTags[e] == 5){
+    //   std::cout << " myid " << myid << " face " << std::endl;
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+      //  std::cout << " myid " << myid << " i am in one " << std::endl;
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       temp_elmat = 0.0;
@@ -312,6 +318,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
       elmat.CopyMN(temp_elmat, 0, 0);
     }
     else if ((elem2 < NEproc) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
+      //      std::cout << " myid " << myid << " i am in two " << std::endl;	 
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       temp_elmat = 0.0;
@@ -372,7 +379,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   te_shape = 0.0;
   tr_shape = 0.0;
   Vloc_force = 0.0;
-
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
       DenseMatrix temp_elmat;
@@ -492,7 +498,7 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
   const int nqp_face = IntRule->GetNPoints();
   const int dim = fe1.GetDim();
   const int h1dofs_cnt = fe1.GetDof();
-  elmat.SetSize(h1dofs_cnt*dim*2);
+  elmat.SetSize(h1dofs_cnt*dim*2,h1dofs_cnt*dim*2);
   //  elmat.SetSize(h1dofs_cnt*dim);
   elmat = 0.0;
   Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim);;
@@ -500,7 +506,7 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
   shape = 0.0;
   DenseMatrix loc_force1(h1dofs_cnt, dim);
   Vector Vloc_force(loc_force1.Data(), h1dofs_cnt*dim);
-
+  // elmat.Print(std::cout,1);
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
       DenseMatrix temp_elmat;
@@ -532,28 +538,33 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
 	  nor_norm = sqrt(nor_norm);
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
-	    {
+	    {	      
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
 		  for (int j = 0; j < h1dofs_cnt; j++)
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  temp_elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
 			}
 		    }
 		}
 	    }
 	}
-      elmat.CopyMN(temp_elmat, 0, 0);
+      //  std::cout << " myid " << myid << " print " << std::endl;
+      //  temp_elmat.Print(std::cout,1);
+      //  elmat = 0.0;
+      //  elmat.CopyMN(temp_elmat, 0, 0);
+      //  elmat.CopyMN(temp_elmat,h1dofs_cnt*dim*2,h1dofs_cnt*dim*2,0,0);
+      //  std::cout << " myid " << myid << " Printing ELEM1 " << std::endl;
+      //  elmat.Print(std::cout,1);
     }
     else if ((elem2 < NEproc) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim);
       temp_elmat = 0.0;
 
-      int h1dofs_offset = h1dofs_cnt * dim;
-      
+      int h1dofs_offset = h1dofs_cnt * dim;   
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const int eq = e*nqp_face + q;
@@ -587,13 +598,15 @@ void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  temp_elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
+			  elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
 			}
 		    }
 		}
 	    }
 	}
-      elmat.CopyMN(temp_elmat, h1dofs_offset, h1dofs_offset);
+      //  elmat.CopyMN(temp_elmat, h1dofs_offset, h1dofs_offset);
+      //  std::cout << " myid " << myid << " Printing ELEM2 " << std::endl;
+      //  elmat.Print(std::cout,1);
     }
   }
 }

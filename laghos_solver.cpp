@@ -162,6 +162,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[3] = block_offsets[2] + L2Vsize;
    //one = 1.0;
    ess_elem = 1;
+   // std::cout << " face nbr size " << H1.GetFaceNbrVSize() << std::endl;
    if (analyticalSurface != NULL){
      for (int s = 1; s < ess_elem.Size(); s++){
        ess_elem[s] = 0;
@@ -191,14 +192,31 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
    MassIntegrator mi(rho0_coeff, &ir);
-   for (int e = 0; e < NE; e++)
-   {
-      DenseMatrixInverse inv(&Me(e));
-      const FiniteElement &fe = *L2.GetFE(e);
-      ElementTransformation &Tr = *L2.GetElementTransformation(e);
-      mi.AssembleElementMatrix(fe, Tr, Me(e));
-      inv.Factor();
-      inv.GetInverseMatrix(Me_inv(e));
+   if (analyticalSurface != NULL){
+     Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+     for (int e = 0; e < NE; e++)
+       {
+	 int statusElem1 = elemStatus[e];
+	 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){ 
+	   DenseMatrixInverse inv(&Me(e));
+	   const FiniteElement &fe = *L2.GetFE(e);
+	   ElementTransformation &Tr = *L2.GetElementTransformation(e);
+	   mi.AssembleElementMatrix(fe, Tr, Me(e));
+	   inv.Factor();
+	   inv.GetInverseMatrix(Me_inv(e));
+	 }
+       }
+   }
+   else{
+     for (int e = 0; e < NE; e++)
+       {
+	 DenseMatrixInverse inv(&Me(e));
+	 const FiniteElement &fe = *L2.GetFE(e);
+	 ElementTransformation &Tr = *L2.GetElementTransformation(e);
+	 mi.AssembleElementMatrix(fe, Tr, Me(e));
+	 inv.Factor();
+	 inv.GetInverseMatrix(Me_inv(e));
+       }
    }
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
@@ -450,6 +468,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             Vector &dS_dt,
 					    const Vector &S_init) const
 {
+  MPI_Comm comm = pmesh->GetComm();
+  int myid;
+  MPI_Comm_rank(comm, &myid);
+  
   // reset mesh, needed to update the normal velocity penalty term.
   Mv.Update();
   Mv.KeepNbrBlock(true);
@@ -470,8 +492,10 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   // assemble boundary terms at the most recent state.
   Mv.AssembleBoundaryFaceIntegrators();
   AssembleForceMatrix();
-  
+  //  std::cout << " myid " << myid << " calling " << std::endl;
   AssembleVelocityBoundaryForceMatrix();
+  //  std::cout << " myid " << myid << " I AM OUT ASSEMBLE FACE " << std::endl;
+
   // The monolithic BlockVector stores the unknown fields as follows:
   // (Position, Velocity, Specific Internal Energy).
   ParGridFunction dv;
@@ -491,10 +515,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   Force.Mult(one, rhs);
   rhs.Neg();
 
-  MPI_Comm comm = pmesh->GetComm();
-  int myid;
-  MPI_Comm_rank(comm, &myid);
-   
   // populate a vector of ones only at the boundary dofs. 
   Vector loc_one(L2Vsize);
   loc_one = 0.0;
