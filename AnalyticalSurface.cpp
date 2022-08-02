@@ -104,5 +104,11 @@ namespace mfem
   Array<int>& AnalyticalSurface::GetElement_Status(){
     return elementalStatus;
   }
+  const DenseMatrix& AnalyticalSurface::GetQuadratureDistance(){
+    return quadratureDistance;
+  }
+  const DenseMatrix& AnalyticalSurface::GetQuadratureTrueNormal(){
+    return quadratureTrueNormal;
+  }
 
 }

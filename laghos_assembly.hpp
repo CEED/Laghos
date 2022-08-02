@@ -21,6 +21,7 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 #include "AnalyticalGeometricShape.hpp"
+#include "AnalyticalSurface.hpp"
 
 namespace mfem
 {
@@ -174,12 +175,13 @@ class ShiftedVelocityBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
   const ParMesh *pmesh;
+  AnalyticalSurface *analyticalSurface;
   const FaceQuadratureData &qdata;
   Array<int> elemStatus;
   Array<int> faceTags;
   
 public:
-  ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
+  ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
   virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
 				  const FiniteElement &trial_fe2,
 				  const FiniteElement &test_fe1,
@@ -194,12 +196,13 @@ class ShiftedEnergyBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
    const ParMesh *pmesh;
+   AnalyticalSurface *analyticalSurface;
    const FaceQuadratureData &qdata;
    Array<int> elemStatus;
    Array<int> faceTags;
   
 public:
-  ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag){ }
+  ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag){ }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
 				   const FiniteElement &trial_fe2,
 				   const FiniteElement &test_fe1,
@@ -213,12 +216,13 @@ class ShiftedNormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
 private:
    const ParMesh *pmesh;
+   AnalyticalSurface *analyticalSurface;
    const FaceQuadratureData &qdata;
    Array<int> elemStatus;
    Array<int> faceTags;
   
 public:
-  ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
+  ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
   virtual void AssembleFaceMatrix(const FiniteElement &fe1,
 				  const FiniteElement &fe2,
 				  FaceElementTransformations &Trans,

@@ -65,7 +65,11 @@ namespace mfem
   Array<int>& GetEss_Vdofs();
   Array<int>& GetFace_Tags();
   Array<int>& GetElement_Status();
+  const DenseMatrix& GetQuadratureDistance();
+  const DenseMatrix& GetQuadratureTrueNormal();
+    
   ~AnalyticalSurface();
   };
 }
 #endif // MFEM_LAGHOS
+

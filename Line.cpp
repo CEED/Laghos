@@ -1,4 +1,4 @@
-// Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at
+// Copyright (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.51) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.55) {
   }
 
   Line::~Line(){}
@@ -209,7 +209,7 @@ namespace mfem{
 	}
       }
     }
-    pmesh->ExchangeFaceNbrNodes();   
+    /*    pmesh->ExchangeFaceNbrNodes();   
     for (int i = H1.GetNF(); i <  (H1.GetNF() + pmesh->GetNSharedFaces()) ; i++){
       FaceElementTransformations *eltrans = pmesh->GetSharedFaceTransformations(i-H1.GetNF());
       if (eltrans != NULL){
@@ -234,14 +234,14 @@ namespace mfem{
 	      double xPtOnLine = x(0) - slope * yIntercept + slope * x(1);
 	      double distX = xPtOnLine - x(0);
 	      double distY = slope * xPtOnLine + yIntercept - x(1);
-	      quadratureDistance(i*nqp_face + q,0) = distX;
-	      quadratureDistance(i*nqp_face + q,1) = distY;
+	      quadratureDistance(faceElemNo*nqp_face + q,0) = distX;
+	      quadratureDistance(faceElemNo*nqp_face + q,1) = distY;
 	      double normD = sqrt(distX * distX + distY * distY);
-	      quadratureTrueNormal(i*nqp_face + q,0) = distX /  normD;
-	      quadratureTrueNormal(i*nqp_face + q,1) = distY /  normD;
+	      quadratureTrueNormal(faceElemNo*nqp_face + q,0) = distX /  normD;
+	      quadratureTrueNormal(faceElemNo*nqp_face + q,1) = distY /  normD;
 	    }
 	}
       }
-    }
+      }*/
   }
 }
