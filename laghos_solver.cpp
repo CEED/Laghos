@@ -126,7 +126,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-   b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
+   b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), 4*H1.GetOrder(0) + 4*L2.GetOrder(0) + 4*(pmesh->GetBdrFaceTransformations(0))->OrderW() )),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
@@ -187,7 +187,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    else{
      one  = 1.0;
    }
-  
+   
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
@@ -340,7 +340,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      
      ShiftedEnergyBoundaryForceIntegrator *e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata,analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
      e_bfi->SetIntRule(&b_ir);
-     ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
+     // ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
      ShiftedEnergyBoundaryForce.KeepNbrBlock(true);
      
      ShiftedNormalVelocityMassIntegrator *nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
@@ -539,8 +539,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 	  }
 	}
       }
-    int NEproc = pmesh->GetNE();
-    
     ShiftedVelocityBoundaryForce.Mult(shiftedloc_one,shiftedb_rhs);
     rhs += shiftedb_rhs;
   }
@@ -1100,7 +1098,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	       const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 	       ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 	       Trans_el1.SetIntPoint(&eip);
-	       for (int q = 0; q  < nqp_face; q++)
+	       for (int q = 0; q < nqp_face; q++)
 		 {
 		   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 		   eltrans->SetAllIntPoints(&ip_f);
@@ -1296,7 +1294,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
 
  	   stress = 0.0;
 	   
@@ -1305,11 +1303,11 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
 	   if (use_viscosity)
 	     {
-               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h /*nor_norm / eltrans->Elem1->Weight()*/;
+               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (global_max_sound_speed / global_min_h)  * ip_f.weight/*nor_norm / eltrans->Elem1->Weight()*/;
 	       
 	       if (use_vorticity)
 		 {
-		   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+		   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h * ip_f.weight/*eltrans->Elem1->Weight() / nor_norm*/;
 		 }
 	    }
 	   // Quadrature data for partial assembly of the force operator.
@@ -1366,7 +1364,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 		       double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 		       double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-		       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+		       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
 		       
 		       stress = 0.0;
 		       
@@ -1376,11 +1374,11 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       
 		       if (use_viscosity)
 			 {
-			   interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h /*nor_norm / eltrans->Elem1->Weight()*/;
+			   interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (global_max_sound_speed / global_min_h) * ip_f.weight/*nor_norm / eltrans->Elem1->Weight()*/;
 			   
 			   if (use_vorticity)
 			     {
-			       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+			       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h * ip_f.weight/*eltrans->Elem1->Weight() / nor_norm*/;
 			     }
 			 }
 		       // Quadrature data for partial assembly of the force operator.
@@ -1389,6 +1387,9 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       for (int vd = 0 ; vd < dim; vd++)
 			 {
 			   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
+			   // std::cout << " weighted Normal StressElem1 " << interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) << std::endl;
+			   // std::cout << " weighted Normal PenaltyElem1 " << interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) << std::endl;
+		
 			 }
 		     }
 		 }
@@ -1424,7 +1425,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 		       double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
 		       double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
-		       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
+		       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
 		       
 		       stress = 0.0;
 		       
@@ -1434,11 +1435,11 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       
 		       if (use_viscosity)
 			 {
-			   interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h /*nor_norm / eltrans->Elem1->Weight()*/;
+			   interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (global_max_sound_speed / global_min_h) * ip_f.weight/*nor_norm / eltrans->Elem1->Weight()*/;
 			   
 			   if (use_vorticity)
 			     {
-			       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+			       interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h * ip_f.weight/*eltrans->Elem1->Weight() / nor_norm*/;
 			     }
 			 }
 		       // Quadrature data for partial assembly of the force operator.
@@ -1447,6 +1448,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       for (int vd = 0 ; vd < dim; vd++)
 			 {
 			   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
+			   //  std::cout << " weighted Normal StressElem2 " << interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) << std::endl;
+			   //   std::cout << " weighted Normal PenaltyElem2 " << interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) << std::endl;
 			 }
 		     }
 		 }

@@ -1,4 +1,4 @@
-// Copyright (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
+// CopyrOAight (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -176,6 +176,7 @@ namespace mfem{
       if (eltrans != NULL){
 	const int faceElemNo = eltrans->ElementNo; 
 	if (faceTags[faceElemNo] == 5){
+	  //  std::cout << " qnp face " << nqp_face << std::endl;
 	  for (int q = 0; q  < nqp_face; q++)
 	    {
 	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);

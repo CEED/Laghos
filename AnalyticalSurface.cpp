@@ -24,7 +24,7 @@ namespace mfem
     H1(h1_fes),
     L2(l2_fes),
     pmesh(h1_fes.GetParMesh()),
-    b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), h1_fes.GetOrder(0) + l2_fes.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
+    b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), 4*H1.GetOrder(0) + 4*L2.GetOrder(0) + 4*(pmesh->GetBdrFaceTransformations(0))->OrderW() )),
     elementalStatus(h1_fes.GetNE()+pmesh->GetNSharedFaces()),
     faceTags(h1_fes.GetNF()+pmesh->GetNSharedFaces()),
     initialBoundaryFaceTags(h1_fes.GetNBE()),

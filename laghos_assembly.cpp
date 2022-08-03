@@ -289,9 +289,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
   Vloc_force = 0.0;
   
   if (faceTags[e] == 5){
-    //   std::cout << " myid " << myid << " face " << std::endl;
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-      //  std::cout << " myid " << myid << " i am in one " << std::endl;
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       temp_elmat = 0.0;
@@ -318,7 +316,6 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
       elmat.CopyMN(temp_elmat, 0, 0);
     }
     else if ((elem2 < NEproc) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
-      //      std::cout << " myid " << myid << " i am in two " << std::endl;	 
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       temp_elmat = 0.0;
@@ -373,7 +370,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   const int h1dofs2_cnt = test_fe2.GetDof();
   const int l2dofs2_cnt = trial_fe2.GetDof();
   elmat.SetSize((h1dofs_cnt+h1dofs2_cnt)*dim, l2dofs_cnt+l2dofs2_cnt);
-  //  elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
   elmat = 0.0;
  
   DenseMatrix loc_force(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim);
@@ -384,61 +380,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   Vloc_force = 0.0;
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-      Array<DenseMatrix *> dkphi_dxk;
-      DenseMatrix grad_phys;
-      Vector Factorial;
-      Array<DenseMatrix *> grad_phys_dir;
-      test_fe1.ProjectGrad(test_fe1, *Trans.Elem1, grad_phys);
-      DenseMatrix grad_work;
-      grad_phys_dir.SetSize(dim); // NxN matrices for derivative in each direction
-      for (int i = 0; i < dim; i++)
-      {
-         grad_phys_dir[i] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt);
-         grad_phys_dir[i]->CopyRows(grad_phys, i*h1dofs_cnt, (i+1)*h1dofs_cnt-1);
-      }
-      DenseMatrix grad_phys_work = grad_phys;
-      grad_phys_work.SetSize(h1dofs_cnt, h1dofs_cnt*dim);
-
-      dkphi_dxk.SetSize(1);
-      int sz1 = pow(dim, 1);
-      dkphi_dxk[0] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt*sz1*dim);
-      int loc_col_per_dof = sz1;
-      int tot_col_per_dof = loc_col_per_dof*dim;
-      for (int k = 0; k < dim; k++)
-	{
-	  grad_work.SetSize(h1dofs_cnt, h1dofs_cnt*sz1);
-	  // grad_work[k] has derivative in kth direction for each DOF.
-	  // grad_work[0] has d^2phi/dx^2 and d^2phi/dxdy terms and
-	  // grad_work[1] has d^2phi/dydx and d^2phi/dy2 terms for each dof
-	  Mult(*grad_phys_dir[k], grad_phys_work, grad_work);
-            // Now we must place columns for each dof together so that they are
-            // in order: d^2phi/dx^2, d^2phi/dxdy, d^2phi/dydx, d^2phi/dy2.
-	  for (int j = 0; j < h1dofs_cnt; j++)
-            {
-	      for (int d = 0; d < loc_col_per_dof; d++)
-		{
-                  Vector col;
-                  grad_work.GetColumn(j*loc_col_per_dof+d, col);
-                  dkphi_dxk[0]->SetCol(j*tot_col_per_dof+k*loc_col_per_dof+d, col);
-		}
-            }
-	}
-
-      for (int i = 0; i < grad_phys_dir.Size(); i++)
-      {
-         delete grad_phys_dir[i];
-      }
-
-      Factorial.SetSize(1);
-      Factorial(0) = 2;
-
-      DenseMatrix q_hess_dn(dim, h1dofs_cnt);
-      Vector q_hess_dn_work(q_hess_dn.GetData(), h1dofs_cnt*dim);
-      Vector q_hess_dot_d(h1dofs_cnt);
-
-      q_hess_dn = 0.0;
-      q_hess_dn_work = 0.0;
-      q_hess_dot_d = 0.0;
 	  
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
@@ -446,7 +387,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 
       for (int q = 0; q  < nqp_face; q++)
 	{
-	  
 	  Vector D(dim);
 	  Vector tN(dim);
 	  D = 0.0;
@@ -478,8 +418,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < dim; s++){
 	    normalStressProjNormal += qdata.weightedNormalStress(eq,s) * nor(s);
 	    nor_norm += nor(s) * nor(s);
-	    D(s) = quadDist(e*nqp_face+q,s);
-	    tN(s) = quadTrueNorm(e*nqp_face+q,s);
+	    D(s) = quadDist(eq,s);
+	    tN(s) = quadTrueNorm(eq,s);
 	    //    tN(s) = nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
@@ -490,29 +430,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
-	  q_hess_dot_d = 0.;
-	  int sz1 = pow(dim, 1);
-	  DenseMatrix T1(dim, h1dofs_cnt*sz1);
-	  Vector T1_wrk(T1.GetData(), dim*h1dofs_cnt*sz1);
-	  dkphi_dxk[0]->MultTranspose(te_shape, T1_wrk);
-	  
-	  DenseMatrix T2;
-	  Vector T2_wrk;
-	  for (int j = 0; j < 1; j++)
-	    {
-	      int sz2 = pow(dim, -j);
-	      T2.SetSize(dim, h1dofs_cnt*sz2);
-	      T2_wrk.SetDataAndSize(T2.GetData(), dim*h1dofs_cnt*sz2);
-	      T1.MultTranspose(D, T2_wrk);
-	      T1 = T2;
-	    }
-	  Vector q_hess_dot_d_work(h1dofs_cnt);
-	  T1.MultTranspose(D, q_hess_dot_d_work);
-	  q_hess_dot_d_work *= 1./Factorial(0);
-	  q_hess_dot_d += q_hess_dot_d_work;
 
 	  te_shape += dshapephysdd;
-	  // te_shape += q_hess_dot_d;
 	    
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -527,53 +446,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
       elmat.CopyMN(temp_elmat, 0, 0);
     }
     else if ((elem2 < NEproc) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
-      Array<DenseMatrix *> dkphi_dxk;
-      DenseMatrix grad_phys;
-      Vector Factorial;
-      Array<DenseMatrix *> grad_phys_dir;
-      test_fe2.ProjectGrad(test_fe2, *Trans.Elem2, grad_phys);
-      DenseMatrix grad_work;
-      grad_phys_dir.SetSize(dim); // NxN matrices for derivative in each direction
-      for (int i = 0; i < dim; i++)
-      {
-         grad_phys_dir[i] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt);
-         grad_phys_dir[i]->CopyRows(grad_phys, i*h1dofs_cnt, (i+1)*h1dofs_cnt-1);
-      }
-      DenseMatrix grad_phys_work = grad_phys;
-      grad_phys_work.SetSize(h1dofs_cnt, h1dofs_cnt*dim);
 
-      dkphi_dxk.SetSize(1);
-      int sz1 = pow(dim, 1);
-      dkphi_dxk[0] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt*sz1*dim);
-      int loc_col_per_dof = sz1;
-      int tot_col_per_dof = loc_col_per_dof*dim;
-      for (int k = 0; k < dim; k++)
-	{
-	  grad_work.SetSize(h1dofs_cnt, h1dofs_cnt*sz1);
-	  // grad_work[k] has derivative in kth direction for each DOF.
-	  // grad_work[0] has d^2phi/dx^2 and d^2phi/dxdy terms and
-	  // grad_work[1] has d^2phi/dydx and d^2phi/dy2 terms for each dof
-	  Mult(*grad_phys_dir[k], grad_phys_work, grad_work);
-            // Now we must place columns for each dof together so that they are
-            // in order: d^2phi/dx^2, d^2phi/dxdy, d^2phi/dydx, d^2phi/dy2.
-	  for (int j = 0; j < h1dofs_cnt; j++)
-            {
-	      for (int d = 0; d < loc_col_per_dof; d++)
-		{
-                  Vector col;
-                  grad_work.GetColumn(j*loc_col_per_dof+d, col);
-                  dkphi_dxk[0]->SetCol(j*tot_col_per_dof+k*loc_col_per_dof+d, col);
-		}
-            }
-	}
-
-      for (int i = 0; i < grad_phys_dir.Size(); i++)
-      {
-         delete grad_phys_dir[i];
-      }
-
-      Factorial.SetSize(1);
-      Factorial(0) = 2;      
       DenseMatrix temp_elmat;
       temp_elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       temp_elmat = 0.0;
@@ -581,13 +454,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
       int h1dofs_offset = h1dofs_cnt * dim;
       int l2dofs_offset = l2dofs_cnt;
 
-      DenseMatrix q_hess_dn(dim, h1dofs_cnt);
-      Vector q_hess_dn_work(q_hess_dn.GetData(), h1dofs_cnt*dim);
-      Vector q_hess_dot_d(h1dofs_cnt);
-      q_hess_dn = 0.0;
-      q_hess_dn_work = 0.0;
-      q_hess_dot_d = 0.0;
-      
       for (int q = 0; q  < nqp_face; q++)
 	{	   
 	  Vector D(dim);
@@ -624,12 +490,10 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < dim; s++){
 	    normalStressProjNormal += qdata.weightedNormalStress(eq,s) * nor(s);
 	    nor_norm += nor(s) * nor(s);
-	    D(s) = quadDist(e*nqp_face+q,s);
-	    tN(s) = quadTrueNorm(e*nqp_face+q,s);
+	    D(s) = quadDist(eq,s);
+	    tN(s) = quadTrueNorm(eq,s);
 	    //   tN(s) = nor(s);
-	  }
-	  //  std::cout << " distanceX " << D(0) <<  " distanceY " << D(1) << std::endl;
-	  
+	  }	  
 	  nor_norm = sqrt(nor_norm);
 	  //  tN /= nor_norm;
 	  normalStressProjNormal = normalStressProjNormal/nor_norm;
@@ -638,29 +502,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
-	  q_hess_dot_d = 0.;
-	  int sz1 = pow(dim, 1);
-	  DenseMatrix T1(dim, h1dofs_cnt*sz1);
-	  Vector T1_wrk(T1.GetData(), dim*h1dofs_cnt*sz1);
-	  dkphi_dxk[0]->MultTranspose(te_shape, T1_wrk);
-	  
-	  DenseMatrix T2;
-	  Vector T2_wrk;
-	  for (int j = 0; j < 1; j++)
-	    {
-	      int sz2 = pow(dim, -j);
-	      T2.SetSize(dim, h1dofs_cnt*sz2);
-	      T2_wrk.SetDataAndSize(T2.GetData(), dim*h1dofs_cnt*sz2);
-	      T1.MultTranspose(D, T2_wrk);
-	      T1 = T2;
-	    }
-	  Vector q_hess_dot_d_work(h1dofs_cnt);
-	  T1.MultTranspose(D, q_hess_dot_d_work);
-	  q_hess_dot_d_work *= 1./Factorial(0);
-	  q_hess_dot_d += q_hess_dot_d_work;
 
 	  te_shape += dshapephysdd;
-	  //  te_shape += q_hess_dot_d;
 
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -700,75 +543,16 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   const int dim = fe1.GetDim();
   const int h1dofs_cnt = fe1.GetDof();
   elmat.SetSize(h1dofs_cnt*dim*2,h1dofs_cnt*dim*2);
-  //  elmat.SetSize(h1dofs_cnt*dim);
   elmat = 0.0;
   Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim), dshapedn(h1dofs_cnt), dshapephysdd(h1dofs_cnt);
- 
   const int e = Trans.ElementNo;
   shape = 0.0;
   DenseMatrix loc_force1(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim);
   Vector Vloc_force(loc_force1.Data(), h1dofs_cnt*dim);
-  // elmat.Print(std::cout,1);
-  // these are not thread-safe!
-  Vector Factorial;
-  Factorial.SetSize(1);
-  Factorial(0) = 2.0;
-  
+
+  //  std::cout << " qnp face shift " << nqp_face << std::endl;
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-      Array<DenseMatrix *> dkphi_dxk;
-      DenseMatrix grad_phys;
-      Array<DenseMatrix *> grad_phys_dir;
-      fe1.ProjectGrad(fe1, *Trans.Elem1, grad_phys);
-      DenseMatrix grad_work;
-      grad_phys_dir.SetSize(dim); // NxN matrices for derivative in each direction
-      for (int i = 0; i < dim; i++)
-      {
-         grad_phys_dir[i] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt);
-         grad_phys_dir[i]->CopyRows(grad_phys, i*h1dofs_cnt, (i+1)*h1dofs_cnt-1);
-      }
-      DenseMatrix grad_phys_work = grad_phys;
-      grad_phys_work.SetSize(h1dofs_cnt, h1dofs_cnt*dim);
-
-      dkphi_dxk.SetSize(1);
-      int sz1 = pow(dim, 1);
-      dkphi_dxk[0] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt*sz1*dim);
-      int loc_col_per_dof = sz1;
-      int tot_col_per_dof = loc_col_per_dof*dim;
-      for (int k = 0; k < dim; k++)
-	{
-	  grad_work.SetSize(h1dofs_cnt, h1dofs_cnt*sz1);
-	  // grad_work[k] has derivative in kth direction for each DOF.
-	  // grad_work[0] has d^2phi/dx^2 and d^2phi/dxdy terms and
-	  // grad_work[1] has d^2phi/dydx and d^2phi/dy2 terms for each dof
-	  Mult(*grad_phys_dir[k], grad_phys_work, grad_work);
-            // Now we must place columns for each dof together so that they are
-            // in order: d^2phi/dx^2, d^2phi/dxdy, d^2phi/dydx, d^2phi/dy2.
-	  for (int j = 0; j < h1dofs_cnt; j++)
-            {
-	      for (int d = 0; d < loc_col_per_dof; d++)
-		{
-                  Vector col;
-                  grad_work.GetColumn(j*loc_col_per_dof+d, col);
-                  dkphi_dxk[0]->SetCol(j*tot_col_per_dof+k*loc_col_per_dof+d, col);
-		}
-            }
-	}
-
-      for (int i = 0; i < grad_phys_dir.Size(); i++)
-      {
-         delete grad_phys_dir[i];
-      }
-      
-      DenseMatrix q_hess_dn(dim, h1dofs_cnt);
-      Vector q_hess_dn_work(q_hess_dn.GetData(), h1dofs_cnt*dim);
-      Vector q_hess_dot_d(h1dofs_cnt);
-      
-      q_hess_dn = 0.0;
-      q_hess_dn_work = 0.0;
-      q_hess_dot_d = 0.0;
-      
-      //  std::cout << " neq face in assemble " << nqp_face << std::endl;
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  Vector D(dim);
@@ -776,7 +560,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  D = 0.0;
 	  tN = 0.0;
 	  const int eq = e*nqp_face + q;
-	  //  std::cout << " show me El1 " <<  qdata.normalVelocityPenaltyScaling(eq) << std::endl;
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
 	  Trans.SetAllIntPoints(&ip_f);
@@ -792,6 +575,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    {
 	      CalcOrtho(Trans.Jacobian(), nor);
 	    }
+
 	  dshapephys = 0.0;
 	  dshapephysdd = 0.0;
 	  shape = 0.0;
@@ -813,33 +597,11 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
-	  q_hess_dot_d = 0.;
-	  int sz1 = pow(dim, 1);
-	  DenseMatrix T1(dim, h1dofs_cnt*sz1);
-	  Vector T1_wrk(T1.GetData(), dim*h1dofs_cnt*sz1);
-	  dkphi_dxk[0]->MultTranspose(shape, T1_wrk);
-	  
-	  DenseMatrix T2;
-	  Vector T2_wrk;
-	  //  for (int j = 0; j < 1; j++)
-	  //   {
-	  int sz2 = pow(dim, 0);
-	  T2.SetSize(dim, h1dofs_cnt*sz2);
-	  T2_wrk.SetDataAndSize(T2.GetData(), dim*h1dofs_cnt*sz2);
-	  T1.MultTranspose(D, T2_wrk);
-	  T1 = T2;
-	      //  }
-	  Vector q_hess_dot_d_work(h1dofs_cnt);
-	  T1.MultTranspose(D, q_hess_dot_d_work);
-	  q_hess_dot_d_work *= 1./Factorial(0);
-	  q_hess_dot_d += q_hess_dot_d_work;
 
 	  Vector trial_wrk = shape;
 	  Vector test_wrk = shape;
 	  trial_wrk += dshapephysdd;
-	  //  trial_wrk += q_hess_dot_d;
 	  test_wrk += dshapephysdd;
-	  //  test_wrk += q_hess_dot_d;
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {	      
@@ -864,59 +626,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
       //  elmat.Print(std::cout,1);
     }
     else if ((elem2 < NEproc) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE)){
-      Array<DenseMatrix *> dkphi_dxk;
-      DenseMatrix grad_phys;
-      Array<DenseMatrix *> grad_phys_dir;
-      fe2.ProjectGrad(fe2, *Trans.Elem2, grad_phys);
-      DenseMatrix grad_work;
-      grad_phys_dir.SetSize(dim); // NxN matrices for derivative in each direction
-      for (int i = 0; i < dim; i++)
-      {
-         grad_phys_dir[i] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt);
-         grad_phys_dir[i]->CopyRows(grad_phys, i*h1dofs_cnt, (i+1)*h1dofs_cnt-1);
-      }
-      DenseMatrix grad_phys_work = grad_phys;
-      grad_phys_work.SetSize(h1dofs_cnt, h1dofs_cnt*dim);
-
-      dkphi_dxk.SetSize(1);
-      int sz1 = pow(dim, 1);
-      dkphi_dxk[0] = new DenseMatrix(h1dofs_cnt, h1dofs_cnt*sz1*dim);
-      int loc_col_per_dof = sz1;
-      int tot_col_per_dof = loc_col_per_dof*dim;
-      for (int k = 0; k < dim; k++)
-	{
-	  grad_work.SetSize(h1dofs_cnt, h1dofs_cnt*sz1);
-	  // grad_work[k] has derivative in kth direction for each DOF.
-	  // grad_work[0] has d^2phi/dx^2 and d^2phi/dxdy terms and
-	  // grad_work[1] has d^2phi/dydx and d^2phi/dy2 terms for each dof
-	  Mult(*grad_phys_dir[k], grad_phys_work, grad_work);
-          // Now we must place columns for each dof together so that they are
-	  // in order: d^2phi/dx^2, d^2phi/dxdy, d^2phi/dydx, d^2phi/dy2.
-	  for (int j = 0; j < h1dofs_cnt; j++)
-            {
-	      for (int d = 0; d < loc_col_per_dof; d++)
-		{
-                  Vector col;
-                  grad_work.GetColumn(j*loc_col_per_dof+d, col);
-                  dkphi_dxk[0]->SetCol(j*tot_col_per_dof+k*loc_col_per_dof+d, col);
-		}
-            }
-	}
-
-      for (int i = 0; i < grad_phys_dir.Size(); i++)
-      {
-         delete grad_phys_dir[i];
-      }
       
       int h1dofs_offset = h1dofs_cnt * dim;
-
-      DenseMatrix q_hess_dn(dim, h1dofs_cnt);
-      Vector q_hess_dn_work(q_hess_dn.GetData(), h1dofs_cnt*dim);
-      Vector q_hess_dot_d(h1dofs_cnt);
-      
-      q_hess_dn = 0.0;
-      q_hess_dn_work = 0.0;
-      q_hess_dot_d = 0.0;
       
       for (int q = 0; q  < nqp_face; q++)
 	{
@@ -925,7 +636,6 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  D = 0.0;
 	  tN = 0.0;
 	  const int eq = e*nqp_face + q;
-	  //	  std::cout << " show me El2 " <<  qdata.normalVelocityPenaltyScaling(eq) << std::endl;
 		
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
@@ -957,40 +667,17 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  }
 	  nor_norm = sqrt(nor_norm);
 	  //  tN /= nor_norm;
-	  
+
 	  double ntildaDotTrueN = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
-	  //  std::cout << " ntildaDot " << ntildaDotTrueN << std::endl;
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
-	  q_hess_dot_d = 0.;
-	  int sz1 = pow(dim, 1);
-	  DenseMatrix T1(dim, h1dofs_cnt*sz1);
-	  Vector T1_wrk(T1.GetData(), dim*h1dofs_cnt*sz1);
-	  dkphi_dxk[0]->MultTranspose(shape, T1_wrk);
-	  
-	  DenseMatrix T2;
-	  Vector T2_wrk;
-	  //	  for (int j = 0; j < 1; j++)
-	  //  {
-	  int sz2 = pow(dim, 0);
-	  T2.SetSize(dim, h1dofs_cnt*sz2);
-	  T2_wrk.SetDataAndSize(T2.GetData(), dim*h1dofs_cnt*sz2);
-	  T1.MultTranspose(D, T2_wrk);
-	  T1 = T2;
-	      //  }
-	  Vector q_hess_dot_d_work(h1dofs_cnt);
-	  T1.MultTranspose(D, q_hess_dot_d_work);
-	  q_hess_dot_d_work *= 1./Factorial(0);
-	  q_hess_dot_d += q_hess_dot_d_work;
 
 	  Vector trial_wrk = shape;
 	  Vector test_wrk = shape;
 	  trial_wrk += dshapephysdd;
-	  //	  trial_wrk += q_hess_dot_d;
 	  test_wrk += dshapephysdd;
-	  //  test_wrk += q_hess_dot_d;
 
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -1016,3 +703,4 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 } // namespace hydrodynamics
 
 } // namespace mfem
+
