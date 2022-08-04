@@ -162,7 +162,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[3] = block_offsets[2] + L2Vsize;
    //one = 1.0;
    ess_elem = 1;
-   // std::cout << " face nbr size " << H1.GetFaceNbrVSize() << std::endl;
    if (analyticalSurface != NULL){
      for (int s = 1; s < ess_elem.Size(); s++){
        ess_elem[s] = 0;
@@ -221,7 +220,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv.AddDomainIntegrator(vmi, ess_elem);
-   Mv.KeepNbrBlock(true);
+   //  Mv.KeepNbrBlock(true);
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
@@ -333,28 +332,28 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force.Assemble(0);
    Force.Finalize(0);
    if (analyticalSurface != NULL){
-     ShiftedVelocityBoundaryForceIntegrator *v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
+     ShiftedVelocityBoundaryForceIntegrator *v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags(), L2, H1);
      v_bfi->SetIntRule(&b_ir);
      ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(v_bfi);
-     ShiftedVelocityBoundaryForce.KeepNbrBlock(true);
+     //  ShiftedVelocityBoundaryForce.KeepNbrBlock(true);
      
-     ShiftedEnergyBoundaryForceIntegrator *e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata,analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
+     ShiftedEnergyBoundaryForceIntegrator *e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata,analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags(), L2, H1);
      e_bfi->SetIntRule(&b_ir);
-     // ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
-     ShiftedEnergyBoundaryForce.KeepNbrBlock(true);
+     //  ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
+     //  ShiftedEnergyBoundaryForce.KeepNbrBlock(true);
      
-     ShiftedNormalVelocityMassIntegrator *nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags());
+     ShiftedNormalVelocityMassIntegrator *nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags(), H1);
      nvmi->SetIntRule(&b_ir);
      Mv.AddInteriorFaceIntegrator(nvmi);
-     Mv.KeepNbrBlock(true);
+     //  Mv.KeepNbrBlock(true);
      
      // Make a dummy assembly to figure out the sparsity.
      ShiftedVelocityBoundaryForce.Assemble(0);    
      ShiftedVelocityBoundaryForce.Finalize(0);
+     
      // Make a dummy assembly to figure out the sparsity.
      ShiftedEnergyBoundaryForce.Assemble(0);
      ShiftedEnergyBoundaryForce.Finalize(0);
-
      VelocityBoundaryForceIntegrator *vbf_bfi = new VelocityBoundaryForceIntegrator(f_qdata,analyticalSurface->GetElement_Status());
      vbf_bfi->SetIntRule(&b_ir);
      VelocityBoundaryForce.AddBdrFaceIntegrator(vbf_bfi);
@@ -394,8 +393,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      
    // Make a dummy assembly to figure out the sparsity.
    EnergyBoundaryForce.Assemble(0);
-   EnergyBoundaryForce.Finalize(0);
-     
+   EnergyBoundaryForce.Finalize(0);    
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -435,7 +433,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   
   // reset mesh, needed to update the normal velocity penalty term.
   Mv.Update();
-  Mv.KeepNbrBlock(true);
+  //  Mv.KeepNbrBlock(true);
   // set the state at the initial one
   UpdateMesh(S_init);
   // assemble the velocity mass matrix at that state
@@ -551,6 +549,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       rhs += rhs_accel;
     }
 
+  
   HypreParMatrix A;
  
   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -627,7 +626,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 	 loc_v(h1dofs[s]) = v(h1dofs[s]);
        }
      }
-
    }
 
    EnergyBoundaryForce.MultTranspose(loc_v, be_rhs);
@@ -788,10 +786,8 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
    double glob_ke = 0.0;
-   //   v.Print(std::cout,1);
    // This should be turned into a kernel so that it could be displayed in pa
    double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
-   //  std::cout << " loc_ke " << loc_ke << std::endl;
    MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
                  H1.GetParMesh()->GetComm());
    return glob_ke;
@@ -1335,7 +1331,6 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 		   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 		   Trans_el1.SetIntPoint(&eip);
-		   //  std::cout << " neq face in quadrat " << nqp_face << std::endl;
 		   for (int q = 0; q  < nqp_face; q++)
 		     {
 		       const IntegrationPoint &ip_f = b_ir.IntPoint(q);
@@ -1791,6 +1786,7 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 {
   //  Force = 0.0;
   Force.Update();
+  
   Force.Assemble();
   forcemat_is_assembled = true;
 }
@@ -1802,8 +1798,8 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
   VelocityBoundaryForce.Assemble();
   if (analyticalSurface != NULL){
     // reset mesh, needed to update the normal velocity penalty term.
-    //  ShiftedVelocityBoundaryForce = 0.0;
-    ShiftedVelocityBoundaryForce.Update();
+    ShiftedVelocityBoundaryForce = 0.0;
+    //  ShiftedVelocityBoundaryForce.Update();
     ShiftedVelocityBoundaryForce.Assemble();
     bvemb_forcemat_is_assembled = true;
   }
@@ -1815,9 +1811,9 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
   EnergyBoundaryForce = 0.0;
   //  EnergyBoundaryForce.Update();
   EnergyBoundaryForce.Assemble();
-   if (analyticalSurface != NULL){
-     //  ShiftedEnergyBoundaryForce = 0.0;
-     ShiftedEnergyBoundaryForce.Update();
+  if (analyticalSurface != NULL){
+    ShiftedEnergyBoundaryForce = 0.0;
+    //     ShiftedEnergyBoundaryForce.Update();
      ShiftedEnergyBoundaryForce.Assemble();
      beemb_forcemat_is_assembled = true;
   }
@@ -1826,8 +1822,8 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
  void LagrangianHydroOperator::SetupEmbeddedDataStructure(){
    if (analyticalSurface != NULL){  
-     // analyticalSurface->SetupElementStatus();
-     //  analyticalSurface->SetupFaceTags();
+     analyticalSurface->SetupElementStatus();
+     analyticalSurface->SetupFaceTags();
      analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
    }
  }
@@ -1887,7 +1883,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
-   //  hydro_oper->ResetEmbeddedData();
+   hydro_oper->ResetEmbeddedData();
    hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
@@ -1901,7 +1897,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
    //  hydro_oper->ResetEmbeddedData();
-   hydro_oper->SetupEmbeddedDataStructure();
+   //   hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);

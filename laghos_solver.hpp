@@ -83,8 +83,8 @@ protected:
    mutable MixedBilinearForm Force;
    mutable MixedBilinearForm VelocityBoundaryForce;
    mutable MixedBilinearForm EnergyBoundaryForce;
-   mutable ParMixedBilinearForm ShiftedVelocityBoundaryForce;
-   mutable ParMixedBilinearForm ShiftedEnergyBoundaryForce;
+   mutable MixedBilinearForm ShiftedVelocityBoundaryForce;
+   mutable MixedBilinearForm ShiftedEnergyBoundaryForce;
 
    mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, shiftedb_rhs, shiftedbe_rhs;
    const double penaltyParameter;

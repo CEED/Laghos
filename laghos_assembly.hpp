@@ -132,7 +132,7 @@ private:
 public:
   VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
-				   const FiniteElement &test_fe1,
+				   const FiniteElement &test_fe,
 				   FaceElementTransformations &Tr,
 				   DenseMatrix &elmat);
 };
@@ -148,7 +148,7 @@ private:
 public:
   EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
-				   const FiniteElement &test_fe1,
+				   const FiniteElement &test_fe,
 				   FaceElementTransformations &Tr,
 				   DenseMatrix &elmat);
 };
@@ -162,8 +162,8 @@ private:
 
 public:
   NormalVelocityMassIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
-   virtual void AssembleFaceMatrix(const FiniteElement &fe,
-				   const FiniteElement &fe2,
+   virtual void AssembleFaceMatrix(const FiniteElement &el1,
+				   const FiniteElement &el2,
                                        FaceElementTransformations &Tr,
                                        DenseMatrix &elmat);
 
@@ -179,15 +179,19 @@ private:
   const FaceQuadratureData &qdata;
   Array<int> elemStatus;
   Array<int> faceTags;
+  ParFiniteElementSpace &trial_L2;
+  ParFiniteElementSpace &test_H1;
   
 public:
-  ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
+  ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag, ParFiniteElementSpace &l2, ParFiniteElementSpace &h1) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag), trial_L2(l2), test_H1(h1) { }
   virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
 				  const FiniteElement &trial_fe2,
 				  const FiniteElement &test_fe1,
 				  const FiniteElement &test_fe2,
 				  FaceElementTransformations &Trans,
-				  DenseMatrix &elmat);
+				  DenseMatrix &elmat,
+				  Array<int> &trial_vdofs,
+				  Array<int> &test_vdofs);
 };
 
   // Performs full assembly for the boundary force operator on the energy equation.
@@ -200,15 +204,19 @@ private:
    const FaceQuadratureData &qdata;
    Array<int> elemStatus;
    Array<int> faceTags;
+   ParFiniteElementSpace &trial_L2;
+   ParFiniteElementSpace &test_H1;
   
 public:
-  ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag){ }
+  ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag, ParFiniteElementSpace &l2, ParFiniteElementSpace &h1) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag), trial_L2(l2), test_H1(h1) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe1,
 				   const FiniteElement &trial_fe2,
 				   const FiniteElement &test_fe1,
 				   const FiniteElement &test_fe2,
 				   FaceElementTransformations &Trans,
-				   DenseMatrix &elmat);
+				   DenseMatrix &elmat,
+				   Array<int> &trial_vdofs,
+				   Array<int> &test_vdofs);
 };
 
 // Performs full assembly for the normal velocity mass matrix operator.
@@ -220,13 +228,15 @@ private:
    const FaceQuadratureData &qdata;
    Array<int> elemStatus;
    Array<int> faceTags;
+   ParFiniteElementSpace &H1;
   
 public:
-  ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag) { }
-  virtual void AssembleFaceMatrix(const FiniteElement &fe1,
-				  const FiniteElement &fe2,
+  ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, AnalyticalSurface *analyticalSurface, FaceQuadratureData &qdata, Array<int> elementStatus, Array<int> faceTag, ParFiniteElementSpace &h1) : pmesh(pmesh), analyticalSurface(analyticalSurface), qdata(qdata), elemStatus(elementStatus), faceTags(faceTag), H1(h1) { }
+  virtual void AssembleFaceMatrix(const FiniteElement &el1,
+				  const FiniteElement &el2,
 				  FaceElementTransformations &Trans,
-				  DenseMatrix &elmat);
+				  DenseMatrix &elmat,
+				  Array<int> &vdofs);
   
 };
   

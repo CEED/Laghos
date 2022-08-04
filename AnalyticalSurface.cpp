@@ -88,9 +88,9 @@ namespace mfem
     faceTags = maxBoundaryTag;
     for (int i = 0; i < H1.GetNE(); i++)
       {    
-	ElementTransformation *eltrans = pmesh->GetElementTransformation(i);
+	ElementTransformation *eltrans = H1.GetElementTransformation(i);
 	const int ElemNo = eltrans->ElementNo;
-	pmesh->SetAttribute(ElemNo,initialElementTags[i]);
+	pmesh->SetAttribute(i,initialElementTags[i]);
       }
     pmesh->SetAttributes();
   }
