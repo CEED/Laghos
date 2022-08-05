@@ -224,7 +224,7 @@ comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
 
 ## libROM: library for Reduced Order Model
 
-We rely heavily on the library for reduced order models, [libROM](libROM.net),
+We rely heavily on the library for reduced order models, [libROM](https://www.libROM.net),
 developed by the ROM team at [LLNL](https://www.llnl.gov).
 
 ## YouTube Tutorials on Reduced Order Models
