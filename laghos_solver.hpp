@@ -103,7 +103,6 @@ protected:
 
    void UpdateQuadratureData(const Vector &S) const;
    void UpdateSurfaceNormalStressData(const Vector &S) const;
-   void UpdateEmbeddedSurfaceNormalStressData(const Vector &S) const;
    void AssembleForceMatrix() const;
    void AssembleVelocityBoundaryForceMatrix() const;
    void AssembleEnergyBoundaryForceMatrix() const;

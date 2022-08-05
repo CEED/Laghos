@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
-   int order_v = 1;
+   int order_v = 2;
    int order_e = 1;
    int order_q = -1;
    int ode_solver_type = 4;

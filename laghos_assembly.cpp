@@ -422,6 +422,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  // Set the integration point in the face and the neighboring elements
 	  Trans.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Trans.GetElement1IntPoint();
+	  
 	  Vector nor;
 	  nor.SetSize(dim);
 	  nor = 0.0;
@@ -626,12 +627,14 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  }
 	  nor_norm = sqrt(nor_norm);
 	  //  tN /= nor_norm;
+	  //  std::cout << " DistX " << D(0) << " DistY " << D(1) << std::endl;
 	  
 	  double ntildaDotTrueN = 0;
 	  for (int s = 0; s < dim; s++){
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
+	  //  std::cout << " nTildaDotNElem1 " << ntildaDotTrueN << std::endl;
 
 	  Vector trial_wrk = shape;
 	  Vector test_wrk = shape;
@@ -705,7 +708,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  }
 	  nor_norm = sqrt(nor_norm);
 	  //  tN /= nor_norm;
-	  //  std::cout << " DistX " << D(0) << " DistY " << D(1) << std::endl;
+	  // std::cout << " DistX " << D(0) << " DistY " << D(1) << std::endl;
 	  //  std::cout << " NormalX " << tN(0) << " NormalY " << tN(1) << std::endl;
 
 	  double ntildaDotTrueN = 0.0;
@@ -713,7 +716,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    ntildaDotTrueN += tN(s) * nor(s)/nor_norm;
 	  }
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
-	  //	  std::cout << " nTildaDotN " << ntildaDotTrueN << std::endl;
+	  //  std::cout << " nTildaDotN " << ntildaDotTrueN << std::endl;
 	  
 	  Vector trial_wrk = shape;
 	  Vector test_wrk = shape;

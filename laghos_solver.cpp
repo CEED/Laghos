@@ -339,7 +339,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      
      ShiftedEnergyBoundaryForceIntegrator *e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, analyticalSurface, interiorf_qdata,analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags(), L2, H1);
      e_bfi->SetIntRule(&b_ir);
-     //  ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
+     ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(e_bfi);
      //  ShiftedEnergyBoundaryForce.KeepNbrBlock(true);
      
      ShiftedNormalVelocityMassIntegrator *nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, analyticalSurface, interiorf_qdata, analyticalSurface->GetElement_Status(), analyticalSurface->GetFace_Tags(), H1);
@@ -444,16 +444,14 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
   UpdateQuadratureData(S); 
   UpdateSurfaceNormalStressData(S);
   if (analyticalSurface != NULL){
-    UpdateEmbeddedSurfaceNormalStressData(S);
+    // UpdateEmbeddedSurfaceNormalStressData(S);
     // assemble boundary terms at the most recent state.
     Mv.AssembleInteriorFaceIntegrators();
   }
   // assemble boundary terms at the most recent state.
   Mv.AssembleBoundaryFaceIntegrators();
   AssembleForceMatrix();
-  //  std::cout << " myid " << myid << " calling " << std::endl;
   AssembleVelocityBoundaryForceMatrix();
-  //  std::cout << " myid " << myid << " I AM OUT ASSEMBLE FACE " << std::endl;
 
   // The monolithic BlockVector stores the unknown fields as follows:
   // (Position, Velocity, Specific Internal Energy).
@@ -572,7 +570,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    UpdateQuadratureData(S);
    UpdateSurfaceNormalStressData(S);
    if (analyticalSurface != NULL){
-     UpdateEmbeddedSurfaceNormalStressData(S);
+     //   UpdateEmbeddedSurfaceNormalStressData(S);
    }
    AssembleForceMatrix();
    AssembleEnergyBoundaryForceMatrix();
@@ -1381,10 +1379,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       
 		       for (int vd = 0 ; vd < dim; vd++)
 			 {
-			   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-			   // std::cout << " weighted Normal StressElem1 " << interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) << std::endl;
-			   // std::cout << " weighted Normal PenaltyElem1 " << interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) << std::endl;
-		
+			   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;		
 			 }
 		     }
 		 }
@@ -1443,8 +1438,6 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		       for (int vd = 0 ; vd < dim; vd++)
 			 {
 			   interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-			   //  std::cout << " weighted Normal StressElem2 " << interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) << std::endl;
-			   //   std::cout << " weighted Normal PenaltyElem2 " << interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) << std::endl;
 			 }
 		     }
 		 }
@@ -1452,333 +1445,6 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	     }
 	   }
        }
-}
-
-void LagrangianHydroOperator::UpdateEmbeddedSurfaceNormalStressData(const Vector &S) const
-{
-  /*  if (bvemb_qdata_is_current) { return; }
-   bvemb_qdata_is_current = true;
-   bvemb_forcemat_is_assembled = false;
-   
-   // This code is only for the 1D/FA mode
-   const int nqp_face = b_ir.GetNPoints();
-   ParGridFunction x, v, e;
-   Vector* sptr = const_cast<Vector*>(&S);
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1.GetVSize());
-   e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-   Vector weightedNormalStress;
-   DenseMatrix stress(dim);
-   weightedNormalStress.SetSize(dim);
-   weightedNormalStress = 0.0;
-
-   // compute the maximum vorticity, density (rho), artificial viscosity (mu), and sound speed
-   // over all faces/edges of the domain.
-   double max_vorticity = 0.0;
-   double max_rho = 0.0;
-   double max_sound_speed = 0.0;
-   double max_mu = 0.0;
-   double min_h = 10000.0;
-   double max_h = 0.0;
-
-   Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-   Array<int> &faceTags = analyticalSurface->GetFace_Tags();
-
-   for (int i = 0; i < H1.GetNF(); i++)
-     {
-       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
-       if (eltrans != NULL){
-	 const int faceElemNo = eltrans->ElementNo;
-	 if (faceTags[faceElemNo] == 5){
-	   int Elem1No = eltrans->Elem1No;
-	   int statusElem1 = elemStatus[Elem1No];
-	   if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	     const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	     ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	     Trans_el1.SetIntPoint(&eip);
-	     for (int q = 0; q  < nqp_face; q++)
-	       {
-		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-		 eltrans->SetAllIntPoints(&ip_f);
-		 Vector x(3);
-		 eltrans->Transform(ip_f,x);
-		 const double detJ = (Trans_el1.Jacobian()).Det();       
-		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
-		 double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
-		 double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-		 double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
-		 if ( max_rho < rho_vals){
-		   max_rho = rho_vals;
-		 }
-		 if ( max_sound_speed < sound_speed){
-		   max_sound_speed = sound_speed;
-		 }
-		 DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-		 if (use_viscosity)
-		   {
-		     // Compression-based length scale at the point. The first
-		     // eigenvector of the symmetric velocity lgradient gives the
-		     // direction of maximal compression. This is used to define the
-		     // relative change of the initial length scale.
-		     v.GetVectorGradient(Trans_el1, sgrad_v);
-		     
-		     double vorticity_coeff = 1.0;
-		     if (use_vorticity)
-		       {
-			 const double grad_norm = sgrad_v.FNorm();
-			 const double div_v = fabs(sgrad_v.Trace());
-			 vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-			 if (max_vorticity < vorticity_coeff){
-			   max_vorticity = vorticity_coeff;
-			 }
-			 
-		       } 
-		     sgrad_v.Symmetrize();
-		     double eig_val_data[3], eig_vec_data[9];
-		     if (dim==1)
-		       {
-			 eig_val_data[0] = sgrad_v(0, 0);
-			 eig_vec_data[0] = 1.;
-		       }
-		     else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-		     Vector compr_dir(eig_vec_data, dim);
-		     mfem::Mult(Trans_el1.Jacobian(), interiorf_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
-		     Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-		   // Change of the initial mesh size in the compression direction.
-		     const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
-		     // Measure of maximal compression.
-		     const double mu = fabs(eig_val_data[0]);
-		     if( max_mu < mu){
-		       max_mu = mu;
-		     }
-		     if( h < min_h){
-		       min_h = h;
-		     }
-		     if( h > max_h){
-		     max_h = h;
-		     }	 
-		   }
-	       }
-	   }
-	   else {
-	     const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
-	     ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
-	     Trans_el2.SetIntPoint(&eip);
-	     for (int q = 0; q < nqp_face; q++)
-	       {
-		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-		 eltrans->SetAllIntPoints(&ip_f);
-		 Vector x(3);
-		 eltrans->Transform(ip_f,x);
-		 const double detJ = (Trans_el2.Jacobian()).Det();       
-		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
-		 double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
-		 double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
-		 double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
-		 if ( max_rho < rho_vals){
-		   max_rho = rho_vals;
-		 }
-		 if ( max_sound_speed < sound_speed){
-		   max_sound_speed = sound_speed;
-		 }
-		 DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-		 if (use_viscosity)
-		   {
-		     // Compression-based length scale at the point. The first
-		     // eigenvector of the symmetric velocity lgradient gives the
-		     // direction of maximal compression. This is used to define the
-		     // relative change of the initial length scale.
-		     v.GetVectorGradient(Trans_el2, sgrad_v);
-		     
-		     double vorticity_coeff = 1.0;
-		     if (use_vorticity)
-		       {
-			 const double grad_norm = sgrad_v.FNorm();
-			 const double div_v = fabs(sgrad_v.Trace());
-			 vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-			 if (max_vorticity < vorticity_coeff){
-			   max_vorticity = vorticity_coeff;
-			 }
-			 
-		       } 
-		     sgrad_v.Symmetrize();
-		     double eig_val_data[3], eig_vec_data[9];
-		     if (dim==1)
-		       {
-			 eig_val_data[0] = sgrad_v(0, 0);
-			 eig_vec_data[0] = 1.;
-		       }
-		     else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-		     Vector compr_dir(eig_vec_data, dim);
-		     mfem::Mult(Trans_el2.Jacobian(), interiorf_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
-		     Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-		   // Change of the initial mesh size in the compression direction.
-		     const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
-		     // Measure of maximal compression.
-		     const double mu = fabs(eig_val_data[0]);
-		     if( max_mu < mu){
-		       max_mu = mu;
-		     }
-		     if( h < min_h){
-		       min_h = h;
-		     }
-		     if( h > max_h){
-		     max_h = h;
-		     }	 
-		   }
-	       }
-	   }
-	 }
-       }
-     }
-    
-   double global_max_vorticity = 0.0;
-   double global_max_rho = 0.0;
-   double global_max_sound_speed = 0.0;
-   double global_max_mu = 0.0;
-   double global_min_h = 1000.0;
-   double global_max_h = 0.0;
-   
-   // parallel calls
-   MPI_Allreduce(&max_rho, &global_max_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   MPI_Allreduce(&max_sound_speed, &global_max_sound_speed, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   MPI_Allreduce(&max_mu, &global_max_mu, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   MPI_Allreduce(&max_vorticity, &global_max_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-   MPI_Allreduce(&min_h, &global_min_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
-   MPI_Allreduce(&max_h, &global_max_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-
-   // compute normal stress at each quadrature point on all the boundary faces and
-   // store it in f_qdata.weightedNormalStress
-   // compute the penalty scaling and store it in f_qdata.normalVelocityPenaltyScaling.
-   // expression of the penalty is defined in the FaceQuadratureData in laghos_solver.hpp
-   for (int i = 0; i < H1.GetNF(); i++)
-     {
-       FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
-       if (eltrans != NULL){
-	 const int faceElemNo = eltrans->ElementNo;
-	 if (faceTags[faceElemNo] == 5){
-	   int Elem1No = eltrans->Elem1No;
-	   int statusElem1 = elemStatus[Elem1No];
-	   
-	   if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	     const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	     ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	     Trans_el1.SetIntPoint(&eip);
-	     for (int q = 0; q  < nqp_face; q++)
-	       {
-		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-		 eltrans->SetAllIntPoints(&ip_f);
-		 Vector nor;
-		 nor.SetSize(dim);
-		 nor = 0.0;
-		 
-		 if (dim == 1)
-		 {
-		   nor(0) = 2*eip.x - 1.0;
-		 }
-		 else
-		   {
-		     CalcOrtho(eltrans->Jacobian(), nor);
-		   }
-		 
-		 double nor_norm = 0.0;
-		 for (int s = 0; s < dim; s++){
-		   nor_norm += nor(s) * nor(s);
-		 }
-		 nor_norm = sqrt(nor_norm);
-		 
-		 const double detJ = (Trans_el1.Jacobian()).Det();
-		 
-		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
-		 double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
-		 double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-		 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
-		 
-		 stress = 0.0;
-		 
-		 double p = (gamma_vals - 1) * rho_vals * e_vals;
-
-		 for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-	   
-		 if (use_viscosity)
-		   {
-		     interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h;
-		     
-		     if (use_vorticity)
-		       {
-			 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
-		       }
-		   }
-		 // Quadrature data for partial assembly of the force operator.
-		 stress.Mult( nor, weightedNormalStress);
-		 
-		 for (int vd = 0 ; vd < dim; vd++)
-		   {
-		     interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-		   }
-	       }
-	   }
-	   else {
-	     const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
-	     ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
-	     Trans_el2.SetIntPoint(&eip);
-	     for (int q = 0; q  < nqp_face; q++)
-	       {
-		 const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-		 eltrans->SetAllIntPoints(&ip_f);
-		 Vector nor;
-		 nor.SetSize(dim);
-		 nor = 0.0;
-		 
-		 if (dim == 1)
-		 {
-		   nor(0) = 2*eip.x - 1.0;
-		 }
-		 else
-		   {
-		     CalcOrtho(eltrans->Jacobian(), nor);
-		   }
-		 
-		 double nor_norm = 0.0;
-		 for (int s = 0; s < dim; s++){
-		   nor_norm += nor(s) * nor(s);
-		 }
-		 nor_norm = sqrt(nor_norm);
-		 
-		 const double detJ = (Trans_el2.Jacobian()).Det();
-		 
-		 double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
-		 double gamma_vals = gamma_gf.GetValue(Trans_el2, eip);
-		 double e_vals = fmax(0.0,e.GetValue(Trans_el2, eip));
-		 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
-		 
-		 stress = 0.0;
-		 
-		 double p = (gamma_vals - 1) * rho_vals * e_vals;
-
-		 for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-	   
-		 if (use_viscosity)
-		   {
-		     interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * global_max_sound_speed / global_min_h;
-		     
-		     if (use_vorticity)
-		       {
-			 interiorf_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
-		       }
-		   }
-		 // Quadrature data for partial assembly of the force operator.
-		 stress.Mult( nor, weightedNormalStress);
-		 
-		 for (int vd = 0 ; vd < dim; vd++)
-		   {
-		     interiorf_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-		   }
-	       }
-	   }
-	 }
-       }
-     }*/
 }
   
   
@@ -1822,8 +1488,8 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
  void LagrangianHydroOperator::SetupEmbeddedDataStructure(){
    if (analyticalSurface != NULL){  
-     analyticalSurface->SetupElementStatus();
-     analyticalSurface->SetupFaceTags();
+     //  analyticalSurface->SetupElementStatus();
+     //  analyticalSurface->SetupFaceTags();
      analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
    }
  }
@@ -1883,7 +1549,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
-   hydro_oper->ResetEmbeddedData();
+   //  hydro_oper->ResetEmbeddedData();
    hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
@@ -1897,7 +1563,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
    //  hydro_oper->ResetEmbeddedData();
-   //   hydro_oper->SetupEmbeddedDataStructure();
+   hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
    add(v0, 0.5 * dt, dv_dt, V);
