@@ -367,7 +367,7 @@ public:
 
     int FinalNumberOfSamples()
     {
-        MFEM_VERIFY(finalized, "ROM_Sampler not finalized");
+        MFEM_VERIFY(finalized, "DMD_Sampler not finalized");
         return finalNumSamples;
     }
 

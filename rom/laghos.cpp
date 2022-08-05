@@ -1484,7 +1484,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    // get out of the loop when no more file is found
+                    // exit the loop when no more files are found
                     last_step = true;
                     break;
                 }
