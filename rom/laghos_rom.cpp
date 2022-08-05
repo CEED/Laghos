@@ -70,15 +70,6 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
         }
     }
 
-    if (!sns)
-    {
-        MFEM_VERIFY(gfH1.Size() == H1size, "");
-        for (int i=0; i<H1size; ++i)
-            gfH1[i] = dSdt[H1size + i];  // Fv
-
-        gfH1.GetTrueDofs(Xdiff);
-    }
-
     if (rank == 0)
     {
         cout << "E taking sample at t " << t << endl;
@@ -96,15 +87,6 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
     else
     {
         if (t >= tbegin) dmd_E->takeSample(E.GetData(), t);
-    }
-
-    if (!sns)
-    {
-        MFEM_VERIFY(gfL2.Size() == L2size, "");
-        for (int i=0; i<L2size; ++i)
-            gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-        gfL2.GetTrueDofs(Ediff);
     }
 
     // Write timeSamples to file
@@ -200,21 +182,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 tSnapV.push_back(t);
             }
         }
-
-        if (!sns)
-        {
-            MFEM_VERIFY(gfH1.Size() == H1size, "");
-            for (int i=0; i<H1size; ++i)
-                gfH1[i] = dSdt[H1size + i];  // Fv
-
-            gfH1.GetTrueDofs(Xdiff);
-            bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFv.push_back(t);
-            }
-        }
     }
 
     const bool sampleE = generator_E->isNextSample(t);
@@ -243,21 +210,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         {
             addSample = generator_E->takeSample(E.GetData(), t, dt);
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
-        }
-
-        if (!sns)
-        {
-            MFEM_VERIFY(gfL2.Size() == L2size, "");
-            for (int i=0; i<L2size; ++i)
-                gfL2[i] = dSdt[(2*H1size) + i];  // Fe
-
-            gfL2.GetTrueDofs(Ediff);
-            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
-
-            if (writeSnapshots && addSampleF)
-            {
-                tSnapFe.push_back(t);
-            }
         }
 
         if (writeSnapshots && addSample)
