@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.55) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.52) {
   }
 
   Line::~Line(){}
@@ -71,7 +71,7 @@ namespace mfem{
 	pmesh->SetAttribute(i, max_elem_attr+1);
       }
     }
-  //  std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
+  std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
   //  elemStatus.Print(std::cout,1);
   H1.Synchronize(ess_inactive);
   pmesh->SetAttributes();

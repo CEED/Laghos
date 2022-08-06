@@ -397,12 +397,14 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   const int h1dofs2_cnt = test_fe2.GetDof();
   const int l2dofs2_cnt = trial_fe2.GetDof();
  
-  DenseMatrix loc_force(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim);
+  DenseMatrix loc_force(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), Jinv(dim);
   Vector te_shape(h1dofs_cnt), tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim), dshapedn(h1dofs_cnt), dshapephysdd(h1dofs_cnt);
   const int e = Trans.ElementNo;
   te_shape = 0.0;
   tr_shape = 0.0;
   Vloc_force = 0.0;
+  dshape = 0.0;
+  Jinv = 0.0;
   if (faceTags[e] == 5){
     if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
 
@@ -413,6 +415,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
       
       for (int q = 0; q  < nqp_face; q++)
 	{
+	  
 	  Vector D(dim);
 	  Vector tN(dim);
 	  D = 0.0;
@@ -436,9 +439,13 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    }
 	  dshapephys = 0.0;
 	  te_shape = 0.0;
-	  test_fe1.CalcShape(eip, te_shape);
-	  test_fe1.CalcPhysDShape(*(Trans.Elem1), dshapephys);
 
+	  test_fe1.CalcShape(eip, te_shape);
+	  test_fe1.CalcDShape(eip, dshape);
+	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  Mult(dshape, Jinv, dshapephys);
+
+	  
 	  loc_force = 0.0;
 	  double normalStressProjNormal = 0.0;
 	  double nor_norm = 0.0;
@@ -508,8 +515,11 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  te_shape = 0.0;
 
 	  test_fe2.CalcShape(eip, te_shape);
-	  test_fe2.CalcPhysDShape(*(Trans.Elem2), dshapephys);
-
+	  test_fe2.CalcDShape(eip, dshape);
+	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  Mult(dshape, Jinv, dshapephys);
+	
+	 
 	  loc_force = 0.0;
 	  double normalStressProjNormal = 0.0;
 	  double nor_norm = 0.0;
@@ -579,8 +589,10 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim), dshapedn(h1dofs_cnt), dshapephysdd(h1dofs_cnt);
   const int e = Trans.ElementNo;
   shape = 0.0;
-  DenseMatrix loc_force1(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim);
+  DenseMatrix loc_force1(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), Jinv(dim);
   Vector Vloc_force(loc_force1.Data(), h1dofs_cnt*dim);
+  dshape = 0.0;
+  Jinv = 0.0;
 
   //  std::cout << " qnp face shift " << nqp_face << std::endl;
   if (faceTags[e] == 5){
@@ -615,9 +627,15 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  dshapephys = 0.0;
 	  dshapephysdd = 0.0;
 	  shape = 0.0;
+
+	  Trans.SetAllIntPoints(&eip);
+
 	  el1.CalcShape(eip, shape);
-	  el1.CalcPhysDShape(*(Trans.Elem1), dshapephys);
-	  
+	  el1.CalcDShape(eip, dshape);
+	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  Mult(dshape, Jinv, dshapephys);
+
+	
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    nor_norm += nor(s) * nor(s);
@@ -696,9 +714,13 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  nor *= -1.0;
 	  dshapephys = 0.0;
 	  shape = 0.0;
-	  el2.CalcShape(eip, shape);
-	  el2.CalcPhysDShape(*(Trans.Elem2), dshapephys);
 
+	  el2.CalcShape(eip, shape);
+	
+	  el2.CalcDShape(eip, dshape);
+	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  Mult(dshape, Jinv, dshapephys);
+	  
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    nor_norm += nor(s) * nor(s);

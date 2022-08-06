@@ -1488,8 +1488,8 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
  void LagrangianHydroOperator::SetupEmbeddedDataStructure(){
    if (analyticalSurface != NULL){  
-     //  analyticalSurface->SetupElementStatus();
-     //  analyticalSurface->SetupFaceTags();
+     analyticalSurface->SetupElementStatus();
+     analyticalSurface->SetupFaceTags();
      analyticalSurface->ComputeDistanceAndNormalAtQuadraturePoints();
    }
  }
@@ -1549,7 +1549,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    // -- 1.
    // S is S0.
    hydro_oper->UpdateMesh(S);
-   //  hydro_oper->ResetEmbeddedData();
+   hydro_oper->ResetEmbeddedData();
    hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
@@ -1562,7 +1562,7 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
    add(S0, 0.5 * dt, dS_dt, S);
    hydro_oper->ResetQuadratureData();
    hydro_oper->UpdateMesh(S);
-   //  hydro_oper->ResetEmbeddedData();
+   hydro_oper->ResetEmbeddedData();
    hydro_oper->SetupEmbeddedDataStructure();
    hydro_oper->SolveVelocity(S, dS_dt, S_init);
    // V = v0 + 0.5 * dt * dv_dt;
