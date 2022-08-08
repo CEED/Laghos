@@ -1,4 +1,4 @@
-// CopyrOAight (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
+// Copyright (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -71,7 +71,7 @@ namespace mfem{
 	pmesh->SetAttribute(i, max_elem_attr+1);
       }
     }
-  std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
+  //  std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
   //  elemStatus.Print(std::cout,1);
   H1.Synchronize(ess_inactive);
   pmesh->SetAttributes();

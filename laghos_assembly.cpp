@@ -449,10 +449,26 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
 	  Mult(dshape, Jinv, dshapephys);
 
-	  DenseMatrix physical_hess(h1dofs_cnt,dim*dim);
+	  int size = (dim*(dim+1))/2;
+	  DenseMatrix physical_hess(h1dofs_cnt,size);
 	  physical_hess = 0.0;
-	  test_fe1.CalcPhysHessian(Trans.GetElement1Transformation(),physical_hess);
+	  test_fe1.CalcPhysHessian2(Trans.GetElement1Transformation(),physical_hess);
+	  DenseMatrix adjusted_physical_hess(h1dofs_cnt,dim*dim);
+	  for (int s = 0; s < h1dofs_cnt; s++){ 
+	    for (int l = 0; l < dim; l++){
+	      for (int g = 0; g <= l; g++){
+		adjusted_physical_hess(s,g + l * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+		adjusted_physical_hess(s,l + g * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+	      }
+	    }
+	  }
+	  
+	  std::cout << " phy " << std::endl; 
+	  physical_hess.Print(std::cout,1);
+	  std::cout << " adjusted phy " << std::endl; 
+	  adjusted_physical_hess.Print(std::cout,1);
 
+	  
 	  loc_force = 0.0;
 	  double normalStressProjNormal = 0.0;
 	  double nor_norm = 0.0;
@@ -475,7 +491,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < h1dofs_cnt; s++){
 	    for (int l = 0; l < dim; l++){
 	      for (int g = 0; g < dim; g++){
-		q_hess_dot_d(s) += physical_hess(s, g + l*dim) * D(g) * D(l);
+		q_hess_dot_d(s) += adjusted_physical_hess(s, g + l*dim) * D(g) * D(l);
 	      }
 	    }
 	  }
@@ -545,10 +561,21 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
 	  Mult(dshape, Jinv, dshapephys);
 
-	  DenseMatrix physical_hess(h1dofs_cnt,dim*dim);
+	  int size = (dim*(dim+1))/2; 
+	  DenseMatrix physical_hess(h1dofs_cnt,size);
 	  physical_hess = 0.0;
-	  test_fe2.CalcPhysHessian(Trans.GetElement2Transformation(),physical_hess);
+	  test_fe2.CalcPhysHessian2(Trans.GetElement2Transformation(),physical_hess);
 
+	  DenseMatrix adjusted_physical_hess(h1dofs_cnt,dim*dim);
+	  for (int s = 0; s < h1dofs_cnt; s++){ 
+	    for (int l = 0; l < dim; l++){
+	      for (int g = 0; g <= l; g++){
+		adjusted_physical_hess(s,g + l * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+		adjusted_physical_hess(s,l + g * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+	      }
+	    }
+	  }
+	
 	  loc_force = 0.0;
 	  double normalStressProjNormal = 0.0;
 	  double nor_norm = 0.0;
@@ -571,7 +598,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < h1dofs_cnt; s++){
 	    for (int l = 0; l < dim; l++){
 	      for (int g = 0; g < dim; g++){
-		q_hess_dot_d(s) += physical_hess(s, g + l*dim) * D(g) * D(l);
+		q_hess_dot_d(s) += adjusted_physical_hess(s, g + l*dim) * D(g) * D(l);
 	      }
 	    }
 	  }
@@ -677,9 +704,31 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
 	  Mult(dshape, Jinv, dshapephys);
 
-	  DenseMatrix physical_hess(h1dofs_cnt,dim*dim);
+	  int size = (dim*(dim+1))/2;
+	  DenseMatrix physical_hess(h1dofs_cnt,size);
 	  physical_hess = 0.0;
-	  el1.CalcPhysHessian(Trans.GetElement1Transformation(),physical_hess);	  
+	  el1.CalcPhysHessian2(Trans.GetElement1Transformation(),physical_hess);
+
+	  DenseMatrix adjusted_physical_hess(h1dofs_cnt,dim*dim);
+	  adjusted_physical_hess = 0.0;
+	  for (int s = 0; s < h1dofs_cnt; s++){ 
+	    for (int l = 0; l < dim; l++){
+	      for (int g = 0; g <= l; g++){
+		adjusted_physical_hess(s,g + l * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+		adjusted_physical_hess(s,l + g * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+	      }
+	    }
+	  }
+	  
+	  /*  Vector x_eip(3);
+	  Trans.Transform(eip,x_eip);
+	  Vector xcheck_eip(3);
+	  Trans.Transform(Trans.GetElement1Transformation().GetIntPoint(),xcheck_eip);
+	  std::cout << " eipX " << x_eip(0) << " eipY " << x_eip(1) << std::endl;
+	  std::cout << " CheckX " << xcheck_eip(0) << " checkY " << xcheck_eip(1) << std::endl;*/
+	  
+	  //el1.CalcHessian(eip,hessshape);
+	  
 	  
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
@@ -702,8 +751,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < h1dofs_cnt; s++){
 	    for (int l = 0; l < dim; l++){
 	      for (int g = 0; g < dim; g++){
-		q_hess_dot_d(s) += physical_hess(s, g + l*dim) * D(g) * D(l);
-	  }
+		q_hess_dot_d(s) += adjusted_physical_hess(s, g + l*dim) * D(g) * D(l);
+	      }
 	    }
 	  }
 	  q_hess_dot_d *= 1.0/2.0;
@@ -777,10 +826,21 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
 	  Mult(dshape, Jinv, dshapephys);
 
-	  DenseMatrix physical_hess(h1dofs_cnt,dim * dim);
+	  int size = (dim*(dim+1))/2;
+	  DenseMatrix physical_hess(h1dofs_cnt,size);
 	  physical_hess = 0.0;
-	  el2.CalcPhysHessian(Trans.GetElement2Transformation(), physical_hess);
+	  el2.CalcPhysHessian2(Trans.GetElement2Transformation(), physical_hess);
 	  
+	  DenseMatrix adjusted_physical_hess(h1dofs_cnt,dim*dim);
+	  for (int s = 0; s < h1dofs_cnt; s++){ 
+	    for (int l = 0; l < dim; l++){
+	      for (int g = 0; g <= l; g++){
+		adjusted_physical_hess(s,g + l * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+		adjusted_physical_hess(s,l + g * dim) = physical_hess(s, l + g + (dim - 2) * std::min({l,g,1}));
+	      }
+	    }
+	  }
+	
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    nor_norm += nor(s) * nor(s);
@@ -804,7 +864,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  for (int s = 0; s < h1dofs_cnt; s++){
 	    for (int l = 0; l < dim; l++){
 	      for (int g = 0; g < dim; g++){
-		q_hess_dot_d(s) += physical_hess(s, g + l*dim) * D(g) * D(l);
+		q_hess_dot_d(s) += adjusted_physical_hess(s, g + l*dim) * D(g) * D(l);
 	      }
 	    }
 	  }
