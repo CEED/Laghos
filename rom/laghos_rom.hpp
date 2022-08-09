@@ -72,7 +72,7 @@ enum HyperreductionSamplingType
 {
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
-    sopt,      // S-OPT
+    sopt,       // S-OPT
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -187,10 +187,6 @@ struct ROM_Options
     double desired_dt = -1.0;
     double dmd_closest_rbf = 0.9;
     bool   dmd_nonuniform = false;
-    bool   dmd_init_os_s = false;
-    bool   dmd_init_os_d = false;
-    bool   dmd_mean_os_s = false;
-    bool   dmd_mean_os_d = false;
     double rhoFactor = 1.0; // factor for scaling rho
     double atwoodFactor = 1.0 / 3.0; // factor for Atwood number in Rayleigh-Taylor instability problem
     double blast_energyFactor = 1.0; // factor for scaling blast energy
@@ -282,19 +278,6 @@ public:
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
-        if (input.dmd_nonuniform)
-        {
-            dmd_X = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
-            dmd_V = new CAROM::NonuniformDMD(tH1size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
-            dmd_E = new CAROM::NonuniformDMD(tL2size, input.dmd_init_os_s, input.dmd_init_os_d, input.dmd_mean_os_s, input.dmd_mean_os_d);
-        }
-        else
-        {
-            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
-            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
-            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf);
-        }
-
         SetStateVariables(S_init);
 
         dXdt = 0.0;
@@ -353,7 +336,26 @@ public:
                 }
             }
         }
-        else first_sv = input.sv_shift;
+        else
+        {
+            first_sv = input.sv_shift;
+            initX = NULL;
+            initV = NULL;
+            initE = NULL;
+        }
+
+        if (input.dmd_nonuniform)
+        {
+            dmd_X = new CAROM::NonuniformDMD(tH1size, offsetInit, false, initX, NULL);
+            dmd_V = new CAROM::NonuniformDMD(tH1size, offsetInit, false, initV, NULL);
+            dmd_E = new CAROM::NonuniformDMD(tL2size, offsetInit, false, initE, NULL);
+        }
+        else
+        {
+            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initX);
+            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initV);
+            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initE);
+        }
     }
 
     void SampleSolution(const double t, const double dt, Vector const& S);
