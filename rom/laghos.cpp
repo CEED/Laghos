@@ -1397,7 +1397,7 @@ int main(int argc, char *argv[])
                 if (myid == 0) cout << "Predicting time t " << curr_time << " using DMD window " << curr_window << " with initial start time " << window_start_time << std::endl;
 
                 result_X = dmd_X->predict(curr_time);
-                result_V = (romOptions.useVX) ? dmd_X->predict(curr_time, 1) : dmd_V->predict(curr_time);
+                result_V = (romOptions.useVX && romOptions.dmd_nonuniform) ? dmd_X->predict(curr_time, 1) : dmd_V->predict(curr_time);
                 result_E = dmd_E->predict(curr_time);
                 Vector m_result_X(result_X->getData(), result_X->dim());
                 Vector m_result_V(result_V->getData(), result_V->dim());

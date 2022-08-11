@@ -346,15 +346,15 @@ public:
 
         if (input.dmd_nonuniform)
         {
-            dmd_X = new CAROM::NonuniformDMD(tH1size, offsetInit, false, initX, NULL);
-            dmd_V = new CAROM::NonuniformDMD(tH1size, offsetInit, false, initV, NULL);
-            dmd_E = new CAROM::NonuniformDMD(tL2size, offsetInit, false, initE, NULL);
+            dmd_X = new CAROM::NonuniformDMD(tH1size, initX, NULL);
+            dmd_V = new CAROM::NonuniformDMD(tH1size, initV, NULL);
+            dmd_E = new CAROM::NonuniformDMD(tL2size, initE, NULL);
         }
         else
         {
-            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initX);
-            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initV);
-            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, offsetInit, initE);
+            dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, initX);
+            dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, initV);
+            dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS", input.dmd_closest_rbf, initE);
         }
     }
 
