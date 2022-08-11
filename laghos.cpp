@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
-   int order_v = 2;
+   int order_v = 1;
    int order_e = 1;
    int order_q = -1;
    int ode_solver_type = 4;
@@ -360,7 +360,7 @@ int main(int argc, char *argv[])
      H1FESpace.Synchronize(ess_inactive_dofs);
      H1FESpace.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_tdofs);
      H1FESpace.MarkerToList(ess_tdofs, ess_vdofs);
-     //  std::cout << " ess size " << ess_vdofs.Size() << std::endl;
+     std::cout << " ess size " << ess_vdofs.Size() << std::endl;
      for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
    }
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),

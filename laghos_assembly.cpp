@@ -395,7 +395,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   const int h1dofs2_cnt = test_fe2.GetDof();
   const int l2dofs2_cnt = trial_fe2.GetDof();
  
-  DenseMatrix loc_force(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), Jinv(dim), hessshape(h1dofs_cnt, dim * dim);
+  DenseMatrix loc_force(h1dofs_cnt, dim), dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), /*Jinv(dim),*/ hessshape(h1dofs_cnt, dim * dim);
   Vector te_shape(h1dofs_cnt), tr_shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim),  dshapephysdd(h1dofs_cnt), q_hess_dot_d(h1dofs_cnt);
 	
   const int e = Trans.ElementNo;
@@ -417,7 +417,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  dshapephys = 0.0;
 	  dshape = 0.0;
 	  dshapephysdd = 0.0;
-	  Jinv = 0.0;
+	  //  Jinv = 0.0;
 	  hessshape = 0.0;
 
 	  q_hess_dot_d = 0.0;
@@ -446,7 +446,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 
 	  test_fe1.CalcShape(eip, te_shape);
 	  test_fe1.CalcDShape(eip, dshape);
-	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  //	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  const DenseMatrix &Jinv = (Trans.GetElement1Transformation()).InverseJacobian();
 	  Mult(dshape, Jinv, dshapephys);
 
 	  int size = (dim*(dim+1))/2;
@@ -463,11 +464,11 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    }
 	  }
 	  
-	  std::cout << " phy " << std::endl; 
+	  /*	  std::cout << " phy " << std::endl; 
 	  physical_hess.Print(std::cout,1);
 	  std::cout << " adjusted phy " << std::endl; 
 	  adjusted_physical_hess.Print(std::cout,1);
-
+*/
 	  
 	  loc_force = 0.0;
 	  double normalStressProjNormal = 0.0;
@@ -498,7 +499,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  q_hess_dot_d *= 1.0/2.0;
 
 	  te_shape += dshapephysdd;
-	  te_shape += q_hess_dot_d;
+	  //  te_shape += q_hess_dot_d;
 	    
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -528,7 +529,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  dshapephys = 0.0;
 	  dshape = 0.0;
 	  dshapephysdd = 0.0;
-	  Jinv = 0.0;
+	  //  Jinv = 0.0;
 	  hessshape = 0.0;
 
 	  q_hess_dot_d = 0.0;
@@ -558,7 +559,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 
 	  test_fe2.CalcShape(eip, te_shape);
 	  test_fe2.CalcDShape(eip, dshape);
-	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  //	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  const DenseMatrix &Jinv = (Trans.GetElement2Transformation()).InverseJacobian();
 	  Mult(dshape, Jinv, dshapephys);
 
 	  int size = (dim*(dim+1))/2; 
@@ -605,7 +607,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  q_hess_dot_d *= 1.0/2.0;
 
 	  te_shape += dshapephysdd;
-	  te_shape += q_hess_dot_d;
+	  //  te_shape += q_hess_dot_d;
 	    
 	  for (int i = 0; i < h1dofs2_cnt; i++)
 	    {
@@ -651,7 +653,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
   const int nqp_face = IntRule->GetNPoints();
   const int dim = el1.GetDim();
   const int h1dofs_cnt = el1.GetDof();
-  DenseMatrix  dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), Jinv(dim), hessshape(h1dofs_cnt, dim * dim);
+  DenseMatrix  dshapephys(h1dofs_cnt, dim), dshape(h1dofs_cnt, dim), /*Jinv(dim),*/ hessshape(h1dofs_cnt, dim * dim);
 
   Vector shape(h1dofs_cnt), dshapephysdd(h1dofs_cnt), q_hess_dot_d(h1dofs_cnt);
   const int e = Trans.ElementNo;
@@ -671,7 +673,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  dshapephys = 0.0;
 	  dshape = 0.0;
 	  dshapephysdd = 0.0;
-	  Jinv = 0.0;
+	  //Jinv = 0.0;
 	  hessshape = 0.0;
 
 	  q_hess_dot_d = 0.0;
@@ -701,7 +703,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 
 	  el1.CalcShape(eip, shape);
 	  el1.CalcDShape(eip, dshape);
-	  CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  // CalcInverse((Trans.Elem1)->Jacobian(), Jinv);
+	  const DenseMatrix &Jinv = (Trans.GetElement1Transformation()).InverseJacobian();
 	  Mult(dshape, Jinv, dshapephys);
 
 	  int size = (dim*(dim+1))/2;
@@ -720,7 +723,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    }
 	  }
 	  
-	  /*  Vector x_eip(3);
+	  /* Vector x_eip(3);
 	  Trans.Transform(eip,x_eip);
 	  Vector xcheck_eip(3);
 	  Trans.Transform(Trans.GetElement1Transformation().GetIntPoint(),xcheck_eip);
@@ -729,6 +732,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  
 	  //el1.CalcHessian(eip,hessshape);
 	  
+	  Vector x_eip(3);
+	  Trans.Transform(eip,x_eip);
 	  
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
@@ -738,6 +743,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    //  tN(s) = nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
+	  //  std::cout << " Xeip " << x_eip(0) << " Yeip " << x_eip(1)  << " dY " << D(1) << std::endl;
+	  
 	  //  tN /= nor_norm;
 	  //  std::cout << " DistX " << D(0) << " DistY " << D(1) << std::endl;
 	  
@@ -761,8 +768,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  Vector test_wrk = shape;
 	  trial_wrk += dshapephysdd;
 	  test_wrk += dshapephysdd;
-	  trial_wrk += q_hess_dot_d;
-	  test_wrk += q_hess_dot_d;
+	  //  trial_wrk += q_hess_dot_d;
+	  //  test_wrk += q_hess_dot_d;
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {	      
@@ -793,7 +800,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  dshapephys = 0.0;
 	  dshape = 0.0;
 	  dshapephysdd = 0.0;
-	  Jinv = 0.0;
+	  // Jinv = 0.0;
 	  hessshape = 0.0;
 
 	  q_hess_dot_d = 0.0;
@@ -823,7 +830,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 
 	  el2.CalcShape(eip, shape);
 	  el2.CalcDShape(eip, dshape);
-	  CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  // CalcInverse((Trans.Elem2)->Jacobian(), Jinv);
+	  const DenseMatrix &Jinv = (Trans.GetElement2Transformation()).InverseJacobian();
 	  Mult(dshape, Jinv, dshapephys);
 
 	  int size = (dim*(dim+1))/2;
@@ -848,6 +856,7 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	    tN(s) = quadTrueNorm(e*nqp_face+q,s);
 	    //  tN(s) = nor(s);
 	  }
+	  //  std::cout << " dX " << D(0) << " dY " << D(1) << std::endl;
 	  nor_norm = sqrt(nor_norm);
 	  //  tN /= nor_norm;
 	  // std::cout << " DistX " << D(0) << " DistY " << D(1) << std::endl;
@@ -874,8 +883,8 @@ void ShiftedEnergyBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  Vector test_wrk = shape;
 	  trial_wrk += dshapephysdd;
 	  test_wrk += dshapephysdd;
-	  trial_wrk += q_hess_dot_d;
-	  test_wrk += q_hess_dot_d;
+	  //  trial_wrk += q_hess_dot_d;
+	  // test_wrk += q_hess_dot_d;
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {

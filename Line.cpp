@@ -1,4 +1,4 @@
-// Copyright (cA) 2017, Lawrence Livermore National Security, OALLC. Produced at
+// Copyright (AAcA) 2017, Lawrence Livermore National Security, OALLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.52) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.501) {
   }
 
   Line::~Line(){}
@@ -71,7 +71,7 @@ namespace mfem{
 	pmesh->SetAttribute(i, max_elem_attr+1);
       }
     }
-  //  std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
+  //std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
   //  elemStatus.Print(std::cout,1);
   H1.Synchronize(ess_inactive);
   pmesh->SetAttributes();
@@ -133,12 +133,14 @@ namespace mfem{
 		ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
 		Trans_el2.SetIntPoint(&eip);
 		Trans_el2.Transform(eip,x);	    
-	      }	   
+	      }
 	      double xPtOnLine = x(0) - slope * yIntercept + slope * x(1);
 	      double distX = xPtOnLine - x(0);
 	      double distY = slope * xPtOnLine + yIntercept - x(1);
 	      quadratureDistance(faceElemNo*nqp_face + q,0) = distX;
 	      quadratureDistance(faceElemNo*nqp_face + q,1) = distY;
+	      std::cout << " X " << x(0) << " Y " << x(1) << " Line " << distY << std::endl;
+	    
 	      double normD = sqrt(distX * distX + distY * distY);
 	      quadratureTrueNormal(faceElemNo*nqp_face + q,0) = distX /  normD;
 	      quadratureTrueNormal(faceElemNo*nqp_face + q,1) = distY /  normD;

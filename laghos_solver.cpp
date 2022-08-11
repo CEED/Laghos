@@ -593,9 +593,29 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       e_source->Assemble();
    }
 
-   Array<int> h1dofs;
-   
+   Vector active_v(H1Vsize);
+   active_v = 0.0;
+   if (analyticalSurface != NULL){
+     Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+     Array<int> &faceTags = analyticalSurface->GetFace_Tags();
+     Array<int> h1dofs_v;
+     for (int e = 0; e < H1.GetNE(); e++)
+       {
+	 int statusElem1 = elemStatus[e];
+	 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	   H1.GetElementVDofs(e, h1dofs_v);
+	   for (int s = 0; s < h1dofs_v.Size(); s++){
+	     active_v(h1dofs_v[s]) = v(h1dofs_v[s]);
+	   }
+	 }
+       }
+     Force.MultTranspose(active_v,e_rhs);
+   }
+   else{
    Force.MultTranspose(v, e_rhs);
+   }
+
+   Array<int> h1dofs;
    // populate the velocity values only at the boundary dofs.
    Vector loc_v(H1Vsize);
    loc_v = 0.0;
@@ -667,7 +687,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
      ShiftedEnergyBoundaryForce.MultTranspose(shiftedloc_v, shiftedbe_rhs);
      shiftedbe_rhs *= nitscheVersion;
      e_rhs += shiftedbe_rhs;
-   }  
+   }
    
    Array<int> l2dofs;
    
@@ -1079,7 +1099,10 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
    if (analyticalSurface != NULL){
      Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-     Array<int> &faceTags = analyticalSurface->GetFace_Tags();     
+     Array<int> &faceTags = analyticalSurface->GetFace_Tags();
+     const DenseMatrix& quadDist = analyticalSurface->GetQuadratureDistance();
+     const DenseMatrix& quadTrueNorm = analyticalSurface->GetQuadratureTrueNormal();
+  
      for (int i = 0; i < H1.GetNF(); i++)
        {
 	 FaceElementTransformations *eltrans = pmesh->GetInteriorFaceTransformations(i);
@@ -1089,15 +1112,16 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	     int Elem1No = eltrans->Elem1No;
 	     int statusElem1 = elemStatus[Elem1No];
 	     if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	       const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	       ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	       Trans_el1.SetIntPoint(&eip);
 	       for (int q = 0; q < nqp_face; q++)
 		 {
 		   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 		   eltrans->SetAllIntPoints(&ip_f);
+		   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+		   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+		   Trans_el1.SetIntPoint(&eip);
 		   Vector x(3);
 		   eltrans->Transform(ip_f,x);
+		   //  std::cout << " Xquad " << x(0) << " Yquad " << x(1) << " quad " <<  quadDist(faceElemNo*nqp_face + q,1) << std::endl;
 		   const double detJ = (Trans_el1.Jacobian()).Det();       
 		   double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 		   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
@@ -1158,12 +1182,12 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	     }
 	     else {
 	       const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
-	       ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
-	       Trans_el2.SetIntPoint(&eip);
 	       for (int q = 0; q < nqp_face; q++)
 		 {
 		   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 		   eltrans->SetAllIntPoints(&ip_f);
+		   ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+		   Trans_el2.SetIntPoint(&eip);
 		   Vector x(3);
 		   eltrans->Transform(ip_f,x);
 		   const double detJ = (Trans_el2.Jacobian()).Det();       
@@ -1326,13 +1350,11 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		 int statusElem1 = elemStatus[Elem1No];
 		 
 		 if (statusElem1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-		   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-		   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-		   Trans_el1.SetIntPoint(&eip);
 		   for (int q = 0; q  < nqp_face; q++)
 		     {
 		       const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 		       eltrans->SetAllIntPoints(&ip_f);
+		       const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
 		       Vector nor;
 		       nor.SetSize(dim);
 		       nor = 0.0;
@@ -1351,6 +1373,8 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 			 nor_norm += nor(s) * nor(s);
 		       }
 		       nor_norm = sqrt(nor_norm);
+		       ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+		       Trans_el1.SetIntPoint(&eip);
 		       
 		       const double detJ = (Trans_el1.Jacobian()).Det();
 		       
@@ -1384,13 +1408,12 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		     }
 		 }
 		 else {
-		   const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
-		   ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
-		   Trans_el2.SetIntPoint(&eip);
 		   for (int q = 0; q  < nqp_face; q++)
 		     {
 		       const IntegrationPoint &ip_f = b_ir.IntPoint(q);
 		       eltrans->SetAllIntPoints(&ip_f);
+		       const IntegrationPoint &eip = eltrans->GetElement2IntPoint();
+
 		       Vector nor;
 		       nor.SetSize(dim);
 		       nor = 0.0;
@@ -1409,7 +1432,10 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 			 nor_norm += nor(s) * nor(s);
 		       }
 		       nor_norm = sqrt(nor_norm);
-		       
+
+		       ElementTransformation &Trans_el2 = eltrans->GetElement2Transformation();
+		       Trans_el2.SetIntPoint(&eip);
+
 		       const double detJ = (Trans_el2.Jacobian()).Det();
 		       
 		       double rho_vals = interiorf_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
