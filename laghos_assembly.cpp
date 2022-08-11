@@ -57,6 +57,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    for (int q = 0; q < nqp; q++)
    {
       const IntegrationPoint &ip = IntRule->IntPoint(q);
+      Tr.SetIntPoint(&ip);
       // Form stress:grad_shape at the current point.
       trial_fe.CalcDShape(ip, vshape);
       for (int i = 0; i < h1dofs_cnt; i++)
@@ -67,12 +68,12 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               loc_force(i, vd) += stressJinvT(vd)(eq, gd) * vshape(i,gd);
+               loc_force(i, vd) += alpha.GetValue(Tr, ip) *
+                                   stressJinvT(vd)(eq, gd) * vshape(i,gd);
             }
          }
       }
       test_fe.CalcShape(ip, shape);
-      shape *= alpha(Tr.ElementNo);
       AddMultVWt(shape, Vloc_force, elmat);
    }
 }

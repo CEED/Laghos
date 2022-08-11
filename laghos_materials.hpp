@@ -64,8 +64,11 @@ public:
    void ExchangeFaceNbrData() { GetPressure().ExchangeFaceNbrData(); }
 };
 
+struct MaterialData;
+
 void UpdateAlpha(const ParGridFunction &level_set,
-                 ParGridFunction &alpha_1, ParGridFunction &alpha_2);
+                 ParGridFunction &alpha_1, ParGridFunction &alpha_2,
+                 MaterialData *mat_data = nullptr);
 
 // Stores the shifted interface options.
 struct MaterialData
@@ -78,6 +81,7 @@ struct MaterialData
    PressureFunction *p_1, *p_2;       // recomputed in UpdateQuadratureData().
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
+   ParGridFunction  vol_1, vol_2;     // recomputed in UpdateQuadratureData().
 
    // Remap influence:
    // * level set is remmaped, then updates alpha_1 and alpha_2 after remap.
@@ -109,8 +113,8 @@ public:
 
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
-      return alpha_1(T.ElementNo) * rho_1.GetValue(T, ip) +
-             alpha_2(T.ElementNo) * rho_2.GetValue(T, ip);
+      return alpha_1.GetValue(T, ip) * rho_1.GetValue(T, ip) +
+             alpha_2.GetValue(T, ip) * rho_2.GetValue(T, ip);
    }
 
    void ExchangeFaceNbrData()
@@ -133,7 +137,7 @@ public:
 
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
-      return alpha(T.ElementNo) * rho.GetValue(T, ip);
+      return alpha.GetValue(T, ip) * rho.GetValue(T, ip);
    }
 };
 

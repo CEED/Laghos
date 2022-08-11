@@ -25,7 +25,8 @@ namespace hydrodynamics
 {
 
 void UpdateAlpha(const ParGridFunction &level_set,
-                 ParGridFunction &alpha_1, ParGridFunction &alpha_2)
+                 ParGridFunction &alpha_1, ParGridFunction &alpha_2,
+                 MaterialData *mat_data)
 {
    IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
    auto pfes = *alpha_1.ParFESpace();
@@ -34,15 +35,56 @@ void UpdateAlpha(const ParGridFunction &level_set,
              nqp = ir.GetNPoints();
    Vector ls_vals;
 
+   const int ndof_l2 = alpha_1.Size() / NE;
+
+   Array<int> l2_dofs;
+   Vector vol_1_loc(ndof_l2), vol_2_loc(ndof_l2);
+   const IntegrationRule ir_nodes =
+      (mat_data) ? mat_data->vol_1.ParFESpace()->GetFE(0)->GetNodes()
+                 : ir;
+   Vector bounds_max(ndof_l2), bounds_min(ndof_l2), target_1(ndof_l2);
+   bounds_max = 1.0; bounds_min = 0.0;
+   Vector ls_vals_nodes;
+   Vector vol_moments(ndof_l2), l2_shape(ndof_l2);
+
    for (int e = 0; e < NE; e++)
    {
+      Vector alpha_1_loc(alpha_1.GetData() + e*ndof_l2, ndof_l2),
+             alpha_2_loc(alpha_2.GetData() + e*ndof_l2, ndof_l2);
       const int attr = pfes.GetParMesh()->GetAttribute(e);
-      if (attr == 10) { alpha_1(e) = 1.0; alpha_2(e) = 0.0; continue; }
-      if (attr == 20) { alpha_1(e) = 0.0; alpha_2(e) = 1.0; continue; }
+      if (attr == 10)
+      {
+         alpha_1_loc = 1.0;
+         alpha_2_loc = 0.0;
+         if (mat_data)
+         {
+            vol_1_loc = 1.0;
+            vol_2_loc = 0.0;
+            mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+            mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
+         }
+         continue;
+      }
+      if (attr == 20)
+      {
+         alpha_1_loc = 0.0;
+         alpha_2_loc = 1.0;
+         if (mat_data)
+         {
+            vol_1_loc = 0.0;
+            vol_2_loc = 1.0;
+            mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+            mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
+         }
+         continue;
+      }
 
       ElementTransformation &Tr = *pfes.GetElementTransformation(e);
       level_set.GetValues(Tr, ir, ls_vals);
       double volume_1 = 0.0, volume = 0.0;
+      vol_moments = 0.0;
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
@@ -50,9 +92,42 @@ void UpdateAlpha(const ParGridFunction &level_set,
          volume   += ip.weight * Tr.Weight();
          volume_1 += ip.weight * Tr.Weight() *
                      ((ls_vals(q) < 0.0) ? 1.0 : 0.0);
+         if (mat_data)
+         {
+            mat_data->vol_1.ParFESpace()->GetFE(e)->CalcShape(ip, l2_shape);
+            for (int i = 0; i < ndof_l2; i++)
+            {
+               vol_moments(i) += ip.weight * Tr.Weight() * l2_shape(i);
+            }
+         }
       }
-      alpha_1(e) = volume_1 / volume;
-      alpha_2(e) = 1.0 - alpha_1(e);
+      alpha_1_loc = volume_1 / volume;
+      alpha_2_loc = 1.0 - volume_1 / volume;
+
+      // Tilt the alphas.
+      // Target values are 1 or 0 at the dof locations.
+      if (mat_data)
+      {
+         level_set.GetValues(Tr, ir_nodes, ls_vals_nodes);
+         for (int q = 0; q < ndof_l2; q++)
+         {
+            target_1(q) = ((ls_vals_nodes(q) < 0.0) ? 1.0 : 0.0);
+         }
+         SLBQPOptimizer slbqp;
+         slbqp.SetBounds(bounds_min, bounds_max);
+         slbqp.SetLinearConstraint(vol_moments, volume_1);
+         IterativeSolver::PrintLevel print;
+         print.None();
+         slbqp.SetPrintLevel(print);
+         slbqp.Mult(target_1, vol_1_loc);
+         for (int i = 0; i < ndof_l2; i++)
+         {
+            vol_2_loc(i) = 1.0 - vol_1_loc(i);
+         }
+         mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+         mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
+         mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
+      }
    }
 }
 
@@ -110,7 +185,8 @@ void PressureFunction::UpdateRho0Alpha0(const ParGridFunction &alpha0,
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         rho0DetJ0(e * nqp + q) = Tr.Weight() * alpha0(e) * rho_vals(q);
+         rho0DetJ0(e * nqp + q) = Tr.Weight() *
+                                  alpha0.GetValue(Tr, ip) * rho_vals(q);
       }
    }
 }
@@ -142,7 +218,8 @@ void PressureFunction::UpdatePressure(const ParGridFunction &alpha,
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         const double rho = rho0DetJ0(e * nqp + q) / alpha(e) / Tr.Weight();
+         const double rho = rho0DetJ0(e * nqp + q) /
+                            alpha.GetValue(Tr, ip) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && mat_id == 1)

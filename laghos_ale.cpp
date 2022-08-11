@@ -207,7 +207,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
    marker.MarkFaceAttributes();
 
    // Update the volume fractions.
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2, &mat_data);
 
    // This will affect the update of mass matrices.
    mat_data.rho0_1 = rho_1;
@@ -225,9 +225,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
-         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.alpha_1(k) *
+         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.alpha_1.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
-         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.alpha_2(k) *
+         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.alpha_2.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
       }
    }

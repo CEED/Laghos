@@ -138,18 +138,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    one = 1.0;
 
    // Needed for mass matrices, masses, etc.
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2, &mat_data);
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   InterfaceRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.alpha_2,
-                                  mat_data.rho0_1, mat_data.rho0_2),
-                     arho_2_coeff(mat_data.alpha_1, mat_data.alpha_2,
-                                  mat_data.rho0_1, mat_data.rho0_2);
-   // AlphaRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.rho0_1),
-   //               arho_2_coeff(mat_data.alpha_2, mat_data.rho0_2);
-   MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff, &ir);
+   InterfaceRhoCoeff arho_mix_coeff(mat_data.alpha_1, mat_data.alpha_2,
+                                    mat_data.rho0_1, mat_data.rho0_2);
+   AlphaRhoCoeff arho_1_coeff(mat_data.alpha_1, mat_data.rho0_1),
+                 arho_2_coeff(mat_data.alpha_2, mat_data.rho0_2);
+   MassIntegrator mi_1(arho_mix_coeff, &ir), mi_2(arho_mix_coeff, &ir);
 
    for (int e = 0; e < NE; e++)
    {
@@ -203,9 +201,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
          qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        mat_data.alpha_1(e) * rho1_vals(q);
+                                        mat_data.alpha_1.GetValue(Tr, ip) * rho1_vals(q);
          qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        mat_data.alpha_2(e) * rho2_vals(q);
+                                        mat_data.alpha_2.GetValue(Tr, ip) * rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -580,10 +578,12 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi(&ir);
 
    Vector &rhoDetJ = (mat_id == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
    ParGridFunction &alpha = (mat_id == 1) ? mat_data.alpha_1 : mat_data.alpha_2;
+
+   GridFunctionCoefficient alpha_coeff(&alpha);
+   MassIntegrator mi(alpha_coeff, &ir);
 
    DensityIntegrator di(rhoDetJ);
    di.SetIntRule(&ir);
@@ -592,7 +592,6 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
       di.AssembleRHSElementVect(fe, eltr, rhs);
-      if (alpha(e) > 1e-12) { rhs /= alpha(e); }
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
 
@@ -678,7 +677,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the pressure values (used for the shifted interface method).
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2, &mat_data);
    mat_data.p_1->UpdatePressure(mat_data.alpha_1, e_1);
    mat_data.p_2->UpdatePressure(mat_data.alpha_2, e_2);
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
@@ -748,7 +747,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                gamma_b[idx] = gamma_k;
                rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
                               detJ / ip.weight;
-               if (alpha_k(z_id) > 1e-14) { rho_b[idx] /= alpha_k(z_id); }
+               if (alpha_k.GetValue(*T, ip) > 1e-14)
+               {
+                  rho_b[idx] /= alpha_k.GetValue(*T, ip);
+               }
                e_b[idx]     = fmax(0.0, e_vals(q));
                ls_b[idx]    = ls_vals(q);
 

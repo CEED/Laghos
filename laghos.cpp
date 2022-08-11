@@ -52,7 +52,7 @@ static int problem, dim;
 char vishost[] = "localhost";
 int  visport   = 19916;
 const int ws   = 200; // window size
-socketstream vis_mat, vis_faces, vis_alpha, vis_rho_1, vis_rho_2,
+socketstream vis_mat, vis_faces, vis_alpha, vis_vol, vis_rho_1, vis_rho_2,
              vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_p, vis_xi, vis_dist;
 
 // Forward declarations.
@@ -367,8 +367,10 @@ int main(int argc, char *argv[])
    // gamma values are projected on function that's constant on the moving mesh.
    L2_FECollection mat_fec(0, pmesh->Dimension());
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   mat_data.alpha_1.SetSpace(&mat_fes);
-   mat_data.alpha_2.SetSpace(&mat_fes);
+   mat_data.alpha_1.SetSpace(&L2FESpace);
+   mat_data.alpha_2.SetSpace(&L2FESpace);
+   mat_data.vol_1.SetSpace(&L2FESpace);
+   mat_data.vol_2.SetSpace(&L2FESpace);
 
    //
    // Shifted interface options.
@@ -511,7 +513,7 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2, &mat_data);
    mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
                                        mat_data.alpha_1, mat_data.rho0_1,
                                        mat_data.gamma_1);
@@ -519,6 +521,7 @@ int main(int argc, char *argv[])
                                        mat_data.alpha_2, mat_data.rho0_2,
                                        mat_data.gamma_2);
    mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
+
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho_mixed_coeff,
@@ -1221,6 +1224,10 @@ void visualize(MaterialData &mat_data,
    hydrodynamics::VisualizeField(vis_alpha, vishost, visport,
                                  mat_data.alpha_1, "Volume Fraction 1",
                                  2*ws, wy, ws, ws, false,
+                                 "mAcRjlpppppppppppppppppppppp");
+   hydrodynamics::VisualizeField(vis_vol, vishost, visport,
+                                 mat_data.vol_1, "Volume Fraction 1 Non-const",
+                                 3*ws, wy, ws, ws, false,
                                  "mAcRjlpppppppppppppppppppppp");
 
    wy = ws + 65;
