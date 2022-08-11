@@ -142,9 +142,7 @@ public:
    // The FE space of rho must be set before the call.
    void ComputeDensity(int mat_id, ParGridFunction &rho) const;
    double Mass(int mat_id) const;
-   double InternalEnergy(const ParGridFunction &alpha_1,
-                         const ParGridFunction &e_1,
-                         const ParGridFunction &alpha_2,
+   double InternalEnergy(const ParGridFunction &e_1,
                          const ParGridFunction &e_2) const;
    double KineticEnergy(const ParGridFunction &v) const;
    double Momentum(const ParGridFunction &v) const;

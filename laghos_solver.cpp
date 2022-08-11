@@ -611,9 +611,8 @@ double LagrangianHydroOperator::Mass(int mat_id) const
    return mass;
 }
 
-double LagrangianHydroOperator::InternalEnergy(
-   const ParGridFunction &alpha_1, const ParGridFunction &e_1,
-   const ParGridFunction &alpha_2, const ParGridFunction &e_2) const
+double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e_1,
+                                               const ParGridFunction &e_2) const
 {
    Vector one(l2dofs_cnt), loc_e_1(l2dofs_cnt), loc_e_2(l2dofs_cnt);
    one = 1.0;
@@ -624,8 +623,8 @@ double LagrangianHydroOperator::InternalEnergy(
       L2.GetElementDofs(k, l2dofs);
       e_1.GetSubVector(l2dofs, loc_e_1);
       e_2.GetSubVector(l2dofs, loc_e_2);
-      ie += alpha_1(k) * Me_1(k).InnerProduct(loc_e_1, one) +
-                alpha_2(k) * Me_2(k).InnerProduct(loc_e_2, one);
+      ie += Me_1(k).InnerProduct(loc_e_1, one) +
+            Me_2(k).InnerProduct(loc_e_2, one);
    }
    MPI_Allreduce(MPI_IN_PLACE, &ie, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
 

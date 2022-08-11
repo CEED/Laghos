@@ -538,8 +538,7 @@ int main(int argc, char *argv[])
 
    const double mass_init   = hydro.Mass(1);
    const double energy_init =
-         hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
-                              mat_data.alpha_2, mat_data.e_2) +
+         hydro.InternalEnergy(mat_data.e_1, mat_data.e_2) +
          hydro.KineticEnergy(v_gf);
    const double moment_init = hydro.Momentum(v_gf);
 
@@ -713,9 +712,7 @@ int main(int argc, char *argv[])
          // Conserved quantities at the start of the ALE step.
          double mass_in     = hydro.Mass(1),
                 momentum_in = hydro.Momentum(v_gf),
-                internal_in = hydro.InternalEnergy(
-                                 mat_data.alpha_1, mat_data.e_1,
-                                 mat_data.alpha_2, mat_data.e_2),
+                internal_in = hydro.InternalEnergy(mat_data.e_1, mat_data.e_2),
                 kinetic_in  = hydro.KineticEnergy(v_gf),
                 total_in    = internal_in + kinetic_in;
 
@@ -745,9 +742,7 @@ int main(int argc, char *argv[])
          // Conserved quantities at the exit of the ALE step.
          double mass_out     = hydro.Mass(1),
                 momentum_out = hydro.Momentum(v_gf),
-                internal_out = hydro.InternalEnergy(
-                                  mat_data.alpha_1, mat_data.e_1,
-                                  mat_data.alpha_2, mat_data.e_2),
+                internal_out = hydro.InternalEnergy(mat_data.e_1, mat_data.e_2),
                 kinetic_out  = hydro.KineticEnergy(v_gf),
                 total_out    = internal_out + kinetic_out;
 
@@ -799,8 +794,7 @@ int main(int argc, char *argv[])
       {
          energy_old = energy_new;
          energy_new =
-            hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
-                                 mat_data.alpha_2, mat_data.e_2) +
+            hydro.InternalEnergy(mat_data.e_1, mat_data.e_2) +
             hydro.KineticEnergy(v_gf);
 
          double lnorm = mat_data.e_1 * mat_data.e_1, norm;
@@ -937,8 +931,7 @@ int main(int argc, char *argv[])
 
    const double mass_final   = hydro.Mass(1);
    const double energy_final =
-         hydro.InternalEnergy(mat_data.alpha_1, mat_data.e_1,
-                              mat_data.alpha_2, mat_data.e_2) +
+         hydro.InternalEnergy(mat_data.e_1, mat_data.e_2) +
          hydro.KineticEnergy(v_gf);
    const double moment_final = hydro.Momentum(v_gf);
    if (mpi.Root())
