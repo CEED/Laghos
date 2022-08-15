@@ -1,4 +1,4 @@
-// Copyright (AAcA) 2017, Lawrence Livermore National Security, OALLC. Produced at
+// CopyrighAt (AAcA) 2017, Lawrence Livermore National Security, OALLC. Produced at
 // the Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights
 // reserved. See files LICENSE and NOTICE for details.
 //
@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.501) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(1.06) {
   }
 
   Line::~Line(){}
@@ -45,7 +45,7 @@ namespace mfem{
 	T.Transform(ip,x);
 	//	std::cout << " x " << x(0) << " y " << x(1) << std::endl;
 	double ptOnLine = slope * x(0) + yIntercept;
-	if ( x(1) <= ptOnLine){
+	if ( x(1) <= (ptOnLine)){
 	  count++;
 	}
       }
@@ -104,7 +104,7 @@ namespace mfem{
     }
 
   }
-  void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal){
+  void Line::ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal, DenseMatrix &quadratureDistance_BF,  DenseMatrix &quadratureTrueNormal_BF){
     // This code is only for the 1D/FA mode
     const int nqp_face = b_ir.GetNPoints();
     for (int i = 0; i < H1.GetNF() ; i++){
@@ -139,8 +139,8 @@ namespace mfem{
 	      double distY = slope * xPtOnLine + yIntercept - x(1);
 	      quadratureDistance(faceElemNo*nqp_face + q,0) = distX;
 	      quadratureDistance(faceElemNo*nqp_face + q,1) = distY;
-	      std::cout << " X " << x(0) << " Y " << x(1) << " Line " << distY << std::endl;
-	    
+	      std::cout << " shit shit shit shit shit " << std::endl;
+	      	    
 	      double normD = sqrt(distX * distX + distY * distY);
 	      quadratureTrueNormal(faceElemNo*nqp_face + q,0) = distX /  normD;
 	      quadratureTrueNormal(faceElemNo*nqp_face + q,1) = distY /  normD;
@@ -148,5 +148,48 @@ namespace mfem{
 	}
       }
     }
+    for (int i = 0; i < H1.GetNBE() ; i++){
+      FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
+      const int faceElemNo = eltrans->ElementNo; 
+      if (pmesh->GetBdrAttribute(faceElemNo) == 3 ){
+	for (int q = 0; q  < nqp_face; q++)
+	  {
+	    const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	    eltrans->SetAllIntPoints(&ip_f);
+	    int Elem1No = eltrans->Elem1No;
+	    int Elem2No = eltrans->Elem2No;
+	    int statusElem1 = elemStatus[Elem1No];
+	    int statusElem2 = elemStatus[Elem2No];
+	    Vector x(3);
+	    if (statusElem1 == SBElementType::INSIDE){
+	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	      //  Trans_el1.SetIntPoint(&eip);	
+	      Trans_el1.Transform(eip,x);
+	      //  eltrans->Transform(eip,x);
+	    }
+	    double xPtOnLine = x(0) - slope * yIntercept + slope * x(1);
+	    double distX = xPtOnLine - x(0);
+	    double distY = slope * xPtOnLine + yIntercept - x(1);
+	    quadratureDistance_BF(faceElemNo*nqp_face + q,0) = distX;
+	    quadratureDistance_BF(faceElemNo*nqp_face + q,1) = distY;
+	    // std::cout << " eq Nu " << faceElemNo*nqp_face + q <<  " X " << x(0) << " Y " << x(1) << " Line " << distY << std::endl;
+	    double normD = sqrt(distX * distX + distY * distY);
+	    quadratureTrueNormal_BF(faceElemNo*nqp_face + q,0) = distX /  normD;
+	    quadratureTrueNormal_BF(faceElemNo*nqp_face + q,1) = distY /  normD;
+	  }
+      }
+    }
   }
+
+  void Line::ComputeDistanceAndNormalAtCoordinates(const Vector &x, Vector &D, Vector &tN){
+    double xPtOnLine = x(0) - slope * yIntercept + slope * x(1);
+    double distX = xPtOnLine - x(0);
+    double distY = slope * xPtOnLine + yIntercept - x(1);
+    D(0) = distX;
+    D(1) = distY;
+    double normD = sqrt(distX * distX + distY * distY);
+    tN(0) = distX /  normD;
+    tN(1) = distY /  normD;
+  }	      
 }

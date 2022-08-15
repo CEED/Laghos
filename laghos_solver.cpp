@@ -354,15 +354,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      // Make a dummy assembly to figure out the sparsity.
      ShiftedEnergyBoundaryForce.Assemble(0);
      ShiftedEnergyBoundaryForce.Finalize(0);
-     VelocityBoundaryForceIntegrator *vbf_bfi = new VelocityBoundaryForceIntegrator(f_qdata,analyticalSurface->GetElement_Status());
+     VelocityBoundaryForceIntegrator *vbf_bfi = new VelocityBoundaryForceIntegrator(f_qdata, analyticalSurface->GetElement_Status());
      vbf_bfi->SetIntRule(&b_ir);
      VelocityBoundaryForce.AddBdrFaceIntegrator(vbf_bfi);
      
-     EnergyBoundaryForceIntegrator *ebf_bfi = new EnergyBoundaryForceIntegrator(f_qdata,analyticalSurface->GetElement_Status());
+     EnergyBoundaryForceIntegrator *ebf_bfi = new EnergyBoundaryForceIntegrator(pmesh, f_qdata, analyticalSurface, analyticalSurface->GetElement_Status());
      ebf_bfi->SetIntRule(&b_ir);
      EnergyBoundaryForce.AddBdrFaceIntegrator(ebf_bfi);
      
-     NormalVelocityMassIntegrator *nvmi_bf = new NormalVelocityMassIntegrator(f_qdata,analyticalSurface->GetElement_Status());
+     NormalVelocityMassIntegrator *nvmi_bf = new NormalVelocityMassIntegrator(pmesh, f_qdata, analyticalSurface, analyticalSurface->GetElement_Status());
      nvmi_bf->SetIntRule(&b_ir);
      Mv.AddBdrFaceIntegrator(nvmi_bf);
    }
@@ -374,11 +374,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
        v_bfi->SetIntRule(&b_ir);
        VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi,*bdr_attr[s]);
        
-       EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(f_qdata, dummyElem_Status);
+       EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(pmesh, f_qdata, analyticalSurface, dummyElem_Status);
        e_bfi->SetIntRule(&b_ir);
        EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi,*bdr_attr[s]);
        
-       NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata, dummyElem_Status);
+       NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(pmesh, f_qdata, analyticalSurface, dummyElem_Status);
        nvmi->SetIntRule(&b_ir);
        Mv.AddBdrFaceIntegrator(nvmi,*bdr_attr[s]);
      }
@@ -386,7 +386,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
-     
+   
    // Make a dummy assembly to figure out the sparsity.
    VelocityBoundaryForce.Assemble(0);    
    VelocityBoundaryForce.Finalize(0);
@@ -822,6 +822,48 @@ double smooth_step_01(double x, double eps)
 
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
+  double max_distance = 0.0;
+  double min_distance = 100.0;
+
+  const int nqp_face = b_ir.GetNPoints();
+   
+  if (analyticalSurface != NULL){
+    for (int i = 0; i < H1.GetNBE() ; i++){
+      FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
+      const int faceElemNo = eltrans->ElementNo; 
+      if (pmesh->GetBdrAttribute(faceElemNo) == 3 ){
+	for (int q = 0; q  < nqp_face; q++)
+	  {
+	    const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    eltrans->SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	    
+	    Vector x_eip(3);
+	    eltrans->Transform(eip,x_eip);
+	    
+	    Vector D(dim);
+	  Vector tN(dim);
+	  D = 0.0;
+	  tN = 0.0;
+	  analyticalSurface->ComputeDistanceAndNormalAtCoordinates(x_eip,D,tN);
+	  double normD = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    normD += D(s) * D(s);
+	  }
+	  normD = sqrt(normD);	  
+	  if (max_distance < normD){
+	    max_distance = normD;
+	  }
+	  if (min_distance > D(1)){
+	    min_distance = D(1);
+	  }
+	  }
+      }
+    }
+  }
+  std::cout << " maxD " << max_distance << " minD " << min_distance << std::endl;
+    max_distance = 0.0;
    if (qdata_is_current) { return; }
 
    qdata_is_current = true;
@@ -835,7 +877,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    v.MakeRef(&H1, *sptr, H1.GetVSize());
    e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
    Vector e_vals;
-   DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
+   DenseMatrix Jpi(dim), sgrad_v(dim), sgrad_v2(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Batched computations are needed, because hydrodynamic codes usually
    // involve expensive computations of material properties. Although this
@@ -914,6 +956,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                // direction of maximal compression. This is used to define the
                // relative change of the initial length scale.
                v.GetVectorGradient(*T, sgrad_v);
+	       // v.GetVectorGradient(*T, sgrad_v2);
 
                double vorticity_coeff = 1.0;
                if (use_vorticity)
@@ -923,7 +966,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                   vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
                }
 
-               sgrad_v.Symmetrize();
+	       sgrad_v.Symmetrize();
                double eig_val_data[3], eig_vec_data[9];
                if (dim==1)
                {
@@ -940,13 +983,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                                 compr_dir.Norml2();
                // Measure of maximal compression.
                const double mu = eig_val_data[0];
-               visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               visc_coeff = 2.0 * rho * (h + max_distance) * (h + max_distance) * fabs(mu);
                // The following represents a "smooth" version of the statement
                // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
                // eps must be scaled appropriately if a different unit system is
                // being used.
                const double eps = 1e-12;
-               visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
+               visc_coeff += 0.5 * rho * (h + max_distance) * sound_speed * vorticity_coeff *
                              (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
                stress.Add(visc_coeff, sgrad_v);
             }
@@ -1312,12 +1355,65 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
 
  	   stress = 0.0;
 	   
 	   double p = (gamma_vals - 1) * rho_vals * e_vals; 
 	   for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
+	   // Quadrature data for partial assembly of the force operator.
+	   stress.Mult( nor, weightedNormalStress);
+	   Vector x_eip(3);
+	   eltrans->Transform(eip,x_eip);
+	
+	   for (int vd = 0 ; vd < dim; vd++)
+	     {
+	       f_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
+	       //  std::cout << " qdata " << faceElemNo*nqp_face + q << " intpoX " << x_eip(0) << " intpoY " << x_eip(1) << " val " <<  f_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) << std::endl;
+ 	     }
+	 }
+      }
+
+    for (int i = 0; i < H1.GetNBE(); i++)
+      {
+       FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
+       const int faceElemNo = eltrans->ElementNo;
+       
+       for (int q = 0; q  < nqp_face; q++)
+	 {
+	   const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	   // Compute el1 quantities.
+	   // Set the integration point in the face and the neighboring elements
+	   eltrans->SetAllIntPoints(&ip_f);
+	   const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	  
+	   Vector nor;
+	   nor.SetSize(dim);
+	   nor = 0.0;
+	   
+	   if (dim == 1)
+	     {
+	       nor(0) = 2*eip.x - 1.0;
+	     }
+	   else
+	     {
+	       CalcOrtho(eltrans->Jacobian(), nor);
+	     }
+
+	   double nor_norm = 0.0;
+	   for (int s = 0; s < dim; s++){
+	     nor_norm += nor(s) * nor(s);
+	   }
+	   nor_norm = sqrt(nor_norm);
+	   
+	   ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	   Trans_el1.SetIntPoint(&eip);
+	   const double detJ = (Trans_el1.Jacobian()).Det();
+
+	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
+	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
+
 
 	   if (use_viscosity)
 	     {
@@ -1328,12 +1424,6 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 		   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h * ip_f.weight/*eltrans->Elem1->Weight() / nor_norm*/;
 		 }
 	    }
-	   // Quadrature data for partial assembly of the force operator.
-	   stress.Mult( nor, weightedNormalStress);
-	   for (int vd = 0 ; vd < dim; vd++)
-	     {
-	       f_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-	     }
 	 }
       }
 

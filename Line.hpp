@@ -33,8 +33,8 @@ namespace mfem
 
     void SetupElementStatus(Array<int> &elemStatus, Array<int> &ess_inactive);
     void SetupFaceTags(Array<int> &elemStatus, Array<int> &faceTags, Array<int> &ess_inactive, Array<int> &initialBoundaryFaceTags, int maxBTag);
-    void ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal);
-
+    void ComputeDistanceAndNormalAtQuadraturePoints(const IntegrationRule &b_ir, Array<int> &elemStatus, Array<int> &faceTags, DenseMatrix &quadratureDistance, DenseMatrix &quadratureTrueNormal, DenseMatrix &quadratureDistance_BF,  DenseMatrix &quadratureTrueNormal_BF);
+    void ComputeDistanceAndNormalAtCoordinates(const Vector &x, Vector &D, Vector &tN);
   };
 
 }

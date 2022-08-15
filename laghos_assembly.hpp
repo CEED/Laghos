@@ -142,11 +142,13 @@ public:
 class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
+  const ParMesh *pmesh;
   const FaceQuadratureData &qdata;
   Array<int> elemStatus;
+  AnalyticalSurface *analyticalSurface;
 
 public:
-  EnergyBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
+  EnergyBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, AnalyticalSurface *analyticalSurface, Array<int> elementStatus) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				   const FiniteElement &test_fe,
 				   FaceElementTransformations &Tr,
@@ -157,11 +159,13 @@ public:
 class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
 private:
+  const ParMesh *pmesh;
    const FaceQuadratureData &qdata;
-  Array<int> elemStatus;
+   Array<int> elemStatus;
+   AnalyticalSurface *analyticalSurface;
 
 public:
-  NormalVelocityMassIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
+  NormalVelocityMassIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, AnalyticalSurface *analyticalSurface, Array<int> elementStatus) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &el1,
 				   const FiniteElement &el2,
                                        FaceElementTransformations &Tr,

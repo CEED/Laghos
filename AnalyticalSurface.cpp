@@ -31,12 +31,19 @@ namespace mfem
     initialElementTags(h1_fes.GetNE()),
     quadratureDistance((h1_fes.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
     quadratureTrueNormal((h1_fes.GetNF()+pmesh->GetNSharedFaces()) * b_ir.GetNPoints(),pmesh->Dimension()),
+    quadratureDistance_BF(H1.GetNBE() * b_ir.GetNPoints(),pmesh->Dimension()),
+    quadratureTrueNormal_BF(H1.GetNBE() * b_ir.GetNPoints(),pmesh->Dimension()),
     maxBoundaryTag(0),
     ess_edofs(h1_fes.GetVSize()),
     geometry(NULL)
   {
     ess_edofs = -1;
     elementalStatus = AnalyticalGeometricShape::SBElementType::INSIDE;
+    quadratureDistance = 0.0;
+    quadratureTrueNormal = 0.0;
+    quadratureDistance_BF = 0.0;
+    quadratureTrueNormal_BF = 0.0;
+ 
     int localMaxBoundaryTag = 0;
     for (int i = 0; i < H1.GetNBE(); i++)
       {    
@@ -78,11 +85,17 @@ namespace mfem
   }
 
   void AnalyticalSurface::ComputeDistanceAndNormalAtQuadraturePoints(){
-    geometry->ComputeDistanceAndNormalAtQuadraturePoints(b_ir, elementalStatus, faceTags, quadratureDistance, quadratureTrueNormal);
+    geometry->ComputeDistanceAndNormalAtQuadraturePoints(b_ir, elementalStatus, faceTags, quadratureDistance, quadratureTrueNormal, quadratureDistance_BF, quadratureTrueNormal_BF);
   }
+  void AnalyticalSurface::ComputeDistanceAndNormalAtCoordinates(const Vector &x, Vector &D, Vector &tN){
+    geometry->ComputeDistanceAndNormalAtCoordinates(x, D, tN);
+  }
+ 
   void AnalyticalSurface::ResetData(){
     quadratureDistance = 0.0;
     quadratureTrueNormal = 0.0;
+    quadratureDistance_BF = 0.0;
+    quadratureTrueNormal_BF = 0.0;
     ess_edofs = -1;
     elementalStatus = AnalyticalGeometricShape::SBElementType::INSIDE;
     faceTags = maxBoundaryTag;
@@ -110,5 +123,10 @@ namespace mfem
   const DenseMatrix& AnalyticalSurface::GetQuadratureTrueNormal(){
     return quadratureTrueNormal;
   }
-
+  const DenseMatrix& AnalyticalSurface::GetQuadratureDistance_BF(){
+    return quadratureDistance_BF;
+  }
+  const DenseMatrix& AnalyticalSurface::GetQuadratureTrueNormal_BF(){
+    return quadratureTrueNormal_BF;
+  }
 }

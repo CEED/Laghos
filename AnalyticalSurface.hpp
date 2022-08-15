@@ -52,6 +52,9 @@ namespace mfem
   
     DenseMatrix quadratureDistance;
     DenseMatrix quadratureTrueNormal;
+    DenseMatrix quadratureDistance_BF;
+    DenseMatrix quadratureTrueNormal_BF;
+
     AnalyticalGeometricShape *geometry;
 
   
@@ -61,15 +64,17 @@ namespace mfem
   void SetupElementStatus();
   void SetupFaceTags();
   void ComputeDistanceAndNormalAtQuadraturePoints();
+  void ComputeDistanceAndNormalAtCoordinates(const Vector &x, Vector &D, Vector &tN);
   void ResetData();
   Array<int>& GetEss_Vdofs();
   Array<int>& GetFace_Tags();
   Array<int>& GetElement_Status();
   const DenseMatrix& GetQuadratureDistance();
   const DenseMatrix& GetQuadratureTrueNormal();
+  const DenseMatrix& GetQuadratureDistance_BF();
+  const DenseMatrix& GetQuadratureTrueNormal_BF();
     
   ~AnalyticalSurface();
   };
 }
 #endif // MFEM_LAGHOS
-
