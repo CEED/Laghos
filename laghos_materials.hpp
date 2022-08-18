@@ -68,7 +68,8 @@ struct MaterialData;
 
 void UpdateAlpha(const ParGridFunction &level_set,
                  ParGridFunction &alpha_1, ParGridFunction &alpha_2,
-                 MaterialData *mat_data = nullptr);
+                 MaterialData *mat_data = nullptr,
+                 bool pointwise_alpha = false);
 
 // Stores the shifted interface options.
 struct MaterialData
@@ -81,6 +82,7 @@ struct MaterialData
    PressureFunction *p_1, *p_2;       // recomputed in UpdateQuadratureData().
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
+   bool             pointwise_alpha;
    ParGridFunction  vol_1, vol_2;     // recomputed in UpdateQuadratureData().
 
    // Remap influence:

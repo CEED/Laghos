@@ -178,7 +178,6 @@ void Extrapolator::Extrapolate(Coefficient &level_set,
    Array<bool> active_zones(NE);
    for (int k = 0; k < NE; k++)
    {
-      MFEM_ABORT("wrong alpha - not implemented");
       if (from_pure)
       {
          active_zones[k] = (alpha_gf(k) < 1.0 - 1e-12) ? true : false;

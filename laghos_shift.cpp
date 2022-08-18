@@ -118,7 +118,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-  const int mode_TG = (pure_test) ? 0 : 2;
+   const int mode_TG = (pure_test) ? 0 : 2;
 
    switch (problem)
    {
@@ -297,8 +297,8 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
    else { MFEM_ABORT("Invalid marking configuration."); }
 
    // The alpha scaling is always taken from the mixed element.
-   double alpha_scale = (attr_e1 == 15) ? mat_data.alpha_1(Trans_e1.ElementNo*l2dofs_cnt)
-                                        : mat_data.alpha_1(Trans_e2.ElementNo*l2dofs_cnt);
+   double alpha_scale = (attr_e1 == 15) ? mat_data.alpha_1(Trans_e1.ElementNo)
+                                        : mat_data.alpha_1(Trans_e2.ElementNo);
    // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
    if (alpha_scale < 1e-13 || (alpha_scale > 1.0 - 1e-13))

@@ -75,17 +75,22 @@ struct CutFaceQuadratureData
    CutFaceQuadratureData() : rho0DetJ0(), rhocs() { }
 };
 
-// This class is used only for visualization. It assembles (rho, phi) in each
+// Assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.
 class DensityIntegrator : public LinearFormIntegrator
 {
    using LinearFormIntegrator::AssembleRHSElementVect;
 private:
+   int mat_id;
    const Vector &rho0DetJ0w;
+   const ParGridFunction *ind;
 
 public:
-   DensityIntegrator(const Vector &rDJw) : rho0DetJ0w(rDJw) { }
+   DensityIntegrator(int mid, const Vector &rDJw,
+                     const ParGridFunction *ind_)
+      : mat_id(mid), rho0DetJ0w(rDJw), ind(ind_) { }
+
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);

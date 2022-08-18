@@ -26,7 +26,7 @@ namespace hydrodynamics
 
 void UpdateAlpha(const ParGridFunction &level_set,
                  ParGridFunction &alpha_1, ParGridFunction &alpha_2,
-                 MaterialData *mat_data)
+                 MaterialData *mat_data, bool pointwise_alpha)
 {
    IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
    auto pfes = *alpha_1.ParFESpace();
@@ -35,7 +35,7 @@ void UpdateAlpha(const ParGridFunction &level_set,
              nqp = ir.GetNPoints();
    Vector ls_vals;
 
-   const int ndof_l2 = alpha_1.Size() / NE;
+   const int ndof_l2 = (mat_data) ? mat_data->vol_1.Size() / NE : 0;
 
    Array<int> l2_dofs;
    Vector vol_1_loc(ndof_l2), vol_2_loc(ndof_l2);
@@ -49,13 +49,11 @@ void UpdateAlpha(const ParGridFunction &level_set,
 
    for (int e = 0; e < NE; e++)
    {
-      Vector alpha_1_loc(alpha_1.GetData() + e*ndof_l2, ndof_l2),
-             alpha_2_loc(alpha_2.GetData() + e*ndof_l2, ndof_l2);
       const int attr = pfes.GetParMesh()->GetAttribute(e);
       if (attr == 10)
       {
-         alpha_1_loc = 1.0;
-         alpha_2_loc = 0.0;
+         alpha_1(e) = 1.0;
+         alpha_2(e) = 0.0;
          if (mat_data)
          {
             vol_1_loc = 1.0;
@@ -68,8 +66,8 @@ void UpdateAlpha(const ParGridFunction &level_set,
       }
       if (attr == 20)
       {
-         alpha_1_loc = 0.0;
-         alpha_2_loc = 1.0;
+         alpha_1(e) = 0.0;
+         alpha_2(e) = 1.0;
          if (mat_data)
          {
             vol_1_loc = 0.0;
@@ -101,13 +99,22 @@ void UpdateAlpha(const ParGridFunction &level_set,
             }
          }
       }
-      alpha_1_loc = volume_1 / volume;
-      alpha_2_loc = 1.0 - volume_1 / volume;
+      alpha_1(e) = volume_1 / volume;
+      alpha_2(e) = 1.0 - alpha_1(e);
 
       // Tilt the alphas.
       // Target values are 1 or 0 at the dof locations.
       if (mat_data)
       {
+         if (pointwise_alpha == false)
+         {
+            vol_1_loc = alpha_1(e);
+            vol_2_loc = alpha_2(e);
+            mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+            mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
+            continue;
+         }
          level_set.GetValues(Tr, ir_nodes, ls_vals_nodes);
          for (int q = 0; q < ndof_l2; q++)
          {

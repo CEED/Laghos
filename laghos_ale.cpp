@@ -207,7 +207,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
    marker.MarkFaceAttributes();
 
    // Update the volume fractions.
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2, &mat_data);
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
+               &mat_data, mat_data.pointwise_alpha);
 
    // This will affect the update of mass matrices.
    mat_data.rho0_1 = rho_1;
@@ -225,9 +226,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
-         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.alpha_1.GetValue(T, ip) *
+         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.vol_1.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
-         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.alpha_2.GetValue(T, ip) *
+         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.vol_2.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
       }
    }
@@ -249,10 +250,10 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       }
    }
 
-   mat_data.p_1->UpdateRho0Alpha0(mat_data.alpha_1, mat_data.rho0_1);
-   mat_data.p_2->UpdateRho0Alpha0(mat_data.alpha_2, mat_data.rho0_2);
-   mat_data.p_1->UpdatePressure(mat_data.alpha_1, mat_data.e_1);
-   mat_data.p_2->UpdatePressure(mat_data.alpha_2, mat_data.e_2);
+   mat_data.p_1->UpdateRho0Alpha0(mat_data.vol_1, mat_data.rho0_1);
+   mat_data.p_2->UpdateRho0Alpha0(mat_data.vol_2, mat_data.rho0_2);
+   mat_data.p_1->UpdatePressure(mat_data.vol_1, mat_data.e_1);
+   mat_data.p_2->UpdatePressure(mat_data.vol_2, mat_data.e_2);
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
@@ -725,7 +726,7 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho,
           beta(dof_cnt), z(dof_cnt), gp(dof_cnt), gm(dof_cnt);
    Array<int> dofs(dof_cnt);
    MassIntegrator mi(&ir_rho);
-   DensityIntegrator di(quad_rho);
+   DensityIntegrator di(1, quad_rho, nullptr);
    di.SetIntRule(&ir_rho);
    for (int k = 0; k < NE; k++)
    {

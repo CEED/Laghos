@@ -27,15 +27,29 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
 {
-   const int nqp = IntRule->GetNPoints();
-   Vector shape(fe.GetDof());
    elvect.SetSize(fe.GetDof());
    elvect = 0.0;
+   if (ind && mat_id == 1 && Tr.Attribute == 20) { return; }
+   if (ind && mat_id == 2 && Tr.Attribute == 10) { return; }
+
+   const int nqp = IntRule->GetNPoints();
+   Vector shape(fe.GetDof());
    for (int q = 0; q < nqp; q++)
    {
-      fe.CalcShape(IntRule->IntPoint(q), shape);
+      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      fe.CalcShape(ip, shape);
+      Tr.SetIntPoint(&ip);
+
       // Note that rhoDetJ = rho0DetJ0.
-      shape *= rho0DetJ0w(Tr.ElementNo*nqp + q);
+      if (ind)
+      {
+         shape *= rho0DetJ0w(Tr.ElementNo*nqp + q) / ind->GetValue(Tr, ip);
+      }
+      else
+      {
+         shape *= rho0DetJ0w(Tr.ElementNo*nqp + q);
+      }
+
       elvect += shape;
    }
 }
