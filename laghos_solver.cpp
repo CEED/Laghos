@@ -835,7 +835,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho /* * global_max_sound_speed*/ * ip_f.weight;
 
  	   stress = 0.0;
 	   
@@ -844,7 +844,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
 	   if (use_viscosity)
 	     {
-               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (global_max_sound_speed / global_min_h) * ip_f.weight /*nor_norm / eltrans->Elem1->Weight()*/;
+               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (/*global_max_sound_speed*/ 1.0 / global_min_h) * ip_f.weight /*nor_norm / eltrans->Elem1->Weight()*/;
 	       
 	       if (use_vorticity)
 		 {
