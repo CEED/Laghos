@@ -126,11 +126,13 @@ public:
 class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
 {
 private:
+  const ParMesh *pmesh;
   const FaceQuadratureData &qdata;
   Array<int> elemStatus;
+  AnalyticalSurface *analyticalSurface;
 
 public:
-  VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata, Array<int> elementStatus) : qdata(qdata), elemStatus(elementStatus) { }
+  VelocityBoundaryForceIntegrator(const ParMesh *pmesh, FaceQuadratureData &qdata, AnalyticalSurface *analyticalSurface, Array<int> elementStatus) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), elemStatus(elementStatus) { }
    virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				   const FiniteElement &test_fe,
 				   FaceElementTransformations &Tr,

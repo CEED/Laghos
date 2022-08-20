@@ -354,7 +354,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      // Make a dummy assembly to figure out the sparsity.
      ShiftedEnergyBoundaryForce.Assemble(0);
      ShiftedEnergyBoundaryForce.Finalize(0);
-     VelocityBoundaryForceIntegrator *vbf_bfi = new VelocityBoundaryForceIntegrator(f_qdata, analyticalSurface->GetElement_Status());
+     VelocityBoundaryForceIntegrator *vbf_bfi = new VelocityBoundaryForceIntegrator(pmesh, f_qdata, analyticalSurface, analyticalSurface->GetElement_Status());
      vbf_bfi->SetIntRule(&b_ir);
      VelocityBoundaryForce.AddBdrFaceIntegrator(vbf_bfi);
      
@@ -370,7 +370,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
      Array<int> dummyElem_Status;
      dummyElem_Status.SetSize(0);
      for (int s = 0; s < bdr_attr.Size(); s++){
-       VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata, dummyElem_Status);
+       VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(pmesh, f_qdata, analyticalSurface, dummyElem_Status);
        v_bfi->SetIntRule(&b_ir);
        VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi,*bdr_attr[s]);
        
@@ -1412,7 +1412,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 	   double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 	   double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	   double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed * ip_f.weight;
+	   f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho  /* * global_max_sound_speed*/ * ip_f.weight;
 
 
 	   if (use_viscosity)

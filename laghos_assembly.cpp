@@ -111,15 +111,48 @@ void VelocityBoundaryForceIntegrator::AssembleFaceMatrix(const FiniteElement &tr
 	const IntegrationPoint &eip = Tr.GetElement1IntPoint();
 	test_fe.CalcShape(eip, te_shape);
 	loc_force = 0.0;
-	for (int i = 0; i < h1dofs_cnt; i++)
-	  {
-	    for (int vd = 0; vd < dim; vd++) // Velocity components.
-	      {
-		loc_force(i, vd) += qdata.weightedNormalStress(eq,vd) * te_shape(i);
+	/*	if ( pmesh->GetBdrAttribute(Elem1No) == 3) {
+	  Vector sigmaTildaNDotN(dim);
+	  sigmaTildaNDotN = 0.0;
+	  Vector x_eip(3);
+	  Tr.Transform(eip,x_eip);
+	
+	  Vector D(dim);
+	  Vector tN(dim);
+	  D = 0.0;
+	  tN = 0.0;
+	  analyticalSurface->ComputeDistanceAndNormalAtCoordinates(x_eip,D,tN);
+	  
+	  for (int vd = 0; vd < dim; vd++) // Velocity components.
+	    {
+	      double temp = 0.0;
+	      for (int md = 0; md < dim; md++){ // Velocity components.
+		
+		temp += qdata.weightedNormalStress(eq,md) * tN(md);
 	      }
-	  }
-	trial_fe.CalcShape(eip, tr_shape);
-	AddMultVWt(Vloc_force,tr_shape,elmat);
+	      sigmaTildaNDotN(vd) = temp * tN(vd);    
+	    }
+	  for (int i = 0; i < h1dofs_cnt; i++)
+	    {
+	      for (int vd = 0; vd < dim; vd++) // Velocity components.
+		{
+		  loc_force(i, vd) += sigmaTildaNDotN(vd) * te_shape(i);
+		}
+	    }
+	  trial_fe.CalcShape(eip, tr_shape);
+	  AddMultVWt(Vloc_force,tr_shape,elmat);	  
+	}*/
+	//	else{
+	  for (int i = 0; i < h1dofs_cnt; i++)
+	    {
+	      for (int vd = 0; vd < dim; vd++) // Velocity components.
+		{
+		  loc_force(i, vd) += qdata.weightedNormalStress(eq,vd) * te_shape(i);
+		}
+	    }
+	  trial_fe.CalcShape(eip, tr_shape);
+	  AddMultVWt(Vloc_force,tr_shape,elmat);
+	  // }
       }
   }
 }
