@@ -862,7 +862,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       }
     }
   }
-  std::cout << " maxD " << max_distance << " minD " << min_distance << std::endl;
+  // std::cout << " maxD " << max_distance << " minD " << min_distance << std::endl;
     max_distance = 0.0;
    if (qdata_is_current) { return; }
 

@@ -357,6 +357,8 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &el1,
 	el1.CalcShape(eip, shape);
 
 	if ( pmesh->GetBdrAttribute(Elem1No) == 3) {
+	  //	  std::cout << " x_before " << eip.x << " y_before " << eip.y << std::endl;
+
 	  dshapephys = 0.0;
 	  dshape = 0.0;
 	  dshapephysdd = 0.0;
@@ -378,10 +380,13 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &el1,
 	  tN = 0.0;
 	  analyticalSurface->ComputeDistanceAndNormalAtCoordinates(x_eip,D,tN);
 	  //  std::cout << " x " << x_eip(0) << " Y " << x_eip(1) << " distY " << D(1) << std::endl; 	
-	  el1.CalcDShape(eip, dshape);
+	  /* el1.CalcDShape(eip, dshape);
 	  const DenseMatrix &Jinv = (Tr.GetElement1Transformation()).InverseJacobian();
-	  Mult(dshape, Jinv, dshapephys);
-	
+	  Mult(dshape, Jinv, dshapephys);*/
+	  //  const IntegrationPoint &eip_check = (Tr.GetElement1Transformation()).GetIntPoint();
+	  //  std::cout << " x " << eip_check.x << " y " << eip_check.y << std::endl;
+	    
+	  el1.CalcPhysDShape(Tr.GetElement1Transformation(),dshapephys);
 	  dshapephys.Mult(D, dshapephysdd); // dphi/dx.D);
 	  shape += dshapephysdd;
 

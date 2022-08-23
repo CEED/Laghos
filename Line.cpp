@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(1.06) {
+  Line::Line(ParFiniteElementSpace &h1_fes, ParFiniteElementSpace &l2_fes): AnalyticalGeometricShape(h1_fes, l2_fes), slope(0), yIntercept(0.51) {
   }
 
   Line::~Line(){}
@@ -139,7 +139,7 @@ namespace mfem{
 	      double distY = slope * xPtOnLine + yIntercept - x(1);
 	      quadratureDistance(faceElemNo*nqp_face + q,0) = distX;
 	      quadratureDistance(faceElemNo*nqp_face + q,1) = distY;
-	      std::cout << " shit shit shit shit shit " << std::endl;
+	      // std::cout << " shit shit shit shit shit " << std::endl;
 	      	    
 	      double normD = sqrt(distX * distX + distY * distY);
 	      quadratureTrueNormal(faceElemNo*nqp_face + q,0) = distX /  normD;
