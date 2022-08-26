@@ -21,6 +21,7 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 #include "Line.hpp"
+#include "Circle.hpp"
 
 namespace mfem
 {
