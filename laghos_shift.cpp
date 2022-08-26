@@ -727,7 +727,6 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
    Vector h1_shape(h1dofs_cnt);
    Vector nor(dim);
 
-   const IntegrationRule *ir = IntRule;
    MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
    const int nqp_face = IntRule->GetNPoints();
 

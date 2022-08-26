@@ -681,8 +681,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // Update the pressure values (used for the shifted interface method).
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
                &mat_data, mat_data.pointwise_alpha);
-   mat_data.p_1->UpdatePressure(mat_data.alpha_1, e_1);
-   mat_data.p_2->UpdatePressure(mat_data.alpha_2, e_2);
+   mat_data.p_1->UpdatePressure(mat_data.vol_1, e_1);
+   mat_data.p_2->UpdatePressure(mat_data.vol_2, e_2);
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       // Needed for shifted face integrals in parallel.
@@ -714,7 +714,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    for (int k = 1; k <= 2; k++)
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
-      ParGridFunction &vol_k = (k == 1) ? mat_data.vol_1 : mat_data.vol_2;
+      ParGridFunction &ind_k = (k == 1) ? mat_data.vol_1 : mat_data.vol_2;
       double gamma_k = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
       ParGridFunction &e_k     = (k == 1) ? e_1 : e_2;
       DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
@@ -752,9 +752,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                gamma_b[idx] = gamma_k;
                rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
                               detJ / ip.weight;
-               if (vol_k.GetValue(*T, ip) > 1e-14)
+               if (ind_k.GetValue(*T, ip) > 1e-14)
                {
-                  rho_b[idx] /= vol_k.GetValue(*T, ip);
+                  rho_b[idx] /= ind_k.GetValue(*T, ip);
                }
                e_b[idx]     = fmax(0.0, e_vals(q));
                ls_b[idx]    = ls_vals(q);

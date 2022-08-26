@@ -40,8 +40,7 @@ void UpdateAlpha(const ParGridFunction &level_set,
    Array<int> l2_dofs;
    Vector vol_1_loc(ndof_l2), vol_2_loc(ndof_l2);
    const IntegrationRule ir_nodes =
-      (mat_data) ? mat_data->vol_1.ParFESpace()->GetFE(0)->GetNodes()
-                 : ir;
+      (mat_data) ? mat_data->vol_1.ParFESpace()->GetFE(0)->GetNodes() : ir;
    Vector bounds_max(ndof_l2), bounds_min(ndof_l2), target_1(ndof_l2);
    bounds_max = 1.0; bounds_min = 0.0;
    Vector ls_vals_nodes;
@@ -106,19 +105,19 @@ void UpdateAlpha(const ParGridFunction &level_set,
       // Target values are 1 or 0 at the dof locations.
       if (mat_data)
       {
+         mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
          if (pointwise_alpha == false)
          {
             vol_1_loc = alpha_1(e);
             vol_2_loc = alpha_2(e);
-            mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
             mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
             mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
             continue;
          }
          level_set.GetValues(Tr, ir_nodes, ls_vals_nodes);
-         for (int q = 0; q < ndof_l2; q++)
+         for (int i = 0; i < ndof_l2; i++)
          {
-            target_1(q) = ((ls_vals_nodes(q) < 0.0) ? 1.0 : 0.0);
+            target_1(i) = ((ls_vals_nodes(i) < 0.0) ? 1.0 : 0.0);
          }
          SLBQPOptimizer slbqp;
          slbqp.SetBounds(bounds_min, bounds_max);
@@ -131,7 +130,6 @@ void UpdateAlpha(const ParGridFunction &level_set,
          {
             vol_2_loc(i) = 1.0 - vol_1_loc(i);
          }
-         mat_data->vol_1.ParFESpace()->GetElementDofs(e, l2_dofs);
          mat_data->vol_1.SetSubVector(l2_dofs, vol_1_loc);
          mat_data->vol_2.SetSubVector(l2_dofs, vol_2_loc);
       }

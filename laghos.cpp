@@ -55,7 +55,6 @@ const int ws   = 200; // window size
 socketstream vis_mat, vis_faces, vis_alpha, vis_vol, vis_rho_1, vis_rho_2,
              vis_v, vis_e_1, vis_e_2, vis_p_1, vis_p_2, vis_p, vis_xi, vis_dist;
 
-// Forward declarations.
 double e0(const Vector &);
 double rho0(const Vector &);
 double gamma_func(const Vector &);
@@ -1227,13 +1226,9 @@ void visualize(MaterialData &mat_data,
    hydrodynamics::VisualizeField(vis_faces, vishost, visport,
                                  faces, "Face Marking",
                                  ws, wy, ws, ws);
-   hydrodynamics::VisualizeField(vis_alpha, vishost, visport,
-                                 mat_data.alpha_1, "Volume Fraction 1 Const",
-                                 2*ws, wy, ws, ws, false,
-                                 "mAcRjlpppppppppppppppppppppp");
    hydrodynamics::VisualizeField(vis_vol, vishost, visport,
                                  mat_data.vol_1, "Volume Fraction 1",
-                                 3*ws, wy, ws, ws, false,
+                                 2*ws, wy, ws, ws, false,
                                  "mAcRjlpppppppppppppppppppppp");
 
    wy = ws + 65;
