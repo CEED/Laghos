@@ -346,7 +346,7 @@ public:
 
         if (input.dmd_nonuniform)
         {
-            dmd_X = new CAROM::NonuniformDMD(tH1size, initX, NULL);
+            dmd_X = new CAROM::NonuniformDMD(tH1size, initX, initV);
             dmd_V = new CAROM::NonuniformDMD(tH1size, initV, NULL);
             dmd_E = new CAROM::NonuniformDMD(tL2size, initE, NULL);
         }
