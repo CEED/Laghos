@@ -271,15 +271,15 @@ int main(int argc, char *argv[])
     args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
     args.AddOption(&romOptions.dmd, "-dmd", "--dmd", "-dmd", "--dmd",
-                    "Do DMD calculations.");
+                   "Do DMD calculations.");
     args.AddOption(&romOptions.dmd_tbegin, "-dmdtbegin", "--dmdtbegin",
-                    "Time to begin DMD. If DMD starts from t = 0, it will not work due to an zero initial vectors.");
+                   "Time to begin DMD. If DMD starts from t = 0, it will not work due to an zero initial vectors.");
     args.AddOption(&romOptions.desired_dt, "-ddt", "--dtime-step",
                    "Desired Time step.");
     args.AddOption(&romOptions.dmd_closest_rbf, "-dmdcrbf", "--dmdcrbf",
                    "DMD RBF value between two closes training parameter points.");
     args.AddOption(&romOptions.dmd_nonuniform, "-dmdnuf", "--dmdnuf", "-no-dmdnuf", "--no-dmdnuf",
-                    "Use NonuniformDMD rather than AdaptiveDMD.");
+                   "Use NonuniformDMD rather than AdaptiveDMD.");
     args.AddOption(&visitDiffCycle, "-visdiff", "--visdiff", "VisIt DC cycle to diff.");
     args.AddOption(&writeSol, "-writesol", "--writesol", "-no-writesol", "--no-writesol",
                    "Enable or disable write solution.");
@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.mergeXV, "-romxandv", "--romusexandv", "-no-romxandv", "--no-romusexandv",
                    "Enable or disable merging of X-X0 and V bases.");
     args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
-                  "Sampling type for the hyperreduction.");
+                   "Sampling type for the hyperreduction.");
     args.Parse();
     if (!args.Good())
     {
