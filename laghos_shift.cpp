@@ -58,11 +58,14 @@ void SIMarker::MarkFaceAttributes()
       if (a1 == 10 && a2 == 15) { return 10; }
       if (a1 == 15 && a2 == 20) { return 20; }
       if (a1 == 20 && a2 == 15) { return 20; }
+      if (a1 == 15 && a2 == 15) { return 15; }
       return 0;
    };
 
    ParMesh *pmesh = ls.ParFESpace()->GetParMesh();
    pmesh->ExchangeFaceNbrNodes();
+
+   // Mark faces of mixed elements, when both sides are local zones.
    for (int f = 0; f < pmesh->GetNumFaces(); f++)
    {
       pmesh->SetFaceAttribute(f, 0);
@@ -75,6 +78,7 @@ void SIMarker::MarkFaceAttributes()
       pmesh->SetFaceAttribute(f, get_face_attr(attr1, attr2));
    }
 
+   // Mark faces of mixed elements, when the faces are shared.
    mat_attr.ExchangeFaceNbrData();
    for (int f = 0; f < pmesh->GetNSharedFaces(); f++)
    {
