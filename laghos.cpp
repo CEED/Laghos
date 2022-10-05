@@ -93,7 +93,6 @@ int main(int argc, char *argv[])
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
    int cg_max_iter = 300;
-   int max_tsteps = -1;
    bool impose_visc = false;
    bool visualization = false;
    int vis_steps = 5;
@@ -139,8 +138,6 @@ int main(int argc, char *argv[])
                   "Absolute flush-to-zero tolerance.");
    args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
                   "Maximum number of CG iterations (velocity linear solve).");
-   args.AddOption(&max_tsteps, "-ms", "--max-steps",
-                  "Maximum number of steps (negative means no restriction).");
    args.AddOption(&impose_visc, "-iv", "--impose-viscosity", "-niv",
                   "--no-impose-viscosity",
                   "Use active viscosity terms even for smooth problems.");
@@ -278,9 +275,7 @@ int main(int argc, char *argv[])
       case 7: ode_solver = new RK2AvgSolver; break;
       default:
          if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
+         { cout << "Unknown ODE solver type: " << ode_solver_type << '\n'; }
          delete pmesh;
          MPI_Finalize();
          return 3;
@@ -680,7 +675,7 @@ int main(int argc, char *argv[])
          dt = t_final - t;
          last_step = true;
       }
-      if (steps == max_tsteps) { last_step = true; }
+
       S_old = S;
       t_old = t;
       hydro.ResetTimeStepEstimate();
@@ -702,7 +697,7 @@ int main(int argc, char *argv[])
          S = S_old;
          hydro.ResetQuadratureData();
          if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
-         if (steps < max_tsteps) { last_step = false; }
+         last_step = false;
          ti--; continue;
       }
       else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
