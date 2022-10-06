@@ -242,35 +242,44 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                         H1.GetOrder(0) + L2.GetOrder(0) + tr->OrderW());
    const int nqp_face = cfir->GetNPoints();
    const int nfaces = pmesh->GetNumFaces();
-   cfqdata.rho0DetJ0.SetSize(nfaces * 2 * nqp_face);
-   cfqdata.rho0DetJ0 = 0.0;
-   for (int f = 0; f < nfaces; f++)
+   // 0 / 1 / 2 /3 --- rho_1 left / rho_1 right / rho_2 left / rho_2 right.
+   if (H1.GetNRanks() == 1)
    {
-       const int attr = pmesh->GetFace(f)->GetAttribute();
-       if (attr == 77)
-       {
-           tr = pmesh->GetFaceElementTransformations(f);
+      cfqdata.rho0DetJ0.SetSize(nfaces * 4 * nqp_face);
+      cfqdata.rho0DetJ0 = 0.0;
+      for (int f = 0; f < nfaces; f++)
+      {
+         const int attr = pmesh->GetFace(f)->GetAttribute();
+         if (attr != 10 && attr != 15 && attr != 20) { continue; }
 
-           const int Elem1No = tr->Elem1No,
-                     Elem2No = tr->Elem2No;
-           for (int q = 0; q < nqp_face; q++)
-           {
-               const IntegrationPoint &ip_f = cfir->IntPoint(q);
-               tr->SetAllIntPoints(&ip_f);
-               const IntegrationPoint &ip_e1 = tr->GetElement1IntPoint();
-               const IntegrationPoint &ip_e2 = tr->GetElement2IntPoint();
+         tr = pmesh->GetFaceElementTransformations(f);
+         for (int q = 0; q < nqp_face; q++)
+         {
+            const IntegrationPoint &ip_f = cfir->IntPoint(q);
+            tr->SetAllIntPoints(&ip_f);
+            const IntegrationPoint &ip_e1 = tr->GetElement1IntPoint();
+            const IntegrationPoint &ip_e2 = tr->GetElement2IntPoint();
 
-               ElementTransformation &Tr1 = *H1.GetElementTransformation(Elem1No);
-               Tr1.SetIntPoint(&ip_e1);
-               cfqdata.rho0DetJ0(f*nqp_face*2 + 0*nqp_face + q ) =
-                       Tr1.Weight() * mat_data.rho0_1.GetValue(Elem1No, ip_e1);
+            ElementTransformation &Trans_e1 = tr->GetElement1Transformation();
+            ElementTransformation &Trans_e2 = tr->GetElement2Transformation();
 
-               ElementTransformation &Tr2 = *H1.GetElementTransformation(Elem2No);
-               Tr2.SetIntPoint(&ip_e2);
-               cfqdata.rho0DetJ0(f*nqp_face*2 + 1*nqp_face + q) =
-                       Tr2.Weight() * mat_data.rho0_1.GetValue(Elem2No, ip_e2);
-           }
-       }
+            cfqdata.rho0DetJ0(f*nqp_face*4 + 0*nqp_face + q) =
+                  mat_data.vol_1.GetValue(Trans_e1, ip_e1) * Trans_e1.Weight() *
+                  mat_data.rho0_1.GetValue(tr->Elem1No, ip_e1);
+
+            cfqdata.rho0DetJ0(f*nqp_face*4 + 1*nqp_face + q) =
+                  mat_data.vol_1.GetValue(Trans_e2, ip_e2) * Trans_e2.Weight() *
+                  mat_data.rho0_1.GetValue(tr->Elem2No, ip_e2);
+
+            cfqdata.rho0DetJ0(f*nqp_face*4 + 2*nqp_face + q) =
+                  mat_data.vol_2.GetValue(Trans_e1, ip_e1) * Trans_e1.Weight() *
+                  mat_data.rho0_2.GetValue(tr->Elem1No, ip_e1);
+
+            cfqdata.rho0DetJ0(f*nqp_face*4 + 3*nqp_face + q) =
+                  mat_data.vol_2.GetValue(Trans_e2, ip_e2) * Trans_e2.Weight() *
+                  mat_data.rho0_2.GetValue(tr->Elem2No, ip_e2);
+         }
+      }
    }
 
    //

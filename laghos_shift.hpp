@@ -192,6 +192,30 @@ public:
    void UnsetVandE() { v = nullptr; e = nullptr; }
 };
 
+class EnergyCutFaceIntegrator : public LinearFormIntegrator
+{
+private:
+   const int mat_id;
+   const MaterialData &mat_data;
+   CutFaceQuadratureData &qdata_face;
+
+public:
+   EnergyCutFaceIntegrator(int m_id, const MaterialData &mdata,
+                           CutFaceQuadratureData &cfqdata)
+      : mat_id(m_id), mat_data(mdata), qdata_face(cfqdata) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el_1,
+                                       const FiniteElement &el_2,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
+};
+
 void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes,
                       std::string text);
 
