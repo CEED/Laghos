@@ -1005,6 +1005,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
 
       // + < [((grad_v d).n) n], {p phi} > (form 4)
+      // phi is DG, so {p phi} = p1 phi + p2 0 = p1 phi.
       if (form == 4)
       {
          // 1st element.
