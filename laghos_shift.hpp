@@ -99,12 +99,10 @@ private:
 
    bool diffuse_v = false;
    double diffuse_v_scale = 1.0;
-   CutFaceQuadratureData &qdata;
 
   public:
-   FaceForceIntegrator(const MaterialData &mdata, VectorCoefficient &d,
-                       CutFaceQuadratureData &cfqdata)
-   : mat_data(mdata), dist(d), qdata(cfqdata) { }
+   FaceForceIntegrator(const MaterialData &mdata, VectorCoefficient &d)
+   : mat_data(mdata), dist(d) { }
 
    // Goes over all H1 volumetric dofs in both cells around the interface.
    void AssembleFaceMatrix(const FiniteElement &trial_fe,
@@ -165,17 +163,14 @@ private:
    const ParGridFunction *v = nullptr, *e = nullptr;
    VectorCoefficient &dist;
 
-   CutFaceQuadratureData &qdata_face;
-
 public:
    int e_shift_type = 0;
    bool diffusion = false;
    double diffusion_scale = 1.0;
 
    EnergyInterfaceIntegrator(int m_id, const MaterialData &mdata,
-                             VectorCoefficient &d,
-                             CutFaceQuadratureData &cfqdata)
-      : mat_id(m_id), mat_data(mdata), dist(d), qdata_face(cfqdata) { }
+                             VectorCoefficient &d)
+      : mat_id(m_id), mat_data(mdata), dist(d) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -197,12 +192,10 @@ class EnergyCutFaceIntegrator : public LinearFormIntegrator
 private:
    const int mat_id;
    const MaterialData &mat_data;
-   CutFaceQuadratureData &qdata_face;
 
 public:
-   EnergyCutFaceIntegrator(int m_id, const MaterialData &mdata,
-                           CutFaceQuadratureData &cfqdata)
-      : mat_id(m_id), mat_data(mdata), qdata_face(cfqdata) { }
+   EnergyCutFaceIntegrator(int m_id, const MaterialData &mdata)
+      : mat_id(m_id), mat_data(mdata) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,

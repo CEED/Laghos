@@ -349,33 +349,16 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
       dist.Eval(d_q, Trans_e1, ip_e1);
       const double grad_p_d_q1 = d_q * p_grad_q1;
       const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
-      const double rho1 =
-            qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 0*nqp_face + q) /
-            Trans_e1.Weight();
-      const double cs1 = sqrt(gamma_e1 * p_q1 / rho1);
-      if (diffuse_v)
-      {
-         v->GetVectorGradient(Trans_e1, v_grad_q1);
-      }
+      if (diffuse_v) { v->GetVectorGradient(Trans_e1, v_grad_q1); }
 
       // Compute el2 quantities.
       Trans_e2.SetIntPoint(&ip_e2);
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       const double grad_p_d2 = d_q * p_grad_q2;
       const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
-      const double rho2 =
-            qdata.rho0DetJ0(Trans.ElementNo * nqp_face * 2 + 1*nqp_face + q) /
-            Trans_e2.Weight();
-      const double cs2 = sqrt(gamma_e2 * p_q2 / rho2);
-      if (diffuse_v)
-      {
-         v->GetVectorGradient(Trans_e2, v_grad_q2);
-      }
+      if (diffuse_v) { v->GetVectorGradient(Trans_e2, v_grad_q2); }
 
       MFEM_VERIFY(p_q1 > 0.0 && p_q2 > 0.0, "negative pressure");
-      const double gamma_avg = p_q1 / (p_q1 + p_q2);
-      const double rho_cs_avg = gamma_avg * rho1 * cs1 +
-                                (1.0 - gamma_avg) * rho2 * cs2;
 
       // generic stuff that we need for forms 2, 3 and 4
       Vector gradv_d(dim);
@@ -445,6 +428,10 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   double diffuse_term = 0.0;
                   if (diffuse_v)
                   {
+                     MFEM_ABORT("Fix the rho computation to get data "
+                                "from mat_data.rhoDetJind0.");
+                     double rho_cs_avg = -1.0; // TODO.
+
                      Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
                      double grad_psi_d = (grad_shape_h1 * d_q) * true_normal(d);
@@ -510,6 +497,10 @@ void FaceForceIntegrator::AssembleFaceMatrix(const FiniteElement &trial_fe,
                   double diffuse_term = 0.0;
                   if (diffuse_v)
                   {
+                     MFEM_ABORT("Fix the rho computation to get data "
+                                "from mat_data.rhoDetJind0.");
+                     double rho_cs_avg = -1.0; // TODO.
+
                      Vector grad_shape_h1;
                      h1_grads.GetRow(j, grad_shape_h1);
                      double grad_psi_d = (grad_shape_h1 * d_q) * true_normal(d);
@@ -852,24 +843,37 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
 
+   const IntegrationRule *ir = IntRule;
+   MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
+   const int nqp_face = ir->GetNPoints();
+
    const int attr_e1 = Trans_e1.Attribute;
-   const ParGridFunction *p_e1, *p_e2;
+   const ParGridFunction *p_e1, *p_e2, *rhoDetJind0_e1, *rhoDetJind0_e2,
+                         *ind_e1, *ind_e2;
    double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
-      p_e1     = &mat_data.p_1->GetPressure();
-      gamma_e1 = mat_data.gamma_1;
-      p_e2     = &mat_data.p_2->GetPressure();
-      gamma_e2 = mat_data.gamma_2;
+      p_e1           = &mat_data.p_1->GetPressure();
+      rhoDetJind0_e1 = &mat_data.rhoDetJind0_1;
+      ind_e1         = &mat_data.vol_1;
+      gamma_e1       =  mat_data.gamma_1;
+      p_e2           = &mat_data.p_2->GetPressure();
+      rhoDetJind0_e2 = &mat_data.rhoDetJind0_2;
+      ind_e2         = &mat_data.vol_2;
+      gamma_e2       =  mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
    {
-      p_e1     = &mat_data.p_2->GetPressure();
-      gamma_e1 = mat_data.gamma_2;
-      p_e2     = &mat_data.p_1->GetPressure();
-      gamma_e2 = mat_data.gamma_1;
+      p_e1           = &mat_data.p_2->GetPressure();
+      rhoDetJind0_e1 = &mat_data.rhoDetJind0_2;
+      ind_e1         = &mat_data.vol_2;
+      gamma_e1       =  mat_data.gamma_2;
+      p_e2           = &mat_data.p_1->GetPressure();
+      rhoDetJind0_e2 = &mat_data.rhoDetJind0_1;
+      ind_e2         = &mat_data.vol_1;
+      gamma_e2       =  mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); }
 
@@ -886,10 +890,6 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
                "The mixed zone is a 1-material zone! Check it.");
 
    Vector shape_e(l2dofs_cnt);
-
-   const IntegrationRule *ir = IntRule;
-   MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
-   const int nqp_face = ir->GetNPoints();
 
    Vector nor(dim), p_grad_q1(dim), p_grad_q2(dim), d_q(dim), v_vals(dim);
    DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
@@ -1087,24 +1087,23 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
       if (diffusion)
       {
-         double p1_ext = fmax(p_q1 + d_q * p_grad_q1, 0.0),
-                p2_ext = fmax(p_q2 + d_q * p_grad_q2, 0.0);
+         double p_q1_ext = fmax(p_q1 + d_q * p_grad_q1, 0.0),
+                p_q2_ext = fmax(p_q2 + d_q * p_grad_q2, 0.0);
 
-         double p_gradp_jump = p1_ext - p2_ext;
+         double p_gradp_jump = p_q1_ext - p_q2_ext;
 
-         const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
-         const double rho_1  = qdata_face.rho0DetJ0(idx) /
-                               Trans_e1.Weight();
-         const double cs_1   = sqrt(gamma_e1 * p_q1 / rho_1);
-         const double rho_2  = qdata_face.rho0DetJ0(idx + nqp_face) /
-                               Trans_e2.Weight();
-         const double cs_2   = sqrt(gamma_e2* p_q2 / rho_2);
+         double rho_q1  = rhoDetJind0_e1->GetValue(Trans_e1, ip_e1) /
+                          Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e1);
+         const double cs_q1 = sqrt(gamma_e1 * p_q1 / rho_q1);
 
-         int cut_zone_id = (d_q * nor > 0.0) ? Trans.Elem2No : Trans.Elem1No;
-         double h = v->ParFESpace()->GetParMesh()->GetElementVolume(cut_zone_id);
-         h = pow(h, 1.0 / dim);
-         const double cs_avg = sqrt(d_q * d_q) / h *
-                               (gamma_avg * cs_1 + (1.0 - gamma_avg) * cs_2);
+         double rho_q2  = rhoDetJind0_e2->GetValue(Trans_e2, ip_e2) /
+                          Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e2);
+         const double cs_q2 = sqrt(gamma_e2* p_q2 / rho_q2);
+
+         MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
+                     "Negative density at the face, not good.");
+
+         const double cs_avg = (gamma_avg * cs_q1 + (1.0 - gamma_avg) * cs_q2);
 
          DenseMatrix grad_shape_phys_e(l2dofs_cnt, dim);
 
@@ -1112,30 +1111,16 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          el_1.CalcShape(ip_e1, shape_e);
          el_1.CalcPhysDShape(Trans_e1, grad_shape_phys_e);
          grad_shape_phys_e.AddMult(d_q, shape_e);
-//         for (int i = 0; i < shape_e.Size(); i++)
-//         {
-//            if (shape_e(i) < 0.0)
-//            {
-//               shape_e(i) = 0.0;
-//            }
-//         }
-         shape_e *= Trans.Weight() * ip_f.weight *
+         shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                     diffusion_scale * cs_avg * p_gradp_jump;
          Vector elvect_ref_1(elvect.GetData(), l2dofs_cnt);
-         elvect_ref_1.Add(1.0, shape_e);
+         elvect_ref_1.Add(+1.0, shape_e);
 
          // 2nd element.
          el_2.CalcShape(ip_e2, shape_e);
          el_2.CalcPhysDShape(Trans_e2, grad_shape_phys_e);
          grad_shape_phys_e.AddMult(d_q, shape_e);
-//         for (int i = 0; i < shape_e.Size(); i++)
-//         {
-//            if (shape_e(i) < 0.0)
-//            {
-//               shape_e(i) = 0.0;
-//            }
-//         }
-         shape_e *= Trans.Weight() * ip_f.weight *
+         shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                     diffusion_scale * cs_avg * p_gradp_jump;
          Vector elvect_ref_2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
          elvect_ref_2.Add(-1.0, shape_e);
@@ -1182,6 +1167,8 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
 
    const ParGridFunction *p = (mat_id == 1) ? &mat_data.p_1->GetPressure()
                                             : &mat_data.p_2->GetPressure();
+   const ParGridFunction *rhoDetJind0 = (mat_id == 1) ? &mat_data.rhoDetJind0_1
+                                                      : &mat_data.rhoDetJind0_2;
    const ParGridFunction *ind = (mat_id == 1) ? &mat_data.vol_1
                                               : &mat_data.vol_2;
    const double gamma = (mat_id == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
@@ -1209,19 +1196,16 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
       const double jump_p = p_q1 - p_q2;
       const double gamma_avg = p_q1 / (p_q1 + p_q2);
 
-      int i1 = (mat_id == 1)
-               ? Trans.ElementNo * nqp_face * 4 + 0 * nqp_face + q
-               : Trans.ElementNo * nqp_face * 4 + 2 * nqp_face + q;
-      int i2 = i1 + nqp_face;
-
-      int idx = Trans.ElementNo * nqp_face * 4 + 0 * nqp_face + q;
-      const double rho_q1  = qdata_face.rho0DetJ0(i1) /
+      const double rho_q1  = rhoDetJind0->GetValue(Trans_e1, ip_e1) /
                              ind->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight(),
-                   rho_q2  = qdata_face.rho0DetJ0(i2) /
+                   rho_q2  = rhoDetJind0->GetValue(Trans_e2, ip_e2) /
                              ind->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
       const double cs_q1   = sqrt(gamma * p_q1 / rho_q1),
                    cs_q2   = sqrt(gamma * p_q2 / rho_q2),
                    cs_avg  = gamma_avg * cs_q1 + (1.0 - gamma_avg) * cs_q2;
+
+      MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
+                  "Negative density at the face, not good.");
 
       // The term is: + < {cs} [p] [phi] >
       // phi is DG, so [phi] = phi - 0.

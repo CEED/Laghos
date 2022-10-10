@@ -121,7 +121,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    cfir(NULL),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
-   cfqdata(),
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force_1(&H1, &L2), Force_2(&H1, &L2), FaceForce(&H1, &L2),
@@ -209,6 +208,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
 
+   // Fill the GridFunction masses mat_data.rhodetJind0 at the L2 nodes.
+   mat_data.UpdateInitialMasses();
+
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))
@@ -236,58 +238,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force_2.Assemble(0);
    Force_2.Finalize(0);
 
-   // Get rho0detJ0 for integration points on marked faces.
-   FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
-   cfir = &IntRules.Get(tr->GetGeometryType(),
-                        H1.GetOrder(0) + L2.GetOrder(0) + tr->OrderW());
-   const int nqp_face = cfir->GetNPoints();
-   const int nfaces = pmesh->GetNumFaces();
-   // 0 / 1 / 2 /3 --- rho_1 left / rho_1 right / rho_2 left / rho_2 right.
-   if (H1.GetNRanks() == 1)
-   {
-      cfqdata.rho0DetJ0.SetSize(nfaces * 4 * nqp_face);
-      cfqdata.rho0DetJ0 = 0.0;
-      for (int f = 0; f < nfaces; f++)
-      {
-         const int attr = pmesh->GetFace(f)->GetAttribute();
-         if (attr != 10 && attr != 15 && attr != 20) { continue; }
-
-         tr = pmesh->GetFaceElementTransformations(f);
-         for (int q = 0; q < nqp_face; q++)
-         {
-            const IntegrationPoint &ip_f = cfir->IntPoint(q);
-            tr->SetAllIntPoints(&ip_f);
-            const IntegrationPoint &ip_e1 = tr->GetElement1IntPoint();
-            const IntegrationPoint &ip_e2 = tr->GetElement2IntPoint();
-
-            ElementTransformation &Trans_e1 = tr->GetElement1Transformation();
-            ElementTransformation &Trans_e2 = tr->GetElement2Transformation();
-
-            cfqdata.rho0DetJ0(f*nqp_face*4 + 0*nqp_face + q) =
-                  mat_data.vol_1.GetValue(Trans_e1, ip_e1) * Trans_e1.Weight() *
-                  mat_data.rho0_1.GetValue(tr->Elem1No, ip_e1);
-
-            cfqdata.rho0DetJ0(f*nqp_face*4 + 1*nqp_face + q) =
-                  mat_data.vol_1.GetValue(Trans_e2, ip_e2) * Trans_e2.Weight() *
-                  mat_data.rho0_1.GetValue(tr->Elem2No, ip_e2);
-
-            cfqdata.rho0DetJ0(f*nqp_face*4 + 2*nqp_face + q) =
-                  mat_data.vol_2.GetValue(Trans_e1, ip_e1) * Trans_e1.Weight() *
-                  mat_data.rho0_2.GetValue(tr->Elem1No, ip_e1);
-
-            cfqdata.rho0DetJ0(f*nqp_face*4 + 3*nqp_face + q) =
-                  mat_data.vol_2.GetValue(Trans_e2, ip_e2) * Trans_e2.Weight() *
-                  mat_data.rho0_2.GetValue(tr->Elem2No, ip_e2);
-         }
-      }
-   }
-
    //
    // Shifted interface setup.
    //
 
+   // Quadrature rule.
+   FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
+   cfir = &IntRules.Get(tr->GetGeometryType(),
+                        H1.GetOrder(0) + L2.GetOrder(0) + tr->OrderW());
+
    // Interface forces.
-   auto *ffi = new FaceForceIntegrator(mat_data, dist_coeff, cfqdata);
+   auto *ffi = new FaceForceIntegrator(mat_data, dist_coeff);
    ffi->SetIntRule(cfir);
    ffi->SetShiftType(si_options.v_shift_type);
    ffi->SetScale(si_options.v_shift_scale);
@@ -300,15 +261,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    mfi->v_shift_scale = si_options.v_shift_scale;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
 
-   auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data,
-                                               dist_coeff, cfqdata);
+   auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, dist_coeff);
    efi_1->SetIntRule(cfir);
    efi_1->e_shift_type    = si_options.e_shift_type;
    efi_1->diffusion       = si_options.e_shift_diffusion;
    efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
    FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
-   auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data,
-                                               dist_coeff, cfqdata);
+
+   auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, dist_coeff);
    efi_2->SetIntRule(cfir);
    efi_2->e_shift_type    = si_options.e_shift_type;
    efi_2->diffusion       = si_options.e_shift_diffusion;

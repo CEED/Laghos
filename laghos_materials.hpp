@@ -84,14 +84,19 @@ struct MaterialData
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
    bool             pointwise_alpha;
    ParGridFunction  vol_1, vol_2;     // recomputed in UpdateQuadratureData().
+   ParGridFunction  rhoDetJind0_1,    // pointwise masses as GridFunctions.
+                    rhoDetJind0_2;    // not updated.
 
    // Remap influence:
-   // * level set is remmaped, then updates alpha_1 and alpha_2 after remap.
-   // * e_1 and e_2 are remapped.
+   // * level set is remapped, then updates alpha_1 and alpha_2 after remap.
    // * rho0_1 and rho0_2 are updated after remap.
+   // * e_1 and e_2 are remapped.
    // * the fields inside p_1 and p_2 are updated after remap.
+   // * rhoDetJind0_1 and _2 are updated after remap.
 
    MaterialData() : p_1(nullptr), p_2(nullptr) { }
+
+   void UpdateInitialMasses();
 
    void ComputeTotalPressure(const ParGridFunction &p1_gf,
                              const ParGridFunction &p2_gf);

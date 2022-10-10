@@ -233,6 +233,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       }
    }
 
+   mat_data.UpdateInitialMasses();
+
    mat_data.e_1 = e_1;
    mat_data.e_2 = e_2;
    const int ndofs = mat_data.e_1.Size() / NE;

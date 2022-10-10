@@ -136,6 +136,27 @@ void UpdateAlpha(const ParGridFunction &level_set,
    }
 }
 
+void MaterialData::UpdateInitialMasses()
+{
+   ParFiniteElementSpace &pfes_L2 = *rhoDetJind0_1.ParFESpace();
+   const IntegrationRule &ir_L2_nodes = pfes_L2.GetFE(0)->GetNodes();
+   const int nd = ir_L2_nodes.GetNPoints(), NE = pfes_L2.GetNE();
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation &tr_e = *pfes_L2.GetElementTransformation(e);
+      for (int i = 0; i < nd; i++)
+      {
+         const IntegrationPoint &ip = ir_L2_nodes.IntPoint(i);
+         tr_e.SetIntPoint(&ip);
+         const double detJ = tr_e.Weight();
+         rhoDetJind0_1(e * nd + i) = rho0_1(e * nd + i) *
+                                     detJ * vol_1(e * nd + i);
+         rhoDetJind0_2(e * nd + i) = rho0_2(e * nd + i) *
+                                     detJ * vol_2(e * nd + i);
+      }
+   }
+}
+
 void MaterialData::ComputeTotalPressure(const ParGridFunction &p1_gf,
                                         const ParGridFunction &p2_gf)
 {

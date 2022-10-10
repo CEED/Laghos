@@ -62,19 +62,6 @@ struct QuadratureData
         rho0DetJ0w_1(NE * quads_per_el), rho0DetJ0w_2(NE * quads_per_el) { }
 };
 
-// Container for all data needed at quadrature points.
-struct CutFaceQuadratureData
-{
-   // Quadrature data used for full/partial assembly of the mass matrices.
-   // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-   // quadrature point. Note the at any other time, we can compute
-   // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-   // conservation.
-   Vector rho0DetJ0, rhocs;
-
-   CutFaceQuadratureData() : rho0DetJ0(), rhocs() { }
-};
-
 // Assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.

@@ -70,7 +70,6 @@ protected:
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
-   mutable CutFaceQuadratureData cfqdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
