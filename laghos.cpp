@@ -404,7 +404,7 @@ int main(int argc, char *argv[])
    // Activate the energy diffusion term. The RHS gets:
    //    - < {c_s} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = false;
-   si_options.e_shift_diffusion_scale = 0.25;
+   si_options.e_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (multimat == false);
    const bool calc_dist = (si_options.v_shift_type > 0 ||

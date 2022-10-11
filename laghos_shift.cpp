@@ -749,21 +749,20 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       else { CalcOrtho(Trans.Jacobian(), nor); }
       nor *= ip_f.weight;
 
-      // Compute el1 quantities.
+      // Compute el1 quantities. Allows negative pressure.
       Trans_e1.SetIntPoint(&ip_e1);
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       dist.Eval(d_q, Trans_e1, ip_e1);
       const double grad_p_d_q1 = d_q * p_grad_q1;
-      const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
+      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
 
-      // Compute el2 quantities.
+      // Compute el2 quantities. Allows negative pressure.
       Trans_e2.SetIntPoint(&ip_e2);
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       const double grad_p_d_q2 = d_q * p_grad_q2;
-      const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
+      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
 
-      MFEM_VERIFY(p_q1 > 0.0 && p_q2 > 0.0, "negative pressure");
-      const double gamma_avg = p_q1 / (p_q1 + p_q2);
+      const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
 
       // 1st element.
       {
@@ -914,43 +913,21 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
       else { CalcOrtho(Trans.Jacobian(), nor); }
 
-      // 1st element stuff.
-      const double p_q1 = fmax(1e-5, p_e1->GetValue(Trans_e1, ip_e1));
+      // Compute el1 quantities. Allows negative pressure.
+      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
       dist.Eval(d_q, Trans_e1, ip_e1);
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       v->GetVectorGradient(Trans_e1, v_grad_q1);
 
-      // 2nd element stuff.
-      const double p_q2 = fmax(1e-5, p_e2->GetValue(Trans_e2, ip_e2));
+      // Compute el2 quantities. Allows negative pressure.
+      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
       if (local_face)
       {
          p_e2->GetGradient(Trans_e2, p_grad_q2);
          v->GetVectorGradient(Trans_e2, v_grad_q2);
       }
 
-//      const int idx = Trans.ElementNo * nqp_face * 2 + 0 + q;
-//      const double rho_1  = qdata_face.rho0DetJ0(idx) /
-//                            Trans_e1.Weight();
-//      const double rho_2  = qdata_face.rho0DetJ0(idx + nqp_face) /
-//                            Trans_e2.Weight();
-//      const double e1 = e->GetValue(Trans_e1, ip_e1);
-//      const double e2 = e->GetValue(Trans_e2, ip_e2);
-
-//      int cut_zone_id = (d_q * nor > 0.0) ? Trans.Elem2No : Trans.Elem1No;
-//      double h = v->ParFESpace()->GetParMesh()->GetElementVolume(cut_zone_id);
-//      h = pow(h, 1.0 / dim);
-//      const double d_over_h = sqrt(d_q * d_q) / h;
-//      if (d_over_h > 1.0)
-//      {
-//         std::cout << sqrt(d_q * d_q) << " " << h << std::endl;
-//         MFEM_ABORT("bad d / h");
-//      }
-//      MFEM_VERIFY(d_over_h < 1.0, "d over h is broken!");
-//      const double gamma_e1 = (1.0 - d_over_h) / 2.0,
-//                   gamma_e2 = 1.0 - gamma_e1;
-
-      MFEM_VERIFY(p_q1 > 0.0 && p_q2 > 0.0, "negative pressure");
-      const double gamma_avg = p_q1 / (p_q1 + p_q2);
+      const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
 
       v->GetVectorValue(Trans, ip_f, v_vals);
       const int form = e_shift_type;
@@ -1087,18 +1064,20 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
       if (diffusion)
       {
-         double p_q1_ext = fmax(p_q1 + d_q * p_grad_q1, 0.0),
-                p_q2_ext = fmax(p_q2 + d_q * p_grad_q2, 0.0);
+         double p_q1_ext = p_q1 + d_q * p_grad_q1,
+                p_q2_ext = p_q2 + d_q * p_grad_q2;
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
          double rho_q1  = rhoDetJind0_e1->GetValue(Trans_e1, ip_e1) /
                           Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e1);
-         const double cs_q1 = sqrt(gamma_e1 * p_q1 / rho_q1);
+         //double cs_q1 = (p_q1 > 0.0) ? sqrt(gamma_e1 * p_q1 / rho_q1) : 0.0;
+         double cs_q1 = sqrt(gamma_e1 * fabs(p_q1) / rho_q1);
 
          double rho_q2  = rhoDetJind0_e2->GetValue(Trans_e2, ip_e2) /
                           Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e2);
-         const double cs_q2 = sqrt(gamma_e2* p_q2 / rho_q2);
+         //double cs_q2 = (p_q2 > 0.0) ? sqrt(gamma_e2 * p_q2 / rho_q2) : 0.0;
+         double cs_q2 = sqrt(gamma_e1 * fabs(p_q1) / rho_q2);
 
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good.");
@@ -1124,15 +1103,6 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
                     diffusion_scale * cs_avg * p_gradp_jump;
          Vector elvect_ref_2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
          elvect_ref_2.Add(-1.0, shape_e);
-
-         if (cs_avg * p_gradp_jump > 100.0)
-         {
-            cout << "p grads: " << p_grad_q1(0) << " " << p_grad_q2(0) << endl;
-            std::cout << "p1: " << p_q1 << " " << d_q * p_grad_q1 << std::endl;
-            std::cout << "p2: " << p_q2 << " " << d_q * p_grad_q2 << std::endl;
-            std::cout << cs_avg << " " << p_gradp_jump << std::endl;
-            MFEM_ABORT("break");
-         }
       }
    }
 }
@@ -1393,7 +1363,8 @@ void InitWaterAir(MaterialData &mat_data)
             mat_data.e_1(e*ndofs + i)    = (p + g * 6.0e8) / r / (g - 1.0);
          }
       }
-      else
+
+      if (attr == 15 || attr == 20)
       {
          // Right material - air (low pressure).
          r = 50; g = 1.4; p = 1.e5;
