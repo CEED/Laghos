@@ -402,6 +402,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    auto e_integ_1 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_1)[0]);
    auto tfi_e_2 = FaceForceEnergy_2.GetIFLFI();
    auto e_integ_2 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_2)[0]);
+   vel.ExchangeFaceNbrData();
    v_integ->SetVelocity(vel);
    e_integ_1->SetVandE(&vel, &energy_1);
    e_integ_2->SetVandE(&vel, &energy_2);

@@ -921,11 +921,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       // Compute el2 quantities. Allows negative pressure.
       const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
-      if (local_face)
-      {
-         p_e2->GetGradient(Trans_e2, p_grad_q2);
-         v->GetVectorGradient(Trans_e2, v_grad_q2);
-      }
+      p_e2->GetGradient(Trans_e2, p_grad_q2);
+      v->GetVectorGradient(Trans_e2, v_grad_q2);
 
       const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
 
@@ -970,16 +967,12 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       Vector gradv_d_n_n_e1(true_normal);
       gradv_d_n_n_e1 *= gradv_d_n;
 
+      v_grad_q2.Mult(d_q, gradv_d);
+      gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e2(true_normal);
-      double jump_gradv_d_n_n = 0.0;
-      if (local_face)
-      {
-         v_grad_q2.Mult(d_q, gradv_d);
-         gradv_d_n = gradv_d * true_normal;
-         gradv_d_n_n_e2 *= gradv_d_n;
+      gradv_d_n_n_e2 *= gradv_d_n;
 
-         jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
-      }
+      double jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
 
       // + < [((grad_v d).n) n], {p phi} > (form 4)
       // phi is DG, so {p phi} = p1 phi + p2 0 = p1 phi.
@@ -988,18 +981,21 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          // 1st element.
          el_1.CalcShape(ip_e1, shape_e);
          shape_e *= ip_f.weight * alpha_scale *
-                    (gradv_d_n_n_e1 * nor) * gamma_avg * p_q1;
+                    //(gradv_d_n_n_e1 * nor) * gamma_avg * p_q1;
+                    jump_gradv_d_n_n * gamma_avg * p_q1;
          Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
-         elvect_e1.Add(+1.0, shape_e);
+         elvect_e1 -= shape_e;
 
          // 2nd element.
          if (local_face)
          {
             el_2.CalcShape(ip_e2, shape_e);
             shape_e *= ip_f.weight * alpha_scale *
-                       (gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
+                       //(gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
+                       jump_gradv_d_n_n * (1.0 - gamma_avg) * p_q2;
             Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-            elvect_e2.Add(-1.0, shape_e);
+            //elvect_e2.Add(-1.0, shape_e);
+            elvect_e2 -= shape_e;
          }
       }
 

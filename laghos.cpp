@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
    //    + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
    //    + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
    //    + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
-   // 4: + < [((grad_v.d).n) n] {p phi} >
+   // 4: - < [((grad_v.d).n) n] {p phi} >
    // 5: - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>
    //    - < [p + grad_p.d].v {phi} >
    // 6: + < |[((grad_v d).n) n]| [p] [phi] >
