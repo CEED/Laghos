@@ -662,6 +662,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       mat_data.vol_2.ExchangeFaceNbrData();
       mat_data.p_1->ExchangeFaceNbrData();
       mat_data.p_2->ExchangeFaceNbrData();
+      mat_data.rhoDetJind0_1.ExchangeFaceNbrData();
+      mat_data.rhoDetJind0_2.ExchangeFaceNbrData();
    }
 
    // Batched computations are needed, because hydrodynamic codes usually

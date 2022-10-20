@@ -974,7 +974,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       double jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
 
-      // + < [((grad_v d).n) n], {p phi} > (form 4)
+      // - < [((grad_v d).n) n], {p phi} > (form 4)
       // phi is DG, so {p phi} = p1 phi + p2 0 = p1 phi.
       if (form == 4)
       {
@@ -994,7 +994,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
                        //(gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
                        jump_gradv_d_n_n * (1.0 - gamma_avg) * p_q2;
             Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-            //elvect_e2.Add(-1.0, shape_e);
+            // Same sign as above, because it's an average of the shape f-s.
             elvect_e2 -= shape_e;
          }
       }
@@ -1057,7 +1057,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          elvect_e2.Add(-1.0, shape_e);
       }
 
-      // scale * {c_s} * [p + grad_p.d] * [phi + grad_phi.d].
+      // + < scale * {h |grad_v|} * [p + grad_p.d] * [phi + grad_phi.d] >.
       if (diffusion)
       {
          double p_q1_ext = p_q1 + d_q * p_grad_q1,
@@ -1067,18 +1067,16 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
          double rho_q1  = rhoDetJind0_e1->GetValue(Trans_e1, ip_e1) /
                           Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e1);
-         //double cs_q1 = (p_q1 > 0.0) ? sqrt(gamma_e1 * p_q1 / rho_q1) : 0.0;
-         double cs_q1 = sqrt(gamma_e1 * fabs(p_q1) / rho_q1);
-
          double rho_q2  = rhoDetJind0_e2->GetValue(Trans_e2, ip_e2) /
                           Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e2);
-         //double cs_q2 = (p_q2 > 0.0) ? sqrt(gamma_e2 * p_q2 / rho_q2) : 0.0;
-         double cs_q2 = sqrt(gamma_e1 * fabs(p_q1) / rho_q2);
-
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good.");
 
-         const double cs_avg = (gamma_avg * cs_q1 + (1.0 - gamma_avg) * cs_q2);
+         double h_1 = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e1, 0);
+         double h_2 = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e2, 0);
+
+         double grad_v_avg = gamma_avg * h_1 * v_grad_q1.FNorm() +
+                             (1.0 - gamma_avg) * h_2 * v_grad_q2.FNorm();
 
          DenseMatrix grad_shape_phys_e(l2dofs_cnt, dim);
 
@@ -1087,18 +1085,22 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          el_1.CalcPhysDShape(Trans_e1, grad_shape_phys_e);
          grad_shape_phys_e.AddMult(d_q, shape_e);
          shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
-                    diffusion_scale * cs_avg * p_gradp_jump;
-         Vector elvect_ref_1(elvect.GetData(), l2dofs_cnt);
-         elvect_ref_1.Add(+1.0, shape_e);
+                    diffusion_scale * grad_v_avg * p_gradp_jump;
+         Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
+         elvect_e1 += shape_e;
 
          // 2nd element.
-         el_2.CalcShape(ip_e2, shape_e);
-         el_2.CalcPhysDShape(Trans_e2, grad_shape_phys_e);
-         grad_shape_phys_e.AddMult(d_q, shape_e);
-         shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
-                    diffusion_scale * cs_avg * p_gradp_jump;
-         Vector elvect_ref_2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-         elvect_ref_2.Add(-1.0, shape_e);
+         if (local_face)
+         {
+            el_2.CalcShape(ip_e2, shape_e);
+            el_2.CalcPhysDShape(Trans_e2, grad_shape_phys_e);
+            grad_shape_phys_e.AddMult(d_q, shape_e);
+            shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
+                       diffusion_scale * grad_v_avg * p_gradp_jump;
+            Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
+            // Switches sign, because it's a jump of the shape f-s.
+            elvect_e2 -= shape_e;
+         }
       }
    }
 }
