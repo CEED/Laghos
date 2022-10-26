@@ -76,7 +76,7 @@ echo -e $com_line >> $file
 $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
-# Water-Air 1D pure mixed
+# Water-Air 1D mixed
 params="-p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm"
 run_line=$command" "$params
 com_line=$comment" "$params
@@ -84,7 +84,7 @@ echo -e $com_line >> $file
 $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
-# Water-Air 1D pure shifted
+# Water-Air 1D shifted
 params="-p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4"
 run_line=$command" "$params
 com_line=$comment" "$params
