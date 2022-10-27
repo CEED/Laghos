@@ -844,7 +844,7 @@ void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) con
 
 	   if (use_viscosity)
 	     {
-               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (global_max_sound_speed / global_min_h) * ip_f.weight /*nor_norm / eltrans->Elem1->Weight()*/;
+               f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (1.0 / global_min_h) * ip_f.weight /*nor_norm / eltrans->Elem1->Weight()*/;
 	       
 	       if (use_vorticity)
 		 {
