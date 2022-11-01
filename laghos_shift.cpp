@@ -108,6 +108,11 @@ void SIMarker::GetFaceAttributeGF(ParGridFunction &fa_gf)
                                     pmesh.GetFaceAttribute(f));
       }
    }
+
+   GroupCommunicator &gcomm = fa_gf.ParFESpace()->GroupComm();
+   Array<double> maxvals(fa_gf.GetData(), fa_gf.Size());
+   gcomm.Reduce<double>(maxvals, GroupCommunicator::Max);
+   gcomm.Bcast(maxvals);
 }
 
 double InterfaceCoeff::Eval(ElementTransformation &T,
