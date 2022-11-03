@@ -33,20 +33,27 @@ int SIMarker::GetMaterialID(int el_id)
    Vector ls_vals;
    const IntegrationRule &ir = IntRulesLo.Get(fe->GetGeomType(), 20);
 
-   bool has_pos_value = false, has_neg_value = false;
    ls.GetValues(el_id, ir, ls_vals);
    ElementTransformation *Tr = pfes.GetMesh()->GetElementTransformation(el_id);
+   double volume_1 = 0.0, volume_2 = 0.0, volume = 0.0;
    for (int q = 0; q < ir.GetNPoints(); q++)
    {
       const IntegrationPoint &ip = ir.IntPoint(q);
       Tr->SetIntPoint(&ip);
 
-      if (ls_vals(q) - 1e-12 > 0.0) { has_pos_value = true; }
-      if (ls_vals(q) + 1e-12 < 0.0) { has_neg_value = true; }
+      volume += ip.weight * Tr->Weight();
+      if (ls_vals(q) + 1e-12 < 0.0)
+      {
+         volume_1 += ip.weight * Tr->Weight();
+      }
+      if (ls_vals(q) - 1e-12 > 0.0)
+      {
+         volume_2 += ip.weight * Tr->Weight();
+      }
    }
 
-   if (has_pos_value == false) { return 10; }
-   if (has_neg_value == false) { return 20; }
+   if (volume_1 / volume < 0.01) { return 20; }
+   if (volume_2 / volume < 0.01) { return 10; }
    return 15;
 }
 

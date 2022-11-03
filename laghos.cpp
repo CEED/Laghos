@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
 
    mat_data.pointwise_alpha = si_options.pointwise_alpha;
 
-// #define EXTRACT_1D
+//#define EXTRACT_1D
 
    // Distance vector and distance solver setup.
    ParGridFunction dist(&H1FESpace);

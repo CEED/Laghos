@@ -143,11 +143,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   InterfaceRhoCoeff arho_mix_coeff(mat_data.vol_1, mat_data.vol_2,
-                                    mat_data.rho0_1, mat_data.rho0_2);
    AlphaRhoCoeff arho_1_coeff(mat_data.vol_1, mat_data.rho0_1),
                  arho_2_coeff(mat_data.vol_2, mat_data.rho0_2);
-   MassIntegrator mi_1(arho_mix_coeff, &ir), mi_2(arho_mix_coeff, &ir);
+   MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff, &ir);
 
    for (int e = 0; e < NE; e++)
    {
