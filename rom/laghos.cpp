@@ -1364,7 +1364,9 @@ int main(int argc, char *argv[])
                 {
                     if (curr_window != 0)
                     {
-                        delete dmd_X, dmd_V, dmd_E;
+                        delete dmd_X;
+                        delete dmd_V;
+                        delete dmd_E;
                     }
 
                     if (romOptions.dmd_nonuniform)
@@ -2575,8 +2577,12 @@ int main(int argc, char *argv[])
 
     if (romOptions.dmd && rom_restore)
     {
-        delete dmd_X, dmd_V, dmd_E;
-        delete result_X, result_V, result_E;
+        delete dmd_X;
+        delete dmd_V;
+        delete dmd_E;
+        delete result_X;
+        delete result_V;
+        delete result_E;
     }
 
     return 0;

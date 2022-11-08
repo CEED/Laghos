@@ -16,78 +16,43 @@ using namespace std;
 
 void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
 {
+    int snapshot_idx = MaxNumSamples();
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
-    Vector dSdt;
-    if (!sns)
+    if (rank == 0)
     {
-        dSdt.SetSize(S.Size());
-        lhoper->Mult(S, dSdt);
+        cout << "X taking sample #" << snapshot_idx << " at t " << t << endl;
     }
 
-    if (!useXV)
+    if (t >= tbegin) dmd_X->takeSample(X.GetData(), t);
+
+    if (rank == 0)
+    {
+        cout << "V taking sample #" << snapshot_idx << " at t " << t << endl;
+    }
+
+    if (t >= tbegin) dmd_V->takeSample(V.GetData(), t);
+
+    if (offsetInit && snapshot_idx == 1 && false)
     {
         if (rank == 0)
         {
-            cout << "X taking sample at t " << t << endl;
+            cout << "Replacing initV" << endl;
         }
 
-        if (offsetInit)
+        for (int i=0; i<tH1size; ++i)
         {
-            for (int i=0; i<tH1size; ++i)
-            {
-                Xdiff[i] = X[i] - (*initX)(i);
-            }
-
-            if (t >= tbegin) dmd_X->takeSample(Xdiff.GetData(), t);
-        }
-        else
-        {
-            if (t >= tbegin) dmd_X->takeSample(X.GetData(), t);
-        }
-    }
-
-    if (!useVX)
-    {
-        if (rank == 0)
-        {
-            cout << "V taking sample at t " << t << endl;
-        }
-
-        if (offsetInit && Voffset)
-        {
-            for (int i=0; i<tH1size; ++i)
-            {
-                Xdiff[i] = V[i] - (*initV)(i);
-            }
-
-            if (t >= tbegin) dmd_V->takeSample(Xdiff.GetData(), t);
-        }
-        else
-        {
-            if (t >= tbegin) dmd_V->takeSample(V.GetData(), t);
+            (*initV)(i) = (X[i] - (*initX)(i)) / dt;
         }
     }
 
     if (rank == 0)
     {
-        cout << "E taking sample at t " << t << endl;
+        cout << "E taking sample #" << snapshot_idx << " at t " << t << endl;
     }
 
-    if (offsetInit)
-    {
-        for (int i=0; i<tL2size; ++i)
-        {
-            Ediff[i] = E[i] - (*initE)(i);
-        }
-
-        if (t >= tbegin) dmd_E->takeSample(Ediff.GetData(), t);
-    }
-    else
-    {
-        if (t >= tbegin) dmd_E->takeSample(E.GetData(), t);
-    }
+    if (t >= tbegin) dmd_E->takeSample(E.GetData(), t);
 
     // Write timeSamples to file
     if (rank == 0 && t >= tbegin)
@@ -101,6 +66,7 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
 void ROM_Sampler::SampleSolution(const double t, const double dt, const double pd, Vector const& S)
 {
+    int snapshot_idx = MaxNumSamples();
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
@@ -117,7 +83,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     {
         if (rank == 0)
         {
-            cout << "X taking sample at t " << t << endl;
+            cout << "X taking sample #" << snapshot_idx << " at t " << t << endl;
         }
 
         bool addSample;
@@ -156,7 +122,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         {
             if (rank == 0)
             {
-                cout << "V taking sample at t " << t << endl;
+                cout << "V taking sample #" << snapshot_idx << " at t " << t << endl;
             }
 
             bool addSample;
@@ -205,7 +171,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     {
         if (rank == 0)
         {
-            cout << "E taking sample at t " << t << endl;
+            cout << "E taking sample #" << snapshot_idx << " at t " << t << endl;
         }
 
         bool addSample, addSampleF;
@@ -273,7 +239,9 @@ void DMD_Sampler::Finalize(ROM_Options& input)
     dmd_E->train(input.dimE == -1 ? input.energyFraction : input.dimE);
     dmd_E->save(basename + "/" + "dmdE" + input.basisIdentifier + "_" + to_string(window));
 
-    delete dmd_X, dmd_V, dmd_E;
+    delete dmd_X;
+    delete dmd_V;
+    delete dmd_E;
 
     finalized = true;
 }

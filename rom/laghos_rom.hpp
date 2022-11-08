@@ -275,7 +275,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper),
-          parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
+          parameterID(input.parameterID), basename(*input.basename), 
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
         SetStateVariables(S_init);
@@ -347,8 +347,8 @@ public:
         if (input.dmd_nonuniform)
         {
             dmd_X = new CAROM::NonuniformDMD(tH1size, initX, initV);
-            dmd_V = new CAROM::NonuniformDMD(tH1size, initV, NULL);
-            dmd_E = new CAROM::NonuniformDMD(tL2size, initE, NULL);
+            dmd_V = new CAROM::NonuniformDMD(tH1size, NULL, NULL);
+            dmd_E = new CAROM::NonuniformDMD(tL2size, NULL, NULL);
         }
         else
         {
@@ -410,7 +410,6 @@ private:
 
     const bool sns;
 
-    const bool Voffset;
     const bool useXV;
     const bool useVX;
 
