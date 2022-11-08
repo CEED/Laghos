@@ -34,19 +34,6 @@ void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& 
 
     if (t >= tbegin) dmd_V->takeSample(V.GetData(), t);
 
-    if (offsetInit && snapshot_idx == 1 && false)
-    {
-        if (rank == 0)
-        {
-            cout << "Replacing initV" << endl;
-        }
-
-        for (int i=0; i<tH1size; ++i)
-        {
-            (*initV)(i) = (X[i] - (*initX)(i)) / dt;
-        }
-    }
-
     if (rank == 0)
     {
         cout << "E taking sample #" << snapshot_idx << " at t " << t << endl;
