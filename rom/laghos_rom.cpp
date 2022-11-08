@@ -13,8 +13,47 @@
 
 using namespace std;
 
+
+void DMD_Sampler::SampleSolution(const double t, const double dt, Vector const& S)
+{
+    int snapshot_idx = MaxNumSamples();
+    SetStateVariables(S);
+    SetStateVariableRates(dt);
+
+    if (rank == 0)
+    {
+        cout << "X taking sample #" << snapshot_idx << " at t " << t << endl;
+    }
+
+    if (t >= tbegin) dmd_X->takeSample(X.GetData(), t);
+
+    if (rank == 0)
+    {
+        cout << "V taking sample #" << snapshot_idx << " at t " << t << endl;
+    }
+
+    if (t >= tbegin) dmd_V->takeSample(V.GetData(), t);
+
+    if (rank == 0)
+    {
+        cout << "E taking sample #" << snapshot_idx << " at t " << t << endl;
+    }
+
+    if (t >= tbegin) dmd_E->takeSample(E.GetData(), t);
+
+    // Write timeSamples to file
+    if (rank == 0 && t >= tbegin)
+    {
+        std::string filename = basename + "/timeSamples.csv";
+        std::ofstream outfile(filename, std::ios_base::app);
+        outfile << to_string(window) << " " << t << "\n";
+        outfile.close();
+    }
+}
+
 void ROM_Sampler::SampleSolution(const double t, const double dt, const double pd, Vector const& S)
 {
+    int snapshot_idx = MaxNumSamples();
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
@@ -31,7 +70,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     {
         if (rank == 0)
         {
-            cout << "X taking sample at t " << t << endl;
+            cout << "X taking sample #" << snapshot_idx << " at t " << t << endl;
         }
 
         bool addSample;
@@ -70,7 +109,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         {
             if (rank == 0)
             {
-                cout << "V taking sample at t " << t << endl;
+                cout << "V taking sample #" << snapshot_idx << " at t " << t << endl;
             }
 
             bool addSample;
@@ -119,7 +158,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     {
         if (rank == 0)
         {
-            cout << "E taking sample at t " << t << endl;
+            cout << "E taking sample #" << snapshot_idx << " at t " << t << endl;
         }
 
         bool addSample, addSampleF;
@@ -141,6 +180,11 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
+        if (writeSnapshots && addSample)
+        {
+            tSnapE.push_back(t);
+        }
+
         if (!sns)
         {
             MFEM_VERIFY(gfL2.Size() == L2size, "");
@@ -155,11 +199,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 tSnapFe.push_back(t);
             }
         }
-
-        if (writeSnapshots && addSample)
-        {
-            tSnapE.push_back(t);
-        }
     }
 }
 
@@ -173,6 +212,25 @@ void printSnapshotTime(std::vector<double> const &tSnap, std::string const path,
     {
         outfile_tSnap << i << endl;
     }
+}
+
+void DMD_Sampler::Finalize(ROM_Options& input)
+{
+    std::cout << "Creating dmd_X with ef " << input.energyFraction_X << " and rdim " << input.dimX << std::endl;
+    dmd_X->train(input.dimX == -1 ? input.energyFraction_X : input.dimX);
+    dmd_X->save(basename + "/" + "dmdX" + input.basisIdentifier + "_" + to_string(window));
+    std::cout << "Creating dmd_V with ef " << input.energyFraction << " and rdim " << input.dimV << std::endl;
+    dmd_V->train(input.dimV == -1 ? input.energyFraction : input.dimV);
+    dmd_V->save(basename + "/" + "dmdV" + input.basisIdentifier + "_" + to_string(window));
+    std::cout << "Creating dmd_E with ef " << input.energyFraction << " and rdim " << input.dimE << std::endl;
+    dmd_E->train(input.dimE == -1 ? input.energyFraction : input.dimE);
+    dmd_E->save(basename + "/" + "dmdE" + input.basisIdentifier + "_" + to_string(window));
+
+    delete dmd_X;
+    delete dmd_V;
+    delete dmd_E;
+
+    finalized = true;
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)

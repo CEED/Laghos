@@ -560,6 +560,8 @@ double PrintDiffParGridFunction(NormType normtype, const int rank, const std::st
 
     std::ifstream ifs(fullname.c_str());
 
+    MFEM_VERIFY(ifs.good(), "Solution file can not be opened.");
+
     for (int i=0; i<tv.Size(); ++i)
     {
         double d;
