@@ -1239,11 +1239,15 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
    }
 }
 
-PointExtractor::PointExtractor(int zone, Vector &xyz, const ParGridFunction &gf,
-                               const IntegrationRule &ir, std::string filename)
-   : g(gf), z_id(zone), ip(), fstream(filename)
+void PointExtractor::SetPoint(int zone, const Vector &xyz,
+                              const ParGridFunction *gf,
+                              const IntegrationRule &ir, std::string filename)
 {
-   ParFiniteElementSpace &pfes = *gf.ParFESpace();
+   g = gf;
+   z_id = zone;
+   fstream.open(filename);
+
+   ParFiniteElementSpace &pfes = *g->ParFESpace();
    MFEM_VERIFY(pfes.GetNRanks() == 1, "PointExtractor works only in serial.");
    MFEM_VERIFY(pfes.GetMesh()->Dimension() == 1, "Only implemented in 1D.");
 
@@ -1268,7 +1272,7 @@ int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
 {
    const int nqp = ir.GetNPoints();
    ElementTransformation &tr =
-         *g.ParFESpace()->GetMesh()->GetElementTransformation(z_id);
+         *g->ParFESpace()->GetMesh()->GetElementTransformation(z_id);
    Vector position;
    const double eps = 1e-8;
    for (int q = 0; q < nqp; q++)
@@ -1284,15 +1288,15 @@ int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
 
 double ShiftedPointExtractor::GetValue() const
 {
-   ParFiniteElementSpace &pfes = *g.ParFESpace();
+   ParFiniteElementSpace &pfes = *g->ParFESpace();
    Vector grad_g(1);
 
    ElementTransformation &tr = *pfes.GetElementTransformation(z_id);
    tr.SetIntPoint(&ip);
-   g.GetGradient(*pfes.GetElementTransformation(z_id), grad_g);
+   g->GetGradient(*pfes.GetElementTransformation(z_id), grad_g);
 
    // Assumes 1D.
-   return g.GetValue(z_id, ip) + dist.GetValue(z_id, ip) * grad_g(0);
+   return g->GetValue(z_id, ip) + dist->GetValue(z_id, ip) * grad_g(0);
 }
 
 // Initially the energies are initialized as the single material version, due

@@ -412,8 +412,6 @@ int main(int argc, char *argv[])
 
    mat_data.pointwise_alpha = si_options.pointwise_alpha;
 
-//#define EXTRACT_1D
-
    // Distance vector and distance solver setup.
    ParGridFunction dist(&H1FESpace);
    dist = 0.0;
@@ -576,95 +574,93 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
 
    // Shifting - related extractors.
-#ifdef EXTRACT_1D
-
-   if (problem != 8 && problem != 9) { MFEM_ABORT("Disable EXTRACT_1D"); }
-
-   MFEM_VERIFY(H1FESpace.GetNRanks() == 1,
-               "Point extraction works inly in serial.");
-
-   const double dx = 1.0 / NE;
-   ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.alpha_1,
-                                                           mat_data.e_1);
-   ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.alpha_2,
-                                                           mat_data.e_2);
-   Vector point_interface(1), point_face_10(1), point_face_20(1);
-   point_interface(0) = 0.5;
-   if (problem == 8)
+   hydrodynamics::PointExtractor e_L_extr, e_R_extr,
+                                 p_L_extr, p_R_extr, x_extr, v_extr;
+   hydrodynamics::ShiftedPointExtractor e_LS_extr, e_RS_extr,
+                                        p_LS_extr, p_RS_extr;
+   bool extract1D = false;
+   if ((problem == 8 || problem == 9) && H1FESpace.GetNRanks() == 1)
    {
-      point_interface(0) = (pure_test) ? 0.5 : 0.5 + 0.5*dx;
-   }
-   if (problem == 9)
-   {
-      point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
-   }
-   point_face_10(0) = (zone_id_10 + 1) * dx;
-   point_face_20(0) = zone_id_20 * dx;
-   cout << "Elements: " << zone_id_10 << " " << zone_id_20 << endl;
-   std::cout << "True interface: " << point_interface(0) << endl
-             << "Surrogate 10:   " << point_face_10(0)   << endl
-             << "Surrogate 20:   " << point_face_20(0)   << endl
-             << "dx:             " << dx << endl;
+      extract1D = true;
+      const double dx = 1.0 / NE;
+      ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.alpha_1,
+                                                              mat_data.e_1);
+      ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.alpha_2,
+                                                              mat_data.e_2);
+      Vector point_interface(1), point_face_10(1), point_face_20(1);
+      point_interface(0) = 0.5;
+      if (problem == 8)
+      {
+         point_interface(0) = (pure_test) ? 0.5 : 0.5 + 0.5*dx;
+      }
+      if (problem == 9)
+      {
+         point_interface(0) = (pure_test) ? 0.7 : 0.7 + 0.5*dx;
+      }
+      point_face_10(0) = (zone_id_10 + 1) * dx;
+      point_face_20(0) = zone_id_20 * dx;
+      cout << "Elements: " << zone_id_10 << " " << zone_id_20 << endl;
+      std::cout << "True interface: " << point_interface(0) << endl
+                << "Surrogate 10:   " << point_face_10(0)   << endl
+                << "Surrogate 20:   " << point_face_20(0)   << endl
+                << "dx:             " << dx << endl;
 
-   std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
-               enameFL, enameFR, enameSL, enameSR;
+      std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
+                  enameFL, enameFR, enameSL, enameSR;
 
-   std::string prefix = (problem == 8) ? "sod_" : "wa_";
-   vname = prefix + "v.out";
-   xname = prefix + "x.out";
-   enameFL = prefix + "e_fit_L.out";
-   enameFR = prefix + "e_fit_R.out";
-   enameSL = prefix + "e_shift_L.out";
-   enameSR = prefix + "e_shift_R.out";
-   pnameFL = prefix + "p_fit_L.out";
-   pnameFR = prefix + "p_fit_R.out";
-   pnameSL = prefix + "p_shift_L.out";
-   pnameSR = prefix + "p_shift_R.out";
+      std::string prefix = (problem == 8) ? "sod_" : "wa_";
+      vname = prefix + "v.out";
+      xname = prefix + "x.out";
+      enameFL = prefix + "e_fit_L.out";
+      enameFR = prefix + "e_fit_R.out";
+      enameSL = prefix + "e_shift_L.out";
+      enameSR = prefix + "e_shift_R.out";
+      pnameFL = prefix + "p_fit_L.out";
+      pnameFR = prefix + "p_fit_R.out";
+      pnameSL = prefix + "p_shift_L.out";
+      pnameSR = prefix + "p_shift_R.out";
 
-   IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
-   const IntegrationRule &ir_extr =
-         IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
+      IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
+      const IntegrationRule &ir_extr =
+            IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
 
-//   hydrodynamics::PointExtractor v_extr(zone_id_15, point_interface,
-//                                        v_gf, ir_extr, vname);
-//   hydrodynamics::PointExtractor x_extr(zone_id_L, point_interface, x_gf, xname);
-   hydrodynamics::PointExtractor e_L_extr(zone_id_10, point_face_10,
-                                          mat_data.e_1, ir_extr, enameFL);
-   hydrodynamics::PointExtractor e_R_extr(zone_id_20, point_face_20,
-                                          mat_data.e_2, ir_extr, enameFR);
-   hydrodynamics::ShiftedPointExtractor e_LS_extr(zone_id_10, point_face_10,
-                                                  mat_data.e_1, dist,
-                                                  ir_extr, enameSL);
-   hydrodynamics::ShiftedPointExtractor e_RS_extr(zone_id_20, point_face_20,
-                                                  mat_data.e_2, dist,
-                                                  ir_extr, enameSR);
-   hydrodynamics::PointExtractor p_L_extr(zone_id_10, point_face_10,
-                                          p_1_gf, ir_extr, pnameFL);
-   hydrodynamics::PointExtractor p_R_extr(zone_id_20, point_face_20,
-                                          p_2_gf, ir_extr, pnameFR);
-   hydrodynamics::ShiftedPointExtractor p_LS_extr(zone_id_10, point_face_10,
-                                                  p_1_gf, dist,
-                                                  ir_extr, pnameSL);
-   hydrodynamics::ShiftedPointExtractor p_RS_extr(zone_id_20, point_face_20,
-                                                  p_2_gf, dist,
-                                                  ir_extr, pnameSR);
-   //v_extr.WriteValue(0.0);
-   //x_extr.WriteValue(0.0);
-   if (pure_test)
-   {
-      e_L_extr.WriteValue(0.0);
-      e_R_extr.WriteValue(0.0);
-      p_L_extr.WriteValue(0.0);
-      p_R_extr.WriteValue(0.0);
+      e_L_extr.SetPoint(zone_id_10, point_face_10,
+                        &mat_data.e_1, ir_extr, enameFL);
+      e_R_extr.SetPoint(zone_id_20, point_face_20,
+                        &mat_data.e_2, ir_extr, enameFR);
+      p_L_extr.SetPoint(zone_id_10, point_face_10,
+                        &p_1_gf, ir_extr, pnameFL);
+      p_R_extr.SetPoint(zone_id_20, point_face_20,
+                        &p_2_gf, ir_extr, pnameFR);
+      //v_extr.SetPoint(zone_id_15, point_interface, v_gf, ir_extr, vname);
+      //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
+
+      e_LS_extr.SetPoint(zone_id_10, point_face_10,
+                         &mat_data.e_1, &dist, ir_extr, enameSL);
+      e_RS_extr.SetPoint(zone_id_20, point_face_20,
+                         &mat_data.e_2, &dist, ir_extr, enameSR);
+      p_LS_extr.SetPoint(zone_id_10, point_face_10,
+                         &p_1_gf, &dist, ir_extr, pnameSL);
+      p_RS_extr.SetPoint(zone_id_20, point_face_20,
+                         &p_2_gf, &dist, ir_extr, pnameSR);
+
+      //v_extr.WriteValue(0.0);
+      //x_extr.WriteValue(0.0);
+      if (pure_test)
+      {
+         e_L_extr.WriteValue(0.0);
+         e_R_extr.WriteValue(0.0);
+         p_L_extr.WriteValue(0.0);
+         p_R_extr.WriteValue(0.0);
+      }
+      else
+      {
+         e_LS_extr.WriteValue(0.0);
+         e_RS_extr.WriteValue(0.0);
+         p_LS_extr.WriteValue(0.0);
+         p_RS_extr.WriteValue(0.0);
+      }
    }
-   else
-   {
-      e_LS_extr.WriteValue(0.0);
-      e_RS_extr.WriteValue(0.0);
-      p_LS_extr.WriteValue(0.0);
-      p_RS_extr.WriteValue(0.0);
-   }
-#endif
 
    double energy_old = energy_init,
           energy_new = energy_init;
@@ -775,24 +771,26 @@ int main(int argc, char *argv[])
 
       // Shifting-related procedures.
       if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
-#ifdef EXTRACT_1D
-      //v_extr.WriteValue(t);
-      //x_extr.WriteValue(t);
-      if (pure_test)
+
+      if (extract1D)
       {
-         e_L_extr.WriteValue(t);
-         e_R_extr.WriteValue(t);
-         p_L_extr.WriteValue(t);
-         p_R_extr.WriteValue(t);
+         //v_extr.WriteValue(t);
+         //x_extr.WriteValue(t);
+         if (pure_test)
+         {
+            e_L_extr.WriteValue(t);
+            e_R_extr.WriteValue(t);
+            p_L_extr.WriteValue(t);
+            p_R_extr.WriteValue(t);
+         }
+         else
+         {
+            e_LS_extr.WriteValue(t);
+            e_RS_extr.WriteValue(t);
+            p_LS_extr.WriteValue(t);
+            p_RS_extr.WriteValue(t);
+         }
       }
-      else
-      {
-         e_LS_extr.WriteValue(t);
-         e_RS_extr.WriteValue(t);
-         p_LS_extr.WriteValue(t);
-         p_RS_extr.WriteValue(t);
-      }
-#endif
 
       if (last_step || (ti % vis_steps) == 0)
       {

@@ -218,9 +218,9 @@ void PrintCellNumbers(const Vector &xyz, const ParFiniteElementSpace &pfes,
 class PointExtractor
 {
 protected:
-   const ParGridFunction &g;
+   const ParGridFunction *g = nullptr;
    // -1 if the point is not in the current MPI task.
-   int z_id;
+   int z_id = -1;
    IntegrationPoint ip;
    std::ofstream fstream;
 
@@ -228,27 +228,34 @@ protected:
                        const IntegrationRule &ir);
 
 public:
-   // The assumption is that the point concides with one of the DOFs of the
+   PointExtractor() { }
+
+   // The assumption is that the point coincides with one of the DOFs of the
    // input GridFunction's nodes.
-   PointExtractor(int zone, Vector &xyz, const ParGridFunction &gf,
-                  const IntegrationRule &ir, std::string filename);
+   void SetPoint(int zone, const Vector &xyz, const ParGridFunction *gf,
+                 const IntegrationRule &ir, std::string filename);
 
    ~PointExtractor() { fstream.close(); }
 
-   virtual double GetValue() const { return g.GetValue(z_id, ip); }
+   virtual double GetValue() const { return g->GetValue(z_id, ip); }
    void WriteValue(double time);
 };
 
 class ShiftedPointExtractor : public PointExtractor
 {
 protected:
-   const ParGridFunction &dist;
+   const ParGridFunction *dist = nullptr;
 
 public:
-   ShiftedPointExtractor(int zone, Vector &xyz,
-                         const ParGridFunction &gf, const ParGridFunction &d,
-                         const IntegrationRule &ir, std::string filename)
-      : PointExtractor(zone, xyz, gf, ir, filename), dist(d) { }
+   ShiftedPointExtractor() { }
+
+   void SetPoint(int zone, const Vector &xyz, const ParGridFunction *gf,
+                 const ParGridFunction *d,
+                 const IntegrationRule &ir, std::string filename)
+   {
+      PointExtractor::SetPoint(zone, xyz, gf, ir, filename);
+      dist = d;
+   }
 
    virtual double GetValue() const;
 };
