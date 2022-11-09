@@ -160,17 +160,20 @@ private:
    // What's the material that uses it to construct energy RHS.
    const int mat_id;
    const MaterialData &mat_data;
+   const QuadratureData &quad_data;
    const ParGridFunction *v = nullptr, *e = nullptr;
    VectorCoefficient &dist;
 
 public:
    int e_shift_type = 0;
    bool diffusion = false;
+   bool problem_visc = false;
    double diffusion_scale = 1.0;
 
    EnergyInterfaceIntegrator(int m_id, const MaterialData &mdata,
+                             const QuadratureData &qdata,
                              VectorCoefficient &d)
-      : mat_id(m_id), mat_data(mdata), dist(d) { }
+      : mat_id(m_id), mat_data(mdata), quad_data(qdata), dist(d) { }
 
    using LinearFormIntegrator::AssembleRHSElementVect;
    virtual void AssembleRHSElementVect(const FiniteElement &el,

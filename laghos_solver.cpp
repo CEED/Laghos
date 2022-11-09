@@ -81,6 +81,33 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
+void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
+                               ElementTransformation &T,
+                               const DenseMatrix &Jac0inv, double h0,
+                               double &h, double &mu)
+{
+   const int dim = sgrad_v.Height();
+
+   double eig_val_data[3], eig_vec_data[9];
+   if (dim == 1)
+   {
+      eig_val_data[0] = sgrad_v(0, 0);
+      eig_vec_data[0] = 1.;
+   }
+   else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+
+   DenseMatrix Jpi(dim);
+   // Computes the initial->physical transformation Jacobian.
+   Mult(T.Jacobian(), Jac0inv, Jpi);
+   Vector compr_dir(eig_vec_data, dim), ph_dir(dim);
+   Jpi.Mult(compr_dir, ph_dir);
+
+   // Change of the initial mesh size in the compression direction.
+   h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
+   // Measure of maximal compression.
+   mu = eig_val_data[0];
+}
+
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
@@ -259,17 +286,19 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    mfi->v_shift_scale = si_options.v_shift_scale;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
 
-   auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, dist_coeff);
+   auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, qdata, dist_coeff);
    efi_1->SetIntRule(cfir);
    efi_1->e_shift_type    = si_options.e_shift_type;
    efi_1->diffusion       = si_options.e_shift_diffusion;
+   efi_1->problem_visc    = use_viscosity;
    efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
    FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
 
-   auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, dist_coeff);
+   auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, qdata, dist_coeff);
    efi_2->SetIntRule(cfir);
    efi_2->e_shift_type    = si_options.e_shift_type;
    efi_2->diffusion       = si_options.e_shift_diffusion;
+   efi_2->problem_visc    = use_viscosity;
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
    FaceForceEnergy_2.AddInteriorFaceIntegrator(efi_2);
 
@@ -770,6 +799,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                   // direction of maximal compression. This is used to define the
                   // relative change of the initial length scale.
                   v.GetVectorGradient(*T, sgrad_v);
+                  sgrad_v.Symmetrize();
+
+                  // Length scale in compression direction, and measure of
+                  // maximal compression / expansion.
+                  double h, mu;
+                  LengthScaleAndCompression(sgrad_v, *T,
+                                            qdata.Jac0inv(z_id*nqp + q),
+                                            qdata.h0, h, mu);
 
                   double vort_coeff = 1.0;
                   if (use_vorticity)
@@ -779,23 +816,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                      vort_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
                   }
 
-                  sgrad_v.Symmetrize();
-                  double eig_val_data[3], eig_vec_data[9];
-                  if (dim==1)
-                  {
-                     eig_val_data[0] = sgrad_v(0, 0);
-                     eig_vec_data[0] = 1.;
-                  }
-                  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-                  Vector compr_dir(eig_vec_data, dim);
-                  // Computes the initial->physical transformation Jacobian.
-                  mfem::Mult(Jpr, qdata.Jac0inv(z_id*nqp + q), Jpi);
-                  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-                  // Change of the initial mesh size in the compression direction.
-                  const double h = qdata.h0 * ph_dir.Norml2() /
-                                   compr_dir.Norml2();
-                  // Measure of maximal compression.
-                  const double mu = eig_val_data[0];
                   visc_coeff = 2.0 * rho * h * h * fabs(mu);
                   // The following represents a "smooth" version of the statement
                   // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that

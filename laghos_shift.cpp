@@ -1070,7 +1070,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
 
       // + < scale * {h |grad_v|} * [p + grad_p.d] * [phi + grad_phi.d] >.
-      if (diffusion)
+      if (problem_visc && diffusion)
       {
          double p_q1_ext = p_q1 + d_q * p_grad_q1,
                 p_q2_ext = p_q2 + d_q * p_grad_q2;
@@ -1084,11 +1084,43 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good.");
 
-         double h_1 = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e1, 0);
-         double h_2 = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e2, 0);
+         double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
 
-         double grad_v_avg = gamma_avg * h_1 * v_grad_q1.FNorm() +
-                             (1.0 - gamma_avg) * h_2 * v_grad_q2.FNorm();
+         // Mesh size with grad_v.
+//         h_1  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e1, 0);
+//         h_2  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e2, 0);
+//         mu_1 = v_grad_q1.FNorm();
+//         mu_2 = v_grad_q2.FNorm();
+//         visc_q1 = h_1 * fabs(mu_1);
+//         visc_q2 = h_2 * fabs(mu_2);
+
+         // Distance with grad_v.
+         h_1  = d_q.Norml2();
+         h_2  = d_q.Norml2();
+         mu_1 = v_grad_q1.FNorm();
+         mu_2 = v_grad_q2.FNorm();
+         visc_q1 = h_1 * fabs(mu_1);
+         visc_q2 = h_2 * fabs(mu_2);
+
+         // As in the volumetric viscosity.
+//         v_grad_q1.Symmetrize();
+//         v_grad_q2.Symmetrize();
+//         LengthScaleAndCompression(v_grad_q1, Trans_e1, quad_data.Jac0inv(0),
+//                                   quad_data.h0, h_1, mu_1);
+//         LengthScaleAndCompression(v_grad_q2, Trans_e2, quad_data.Jac0inv(0),
+//                                   quad_data.h0, h_2, mu_2);
+//         visc_q1 = 2.0 * h_1 * fabs(mu_1);
+//         if (mu_1 < 0.0)
+//         {
+//            visc_q1 += 0.5 * sqrt(gamma_e1 * fmax(p_q1, 1e-5) / rho_q1);
+//         }
+//         visc_q2 = 2.0 * h_2 * fabs(mu_2);
+//         if (mu_2 < 0.0)
+//         {
+//            visc_q2 += 0.5 * sqrt(gamma_e2 * fmax(p_q2, 1e-5) / rho_q2);
+//         }
+
+         double grad_v_avg = gamma_avg * visc_q1 + (1.0 - gamma_avg) * visc_q2;
 
          DenseMatrix grad_shape_phys_e(l2dofs_cnt, dim);
 

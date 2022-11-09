@@ -183,6 +183,11 @@ public:
    }
 };
 
+void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
+                               ElementTransformation &T,
+                               const DenseMatrix &Jac0inv, double h0,
+                               double &h, double &mu);
+
 } // namespace hydrodynamics
 
 class HydroODESolver : public ODESolver
