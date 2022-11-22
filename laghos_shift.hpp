@@ -58,6 +58,9 @@ struct SIOptions
    PressureSpace p_space = PressureSpace::L2;
    bool pointwise_alpha = false;
 
+   int distance_type = 0;
+   int num_lap = 7;
+
    int v_shift_type = 0;
    double v_shift_scale = 1.0;
    bool v_shift_diffusion = false;

@@ -376,6 +376,9 @@ int main(int argc, char *argv[])
    si_options.p_space = PressureSpace::L2;
    // Pointwise volume fractions or not.
    si_options.pointwise_alpha = false;
+   // Type of distance solver: 0 is p-lap, 1 is normalization.
+   si_options.distance_type = 0;
+   si_options.num_lap       = 7;
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >
@@ -416,17 +419,26 @@ int main(int argc, char *argv[])
    ParGridFunction dist(&H1FESpace);
    dist = 0.0;
    VectorGridFunctionCoefficient dist_coeff(&dist);
-   PLapDistanceSolver dist_solver(7);
-   dist_solver.print_level = 0;
+   DistanceSolver *dist_solver = nullptr;
+   if (calc_dist)
+   {
+      if (si_options.distance_type == 0)
+      { dist_solver = new PLapDistanceSolver(si_options.num_lap); }
+      else if (si_options.distance_type == 1)
+      { dist_solver = new NormalizationDistanceSolver; }
+      else { MFEM_ABORT("Wrong distance solver option."); }
+      dist_solver->print_level = 0;
+   }
 
    // Interface function.
    ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
    mat_data.level_set.SetSpace(&pfes_xi);
    hydrodynamics::InterfaceCoeff coeff_ls_0(problem, *pmesh, pure_test);
-   dist_solver.ComputeScalarDistance(coeff_ls_0, mat_data.level_set);
+   PLapDistanceSolver ds(7);
+   ds.ComputeScalarDistance(coeff_ls_0, mat_data.level_set);
    GridFunctionCoefficient coeff_xi(&mat_data.level_set);
 
-   if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+   if (calc_dist) { dist_solver->ComputeVectorDistance(coeff_xi, dist); }
 
    ConstantCoefficient z(0.0);
    double ed = dist.ComputeL1Error(z);
@@ -770,7 +782,7 @@ int main(int argc, char *argv[])
       pmesh->NewNodes(x_gf, false);
 
       // Shifting-related procedures.
-      if (calc_dist) { dist_solver.ComputeVectorDistance(coeff_xi, dist); }
+      if (calc_dist) { dist_solver->ComputeVectorDistance(coeff_xi, dist); }
 
       if (extract1D)
       {
@@ -985,6 +997,7 @@ int main(int argc, char *argv[])
 
    // Free the used memory.
    delete ode_solver;
+   delete dist_solver;
    delete pmesh;
 
    return 0;
