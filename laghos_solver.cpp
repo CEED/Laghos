@@ -30,6 +30,7 @@ namespace hydrodynamics
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
+                    const char *vis_keys,
                     int x, int y, int w, int h, bool vec)
 {
    gf.HostRead();
@@ -61,7 +62,8 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 
       if (myid == 0 && newly_opened)
       {
-         const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
+         const char* keys = vis_keys ? vis_keys :
+                            (gf.FESpace()->GetMesh()->Dimension() == 2)
                             ? "mAcRjl" : "mmaaAcl";
 
          sock << "window_title '" << title << "'\n"

@@ -322,7 +322,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
 
       case amr::estimator::jjt:
       {
-         const double art = opt.ref_threshold;
+         const double art = opt.jac_threshold;
          const int h1_order = H1FESpace.GetOrder(0) + 1;
          DenseMatrix Jadjt, Jadj(dim, pmesh->SpaceDimension());
          MFEM_VERIFY(art >= 0.0, "AMR threshold should be positive");
@@ -350,7 +350,7 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
             {
                const double rho = minW / maxW;
                MFEM_VERIFY(rho <= 1.0, "");
-               if (rho < opt.jac_threshold && depth < opt.max_level)
+               if (rho < art && depth < opt.max_level)
                {
                   refined.Append(Refinement(el));
                }
@@ -382,7 +382,8 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
          std::cout << "Refined " << nref << " elements." << std::endl;
       }
    }
-   else if (opt.estimator == amr::estimator::custom &&
+   else if ((opt.estimator == amr::estimator::custom ||
+             opt.estimator == amr::estimator::jjt) &&
             opt.deref_threshold >= 0.0 && !mesh_updated)
    {
       ParGridFunction rho_gf;
@@ -397,25 +398,27 @@ void AMR::Update(hydrodynamics::LagrangianHydroOperator &hydro,
                     pmesh->GetComm());
 
       // make sure the blast point is never derefined
-      Array<int> elements;
-      FindElementsWithVertex(pmesh, opt.blast_position, opt.blast_size, elements);
-      for (int i = 0; i < elements.Size(); i++)
+      if (opt.estimator == amr::estimator::custom)
       {
-         int index = elements[i];
-         if (index >= 0) { rho_max(index) = NL_DMAX; }
+         Array<int> elements;
+         FindElementsWithVertex(pmesh, opt.blast_position, opt.blast_size, elements);
+         for (int i = 0; i < elements.Size(); i++)
+         {
+            int index = elements[i];
+            if (index >= 0) { rho_max(index) = NL_DMAX; }
+         }
+         // only derefine where the mesh is in motion, i.e. after the shock
+         for (int i = 0; i < pmesh->GetNE(); i++)
+         {
+            if (v_min(i) < 0.1) { rho_max(i) = NL_DMAX; }
+         }
       }
 
-      // only derefine where the mesh is in motion, i.e. after the shock
-      for (int i = 0; i < pmesh->GetNE(); i++)
-      {
-         if (v_min(i) < 0.1) { rho_max(i) = NL_DMAX; }
-      }
-
-      const int op = 2; // operatoe on the 'maximum' value of the fine elements
+      const int op = 2; // operator on the 'maximum' value of the fine elements
       mesh_updated = pmesh->DerefineByError(rho_max, threshold, opt.nc_limit, op);
       if (mesh_updated && myid == 0)
       {
-         std::cout << "Derefined, threshold = " << threshold << std::endl;
+         //std::cout << "Derefined, threshold = " << threshold << std::endl;
       }
    }
    else if ((opt.estimator == amr::estimator::zz ||

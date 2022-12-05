@@ -240,6 +240,7 @@ namespace hydrodynamics
 /// its geometry.
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
+                    const char *keys = nullptr,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
 
@@ -355,7 +356,7 @@ public:
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort, const bool pa,
-									const bool amr,
+                           const bool amr,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();

@@ -105,6 +105,7 @@ int main(int argc, char *argv[])
    bool visualization = false;
    int vis_steps = 5;
    int vis_windows = 3;
+   const char *vis_keys = nullptr;
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
@@ -170,6 +171,7 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&vis_windows, "-vw", "--visualization-windows",
                   "Number of visualization windows to open: 1~3");
+   args.AddOption(&vis_keys, "-vk", "--visualization-keys", "Keys for vis.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
@@ -202,11 +204,11 @@ int main(int argc, char *argv[])
    args.AddOption(&amr_estimator, "-ae", "--amr-estimator",
                   "AMR estimator: 0:Custom, 1:Rho, 2:ZZ, 3:Kelly");
    args.AddOption(&amr_ref_threshold, "-ar", "--amr-ref-threshold",
-                  "AMR Jacobian refinement threshold.");
-   args.AddOption(&amr_deref_threshold, "-ad", "--amr-deref-threshold",
                   "AMR refinement threshold.");
-   args.AddOption(&amr_jac_threshold, "-aj", "--amr-jac-threshold",
+   args.AddOption(&amr_deref_threshold, "-ad", "--amr-deref-threshold",
                   "AMR derefinement threshold (0 = no derefinement).");
+   args.AddOption(&amr_jac_threshold, "-aj", "--amr-jac-threshold",
+                  "AMR refinement threshold.");
    args.AddOption(&amr_max_level, "-am", "--amr-max-level",
                   "AMR max refined level (default to 'rs_levels + rp_levels')");
    args.Parse();
@@ -216,17 +218,16 @@ int main(int argc, char *argv[])
       return 1;
    }
 
-   amr_max_level = std::max(amr_max_level, rs_levels + rp_levels);
-
    if (mpi.Root()) { args.PrintOptions(cout); }
 
    // Check AMR configuration: only Sedov problem (#1) is supported for now
-   if (amr && problem != 1)
+   // does this still holds?
+   /*if (amr && problem != 1)
    {
       if (mpi.Root())
       { std::cout << "AMR only supported for problem 1." << std::endl; }
       return 0;
-   }
+   }*/
 
    // Configure the device from the command line options
    Device backend;
@@ -288,17 +289,20 @@ int main(int argc, char *argv[])
    }
 
    // Refine the mesh in serial to increase the resolution.
-   if (!amr)
-   {
-      for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
-   }
-   else
+   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   //amr_max_level = std::max(amr_max_level, rs_levels + rp_levels);s
+
+   if (amr)
    {
       mesh->EnsureNCMesh();
-      Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
-      for (int lev = 0; lev < rs_levels; lev++)
+      // refine at the blast position for problem 1
+      if (problem == 1)
       {
-         mesh->RefineAtVertex(blast, amr_blast_eps);
+         Vertex blast {blast_position[0], blast_position[1], blast_position[2]};
+         for (int lev = 0; lev < rs_levels; lev++)
+         {
+            mesh->RefineAtVertex(blast, amr_blast_eps);
+         }
       }
    }
 
@@ -628,24 +632,26 @@ int main(int argc, char *argv[])
       vis_v.precision(8);
       vis_e.precision(8);
       int Wx = 0, Wy = 0; // window position
-      const int Ww = 350, Wh = 350; // window size
+      int Ww = vis_windows==1 ? 1024 : 350,
+          Wh = vis_windows==1 ?  768 : 350; // window size
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                       "Density", Wx, Wy, Ww, Wh);
+                                       "Density", vis_keys, Wx, Wy, Ww, Wh);
       }
       if (vis_windows > 1)
       {
          Wx += offx;
          hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
-                                       "Velocity", Wx, Wy, Ww, Wh);
+                                       "Velocity", vis_keys, Wx, Wy, Ww, Wh);
       }
       if (vis_windows > 2)
       {
          Wx += offx;
          hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                       "Specific Internal Energy", Wx, Wy, Ww, Wh);
+                                       "Specific Internal Energy",
+                                       vis_keys, Wx, Wy, Ww, Wh);
       }
    }
 
@@ -787,25 +793,27 @@ int main(int argc, char *argv[])
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
-            int Ww = 350, Wh = 350; // window size
+            int Ww = vis_windows==1 ? 1024 : 350,
+                Wh = vis_windows==1 ?  768 : 350; // window size
             int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                             "Density", Wx, Wy, Ww, Wh);
+                                             "Density", vis_keys, Wx, Wy, Ww, Wh);
             }
             if (vis_windows > 1)
             {
                Wx += offx;
-               hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                             v_gf, "Velocity", Wx, Wy, Ww, Wh);
+               hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
+                                             "Velocity",
+                                             vis_keys, Wx, Wy, Ww, Wh);
             }
             if (vis_windows > 2)
             {
                Wx += offx;
                hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                              "Specific Internal Energy",
-                                             Wx, Wy, Ww,Wh);
+                                             vis_keys, Wx, Wy, Ww,Wh);
             }
          }
 
