@@ -18,8 +18,6 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "general/forall.hpp"
-#include "linalg/dtensor.hpp"
 
 namespace mfem
 {
@@ -55,11 +53,32 @@ struct QuadratureData
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
-   QuadratureData(int dim, int NE, int quads_per_el)
-      : Jac0inv(dim, dim, NE * quads_per_el),
-        stressJinvT(NE * quads_per_el, dim, dim),
-        rho0DetJ0w(NE * quads_per_el) { }
+   QuadratureData(int dim, int NE, int NQ)
+      : Jac0inv(dim, dim, NE * NQ),
+        stressJinvT(NE * NQ, dim, dim),
+        rho0DetJ0w(NE * NQ) { }
+
+   void Resize(int dim, int NE, int NQ)
+   {
+      Jac0inv.SetSize(dim, dim, NE * NQ);
+      stressJinvT.SetSize(NE * NQ, dim, dim);
+      rho0DetJ0w.SetSize(NE * NQ);
+   }
 };
+
+double ComputeVolumeIntegral(const int DIM, const int NE, const int NQ,
+                             const int Q1D, const int VDIM,
+                             const double ln_norm,
+                             const mfem::Vector& mass,
+                             const mfem::Vector& f);
+
+void Rho0DetJ0Vol(const int dim, const int NE,
+                  const IntegrationRule &ir,
+                  ParMesh *pmesh,
+                  ParFiniteElementSpace &L2,
+                  const ParGridFunction &rho0,
+                  QuadratureData &qdata,
+                  double &volume);
 
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2

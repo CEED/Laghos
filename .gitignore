@@ -1,0 +1,17 @@
+*.o
+*~
+
+# OS-specific: Mac
+*.dSYM
+.DS_Store
+
+Laghos
+
+# QtCreator files
+*.cflags
+*.config
+*.creator
+*.creator.user
+*.cxxflags
+*.files
+*.includes

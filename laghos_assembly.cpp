@@ -14,14 +14,181 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_assembly.hpp"
 #include <unordered_map>
+#include "laghos_assembly.hpp"
+#include "general/forall.hpp"
+
+using namespace mfem;
 
 namespace mfem
 {
 
 namespace hydrodynamics
 {
+
+double ComputeVolumeIntegral(const int DIM, const int NE, const int NQ,
+                             const int Q1D, const int VDIM,
+                             const double ln_norm,
+                             const Vector& mass,
+                             const Vector& f)
+{
+
+   Vector integrand(NE*NQ);
+   const auto f_vals = Reshape(f.Read(), VDIM, NQ, NE);
+   auto I = Reshape(integrand.Write(), NQ, NE);
+
+   if (DIM == 1)
+   {
+      for (int e=0; e < NE; ++e)
+      {
+         for (int q = 0; q < NQ; ++q)
+         {
+            double vmag = 0;
+            for (int k = 0; k < VDIM; k++)
+            {
+               vmag += pow(f_vals(k,q,e),ln_norm);
+            }
+            I(q,e) = vmag;
+         }
+      }
+   }
+   else if (DIM == 2)
+   {
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               double vmag = 0;
+               for (int k = 0; k < VDIM; k++)
+               {
+                  vmag += pow(f_vals(k,q,e),ln_norm);
+               }
+               I(q,e) = vmag;
+            }
+         }
+      });
+   }
+   else if (DIM == 3)
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  double vmag = 0;
+                  for (int k = 0; k < VDIM; k++)
+                  {
+                     vmag += pow(f_vals(k,q,e),ln_norm);
+                  }
+                  I(q,e) = vmag;
+               }
+            }
+         }
+      });
+   }
+   const double integral = integrand * mass;
+   return integral;
+}
+
+void Rho0DetJ0Vol(const int dim, const int NE,
+                  const IntegrationRule &ir,
+                  ParMesh *pmesh,
+                  ParFiniteElementSpace &L2,
+                  const ParGridFunction &rho0,
+                  hydrodynamics::QuadratureData &qdata,
+                  double &volume)
+{
+   const int NQ = ir.GetNPoints();
+   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
+   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
+   Vector rho0Q(NQ*NE);
+   rho0Q.UseDevice(true);
+   Vector j, detj;
+   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
+   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
+   const auto W = ir.GetWeights().Read();
+   const auto R = Reshape(rho0Q.Read(), NQ, NE);
+   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
+   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
+   auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
+   Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
+   const MemoryClass mc = Device::GetMemoryClass();
+   const int Ji_total_size = qdata.Jac0inv.TotalSize();
+   auto invJ = Reshape(Jinv_m.Write(mc, Ji_total_size), dim, dim, NQ, NE);
+   Vector vol(NE*NQ), one(NE*NQ);
+   auto A = Reshape(vol.Write(), NQ, NE);
+   auto O = Reshape(one.Write(), NQ, NE);
+   MFEM_ASSERT(dim==2 || dim==3, "");
+   if (dim==2)
+   {
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               const double J11 = J(q,0,0,e);
+               const double J12 = J(q,1,0,e);
+               const double J21 = J(q,0,1,e);
+               const double J22 = J(q,1,1,e);
+               const double det = detJ(q,e);
+               V(q,e) =  W[q] * R(q,e) * det;
+               const double r_idetJ = 1.0 / det;
+               invJ(0,0,q,e) =  J22 * r_idetJ;
+               invJ(1,0,q,e) = -J12 * r_idetJ;
+               invJ(0,1,q,e) = -J21 * r_idetJ;
+               invJ(1,1,q,e) =  J11 * r_idetJ;
+               A(q,e) = W[q] * det;
+               O(q,e) = 1.0;
+            }
+         }
+      });
+   }
+   else
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
+                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
+                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
+                  const double det = detJ(q,e);
+                  V(q,e) = W[q] * R(q,e) * det;
+                  const double r_idetJ = 1.0 / det;
+                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
+                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
+                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
+                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
+                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
+                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
+                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
+                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
+                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
+                  A(q,e) = W[q] * det;
+                  O(q,e) = 1.0;
+               }
+            }
+         }
+      });
+   }
+   qdata.rho0DetJ0w.HostRead();
+   volume = vol * one;
+}
 
 void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
@@ -150,14 +317,16 @@ void ForceMult2D(const int NE,
                  const DenseTensor &sJit_,
                  const Vector &x, Vector &y)
 {
-   auto b = Reshape(B_.Read(), Q1D, L1D);
-   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
-   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
-   auto energy = Reshape(x.Read(), L1D, L1D, NE);
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
+
+   const auto b = Reshape(B_.Read(), Q1D, L1D);
+   const auto bt = Reshape(Bt_.Read(), D1D, Q1D);
+   const auto gt = Reshape(Gt_.Read(), D1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+   const auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+   const auto energy = Reshape(x.Read(), L1D, L1D, NE);
+
    auto velocity = Reshape(y.Write(), D1D, D1D, DIM, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
@@ -301,14 +470,16 @@ void ForceMult3D(const int NE,
                  const DenseTensor &sJit_,
                  const Vector &x, Vector &y)
 {
-   auto b = Reshape(B_.Read(), Q1D, L1D);
-   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
-   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
-   auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
+
+   const auto b = Reshape(B_.Read(), Q1D, L1D);
+   const auto bt = Reshape(Bt_.Read(), D1D, Q1D);
+   const auto gt = Reshape(Gt_.Read(), D1D, Q1D);
+   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+   const auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+   const auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
+
    auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
@@ -569,12 +740,13 @@ void ForceMultTranspose2D(const int NE,
                           const DenseTensor &sJit_,
                           const Vector &x, Vector &y)
 {
-   auto b = Reshape(B_.Read(), Q1D, D1D);
-   auto g = Reshape(G_.Read(), Q1D, D1D);
-   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
+   const auto b = Reshape(B_.Read(), Q1D, D1D);
+   const auto g = Reshape(G_.Read(), Q1D, D1D);
+   const auto bt = Reshape(Bt_.Read(), L1D, Q1D);
    const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
-   auto velocity = Reshape(x.Read(), D1D, D1D, DIM, NE);
+   const auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
+   const auto velocity = Reshape(x.Read(), D1D, D1D, DIM, NE);
+
    auto energy = Reshape(y.Write(), L1D, L1D, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, NBZ,
@@ -718,12 +890,13 @@ void ForceMultTranspose3D(const int NE,
                           const Vector &v_,
                           Vector &e_)
 {
-   auto b = Reshape(B_.Read(), Q1D, D1D);
-   auto g = Reshape(G_.Read(), Q1D, D1D);
-   auto bt = Reshape(Bt_.Read(), L1D, Q1D);
+   const auto b = Reshape(B_.Read(), Q1D, D1D);
+   const auto g = Reshape(G_.Read(), Q1D, D1D);
+   const auto bt = Reshape(Bt_.Read(), L1D, Q1D);
    const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
-   auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
+   const auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+   const auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
+
    auto energy = Reshape(e_.Write(), L1D, L1D, L1D, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
