@@ -227,7 +227,7 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 		{
 		  for (int md = 0; md < dim; md++) // Velocity components.
 		    {	      
-		      elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq);
+		      elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling(eq) * ip_f.weight;
 		    }
 		}
 	    }
