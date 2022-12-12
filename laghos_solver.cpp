@@ -792,6 +792,17 @@ namespace mfem
       MPI_Allreduce(&min_h, &global_min_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
       MPI_Allreduce(&max_h, &global_max_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
+      f_qdata.normalVelocityPenaltyScaling = penaltyParameter * global_max_rho * global_max_sound_speed;
+      if (use_viscosity)
+	{
+	  f_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_mu * (1.0 / global_min_h) /*nor_norm / eltrans->Elem1->Weight()*/;
+	  
+	  if (use_vorticity)
+	    {
+	      f_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+	    }
+	}
+
       // compute normal stress at each quadrature point on all the boundary faces and
       // store it in f_qdata.weightedNormalStress
       // compute the penalty scaling and store it in f_qdata.normalVelocityPenaltyScaling.
@@ -835,22 +846,12 @@ namespace mfem
 	      double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
 	      double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	      double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-	      f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) = penaltyParameter * global_max_rho * global_max_sound_speed;
 
 	      stress = 0.0;
 	   
 	      double p = (gamma_vals - 1) * rho_vals * e_vals; 
 	      for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 
-	      if (use_viscosity)
-		{
-		  f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_mu * (1.0 / global_min_h) /*nor_norm / eltrans->Elem1->Weight()*/;
-	       
-		  if (use_vorticity)
-		    {
-		      f_qdata.normalVelocityPenaltyScaling(faceElemNo*nqp_face+q) += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
-		    }
-		}
 	      // Quadrature data for partial assembly of the force operator.
 	      stress.Mult( nor, weightedNormalStress);
 	      for (int vd = 0 ; vd < dim; vd++)
