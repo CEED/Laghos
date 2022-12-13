@@ -59,6 +59,8 @@ namespace mfem
       const double ftz_tol;
       const ParGridFunction &rho0_gf;
       const ParGridFunction &gamma_gf;
+      ParGridFunction &v_gf;
+      ParGridFunction &e_gf;
    
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
@@ -83,16 +85,6 @@ namespace mfem
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
       const double nitscheVersion;
-      virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
-					     const double rho[], const double e[],
-					     double p[], double cs[]) const
-      {
-	for (int v = 0; v < nvalues; v++)
-	  {
-	    p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-	    cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
-	  }
-      }
 
       void UpdateQuadratureData(const Vector &S) const;
       void UpdateSurfaceNormalStressData(const Vector &S) const;
@@ -108,6 +100,9 @@ namespace mfem
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,
 			      ParGridFunction &gamma_gf,
+			      ParGridFunction &rho_gf,
+			      ParGridFunction &v_gf,
+			      ParGridFunction &e_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,

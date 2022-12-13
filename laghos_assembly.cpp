@@ -33,7 +33,9 @@ namespace mfem
       elvect = 0.0;
       for (int q = 0; q < nqp; q++)
 	{
-	  fe.CalcShape(IntRule->IntPoint(q), shape);
+	  const IntegrationPoint &ip = IntRule->IntPoint(q);
+	  Tr.SetIntPoint (&ip);
+	  fe.CalcShape(ip, shape);
 	  // Note that rhoDetJ = rho0DetJ0.
 	  shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
 	  elvect += shape;
@@ -52,28 +54,50 @@ namespace mfem
       const int l2dofs_cnt = trial_fe.GetDof();
       elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
       elmat = 0.0;
-      DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
-      Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
+      DenseMatrix vshape(h1dofs_cnt, dim);
+      Vector shape(l2dofs_cnt);
       for (int q = 0; q < nqp; q++)
 	{
 	  const IntegrationPoint &ip = IntRule->IntPoint(q);
+	  Tr.SetIntPoint(&ip);
+	  const DenseMatrix &Jpr = Tr.Jacobian();
+	  DenseMatrix Jinv(dim);
+	  Jinv = 0.0;
+	  CalcInverse(Jpr, Jinv);
+
 	  // Form stress:grad_shape at the current point.
 	  test_fe.CalcDShape(ip, vshape);
+	  trial_fe.CalcShape(ip, shape);
+	  double rho_val = qdata.rho_gf.GetValue(Tr, ip);
+	  double gamma_val = qdata.gamma_gf.GetValue(Tr, ip);
+	  double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+	  double p = 0.0;
+	  double cs = 0.0;
+	  DenseMatrix stress(dim), stressJiT(dim);
+	  stressJiT = 0.0;
+	  stress = 0.0;
+	  ComputeMaterialProperty(gamma_val,rho_val,e_val,p,cs);
+	  ComputeStress(p,dim,stress);
+	  MultABt(stress, Jinv, stressJiT);
+	  stressJiT *= ip.weight * Jpr.Det();
+	  const int eq = e*nqp + q;
+	  // std::cout << " eq " << eq << " rho " << rho_val << std::endl;
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
-		  loc_force(i, vd) = 0.0;
+		  double loc_force = 0.0;
 		  for (int gd = 0; gd < dim; gd++) // Gradient components.
 		    {
-		      const int eq = e*nqp + q;
-		      const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
-		      loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
+		      loc_force += stressJiT(vd,gd) * vshape(i,gd);
+		      //  const double stressJiT = qdata.stressJinvT(vd)(eq, gd);
+		      //   loc_force += stressJiT * vshape(i,gd);
 		    }
+		  for (int j = 0; j < l2dofs_cnt; j++){
+		    elmat(i + vd * h1dofs_cnt, j) += loc_force * shape(j);
+		  }
 		}
 	    }
-	  trial_fe.CalcShape(ip, shape);
-	  AddMultVWt(Vloc_force, shape, elmat);
 	}
     }
 

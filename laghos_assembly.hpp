@@ -20,75 +20,13 @@
 #include "mfem.hpp"
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
+#include "auxiliary_functions.hpp"
 
 namespace mfem
 {
 
   namespace hydrodynamics
   {
-
-    // Container for all data needed at quadrature points.
-    struct QuadratureData
-    {
-      // Reference to physical Jacobian for the initial mesh.
-      // These are computed only at time zero and stored here.
-      DenseTensor Jac0inv;
-
-      // Quadrature data used for full/partial assembly of the force operator.
-      // At each quadrature point, it combines the stress, inverse Jacobian,
-      // determinant of the Jacobian and the integration weight.
-      // It must be recomputed in every time step.
-      DenseTensor stressJinvT;
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation.
-      Vector rho0DetJ0w;
-
-      // Initial length scale. This represents a notion of local mesh size.
-      // We assume that all initial zones have similar size.
-      double h0;
-
-      // Estimate of the minimum time step over all quadrature points. This is
-      // recomputed at every time step to achieve adaptive time stepping.
-      double dt_est;
-  
-      QuadratureData(int dim, int NE, int quads_per_el)
-	: Jac0inv(dim, dim, NE * quads_per_el),
-	  stressJinvT(NE * quads_per_el, dim, dim),
-	  rho0DetJ0w(NE * quads_per_el) { }
-    };
-
-    // Container for all data needed at quadrature points.
-    struct FaceQuadratureData
-    {
-      // evaluation of the norma stress at the face quadrature points
-      DenseMatrix weightedNormalStress;
-
-      // Scaling of the penalty term evaluated at the face quadrature points:
-      // tau * (c_s * (rho + mu / h) + rho * vorticity * h)
-      // tau: user-defined non-dimensional constant 
-      // c_s: max. sound speed over all boundary faces/edges
-      // rho: max. density over all boundary faces/edges
-      // mu: max. artificial viscosity over all boundary faces/edges
-      // vorticity: max. vorticity over all boundary faces/edges
-      double normalVelocityPenaltyScaling;
-
-      // Reference to physical Jacobian for the initial mesh.
-      // These are computed only at time zero and stored here.
-      DenseTensor Jac0inv;
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation.
-      Vector rho0DetJ0w;
-
-      FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(0.0), rho0DetJ0w(NE * quads_per_faceel),Jac0inv(dim, dim, NE * quads_per_faceel) { }
-    };
 
     // This class is used only for visualization. It assembles (rho, phi) in each
     // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
@@ -111,8 +49,11 @@ namespace mfem
     {
     private:
       const QuadratureData &qdata;
+      const ParGridFunction &v_gf;
+      const ParGridFunction &e_gf;
+
     public:
-      ForceIntegrator(QuadratureData &qdata) : qdata(qdata) { }
+      ForceIntegrator(QuadratureData &qdata, const ParGridFunction &v_gf, const ParGridFunction &e_gf) : qdata(qdata), v_gf(v_gf), e_gf(e_gf) { }
       virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
 					  const FiniteElement &test_fe,
 					  ElementTransformation &Tr,
@@ -125,6 +66,7 @@ namespace mfem
     {
     private:
       const FaceQuadratureData &qdata;
+
     public:
       VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
       virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,

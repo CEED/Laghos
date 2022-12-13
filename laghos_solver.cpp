@@ -18,6 +18,7 @@
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
 #include <unordered_map>
+#include "laghos_solver.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -87,6 +88,9 @@ namespace mfem
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
 						     ParGridFunction &gamma_gf,
+						     ParGridFunction &rho_gf,
+						     ParGridFunction &v_gf,
+						     ParGridFunction &e_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -116,6 +120,8 @@ namespace mfem
       nitscheVersion(nitscheVersion),
       rho0_gf(rho0_gf),
       gamma_gf(gamma_gf),
+      v_gf(v_gf),
+      e_gf(e_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -123,7 +129,7 @@ namespace mfem
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-      qdata(dim, NE, ir.GetNPoints()),
+      qdata(dim, NE, ir.GetNPoints(), rho_gf, gamma_gf),
       f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
       qdata_is_current(false),
       forcemat_is_assembled(false),
@@ -167,6 +173,7 @@ namespace mfem
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
 
+      
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
       // Initial local mesh size (assumes all mesh elements are the same).
       int Ne, ne = NE;
@@ -185,7 +192,7 @@ namespace mfem
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-	      qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
+	      qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0  * ir.IntPoint(q).weight;
 	    }
 	}
 
@@ -230,7 +237,7 @@ namespace mfem
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
 
-      ForceIntegrator *fi = new ForceIntegrator(qdata);
+      ForceIntegrator *fi = new ForceIntegrator(qdata, v_gf, e_gf);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi);
       // Make a dummy assembly to figure out the sparsity.
@@ -296,6 +303,9 @@ namespace mfem
       Mv.AssembleDomainIntegrators();
       // reset the mesh state at the current one
       UpdateMesh(S);
+
+      // Compute density at the current configuration
+      ComputeDensity(qdata.rho_gf);
       //Compute quadrature quantities
       UpdateQuadratureData(S); 
       UpdateSurfaceNormalStressData(S);
@@ -453,7 +463,7 @@ namespace mfem
 	  const FiniteElement &fe = *L2.GetFE(e);
 	  ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	  di.AssembleRHSElementVect(fe, eltr, rhs);
-	  mi.AssembleElementMatrix(fe, eltr, Mrho);
+	  mi.AssembleElementMatrix2(fe, fe, eltr, Mrho);
 	  inv.Factor();
 	  inv.Mult(rhs, rho_z);
 	  L2.GetElementDofs(e, dofs);
@@ -489,15 +499,6 @@ namespace mfem
       MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
 		    H1.GetParMesh()->GetComm());
       return glob_ke;
-    }
-
-    // Smooth transition between 0 and 1 for x in [-eps, eps].
-    double smooth_step_01(double x, double eps)
-    {
-      const double y = (x + eps) / (2.0 * eps);
-      if (y < 0.0) { return 0.0; }
-      if (y > 1.0) { return 1.0; }
-      return (3.0 - 2.0 * y) * y * y;
     }
 
     void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
@@ -582,9 +583,9 @@ namespace mfem
 		  const DenseMatrix &Jpr = Jpr_b[z](q);
 		  CalcInverse(Jpr, Jinv);
 		  const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
-		    p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
+		    p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q], energy = e_b[z*nqp + q];
 		  stress = 0.0;
-	    
+		  //		  std::cout << " z " << z*nqp + q << " sound " << rho << std::endl;
 		  for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 		  double visc_coeff = 0.0;
 		  if (use_viscosity)
@@ -650,6 +651,7 @@ namespace mfem
 			  qdata.dt_est = fmin(qdata.dt_est, cfl*(1.0/inv_dt));
 			}
 		    }
+		  //  std::cout << " stress(0,0) " << stress(0,0) << std::endl;
 		  // Quadrature data for partial assembly of the force operator.
 		  MultABt(stress, Jinv, stressJiT);
 		  stressJiT *= ir.IntPoint(q).weight * detJ;
