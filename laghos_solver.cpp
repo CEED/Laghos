@@ -84,13 +84,15 @@ namespace mfem
     LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 						     ParFiniteElementSpace &h1,
 						     ParFiniteElementSpace &l2,
+						     ParFiniteElementSpace &p_l2_fes,
 						     const Array<int> &ess_tdofs,
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
 						     ParGridFunction &gamma_gf,
-						     ParGridFunction &rho_gf,
+						     ParGridFunction &p_gf,
 						     ParGridFunction &v_gf,
 						     ParGridFunction &e_gf,
+						     ParGridFunction &cs_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -102,7 +104,7 @@ namespace mfem
 						     const double penaltyParameter,
 						     const double nitscheVersion) :
       TimeDependentOperator(size),
-      H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+      H1(h1), L2(l2), P_L2(p_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       pmesh(H1.GetParMesh()),
       H1Vsize(H1.GetVSize()),
       L2Vsize(L2.GetVSize()),
@@ -121,7 +123,9 @@ namespace mfem
       rho0_gf(rho0_gf),
       gamma_gf(gamma_gf),
       v_gf(v_gf),
+      p_gf(p_gf),
       e_gf(e_gf),
+      cs_gf(cs_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -129,7 +133,7 @@ namespace mfem
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-      qdata(dim, NE, ir.GetNPoints(), rho_gf, gamma_gf),
+      qdata(dim, NE, ir.GetNPoints()),
       f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
       qdata_is_current(false),
       forcemat_is_assembled(false),
@@ -181,18 +185,25 @@ namespace mfem
 
       const int NQ = ir.GetNPoints();
       Vector rho_vals(NQ);
+      //  std::cout << " quad " << NQ << std::endl;
+      
       for (int e = 0; e < NE; e++)
 	{
+	 
 	  rho0_gf.GetValues(e, ir, rho_vals);
 	  ElementTransformation &Tr = *H1.GetElementTransformation(e);
 	  for (int q = 0; q < NQ; q++)
 	    {
+	      const int nqp = ir.GetNPoints();
+	  
 	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      //     std::cout << " x " << ip.x << " y " << ip.y << std::endl;
 	      Tr.SetIntPoint(&ip);
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
 	      qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0  * ir.IntPoint(q).weight;
+	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
 	    }
 	}
 
@@ -237,7 +248,7 @@ namespace mfem
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
 
-      ForceIntegrator *fi = new ForceIntegrator(qdata, v_gf, e_gf);
+      ForceIntegrator *fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi);
       // Make a dummy assembly to figure out the sparsity.
@@ -304,10 +315,10 @@ namespace mfem
       // reset the mesh state at the current one
       UpdateMesh(S);
 
-      // Compute density at the current configuration
-      ComputeDensity(qdata.rho_gf);
       //Compute quadrature quantities
-      UpdateQuadratureData(S); 
+      UpdatePressure(gamma_gf, e_gf, qdata.rho0DetJ0, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);
 
       // assemble boundary terms at the most recent state.
@@ -561,7 +572,9 @@ namespace mfem
 		  const int idx = z * nqp + q;
 		  // Assuming piecewise constant gamma that moves with the mesh.
 		  gamma_b[idx] = gamma_gf(z_id);
+		
 		  rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
+		  //		  std::cout << " z " << z*nqp + q << " x " <<  ip.x << " y " << ip.y << " sound " << detJ << std::endl;
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
 	      ++z_id;
@@ -585,7 +598,6 @@ namespace mfem
 		  const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
 		    p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q], energy = e_b[z*nqp + q];
 		  stress = 0.0;
-		  //		  std::cout << " z " << z*nqp + q << " sound " << rho << std::endl;
 		  for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 		  double visc_coeff = 0.0;
 		  if (use_viscosity)

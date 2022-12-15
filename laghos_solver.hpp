@@ -41,7 +41,7 @@ namespace mfem
     class LagrangianHydroOperator : public TimeDependentOperator
     {
     protected:
-      ParFiniteElementSpace &H1, &L2;
+      ParFiniteElementSpace &H1, &L2, &P_L2;
       mutable ParFiniteElementSpace H1c;
       ParMesh *pmesh;
       // FE spaces local and global sizes
@@ -60,7 +60,9 @@ namespace mfem
       const ParGridFunction &rho0_gf;
       const ParGridFunction &gamma_gf;
       ParGridFunction &v_gf;
+      ParGridFunction &p_gf;
       ParGridFunction &e_gf;
+      ParGridFunction &cs_gf;
    
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
@@ -96,13 +98,15 @@ namespace mfem
       LagrangianHydroOperator(const int size,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
+			      ParFiniteElementSpace &p_l2_fes,
 			      const Array<int> &ess_tdofs,
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,
 			      ParGridFunction &gamma_gf,
-			      ParGridFunction &rho_gf,
+			      ParGridFunction &p_gf,
 			      ParGridFunction &v_gf,
 			      ParGridFunction &e_gf,
+			      ParGridFunction &cs_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,

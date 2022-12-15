@@ -51,9 +51,13 @@ namespace mfem
       const QuadratureData &qdata;
       const ParGridFunction &v_gf;
       const ParGridFunction &e_gf;
-
+      const ParGridFunction &p_gf;
+      const ParGridFunction &cs_gf;
+      const bool use_viscosity;
+      const bool use_vorticity;
+      
     public:
-      ForceIntegrator(QuadratureData &qdata, const ParGridFunction &v_gf, const ParGridFunction &e_gf) : qdata(qdata), v_gf(v_gf), e_gf(e_gf) { }
+      ForceIntegrator(QuadratureData &qdata, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity)  { }
       virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
 					  const FiniteElement &test_fe,
 					  ElementTransformation &Tr,

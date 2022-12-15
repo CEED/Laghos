@@ -212,10 +212,15 @@ int main(int argc, char *argv[])
   // Define the parallel finite element spaces. We use:
   // - H1 (Gauss-Lobatto, continuous) for position and velocity.
   // - L2 (Bernstein, discontinuous) for specific internal energy.
+  // - L2 (Gauss-Legendre, discontinuous) for pressure.
   L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
   H1_FECollection H1FEC(order_v, dim);
   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+  // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
+  int quadRule = (order_q > 0) ? order_q : 3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
+  L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
+  ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
 
   // Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
   // We need to define ess_tdofs and ess_vdofs, but they will be kept empty
@@ -288,14 +293,17 @@ int main(int argc, char *argv[])
   // this density is a temporary function and it will not be updated during the
   // time evolution.
   ParGridFunction rho0_gf(&L2FESpace);
-  ParGridFunction rho_gf(&L2FESpace);
+  ParGridFunction p_gf(&P_L2FESpace);
+  ParGridFunction cs_gf(&P_L2FESpace);
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
   rho0_gf.ProjectGridFunction(l2_rho0_gf);
-  rho_gf.ProjectGridFunction(l2_rho0_gf);
+  p_gf = 0.0;
+  cs_gf = 0.0;
+  //  std::cout << " pgf " << rho0_gf.Size() << std::endl;
   if (problem == 1)
     {
       // For the Sedov test, we use a delta function at the origin.
@@ -335,9 +343,9 @@ int main(int argc, char *argv[])
   if (impose_visc) { visc = true; }
 
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-					       H1FESpace, L2FESpace, ess_tdofs,
+					       H1FESpace, L2FESpace, P_L2FESpace, ess_tdofs,
 					       rho0_coeff, rho0_gf,
-					       mat_gf, rho_gf, v_gf, e_gf, source, cfl,
+					       mat_gf, p_gf, v_gf, e_gf, cs_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion);
@@ -346,8 +354,8 @@ int main(int argc, char *argv[])
   char vishost[] = "localhost";
   int  visport   = 19916;
 
-  ParGridFunction rho_gf_vis;
-  if (visualization || visit) { hydro.ComputeDensity(rho_gf_vis); }
+  ParGridFunction rho_gf;
+  if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
   const double energy_init = hydro.InternalEnergy(e_gf) +
     hydro.KineticEnergy(v_gf);
 
@@ -364,7 +372,7 @@ int main(int argc, char *argv[])
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
 	{
-	  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf_vis,
+	  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
 					"Density", Wx, Wy, Ww, Wh);
 	}
       Wx += offx;
@@ -379,7 +387,7 @@ int main(int argc, char *argv[])
   VisItDataCollection visit_dc(basename, pmesh);
   if (visit)
     {
-      visit_dc.RegisterField("Density",  &rho_gf_vis);
+      visit_dc.RegisterField("Density",  &rho_gf);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
@@ -466,7 +474,7 @@ int main(int argc, char *argv[])
 	  // another set of GLVis connections (one from each rank):
 	  MPI_Barrier(pmesh->GetComm());
 
-	  if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf_vis); }
+	  if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
 	  if (visualization)
 	    {
 	      int Wx = 0, Wy = 0; // window position
@@ -474,7 +482,7 @@ int main(int argc, char *argv[])
 	      int offx = Ww+10; // window offsets
 	      if (problem != 0 && problem != 4)
 		{
-		  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf_vis,
+		  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
 						"Density", Wx, Wy, Ww, Wh);
 		}
 	      Wx += offx;
@@ -509,7 +517,7 @@ int main(int argc, char *argv[])
 
 	      std::ofstream rho_ofs(rho_name.str().c_str());
 	      rho_ofs.precision(8);
-	      rho_gf_vis.SaveAsOne(rho_ofs);
+	      rho_gf.SaveAsOne(rho_ofs);
 	      rho_ofs.close();
 
 	      std::ofstream v_ofs(v_name.str().c_str());

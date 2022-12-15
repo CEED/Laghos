@@ -22,6 +22,56 @@ namespace mfem
 {
   namespace hydrodynamics
   {
+    
+    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const Vector &rho0DetJ0,  ParGridFunction &p_gf)
+    {
+      ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
+      const int NE = p_fespace->GetParMesh()->GetNE();
+      
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NE; e++)
+	{
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      double gamma_val = gamma_gf.GetValue(Tr, ip);
+	      double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+	      //	      std::cout << " assembly " <<  " x " << ip.x << " y " << ip.y << std::endl;
+	      const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+	      p_gf(e * nqp + q) = (gamma_val - 1.0) * rho * e_val;
+	    }
+	}
+    }
+
+    void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
+    {
+      ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
+      const int NE = p_fespace->GetParMesh()->GetNE();
+      
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NE; e++)
+	{
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      double gamma_val = gamma_gf.GetValue(Tr, ip);
+	      double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+	      cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
+	    }
+	}
+    }
 
     void ComputeMaterialProperty(const double gamma,
 				 const double rho, const double e,

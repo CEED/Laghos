@@ -34,8 +34,8 @@ namespace mfem
       for (int q = 0; q < nqp; q++)
 	{
 	  const IntegrationPoint &ip = IntRule->IntPoint(q);
-	  Tr.SetIntPoint (&ip);
 	  fe.CalcShape(ip, shape);
+	  Tr.SetIntPoint (&ip);
 	  // Note that rhoDetJ = rho0DetJ0.
 	  shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
 	  elvect += shape;
@@ -64,24 +64,21 @@ namespace mfem
 	  DenseMatrix Jinv(dim);
 	  Jinv = 0.0;
 	  CalcInverse(Jpr, Jinv);
-
+	  const int eq = e*nqp + q;
 	  // Form stress:grad_shape at the current point.
 	  test_fe.CalcDShape(ip, vshape);
 	  trial_fe.CalcShape(ip, shape);
-	  double rho_val = qdata.rho_gf.GetValue(Tr, ip);
-	  double gamma_val = qdata.gamma_gf.GetValue(Tr, ip);
-	  double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-	  double p = 0.0;
-	  double cs = 0.0;
+	  double pressure = p_gf.GetValue(Tr,ip);
+	  double sound_speed = cs_gf.GetValue(Tr,ip);
 	  DenseMatrix stress(dim), stressJiT(dim);
 	  stressJiT = 0.0;
 	  stress = 0.0;
-	  ComputeMaterialProperty(gamma_val,rho_val,e_val,p,cs);
-	  ComputeStress(p,dim,stress);
+	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	  ComputeStress(pressure,dim,stress);
+	  ComputeViscousStress(Tr, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
 	  stressJiT *= ip.weight * Jpr.Det();
-	  const int eq = e*nqp + q;
-	  // std::cout << " eq " << eq << " rho " << rho_val << std::endl;
+	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -91,7 +88,7 @@ namespace mfem
 		    {
 		      loc_force += stressJiT(vd,gd) * vshape(i,gd);
 		      //  const double stressJiT = qdata.stressJinvT(vd)(eq, gd);
-		      //   loc_force += stressJiT * vshape(i,gd);
+		      //  loc_force += stressJiT * vshape(i,gd);
 		    }
 		  for (int j = 0; j < l2dofs_cnt; j++){
 		    elmat(i + vd * h1dofs_cnt, j) += loc_force * shape(j);
