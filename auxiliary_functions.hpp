@@ -37,7 +37,7 @@ namespace mfem
       // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
       // quadrature point. Note the at any other time, we can compute
       // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation. This variable is not scaled with the weights at the integration points
+      // conservation. This variable is not scaled with the weights at the integration points.
       Vector rho0DetJ0;
 
       // Initial length scale. This represents a notion of local mesh size.
@@ -76,16 +76,23 @@ namespace mfem
       // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
       // quadrature point. Note the at any other time, we can compute
       // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation.
-      Vector rho0DetJ0w;
+      // conservation. This variable is not scaled with the weights at the integration points.
+      Vector rho0DetJ0;
 
-      FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(0.0), rho0DetJ0w(NE * quads_per_faceel),Jac0inv(dim, dim, NE * quads_per_faceel) { }
+      FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(0.0), rho0DetJ0(NE * quads_per_faceel), Jac0inv(dim, dim, NE * quads_per_faceel) { }
     };
+    
     void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf);
   
     void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
 
     void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
+
+    void UpdateFaceDensity(const IntegrationRule &b_ir, const Vector &rho0DetJ0, ParGridFunction &rho_gf);
+  
+    void UpdateFacePressure(const IntegrationRule &b_ir, const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
+
+    void UpdateFaceSoundSpeed(const IntegrationRule &b_ir, const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
          
     void ComputeMaterialProperty(const double gamma,
 				   const double rho, const double e,

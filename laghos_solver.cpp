@@ -89,11 +89,14 @@ namespace mfem
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
 						     ParGridFunction &rho_gf,
+						     ParGridFunction &rhoface_gf,
 						     ParGridFunction &gamma_gf,
 						     ParGridFunction &p_gf,
+						     ParGridFunction &pface_gf,
 						     ParGridFunction &v_gf,
 						     ParGridFunction &e_gf,
 						     ParGridFunction &cs_gf,
+						     ParGridFunction &csface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -123,14 +126,18 @@ namespace mfem
       nitscheVersion(nitscheVersion),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
+      rhoface_gf(rhoface_gf),
       gamma_gf(gamma_gf),
       v_gf(v_gf),
       p_gf(p_gf),
       e_gf(e_gf),
       cs_gf(cs_gf),
+      pface_gf(pface_gf),
+      csface_gf(csface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
+      FaceIntRules(0, Quadrature1D::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
@@ -205,11 +212,11 @@ namespace mfem
 	}
 
       const int nqp_face = b_ir.GetNPoints();
-   
       for (int i = 0; i < L2.GetNBE(); i++)
 	{
 	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
 	  const int faceElemNo = eltrans->ElementNo;
+	  
 	  for (int q = 0; q < nqp_face; q++)
 	    {
 	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
@@ -220,11 +227,10 @@ namespace mfem
 	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
 	      Trans_el1.SetIntPoint(&eip);
 	      DenseMatrixInverse Jinv(Trans_el1.Jacobian());
-	      Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));
-     
+	      Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));	      
 	      double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	      const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
-	      f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
+	      f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) = rho0DetJ0;
 	    }
 	}
 
@@ -250,7 +256,7 @@ namespace mfem
       Force.Assemble(0);
       Force.Finalize(0);
 
-      VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata);
+      VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
 
@@ -314,6 +320,11 @@ namespace mfem
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      //Compute quadrature quantities
+      UpdateFaceDensity(b_ir, f_qdata.rho0DetJ0, rhoface_gf);
+      UpdateFacePressure(b_ir, gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateFaceSoundSpeed(b_ir, gamma_gf, e_gf, csface_gf);
+
       UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);
 
@@ -377,6 +388,15 @@ namespace mfem
     void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 					      Vector &dS_dt) const
     {
+      //Compute quadrature quantities
+      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      //Compute quadrature quantities
+      UpdateFaceDensity(b_ir, f_qdata.rho0DetJ0, rhoface_gf);
+      UpdateFacePressure(b_ir, gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateFaceSoundSpeed(b_ir, gamma_gf, e_gf, csface_gf);
+
       UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);
  
@@ -710,7 +730,7 @@ namespace mfem
 	      Trans_el1.SetIntPoint(&eip);
 	      const double detJ = (Trans_el1.Jacobian()).Det();
 
-	      double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	      double rho_vals = f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) / detJ;
 	      double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	      double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
 	      double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
@@ -836,7 +856,7 @@ namespace mfem
 	      Trans_el1.SetIntPoint(&eip);
 	      const double detJ = (Trans_el1.Jacobian()).Det();
 
-	      double rho_vals = f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) / detJ / ip_f.weight;
+	      double rho_vals = f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) / detJ;
 	      double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
 	      double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
 

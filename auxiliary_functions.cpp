@@ -94,6 +94,103 @@ namespace mfem
 	}
     }
 
+    void UpdateFaceDensity(const IntegrationRule &b_ir, const Vector &rho0DetJ0, ParGridFunction &rho_gf)
+    {
+      ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
+      const int NBE = p_fespace->GetParMesh()->GetNBE();
+      const int nqp_face = b_ir.GetNPoints();
+      
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NBE; e++)
+	{
+	  FaceElementTransformations *eltrans = p_fespace->GetParMesh()->GetBdrFaceTransformations(e);
+	  const int faceElemNo = eltrans->ElementNo;
+
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  for (int q = 0; q < nqp_face; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      // Compute el1 quantities.
+	      // Set the integration point in the face and the neighboring elements
+	      eltrans->SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	      Trans_el1.SetIntPoint(&eip);
+	      const int elementNo = Trans_el1.ElementNo;
+	      const double rho = rho0DetJ0(faceElemNo * nqp_face + q) / Trans_el1.Weight();
+	      rho_gf(elementNo * nqp + q) = rho;
+	    }
+	}
+    }
+    
+    void UpdateFacePressure(const IntegrationRule &b_ir, const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
+    {
+      ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
+      const int NBE = p_fespace->GetParMesh()->GetNBE();
+      const int nqp_face = b_ir.GetNPoints();
+      
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NBE; e++)
+	{
+	  FaceElementTransformations *eltrans = p_fespace->GetParMesh()->GetBdrFaceTransformations(e);
+	  const int faceElemNo = eltrans->ElementNo;
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  for (int q = 0; q < nqp_face; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      // Compute el1 quantities.
+	      // Set the integration point in the face and the neighboring elements
+	      eltrans->SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	      Trans_el1.SetIntPoint(&eip);
+	      const int elementNo = Trans_el1.ElementNo;
+	      const double gamma_val = gamma_gf.GetValue(Trans_el1, eip);
+	      const double e_val = fmax(0.0,e_gf.GetValue(Trans_el1, eip));
+	      const double rho_val = rho_gf.GetValue(Trans_el1, eip);
+	      p_gf(elementNo * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
+	    }
+	}
+    }
+
+    void UpdateFaceSoundSpeed(const IntegrationRule &b_ir, const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
+    {
+      ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
+      const int NBE = p_fespace->GetParMesh()->GetNBE();
+      const int nqp_face = b_ir.GetNPoints();
+      
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NBE; e++)
+	{
+	  FaceElementTransformations *eltrans = p_fespace->GetParMesh()->GetBdrFaceTransformations(e);
+	  const int faceElemNo = eltrans->ElementNo;	
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  for (int q = 0; q < nqp_face; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      // Compute el1 quantities.
+	      // Set the integration point in the face and the neighboring elements
+	      eltrans->SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
+	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
+	      Trans_el1.SetIntPoint(&eip);
+	      const int elementNo = Trans_el1.ElementNo;
+	      double gamma_val = gamma_gf.GetValue(Trans_el1, eip);
+	      double e_val = fmax(0.0,e_gf.GetValue(Trans_el1, eip));
+	      cs_gf(elementNo * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
+	    }
+	}
+    }
+
     void ComputeMaterialProperty(const double gamma,
 				 const double rho, const double e,
 				 double &p, double &cs)

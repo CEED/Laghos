@@ -222,6 +222,11 @@ int main(int argc, char *argv[])
   L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
 
+  // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
+  int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW();
+  L2_FECollection PFace_L2FEC((int)(quadRule_face), dim, BasisType::GaussLobatto);
+  ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
+
   // Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
   // We need to define ess_tdofs and ess_vdofs, but they will be kept empty
   Array<int> ess_tdofs, ess_vdofs;
@@ -300,7 +305,14 @@ int main(int argc, char *argv[])
   p_gf = 0.0;
   cs_gf = 0.0;
   rho_gf = 0.0;
-  
+  // Grid Functions for face terms
+  ParGridFunction pface_gf(&PFace_L2FESpace);
+  ParGridFunction csface_gf(&PFace_L2FESpace);
+  ParGridFunction rhoface_gf(&PFace_L2FESpace);
+  pface_gf = 0.0;
+  csface_gf = 0.0;
+  rhoface_gf = 0.0;
+ 
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
@@ -347,8 +359,8 @@ int main(int argc, char *argv[])
 
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
 					       H1FESpace, L2FESpace, P_L2FESpace, ess_tdofs,
-					       rho0_coeff, rho0_gf, rho_gf,
-					       mat_gf, p_gf, v_gf, e_gf, cs_gf, source, cfl,
+					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion);

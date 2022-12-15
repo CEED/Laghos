@@ -70,9 +70,9 @@ namespace mfem
     {
     private:
       const FaceQuadratureData &qdata;
-
+      const ParGridFunction &pface_gf;
     public:
-      VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata) : qdata(qdata) { }
+      VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
       virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				      const FiniteElement &test_fe1,
 				      FaceElementTransformations &Tr,

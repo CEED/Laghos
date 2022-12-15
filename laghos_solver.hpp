@@ -64,7 +64,13 @@ namespace mfem
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
       ParGridFunction &rho_gf;
-
+      // Grid Functions for face terms
+      ParGridFunction &pface_gf;
+      ParGridFunction &csface_gf;
+      ParGridFunction &rhoface_gf;
+      
+      IntegrationRules FaceIntRules;
+      
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
       mutable ParBilinearForm Mv;
@@ -104,11 +110,14 @@ namespace mfem
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,
 			      ParGridFunction &rho_gf,
+			      ParGridFunction &rhoface_gf,
 			      ParGridFunction &gamma_gf,
 			      ParGridFunction &p_gf,
+			      ParGridFunction &pface_gf,
 			      ParGridFunction &v_gf,
 			      ParGridFunction &e_gf,
 			      ParGridFunction &cs_gf,
+			      ParGridFunction &csface_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,
