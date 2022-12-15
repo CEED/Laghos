@@ -293,17 +293,20 @@ int main(int argc, char *argv[])
   // this density is a temporary function and it will not be updated during the
   // time evolution.
   ParGridFunction rho0_gf(&L2FESpace);
+  // Grid Functions for interior terms
   ParGridFunction p_gf(&P_L2FESpace);
   ParGridFunction cs_gf(&P_L2FESpace);
+  ParGridFunction rho_gf(&P_L2FESpace);
+  p_gf = 0.0;
+  cs_gf = 0.0;
+  rho_gf = 0.0;
+  
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
   rho0_gf.ProjectGridFunction(l2_rho0_gf);
-  p_gf = 0.0;
-  cs_gf = 0.0;
-  //  std::cout << " pgf " << rho0_gf.Size() << std::endl;
   if (problem == 1)
     {
       // For the Sedov test, we use a delta function at the origin.
@@ -344,7 +347,7 @@ int main(int argc, char *argv[])
 
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
 					       H1FESpace, L2FESpace, P_L2FESpace, ess_tdofs,
-					       rho0_coeff, rho0_gf,
+					       rho0_coeff, rho0_gf, rho_gf,
 					       mat_gf, p_gf, v_gf, e_gf, cs_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
@@ -354,8 +357,8 @@ int main(int argc, char *argv[])
   char vishost[] = "localhost";
   int  visport   = 19916;
 
-  ParGridFunction rho_gf;
-  if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
+  ParGridFunction rho_gf_vis;
+  if (visualization || visit) { hydro.ComputeDensity(rho_gf_vis); }
   const double energy_init = hydro.InternalEnergy(e_gf) +
     hydro.KineticEnergy(v_gf);
 
@@ -372,7 +375,7 @@ int main(int argc, char *argv[])
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
 	{
-	  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+	  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf_vis,
 					"Density", Wx, Wy, Ww, Wh);
 	}
       Wx += offx;
@@ -387,7 +390,7 @@ int main(int argc, char *argv[])
   VisItDataCollection visit_dc(basename, pmesh);
   if (visit)
     {
-      visit_dc.RegisterField("Density",  &rho_gf);
+      visit_dc.RegisterField("Density",  &rho_gf_vis);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
@@ -474,7 +477,7 @@ int main(int argc, char *argv[])
 	  // another set of GLVis connections (one from each rank):
 	  MPI_Barrier(pmesh->GetComm());
 
-	  if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
+	  if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf_vis); }
 	  if (visualization)
 	    {
 	      int Wx = 0, Wy = 0; // window position
@@ -482,7 +485,7 @@ int main(int argc, char *argv[])
 	      int offx = Ww+10; // window offsets
 	      if (problem != 0 && problem != 4)
 		{
-		  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+		  hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf_vis,
 						"Density", Wx, Wy, Ww, Wh);
 		}
 	      Wx += offx;
@@ -517,7 +520,7 @@ int main(int argc, char *argv[])
 
 	      std::ofstream rho_ofs(rho_name.str().c_str());
 	      rho_ofs.precision(8);
-	      rho_gf.SaveAsOne(rho_ofs);
+	      rho_gf_vis.SaveAsOne(rho_ofs);
 	      rho_ofs.close();
 
 	      std::ofstream v_ofs(v_name.str().c_str());

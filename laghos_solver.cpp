@@ -88,6 +88,7 @@ namespace mfem
 						     const Array<int> &ess_tdofs,
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
+						     ParGridFunction &rho_gf,
 						     ParGridFunction &gamma_gf,
 						     ParGridFunction &p_gf,
 						     ParGridFunction &v_gf,
@@ -121,6 +122,7 @@ namespace mfem
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
       nitscheVersion(nitscheVersion),
       rho0_gf(rho0_gf),
+      rho_gf(rho_gf),
       gamma_gf(gamma_gf),
       v_gf(v_gf),
       p_gf(p_gf),
@@ -185,24 +187,19 @@ namespace mfem
 
       const int NQ = ir.GetNPoints();
       Vector rho_vals(NQ);
-      //  std::cout << " quad " << NQ << std::endl;
       
       for (int e = 0; e < NE; e++)
-	{
-	 
+	{	 
 	  rho0_gf.GetValues(e, ir, rho_vals);
 	  ElementTransformation &Tr = *H1.GetElementTransformation(e);
 	  for (int q = 0; q < NQ; q++)
 	    {
-	      const int nqp = ir.GetNPoints();
-	  
+	      const int nqp = ir.GetNPoints();	  
 	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      //     std::cout << " x " << ip.x << " y " << ip.y << std::endl;
 	      Tr.SetIntPoint(&ip);
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-	      qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0  * ir.IntPoint(q).weight;
 	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
 	    }
 	}
@@ -213,7 +210,6 @@ namespace mfem
 	{
 	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
 	  const int faceElemNo = eltrans->ElementNo;
-       
 	  for (int q = 0; q < nqp_face; q++)
 	    {
 	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
@@ -225,8 +221,7 @@ namespace mfem
 	      Trans_el1.SetIntPoint(&eip);
 	      DenseMatrixInverse Jinv(Trans_el1.Jacobian());
 	      Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));
-         
-
+     
 	      double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
 	      const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
 	      f_qdata.rho0DetJ0w(faceElemNo*nqp_face+q) = rho0DetJ0 * ip_f.weight;
@@ -316,7 +311,8 @@ namespace mfem
       UpdateMesh(S);
 
       //Compute quadrature quantities
-      UpdatePressure(gamma_gf, e_gf, qdata.rho0DetJ0, p_gf);
+      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);
@@ -527,7 +523,7 @@ namespace mfem
       v.MakeRef(&H1, *sptr, H1.GetVSize());
       e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
       Vector e_vals;
-      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
+      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
 
       // Batched computations are needed, because hydrodynamic codes usually
       // involve expensive computations of material properties. Although this
@@ -571,10 +567,8 @@ namespace mfem
 		  min_detJ = fmin(min_detJ, detJ);
 		  const int idx = z * nqp + q;
 		  // Assuming piecewise constant gamma that moves with the mesh.
-		  gamma_b[idx] = gamma_gf(z_id);
-		
-		  rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-		  //		  std::cout << " z " << z*nqp + q << " x " <<  ip.x << " y " << ip.y << " sound " << detJ << std::endl;
+		  gamma_b[idx] = gamma_gf(z_id);		
+		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / detJ;
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
 	      ++z_id;
@@ -597,8 +591,6 @@ namespace mfem
 		  CalcInverse(Jpr, Jinv);
 		  const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
 		    p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q], energy = e_b[z*nqp + q];
-		  stress = 0.0;
-		  for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
 		  double visc_coeff = 0.0;
 		  if (use_viscosity)
 		    {
@@ -641,7 +633,6 @@ namespace mfem
 		      const double eps = 1e-12;
 		      visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
 			(1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		      stress.Add(visc_coeff, sgrad_v);
 		    }
 		  // Time step estimate at the point. Here the more relevant length
 		  // scale is related to the actual mesh deformation; we use the min
@@ -661,18 +652,6 @@ namespace mfem
 		      if (inv_dt>0.0)
 			{
 			  qdata.dt_est = fmin(qdata.dt_est, cfl*(1.0/inv_dt));
-			}
-		    }
-		  //  std::cout << " stress(0,0) " << stress(0,0) << std::endl;
-		  // Quadrature data for partial assembly of the force operator.
-		  MultABt(stress, Jinv, stressJiT);
-		  stressJiT *= ir.IntPoint(q).weight * detJ;
-		  for (int vd = 0 ; vd < dim; vd++)
-		    {
-		      for (int gd = 0; gd < dim; gd++)
-			{
-			  qdata.stressJinvT(vd)(z_id*nqp + q, gd) =
-			    stressJiT(vd, gd);
 			}
 		    }
 		}

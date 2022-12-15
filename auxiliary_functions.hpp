@@ -33,19 +33,6 @@ namespace mfem
       // These are computed only at time zero and stored here.
       DenseTensor Jac0inv;
 
-      // Quadrature data used for full/partial assembly of the force operator.
-      // At each quadrature point, it combines the stress, inverse Jacobian,
-      // determinant of the Jacobian and the integration weight.
-      // It must be recomputed in every time step.
-      DenseTensor stressJinvT;
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation.
-      Vector rho0DetJ0w;
-
       // Quadrature data used for full/partial assembly of the mass matrices.
       // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
       // quadrature point. Note the at any other time, we can compute
@@ -63,8 +50,6 @@ namespace mfem
   
       QuadratureData(int dim, int NE, int quads_per_el)
 	: Jac0inv(dim, dim, NE * quads_per_el),
-	  stressJinvT(NE * quads_per_el, dim, dim),
-	  rho0DetJ0w(NE * quads_per_el),
 	  rho0DetJ0(NE * quads_per_el){ /*std::cout << " NE " << NE << " size " << p_gf.Size() << " quad point " << p_gf.ParFESpace()->GetFE(0)->GetNodes().GetNPoints() << " quad pe el " << quads_per_el << std::endl;*/}
     };
 
@@ -96,8 +81,9 @@ namespace mfem
 
       FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(0.0), rho0DetJ0w(NE * quads_per_faceel),Jac0inv(dim, dim, NE * quads_per_faceel) { }
     };
-
-    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const Vector &rho0DetJ0,  ParGridFunction &p_gf);
+    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf);
+  
+    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
 
     void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
          

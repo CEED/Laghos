@@ -37,7 +37,7 @@ namespace mfem
 	  fe.CalcShape(ip, shape);
 	  Tr.SetIntPoint (&ip);
 	  // Note that rhoDetJ = rho0DetJ0.
-	  shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
+	  shape *= qdata.rho0DetJ0(Tr.ElementNo*nqp + q) * ip.weight;
 	  elvect += shape;
 	}
     }
@@ -87,8 +87,6 @@ namespace mfem
 		  for (int gd = 0; gd < dim; gd++) // Gradient components.
 		    {
 		      loc_force += stressJiT(vd,gd) * vshape(i,gd);
-		      //  const double stressJiT = qdata.stressJinvT(vd)(eq, gd);
-		      //  loc_force += stressJiT * vshape(i,gd);
 		    }
 		  for (int j = 0; j < l2dofs_cnt; j++){
 		    elmat(i + vd * h1dofs_cnt, j) += loc_force * shape(j);

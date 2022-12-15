@@ -63,7 +63,8 @@ namespace mfem
       ParGridFunction &p_gf;
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
-   
+      ParGridFunction &rho_gf;
+
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
       mutable ParBilinearForm Mv;
@@ -102,6 +103,7 @@ namespace mfem
 			      const Array<int> &ess_tdofs,
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,
+			      ParGridFunction &rho_gf,
 			      ParGridFunction &gamma_gf,
 			      ParGridFunction &p_gf,
 			      ParGridFunction &v_gf,
