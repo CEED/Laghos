@@ -24,6 +24,129 @@ namespace mfem
 namespace hydrodynamics
 {
 
+void shift_shape(const ParFiniteElementSpace &pfes_e_const,
+                 const ParFiniteElementSpace &pfes_p,
+                 int e_id,
+                 const IntegrationPoint &ip, const Vector &dist,
+                 int nterms, Vector &shape_shift)
+{
+   auto pfes_e = const_cast<ParFiniteElementSpace *>(&pfes_e_const);
+   const int NE = pfes_e->GetNE();
+   const FiniteElement &el_e =
+      (e_id < NE) ? *pfes_e->GetFE(e_id) : *pfes_e->GetFaceNbrFE(e_id - NE);
+   const FiniteElement &el_p =
+      (e_id < NE) ? *pfes_p.GetFE(e_id) : *pfes_p.GetFaceNbrFE(e_id - NE);
+   const int dim = pfes_e->GetMesh()->Dimension(), dof = el_e.GetDof();
+
+   IsoparametricTransformation el_tr;
+   if (e_id < NE)
+   {
+      pfes_e->GetElementTransformation(e_id, &el_tr);
+   }
+   else
+   {
+      pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
+   }
+   DenseMatrix grad_phys;
+   DenseMatrix Transfer_pe;
+   el_p.Project(el_e, el_tr, Transfer_pe);
+   el_p.ProjectGrad(el_p, el_tr, grad_phys);
+
+   Vector s(dim*dof), t(dof);
+   for (int j = 0; j < dof; j++)
+   {
+      // Shape function transformed into the p space.
+      Vector u_shape_e(dof), u_shape_p(dof);
+      u_shape_e = 0.0;
+      u_shape_e(j) = 1.0;
+      Transfer_pe.Mult(u_shape_e, u_shape_p);
+
+      t = u_shape_p;
+      int factorial = 1;
+      for (int i = 1; i < nterms + 1; i++)
+      {
+         factorial = factorial*i;
+         grad_phys.Mult(t, s);
+         for (int j = 0; j < dof; j++)
+         {
+            t(j) = 0.0;
+            for(int d = 0; d < dim; d++)
+            {
+               t(j) = t(j) + s(j + d * dof) * dist(d);
+            }
+         }
+         u_shape_p.Add(1.0/double(factorial), t);
+      }
+
+      el_tr.SetIntPoint(&ip);
+      el_e.CalcPhysShape(el_tr, t);
+      shape_shift(j) = t * u_shape_p;
+   }
+}
+
+void get_shifted_value(const ParGridFunction &g, int e_id,
+                       const IntegrationPoint &ip, const Vector &dist,
+                       int nterms, Vector &shifted_vec)
+{
+   auto pfes = const_cast<ParFiniteElementSpace *>(g.ParFESpace());
+   const int NE = pfes->GetNE();
+   const FiniteElement &el =
+      (e_id < NE) ? *pfes->GetFE(e_id) : *pfes->GetFaceNbrFE(e_id - NE);
+   const int dim = pfes->GetMesh()->Dimension(), dof = el.GetDof();
+   const int vdim = pfes->GetVDim();
+
+   IsoparametricTransformation el_tr;
+   if (e_id < NE)
+   {
+      pfes->GetElementTransformation(e_id, &el_tr);
+   }
+   else
+   {
+      pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
+   }
+   DenseMatrix grad_phys;
+   el.ProjectGrad(el, el_tr, grad_phys);
+
+   Array<int> vdofs;
+   Vector u(dof), s(dim*dof), t(dof), g_loc(vdim*dof);
+   if (e_id < NE)
+   {
+      g.FESpace()->GetElementVDofs(e_id, vdofs);
+      g.GetSubVector(vdofs, g_loc);
+   }
+   else
+   {
+      g.ParFESpace()->GetFaceNbrElementVDofs(e_id - NE, vdofs);
+      g.FaceNbrData().GetSubVector(vdofs, g_loc);
+   }
+
+   for (int c = 0; c < vdim; c++)
+   {
+      u.SetDataAndSize(g_loc.GetData() + c*dof, dof);
+
+      t = u;
+      int factorial = 1;
+      for (int i = 1; i < nterms + 1; i++)
+      {
+         factorial = factorial*i;
+         grad_phys.Mult(t, s);
+         for (int j = 0; j < dof; j++)
+         {
+            t(j) = 0.0;
+            for(int d = 0; d < dim; d++)
+            {
+               t(j) = t(j) + s(j + d * dof) * dist(d);
+            }
+         }
+         u.Add(1.0/double(factorial), t);
+      }
+
+      el_tr.SetIntPoint(&ip);
+      el.CalcPhysShape(el_tr, t);
+      shifted_vec(c) = t * u;
+   }
+}
+
 int SIMarker::GetMaterialID(int el_id)
 {
    IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
@@ -732,14 +855,10 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
                "The mixed zone is a 1-material zone! Check it.");
 
    Vector h1_shape(h1dofs_cnt);
-   Vector nor(dim);
+   Vector nor(dim), d_q(dim);
 
    MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
    const int nqp_face = IntRule->GetNPoints();
-
-   // The distance vector is a continuous function.
-   Vector d_q(dim);
-   Vector p_grad_q1(dim), p_grad_q2(dim);
 
    for (int q = 0; q < nqp_face; q++)
    {
@@ -762,19 +881,21 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       nor *= ip_f.weight;
 
       // Compute el1 quantities. Allows negative pressure.
+      // Note that the distance vector is a continuous function.
       Trans_e1.SetIntPoint(&ip_e1);
-      p_e1->GetGradient(Trans_e1, p_grad_q1);
       dist.Eval(d_q, Trans_e1, ip_e1);
-      const double grad_p_d_q1 = d_q * p_grad_q1;
       const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+      Vector shift_p(1);
+      get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                        num_taylor, shift_p);
+      double grad_p_d_q1 = shift_p(0) - p_q1;
 
       // Compute el2 quantities. Allows negative pressure.
       Trans_e2.SetIntPoint(&ip_e2);
-      p_e2->GetGradient(Trans_e2, p_grad_q2);
-      const double grad_p_d_q2 = d_q * p_grad_q2;
       const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
-
-      const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
+      get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                        num_taylor, shift_p);
+      double grad_p_d_q2 = shift_p(0) - p_q2;
 
       // 1st element.
       {
@@ -939,12 +1060,11 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
 
       v->GetVectorValue(Trans, ip_f, v_vals);
-      const int form = e_shift_type;
 
       // For each term, we keep the sign as if it is on the left hand side
       // because in SolveEnergy, this will be multiplied with -1 and added.
       // + <v, phi[[\grad p . d]]>
-      if (form == 1)
+      if (e_shift_type == 1)
       {
           double gradp_d_jump_term = (d_q * p_grad_q1 - d_q * p_grad_q2) *
                   (ip_f.weight) * (nor * v_vals);
@@ -972,14 +1092,18 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       // generic stuff.
       Vector true_normal = d_q;
       true_normal /= sqrt(d_q * d_q + 1e-12);
-      Vector gradv_d(dim);
 
-      v_grad_q1.Mult(d_q, gradv_d);
+      Vector gradv_d(dim);
+      get_shifted_value(*v, Trans_e1.ElementNo, ip_e1, d_q,
+                        num_taylor, gradv_d);
+      gradv_d -= v_vals;
       double gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e1(true_normal);
       gradv_d_n_n_e1 *= gradv_d_n;
 
-      v_grad_q2.Mult(d_q, gradv_d);
+      get_shifted_value(*v, Trans_e2.ElementNo, ip_e2, d_q,
+                        num_taylor, gradv_d);
+      gradv_d -= v_vals;
       gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e2(true_normal);
       gradv_d_n_n_e2 *= gradv_d_n;
@@ -988,7 +1112,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       // - < [((grad_v d).n) n], {p phi} > (form 4)
       // phi is DG, so {p phi} = p1 phi + p2 0 = p1 phi.
-      if (form == 4)
+      if (e_shift_type == 4)
       {
          // 1st element.
          el_1.CalcShape(ip_e1, shape_e);
@@ -1012,7 +1136,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
 
       // - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>
-      if (form == 5)
+      if (e_shift_type == 5)
       {
          double jump_gradp_d = p_q1 + d_q * p_grad_q1 - p_q2 - d_q * p_grad_q2;
 
@@ -1034,7 +1158,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
 
       // - < [p + grad_p.d] {phi} v >
-      if (form == 5)
+      if (e_shift_type == 5)
       {
           double jump_gradp_d = p_q1 + d_q * p_grad_q1 - p_q2 - d_q * p_grad_q2;
 
@@ -1054,7 +1178,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
 
       // + < |[((grad_v d).n) n]| [p] [phi] >
-      if (form == 6)
+      if (e_shift_type == 6)
       {
          // 1st element.
          el_1.CalcShape(ip_e1, shape_e);
@@ -1072,8 +1196,13 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       // + < scale * {h |grad_v|} * [p + grad_p.d] * [phi + grad_phi.d] >.
       if (problem_visc && diffusion)
       {
-         double p_q1_ext = p_q1 + d_q * p_grad_q1,
-                p_q2_ext = p_q2 + d_q * p_grad_q2;
+         Vector p_ext(1);
+         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                           num_taylor, p_ext);
+         double p_q1_ext = p_ext(0);
+         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                           num_taylor, p_ext);
+         double p_q2_ext = p_ext(0);
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
@@ -1122,12 +1251,9 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
          double grad_v_avg = gamma_avg * visc_q1 + (1.0 - gamma_avg) * visc_q2;
 
-         DenseMatrix grad_shape_phys_e(l2dofs_cnt, dim);
-
          // 1st element.
-         el_1.CalcShape(ip_e1, shape_e);
-         el_1.CalcPhysDShape(Trans_e1, grad_shape_phys_e);
-         grad_shape_phys_e.AddMult(d_q, shape_e);
+         shift_shape(*e->ParFESpace(), *p_e1->ParFESpace(),
+                     Trans_e1.ElementNo, ip_e1, d_q, num_taylor, shape_e);
          shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                     diffusion_scale * grad_v_avg * p_gradp_jump;
          Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
@@ -1136,9 +1262,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          // 2nd element.
          if (local_face)
          {
-            el_2.CalcShape(ip_e2, shape_e);
-            el_2.CalcPhysDShape(Trans_e2, grad_shape_phys_e);
-            grad_shape_phys_e.AddMult(d_q, shape_e);
+            shift_shape(*e->ParFESpace(), *p_e1->ParFESpace(),
+                        Trans_e2.ElementNo, ip_e2, d_q, num_taylor, shape_e);
             shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                        diffusion_scale * grad_v_avg * p_gradp_jump;
             Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);

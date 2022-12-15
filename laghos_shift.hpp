@@ -61,6 +61,8 @@ struct SIOptions
    int distance_type = 0;
    int num_lap = 7;
 
+   int num_taylor = 1;
+
    int v_shift_type = 0;
    double v_shift_scale = 1.0;
    bool v_shift_diffusion = false;
@@ -136,6 +138,7 @@ private:
    VectorCoefficient &dist;
 
 public:
+   int    num_taylor = 1;
    int    v_shift_type = 0;
    double v_shift_scale = 1.0;
 
@@ -168,6 +171,7 @@ private:
    VectorCoefficient &dist;
 
 public:
+   int num_taylor = 1;
    int e_shift_type = 0;
    bool diffusion = false;
    bool problem_visc = false;

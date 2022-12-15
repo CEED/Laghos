@@ -379,6 +379,8 @@ int main(int argc, char *argv[])
    // Type of distance solver: 0 is p-lap, 1 is normalization.
    si_options.distance_type = 0;
    si_options.num_lap       = 7;
+   // Number of terms in the Taylor expansion (1 is 1st derivative only).
+   si_options.num_taylor = 1;
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >
