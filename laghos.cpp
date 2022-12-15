@@ -358,7 +358,7 @@ int main(int argc, char *argv[])
   if (impose_visc) { visc = true; }
 
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-					       H1FESpace, L2FESpace, P_L2FESpace, ess_tdofs,
+					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace, ess_tdofs,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
 					       visc, vorticity,

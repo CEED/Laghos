@@ -157,8 +157,7 @@ namespace mfem
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
-		  loc_force(i, vd) += qdata.weightedNormalStress(eq,vd) * te_shape(i);
-		  //	  loc_force(i, vd) += weightedNormalStress(vd) * te_shape(i);
+		  loc_force(i, vd) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
 		}
 	    }
 	  trial_fe.CalcShape(eip, tr_shape);

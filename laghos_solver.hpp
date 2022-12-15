@@ -41,7 +41,7 @@ namespace mfem
     class LagrangianHydroOperator : public TimeDependentOperator
     {
     protected:
-      ParFiniteElementSpace &H1, &L2, &P_L2;
+      ParFiniteElementSpace &H1, &L2, &P_L2, &PFace_L2;
       mutable ParFiniteElementSpace H1c;
       ParMesh *pmesh;
       // FE spaces local and global sizes
@@ -83,7 +83,8 @@ namespace mfem
       // These values are recomputed at each time step.
       const int Q1D;
       mutable QuadratureData qdata;
-      mutable FaceQuadratureData f_qdata; 
+      mutable FaceQuadratureData f_qdata;
+      mutable QuadratureDataGL gl_qdata; 
       mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final
@@ -106,6 +107,7 @@ namespace mfem
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
 			      ParFiniteElementSpace &p_l2_fes,
+			      ParFiniteElementSpace &pface_l2_fes,
 			      const Array<int> &ess_tdofs,
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,

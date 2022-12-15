@@ -85,6 +85,7 @@ namespace mfem
 						     ParFiniteElementSpace &h1,
 						     ParFiniteElementSpace &l2,
 						     ParFiniteElementSpace &p_l2_fes,
+						     ParFiniteElementSpace &pface_l2_fes,
 						     const Array<int> &ess_tdofs,
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
@@ -108,7 +109,7 @@ namespace mfem
 						     const double penaltyParameter,
 						     const double nitscheVersion) :
       TimeDependentOperator(size),
-      H1(h1), L2(l2), P_L2(p_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+      H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       pmesh(H1.GetParMesh()),
       H1Vsize(H1.GetVSize()),
       L2Vsize(L2.GetVSize()),
@@ -140,10 +141,11 @@ namespace mfem
       FaceIntRules(0, Quadrature1D::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-      b_ir(IntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
+      b_ir(FaceIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(dim, NE, ir.GetNPoints()),
       f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
+      gl_qdata(dim, NE, PFace_L2.GetFE(0)->GetNodes().GetNPoints()),
       qdata_is_current(false),
       forcemat_is_assembled(false),
       bv_qdata_is_current(false),
@@ -211,6 +213,22 @@ namespace mfem
 	    }
 	}
 
+      for (int e = 0; e < NE; e++)
+	{
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = PFace_L2.GetFE(e)->GetNodes();
+	  const int gl_nqp = ir.GetNPoints();
+
+	  ElementTransformation &Tr = *PFace_L2.GetElementTransformation(e);
+	  for (int q = 0; q < gl_nqp; q++)
+	    {
+	      const IntegrationPoint &ip = b_ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
+	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0;
+	    }
+	}
+
       const int nqp_face = b_ir.GetNPoints();
       for (int i = 0; i < L2.GetNBE(); i++)
 	{
@@ -256,7 +274,7 @@ namespace mfem
       Force.Assemble(0);
       Force.Finalize(0);
 
-      VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(f_qdata, pface_gf);
+      VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
 
@@ -321,9 +339,9 @@ namespace mfem
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       //Compute quadrature quantities
-      UpdateFaceDensity(b_ir, f_qdata.rho0DetJ0, rhoface_gf);
-      UpdateFacePressure(b_ir, gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateFaceSoundSpeed(b_ir, gamma_gf, e_gf, csface_gf);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
 
       UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);
@@ -393,9 +411,9 @@ namespace mfem
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       //Compute quadrature quantities
-      UpdateFaceDensity(b_ir, f_qdata.rho0DetJ0, rhoface_gf);
-      UpdateFacePressure(b_ir, gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateFaceSoundSpeed(b_ir, gamma_gf, e_gf, csface_gf);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
 
       UpdateQuadratureData(S);
       UpdateSurfaceNormalStressData(S);

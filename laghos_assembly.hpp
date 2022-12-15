@@ -69,10 +69,11 @@ namespace mfem
     class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
     {
     private:
-      const FaceQuadratureData &qdata;
+      //      const FaceQuadratureData &qdata;
+      const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
     public:
-      VelocityBoundaryForceIntegrator(FaceQuadratureData &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
+      VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
       virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
 				      const FiniteElement &test_fe1,
 				      FaceElementTransformations &Tr,
