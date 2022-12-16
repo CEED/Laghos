@@ -53,12 +53,11 @@ namespace mfem
 	  rho0DetJ0(NE * quads_per_el){ /*std::cout << " NE " << NE << " size " << p_gf.Size() << " quad point " << p_gf.ParFESpace()->GetFE(0)->GetNodes().GetNPoints() << " quad pe el " << quads_per_el << std::endl;*/}
     };
 
-    // Container for all data needed at quadrature points.
-    struct FaceQuadratureData
-    {
-      // evaluation of the norma stress at the face quadrature points
-      DenseMatrix weightedNormalStress;
 
+     // Container for all data needed at quadrature points.
+    struct QuadratureDataGL
+    {
+      
       // Scaling of the penalty term evaluated at the face quadrature points:
       // tau * (c_s * (rho + mu / h) + rho * vorticity * h)
       // tau: user-defined non-dimensional constant 
@@ -68,32 +67,18 @@ namespace mfem
       // vorticity: max. vorticity over all boundary faces/edges
       double normalVelocityPenaltyScaling;
 
+      // Quadrature data used for full/partial assembly of the mass matrices.
+      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
+      // quadrature point. Note the at any other time, we can compute
+      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
+      // conservation. This variable is not scaled with the weights at the integration points.
+      Vector rho0DetJ0;
+
       // Reference to physical Jacobian for the initial mesh.
       // These are computed only at time zero and stored here.
       DenseTensor Jac0inv;
 
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation. This variable is not scaled with the weights at the integration points.
-      Vector rho0DetJ0;
-
-      FaceQuadratureData(int dim, int NE, int quads_per_faceel) : weightedNormalStress(NE * quads_per_faceel, dim),normalVelocityPenaltyScaling(0.0), rho0DetJ0(NE * quads_per_faceel), Jac0inv(dim, dim, NE * quads_per_faceel) { }
-    };
-
-     // Container for all data needed at quadrature points.
-    struct QuadratureDataGL
-    {
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation. This variable is not scaled with the weights at the integration points.
-      Vector rho0DetJ0;
-
-      QuadratureDataGL(int dim, int NE, int quads_per_faceel) :  rho0DetJ0(NE * quads_per_faceel) { }
+      QuadratureDataGL(int dim, int NE, int quads_per_faceel) :  rho0DetJ0(NE * quads_per_faceel), normalVelocityPenaltyScaling(0.0), Jac0inv(dim, dim, NE * quads_per_faceel) { }
     };
    
     void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf);

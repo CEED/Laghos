@@ -96,7 +96,6 @@ namespace mfem
     
     void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
     {
-      // std::cout << " inininin " << std::endl;
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
       // Compute L2 pressure at the quadrature points, element by element.

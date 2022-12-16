@@ -202,7 +202,8 @@ int main(int argc, char *argv[])
 
   // Refine the mesh further in parallel to increase the resolution.
   for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
-
+  pmesh->ExchangeFaceNbrNodes();
+    
   int NE = pmesh->GetNE(), ne_min, ne_max;
   MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
   MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
@@ -285,7 +286,10 @@ int main(int argc, char *argv[])
 
   // Initialize x_gf using the starting mesh coordinates.
   pmesh->SetNodalGridFunction(&x_gf);
-
+  x_gf.ExchangeFaceNbrData();
+  v_gf.ExchangeFaceNbrData();
+  e_gf.ExchangeFaceNbrData();
+  
   // Initialize the velocity.
   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
   v_gf.ProjectCoefficient(v_coeff);

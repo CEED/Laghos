@@ -144,7 +144,6 @@ namespace mfem
       b_ir(FaceIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(dim, NE, ir.GetNPoints()),
-      f_qdata(dim, H1.GetNBE(), b_ir.GetNPoints()),
       gl_qdata(dim, NE, PFace_L2.GetFE(0)->GetNodes().GetNPoints()),
       qdata_is_current(false),
       forcemat_is_assembled(false),
@@ -168,7 +167,7 @@ namespace mfem
       block_offsets[2] = block_offsets[1] + H1Vsize;
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
-
+      
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
@@ -188,7 +187,6 @@ namespace mfem
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
 
-      
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
       // Initial local mesh size (assumes all mesh elements are the same).
       int Ne, ne = NE;
@@ -212,48 +210,27 @@ namespace mfem
 	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
 	    }
 	}
-
       for (int e = 0; e < NE; e++)
 	{
 	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = PFace_L2.GetFE(e)->GetNodes();
-	  const int gl_nqp = ir.GetNPoints();
-
+	  const IntegrationRule &ir_p = PFace_L2.GetFE(e)->GetNodes();
+	  const int gl_nqp = ir_p.GetNPoints();
+	  //  std::cout << " gl_q " << gl_nqp << std::endl;
 	  ElementTransformation &Tr = *PFace_L2.GetElementTransformation(e);
 	  for (int q = 0; q < gl_nqp; q++)
 	    {
-	      const IntegrationPoint &ip = b_ir.IntPoint(q);
+	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
+	      //	      std::cout << " x " << ip.x << " y " << ip.y << " z " << ip.z << std::endl;
+	      DenseMatrixInverse Jinv(Tr.Jacobian());
+	      Jinv.GetInverseMatrix(gl_qdata.Jac0inv(e * gl_nqp + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0;
 	    }
 	}
-
-      const int nqp_face = b_ir.GetNPoints();
-      for (int i = 0; i < L2.GetNBE(); i++)
-	{
-	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
-	  const int faceElemNo = eltrans->ElementNo;
-	  
-	  for (int q = 0; q < nqp_face; q++)
-	    {
-	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-	      // Compute el1 quantities.
-	      // Set the integration point in the face and the neighboring elements
-	      eltrans->SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	      Trans_el1.SetIntPoint(&eip);
-	      DenseMatrixInverse Jinv(Trans_el1.Jacobian());
-	      Jinv.GetInverseMatrix(f_qdata.Jac0inv(faceElemNo*nqp_face+q));	      
-	      double rho_vals = rho0_gf.GetValue(Trans_el1, eip);
-	      const double rho0DetJ0 = Trans_el1.Weight() * rho_vals;
-	      f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) = rho0DetJ0;
-	    }
-	}
-
+      
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
-
+      
       MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
       MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
       switch (pmesh->GetElementBaseGeometry(0))
@@ -282,18 +259,18 @@ namespace mfem
       VelocityBoundaryForce.Assemble(0);
       VelocityBoundaryForce.Finalize(0);
 
-      EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(f_qdata);
+      EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);
-
+    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble(0);
       EnergyBoundaryForce.Finalize(0);
 
-      NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(f_qdata);
+      NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(gl_qdata);
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
-
+    
     }
 
     LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -338,13 +315,20 @@ namespace mfem
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      rho_gf.ExchangeFaceNbrData();
+      p_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();
+ 
       //Compute quadrature quantities
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-
+      rhoface_gf.ExchangeFaceNbrData();
+      pface_gf.ExchangeFaceNbrData();
+      csface_gf.ExchangeFaceNbrData();
+ 
       UpdateQuadratureData(S);
-      UpdateSurfaceNormalStressData(S);
+      UpdateQuadratureDataGL(S);
 
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
@@ -410,13 +394,20 @@ namespace mfem
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      rho_gf.ExchangeFaceNbrData();
+      p_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();
+ 
       //Compute quadrature quantities
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-
+      rhoface_gf.ExchangeFaceNbrData();
+      pface_gf.ExchangeFaceNbrData();
+      csface_gf.ExchangeFaceNbrData();
+ 
       UpdateQuadratureData(S);
-      UpdateSurfaceNormalStressData(S);
+      UpdateQuadratureDataGL(S);
  
       AssembleForceMatrix();
       AssembleEnergyBoundaryForceMatrix();
@@ -705,24 +696,18 @@ namespace mfem
       delete [] Jpr_b;
     }
 
-    void LagrangianHydroOperator::UpdateSurfaceNormalStressData(const Vector &S) const
+    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
     {
       if (bv_qdata_is_current) { return; }
       bv_qdata_is_current = true;
       bv_forcemat_is_assembled = false;
-
+    
       // This code is only for the 1D/FA mode
-      const int nqp_face = b_ir.GetNPoints();
       ParGridFunction x, v, e;
       Vector* sptr = const_cast<Vector*>(&S);
       x.MakeRef(&H1, *sptr, 0);
       v.MakeRef(&H1, *sptr, H1.GetVSize());
       e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-      Vector weightedNormalStress;
-      DenseMatrix stress(dim);
-      weightedNormalStress.SetSize(dim);
-      weightedNormalStress = 0.0;
-
       // compute the maximum vorticity, density (rho), artificial viscosity (mu), and sound speed
       // over all faces/edges of the domain.
       double max_vorticity = 0.0;
@@ -731,26 +716,23 @@ namespace mfem
       double max_mu = 0.0;
       double min_h = 10000.0;
       double max_h = 0.0;
-    
-      for (int i = 0; i < L2.GetNBE(); i++)
+
+      for (int i = 0; i < NE; i++)
 	{
-	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
-	  const int faceElemNo = eltrans->ElementNo;
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
+	  const int gl_nqp = ir_p.GetNPoints();
 
-	  for (int q = 0; q  < nqp_face; q++)
+	  ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
+	  for (int q = 0; q < gl_nqp; q++)
 	    {
-	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-	      // Compute el1 quantities.
-	      // Set the integration point in the face and the neighboring elements
-	      eltrans->SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	      Trans_el1.SetIntPoint(&eip);
-	      const double detJ = (Trans_el1.Jacobian()).Det();
+	      const IntegrationPoint &ip = ir_p.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      const double detJ = (Tr.Jacobian()).Det();
 
-	      double rho_vals = f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) / detJ;
-	      double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
-	      double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
+	      double rho_vals = gl_qdata.rho0DetJ0(i*gl_nqp+q) / detJ;
+	      double gamma_vals = gamma_gf.GetValue(Tr, ip);
+	      double e_vals = fmax(0.0,e.GetValue(Tr, ip));
 	      double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
 	      if ( max_rho < rho_vals){
 		max_rho = rho_vals;
@@ -765,7 +747,7 @@ namespace mfem
 		  // eigenvector of the symmetric velocity lgradient gives the
 		  // direction of maximal compression. This is used to define the
 		  // relative change of the initial length scale.
-		  v.GetVectorGradient(Trans_el1, sgrad_v);
+		  v.GetVectorGradient(Tr, sgrad_v);
 
 		  double vorticity_coeff = 1.0;
 		  if (use_vorticity)
@@ -788,7 +770,7 @@ namespace mfem
 		    }
 		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
 		  Vector compr_dir(eig_vec_data, dim);
-		  mfem::Mult(Trans_el1.Jacobian(), f_qdata.Jac0inv(faceElemNo*nqp_face + q), Jpi);
+		  mfem::Mult(Tr.Jacobian(), gl_qdata.Jac0inv(i*gl_nqp + q), Jpi);
 		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 		  // Change of the initial mesh size in the compression direction.
 		  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
@@ -823,74 +805,17 @@ namespace mfem
       MPI_Allreduce(&min_h, &global_min_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
       MPI_Allreduce(&max_h, &global_max_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-      f_qdata.normalVelocityPenaltyScaling = penaltyParameter * global_max_rho * global_max_sound_speed;
+      gl_qdata.normalVelocityPenaltyScaling = penaltyParameter * global_max_rho * global_max_sound_speed;
       if (use_viscosity)
 	{
-	  f_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_mu * (1.0 / global_min_h) /*nor_norm / eltrans->Elem1->Weight()*/;
+	  gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_mu * (1.0 / global_min_h);
 	  
 	  if (use_vorticity)
 	    {
-	      f_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h /*eltrans->Elem1->Weight() / nor_norm*/;
+	      gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
 	    }
 	}
 
-      // compute normal stress at each quadrature point on all the boundary faces and
-      // store it in f_qdata.weightedNormalStress
-      // compute the penalty scaling and store it in f_qdata.normalVelocityPenaltyScaling.
-      // expression of the penalty is defined in the FaceQuadratureData in laghos_solver.hpp
-      for (int i = 0; i < L2.GetNBE(); i++)
-	{
-	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
-	  const int faceElemNo = eltrans->ElementNo;
-       
-	  for (int q = 0; q  < nqp_face; q++)
-	    {
-	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-	      // Compute el1 quantities.
-	      // Set the integration point in the face and the neighboring elements
-	      eltrans->SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip = eltrans->GetElement1IntPoint();
-	  
-	      Vector nor;
-	      nor.SetSize(dim);
-	      nor = 0.0;
-	   
-	      if (dim == 1)
-		{
-		  nor(0) = 2*eip.x - 1.0;
-		}
-	      else
-		{
-		  CalcOrtho(eltrans->Jacobian(), nor);
-		}
-
-	      double nor_norm = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nor_norm += nor(s) * nor(s);
-	      }
-	      nor_norm = sqrt(nor_norm);
-	   
-	      ElementTransformation &Trans_el1 = eltrans->GetElement1Transformation();
-	      Trans_el1.SetIntPoint(&eip);
-	      const double detJ = (Trans_el1.Jacobian()).Det();
-
-	      double rho_vals = f_qdata.rho0DetJ0(faceElemNo*nqp_face+q) / detJ;
-	      double gamma_vals = gamma_gf.GetValue(Trans_el1, eip);
-	      double e_vals = fmax(0.0,e.GetValue(Trans_el1, eip));
-
-	      stress = 0.0;
-	   
-	      double p = (gamma_vals - 1) * rho_vals * e_vals; 
-	      for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-
-	      // Quadrature data for partial assembly of the force operator.
-	      stress.Mult( nor, weightedNormalStress);
-	      for (int vd = 0 ; vd < dim; vd++)
-		{
-		  f_qdata.weightedNormalStress(faceElemNo*nqp_face + q, vd) = weightedNormalStress(vd) * ip_f.weight;
-		}
-	    }
-	}
     }
 
     void LagrangianHydroOperator::AssembleForceMatrix() const

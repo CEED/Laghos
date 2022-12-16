@@ -190,6 +190,9 @@ namespace mfem
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  Trans_el1.SetIntPoint(&eip);
+
 	  Vector nor;
 	  nor.SetSize(dim);
 	  nor = 0.0;
@@ -203,10 +206,22 @@ namespace mfem
 	    }        
 	  test_fe1.CalcShape(eip, te_shape);
 	  loc_force = 0.0;
+	  double pressure = pface_gf.GetValue(Trans_el1,eip);
+	  DenseMatrix stress(dim);
+	  stress = 0.0;
+	  ComputeStress(pressure,dim,stress);
+
+	  // evaluation of the normal stress at the face quadrature points
+	  Vector weightedNormalStress(dim);
+	  weightedNormalStress = 0.0;
+	  
+	  // Quadrature data for partial assembly of the force operator.
+	  stress.Mult( nor, weightedNormalStress);
+
 	  double normalStressProjNormal = 0.0;
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
-	    normalStressProjNormal += qdata.weightedNormalStress(eq,s) * nor(s);
+	    normalStressProjNormal += weightedNormalStress(s) * nor(s);
 	    nor_norm += nor(s) * nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
@@ -216,7 +231,7 @@ namespace mfem
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
-		  loc_force(i, vd) += normalStressProjNormal * te_shape(i) * nor(vd)/nor_norm;
+		  loc_force(i, vd) += normalStressProjNormal * te_shape(i) * ip_f.weight * nor(vd)/nor_norm;
 		}
 	    }
 	  trial_fe.CalcShape(eip, tr_shape);

@@ -83,7 +83,6 @@ namespace mfem
       // These values are recomputed at each time step.
       const int Q1D;
       mutable QuadratureData qdata;
-      mutable FaceQuadratureData f_qdata;
       mutable QuadratureDataGL gl_qdata; 
       mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
@@ -97,7 +96,7 @@ namespace mfem
       const double nitscheVersion;
 
       void UpdateQuadratureData(const Vector &S) const;
-      void UpdateSurfaceNormalStressData(const Vector &S) const;
+      void UpdateQuadratureDataGL(const Vector &S) const;
       void AssembleForceMatrix() const;
       void AssembleVelocityBoundaryForceMatrix() const;
       void AssembleEnergyBoundaryForceMatrix() const;
