@@ -215,13 +215,11 @@ namespace mfem
 	  // The points (and their numbering) coincide with the nodes of p.
 	  const IntegrationRule &ir_p = PFace_L2.GetFE(e)->GetNodes();
 	  const int gl_nqp = ir_p.GetNPoints();
-	  //  std::cout << " gl_q " << gl_nqp << std::endl;
 	  ElementTransformation &Tr = *PFace_L2.GetElementTransformation(e);
 	  for (int q = 0; q < gl_nqp; q++)
 	    {
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      //	      std::cout << " x " << ip.x << " y " << ip.y << " z " << ip.z << std::endl;
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(gl_qdata.Jac0inv(e * gl_nqp + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
