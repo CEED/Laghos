@@ -69,7 +69,7 @@ namespace mfem
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
       
-      IntegrationRules FaceIntRules;
+      IntegrationRules GLIntRules;
       
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
