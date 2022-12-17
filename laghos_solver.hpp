@@ -65,7 +65,7 @@ protected:
    DenseTensor Me_1, Me_2, Me_1_inv, Me_2_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
-   const IntegrationRule *cfir;
+   const IntegrationRule &ir_face;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
@@ -115,6 +115,7 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho_mixed_coeff,
                            VectorCoefficient &dist_coeff,
+                           const IntegrationRule &face_ir,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort,

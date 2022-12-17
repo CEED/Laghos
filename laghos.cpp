@@ -525,6 +525,11 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   // Face integration rule.
+   FaceElementTransformations *ftr = pmesh->GetFaceElementTransformations(0);
+   const IntegrationRule &face_ir =
+      IntRules.Get(ftr->GetGeometryType(), order_v + order_e + ftr->OrderW());
+
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
                &mat_data, si_options.pointwise_alpha);
    mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
@@ -538,7 +543,8 @@ int main(int argc, char *argv[])
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho_mixed_coeff,
-                                                dist_coeff, source, cfl,
+                                                dist_coeff, face_ir,
+                                                source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q,

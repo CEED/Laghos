@@ -114,6 +114,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho_mixed_coeff,
                                                  VectorCoefficient &dist_coeff,
+                                                 const IntegrationRule &face_ir,
                                                  const int source,
                                                  const double cfl,
                                                  const bool visc,
@@ -145,7 +146,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_1_inv(l2dofs_cnt, l2dofs_cnt, NE), Me_2_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-   cfir(NULL),
+   ir_face(face_ir),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -267,28 +268,23 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Shifted interface setup.
    //
 
-   // Quadrature rule.
-   FaceElementTransformations *tr = pmesh->GetFaceElementTransformations(0);
-   cfir = &IntRules.Get(tr->GetGeometryType(),
-                        H1.GetOrder(0) + L2.GetOrder(0) + tr->OrderW());
-
    // Interface forces.
    auto *ffi = new FaceForceIntegrator(mat_data, dist_coeff);
-   ffi->SetIntRule(cfir);
+   ffi->SetIntRule(&ir_face);
    ffi->SetShiftType(si_options.v_shift_type);
    ffi->SetScale(si_options.v_shift_scale);
    //FaceForce.AddTraceFaceIntegrator(ffi);
    FaceForce.AddFaceIntegrator(ffi);
 
    auto *mfi = new MomentumInterfaceIntegrator(mat_data, dist_coeff);
-   mfi->SetIntRule(cfir);
+   mfi->SetIntRule(&ir_face);
    mfi->num_taylor    = si_options.num_taylor;
    mfi->v_shift_type  = si_options.v_shift_type;
    mfi->v_shift_scale = si_options.v_shift_scale;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
 
    auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, qdata, dist_coeff);
-   efi_1->SetIntRule(cfir);
+   efi_1->SetIntRule(&ir_face);
    efi_1->num_taylor      = si_options.num_taylor;
    efi_1->e_shift_type    = si_options.e_shift_type;
    efi_1->diffusion       = si_options.e_shift_diffusion;
@@ -297,7 +293,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
 
    auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, qdata, dist_coeff);
-   efi_2->SetIntRule(cfir);
+   efi_2->SetIntRule(&ir_face);
    efi_2->num_taylor      = si_options.num_taylor;
    efi_2->e_shift_type    = si_options.e_shift_type;
    efi_2->diffusion       = si_options.e_shift_diffusion;
