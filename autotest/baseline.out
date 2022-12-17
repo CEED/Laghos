@@ -62,13 +62,13 @@ mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4
 init dist norm: 0.196333510219
 Material marker: 14.950000000000
 Face marker:     0.128190114295
-alpha norm: 0.525754175691
-v norm:     0.080147610143
+alpha norm: 0.526219485571
+v norm:     0.080847690251
 rho1 norm:  0.505000000000
 rho2 norm:  0.061875000000
-e1 norm:    1.019242512160
-e2 norm:    1.011809307354
-dist norm:  0.196009865596
+e1 norm:    1.019652325572
+e2 norm:    1.012374598776
+dist norm:  0.196097802509
 
 mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4
 init dist norm: 0
@@ -98,13 +98,13 @@ mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4
 init dist norm: 0.240829852107
 Material marker: 12.950000000000
 Face marker:     0.128190114295
-alpha norm: 0.75250377
-v norm:     127.55557568
+alpha norm: 0.75266861
+v norm:     127.92204728
 rho1 norm:  705.00000000
 rho2 norm:  14.75000000
-e1 norm:    784584.12870971
-e2 norm:    7646.61754044
-dist norm:  0.26315952
+e1 norm:    784733.01578738
+e2 norm:    7238.88663765
+dist norm:  0.26325145
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 1 -rs 1
 init dist norm: 0
@@ -134,13 +134,13 @@ mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -
 init dist norm: 64.7418661092
 Material marker: 382.500000000000
 Face marker:     24.500552674274
-alpha norm: 3.755890347079
-v norm:     0.506537543605
+alpha norm: 3.756349737580
+v norm:     0.513750769111
 rho1 norm:  3.750000000000
 rho2 norm:  9.703125000000
-e1 norm:    8.776507779986
-e2 norm:    20.271704753619
-dist norm:  64.716011681413
+e1 norm:    8.777893185859
+e2 norm:    20.272027837468
+dist norm:  64.710481130432
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -ale 0.5
 init dist norm: 0
@@ -159,10 +159,10 @@ init dist norm: 64.7418661092
 Material marker: 382.500000000000
 Face marker:     24.500552674274
 alpha norm: 3.750000000000
-v norm:     1.098454202517
-rho1 norm:  3.100811168357
-rho2 norm:  9.411340454520
-e1 norm:    8.488624535968
-e2 norm:    20.438147501549
-dist norm:  63.916860284611
+v norm:     1.125839377341
+rho1 norm:  3.101202180359
+rho2 norm:  9.411497206308
+e1 norm:    8.502746831851
+e2 norm:    20.440922521464
+dist norm:  63.846830025107
 

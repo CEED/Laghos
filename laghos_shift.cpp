@@ -36,7 +36,8 @@ void shift_shape(const ParFiniteElementSpace &pfes_e_const,
       (e_id < NE) ? *pfes_e->GetFE(e_id) : *pfes_e->GetFaceNbrFE(e_id - NE);
    const FiniteElement &el_p =
       (e_id < NE) ? *pfes_p.GetFE(e_id) : *pfes_p.GetFaceNbrFE(e_id - NE);
-   const int dim = pfes_e->GetMesh()->Dimension(), dof = el_e.GetDof();
+   const int dim = pfes_e->GetMesh()->Dimension(),
+             dof_e = el_e.GetDof(), dof_p = el_p.GetDof();
 
    IsoparametricTransformation el_tr;
    if (e_id < NE)
@@ -52,11 +53,11 @@ void shift_shape(const ParFiniteElementSpace &pfes_e_const,
    el_p.Project(el_e, el_tr, Transfer_pe);
    el_p.ProjectGrad(el_p, el_tr, grad_phys);
 
-   Vector s(dim*dof), t(dof);
-   for (int j = 0; j < dof; j++)
+   Vector s(dim*dof_p), t(dof_p);
+   for (int j = 0; j < dof_e; j++)
    {
       // Shape function transformed into the p space.
-      Vector u_shape_e(dof), u_shape_p(dof);
+      Vector u_shape_e(dof_e), u_shape_p(dof_p);
       u_shape_e = 0.0;
       u_shape_e(j) = 1.0;
       Transfer_pe.Mult(u_shape_e, u_shape_p);
@@ -67,19 +68,19 @@ void shift_shape(const ParFiniteElementSpace &pfes_e_const,
       {
          factorial = factorial*i;
          grad_phys.Mult(t, s);
-         for (int j = 0; j < dof; j++)
+         for (int j = 0; j < dof_p; j++)
          {
             t(j) = 0.0;
             for(int d = 0; d < dim; d++)
             {
-               t(j) = t(j) + s(j + d * dof) * dist(d);
+               t(j) = t(j) + s(j + d * dof_p) * dist(d);
             }
          }
          u_shape_p.Add(1.0/double(factorial), t);
       }
 
       el_tr.SetIntPoint(&ip);
-      el_e.CalcPhysShape(el_tr, t);
+      el_p.CalcPhysShape(el_tr, t);
       shape_shift(j) = t * u_shape_p;
    }
 }
