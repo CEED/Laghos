@@ -125,6 +125,11 @@ namespace mfem
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
       nitscheVersion(nitscheVersion),
+      fi(NULL),
+      efi(NULL),
+      v_bfi(NULL),
+      e_bfi(NULL),
+      nvmi(NULL),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
       rhoface_gf(rhoface_gf),
@@ -143,17 +148,19 @@ namespace mfem
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       b_ir(GLIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-      qdata(dim, NE, ir.GetNPoints()),
+      qdata(dim, NE, P_L2.GetFE(0)->GetNodes().GetNPoints()),
       gl_qdata(dim, NE, PFace_L2.GetFE(0)->GetNodes().GetNPoints()),
       qdata_is_current(false),
       forcemat_is_assembled(false),
+      energyforcemat_is_assembled(false),
       bv_qdata_is_current(false),
       be_qdata_is_current(false),
       bv_forcemat_is_assembled(false),
       be_forcemat_is_assembled(false),
-      Force(&L2, &H1),
-      VelocityBoundaryForce(&L2, &H1),
-      EnergyBoundaryForce(&L2, &H1),
+      Force(&H1),
+      EnergyForce(&L2),
+      VelocityBoundaryForce(&H1),
+      EnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
       B(H1c.GetTrueVSize()),
       one(L2Vsize),
@@ -242,36 +249,39 @@ namespace mfem
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
 
-      ForceIntegrator *fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi);
       // Make a dummy assembly to figure out the sparsity.
-      Force.Assemble(0);
-      Force.Finalize(0);
+      Force.Assemble();
 
-      VelocityBoundaryForceIntegrator *v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
+      efi = new EnergyForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      efi->SetIntRule(&ir);
+      EnergyForce.AddDomainIntegrator(efi);
+      // Make a dummy assembly to figure out the sparsity.
+      EnergyForce.Assemble();
+      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
 
       // Make a dummy assembly to figure out the sparsity.
-      VelocityBoundaryForce.Assemble(0);
-      VelocityBoundaryForce.Finalize(0);
+      VelocityBoundaryForce.Assemble();
 
-      EnergyBoundaryForceIntegrator *e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf);
+      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);
     
       // Make a dummy assembly to figure out the sparsity.
-      EnergyBoundaryForce.Assemble(0);
-      EnergyBoundaryForce.Finalize(0);
+      EnergyBoundaryForce.Assemble();
 
-      NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(gl_qdata);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata);
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
-    
+
     }
 
-    LagrangianHydroOperator::~LagrangianHydroOperator() { }
+    LagrangianHydroOperator::~LagrangianHydroOperator() {
+    }
 
     void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt, const Vector &S_init) const
     {
@@ -345,23 +355,11 @@ namespace mfem
 	  accel_src_gf.ProjectCoefficient(accel_coeff);
 	  accel_src_gf.Read();
 	}
-      Array<int> l2dofs;
-      Force.Mult(one, rhs);
-      rhs.Neg();
-      // populate a vector of ones only at the boundary dofs.
-      Vector loc_one(L2Vsize);
-      loc_one = 0.0;
-      for (int i = 0; i < L2.GetNBE(); i++)
-	{
-	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
-	  L2.GetElementDofs(eltrans->Elem1No, l2dofs);
-	  for (int s = 0; s < l2dofs.Size(); s++){
-	    loc_one(l2dofs[s]) = 1.0;
-	  }
-	}
-      VelocityBoundaryForce.Mult(loc_one,b_rhs);
-      rhs += b_rhs;
-  		      
+
+      rhs = 0.0;
+      rhs += Force;
+      rhs += VelocityBoundaryForce;
+      
       if (source_type == 2)
 	{
 	  Vector rhs_accel(rhs.Size());
@@ -406,10 +404,19 @@ namespace mfem
  
       UpdateQuadratureData(S);
       UpdateQuadratureDataGL(S);
- 
-      AssembleForceMatrix();
+
+      // Updated Velocity, needed for the energy solve
+      Vector* sptr = const_cast<Vector*>(&v);
+      ParGridFunction v_updated;
+      v_updated.MakeRef(&H1, *sptr, 0);
+      
+      efi->SetVelocityGridFunctionAtNewState(&v_updated);
+      AssembleEnergyForceMatrix();
+      
+      e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
- 
+
+
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
       ParGridFunction de;
@@ -428,24 +435,10 @@ namespace mfem
 	}
 
       Array<int> h1dofs;
-   
-      Force.MultTranspose(v, e_rhs);
-      // populate the velocity values only at the boundary dofs.
-      Vector loc_v(H1Vsize);
-      loc_v = 0.0;
-      for (int i = 0; i < H1.GetNBE(); i++)
-	{
-	  FaceElementTransformations *eltrans = pmesh->GetBdrFaceTransformations(i);
-	  H1.GetElementVDofs(eltrans->Elem1No, h1dofs);
-	  for (int s = 0; s < h1dofs.Size(); s++){
-	    loc_v(h1dofs[s]) = v(h1dofs[s]);
-	  }
-	}
-   
-      EnergyBoundaryForce.MultTranspose(loc_v, be_rhs);
-      be_rhs *= nitscheVersion;
-      e_rhs += be_rhs;
-   
+      e_rhs = 0.0;
+      e_rhs += EnergyForce;
+      e_rhs += EnergyBoundaryForce; 
+     
       Array<int> l2dofs;
    
       if (e_source) { e_rhs += *e_source; }
@@ -541,6 +534,7 @@ namespace mfem
 
       qdata_is_current = true;
       forcemat_is_assembled = false;
+      energyforcemat_is_assembled = false;
 
       // This code is only for the 1D/FA mode
       const int nqp = ir.GetNPoints();
@@ -821,6 +815,13 @@ namespace mfem
       Force = 0.0;
       Force.Assemble();
       forcemat_is_assembled = true;
+    }
+
+    void LagrangianHydroOperator::AssembleEnergyForceMatrix() const
+    {
+      EnergyForce = 0.0;
+      EnergyForce.Assemble();
+      energyforcemat_is_assembled = true;
     }
 
     void LagrangianHydroOperator::AssembleVelocityBoundaryForceMatrix() const

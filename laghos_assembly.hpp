@@ -45,7 +45,7 @@ namespace mfem
     };
 
     // Performs full assembly for the force operator.
-    class ForceIntegrator : public BilinearFormIntegrator
+    class ForceIntegrator : public LinearFormIntegrator
     {
     private:
       const QuadratureData &qdata;
@@ -58,41 +58,74 @@ namespace mfem
       
     public:
       ForceIntegrator(QuadratureData &qdata, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity)  { }
-      virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
-					  const FiniteElement &test_fe,
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
-					  DenseMatrix &elmat);
+					  Vector &elvect);
     };
 
+    // Performs full assembly for the force operator.
+    class EnergyForceIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const QuadratureData &qdata;
+      const ParGridFunction &v_gf;
+      const ParGridFunction &e_gf;
+      const ParGridFunction &p_gf;
+      const ParGridFunction &cs_gf;
+      const bool use_viscosity;
+      const bool use_vorticity;
+      const ParGridFunction *Vnpt_gf;
+      
+    public:
+      EnergyForceIntegrator(QuadratureData &qdata, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL)  { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+    };
+
+    
     // Performs full assembly for the boundary force operator on the momentum equation.
     // < sigma_{ij} n_{j} , \psi_{i} > 
-    class VelocityBoundaryForceIntegrator : public BilinearFormIntegrator
+    class VelocityBoundaryForceIntegrator : public LinearFormIntegrator
     {
     private:
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
     public:
       VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
-      virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
-				      const FiniteElement &test_fe1,
-				      FaceElementTransformations &Tr,
-				      DenseMatrix &elmat);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
     };
 
     // Performs full assembly for the boundary force operator on the energy equation.
     // < sigma_{ij} n_{j} n_{i}, \phi * v.n > 
-    class EnergyBoundaryForceIntegrator : public BilinearFormIntegrator
+    class EnergyBoundaryForceIntegrator : public LinearFormIntegrator
     {
     private:
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
-
+      const ParGridFunction &v_gf;
+      const ParGridFunction *Vnpt_gf;
+      
     public:
-      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf) :  qdata(qdata), pface_gf(pface_gf) { }
-      virtual void AssembleFaceMatrix(const FiniteElement &trial_fe,
-				      const FiniteElement &test_fe1,
-				      FaceElementTransformations &Tr,
-				      DenseMatrix &elmat);
+      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf) :  qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL) { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+ 
     };
 
     // Performs full assembly for the normal velocity mass matrix operator.

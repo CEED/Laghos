@@ -84,20 +84,27 @@ namespace mfem
       const int Q1D;
       mutable QuadratureData qdata;
       mutable QuadratureDataGL gl_qdata; 
-      mutable bool qdata_is_current, forcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
+      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final
       // right-hand sides for momentum and specific internal energy.
-      mutable MixedBilinearForm Force;
-      mutable MixedBilinearForm VelocityBoundaryForce;
-      mutable MixedBilinearForm EnergyBoundaryForce;
+      mutable ParLinearForm Force;
+      mutable ParLinearForm EnergyForce;
+      mutable ParLinearForm VelocityBoundaryForce;
+      mutable ParLinearForm EnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
       const double nitscheVersion;
-
+      ForceIntegrator *fi;
+      EnergyForceIntegrator *efi;
+      VelocityBoundaryForceIntegrator *v_bfi;
+      EnergyBoundaryForceIntegrator *e_bfi;
+      NormalVelocityMassIntegrator *nvmi;
+      
       void UpdateQuadratureData(const Vector &S) const;
       void UpdateQuadratureDataGL(const Vector &S) const;
       void AssembleForceMatrix() const;
+      void AssembleEnergyForceMatrix() const;
       void AssembleVelocityBoundaryForceMatrix() const;
       void AssembleEnergyBoundaryForceMatrix() const;
 
