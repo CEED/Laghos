@@ -19,6 +19,7 @@
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 #include "laghos_solver.hpp"
+#include "sbm_aux.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -86,7 +87,6 @@ namespace mfem
 						     ParFiniteElementSpace &l2,
 						     ParFiniteElementSpace &p_l2_fes,
 						     ParFiniteElementSpace &pface_l2_fes,
-						     const Array<int> &ess_tdofs,
 						     Coefficient &rho0_coeff,
 						     ParGridFunction &rho0_gf,
 						     ParGridFunction &rho_gf,
@@ -107,7 +107,8 @@ namespace mfem
 						     double ftz,
 						     const int oq,
 						     const double penaltyParameter,
-						     const double nitscheVersion) :
+						     const double nitscheVersion,
+						     const bool useEmb, const int gS) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       pmesh(H1.GetParMesh()),
@@ -115,7 +116,6 @@ namespace mfem
       L2Vsize(L2.GetVSize()),
       block_offsets(4),
       x_gf(&H1),
-      ess_tdofs(ess_tdofs),
       dim(pmesh->Dimension()),
       NE(pmesh->GetNE()),
       l2dofs_cnt(L2.GetFE(0)->GetDof()),
@@ -125,11 +125,25 @@ namespace mfem
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
       nitscheVersion(nitscheVersion),
+      useEmbedded(useEmb),
+      geometricShape(gS),
+      ess_elem(pmesh->attributes.Max()),
       fi(NULL),
       efi(NULL),
       v_bfi(NULL),
       e_bfi(NULL),
       nvmi(NULL),
+      wall_dist_coef(NULL),
+      combo_dist_coef(NULL),
+      distance_vec_space(NULL),
+      distance(NULL),
+      normal_vec_space(NULL),
+      normal(NULL),
+      ls_func(NULL),
+      level_set_gf(NULL),
+      analyticalSurface(NULL),
+      dist_vec(NULL),
+      normal_vec(NULL),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
       rhoface_gf(rhoface_gf),
@@ -174,7 +188,43 @@ namespace mfem
       block_offsets[2] = block_offsets[1] + H1Vsize;
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
-      
+
+      if (useEmbedded){
+	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
+	mfem::ParFiniteElementSpace* lsfes = new mfem::ParFiniteElementSpace(pmesh,lsvec);
+	lsfes->ExchangeFaceNbrData();
+	// Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
+	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
+	Array<int> ess_vdofs;
+	level_set_gf = new ParGridFunction(lsfes);
+	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, 1);
+	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
+	combo_dist_coef = new Combo_Level_Set_Coefficient;
+	
+	level_set_gf->ProjectCoefficient(*wall_dist_coef);
+	// Exchange information for ghost elements i.e. elements that share a face
+	// with element on the current processor, but belong to another processor.
+	level_set_gf->ExchangeFaceNbrData();
+	// Setup the class to mark all elements based on whether they are located
+	// inside or outside the true domain, or intersected by the true boundary.
+	analyticalSurface->MarkElements(*level_set_gf);
+	combo_dist_coef->Add_Level_Set_Coefficient(*wall_dist_coef);
+	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
+	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
+	H1.MarkerToList(ess_vdofs, ess_tdofs);
+	//	if (useAnalyticalShape){
+	dist_vec = new Dist_Vector_Coefficient(dim, geometricShape);
+	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
+	//	}
+      }
+
+      const int max_elem_attr = pmesh->attributes.Max();
+      ess_elem.SetSize(max_elem_attr);
+      ess_elem = 1;
+      if (useEmbedded && (max_elem_attr >= 2)){
+	ess_elem[max_elem_attr-1] = 0;
+      }
+
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
@@ -190,7 +240,7 @@ namespace mfem
 	}
       // Standard assembly for the velocity mass matrix.
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-      Mv.AddDomainIntegrator(vmi);
+      Mv.AddDomainIntegrator(vmi, ess_elem);
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
 
@@ -251,13 +301,13 @@ namespace mfem
 
       fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
-      Force.AddDomainIntegrator(fi);
+      Force.AddDomainIntegrator(fi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble();
 
       efi = new EnergyForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       efi->SetIntRule(&ir);
-      EnergyForce.AddDomainIntegrator(efi);
+      EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
       v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
@@ -368,7 +418,6 @@ namespace mfem
 	}
    
       HypreParMatrix A;
-   
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1.GetParMesh()->GetComm());
       HypreSmoother prec;
@@ -416,7 +465,6 @@ namespace mfem
       e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
 
-
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
       ParGridFunction de;
@@ -424,14 +472,16 @@ namespace mfem
       de = 0.0;
 
       // Solve for energy, assemble the energy source if such exists.
-      LinearForm *e_source = nullptr;
+      ParLinearForm *e_source = nullptr;
+      Array<int> recastEssElem(ess_elem);
       if (source_type == 1) // 2D Taylor-Green.
 	{
-	  e_source = new LinearForm(&L2);
+	  e_source = new ParLinearForm(&L2);
 	  TaylorCoefficient coeff;
 	  DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
-	  e_source->AddDomainIntegrator(d);
+	  e_source->AddDomainIntegrator(d, recastEssElem);
 	  e_source->Assemble();
+	  e_source->ParallelAssemble();
 	}
 
       Array<int> h1dofs;

@@ -89,7 +89,9 @@ int main(int argc, char *argv[])
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
   double blast_position[] = {0.0, 0.0, 0.0};
-
+  bool useEmbedded = false;
+  int geometricShape = 0;
+ 
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -137,7 +139,12 @@ int main(int argc, char *argv[])
 		 "Value of the penalty parameter");
   args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
 		 "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
-
+  args.AddOption(&useEmbedded, "-emb", "--use-embedded", "-no-emb",
+		 "--no-embedded",
+		 "Use Embedded when there is surface that will be embedded in a pre-existing mesh");
+  args.AddOption(&geometricShape, "-gS", "--geometricShape",
+		 "Shape of the embedded geometry that will be embedded");
+  
   args.Parse();
   if (!args.Good())
     {
@@ -228,10 +235,6 @@ int main(int argc, char *argv[])
   L2_FECollection PFace_L2FEC((int)(quadRule_face), dim, BasisType::GaussLobatto);
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
 
-  // Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
-  // We need to define ess_tdofs and ess_vdofs, but they will be kept empty
-  Array<int> ess_tdofs, ess_vdofs;
-
   // Define the explicit ODE solver used for time integration.
   ODESolver *ode_solver = NULL;
   switch (ode_solver_type)
@@ -293,7 +296,6 @@ int main(int argc, char *argv[])
   // Initialize the velocity.
   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
   v_gf.ProjectCoefficient(v_coeff);
-  for (int i = 0; i < ess_vdofs.Size(); i++) { v_gf(ess_vdofs[i]) = 0.0; }
 
   // Initialize density and specific internal energy values. We interpolate in
   // a non-positive basis to get the correct values at the dofs. Then we do an
@@ -362,12 +364,12 @@ int main(int argc, char *argv[])
   if (impose_visc) { visc = true; }
 
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace, ess_tdofs,
+					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, nitscheVersion);
+					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

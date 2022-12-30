@@ -19,8 +19,13 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "dist_solver.hpp"
+#include "marking.hpp"
+
 
 #ifdef MFEM_USE_MPI
+class Dist_Level_Set_Coefficient;
+class Combo_Level_Set_Coefficient;
 
 namespace mfem
 {
@@ -50,7 +55,7 @@ namespace mfem
       Array<int> block_offsets;
       // Reference to the current mesh configuration.
       mutable ParGridFunction x_gf;
-      const Array<int> &ess_tdofs;
+      Array<int> ess_tdofs;
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
       const bool use_viscosity, use_vorticity;
@@ -95,12 +100,30 @@ namespace mfem
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
       const double nitscheVersion;
+      const bool useEmbedded;
+      const int geometricShape;
+      Array<int> ess_elem;
+
       ForceIntegrator *fi;
       EnergyForceIntegrator *efi;
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
-      
+   
+      Dist_Level_Set_Coefficient *wall_dist_coef;
+      Combo_Level_Set_Coefficient *combo_dist_coef;
+      // in case we are using level set to get distance and normal vectors
+      ParFiniteElementSpace *distance_vec_space;
+      ParGridFunction *distance;
+      ParFiniteElementSpace *normal_vec_space;
+      ParGridFunction *normal;
+      ParGridFunction *ls_func;
+      ParGridFunction *level_set_gf;
+      //  
+      ShiftedFaceMarker *analyticalSurface;
+      VectorCoefficient *dist_vec;
+      VectorCoefficient *normal_vec;
+
       void UpdateQuadratureData(const Vector &S) const;
       void UpdateQuadratureDataGL(const Vector &S) const;
       void AssembleForceMatrix() const;
@@ -114,7 +137,6 @@ namespace mfem
 			      ParFiniteElementSpace &l2_fes,
 			      ParFiniteElementSpace &p_l2_fes,
 			      ParFiniteElementSpace &pface_l2_fes,
-			      const Array<int> &ess_tdofs,
 			      Coefficient &rho0_coeff,
 			      ParGridFunction &rho0_gf,
 			      ParGridFunction &rho_gf,
@@ -131,7 +153,7 @@ namespace mfem
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,
-			      const double nitscheVersion);
+			      const double nitscheVersion, const bool useEmb, const int gS);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.
