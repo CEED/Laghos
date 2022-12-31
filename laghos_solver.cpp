@@ -197,7 +197,7 @@ namespace mfem
 	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
 	Array<int> ess_vdofs;
 	level_set_gf = new ParGridFunction(lsfes);
-	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, 1);
+	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, 0);
 	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
 	combo_dist_coef = new Combo_Level_Set_Coefficient;
 	
@@ -416,7 +416,6 @@ namespace mfem
 	  Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
 	  rhs += rhs_accel;
 	}
-   
       HypreParMatrix A;
       Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1.GetParMesh()->GetComm());
