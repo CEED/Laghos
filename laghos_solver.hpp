@@ -161,12 +161,18 @@ public:
 // TaylorCoefficient used in the 2D Taylor-Green problem.
 class TaylorCoefficient : public Coefficient
 {
+private:
+   const ParGridFunction &mat_alpha;
+
 public:
+   TaylorCoefficient(const ParGridFunction &alpha) : mat_alpha(alpha) { }
+
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
       Vector x(2);
       T.Transform(ip, x);
-      return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
+      return mat_alpha.GetValue(T, ip) *
+             3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
                                   cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
    }
 };

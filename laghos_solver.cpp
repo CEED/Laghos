@@ -443,17 +443,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    de_2.MakeRef(&L2, dS_dt, H1Vsize*2 + L2Vsize);
    de_1 = 0.0; de_2 = 0.0;
 
-   // Solve for energy, assemble the energy source if such exists.
-   LinearForm *e_source = nullptr;
-   if (source_type == 1) // 2D Taylor-Green.
-   {
-      e_source = new LinearForm(&L2);
-      TaylorCoefficient coeff;
-      DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
-      e_source->AddDomainIntegrator(d);
-      e_source->Assemble();
-   }
-
    Array<int> l2dofs;
    Vector e_rhs_1(L2Vsize), e_rhs_2(L2Vsize);
 
@@ -479,7 +468,20 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 //      cout << "e rhs diff: " << scientific << ff1 << " " << ff2  << endl;
 //   }
 
-   if (e_source) { e_rhs_1 += *e_source; e_rhs_2 += *e_source; }
+   // Solve for energy, assemble the energy source if such exists.
+   if (source_type == 1) // 2D Taylor-Green.
+   {
+      LinearForm e_source_1(&L2), e_source_2(&L2);
+      TaylorCoefficient coeff_1(mat_data.alpha_1), coeff_2(mat_data.alpha_2);
+      e_source_1.AddDomainIntegrator(new DomainLFIntegrator(coeff_1, &ir));
+      e_source_1.Assemble();
+      e_source_2.AddDomainIntegrator(new DomainLFIntegrator(coeff_2, &ir));
+      e_source_2.Assemble();
+
+      e_rhs_1 += e_source_1;
+      e_rhs_2 += e_source_2;
+   }
+
    Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
    for (int e = 0; e < NE; e++)
    {
@@ -502,7 +504,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          de_2.SetSubVector(l2dofs, loc_de);
       }
    }
-   delete e_source;
 
    v_integ->UnsetVelocity();
    e_integ_1->UnsetVandE();

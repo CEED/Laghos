@@ -152,7 +152,7 @@ int SIMarker::GetMaterialID(int el_id)
 {
    IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
-   const ParFiniteElementSpace &pfes =  *ls.ParFESpace();
+   const ParFiniteElementSpace &pfes = *ls.ParFESpace();
    const FiniteElement *fe = pfes.GetFE(el_id);
    Vector ls_vals;
    const IntegrationRule &ir = IntRulesLo.Get(fe->GetGeomType(), 20);
@@ -166,18 +166,12 @@ int SIMarker::GetMaterialID(int el_id)
       Tr->SetIntPoint(&ip);
 
       volume += ip.weight * Tr->Weight();
-      if (ls_vals(q) + 1e-12 < 0.0)
-      {
-         volume_1 += ip.weight * Tr->Weight();
-      }
-      if (ls_vals(q) - 1e-12 > 0.0)
-      {
-         volume_2 += ip.weight * Tr->Weight();
-      }
+      if (ls_vals(q) + 1e-12 < 0.0) { volume_1 += ip.weight * Tr->Weight(); }
+      if (ls_vals(q) - 1e-12 > 0.0) { volume_2 += ip.weight * Tr->Weight(); }
    }
 
-   if (volume_1 / volume < 0.01) { return 20; }
-   if (volume_2 / volume < 0.01) { return 10; }
+   if (volume_1 == 0.0) { return 20; }
+   if (volume_2 == 0.0) { return 10; }
    return 15;
 }
 
