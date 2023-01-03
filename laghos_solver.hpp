@@ -115,12 +115,12 @@ public:
                            const Array<int> &ess_tdofs,
                            Coefficient &rho_mixed_coeff,
                            VectorCoefficient &dist_coeff,
+                           const IntegrationRule &vol_ir,
                            const IntegrationRule &face_ir,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q,
                            SIOptions &si_opt, MaterialData &m_data);
    ~LagrangianHydroOperator();
 
@@ -156,6 +156,9 @@ public:
    {
       return (mat_id == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
    }
+
+   void PrintPressures(const ParGridFunction &e_1,
+                       const ParGridFunction &e_2, int problem);
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

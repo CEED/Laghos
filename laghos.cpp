@@ -119,8 +119,6 @@ int main(int argc, char *argv[])
                   "Order (degree) of the kinematic finite element space.");
    args.AddOption(&order_e, "-ot", "--order-thermo",
                   "Order (degree) of the thermodynamic finite element space.");
-   args.AddOption(&order_q, "-oq", "--order-intrule",
-                  "Order  of the integration rule.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
@@ -525,10 +523,23 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   // Volumetric integration rule.
+   const IntegrationRule &ir_volume =
+         IntRules.Get(pmesh->GetElementBaseGeometry(0),
+                      3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
+   if (myid == 0)
+   {
+      cout << "Volumetric quad pts: " << ir_volume.GetNPoints() << endl;
+   }
+
    // Face integration rule.
    FaceElementTransformations *ftr = pmesh->GetFaceElementTransformations(0);
-   const IntegrationRule &face_ir =
+   const IntegrationRule &ir_face =
       IntRules.Get(ftr->GetGeometryType(), order_v + order_e + ftr->OrderW());
+   if (myid == 0)
+   {
+      cout << "Face quad pts: " << ir_face.GetNPoints() << endl;
+   }
 
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
                &mat_data, si_options.pointwise_alpha);
@@ -543,11 +554,10 @@ int main(int argc, char *argv[])
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho_mixed_coeff,
-                                                dist_coeff, face_ir,
+                                                dist_coeff, ir_volume, ir_face,
                                                 source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q,
                                                 si_options, mat_data);
 
    // Used only for visualization / output.
@@ -865,6 +875,11 @@ int main(int argc, char *argv[])
             visit_dc.SetCycle(ti);
             visit_dc.SetTime(t);
             visit_dc.Save();
+         }
+
+         if (last_step && extract1D)
+         {
+            hydro.PrintPressures(mat_data.e_1, mat_data.e_2, problem);
          }
 
          if (last_step || gfprint)

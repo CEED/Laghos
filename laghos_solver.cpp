@@ -114,6 +114,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const Array<int> &ess_tdofs,
                                                  Coefficient &rho_mixed_coeff,
                                                  VectorCoefficient &dist_coeff,
+                                                 const IntegrationRule &vol_ir,
                                                  const IntegrationRule &face_ir,
                                                  const int source,
                                                  const double cfl,
@@ -122,7 +123,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq,
                                                  SIOptions &si_opt,
                                                  MaterialData &m_data) :
    TimeDependentOperator(size),
@@ -144,9 +144,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv(&H1), Mv_spmat_copy(),
    Me_1(l2dofs_cnt, l2dofs_cnt, NE), Me_2(l2dofs_cnt, l2dofs_cnt, NE),
    Me_1_inv(l2dofs_cnt, l2dofs_cnt, NE), Me_2_inv(l2dofs_cnt, l2dofs_cnt, NE),
-   ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-   ir_face(face_ir),
+   ir(vol_ir), ir_face(face_ir),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -646,6 +644,72 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 
    MPI_Allreduce(MPI_IN_PLACE, &momentum, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
    return momentum;
+}
+
+void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
+                                             const ParGridFunction &e_2,
+                                             int problem)
+{
+   if (problem != 8 && problem != 9) { return; }
+   MFEM_VERIFY(L2.GetNRanks() == 1, "Pressure output only in 1D serial");
+
+   std::string prefix = (problem == 8) ? "sod_" : "wa_";
+
+   std::ofstream fstream_1, fstream_2, fstream_t;
+   fstream_1.open(prefix + "p_1.out"); fstream_1.precision(8);
+   fstream_2.open(prefix + "p_2.out"); fstream_2.precision(8);
+   fstream_t.open(prefix + "p_tot.out"); fstream_t.precision(8);
+
+   const int nqp = ir.GetNPoints();
+   Vector pos(dim);
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pmesh->GetAttribute(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         Tr.Transform(ip, pos);
+         double detJ = Tr.Weight();
+
+         double p_tot = 0.0;
+         if (attr == 10 || attr == 15)
+         {
+            double rho = qdata.rho0DetJ0w_1(e*nqp + q) /
+                         mat_data.vol_1.GetValue(Tr, ip) / detJ / ip.weight;
+            double e   = e_1.GetValue(Tr, ip);
+            double g   = mat_data.gamma_1;
+            double p = (problem == 8) ? (g - 1.0) * rho * e
+                                      : (g - 1.0) * rho * e - g * 6.0e8;
+            fstream_1 << pos(0) << " " << p << "\n";
+            fstream_1.flush();
+
+            p_tot += mat_data.vol_1.GetValue(Tr, ip) * p;
+         }
+
+         if (attr == 15 || attr == 20)
+         {
+            double rho = qdata.rho0DetJ0w_2(e*nqp + q) /
+                         mat_data.vol_2.GetValue(Tr, ip) / detJ / ip.weight;
+            double e   = e_2.GetValue(Tr, ip);
+            double g   = mat_data.gamma_2;
+            double p = (problem == 8) ? (g - 1.0) * rho * e
+                                      : (g - 1.0) * rho * e - g * 6.0e8;
+            fstream_2 << pos(0) << " " << p << "\n";
+            fstream_2.flush();
+
+            p_tot += mat_data.vol_2.GetValue(Tr, ip) * p;
+         }
+
+         fstream_t << pos(0) << " " << p_tot << "\n";
+         fstream_t.flush();
+      }
+   }
+   fstream_1.close();
+   fstream_2.close();
+   fstream_t.close();
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].
