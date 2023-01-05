@@ -681,8 +681,8 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
                          mat_data.vol_1.GetValue(Tr, ip) / detJ / ip.weight;
             double e   = e_1.GetValue(Tr, ip);
             double g   = mat_data.gamma_1;
-            double p = (problem == 8) ? (g - 1.0) * rho * e
-                                      : (g - 1.0) * rho * e - g * 6.0e8;
+            double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * e
+                                              : (g - 1.0) * rho * e - g * 6.0e8;
             fstream_1 << pos(0) << " " << p << "\n";
             fstream_1.flush();
 
@@ -695,8 +695,8 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
                          mat_data.vol_2.GetValue(Tr, ip) / detJ / ip.weight;
             double e   = e_2.GetValue(Tr, ip);
             double g   = mat_data.gamma_2;
-            double p = (problem == 8) ? (g - 1.0) * rho * e
-                                      : (g - 1.0) * rho * e - g * 6.0e8;
+            double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * e
+                                              : (g - 1.0) * rho * e - g * 6.0e8;
             fstream_2 << pos(0) << " " << p << "\n";
             fstream_2.flush();
 
