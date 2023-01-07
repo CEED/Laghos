@@ -1206,7 +1206,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          double rho_q2  = rhoDetJind0_e2->GetValue(Trans_e2, ip_e2) /
                           Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e2);
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
-                     "Negative density at the face, not good.");
+                     "Negative density at the face, not good: "
+                     << rho_q1 << " " << rho_q2);
 
          double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
 

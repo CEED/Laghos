@@ -117,7 +117,7 @@ void UpdateAlpha(const ParGridFunction &level_set,
          level_set.GetValues(Tr, ir_nodes, ls_vals_nodes);
          for (int i = 0; i < ndof_l2; i++)
          {
-            target_1(i) = ((ls_vals_nodes(i) < 0.0) ? 1.0 : 0.0);
+            target_1(i) = ((ls_vals_nodes(i) < 0.0) ? 1.0 : 1e-12);
          }
          SLBQPOptimizer slbqp;
          slbqp.SetBounds(bounds_min, bounds_max);
