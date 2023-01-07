@@ -158,7 +158,8 @@ public:
    }
 
    void PrintPressures(const ParGridFunction &e_1,
-                       const ParGridFunction &e_2, int problem);
+                       const ParGridFunction &e_2,
+                       std::string prefix, int problem);
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

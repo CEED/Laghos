@@ -384,11 +384,11 @@ int main(int argc, char *argv[])
    // 1: - < [grad_p.d] psi >
    // 2: - < [grad_p.d * grad_psi.d] n >
    // 3: - < [(p + grad_p.d) * grad_psi.d] n >
-   // 4: - < [p + grad_p.d] [psi + grad_psi.d] n >
+   // 4: + < [p + grad_p.d] [psi + grad_psi.d] n >
    // 5: - < [grad_p.d] [psi + grad_psi.d] n >
    si_options.v_shift_type = shift_v;
-   // Scaling of the momentum term. In the formulas above, v_shift_scale = 1.
-   si_options.v_shift_scale = -1.0;
+   // Scaling of the momentum term.
+   si_options.v_shift_scale = 1.0;
    // Activate the momentum diffusion term.
    si_options.v_shift_diffusion = false;
    si_options.v_shift_diffusion_scale = 1.0;
@@ -609,6 +609,7 @@ int main(int argc, char *argv[])
    hydrodynamics::ShiftedPointExtractor e_LS_extr, e_RS_extr,
                                         p_LS_extr, p_RS_extr;
    bool extract1D = false;
+   std::string prefix;
    if ((problem == 8 || problem == 9) && H1FESpace.GetNRanks() == 1)
    {
       extract1D = true;
@@ -638,7 +639,9 @@ int main(int argc, char *argv[])
       std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
                   enameFL, enameFR, enameSL, enameSR;
 
-      std::string prefix = (problem == 8) ? "sod_" : "wa_";
+      prefix = (problem == 8)
+         ? "../../../Desktop/scatter_plots/shift_sod/sod_"
+         : "../../../Desktop/scatter_plots/shift_waterair/wa_";
       vname = prefix + "v.out";
       xname = prefix + "x.out";
       enameFL = prefix + "e_fit_L.out";
@@ -652,27 +655,32 @@ int main(int argc, char *argv[])
 
       IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
       const IntegrationRule &ir_extr =
-            IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
+        IntRulesCU.Get(H1FESpace.GetFE(0)->GetGeomType(), 2);
 
-      e_L_extr.SetPoint(zone_id_10, point_face_10,
-                        &mat_data.e_1, ir_extr, enameFL);
-      e_R_extr.SetPoint(zone_id_20, point_face_20,
-                        &mat_data.e_2, ir_extr, enameFR);
-      p_L_extr.SetPoint(zone_id_10, point_face_10,
-                        &p_1_gf, ir_extr, pnameFL);
-      p_R_extr.SetPoint(zone_id_20, point_face_20,
-                        &p_2_gf, ir_extr, pnameFR);
       //v_extr.SetPoint(zone_id_15, point_interface, v_gf, ir_extr, vname);
       //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
-
-      e_LS_extr.SetPoint(zone_id_10, point_face_10,
-                         &mat_data.e_1, &dist, ir_extr, enameSL);
-      e_RS_extr.SetPoint(zone_id_20, point_face_20,
-                         &mat_data.e_2, &dist, ir_extr, enameSR);
-      p_LS_extr.SetPoint(zone_id_10, point_face_10,
-                         &p_1_gf, &dist, ir_extr, pnameSL);
-      p_RS_extr.SetPoint(zone_id_20, point_face_20,
-                         &p_2_gf, &dist, ir_extr, pnameSR);
+      if (pure_test)
+      {
+         e_L_extr.SetPoint(zone_id_10, point_face_10,
+                           &mat_data.e_1, ir_extr, enameFL);
+         e_R_extr.SetPoint(zone_id_20, point_face_20,
+                           &mat_data.e_2, ir_extr, enameFR);
+         p_L_extr.SetPoint(zone_id_10, point_face_10,
+                           &p_1_gf, ir_extr, pnameFL);
+         p_R_extr.SetPoint(zone_id_20, point_face_20,
+                           &p_2_gf, ir_extr, pnameFR);
+      }
+      else
+      {
+         e_LS_extr.SetPoint(zone_id_10, point_face_10,
+                            &mat_data.e_1, &dist, ir_extr, enameSL);
+         e_RS_extr.SetPoint(zone_id_20, point_face_20,
+                            &mat_data.e_2, &dist, ir_extr, enameSR);
+         p_LS_extr.SetPoint(zone_id_10, point_face_10,
+                            &p_1_gf, &dist, ir_extr, pnameSL);
+         p_RS_extr.SetPoint(zone_id_20, point_face_20,
+                            &p_2_gf, &dist, ir_extr, pnameSR);
+      }
 
       //v_extr.WriteValue(0.0);
       //x_extr.WriteValue(0.0);
@@ -879,7 +887,7 @@ int main(int argc, char *argv[])
 
          if (last_step && extract1D)
          {
-            hydro.PrintPressures(mat_data.e_1, mat_data.e_2, problem);
+            hydro.PrintPressures(mat_data.e_1, mat_data.e_2, prefix, problem);
          }
 
          if (last_step || gfprint)

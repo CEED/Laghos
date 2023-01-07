@@ -375,14 +375,15 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 //   {
 //      FaceForce.AddMultTranspose(one, rhs, 1.0);
 //   }
+
+   rhs.Neg();
+
    if (si_options.v_shift_type > 0)
    {
       pmesh->ExchangeFaceNbrNodes();
       FaceForceMomentum.Assemble();
       rhs += FaceForceMomentum;
    }
-
-   rhs.Neg();
 
    if (source_type == 2)
    {
@@ -648,12 +649,11 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 
 void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
                                              const ParGridFunction &e_2,
+                                             string prefix,
                                              int problem)
 {
    if (problem != 8 && problem != 9) { return; }
    MFEM_VERIFY(L2.GetNRanks() == 1, "Pressure output only in 1D serial");
-
-   std::string prefix = (problem == 8) ? "sod_" : "wa_";
 
    std::ofstream fstream_1, fstream_2, fstream_t;
    fstream_1.open(prefix + "p_1.out"); fstream_1.precision(8);
