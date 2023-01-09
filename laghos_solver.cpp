@@ -133,6 +133,9 @@ namespace mfem
       v_bfi(NULL),
       e_bfi(NULL),
       nvmi(NULL),
+      shifted_v_bfi(NULL),
+      shifted_e_bfi(NULL),
+      shifted_nvmi(NULL),
       wall_dist_coef(NULL),
       combo_dist_coef(NULL),
       distance_vec_space(NULL),
@@ -168,13 +171,19 @@ namespace mfem
       forcemat_is_assembled(false),
       energyforcemat_is_assembled(false),
       bv_qdata_is_current(false),
+      bvemb_qdata_is_current(false),
+      beemb_qdata_is_current(false),
       be_qdata_is_current(false),
       bv_forcemat_is_assembled(false),
+      bvemb_forcemat_is_assembled(false),
       be_forcemat_is_assembled(false),
+      beemb_forcemat_is_assembled(false),
       Force(&H1),
       EnergyForce(&L2),
       VelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
+      ShiftedVelocityBoundaryForce(&H1),
+      ShiftedEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
       B(H1c.GetTrueVSize()),
       one(L2Vsize),
@@ -310,6 +319,7 @@ namespace mfem
       EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
+
       v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
@@ -328,6 +338,24 @@ namespace mfem
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
+      if (useEmbedded){
+	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, analyticalSurface);
+	shifted_v_bfi->SetIntRule(&b_ir);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	// Make a dummy assembly to figure out the sparsity.
+	ShiftedVelocityBoundaryForce.Assemble();    
+
+	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, analyticalSurface);
+	shifted_e_bfi->SetIntRule(&b_ir);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	// Make a dummy assembly to figure out the sparsity.
+	ShiftedEnergyBoundaryForce.Assemble();
+
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface);
+	shifted_nvmi->SetIntRule(&b_ir);
+	Mv.AddInteriorFaceIntegrator(shifted_nvmi);	
+      }
+      
     }
 
     LagrangianHydroOperator::~LagrangianHydroOperator() {
@@ -354,6 +382,8 @@ namespace mfem
       qdata_is_current = false;
       bv_qdata_is_current = false;
       be_qdata_is_current = false;
+      bvemb_qdata_is_current = false;
+      beemb_qdata_is_current = false;
     }
 
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -390,6 +420,11 @@ namespace mfem
 
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
+      if (analyticalSurface != NULL){
+	// assemble boundary terms at the most recent state.
+	Mv.AssembleInteriorFaceIntegrators();
+      }
+
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       // The monolithic BlockVector stores the unknown fields as follows:
@@ -464,6 +499,11 @@ namespace mfem
       e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
 
+      if (useEmbedded){
+	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
+	AssembleShiftedEnergyBoundaryForceMatrix();
+      }
+      
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
       ParGridFunction de;
@@ -492,12 +532,24 @@ namespace mfem
    
       if (e_source) { e_rhs += *e_source; }
       Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
+      
       for (int e = 0; e < NE; e++)
 	{
-	  L2.GetElementDofs(e, l2dofs);
-	  e_rhs.GetSubVector(l2dofs, loc_rhs);
-	  Me_inv(e).Mult(loc_rhs, loc_de);
-	  de.SetSubVector(l2dofs, loc_de);
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmbedded){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    L2.GetElementDofs(e, l2dofs);
+	    e_rhs.GetSubVector(l2dofs, loc_rhs);
+	    Me_inv(e).Mult(loc_rhs, loc_de);
+	    de.SetSubVector(l2dofs, loc_de);
+	  }
+	  else {
+	    loc_de = 0.0;
+	    de.SetSubVector(l2dofs, loc_de);
+	  }
 	}
       delete e_source;
     }
@@ -856,7 +908,6 @@ namespace mfem
 	      gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
 	    }
 	}
-
     }
 
     void LagrangianHydroOperator::AssembleForceMatrix() const
@@ -877,6 +928,13 @@ namespace mfem
     {   
       VelocityBoundaryForce = 0.0;
       VelocityBoundaryForce.Assemble();
+      if (analyticalSurface != NULL){
+	// reset mesh, needed to update the normal velocity penalty term.
+	ShiftedVelocityBoundaryForce = 0.0;
+	ShiftedVelocityBoundaryForce.Assemble();
+	bvemb_forcemat_is_assembled = true;
+      }
+
       bv_forcemat_is_assembled = true;
     }
 
@@ -885,6 +943,13 @@ namespace mfem
       EnergyBoundaryForce = 0.0;
       EnergyBoundaryForce.Assemble();
       be_forcemat_is_assembled = true;
+    }
+
+    void LagrangianHydroOperator::AssembleShiftedEnergyBoundaryForceMatrix() const
+    {
+      ShiftedEnergyBoundaryForce = 0.0;
+      ShiftedEnergyBoundaryForce.Assemble();
+      beemb_forcemat_is_assembled = true;
     }
 
   } // namespace hydrodynamics

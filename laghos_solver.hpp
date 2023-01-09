@@ -89,7 +89,7 @@ namespace mfem
       const int Q1D;
       mutable QuadratureData qdata;
       mutable QuadratureDataGL gl_qdata; 
-      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled;
+      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final
       // right-hand sides for momentum and specific internal energy.
@@ -97,6 +97,8 @@ namespace mfem
       mutable ParLinearForm EnergyForce;
       mutable ParLinearForm VelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
+      mutable ParLinearForm ShiftedVelocityBoundaryForce;
+      mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
       const double nitscheVersion;
@@ -109,7 +111,11 @@ namespace mfem
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
-   
+
+      ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
+      ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
+      ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
+      
       Dist_Level_Set_Coefficient *wall_dist_coef;
       Combo_Level_Set_Coefficient *combo_dist_coef;
       // in case we are using level set to get distance and normal vectors
@@ -130,6 +136,7 @@ namespace mfem
       void AssembleEnergyForceMatrix() const;
       void AssembleVelocityBoundaryForceMatrix() const;
       void AssembleEnergyBoundaryForceMatrix() const;
+      void AssembleShiftedEnergyBoundaryForceMatrix() const;
 
     public:
       LagrangianHydroOperator(const int size,
@@ -169,7 +176,9 @@ namespace mfem
       void ResetQuadratureData() const {
 	qdata_is_current = false;
 	bv_qdata_is_current = false;
-	be_qdata_is_current = false;}
+	be_qdata_is_current = false;
+	bvemb_qdata_is_current = false;
+	beemb_qdata_is_current = false;}
 
       // The density values, which are stored only at some quadrature points,
       // are projected as a ParGridFunction.

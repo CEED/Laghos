@@ -79,7 +79,6 @@ namespace mfem
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
-		  double loc_force = 0.0;
 		  for (int gd = 0; gd < dim; gd++) // Gradient components.
 		    {
 		      elvect(i + vd * h1dofs_cnt) -= stressJiT(vd,gd) * vshape(i,gd);
@@ -154,12 +153,12 @@ namespace mfem
 	const int l2dofs_cnt = el.GetDof();
 	elvect.SetSize(l2dofs_cnt);
 	elvect = 0.0;
-  }
+      }
     }
 
     void VelocityBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
-							     FaceElementTransformations &Tr,
-							     Vector &elvect)
+								 FaceElementTransformations &Tr,
+								 Vector &elvect)
     {
       const int nqp_face = IntRule->GetNPoints();
       const int dim = el.GetDim();
@@ -167,7 +166,6 @@ namespace mfem
       elvect.SetSize(h1dofs_cnt*dim);
       elvect = 0.0;
 
-      DenseMatrix loc_force(h1dofs_cnt, dim);
       Vector te_shape(h1dofs_cnt);
       te_shape = 0.0;
   
@@ -194,7 +192,6 @@ namespace mfem
 	    }        
 
 	  el.CalcShape(eip, te_shape);
-	  loc_force = 0.0;
 	  double pressure = pface_gf.GetValue(Trans_el1,eip);
 	  DenseMatrix stress(dim);
 	  stress = 0.0;
@@ -281,17 +278,17 @@ namespace mfem
 	    nor_norm = sqrt(nor_norm);
 	    normalStressProjNormal = normalStressProjNormal/nor_norm;
 	    
-	  Vector vShape;
-	  Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
-	  double vDotn = 0.0;
-	  for (int s = 0; s < dim; s++)
-	    {
-	      vDotn += vShape(s) * nor(s)/nor_norm;
-	    }
-	  for (int i = 0; i < l2dofs_cnt; i++)
-	    {
-	      elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn;
-	    }
+	    Vector vShape;
+	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
+	    double vDotn = 0.0;
+	    for (int s = 0; s < dim; s++)
+	      {
+		vDotn += vShape(s) * nor(s)/nor_norm;
+	      }
+	    for (int i = 0; i < l2dofs_cnt; i++)
+	      {
+		elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn;
+	      }
 	  }
       }
       else{
@@ -317,11 +314,9 @@ namespace mfem
       const int h1dofs_cnt = fe.GetDof();
       elmat.SetSize(h1dofs_cnt*dim);
       elmat = 0.0;
-      Vector shape(h1dofs_cnt), loc_force2(h1dofs_cnt * dim);;
+      Vector shape(h1dofs_cnt);
       const int Elem1No = Tr.ElementNo;
       shape = 0.0;
-      DenseMatrix loc_force1(h1dofs_cnt, dim);
-      Vector Vloc_force(loc_force1.Data(), h1dofs_cnt*dim);
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const int eq = Elem1No*nqp_face + q;
@@ -363,8 +358,453 @@ namespace mfem
 	    }
 	}
     }
-  
+
+    void ShiftedVelocityBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+									const FiniteElement &el2,
+									FaceElementTransformations &Tr,
+									Vector &elvect)      
+    {
+      const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+      MPI_Comm comm = pmesh->GetComm();
+      int myid;
+      MPI_Comm_rank(comm, &myid);
+      int NEproc = pmesh->GetNE();
+      int elem1 = Tr.Elem1No;
+      int elem2 = Tr.Elem2No;
+      int elemStatus1 = elemStatus[elem1];
+      int elemStatus2;
+      if (Tr.Elem2No >= NEproc)
+	{
+	  elemStatus2 = elemStatus[NEproc+par_shared_face_count];
+	  par_shared_face_count++;
+	}
+      else
+	{
+	  elemStatus2 = elemStatus[elem2];
+	}
+            
+      if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	const int dim = el.GetDim();      
+	const IntegrationRule *ir = IntRule;
+	if (ir == NULL)
+	  {
+	    // a simple choice for the integration order; is this OK?
+	    const int order = 5 * max(el.GetOrder(), 1);
+	    ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	  }
+	const int nqp_face = IntRule->GetNPoints();
+	
+	const int h1dofs_cnt = el.GetDof();
+	elvect.SetSize(2*h1dofs_cnt*dim);
+	elvect = 0.0;
+	Vector te_shape(h1dofs_cnt);
+	te_shape = 0.0;
+	
+	for (int q = 0; q  < nqp_face; q++)
+	  {
+	    const IntegrationPoint &ip_f = ir->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	    Trans_el1.SetIntPoint(&eip);
+	    
+	    Vector nor;
+	    nor.SetSize(dim);
+	    nor = 0.0;
+	    CalcOrtho(Tr.Jacobian(), nor);
+
+	    el.CalcShape(eip, te_shape);
+	    double pressure = pface_gf.GetValue(Trans_el1,eip);
+	    DenseMatrix stress(dim);
+	    stress = 0.0;
+	    ComputeStress(pressure,dim,stress);
+	    
+	    // evaluation of the normal stress at the face quadrature points
+	    Vector weightedNormalStress(dim);
+	    weightedNormalStress = 0.0;
+	    
+	    // Quadrature data for partial assembly of the force operator.
+	    stress.Mult( nor, weightedNormalStress);
+	    
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
+		  }
+	      }
+	  }
+      }
+      else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	const int dim = el2.GetDim();      
+	const IntegrationRule *ir = IntRule;
+	if (ir == NULL)
+	  {
+	    // a simple choice for the integration order; is this OK?
+	    const int order = 5 * max(el2.GetOrder(), 1);
+	    ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	  }
+	const int nqp_face = IntRule->GetNPoints();
+	
+	const int h1dofs_cnt = el2.GetDof();
+	int h1dofs_offset = el2.GetDof()*dim;
+	
+	elvect.SetSize(2*h1dofs_cnt*dim);
+	elvect = 0.0;
+	Vector te_shape(h1dofs_cnt);
+	te_shape = 0.0;
+	
+	for (int q = 0; q  < nqp_face; q++)
+	  {
+	    const IntegrationPoint &ip_f = ir->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = Tr.GetElement2IntPoint();
+	    ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	    Trans_el2.SetIntPoint(&eip);
+	    
+	    Vector nor;
+	    nor.SetSize(dim);
+	    nor = 0.0;
+	    CalcOrtho(Tr.Jacobian(), nor);
+
+	    el.CalcShape(eip, te_shape);
+	    double pressure = pface_gf.GetValue(Trans_el2,eip);
+	    DenseMatrix stress(dim);
+	    stress = 0.0;
+	    ComputeStress(pressure,dim,stress);
+	    
+	    // evaluation of the normal stress at the face quadrature points
+	    Vector weightedNormalStress(dim);
+	    weightedNormalStress = 0.0;
+	    
+	    // Quadrature data for partial assembly of the force operator.
+	    stress.Mult( nor, weightedNormalStress);
+	    
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    elvect(i + vd * h1dofs_cnt + h1dofs_offset) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
+		  }
+	      }
+	  }
+      }
+      else{
+	const int dim = el.GetDim();
+	const int dofs_cnt = el.GetDof();
+	elvect.SetSize(2*dofs_cnt*dim);
+	elvect = 0.0;
+      }
+    }
+
+    void ShiftedEnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								      const FiniteElement &el2,
+								      FaceElementTransformations &Tr,
+								      Vector &elvect)
+    {
+      if (Vnpt_gf != NULL){	
+	const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	MPI_Comm comm = pmesh->GetComm();
+	int myid;
+	MPI_Comm_rank(comm, &myid);
+	int NEproc = pmesh->GetNE();
+	int elem1 = Tr.Elem1No;
+	int elem2 = Tr.Elem2No;
+	int elemStatus1 = elemStatus[elem1];
+	int elemStatus2;
+	if (Tr.Elem2No >= NEproc)
+	  {
+	    elemStatus2 = elemStatus[NEproc+par_shared_face_count];
+	    par_shared_face_count++;
+	  }
+	else
+	  {
+	    elemStatus2 = elemStatus[elem2];
+	  }
+	
+	if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	  const int dim = el.GetDim();      
+	  const IntegrationRule *ir = IntRule;
+	  if (ir == NULL)
+	    {
+	      // a simple choice for the integration order; is this OK?
+	      const int order = 5 * max(el.GetOrder(), 1);
+	      ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	    }
+	  const int nqp_face = ir->GetNPoints();
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(l2dofs_cnt*2);
+	  elvect = 0.0;
+	  Vector te_shape(l2dofs_cnt);
+	  te_shape = 0.0;
+	
+	  for (int q = 0; q  < nqp_face; q++)
+	    {
+	      te_shape = 0.0;
+	      const IntegrationPoint &ip_f = ir->IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Tr.SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	      ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	      Trans_el1.SetIntPoint(&eip);
+	      const int elementNo = Trans_el1.ElementNo;
+	    
+	      Vector nor;
+	      nor.SetSize(dim);
+	      nor = 0.0;
+	      CalcOrtho(Tr.Jacobian(), nor);
+	      el.CalcShape(eip, te_shape);
+	      double pressure = pface_gf.GetValue(Trans_el1,eip);
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      ComputeStress(pressure,dim,stress);
+	    
+	      // evaluation of the normal stress at the face quadrature points
+	      Vector weightedNormalStress(dim);
+	      weightedNormalStress = 0.0;
+	    
+	      // Quadrature data for partial assembly of the force operator.
+	      stress.Mult( nor, weightedNormalStress);
+	    
+	      double normalStressProjNormal = 0.0;
+	      double nor_norm = 0.0;
+	      for (int s = 0; s < dim; s++){
+		normalStressProjNormal += weightedNormalStress(s) * nor(s);
+		nor_norm += nor(s) * nor(s);
+	      }
+	      nor_norm = sqrt(nor_norm);
+	      normalStressProjNormal = normalStressProjNormal/nor_norm;
+	    
+	      Vector vShape;
+	      Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
+	      double vDotn = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn += vShape(s) * nor(s)/nor_norm;
+		}
+	      for (int i = 0; i < l2dofs_cnt; i++)
+		{
+		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn;
+		}
+	    }
+	}
+	else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	  const int dim = el2.GetDim();      
+	  const IntegrationRule *ir = IntRule;
+	  if (ir == NULL)
+	    {
+	      // a simple choice for the integration order; is this OK?
+	      const int order = 5 * max(el2.GetOrder(), 1);
+	      ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	    }
+	  const int nqp_face = ir->GetNPoints();
+	  const int l2dofs_cnt = el2.GetDof();
+	  int l2dofs_offset = el2.GetDof();
+	  elvect.SetSize(l2dofs_cnt*2);
+	  elvect = 0.0;
+	  Vector te_shape(l2dofs_cnt);
+	  te_shape = 0.0;
+	
+	  for (int q = 0; q  < nqp_face; q++)
+	    {
+	      te_shape = 0.0;
+	      const IntegrationPoint &ip_f = ir->IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Tr.SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip = Tr.GetElement2IntPoint();
+	      ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	      Trans_el2.SetIntPoint(&eip);
+	      const int elementNo = Trans_el2.ElementNo;
+	    
+	      Vector nor;
+	      nor.SetSize(dim);
+	      nor = 0.0;
+	      CalcOrtho(Tr.Jacobian(), nor);
+	      el.CalcShape(eip, te_shape);
+	      double pressure = pface_gf.GetValue(Trans_el2,eip);
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      ComputeStress(pressure,dim,stress);
+	    
+	      // evaluation of the normal stress at the face quadrature points
+	      Vector weightedNormalStress(dim);
+	      weightedNormalStress = 0.0;
+	    
+	      // Quadrature data for partial assembly of the force operator.
+	      stress.Mult( nor, weightedNormalStress);
+	    
+	      double normalStressProjNormal = 0.0;
+	      double nor_norm = 0.0;
+	      for (int s = 0; s < dim; s++){
+		normalStressProjNormal += weightedNormalStress(s) * nor(s);
+		nor_norm += nor(s) * nor(s);
+	      }
+	      nor_norm = sqrt(nor_norm);
+	      normalStressProjNormal = normalStressProjNormal/nor_norm;
+	    
+	      Vector vShape;
+	      Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
+	      double vDotn = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn += vShape(s) * nor(s)/nor_norm;
+		}
+	      for (int i = 0; i < l2dofs_cnt; i++)
+		{
+		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn;
+		}
+	    }
+	}
+	else{
+	  const int dim = el.GetDim();
+	  const int dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*dofs_cnt);
+	  elvect = 0.0;
+	}
+      }
+      else{
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(2*l2dofs_cnt);
+	elvect = 0.0;
+      }
+    }
+
+
+    void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
+								 const FiniteElement &fe2,
+								 FaceElementTransformations &Tr,
+								 DenseMatrix &elmat)
+    {
+      const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+      MPI_Comm comm = pmesh->GetComm();
+      int myid;
+      MPI_Comm_rank(comm, &myid);
+      int NEproc = pmesh->GetNE();
+      int elem1 = Tr.Elem1No;
+      int elem2 = Tr.Elem2No;
+      int elemStatus1 = elemStatus[elem1];
+      int elemStatus2;
+      if (Tr.Elem2No >= NEproc)
+	{
+	  elemStatus2 = elemStatus[NEproc+par_shared_face_count];
+	  par_shared_face_count++;
+	}
+      else
+	{
+	  elemStatus2 = elemStatus[elem2];
+	}
+      
+      if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	const int dim = fe.GetDim();      
+	const IntegrationRule *ir = IntRule;
+	if (ir == NULL)
+	  {
+	    // a simple choice for the integration order; is this OK?
+	    const int order = 5 * max(fe.GetOrder(), 1);
+	    ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	  }
+	
+	const int nqp_face = ir->GetNPoints();
+	const int h1dofs_cnt = fe.GetDof();
+	elmat.SetSize(2*h1dofs_cnt*dim);
+	elmat = 0.0;
+
+	Vector shape(h1dofs_cnt);
+	shape = 0.0;
+	for (int q = 0; q < nqp_face; q++)
+	  {	     
+	    const IntegrationPoint &ip_f = ir->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	    Vector nor;
+	    nor.SetSize(dim);
+	    nor = 0.0;
+	    CalcOrtho(Tr.Jacobian(), nor);
+	    
+	    fe.CalcShape(eip, shape);
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+	    
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    for (int j = 0; j < h1dofs_cnt; j++)
+		      {
+			for (int md = 0; md < dim; md++) // Velocity components.
+			  {	      
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			  }
+		      }
+		  }
+	      }
+	  }
+      }
+      else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	const int dim = fe2.GetDim();      
+	const IntegrationRule *ir = IntRule;
+	if (ir == NULL)
+	  {
+	    // a simple choice for the integration order; is this OK?
+	    const int order = 5 * max(fe2.GetOrder(), 1);
+	    ir = &IntRules.Get(Tr.GetGeometryType(), order);
+	  }
+	
+	const int nqp_face = ir->GetNPoints();
+	const int h1dofs_cnt = fe2.GetDof();
+	int h1dofs_offset = fe2.GetDof()*dim;
+	elmat.SetSize(2*h1dofs_cnt*dim);
+	elmat = 0.0;
+
+	Vector shape(h1dofs_cnt);
+	shape = 0.0;
+	for (int q = 0; q < nqp_face; q++)
+	  {	     
+	    const IntegrationPoint &ip_f = ir->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = Tr.GetElement2IntPoint();
+	    Vector nor;
+	    nor.SetSize(dim);
+	    nor = 0.0;
+	    CalcOrtho(Tr.Jacobian(), nor);
+	    
+	    fe2.CalcShape(eip, shape);
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+	    
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    for (int j = 0; j < h1dofs_cnt; j++)
+		      {
+			for (int md = 0; md < dim; md++) // Velocity components.
+			  {	      
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			  }
+		      }
+		  }
+	      }
+	  }
+      }
+      else{
+	const int dim = fe.GetDim();
+	const int h1dofs_cnt = fe.GetDof();
+	elmat.SetSize(2*h1dofs_cnt*dim);
+	elmat = 0.0;    
+      }
+    }
+    
   } // namespace hydrodynamics
-
+  
 } // namespace mfem
-

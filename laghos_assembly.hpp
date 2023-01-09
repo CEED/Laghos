@@ -21,6 +21,11 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 #include "auxiliary_functions.hpp"
+#include "AnalyticalGeometricShape.hpp"
+#include "marking.hpp"
+
+using namespace std;
+using namespace mfem;
 
 namespace mfem
 {
@@ -141,8 +146,78 @@ namespace mfem
 				      DenseMatrix &elmat);
     };
 
-  } // namespace hydrodynamics
+    
+    // Performs full assembly for the boundary force operator on the momentum equation.
+    // < sigma_{ij} n_{j} , \psi_{i} > 
+    class ShiftedVelocityBoundaryForceIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const ParMesh *pmesh;
+      const QuadratureDataGL &qdata;
+      const ParGridFunction &pface_gf;
+      ShiftedFaceMarker *analyticalSurface;
+      int par_shared_face_count;
+      
+    public:
+      ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, ShiftedFaceMarker *analyticalSurface) : pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), analyticalSurface(analyticalSurface), par_shared_face_count(0) { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  const FiniteElement &el2,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect) {}
+    };
 
+    // Performs full assembly for the boundary force operator on the energy equation.
+    // < sigma_{ij} n_{j} n_{i}, \phi * v.n > 
+    class ShiftedEnergyBoundaryForceIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const ParMesh *pmesh;
+      const QuadratureDataGL &qdata;
+      const ParGridFunction &pface_gf;
+      const ParGridFunction &v_gf;
+      const ParGridFunction *Vnpt_gf;
+      ShiftedFaceMarker *analyticalSurface;
+      int par_shared_face_count;
+      
+    public:
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, ShiftedFaceMarker *analyticalSurface) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), analyticalSurface(analyticalSurface), par_shared_face_count(0)  { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  const FiniteElement &el2,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect) {}
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+ 
+    };
+
+    // Performs full assembly for the normal velocity mass matrix operator.
+    class ShiftedNormalVelocityMassIntegrator : public BilinearFormIntegrator
+    {
+    private:
+      const ParMesh *pmesh;
+      const QuadratureDataGL &qdata;
+      ShiftedFaceMarker *analyticalSurface;
+      int par_shared_face_count;
+  
+    public:
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, ShiftedFaceMarker *analyticalSurface) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), par_shared_face_count(0) { }
+      virtual void AssembleFaceMatrix(const FiniteElement &fe,
+				      const FiniteElement &fe2,
+				      FaceElementTransformations &Tr,
+				      DenseMatrix &elmat);
+      
+    };
+
+    
+  } // namespace hydrodynamics
+  
 } // namespace mfem
 
 #endif // MFEM_LAGHOS_ASSEMBLY
