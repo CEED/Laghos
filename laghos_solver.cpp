@@ -322,15 +322,13 @@ namespace mfem
 
       v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
-      VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
-
+      //      VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
-
+      
       e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf);
       e_bfi->SetIntRule(&b_ir);
-      EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);
-    
+      //  EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
@@ -341,13 +339,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, analyticalSurface);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, analyticalSurface);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -420,6 +418,7 @@ namespace mfem
 
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
+       
       if (analyticalSurface != NULL){
 	// assemble boundary terms at the most recent state.
 	Mv.AssembleInteriorFaceIntegrators();
@@ -540,8 +539,8 @@ namespace mfem
 	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
 	    elemStatus1 = elemStatus[e];
 	  }
+	  L2.GetElementDofs(e, l2dofs);	 
 	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
-	    L2.GetElementDofs(e, l2dofs);
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
@@ -588,14 +587,25 @@ namespace mfem
       di.SetIntRule(&ir);
       for (int e = 0; e < NE; e++)
 	{
-	  const FiniteElement &fe = *L2.GetFE(e);
-	  ElementTransformation &eltr = *L2.GetElementTransformation(e);
-	  di.AssembleRHSElementVect(fe, eltr, rhs);
-	  mi.AssembleElementMatrix2(fe, fe, eltr, Mrho);
-	  inv.Factor();
-	  inv.Mult(rhs, rho_z);
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmbedded){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
 	  L2.GetElementDofs(e, dofs);
-	  rho.SetSubVector(dofs, rho_z);
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    const FiniteElement &fe = *L2.GetFE(e);
+	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
+	    di.AssembleRHSElementVect(fe, eltr, rhs);
+	    mi.AssembleElementMatrix2(fe, fe, eltr, Mrho);
+	    inv.Factor();
+	    inv.Mult(rhs, rho_z);
+	    rho.SetSubVector(dofs, rho_z);
+	  }
+	  else{
+	    rho_z = 0.0;
+	    rho.SetSubVector(dofs, rho_z);	    
+	  }
 	}
     }
 
