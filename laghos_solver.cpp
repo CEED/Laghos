@@ -322,13 +322,13 @@ namespace mfem
 
       v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
-      //      VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
+      // VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
       e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf);
       e_bfi->SetIntRule(&b_ir);
-      //  EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
+      EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
@@ -345,7 +345,7 @@ namespace mfem
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, analyticalSurface);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -398,17 +398,17 @@ namespace mfem
       UpdateMesh(S);
 
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      UpdateDensity(qdata.rho0DetJ0, rho_gf, useEmbedded, analyticalSurface);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf, useEmbedded, analyticalSurface);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf, useEmbedded, analyticalSurface);
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
  
       //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf, useEmbedded, analyticalSurface);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf, useEmbedded, analyticalSurface);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf, useEmbedded, analyticalSurface);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -443,6 +443,9 @@ namespace mfem
       rhs = 0.0;
       rhs += Force;
       rhs += VelocityBoundaryForce;
+      if (useEmbedded){
+	rhs += ShiftedVelocityBoundaryForce;
+      }
       
       if (source_type == 2)
 	{
@@ -469,17 +472,17 @@ namespace mfem
 					      Vector &dS_dt) const
     {
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      UpdateDensity(qdata.rho0DetJ0, rho_gf, useEmbedded, analyticalSurface);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf, useEmbedded, analyticalSurface);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf, useEmbedded, analyticalSurface);
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
  
       //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf, useEmbedded, analyticalSurface);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf, useEmbedded, analyticalSurface);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf, useEmbedded, analyticalSurface);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -525,8 +528,10 @@ namespace mfem
       Array<int> h1dofs;
       e_rhs = 0.0;
       e_rhs += EnergyForce;
-      e_rhs += EnergyBoundaryForce; 
-     
+      e_rhs += EnergyBoundaryForce;
+      if (useEmbedded){
+	e_rhs += ShiftedEnergyBoundaryForce; 
+      }
       Array<int> l2dofs;
    
       if (e_source) { e_rhs += *e_source; }
@@ -619,9 +624,16 @@ namespace mfem
       double loc_ie = 0.0;
       for (int e = 0; e < NE; e++)
 	{
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmbedded){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
 	  L2.GetElementDofs(e, l2dofs);
-	  gf.GetSubVector(l2dofs, loc_e);
-	  loc_ie += Me(e).InnerProduct(loc_e, one);
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){    
+	    gf.GetSubVector(l2dofs, loc_e);
+	    loc_ie += Me(e).InnerProduct(loc_e, one);
+	  }
 	}
       MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);

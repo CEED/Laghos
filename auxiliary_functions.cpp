@@ -22,146 +22,189 @@ namespace mfem
 {
   namespace hydrodynamics
   {
-    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
+    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
-      
+      rho_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
-	      rho_gf(e * nqp + q) = rho;
-	    }
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+		rho_gf(e * nqp + q) = rho;
+	      }
+	  }
 	}
     }
     
-    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
+    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
-      
+      p_gf = 0.0;      
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double gamma_val = gamma_gf.GetValue(Tr, ip);
-	      const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-	      const double rho_val = rho_gf.GetValue(Tr, ip);
-	      p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
-	    }
-	}
-    }
-
-    void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
-    {
-      ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
-      const int NE = p_fespace->GetParMesh()->GetNE();
-      
-      // Compute L2 pressure at the quadrature points, element by element.
-      for (int e = 0; e < NE; e++)
-	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      double gamma_val = gamma_gf.GetValue(Tr, ip);
-	      double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-	      cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
-	    }
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		const double gamma_val = gamma_gf.GetValue(Tr, ip);
+		const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+		const double rho_val = rho_gf.GetValue(Tr, ip);
+		p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
+	      }
+	  }
 	}
     }
     
-    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
+    void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    {
+      ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
+      const int NE = p_fespace->GetParMesh()->GetNE();
+      cs_gf = 0.0;
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NE; e++)
+	{
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		double gamma_val = gamma_gf.GetValue(Tr, ip);
+		double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+		cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
+	      }
+	  }
+	}
+    }
+    
+    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      rho_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
-	      rho_gf(e * nqp + q) = rho;
-	    }
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+		rho_gf(e * nqp + q) = rho;
+	      }
+	  }
 	}
     }
     
-    void UpdatePressureGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
+    void UpdatePressureGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
-      
+      p_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double gamma_val = gamma_gf.GetValue(Tr, ip);
-	      const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-	      const double rho_val = rho_gf.GetValue(Tr, ip);
-	      p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
-	    }
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		const double gamma_val = gamma_gf.GetValue(Tr, ip);
+		const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+		const double rho_val = rho_gf.GetValue(Tr, ip);
+		p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
+	      }
+	  }
 	}
     }
-
-    void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
+    
+    void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
-      
+      cs_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      double gamma_val = gamma_gf.GetValue(Tr, ip);
-	      double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-	      cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
-	    }
+	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
+	  if (useEmb){
+	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
+	    elemStatus1 = elemStatus[e];
+	  }
+	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		double gamma_val = gamma_gf.GetValue(Tr, ip);
+		double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+		cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
+	      }
+	  }
 	}
     }
 
