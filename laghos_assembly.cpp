@@ -468,7 +468,7 @@ namespace mfem
 	    nor.SetSize(dim);
 	    nor = 0.0;
 	    CalcOrtho(Tr.Jacobian(), nor);
-
+	    nor *= -1.0;
 	    el.CalcShape(eip, te_shape);
 	    double pressure = pface_gf.GetValue(Trans_el2,eip);
 	    DenseMatrix stress(dim);
@@ -622,6 +622,7 @@ namespace mfem
 	      nor.SetSize(dim);
 	      nor = 0.0;
 	      CalcOrtho(Tr.Jacobian(), nor);
+	      nor *= -1.0;
 	      el.CalcShape(eip, te_shape);
 	      double pressure = pface_gf.GetValue(Trans_el2,eip);
 	      DenseMatrix stress(dim);

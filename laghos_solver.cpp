@@ -322,7 +322,7 @@ namespace mfem
 
       v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
       v_bfi->SetIntRule(&b_ir);
-      // VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
+      VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
@@ -339,7 +339,7 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, analyticalSurface);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedVelocityBoundaryForce.Assemble();    
 
