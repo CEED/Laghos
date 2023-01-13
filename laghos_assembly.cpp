@@ -22,6 +22,13 @@ namespace mfem
 
   namespace hydrodynamics
   {
+    double factorial(int nTerms){
+      double factorial = 1.0;	
+      for (int s = 1; s <= nTerms; s++){
+	factorial = factorial*s;
+      }
+      return factorial;
+    }
 
     void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
 						   ElementTransformation &Tr,
@@ -672,7 +679,6 @@ namespace mfem
       }
     }
 
-
     void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								 const FiniteElement &fe2,
 								 FaceElementTransformations &Tr,
@@ -711,27 +717,106 @@ namespace mfem
 	const int h1dofs_cnt = fe.GetDof();
 	elmat.SetSize(2*h1dofs_cnt*dim);
 	elmat = 0.0;
-
-	Vector shape(h1dofs_cnt);
+	
+	Vector shape(h1dofs_cnt), shape_test(h1dofs_cnt), nor(dim), gradUResD_el1(h1dofs_cnt), test_gradUResD_el1(h1dofs_cnt);
+	ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	DenseMatrix nodalGrad_el1, gradUResDirD_el1(h1dofs_cnt), taylorExp_el1(h1dofs_cnt);
+	fe.ProjectGrad(fe,Trans_el1,nodalGrad_el1);
+	
+	nor = 0.0;
 	shape = 0.0;
+	shape_test = 0.0;
+	gradUResDirD_el1 = 0.0; 
+	gradUResD_el1 = 0.0;
+	taylorExp_el1 = 0.0;
+	test_gradUResD_el1 = 0.0;
+	  
 	for (int q = 0; q < nqp_face; q++)
-	  {	     
+	  {
+	    nor = 0.0;
+	    shape = 0.0;
+	    shape_test = 0.0;
+	    gradUResDirD_el1 = 0.0;
+	    gradUResD_el1 = 0.0;
+	    taylorExp_el1 = 0.0;
+	    test_gradUResD_el1 = 0.0;
+	  
 	    const IntegrationPoint &ip_f = ir->IntPoint(q);
 	    // Set the integration point in the face and the neighboring elements
 	    Tr.SetAllIntPoints(&ip_f);
-	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	    Vector nor;
-	    nor.SetSize(dim);
-	    nor = 0.0;
+	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();	    
 	    CalcOrtho(Tr.Jacobian(), nor);
 	    
 	    fe.CalcShape(eip, shape);
+	    fe.CalcShape(eip, shape_test);
+
+	    /////
+	    Vector D_el1(dim);
+	    Vector tN_el1(dim);
+	    vD->Eval(D_el1, Trans_el1, eip);
+	    vN->Eval(tN_el1, Trans_el1, eip);
+	    /////
+
+	    for (int k = 0; k < h1dofs_cnt; k++){
+	      for (int s = 0; s < h1dofs_cnt; s++){
+		for (int j = 0; j < dim; j++){
+		  gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
+		}
+	      }
+	    }
+
+	    DenseMatrix tmp_el1(h1dofs_cnt);
+	    DenseMatrix dummy_tmp_el1(h1dofs_cnt);
+	    tmp_el1 = gradUResDirD_el1;
+	    taylorExp_el1 = gradUResDirD_el1;
+	    dummy_tmp_el1 = 0.0;
+	    for (int k = 0; k < h1dofs_cnt; k++){
+	      for (int s = 0; s < h1dofs_cnt; s++){
+		gradUResD_el1(k) += taylorExp_el1(k,s) * shape(s);  
+	      }
+	    }	    
+	    test_gradUResD_el1 = gradUResD_el1;
+	    
+	    for ( int p = 1; p < nTerms; p++){
+	      dummy_tmp_el1 = 0.0;
+	      taylorExp_el1 = 0.0;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  for (int r = 0; r < h1dofs_cnt; r++){
+		    taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
+		    dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
+		  }
+		}
+	      }
+	      tmp_el1 = dummy_tmp_el1;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  gradUResD_el1(k) += taylorExp_el1(k,s) * shape(s);  
+		}
+	      }
+	    }
+	  
+	    ////
+	    shape += gradUResD_el1;
+	    //
+	    
+	    if (fullPenalty){
+	      shape_test += gradUResD_el1;
+	    }
+	    else{
+	      shape_test += test_gradUResD_el1;
+	    }
+
 	    double nor_norm = 0.0;
 	    for (int s = 0; s < dim; s++){
 	      nor_norm += nor(s) * nor(s);
 	    }
 	    nor_norm = sqrt(nor_norm);
-	    
+
+	    double nTildaDotN = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
+	    }
 	    for (int i = 0; i < h1dofs_cnt; i++)
 	      {
 		for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -740,7 +825,8 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    //		    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;			
 			  }
 		      }
 		  }
@@ -763,25 +849,109 @@ namespace mfem
 	elmat.SetSize(2*h1dofs_cnt*dim);
 	elmat = 0.0;
 
-	Vector shape(h1dofs_cnt);
+	Vector shape(h1dofs_cnt), shape_test(h1dofs_cnt), nor(dim), gradUResD_el2(h1dofs_cnt), test_gradUResD_el2(h1dofs_cnt);
+	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	DenseMatrix nodalGrad_el2, gradUResDirD_el2(h1dofs_cnt), taylorExp_el2(h1dofs_cnt);
+	fe2.ProjectGrad(fe, Trans_el2, nodalGrad_el2);
+	
+	nor = 0.0;
 	shape = 0.0;
+	shape_test = 0.0;
+	gradUResDirD_el2 = 0.0; 
+	gradUResD_el2 = 0.0;
+	taylorExp_el2 = 0.0;
+	test_gradUResD_el2 = 0.0;
+	  
 	for (int q = 0; q < nqp_face; q++)
-	  {	     
+	  {
+
+	    nor = 0.0;
+	    shape = 0.0;
+	    shape_test = 0.0;
+	    gradUResDirD_el2 = 0.0;
+	    gradUResD_el2 = 0.0;
+	    taylorExp_el2 = 0.0;
+	    test_gradUResD_el2 = 0.0;
+	  
 	    const IntegrationPoint &ip_f = ir->IntPoint(q);
 	    // Set the integration point in the face and the neighboring elements
 	    Tr.SetAllIntPoints(&ip_f);
 	    const IntegrationPoint &eip = Tr.GetElement2IntPoint();
-	    Vector nor;
-	    nor.SetSize(dim);
+	    
 	    nor = 0.0;
 	    CalcOrtho(Tr.Jacobian(), nor);
-	    
+	    nor *= -1.0;
+
 	    fe2.CalcShape(eip, shape);
+	    fe2.CalcShape(eip, shape_test);
+
+	    /////
+	    Vector D_el2(dim);
+	    Vector tN_el2(dim);
+	    vD->Eval(D_el2, Trans_el2, eip);
+	    vN->Eval(tN_el2, Trans_el2, eip);
+	    /////
+	    
+	    for (int k = 0; k < h1dofs_cnt; k++){
+	      for (int s = 0; s < h1dofs_cnt; s++){
+		for (int j = 0; j < dim; j++){
+		  gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
+		}
+	      }
+	    }
+
+	    DenseMatrix tmp_el2(h1dofs_cnt);
+	    DenseMatrix dummy_tmp_el2(h1dofs_cnt);
+	    tmp_el2 = gradUResDirD_el2;
+	    taylorExp_el2 = gradUResDirD_el2;
+	    dummy_tmp_el2 = 0.0;
+	    for (int k = 0; k < h1dofs_cnt; k++){
+	      for (int s = 0; s < h1dofs_cnt; s++){
+		gradUResD_el2(k) += taylorExp_el2(k,s) * shape(s);  
+	      }
+	    }	    
+	    test_gradUResD_el2 = gradUResD_el2;
+	    
+	    for ( int p = 1; p < nTerms; p++){
+	      dummy_tmp_el2 = 0.0;
+	      taylorExp_el2 = 0.0;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  for (int r = 0; r < h1dofs_cnt; r++){
+		    taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
+		    dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
+		  }
+		}
+	      }
+	      tmp_el2 = dummy_tmp_el2;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  gradUResD_el2(k) += taylorExp_el2(k,s) * shape(s);  
+		}
+	      }
+	    }
+	    
+	    ////
+	    shape += gradUResD_el2;
+	    //
+	    
+	    if (fullPenalty){
+	      shape_test += gradUResD_el2;
+	    }
+	    else{
+	      shape_test += test_gradUResD_el2;
+	    }
+	    
 	    double nor_norm = 0.0;
 	    for (int s = 0; s < dim; s++){
 	      nor_norm += nor(s) * nor(s);
 	    }
 	    nor_norm = sqrt(nor_norm);
+
+	    double nTildaDotN = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nTildaDotN += nor(s) * tN_el2(s) / nor_norm;
+	    }
 	    
 	    for (int i = 0; i < h1dofs_cnt; i++)
 	      {
@@ -791,7 +961,9 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    //		    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+
 			  }
 		      }
 		  }
@@ -804,7 +976,8 @@ namespace mfem
 	elmat.SetSize(2*h1dofs_cnt*dim);
 	elmat = 0.0;    
       }
-    }
+      }
+    
     
   } // namespace hydrodynamics
   

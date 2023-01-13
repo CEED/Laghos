@@ -108,7 +108,8 @@ namespace mfem
 						     const int oq,
 						     const double penaltyParameter,
 						     const double nitscheVersion,
-						     const bool useEmb, const int gS) :
+						     const bool useEmb, const int gS,
+						     int nT, bool fP) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       pmesh(H1.GetParMesh()),
@@ -190,7 +191,9 @@ namespace mfem
       rhs(H1Vsize),
       b_rhs(H1Vsize),
       e_rhs(L2Vsize),
-      be_rhs(L2Vsize)
+      be_rhs(L2Vsize),
+      nTerms(nT),
+      fullPenalty(fP)
     {
       block_offsets[0] = 0;
       block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -349,7 +352,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);	
       }

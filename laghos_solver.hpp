@@ -129,7 +129,9 @@ namespace mfem
       ShiftedFaceMarker *analyticalSurface;
       VectorCoefficient *dist_vec;
       VectorCoefficient *normal_vec;
-
+      int nTerms;
+      bool fullPenalty;
+  
       void UpdateQuadratureData(const Vector &S) const;
       void UpdateQuadratureDataGL(const Vector &S) const;
       void AssembleForceMatrix() const;
@@ -160,7 +162,7 @@ namespace mfem
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,
-			      const double nitscheVersion, const bool useEmb, const int gS);
+			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.

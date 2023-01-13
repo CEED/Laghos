@@ -91,7 +91,9 @@ int main(int argc, char *argv[])
   double blast_position[] = {0.0, 0.0, 0.0};
   bool useEmbedded = false;
   int geometricShape = 0;
- 
+  int nTerms = 1; 
+  bool fullPenalty = false;
+   
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -144,7 +146,12 @@ int main(int argc, char *argv[])
 		 "Use Embedded when there is surface that will be embedded in a pre-existing mesh");
   args.AddOption(&geometricShape, "-gS", "--geometricShape",
 		 "Shape of the embedded geometry that will be embedded");
-  
+  args.AddOption(&nTerms, "-tO", "--taylorOrder",
+		 "Number of terms in the Taylor expansion");
+  args.AddOption(&fullPenalty, "-fP", "--full-Penalty", "-first-order-penalty",
+		 "--first-order-penalty",
+		 "Use full or first order for SBM penalty.");
+ 
   args.Parse();
   if (!args.Good())
     {
@@ -369,7 +376,7 @@ int main(int argc, char *argv[])
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape);
+					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

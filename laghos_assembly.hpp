@@ -32,7 +32,8 @@ namespace mfem
 
   namespace hydrodynamics
   {
-
+    double factorial(int nTerms);
+  
     // This class is used only for visualization. It assembles (rho, phi) in each
     // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
     // projection of the density.
@@ -205,9 +206,13 @@ namespace mfem
       const QuadratureDataGL &qdata;
       ShiftedFaceMarker *analyticalSurface;
       int par_shared_face_count;
-  
+      VectorCoefficient *vD;
+      VectorCoefficient *vN;
+      int nTerms;
+      bool fullPenalty;
+      
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, ShiftedFaceMarker *analyticalSurface) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), par_shared_face_count(0) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, ShiftedFaceMarker *analyticalSurface, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), vD(dist_vec), vN(normal_vec), par_shared_face_count(0), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
