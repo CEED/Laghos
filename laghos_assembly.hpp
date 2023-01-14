@@ -182,9 +182,12 @@ namespace mfem
       const ParGridFunction *Vnpt_gf;
       ShiftedFaceMarker *analyticalSurface;
       int par_shared_face_count;
-      
+      VectorCoefficient *vD;
+      VectorCoefficient *vN;
+      int nTerms;
+
     public:
-      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, ShiftedFaceMarker *analyticalSurface) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), analyticalSurface(analyticalSurface), par_shared_face_count(0)  { }
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, ShiftedFaceMarker *analyticalSurface, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), analyticalSurface(analyticalSurface), par_shared_face_count(0), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
