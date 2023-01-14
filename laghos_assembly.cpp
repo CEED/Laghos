@@ -1081,7 +1081,7 @@ namespace mfem
 	Vector shape(h1dofs_cnt), shape_test(h1dofs_cnt), nor(dim), gradUResD_el2(h1dofs_cnt), test_gradUResD_el2(h1dofs_cnt);
 	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
 	DenseMatrix nodalGrad_el2, gradUResDirD_el2(h1dofs_cnt), taylorExp_el2(h1dofs_cnt);
-	fe2.ProjectGrad(fe, Trans_el2, nodalGrad_el2);
+	fe2.ProjectGrad(fe2, Trans_el2, nodalGrad_el2);
 	
 	nor = 0.0;
 	shape = 0.0;
