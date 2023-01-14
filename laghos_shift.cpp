@@ -291,15 +291,15 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
       {
          // Sod - the 1D domain length is 1.
          const double dx = 1.0 / glob_NE;
-         return (pure_test) ? tanh(x(0) - 0.5)
-                            : tanh(x(0) - (0.5 + 0.5*dx));
+         return (pure_test) ? x(0) - 0.5
+                            : x(0) - (0.5 + 0.5*dx);
       }
       case 9:
       {
          // Water-air - the 1D domain length is 1.
          const double dx = 1.0 / glob_NE;
-         return (pure_test) ? tanh(x(0) - 0.7)
-                            : tanh(x(0) - (0.7 + 0.5*dx));
+         return (pure_test) ? x(0) - 0.7
+                            : x(0) - (0.7 + 0.5*dx);
       }
       case 10:
       {
