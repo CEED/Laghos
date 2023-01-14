@@ -84,7 +84,6 @@ int main(int argc, char *argv[])
    int rp_levels = 0;
    int order_v = 2;
    int order_e = 1;
-   int order_q = -1;
    int ode_solver_type = 4;
    double t_final = 0.6;
    double ale_period = -1.0;
@@ -168,6 +167,7 @@ int main(int argc, char *argv[])
    if (strncmp(mesh_file, "default", 7) != 0)
    {
       mesh = new Mesh(mesh_file, true, true);
+      dim = mesh->Dimension();
    }
    else
    {
@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
          }
       }
    }
-   dim = mesh->Dimension();
+
 
    // Refine the mesh in serial to increase the resolution.
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
@@ -404,6 +404,8 @@ int main(int argc, char *argv[])
    //    - < [p + grad_p.d].v {phi} >
    // 6: + < |[((grad_v d).n) n]| [p] [phi] >
    si_options.e_shift_type = shift_e;
+   // Scaling of the energy term.
+   si_options.e_shift_scale = 1.0;
    // Activate the energy diffusion term. The LHS gets:
    //    + < {h |grad_v|} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = true;
@@ -600,12 +602,12 @@ int main(int argc, char *argv[])
    double t = 0.0, t_old;
    double dt = hydro.GetTimeStepEstimate(S);
    bool last_step = false;
-   int steps = 0;
    BlockVector S_old(S);
 
    // Shifting - related extractors.
    hydrodynamics::PointExtractor e_L_extr, e_R_extr,
-                                 p_L_extr, p_R_extr, x_extr, v_extr;
+                                 p_L_extr, p_R_extr, x_extr, v_extr,
+                                 ind_L_extr, ind_R_extr;
    hydrodynamics::ShiftedPointExtractor e_LS_extr, e_RS_extr,
                                         p_LS_extr, p_RS_extr;
    bool extract1D = false;
@@ -631,13 +633,13 @@ int main(int argc, char *argv[])
       point_face_10(0) = (zone_id_10 + 1) * dx;
       point_face_20(0) = zone_id_20 * dx;
       cout << "Elements: " << zone_id_10 << " " << zone_id_20 << endl;
-      std::cout << "True interface: " << point_interface(0) << endl
-                << "Surrogate 10:   " << point_face_10(0)   << endl
-                << "Surrogate 20:   " << point_face_20(0)   << endl
-                << "dx:             " << dx << endl;
+      cout << "True interface: " << point_interface(0) << endl
+           << "Surrogate 10:   " << point_face_10(0)   << endl
+           << "Surrogate 20:   " << point_face_20(0)   << endl
+           << "dx:             " << dx << endl;
 
       std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
-                  enameFL, enameFR, enameSL, enameSR;
+                  enameFL, enameFR, enameSL, enameSR, inameL, inameR;
 
       prefix = (problem == 8)
          ? "../../../Desktop/scatter_plots/shift_sod/sod_"
@@ -652,6 +654,8 @@ int main(int argc, char *argv[])
       pnameFR = prefix + "p_fit_R.out";
       pnameSL = prefix + "p_shift_L.out";
       pnameSR = prefix + "p_shift_R.out";
+      inameL  = prefix + "ind_L.out";
+      inameR  = prefix + "ind_R.out";
 
       IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
       const IntegrationRule &ir_extr =
@@ -659,6 +663,10 @@ int main(int argc, char *argv[])
 
       //v_extr.SetPoint(zone_id_15, point_interface, v_gf, ir_extr, vname);
       //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
+      ind_L_extr.SetPoint(zone_id_15, point_interface, &mat_data.alpha_1,
+                          ir_extr, inameL);
+      ind_R_extr.SetPoint(zone_id_15, point_interface, &mat_data.alpha_2,
+                          ir_extr, inameR);
       if (pure_test)
       {
          e_L_extr.SetPoint(zone_id_10, point_face_10,
@@ -697,6 +705,8 @@ int main(int argc, char *argv[])
          e_RS_extr.WriteValue(0.0);
          p_LS_extr.WriteValue(0.0);
          p_RS_extr.WriteValue(0.0);
+         ind_L_extr.WriteValue(0.0);
+         ind_R_extr.WriteValue(0.0);
       }
    }
 
@@ -719,7 +729,6 @@ int main(int argc, char *argv[])
       // S is the vector of dofs, t is the current time, and dt is the time step
       // to advance. The function does t += dt.
       ode_solver->Step(S, t, dt);
-      steps++;
 
       // Adaptive time step control.
       const double dt_est = hydro.GetTimeStepEstimate(S);
@@ -827,6 +836,8 @@ int main(int argc, char *argv[])
             e_RS_extr.WriteValue(t);
             p_LS_extr.WriteValue(t);
             p_RS_extr.WriteValue(t);
+            ind_L_extr.WriteValue(t);
+            ind_R_extr.WriteValue(t);
          }
       }
 
@@ -962,16 +973,6 @@ int main(int argc, char *argv[])
            << "e1 norm:    " << err_e_1 << endl
            << "e2 norm:    " << err_e_2 << endl
            << "dist norm:  " << err_dis << endl;
-   }
-
-   switch (ode_solver_type)
-   {
-      case 2: steps *= 2; break;
-      case 3:
-      case 10: steps *= 3; break;
-      case 4: steps *= 4; break;
-      case 6: steps *= 6; break;
-      case 7: steps *= 2;
    }
 
    const double mass_final   = hydro.Mass(1);

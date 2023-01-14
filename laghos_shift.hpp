@@ -69,6 +69,7 @@ struct SIOptions
    double v_shift_diffusion_scale = 1.0;
 
    int e_shift_type = 0;
+   double e_shift_scale = 1.0;
    bool e_shift_diffusion = false;
    double e_shift_diffusion_scale = 1.0;
 };
@@ -173,6 +174,7 @@ private:
 public:
    int num_taylor = 1;
    int e_shift_type = 0;
+   double e_shift_scale = 1.0;
    bool diffusion = false;
    bool problem_visc = false;
    double diffusion_scale = 1.0;

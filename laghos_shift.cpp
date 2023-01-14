@@ -1111,8 +1111,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       {
          // 1st element.
          el_1.CalcShape(ip_e1, shape_e);
-         shape_e *= ip_f.weight * alpha_scale *
-                    //(gradv_d_n_n_e1 * nor) * gamma_avg * p_q1;
+         shape_e *= ip_f.weight * alpha_scale * e_shift_scale *
                     jump_gradv_d_n_n * gamma_avg * p_q1;
          Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
          elvect_e1 -= shape_e;
@@ -1121,8 +1120,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          if (local_face)
          {
             el_2.CalcShape(ip_e2, shape_e);
-            shape_e *= ip_f.weight * alpha_scale *
-                       //(gradv_d_n_n_e2 * nor) * (1.0 - gamma_avg) * p_q2;
+            shape_e *= ip_f.weight * alpha_scale * e_shift_scale *
                        jump_gradv_d_n_n * (1.0 - gamma_avg) * p_q2;
             Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
             // Same sign as above, because it's an average of the shape f-s.

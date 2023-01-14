@@ -285,6 +285,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_1->SetIntRule(&ir_face);
    efi_1->num_taylor      = si_options.num_taylor;
    efi_1->e_shift_type    = si_options.e_shift_type;
+   efi_1->e_shift_scale   = si_options.e_shift_scale;
    efi_1->diffusion       = si_options.e_shift_diffusion;
    efi_1->problem_visc    = use_viscosity;
    efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
@@ -294,6 +295,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_2->SetIntRule(&ir_face);
    efi_2->num_taylor      = si_options.num_taylor;
    efi_2->e_shift_type    = si_options.e_shift_type;
+   efi_2->e_shift_scale   = si_options.e_shift_scale;
    efi_2->diffusion       = si_options.e_shift_diffusion;
    efi_2->problem_visc    = use_viscosity;
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
@@ -679,10 +681,10 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
          {
             double rho = qdata.rho0DetJ0w_1(e*nqp + q) /
                          mat_data.vol_1.GetValue(Tr, ip) / detJ / ip.weight;
-            double e   = e_1.GetValue(Tr, ip);
+            double en  = e_1.GetValue(Tr, ip);
             double g   = mat_data.gamma_1;
-            double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * e
-                                              : (g - 1.0) * rho * e - g * 6.0e8;
+            double p   = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
+                                              : (g - 1.0) * rho * en - g*6.0e8;
             fstream_1 << pos(0) << " " << p << "\n";
             fstream_1.flush();
 
@@ -693,10 +695,10 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
          {
             double rho = qdata.rho0DetJ0w_2(e*nqp + q) /
                          mat_data.vol_2.GetValue(Tr, ip) / detJ / ip.weight;
-            double e   = e_2.GetValue(Tr, ip);
+            double en  = e_2.GetValue(Tr, ip);
             double g   = mat_data.gamma_2;
-            double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * e
-                                              : (g - 1.0) * rho * e - g * 6.0e8;
+            double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
+                                              : (g - 1.0) * rho * en - g*6.0e8;
             fstream_2 << pos(0) << " " << p << "\n";
             fstream_2.flush();
 
