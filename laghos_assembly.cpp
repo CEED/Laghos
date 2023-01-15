@@ -532,7 +532,13 @@ namespace mfem
 	  }
 	
 	if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
-	  const int dim = el.GetDim();      
+	  const int dim = el.GetDim();
+	  DenseMatrix identity(dim);
+	  identity = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    identity(s,s) = 1.0;
+	  }
+
 	  const IntegrationRule *ir = IntRule;
 	  if (ir == NULL)
 	    {
@@ -676,7 +682,7 @@ namespace mfem
 	      }
 	      
 	      ////
-	      velocity_shape += gradUResD_el1;
+	      //	      velocity_shape += gradUResD_el1;
 	      ////
 	      
 	      Vector vShape(dim);
@@ -693,26 +699,55 @@ namespace mfem
 	      }
 
 	      // Quadrature data for partial assembly of the force operator.
-	      stress.Mult( tN_el1, weightedNormalStress);
+	      //	      stress.Mult( tN_el1, weightedNormalStress);
+	      stress.Mult( nor, weightedNormalStress);
 
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
+		//	normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
+		normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+	      }
+
+	      double tangentStressProjTangent = 0.0;
+	      for (int s = 0; s < dim; s++){
+		for (int k = 0; k < dim; k++){
+		  tangentStressProjTangent += stress(s,k) * (identity(s,k) - tN_el1(s) * tN_el1(k));
+		}
 	      }
 
 	      double vDotn = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  vDotn += vShape(s) * tN_el1(s);
+		  //		  vDotn += vShape(s) * tN_el1(s);
+		  vDotn += vShape(s) * nor(s) / nor_norm;
 		}
+	      
+	      double vDotTildaDotTangent = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  for (int k = 0; k < dim; k++)
+		    {
+		      vDotTildaDotTangent += vShape(s) * (nor(k) / nor_norm) * (identity(s,k) - tN_el1(s) * tN_el1(k));
+		    }
+		}
+
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
+	
+		  //	  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  //  elvect(i) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
 		}
 	    }
 	}
 	else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
-	  const int dim = el2.GetDim();      
+	  const int dim = el2.GetDim();
+	  DenseMatrix identity(dim);
+	  identity = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    identity(s,s) = 1.0;
+	  }
+
 	  const IntegrationRule *ir = IntRule;
 	  if (ir == NULL)
 	    {
@@ -858,7 +893,7 @@ namespace mfem
 	      }
 	      
 	      ////
-	      velocity_shape += gradUResD_el2;
+	      // velocity_shape += gradUResD_el2;
 	      //
 
 	      Vector vShape(dim);
@@ -875,21 +910,46 @@ namespace mfem
 	      }
 
 	      // Quadrature data for partial assembly of the force operator.
-	      stress.Mult( tN_el2, weightedNormalStress);
+	      //   stress.Mult( tN_el2, weightedNormalStress);
+	      stress.Mult( nor, weightedNormalStress);
 	    
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
+		//		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
+		normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+	      }
+	      
+	      double tangentStressProjTangent = 0.0;
+	      for (int s = 0; s < dim; s++){
+		for (int k = 0; k < dim; k++){
+		  tangentStressProjTangent += stress(s,k) * (identity(s,k) - tN_el2(s) * tN_el2(k));
+		}
 	      }
 
 	      double vDotn = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  vDotn += vShape(s) * tN_el2(s);
+		  //	  vDotn += vShape(s) * tN_el2(s);
+		  vDotn += vShape(s) * nor(s) / nor_norm;
 		}
+
+	      double vDotTildaDotTangent = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  for (int k = 0; k < dim; k++)
+		    {
+		      vDotTildaDotTangent += vShape(s) * (nor(k) / nor_norm) * (identity(s,k) - tN_el2(s) * tN_el2(k));
+		    }
+		}
+	      
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
+
+		  //		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+
+		  //  elvect(i + l2dofs_offset) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
+	
 		}
 	    }
 	}
@@ -932,7 +992,12 @@ namespace mfem
 	}
       
       if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
-	const int dim = fe.GetDim();      
+	const int dim = fe.GetDim();
+	DenseMatrix identity(dim);
+	identity = 0.0;
+	for (int s = 0; s < dim; s++){
+	  identity(s,s) = 1.0;
+	}
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
 	  {
@@ -1026,14 +1091,14 @@ namespace mfem
 	    }
 	    
 	    ////
-	    shape += gradUResD_el1;
+	    //  shape += gradUResD_el1;
 	    //
 	    
 	    if (fullPenalty){
-	      shape_test += gradUResD_el1;
+	      //  shape_test += gradUResD_el1;
 	    }
 	    else{
-	      shape_test += test_gradUResD_el1;
+	      //  shape_test += test_gradUResD_el1;
 	    }
 
 	    double nor_norm = 0.0;
@@ -1054,8 +1119,10 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    //		    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;			
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    //	    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    //  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el1(vd) * tN_el1(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);			
+	
 			  }
 		      }
 		  }
@@ -1063,7 +1130,13 @@ namespace mfem
 	  }
       }
       else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
-	const int dim = fe2.GetDim();      
+	const int dim = fe2.GetDim();
+	DenseMatrix identity(dim);
+	identity = 0.0;
+	for (int s = 0; s < dim; s++){
+	  identity(s,s) = 1.0;
+	}
+
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
 	  {
@@ -1162,14 +1235,14 @@ namespace mfem
 	    }
 	    
 	    ////
-	    shape += gradUResD_el2;
+	    // shape += gradUResD_el2;
 	    //
 	    
 	    if (fullPenalty){
-	      shape_test += gradUResD_el2;
+	      //  shape_test += gradUResD_el2;
 	    }
 	    else{
-	      shape_test += test_gradUResD_el2;
+	      //  shape_test += test_gradUResD_el2;
 	    }
 	    
 	    double nor_norm = 0.0;
@@ -1191,8 +1264,10 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    //   elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    //	    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    //  elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el2(vd) * tN_el2(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);
+
 			  }
 		      }
 		  }
@@ -1205,7 +1280,7 @@ namespace mfem
 	elmat.SetSize(2*h1dofs_cnt*dim);
 	elmat = 0.0;    
       }
-      }
+    }
     
     
   } // namespace hydrodynamics
