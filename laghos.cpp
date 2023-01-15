@@ -605,9 +605,11 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
 
    // Shifting - related extractors.
-   hydrodynamics::PointExtractor e_L_extr, e_R_extr,
-                                 p_L_extr, p_R_extr, x_extr, v_extr,
-                                 ind_L_extr, ind_R_extr;
+   hydrodynamics::PointExtractor e_L_pure_extr, e_R_pure_extr,
+                                 p_L_pure_extr, p_R_pure_extr,
+                                 x_extr, v_extr,
+                                 ind_L_mix_extr, ind_R_mix_extr;
+   hydrodynamics::RhoPointExtractor rho_L_mix_extr, rho_R_mix_extr;
    hydrodynamics::ShiftedPointExtractor e_LS_extr, e_RS_extr,
                                         p_LS_extr, p_RS_extr;
    bool extract1D = false;
@@ -639,7 +641,8 @@ int main(int argc, char *argv[])
            << "dx:             " << dx << endl;
 
       std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
-                  enameFL, enameFR, enameSL, enameSR, inameL, inameR;
+                  enameFL, enameFR, enameSL, enameSR,
+                  inameL, inameR, rnameML, rnameMR;
 
       prefix = (problem == 8)
          ? "../../../Desktop/scatter_plots/shift_sod/sod_"
@@ -656,6 +659,8 @@ int main(int argc, char *argv[])
       pnameSR = prefix + "p_shift_R.out";
       inameL  = prefix + "ind_L.out";
       inameR  = prefix + "ind_R.out";
+      rnameML = prefix + "rho_mix_L.out";
+      rnameMR = prefix + "rho_mix_R.out";
 
       IntegrationRules IntRulesCU(0, Quadrature1D::ClosedUniform);
       const IntegrationRule &ir_extr =
@@ -663,20 +668,16 @@ int main(int argc, char *argv[])
 
       //v_extr.SetPoint(zone_id_15, point_interface, v_gf, ir_extr, vname);
       //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
-      ind_L_extr.SetPoint(zone_id_15, point_interface, &mat_data.alpha_1,
-                          ir_extr, inameL);
-      ind_R_extr.SetPoint(zone_id_15, point_interface, &mat_data.alpha_2,
-                          ir_extr, inameR);
       if (pure_test)
       {
-         e_L_extr.SetPoint(zone_id_10, point_face_10,
-                           &mat_data.e_1, ir_extr, enameFL);
-         e_R_extr.SetPoint(zone_id_20, point_face_20,
-                           &mat_data.e_2, ir_extr, enameFR);
-         p_L_extr.SetPoint(zone_id_10, point_face_10,
-                           &p_1_gf, ir_extr, pnameFL);
-         p_R_extr.SetPoint(zone_id_20, point_face_20,
-                           &p_2_gf, ir_extr, pnameFR);
+         e_L_pure_extr.SetPoint(zone_id_10, point_face_10,
+                                &mat_data.e_1, ir_extr, enameFL);
+         e_R_pure_extr.SetPoint(zone_id_20, point_face_20,
+                                &mat_data.e_2, ir_extr, enameFR);
+         p_L_pure_extr.SetPoint(zone_id_10, point_face_10,
+                                &p_1_gf, ir_extr, pnameFL);
+         p_R_pure_extr.SetPoint(zone_id_20, point_face_20,
+                                &p_2_gf, ir_extr, pnameFR);
       }
       else
       {
@@ -688,16 +689,29 @@ int main(int argc, char *argv[])
                             &p_1_gf, &dist, ir_extr, pnameSL);
          p_RS_extr.SetPoint(zone_id_20, point_face_20,
                             &p_2_gf, &dist, ir_extr, pnameSR);
+
+         int q_id = ir_volume.GetNPoints() / 2;
+         cout << "Volumetric quads: "
+              << ir_volume.GetNPoints() << "; extracting " << q_id << endl;
+         ind_L_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_1,
+                                 ir_volume, inameL);
+         ind_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_2,
+                                 ir_volume, inameR);
+
+         rho_L_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_1,
+                                 &hydro.GetRhoDetJw(1), ir_volume, rnameML);
+         rho_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_2,
+                                 &hydro.GetRhoDetJw(2), ir_volume, rnameMR);
       }
 
       //v_extr.WriteValue(0.0);
       //x_extr.WriteValue(0.0);
       if (pure_test)
       {
-         e_L_extr.WriteValue(0.0);
-         e_R_extr.WriteValue(0.0);
-         p_L_extr.WriteValue(0.0);
-         p_R_extr.WriteValue(0.0);
+         e_L_pure_extr.WriteValue(0.0);
+         e_R_pure_extr.WriteValue(0.0);
+         p_L_pure_extr.WriteValue(0.0);
+         p_R_pure_extr.WriteValue(0.0);
       }
       else
       {
@@ -705,8 +719,10 @@ int main(int argc, char *argv[])
          e_RS_extr.WriteValue(0.0);
          p_LS_extr.WriteValue(0.0);
          p_RS_extr.WriteValue(0.0);
-         ind_L_extr.WriteValue(0.0);
-         ind_R_extr.WriteValue(0.0);
+         ind_L_mix_extr.WriteValue(0.0);
+         ind_R_mix_extr.WriteValue(0.0);
+         rho_L_mix_extr.WriteValue(0.0);
+         rho_R_mix_extr.WriteValue(0.0);
       }
    }
 
@@ -825,10 +841,10 @@ int main(int argc, char *argv[])
          //x_extr.WriteValue(t);
          if (pure_test)
          {
-            e_L_extr.WriteValue(t);
-            e_R_extr.WriteValue(t);
-            p_L_extr.WriteValue(t);
-            p_R_extr.WriteValue(t);
+            e_L_pure_extr.WriteValue(t);
+            e_R_pure_extr.WriteValue(t);
+            p_L_pure_extr.WriteValue(t);
+            p_R_pure_extr.WriteValue(t);
          }
          else
          {
@@ -836,8 +852,10 @@ int main(int argc, char *argv[])
             e_RS_extr.WriteValue(t);
             p_LS_extr.WriteValue(t);
             p_RS_extr.WriteValue(t);
-            ind_L_extr.WriteValue(t);
-            ind_R_extr.WriteValue(t);
+            ind_L_mix_extr.WriteValue(t);
+            ind_R_mix_extr.WriteValue(t);
+            rho_L_mix_extr.WriteValue(t);
+            rho_R_mix_extr.WriteValue(t);
          }
       }
 

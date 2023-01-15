@@ -229,7 +229,7 @@ class PointExtractor
 protected:
    const ParGridFunction *g = nullptr;
    // -1 if the point is not in the current MPI task.
-   int z_id = -1;
+   int element_id = -1;
    IntegrationPoint ip;
    std::ofstream fstream;
 
@@ -241,13 +241,43 @@ public:
 
    // The assumption is that the point coincides with one of the DOFs of the
    // input GridFunction's nodes.
-   void SetPoint(int zone, const Vector &xyz, const ParGridFunction *gf,
+   void SetPoint(int el_id, const Vector &xyz, const ParGridFunction *gf,
+                 const IntegrationRule &ir, std::string filename);
+
+   // Sets the point to the quad_id index in ir.
+   void SetPoint(int el_id, int quad_id, const ParGridFunction *gf,
                  const IntegrationRule &ir, std::string filename);
 
    ~PointExtractor() { fstream.close(); }
 
-   virtual double GetValue() const { return g->GetValue(z_id, ip); }
-   void WriteValue(double time);
+   virtual double GetValue() const { return g->GetValue(element_id, ip); }
+   void WriteValue(double time)
+   {
+      fstream << time << " " << GetValue() << "\n"; fstream.flush();
+   }
+};
+
+class RhoPointExtractor : public PointExtractor
+{
+protected:
+   const Vector *rho0DetJ0w = nullptr;
+   int nqp = -1, q_id = -1;
+
+public:
+   RhoPointExtractor() { }
+
+   // Needs the indicator GridFunction.
+   void SetPoint(int el_id, int quad_id,
+                 const ParGridFunction *ind_gf, const Vector *rdj,
+                 const IntegrationRule &ir, std::string filename)
+   {
+      PointExtractor::SetPoint(el_id, quad_id, ind_gf, ir, filename);
+      rho0DetJ0w = rdj;
+      nqp = ir.GetNPoints();
+      q_id = quad_id;
+   }
+
+   virtual double GetValue() const;
 };
 
 class ShiftedPointExtractor : public PointExtractor

@@ -1358,32 +1358,44 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
    }
 }
 
-void PointExtractor::SetPoint(int zone, const Vector &xyz,
+void PointExtractor::SetPoint(int el_id, const Vector &xyz,
                               const ParGridFunction *gf,
                               const IntegrationRule &ir, std::string filename)
 {
    g = gf;
-   z_id = zone;
-   fstream.open(filename);
+   element_id = el_id;
+
+   // Find the integration point and copy it.
+   int q_id = FindIntegrPoint(el_id, xyz, ir);
+   ip = ir.IntPoint(q_id);
+   MFEM_VERIFY(q_id > -1,
+               "Integration point not found " << filename);
 
    ParFiniteElementSpace &pfes = *g->ParFESpace();
    MFEM_VERIFY(pfes.GetNRanks() == 1, "PointExtractor works only in serial.");
    MFEM_VERIFY(pfes.GetMesh()->Dimension() == 1, "Only implemented in 1D.");
 
-   // Find the integration point and copy it.
-   int q_id = FindIntegrPoint(zone, xyz, ir);
-   ip = ir.IntPoint(q_id);
-   MFEM_VERIFY(q_id > -1,
-               "Integration point not found " << filename);
-   cout << filename << ": Element " << zone << "; Quad: " << q_id << endl;
-
+   fstream.open(filename);
    fstream.precision(8);
+
+   cout << filename << ": Element " << el_id << "; Quad: " << q_id << endl;
 }
 
-void PointExtractor::WriteValue(double time)
+void PointExtractor::SetPoint(int el_id, int quad_id, const ParGridFunction *gf,
+                              const IntegrationRule &ir, std::string filename)
 {
-   fstream << time << " " << GetValue() << "\n";
-   fstream.flush();
+   g = gf;
+   element_id = el_id;
+   ip = ir.IntPoint(quad_id);
+
+   ParFiniteElementSpace &pfes = *g->ParFESpace();
+   MFEM_VERIFY(pfes.GetNRanks() == 1, "PointExtractor works only in serial.");
+   MFEM_VERIFY(pfes.GetMesh()->Dimension() == 1, "Only implemented in 1D.");
+
+   fstream.open(filename);
+   fstream.precision(8);
+
+   cout << filename << ": Element " << el_id << "; Quad: " << quad_id << endl;
 }
 
 int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
@@ -1396,13 +1408,23 @@ int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
    const double eps = 1e-8;
    for (int q = 0; q < nqp; q++)
    {
-      const IntegrationPoint &ip = ir.IntPoint(q);
-      tr.SetIntPoint(&ip);
-      tr.Transform(ip, position);
+      const IntegrationPoint &ip_q = ir.IntPoint(q);
+      tr.SetIntPoint(&ip_q);
+      tr.Transform(ip_q, position);
       // Assumes 1D.
       if (fabs(position(0) - xyz(0)) < eps) { return q; }
    }
    return -1;
+}
+
+double RhoPointExtractor::GetValue() const
+{
+   ParFiniteElementSpace &pfes = *g->ParFESpace();
+   ElementTransformation &tr = *pfes.GetElementTransformation(element_id);
+   tr.SetIntPoint(&ip);
+
+   return (*rho0DetJ0w)(nqp * element_id + q_id) /
+          g->GetValue(element_id, ip) / tr.Jacobian().Det() / ip.weight;
 }
 
 double ShiftedPointExtractor::GetValue() const
@@ -1410,12 +1432,13 @@ double ShiftedPointExtractor::GetValue() const
    ParFiniteElementSpace &pfes = *g->ParFESpace();
    Vector grad_g(1);
 
-   ElementTransformation &tr = *pfes.GetElementTransformation(z_id);
+   ElementTransformation &tr = *pfes.GetElementTransformation(element_id);
    tr.SetIntPoint(&ip);
-   g->GetGradient(*pfes.GetElementTransformation(z_id), grad_g);
+   g->GetGradient(*pfes.GetElementTransformation(element_id), grad_g);
 
    // Assumes 1D.
-   return g->GetValue(z_id, ip) + dist->GetValue(z_id, ip) * grad_g(0);
+   return g->GetValue(element_id, ip) +
+          dist->GetValue(element_id, ip) * grad_g(0);
 }
 
 // Initially the energies are initialized as the single material version, due
