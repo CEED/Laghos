@@ -27,6 +27,13 @@ double relativePosition(const Vector &x, const int type)
      const double radius = 0.2;
      return radiusOfPt - radius; // positive is the domain
    }
+   if (type == 2) // circle of radius 0.2 - centered at 0.5, 0.5
+   {
+     double slope = 0.0;
+     double yIntercept = 0.6;
+     double ptOnLine = slope * x(0) + yIntercept;
+     return ptOnLine-x(1); // positive is the domain
+   }
    else
      {
       MFEM_ABORT(" Function type not implement yet.");
@@ -72,11 +79,29 @@ void Circle_Normal(const Vector &x, Vector &tN){
   }
 }
 
+// Distance to circle of radius 0.2 - centered at 0.5, 0.5 
+void Line_Dist(const Vector &x, Vector &D){
+  double slope = 0.0;
+  double yIntercept = 0.6;
+  double ptOnLine = slope * x(0) + yIntercept;
+  D(0) = 0.0;
+  D(1) = ptOnLine - x(1);
+}
+
+// Unit normal of circle of radius 0.2 - centered at 0.5, 0.5
+void Line_Normal(const Vector &x, Vector &tN){
+  tN(0) = 0.0;
+  tN(1) = 1.0;
+}
+
 /// Analytic distance to the 0 level set.
 void dist_value(const Vector &x, Vector &D, const int type)
 {
    if (type == 1) {
      return Circle_Dist(x, D);
+   }
+   else if (type == 2) {
+     return Line_Dist(x, D);
    }
    else
    {
@@ -90,6 +115,9 @@ void normal_value(const Vector &x, Vector &tN, const int type)
 {
    if (type == 1) {
      return Circle_Normal(x, tN);
+   }
+   if (type == 2) {
+     return Line_Normal(x, tN);
    }
    else
    {
