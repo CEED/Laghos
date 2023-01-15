@@ -682,7 +682,7 @@ namespace mfem
 	      }
 	      
 	      ////
-	      //	      velocity_shape += gradUResD_el1;
+	      velocity_shape += gradUResD_el1;
 	      ////
 	      
 	      Vector vShape(dim);
@@ -699,13 +699,13 @@ namespace mfem
 	      }
 
 	      // Quadrature data for partial assembly of the force operator.
-	      //	      stress.Mult( tN_el1, weightedNormalStress);
-	      stress.Mult( nor, weightedNormalStress);
+	      // stress.Mult( nor, weightedNormalStress);
+	      stress.Mult( tN_el1, weightedNormalStress);
 
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		//	normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
-		normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		//normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
 	      }
 
 	      double tangentStressProjTangent = 0.0;
@@ -718,8 +718,8 @@ namespace mfem
 	      double vDotn = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  //		  vDotn += vShape(s) * tN_el1(s);
-		  vDotn += vShape(s) * nor(s) / nor_norm;
+		  //  vDotn += vShape(s) * nor(s) / nor_norm;
+		  vDotn += vShape(s) * tN_el1(s);
 		}
 	      
 	      double vDotTildaDotTangent = 0.0;
@@ -733,9 +733,8 @@ namespace mfem
 
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
-	
-		  //	  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  //  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
+		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
 		  //  elvect(i) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
 		}
 	    }
@@ -893,7 +892,7 @@ namespace mfem
 	      }
 	      
 	      ////
-	      // velocity_shape += gradUResD_el2;
+	      velocity_shape += gradUResD_el2;
 	      //
 
 	      Vector vShape(dim);
@@ -910,13 +909,13 @@ namespace mfem
 	      }
 
 	      // Quadrature data for partial assembly of the force operator.
-	      //   stress.Mult( tN_el2, weightedNormalStress);
-	      stress.Mult( nor, weightedNormalStress);
+	      //  stress.Mult( nor, weightedNormalStress);
+	      stress.Mult( tN_el2, weightedNormalStress);
 	    
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		//		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
-		normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		// normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
 	      }
 	      
 	      double tangentStressProjTangent = 0.0;
@@ -929,8 +928,8 @@ namespace mfem
 	      double vDotn = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  //	  vDotn += vShape(s) * tN_el2(s);
-		  vDotn += vShape(s) * nor(s) / nor_norm;
+		  vDotn += vShape(s) * tN_el2(s);
+		  // vDotn += vShape(s) * nor(s) / nor_norm;
 		}
 
 	      double vDotTildaDotTangent = 0.0;
@@ -944,11 +943,11 @@ namespace mfem
 	      
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
+		  //	  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
 
-		  //		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
 
-		  //  elvect(i + l2dofs_offset) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
+		  //	  elvect(i + l2dofs_offset) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
 	
 		}
 	    }
@@ -1091,14 +1090,14 @@ namespace mfem
 	    }
 	    
 	    ////
-	    //  shape += gradUResD_el1;
+	    shape += gradUResD_el1;
 	    //
 	    
 	    if (fullPenalty){
-	      //  shape_test += gradUResD_el1;
+	      shape_test += gradUResD_el1;
 	    }
 	    else{
-	      //  shape_test += test_gradUResD_el1;
+	      shape_test += test_gradUResD_el1;
 	    }
 
 	    double nor_norm = 0.0;
@@ -1119,8 +1118,8 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    //	    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    //		    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
 			    //  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el1(vd) * tN_el1(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);			
 	
 			  }
@@ -1235,14 +1234,14 @@ namespace mfem
 	    }
 	    
 	    ////
-	    // shape += gradUResD_el2;
+	    shape += gradUResD_el2;
 	    //
 	    
 	    if (fullPenalty){
-	      //  shape_test += gradUResD_el2;
+	      shape_test += gradUResD_el2;
 	    }
 	    else{
-	      //  shape_test += test_gradUResD_el2;
+	      shape_test += test_gradUResD_el2;
 	    }
 	    
 	    double nor_norm = 0.0;
@@ -1264,9 +1263,9 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    //	    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
-			    //  elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el2(vd) * tN_el2(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);
+			    //		    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    //    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el2(vd) * tN_el2(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);
 
 			  }
 		      }
