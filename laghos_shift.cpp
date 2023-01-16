@@ -1427,6 +1427,15 @@ double RhoPointExtractor::GetValue() const
           g->GetValue(element_id, ip) / tr.Jacobian().Det() / ip.weight;
 }
 
+double PPointExtractor::GetValue() const
+{
+   const double rho = RhoPointExtractor::GetValue(),
+                  e = e_gf->GetValue(element_id, ip);
+
+   return (fabs(gamma - 4.4) > 1e-8) ? (gamma - 1.0) * rho * e
+                                     : (gamma - 1.0) * rho * e - gamma * 6.0e8;
+}
+
 double ShiftedPointExtractor::GetValue() const
 {
    ParFiniteElementSpace &pfes = *g->ParFESpace();

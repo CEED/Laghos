@@ -280,6 +280,28 @@ public:
    virtual double GetValue() const;
 };
 
+class PPointExtractor : public RhoPointExtractor
+{
+protected:
+   const ParGridFunction *e_gf = nullptr;
+   double gamma = 0.0;
+
+public:
+   PPointExtractor() { }
+
+   // Needs the indicator and energy GridFunctions.
+   void SetPoint(int el_id, int quad_id, const Vector *rdj, double gam,
+                 const ParGridFunction *ind_gf, const ParGridFunction *en_gf,
+                 const IntegrationRule &ir, std::string filename)
+   {
+      RhoPointExtractor::SetPoint(el_id, quad_id, ind_gf, rdj, ir, filename);
+      gamma = gam;
+      e_gf = en_gf;
+   }
+
+   virtual double GetValue() const;
+};
+
 class ShiftedPointExtractor : public PointExtractor
 {
 protected:
