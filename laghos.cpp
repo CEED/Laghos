@@ -605,9 +605,10 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
 
    // Shifting - related extractors.
-   hydrodynamics::PointExtractor e_L_pure_extr, e_R_pure_extr,
-                                 p_L_pure_extr, p_R_pure_extr,
-                                 x_extr, v_extr,
+   hydrodynamics::RhoPointExtractor rho_L_fit_extr, rho_R_fit_extr;
+   hydrodynamics::PointExtractor e_L_fit_extr, e_R_fit_extr;
+   hydrodynamics::PPointExtractor p_L_fit_extr, p_R_fit_extr;
+   hydrodynamics::PointExtractor x_extr, v_extr,
                                  ind_L_mix_extr, ind_R_mix_extr,
                                  e_L_mix_extr, e_R_mix_extr;
    hydrodynamics::RhoPointExtractor rho_L_mix_extr, rho_R_mix_extr;
@@ -644,7 +645,8 @@ int main(int argc, char *argv[])
 
       std::string vname, xname, pnameFL, pnameFR, pnameSL, pnameSR,
                   enameFL, enameFR, enameSL, enameSR,
-                  inameL, inameR, enameML, enameMR, rnameML, rnameMR,
+                  inameL, inameR, enameML, enameMR,
+                  rnameML, rnameMR, rnameFL, rnameFR,
                   pnameML, pnameMR;
 
       prefix = (problem == 8)
@@ -652,12 +654,16 @@ int main(int argc, char *argv[])
          : "../../../Desktop/scatter_plots/shift_waterair/wa_";
       vname = prefix + "v.out";
       xname = prefix + "x.out";
+
+      rnameFL = prefix + "rho_fit_L.out";
+      rnameFR = prefix + "rho_fit_R.out";
       enameFL = prefix + "e_fit_L.out";
       enameFR = prefix + "e_fit_R.out";
-      enameSL = prefix + "e_shift_L.out";
-      enameSR = prefix + "e_shift_R.out";
       pnameFL = prefix + "p_fit_L.out";
       pnameFR = prefix + "p_fit_R.out";
+
+      enameSL = prefix + "e_shift_L.out";
+      enameSR = prefix + "e_shift_R.out";
       pnameSL = prefix + "p_shift_L.out";
       pnameSR = prefix + "p_shift_R.out";
       inameL  = prefix + "ind_L.out";
@@ -677,14 +683,23 @@ int main(int argc, char *argv[])
       //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
       if (pure_test)
       {
-         e_L_pure_extr.SetPoint(zone_id_10, point_face_10,
-                                &mat_data.e_1, ir_extr, enameFL);
-         e_R_pure_extr.SetPoint(zone_id_20, point_face_20,
-                                &mat_data.e_2, ir_extr, enameFR);
-         p_L_pure_extr.SetPoint(zone_id_10, point_face_10,
-                                &p_1_gf, ir_extr, pnameFL);
-         p_R_pure_extr.SetPoint(zone_id_20, point_face_20,
-                                &p_2_gf, ir_extr, pnameFR);
+         int q_id = ir_volume.GetNPoints() - 1;
+         rho_L_fit_extr.SetPoint(zone_id_10, q_id, &mat_data.alpha_1,
+                                 &hydro.GetRhoDetJw(1), ir_volume, rnameFL);
+         rho_R_fit_extr.SetPoint(zone_id_20, 0, &mat_data.alpha_2,
+                                 &hydro.GetRhoDetJw(2), ir_volume, rnameFR);
+         e_L_fit_extr.SetPoint(zone_id_10, q_id,
+                                &mat_data.e_1, ir_volume, enameFL);
+         e_R_fit_extr.SetPoint(zone_id_20, 0,
+                                &mat_data.e_2, ir_volume, enameFR);
+         p_L_fit_extr.SetPoint(zone_id_10, q_id,
+                               &hydro.GetRhoDetJw(1), mat_data.gamma_1,
+                               &mat_data.alpha_1, &mat_data.e_1,
+                               ir_volume, pnameFL);
+         p_R_fit_extr.SetPoint(zone_id_20, 0,
+                               &hydro.GetRhoDetJw(2), mat_data.gamma_2,
+                               &mat_data.alpha_2, &mat_data.e_2,
+                               ir_volume, pnameFR);
       }
       else
       {
@@ -727,10 +742,12 @@ int main(int argc, char *argv[])
       //x_extr.WriteValue(0.0);
       if (pure_test)
       {
-         e_L_pure_extr.WriteValue(0.0);
-         e_R_pure_extr.WriteValue(0.0);
-         p_L_pure_extr.WriteValue(0.0);
-         p_R_pure_extr.WriteValue(0.0);
+         rho_L_fit_extr.WriteValue(0.0);
+         rho_R_fit_extr.WriteValue(0.0);
+         e_L_fit_extr.WriteValue(0.0);
+         e_R_fit_extr.WriteValue(0.0);
+         p_L_fit_extr.WriteValue(0.0);
+         p_R_fit_extr.WriteValue(0.0);
       }
       else
       {
@@ -864,10 +881,12 @@ int main(int argc, char *argv[])
          //x_extr.WriteValue(t);
          if (pure_test)
          {
-            e_L_pure_extr.WriteValue(t);
-            e_R_pure_extr.WriteValue(t);
-            p_L_pure_extr.WriteValue(t);
-            p_R_pure_extr.WriteValue(t);
+            rho_L_fit_extr.WriteValue(t);
+            rho_R_fit_extr.WriteValue(t);
+            e_L_fit_extr.WriteValue(t);
+            e_R_fit_extr.WriteValue(t);
+            p_L_fit_extr.WriteValue(t);
+            p_R_fit_extr.WriteValue(t);
          }
          else
          {
