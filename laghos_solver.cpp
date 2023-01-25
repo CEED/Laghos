@@ -162,15 +162,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[4] = block_offsets[3] + L2Vsize;
    one = 1.0;
 
-   // Needed for mass matrices, masses, etc.
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
-               &mat_data, mat_data.pointwise_alpha);
-
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   AlphaRhoCoeff arho_1_coeff(mat_data.vol_1, mat_data.rho0_1),
-                 arho_2_coeff(mat_data.vol_2, mat_data.rho0_2);
+   AlphaRhoCoeff arho_1_coeff(mat_data.ind0_1, mat_data.rho0_1),
+                 arho_2_coeff(mat_data.ind0_2, mat_data.rho0_2);
    MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff, &ir);
 
    for (int e = 0; e < NE; e++)
@@ -225,9 +221,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
          qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        mat_data.vol_1.GetValue(Tr, ip) * rho1_vals(q);
+                                        mat_data.ind0_1.GetValue(Tr, ip) * rho1_vals(q);
          qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        mat_data.vol_2.GetValue(Tr, ip) * rho2_vals(q);
+                                        mat_data.ind0_2.GetValue(Tr, ip) * rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -250,8 +246,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    ForceIntegrator *fi_1, *fi_2;
    // The total stress is always taken pointwise, based on the LS value.
-   fi_1 = new ForceIntegrator(qdata.stressJinvT_1, mat_data.vol_1);
-   fi_2 = new ForceIntegrator(qdata.stressJinvT_2, mat_data.vol_2);
+   fi_1 = new ForceIntegrator(qdata.stressJinvT_1, mat_data.ind0_1);
+   fi_2 = new ForceIntegrator(qdata.stressJinvT_2, mat_data.ind0_2);
    fi_1->SetIntRule(&ir);
    fi_2->SetIntRule(&ir);
    Force_1.AddDomainIntegrator(fi_1);
@@ -571,31 +567,29 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 }
 
 void LagrangianHydroOperator::ComputeDensity(int mat_id,
-                                             ParGridFunction &alpha,
+                                             ParGridFunction &ind0,
                                              ParGridFunction &rho) const
 {
-   // TODO fix alpha scaling.
-
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector rhs_z(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
 
    Vector &rhoDetJ = (mat_id == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
 
    MassIntegrator mi(&ir);
-   DensityIntegrator di(mat_id, rhoDetJ, &alpha);
+   DensityIntegrator di(mat_id, rhoDetJ, &ind0);
    di.SetIntRule(&ir);
 
    for (int e = 0; e < NE; e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
+      di.AssembleRHSElementVect(fe, eltr, rhs_z);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
 
-      inv.Mult(rhs, rho_z);
+      inv.Mult(rhs_z, rho_z);
 
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
@@ -680,7 +674,7 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
          if (attr == 10 || attr == 15)
          {
             double rho = qdata.rho0DetJ0w_1(e*nqp + q) /
-                         mat_data.vol_1.GetValue(Tr, ip) / detJ / ip.weight;
+                         mat_data.ind0_1.GetValue(Tr, ip) / detJ / ip.weight;
             double en  = e_1.GetValue(Tr, ip);
             double g   = mat_data.gamma_1;
             double p   = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
@@ -688,13 +682,13 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
             fstream_1 << pos(0) << " " << p << "\n";
             fstream_1.flush();
 
-            p_tot += mat_data.vol_1.GetValue(Tr, ip) * p;
+            p_tot += mat_data.ind0_1.GetValue(Tr, ip) * p;
          }
 
          if (attr == 15 || attr == 20)
          {
             double rho = qdata.rho0DetJ0w_2(e*nqp + q) /
-                         mat_data.vol_2.GetValue(Tr, ip) / detJ / ip.weight;
+                         mat_data.ind0_2.GetValue(Tr, ip) / detJ / ip.weight;
             double en  = e_2.GetValue(Tr, ip);
             double g   = mat_data.gamma_2;
             double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
@@ -702,7 +696,7 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
             fstream_2 << pos(0) << " " << p << "\n";
             fstream_2.flush();
 
-            p_tot += mat_data.vol_2.GetValue(Tr, ip) * p;
+            p_tot += mat_data.ind0_2.GetValue(Tr, ip) * p;
          }
 
          fstream_t << pos(0) << " " << p_tot << "\n";
@@ -741,18 +735,18 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    Vector e_vals, ls_vals;
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
+   // Update the alphas.
+   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
    // Update the pressure values (used for the shifted interface method).
-   UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
-               &mat_data, mat_data.pointwise_alpha);
-   mat_data.p_1->UpdatePressure(mat_data.vol_1, e_1);
-   mat_data.p_2->UpdatePressure(mat_data.vol_2, e_2);
+   mat_data.p_1->UpdatePressure(mat_data.ind0_1, e_1);
+   mat_data.p_2->UpdatePressure(mat_data.ind0_2, e_2);
    if (si_options.v_shift_type > 0 || si_options.e_shift_type > 0)
    {
       // Needed for shifted face integrals in parallel.
       mat_data.alpha_1.ExchangeFaceNbrData();
       mat_data.alpha_2.ExchangeFaceNbrData();
-      mat_data.vol_1.ExchangeFaceNbrData();
-      mat_data.vol_2.ExchangeFaceNbrData();
+      mat_data.ind0_1.ExchangeFaceNbrData();
+      mat_data.ind0_2.ExchangeFaceNbrData();
       mat_data.p_1->ExchangeFaceNbrData();
       mat_data.p_2->ExchangeFaceNbrData();
       mat_data.rhoDetJind0_1.ExchangeFaceNbrData();
@@ -779,7 +773,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    for (int k = 1; k <= 2; k++)
    {
       Vector &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
-      ParGridFunction &ind_k = (k == 1) ? mat_data.vol_1 : mat_data.vol_2;
+      ParGridFunction &ind_k = (k == 1) ? mat_data.ind0_1 : mat_data.ind0_2;
       double gamma_k = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
       ParGridFunction &e_k     = (k == 1) ? e_1 : e_2;
       DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1

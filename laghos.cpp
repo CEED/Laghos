@@ -361,8 +361,8 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    mat_data.alpha_1.SetSpace(&mat_fes);
    mat_data.alpha_2.SetSpace(&mat_fes);
-   mat_data.vol_1.SetSpace(&L2FESpace);
-   mat_data.vol_2.SetSpace(&L2FESpace);
+   mat_data.ind0_1.SetSpace(&L2FESpace);
+   mat_data.ind0_2.SetSpace(&L2FESpace);
    mat_data.rhoDetJind0_1.SetSpace(&L2FESpace);
    mat_data.rhoDetJind0_2.SetSpace(&L2FESpace);
 
@@ -501,7 +501,7 @@ int main(int argc, char *argv[])
    if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data, 0); }
    if (problem == 11) { hydrodynamics::InitTriPoint2Mat(mat_data, 1); }
    if (problem == 12) { hydrodynamics::InitImpact(mat_data); }
-   InterfaceRhoCoeff rho_mixed_coeff(mat_data.vol_1, mat_data.vol_2,
+   InterfaceRhoCoeff rho_mixed_coeff(mat_data.ind0_1, mat_data.ind0_2,
                                      mat_data.rho0_1, mat_data.rho0_2);
 
    // Additional details, depending on the problem.
@@ -543,13 +543,14 @@ int main(int argc, char *argv[])
       cout << "Face quad pts: " << ir_face.GetNPoints() << endl;
    }
 
+   // Computation of alpha and ind at time 0.
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
                &mat_data, si_options.pointwise_alpha);
    mat_data.p_1 = new PressureFunction(problem, 1, *pmesh, si_options.p_space,
-                                       mat_data.vol_1, mat_data.rho0_1,
+                                       mat_data.ind0_1, mat_data.rho0_1,
                                        mat_data.gamma_1);
    mat_data.p_2 = new PressureFunction(problem, 2, *pmesh, si_options.p_space,
-                                       mat_data.vol_2, mat_data.rho0_2,
+                                       mat_data.ind0_2, mat_data.rho0_2,
                                        mat_data.gamma_2);
    mat_data.p.SetSpace(mat_data.p_1->GetPressure().ParFESpace());
 
@@ -566,8 +567,8 @@ int main(int argc, char *argv[])
    ParGridFunction rho_gf_1(&L2FESpace), rho_gf_2(&L2FESpace);
    if (visualization || visit)
    {
-      hydro.ComputeDensity(1, mat_data.vol_1, rho_gf_1);
-      hydro.ComputeDensity(2, mat_data.vol_2, rho_gf_2);
+      hydro.ComputeDensity(1, mat_data.ind0_1, rho_gf_1);
+      hydro.ComputeDensity(2, mat_data.ind0_2, rho_gf_2);
    }
 
    const double mass_init   = hydro.Mass(1);
@@ -621,9 +622,9 @@ int main(int argc, char *argv[])
    {
       extract1D = true;
       const double dx = 1.0 / NE;
-      ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.alpha_1,
+      ParGridFunction &p_1_gf = mat_data.p_1->ComputePressure(mat_data.ind0_1,
                                                               mat_data.e_1);
-      ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.alpha_2,
+      ParGridFunction &p_2_gf = mat_data.p_2->ComputePressure(mat_data.ind0_2,
                                                               mat_data.e_2);
       Vector point_interface(1), point_face_10(1), point_face_20(1);
       point_interface(0) = 0.5;
@@ -944,8 +945,8 @@ int main(int argc, char *argv[])
 
          if (visualization || visit || gfprint)
          {
-            hydro.ComputeDensity(1, mat_data.vol_1, rho_gf_1);
-            hydro.ComputeDensity(2, mat_data.vol_2, rho_gf_2);
+            hydro.ComputeDensity(1, mat_data.ind0_1, rho_gf_1);
+            hydro.ComputeDensity(2, mat_data.ind0_2, rho_gf_2);
          }
          if (visualization)
          {
@@ -1317,9 +1318,9 @@ void visualize(MaterialData &mat_data,
 {
    MPI_Barrier(v.ParFESpace()->GetComm());
 
-   ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.vol_1,
+   ParGridFunction &pressure_1 = mat_data.p_1->ComputePressure(mat_data.ind0_1,
                                                                mat_data.e_1),
-                   &pressure_2 = mat_data.p_2->ComputePressure(mat_data.vol_2,
+                   &pressure_2 = mat_data.p_2->ComputePressure(mat_data.ind0_2,
                                                                mat_data.e_2);
    mat_data.ComputeTotalPressure(pressure_1, pressure_2);
 
@@ -1331,7 +1332,7 @@ void visualize(MaterialData &mat_data,
                                  faces, "Face Marking",
                                  ws, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_vol, vishost, visport,
-                                 mat_data.vol_1, "Volume Fraction 1",
+                                 mat_data.ind0_1, "Volume Fraction 1",
                                  2*ws, wy, ws, ws, false,
                                  "mAcRjlpppppppppppppppppppppp");
 

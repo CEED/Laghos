@@ -44,18 +44,18 @@ private:
 
 public:
    PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,
-                    ParGridFunction &alpha0, ParGridFunction &rho0, double g);
+                    ParGridFunction &ind0, ParGridFunction &rho0, double g);
 
    void UpdateRho0Alpha0(const ParGridFunction &alpha0,
                          const ParGridFunction &rho0);
 
-   void UpdatePressure(const ParGridFunction &alpha,
+   void UpdatePressure(const ParGridFunction &ind0,
                        const ParGridFunction &energy);
 
-   ParGridFunction &ComputePressure(const ParGridFunction &alpha,
+   ParGridFunction &ComputePressure(const ParGridFunction &ind0,
                                     const ParGridFunction &energy)
    {
-      UpdatePressure(alpha, energy);
+      UpdatePressure(ind0, energy);
       return GetPressure();
    }
 
@@ -66,6 +66,7 @@ public:
 
 struct MaterialData;
 
+// Updates ind when mat_data is not null.
 void UpdateAlpha(const ParGridFunction &level_set,
                  ParGridFunction &alpha_1, ParGridFunction &alpha_2,
                  MaterialData *mat_data = nullptr,
@@ -83,7 +84,7 @@ struct MaterialData
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
    bool             pointwise_alpha;
-   ParGridFunction  vol_1, vol_2;     // recomputed in UpdateQuadratureData().
+   ParGridFunction  ind0_1, ind0_2;     // recomputed in UpdateQuadratureData().
    ParGridFunction  rhoDetJind0_1,    // pointwise masses as GridFunctions.
                     rhoDetJind0_2;    // not updated.
 

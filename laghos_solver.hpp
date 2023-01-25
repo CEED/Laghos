@@ -140,7 +140,7 @@ public:
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    // The FE space of rho must be set before the call.
-   void ComputeDensity(int mat_id, ParGridFunction &alpha,
+   void ComputeDensity(int mat_id, ParGridFunction &ind0,
                        ParGridFunction &rho) const;
    double Mass(int mat_id) const;
    double InternalEnergy(const ParGridFunction &e_1,

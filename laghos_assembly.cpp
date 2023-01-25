@@ -82,7 +82,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               loc_force(i, vd) += ind.GetValue(Tr, ip) *
+               loc_force(i, vd) += ind0.GetValue(Tr, ip) *
                                    stressJinvT(vd)(eq, gd) * vshape(i,gd);
             }
          }
