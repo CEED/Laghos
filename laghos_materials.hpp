@@ -30,9 +30,9 @@ enum PressureSpace {L2, H1};
 class PressureFunction
 {
 private:
-   const int p_order = 1;
    const double gamma;
    const int problem, mat_id;
+   const int p_order;
    PressureSpace p_space;
 
    L2_FECollection p_fec_L2;
@@ -43,7 +43,8 @@ private:
    Vector rho0DetJ0;
 
 public:
-   PressureFunction(int prob, int mid, ParMesh &pmesh, PressureSpace space,
+   PressureFunction(int prob, int mid, ParMesh &pmesh,
+                    PressureSpace space, int p_ord,
                     ParGridFunction &ind0, ParGridFunction &rho0, double g);
 
    void UpdateRho0Alpha0(const ParGridFunction &alpha0,

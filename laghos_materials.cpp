@@ -178,10 +178,10 @@ void MaterialData::ComputeTotalPressure(const ParGridFunction &p1_gf,
 }
 
 PressureFunction::PressureFunction(int prob, int mid, ParMesh &pmesh,
-                                   PressureSpace space,
+                                   PressureSpace space, int p_ord,
                                    ParGridFunction &ind0,
                                    ParGridFunction &rho0, double g)
-   : gamma(g), problem(prob), mat_id(mid), p_space(space),
+   : gamma(g), problem(prob), mat_id(mid), p_order(p_ord), p_space(space),
      p_fec_L2(p_order, pmesh.Dimension(), BasisType::GaussLegendre),
      p_fec_H1(p_order, pmesh.Dimension(), BasisType::GaussLobatto),
      p_fes_L2(&pmesh, &p_fec_L2), p_fes_H1(&pmesh, &p_fec_H1),

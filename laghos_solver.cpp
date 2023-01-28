@@ -168,7 +168,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    AlphaRhoCoeff arho_1_coeff(mat_data.ind0_1, mat_data.rho0_1),
                  arho_2_coeff(mat_data.ind0_2, mat_data.rho0_2);
    MassIntegrator mi_1(arho_1_coeff, &ir), mi_2(arho_2_coeff, &ir);
-
    for (int e = 0; e < NE; e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
