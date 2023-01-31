@@ -752,22 +752,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       mat_data.rhoDetJind0_2.ExchangeFaceNbrData();
    }
 
-   // Batched computations are needed, because hydrodynamic codes usually
-   // involve expensive computations of material properties. Although this
-   // miniapp uses simple EOS equations, we still want to represent the batched
-   // cycle structure.
-   int nzones_batch = 3;
-   const int nbatches =  NE / nzones_batch + 1; // +1 for the remainder.
-   int nqp_batch = nqp * nzones_batch;
-   double *gamma_b = new double[nqp_batch],
-          *rho_b   = new double[nqp_batch],
-          *e_b     = new double[nqp_batch],
-          *p_b     = new double[nqp_batch],
-          *cs_b    = new double[nqp_batch],
-          *ls_b    = new double[nqp_batch];
-   // Jacobians of reference->physical transformations for all quadrature points
-   // in the batch.
-   DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
+   // Jacobians of reference->physical transformations for all quad points.
+   DenseTensor Jpr(dim, dim, nqp);
 
    for (int k = 1; k <= 2; k++)
    {
@@ -777,157 +763,138 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       ParGridFunction &e_k     = (k == 1) ? e_1 : e_2;
       DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
                                             : qdata.stressJinvT_2;
-      nzones_batch = 3;
-      nqp_batch    = nqp * nzones_batch;
 
-      for (int b = 0; b < nbatches; b++)
+      double min_detJ = std::numeric_limits<double>::infinity();
+      for (int e = 0; e < NE; e++)
       {
-         int z_id = b * nzones_batch; // Global index over zones.
-         // The last batch might not be full.
-         if (z_id == NE) { break; }
-         else if (z_id + nzones_batch > NE)
+         const int attr = pmesh->GetAttribute(e);
+         if ((k == 1 && attr == 20) || (k == 2 && attr == 10))
          {
-            nzones_batch = NE - z_id;
-            nqp_batch    = nqp * nzones_batch;
-         }
-
-         double min_detJ = std::numeric_limits<double>::infinity();
-         for (int z = 0; z < nzones_batch; z++)
-         {
-            ElementTransformation *T = H1.GetElementTransformation(z_id);
-            Jpr_b[z].SetSize(dim, dim, nqp);
-            e_k.GetValues(z_id, ir, e_vals);
-            mat_data.level_set.GetValues(z_id, ir, ls_vals);
-            for (int q = 0; q < nqp; q++)
+            for (int vd = 0 ; vd < dim; vd++)
             {
-               const IntegrationPoint &ip = ir.IntPoint(q);
-               T->SetIntPoint(&ip);
-               Jpr_b[z](q) = T->Jacobian();
-               const double detJ = Jpr_b[z](q).Det();
-               min_detJ = fmin(min_detJ, detJ);
-               const int idx = z * nqp + q;
-               // Assuming piecewise constant gamma that moves with the mesh.
-               gamma_b[idx] = gamma_k;
-               rho_b[idx]   = r0DJ_k(z_id*nqp + q) /
-                              detJ / ip.weight;
-               if (ind_k.GetValue(*T, ip) > 1e-14)
+               for (int gd = 0; gd < dim; gd++)
                {
-                  rho_b[idx] /= ind_k.GetValue(*T, ip);
-               }
-               e_b[idx]     = fmax(0.0, e_vals(q));
-               ls_b[idx]    = ls_vals(q);
-
-               if (IsFinite(rho_b[idx]) == false)
-               {
-                  cout << z_id << " " << q << endl;
-
-                  T->Jacobian().Print();
-                  pmesh->GetNodes()->Print();
-                  std::cout << detJ << " " << rho_b[idx] << " "
-                            << gamma_b[idx] << " " << min_detJ << std::endl;
-                  MFEM_ABORT("rho bad");
-               }
-            }
-            ++z_id;
-         }
-
-         // Batched computation of material properties.
-         ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
-
-         z_id -= nzones_batch;
-         for (int z = 0; z < nzones_batch; z++)
-         {
-            ElementTransformation *T = H1.GetElementTransformation(z_id);
-            for (int q = 0; q < nqp; q++)
-            {
-               const IntegrationPoint &ip = ir.IntPoint(q);
-               T->SetIntPoint(&ip);
-               // Note that the Jacobian was already computed above. We've chosen
-               // not to store the Jacobians for all batched quadrature points.
-               const DenseMatrix &Jpr = Jpr_b[z](q);
-               CalcInverse(Jpr, Jinv);
-               const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
-                            p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
-               stress = 0.0;
-               for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
-               double visc_coeff = 0.0;
-               if (use_viscosity)
-               {
-                  // Compression-based length scale at the point. The first
-                  // eigenvector of the symmetric velocity gradient gives the
-                  // direction of maximal compression. This is used to define the
-                  // relative change of the initial length scale.
-                  v.GetVectorGradient(*T, sgrad_v);
-                  sgrad_v.Symmetrize();
-
-                  // Length scale in compression direction, and measure of
-                  // maximal compression / expansion.
-                  double h, mu;
-                  LengthScaleAndCompression(sgrad_v, *T,
-                                            qdata.Jac0inv(z_id*nqp + q),
-                                            qdata.h0, h, mu);
-
-                  double vort_coeff = 1.0;
-                  if (use_vorticity)
+                  for (int q = 0; q < nqp; q++)
                   {
-                     const double grad_norm = sgrad_v.FNorm();
-                     const double div_v = fabs(sgrad_v.Trace());
-                     vort_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-                  }
-
-                  visc_coeff = 2.0 * rho * h * h * fabs(mu);
-                  // The following represents a "smooth" version of the statement
-                  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-                  // eps must be scaled appropriately if a different unit system is
-                  // being used.
-                  const double eps = 1e-12;
-                  visc_coeff += 0.5 * rho * h * sound_speed * vort_coeff *
-                                (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-                  stress.Add(visc_coeff, sgrad_v);
-               }
-               // Time step estimate at the point. Here the more relevant length
-               // scale is related to the actual mesh deformation; we use the min
-               // singular value of the ref->physical Jacobian. In addition, the
-               // time step estimate should be aware of the presence of shocks.
-               const double h_min =
-                     Jpr.CalcSingularvalue(dim-1) / (double) H1.GetOrder(0);
-               const double inv_dt = sound_speed / h_min +
-                                     2.5 * visc_coeff / rho / h_min / h_min;
-               if (min_detJ < 0.0)
-               {
-                  // This will force repetition of the step with smaller dt.
-                  qdata.dt_est = 0.0;
-               }
-               else
-               {
-                  if (inv_dt > 0.0)
-                  {
-                     qdata.dt_est = fmin(qdata.dt_est, cfl*(1.0/inv_dt));
-                  }
-               }
-               MultABt(stress, Jinv, stressJiT);
-               stressJiT *= ir.IntPoint(q).weight * detJ;
-
-               for (int vd = 0 ; vd < dim; vd++)
-               {
-                  for (int gd = 0; gd < dim; gd++)
-                  {
-                     stressJinvT_k(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
+                     stressJinvT_k(vd)(e*nqp + q, gd) = 0.0;
                   }
                }
             }
-            ++z_id;
+            continue;
+         }
+
+         ElementTransformation *T = H1.GetElementTransformation(e);
+         e_k.GetValues(e, ir, e_vals);
+
+         for (int q = 0; q < nqp; q++)
+         {
+            const IntegrationPoint &ip = ir.IntPoint(q);
+            T->SetIntPoint(&ip);
+            Jpr(q) = T->Jacobian();
+            const double detJ = Jpr(q).Det();
+            min_detJ = fmin(min_detJ, detJ);
+            // Assuming piecewise constant gamma that moves with the mesh.
+            double rho   = r0DJ_k(e*nqp + q) / detJ /
+                           ip.weight / ind_k.GetValue(*T, ip);
+            double energy  = fmax(0.0, e_vals(q));
+
+            if (IsFinite(rho) == false)
+            {
+               cout << e << " " << q << endl;
+               T->Jacobian().Print();
+               cout << detJ << " " << rho << " "
+                    << gamma_k << " " << min_detJ << std::endl;
+               MFEM_ABORT("rho bad");
+            }
+
+            double temperature, p, sound_speed;
+            // Special case - stiffened gas;
+            // Assumes that gamma = 4.4 is used only in problem 9 [water-air] !!
+            if (fabs(gamma_k - 4.4) < 1e-8)
+            {
+               p              = (gamma_k - 1.0) * rho * energy - gamma_k*6.0e8;
+               temperature    = fmax(p / rho, 1e-3);
+            }
+            else
+            {
+               p           = (gamma_k - 1.0) * rho * energy;
+               temperature = (gamma_k - 1.0) * energy; // T = p / rho
+            }
+            sound_speed = sqrt(gamma_k * temperature);
+
+            // Note that the Jacobian was already computed above. We've chosen
+            // not to store the Jacobians for all batched quadrature points.
+            CalcInverse(Jpr(q), Jinv);
+            stress = 0.0;
+            for (int d = 0; d < dim; d++) { stress(d, d) = -p; }
+            double visc_coeff = 0.0;
+            if (use_viscosity)
+            {
+               // Compression-based length scale at the point. The first
+               // eigenvector of the symmetric velocity gradient gives the
+               // direction of maximal compression. This is used to define the
+               // relative change of the initial length scale.
+               v.GetVectorGradient(*T, sgrad_v);
+               sgrad_v.Symmetrize();
+
+               // Length scale in compression direction, and measure of
+               // maximal compression / expansion.
+               double h, mu;
+               LengthScaleAndCompression(sgrad_v, *T,
+                                         qdata.Jac0inv(e*nqp + q),
+                                         qdata.h0, h, mu);
+
+               double vort_coeff = 1.0;
+               if (use_vorticity)
+               {
+                  const double grad_norm = sgrad_v.FNorm();
+                  const double div_v = fabs(sgrad_v.Trace());
+                  vort_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+               }
+
+               visc_coeff = 2.0 * rho * h * h * fabs(mu);
+               // The following represents a "smooth" version of the statement
+               // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+               // eps must be scaled appropriately if a different unit system is
+               // being used.
+               const double eps = 1e-12;
+               visc_coeff += 0.5 * rho * h * sound_speed * vort_coeff *
+                             (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+               stress.Add(visc_coeff, sgrad_v);
+            }
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const double h_min =
+                  Jpr(q).CalcSingularvalue(dim-1) / (double) H1.GetOrder(0);
+            const double inv_dt = sound_speed / h_min +
+                                  2.5 * visc_coeff / rho / h_min / h_min;
+            if (min_detJ < 0.0)
+            {
+               // This will force repetition of the step with smaller dt.
+               qdata.dt_est = 0.0;
+            }
+            else
+            {
+               if (inv_dt > 0.0)
+               {
+                  qdata.dt_est = fmin(qdata.dt_est, cfl*(1.0/inv_dt));
+               }
+            }
+            MultABt(stress, Jinv, stressJiT);
+            stressJiT *= ir.IntPoint(q).weight * detJ;
+
+            for (int vd = 0 ; vd < dim; vd++)
+            {
+               for (int gd = 0; gd < dim; gd++)
+               {
+                  stressJinvT_k(vd)(e*nqp + q, gd) = stressJiT(vd, gd);
+               }
+            }
          }
       }
    }
-
-   delete [] gamma_b;
-   delete [] rho_b;
-   delete [] e_b;
-   delete [] p_b;
-   delete [] cs_b;
-   delete [] ls_b;
-   delete [] Jpr_b;
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const
