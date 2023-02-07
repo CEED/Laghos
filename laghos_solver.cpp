@@ -344,13 +344,13 @@ namespace mfem
 	shifted_v_bfi->SetIntRule(&b_ir);
 	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
-	ShiftedVelocityBoundaryForce.Assemble();    
+      	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, analyticalSurface, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
 	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
-	ShiftedEnergyBoundaryForce.Assemble();
+      	ShiftedEnergyBoundaryForce.Assemble();
 
 	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
@@ -847,7 +847,7 @@ namespace mfem
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
 	      const double detJ = (Tr.Jacobian()).Det();
-
+	      const DenseMatrix & Jac = Tr.Jacobian();
 	      double rho_vals = gl_qdata.rho0DetJ0(i*gl_nqp+q) / detJ;
 	      double gamma_vals = gamma_gf.GetValue(Tr, ip);
 	      double e_vals = fmax(0.0,e.GetValue(Tr, ip));
@@ -892,16 +892,17 @@ namespace mfem
 		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 		  // Change of the initial mesh size in the compression direction.
 		  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		  const double h_sing = Jac.CalcSingularvalue(dim-1) / (double) H1.GetOrder(0);
 		  // Measure of maximal compression.
 		  const double mu = fabs(eig_val_data[0]);
 		  if( max_mu < mu){
 		    max_mu = mu;
 		  }
-		  if( h < min_h){
-		    min_h = h;
+		  if( h_sing < min_h){
+		    min_h = h_sing;
 		  }
-		  if( h > max_h){
-		    max_h = h;
+		  if( h_sing > max_h){
+		    max_h = h_sing;
 		  }
 
 		}
