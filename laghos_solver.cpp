@@ -898,11 +898,11 @@ namespace mfem
 		  if( max_mu < mu){
 		    max_mu = mu;
 		  }
-		  if( h_sing < min_h){
-		    min_h = h_sing;
+		  if( h < min_h){
+		    min_h = h;
 		  }
-		  if( h_sing > max_h){
-		    max_h = h_sing;
+		  if( h > max_h){
+		    max_h = h;
 		  }
 
 		}
