@@ -379,6 +379,7 @@ int main(int argc, char *argv[])
    si_options.num_lap       = 7;
    // Number of terms in the Taylor expansion (1 is 1st derivative only).
    si_options.num_taylor = 1;
+   int p_order           = 1;
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >
@@ -538,17 +539,6 @@ int main(int argc, char *argv[])
    FaceElementTransformations *ftr = pmesh->GetFaceElementTransformations(0);
    const IntegrationRule &ir_face =
       IntRules.Get(ftr->GetGeometryType(), order_v + order_e + ftr->OrderW());
-   const int n_face_quad_pts = ir_face.GetNPoints();
-   int p_order;
-   if (dim == 1) { p_order = order_e; }
-   if (dim == 2) { p_order = n_face_quad_pts - 1; }
-   if (dim == 3) { p_order = sqrt(n_face_quad_pts) - 1; }
-   p_order = 1;
-   if (myid == 0)
-   {
-      cout << "Num face quads: " << n_face_quad_pts << endl
-           << "Pressure order: " << p_order << endl;
-   }
 
    // Computation of alpha and ind at time 0.
    UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2,
@@ -599,6 +589,7 @@ int main(int argc, char *argv[])
       visit_dc.RegisterField("Density",  &rho_gf_1);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &mat_data.e_1);
+      visit_dc.RegisterField("Level Set", &mat_data.level_set);
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();

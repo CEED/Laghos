@@ -731,7 +731,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    v.MakeRef(&H1, *sptr, H1.GetVSize());
    e_1.MakeRef(&L2, *sptr, 2*H1.GetVSize());
    e_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
-   Vector e_vals, ls_vals;
+   Vector e_vals;
    DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim), stress(dim), stressJiT(dim);
 
    // Update the alphas.
