@@ -625,7 +625,6 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e_1,
 
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
-   double glob_ke = 0.0;
    double ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
 
    MPI_Allreduce(MPI_IN_PLACE, &ke, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
