@@ -20,6 +20,8 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 
+class ROM_Operator;
+
 #ifdef MFEM_USE_MPI
 
 namespace mfem
@@ -124,6 +126,8 @@ protected:
 
     const bool noMvSolve;
     const bool noMeSolve;
+    const bool eqp;
+    const ROM_Operator *rom_op = nullptr;
 
 public:
     LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
@@ -133,7 +137,7 @@ public:
                             Coefficient *material_, bool visc, bool vort, bool pa,
                             double cgt, int cgiter, double ftz_tol,
                             int h1_basis_type, bool noMvSolve_=false,
-                            bool noMeSolve_=false);
+                            bool noMeSolve_=false, bool eqp_=false);
 
     // Solve for dx_dt, dv_dt and de_dt.
     virtual void Mult(const Vector &S, Vector &dS_dt) const;
@@ -164,6 +168,20 @@ public:
 
     void MultMv(const Vector &u, Vector &v);
     void MultMe(const Vector &u, Vector &v);
+
+    void MultMvInv(Vector &u, Vector &v);
+
+    void SetRomOperator(const ROM_Operator *rop) {
+        rom_op = rop;
+    }
+
+    const IntegrationRule *GetIntegrationRule() const {
+        return &integ_rule;
+    }
+
+    const QuadratureData & GetQuadData() const {
+        return quad_data;
+    }
 };
 
 class TaylorCoefficient : public Coefficient

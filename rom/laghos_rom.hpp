@@ -253,6 +253,8 @@ struct ROM_Options
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
+
+    bool EQP = false;
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
@@ -275,7 +277,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper),
-          parameterID(input.parameterID), basename(*input.basename), 
+          parameterID(input.parameterID), basename(*input.basename),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
         SetStateVariables(S_init);
@@ -722,6 +724,65 @@ private:
         }
     }
 
+    void SetStateFromTrueDOFs(Vector const& x, Vector const& v, Vector const& e, Vector & S)
+    {
+        MFEM_VERIFY(S.Size() == 2*H1size + L2size, "");
+        MFEM_VERIFY(x.Size() == tH1size, "");
+        MFEM_VERIFY(v.Size() == tH1size, "");
+        MFEM_VERIFY(e.Size() == tL2size, "");
+
+        // Set X component of S
+        Xdiff = x;
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] += (*initX)(i);
+            }
+        }
+
+        gfH1.SetFromTrueDofs(Xdiff);
+
+        for (int i=0; i<H1size; ++i)
+        {
+            S[i] = gfH1[i];
+        }
+
+        // Set V component of S
+        Xdiff = v;
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] += (*initV)(i);
+            }
+        }
+
+        gfH1.SetFromTrueDofs(Xdiff);
+
+        for (int i=0; i<H1size; ++i)
+        {
+            S[H1size + i] = gfH1[i];
+        }
+
+        // Set E component of S
+        Ediff = e;
+        if (offsetInit)
+        {
+            for (int i=0; i<tL2size; ++i)
+            {
+                Ediff[i] += (*initE)(i);
+            }
+        }
+
+        gfL2.SetFromTrueDofs(Ediff);
+
+        for (int i=0; i<L2size; ++i)
+        {
+            S[(2 * H1size) + i] = gfL2[i];
+        }
+    }
+
     std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter, const std::string basisIdentifier)
     {
         std::string fileName, path;
@@ -749,6 +810,15 @@ private:
         path = (parameter >= 0) ? basename + "/param" + std::to_string(parameter) + "_" : basename + "/";
         return path + prefix + fileName;
     }
+
+    void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
+                        const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input);
+
+    void SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
+                          const CAROM::Matrix* basisV, ROM_Options const& input);
+
+    void SetupEQP_Force_E(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
+                          const CAROM::Matrix* basisE, ROM_Options const& input);
 };
 
 class ROM_Basis
@@ -760,53 +830,7 @@ public:
               const double sFactorX=1.0, const double sFactorV=1.0,
               const std::vector<double> *timesteps=NULL);
 
-    ~ROM_Basis()
-    {
-        delete rX;
-        delete rV;
-        delete rE;
-        delete rX2;
-        delete rV2;
-        delete rE2;
-        delete basisX;
-        if (!useXV && !useVX && !mergeXV) delete basisV;
-        delete basisE;
-        delete basisFv;
-        delete basisFe;
-        delete spX;
-        delete spV;
-        delete spE;
-        delete sX;
-        delete sV;
-        delete sE;
-        delete BXsp;
-        delete BVsp;
-        delete BEsp;
-        delete BFvsp;
-        delete BFesp;
-        delete BsinvX;
-        delete BsinvV;
-        delete BsinvE;
-        delete BX0;
-        delete initX;
-        delete initV;
-        delete initE;
-        delete initXsp;
-        delete initVsp;
-        delete initEsp;
-        delete BXXinv;
-        delete BVVinv;
-        delete BEEinv;
-        delete smm;
-        delete sampleSelector;
-        if (!hyperreduce)
-        {
-            delete fH1;
-            delete fL2;
-            delete gfH1;
-            delete gfL2;
-        }
-    }
+    ~ROM_Basis();
 
     void Init(ROM_Options const& input, Vector const& S);
 
@@ -815,7 +839,12 @@ public:
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
+
+    void ProjectFOMtoROM_V(Vector const& f, Vector & r,
+                           const bool timeDerivative=false);
+
     void LiftROMtoFOM(Vector const& r, Vector & f);
+    void LiftROMtoFOM_dVdt(Vector const& r, Vector & f);
 
     ParMesh *GetSampleMesh() {
         return sample_pmesh;
@@ -958,7 +987,7 @@ private:
 
     CAROM::Vector *fH1, *fL2;
 
-    Vector mfH1, mfL2;
+    mutable Vector mfH1, mfL2;
 
     ParGridFunction* gfH1;
     ParGridFunction* gfL2;
@@ -1184,6 +1213,13 @@ public:
     void SolveSpaceTime(Vector &S);
     void SolveSpaceTimeGN(Vector &S);
 
+    void ForceIntegratorEQP_FOM(Vector & rhs) const;
+    void ForceIntegratorEQP(Vector & res) const;
+
+    // Input ids are local DOFs, not true DOFs.
+    void GetBasisIndicesH1(std::vector<int> const& ids, CAROM::Matrix* B,
+                           DenseMatrix & B_rows) const;
+
     ~ROM_Operator()
     {
         delete mat_gf_coeff;
@@ -1211,7 +1247,7 @@ private:
 
     mutable Vector fx, fy;
 
-    const bool hyperreduce;
+    const bool hyperreduce, eqp;
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;
@@ -1248,6 +1284,22 @@ private:
     const bool GaussNewton = true; // TODO: eliminate this
 
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
+
+    void ReadSolutionNNLS(ROM_Options const& input);
+
+    // Data for EQP
+    std::vector<int> eqpI;
+    std::vector<double> eqpW;
+
+    mutable bool eqp_init = false;
+    mutable int nvdof = 0;
+
+    mutable DenseMatrix W_elems;
+
+    CAROM::Matrix* Wmat = 0;
+
+    ParFiniteElementSpace *H1spaceFOM = nullptr; // FOM H1 FEM space
+    ParFiniteElementSpace *L2spaceFOM = nullptr; // FOM L2 FEM space
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,

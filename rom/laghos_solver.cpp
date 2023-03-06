@@ -15,6 +15,7 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
+#include "laghos_rom.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -92,7 +93,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         double ftz,
         int h1_basis_type,
         bool noMvSolve_,
-        bool noMeSolve_)
+        bool noMeSolve_,
+        bool eqp_)
     : TimeDependentOperator(size),
       H1FESpace(h1_fes), L2FESpace(l2_fes),
       ess_tdofs(essential_tdofs),
@@ -104,7 +106,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       use_viscosity(visc), use_vorticity(vort),
       p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
-      noMvSolve(noMvSolve_), noMeSolve(noMeSolve_),
+      noMvSolve(noMvSolve_), noMeSolve(noMeSolve_), eqp(eqp_),
       material_pcf(material_),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -272,7 +274,15 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     if (p_assembly)
     {
         timer.sw_force.Start();
-        ForcePA.Mult(one, rhs);
+
+        if (eqp)
+        {
+            rom_op->ForceIntegratorEQP_FOM(rhs);
+        }
+        else
+        {
+            ForcePA.Mult(one, rhs);
+        }
 
         if (ftz_tol>0.0)
         {
@@ -466,9 +476,28 @@ void LagrangianHydroOperator::MultMv(const Vector &u, Vector &v)
 
     for (int i=0; i<ess_tdofs.Size(); ++i)
     {
-        //v[ess_tdofs[i]] = 0.0;
         v[ess_tdofs[i]] = u[ess_tdofs[i]];
     }
+}
+
+void LagrangianHydroOperator::MultMvInv(Vector &u, Vector &v)
+{
+    MFEM_VERIFY(p_assembly, "Without PA, implement MultMvInv with Mv");
+
+    v = 0.0;
+
+    Operator *cVMassPA;
+    Vector X, B;
+    VMassPA.FormLinearSystem(ess_tdofs, v, u, cVMassPA, X, B);
+    CGSolver cg(H1FESpace.GetParMesh()->GetComm());
+    cg.SetPreconditioner(VMassPA_prec);
+    cg.SetOperator(*cVMassPA);
+    cg.SetRelTol(cg_rel_tol);
+    cg.SetAbsTol(0.0);
+    cg.SetMaxIter(cg_max_iter);
+    cg.SetPrintLevel(0);
+    cg.Mult(B, X);
+    VMassPA.RecoverFEMSolution(X, u, v);
 }
 
 void LagrangianHydroOperator::MultMe(const Vector &u, Vector &v)
