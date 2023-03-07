@@ -1224,10 +1224,6 @@ public:
     void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
     void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
 
-    // Input ids are local DOFs, not true DOFs.
-    void GetBasisIndices(std::vector<int> const& ids, CAROM::Matrix* B,
-                         DenseMatrix & B_rows, bool H1) const;
-
     ~ROM_Operator()
     {
         delete mat_gf_coeff;

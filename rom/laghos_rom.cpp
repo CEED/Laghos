@@ -435,8 +435,7 @@ void ROM_Sampler::SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matr
     // element e, with respect to the integration rule weight at that point,
     // where the local "exact" quadrature solution is ir0->GetWeights().
 
-    const int tH1size = input.H1FESpace->GetTrueVSize();
-    const int tL2size = input.L2FESpace->GetTrueVSize();
+    ParGridFunction gf2H1(gfH1);
 
     Vector v_i(tH1size);
     Vector x_i(tH1size);
@@ -447,16 +446,17 @@ void ROM_Sampler::SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matr
     Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
 
     MFEM_VERIFY(tH1size == basisV->numRows(), "");
-    CAROM::Matrix W(tH1size, NB, true);
-    for (int j=0; j<NB; ++j)
+    CAROM::Matrix W(H1size, NB, true);
+    for (int i=0; i<NB; ++i)
     {
-        for (int i=0; i<tH1size; ++i)
-            v_i[i] = (*basisV)(i,j);
+        for (int j=0; j<tH1size; ++j)
+            v_i[j] = (*basisV)(j,i);
 
-        input.FOMoper->MultMvInv(v_i, x_i);
+        gfH1.SetFromTrueDofs(v_i);
+        input.FOMoper->MultMvInv(gfH1, gf2H1);
 
-        for (int i=0; i<tH1size; ++i)
-            W(i,j) = x_i[i];
+        for (int j=0; j<H1size; ++j)
+            W(j,i) = gf2H1[j];
     }
 
     Array<double> const& w_el = ir0->GetWeights();
@@ -493,12 +493,7 @@ void ROM_Sampler::SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matr
 
         for (int j=0; j<NB; ++j)
         {
-            for (int k = 0; k < basisV->numRows(); ++k)
-            {
-                Xdiff[k] = W(k, j);
-            }
-
-            gfH1.SetFromTrueDofs(Xdiff);
+            for (int k = 0; k < H1size; ++k) gfH1[k] = W(k, j);
 
             for (int e=0; e<ne; ++e)
             {
@@ -532,7 +527,8 @@ void ROM_Sampler::SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matr
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, tolNNLS, maxNNLSnnz, w, Gt, sol);
 
-    WriteSolutionNNLS(sol, "run/nnlsV" + std::to_string(input.window));
+    WriteSolutionNNLS(sol, "run/nnlsV" + std::to_string(input.window) + "_" +
+                      std::to_string(rank));
 }
 
 void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
@@ -665,7 +661,8 @@ void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, tolNNLS, maxNNLSnnz, w, Gt, sol);
 
-    WriteSolutionNNLS(sol, "run/nnlsE" + std::to_string(input.window));
+    WriteSolutionNNLS(sol, "run/nnlsE" + std::to_string(input.window) + "_" +
+                      std::to_string(rank));
 }
 
 void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
@@ -774,6 +771,8 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     {
         const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
         const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
+
+        MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
 
         // Truncate the bases.
         CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
@@ -2447,7 +2446,8 @@ void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
 
     MFEM_VERIFY(indices.size() == 0 && weights.size() == 0, "");
 
-    const string filename = basename + std::to_string(input.window);
+    const string filename = basename + std::to_string(input.window) + "_" +
+                            std::to_string(input.rank);
     std::ifstream infile(filename);
     MFEM_VERIFY(infile.is_open(), "NNLS solution file does not exist.");
     std::string line;
@@ -2783,25 +2783,28 @@ void ROM_Operator::ComputeReducedMv()
 
         invMvROM.Invert();
     }
-    else if (eqp && rank == 0)
+    else if (eqp)
     {
         const int size_H1 = basis->SolutionSizeH1FOM();
+        const int tsize_H1 = H1spaceFOM->GetTrueVSize();
 
         Wmat = new CAROM::Matrix(size_H1, nv, true);
 
-        Vector vj(size_H1);
+        ParGridFunction gf(H1spaceFOM);
+
+        Vector vj(tsize_H1);
         Vector Mvj(size_H1);
         for (int j=0; j<nv; ++j)
         {
             basis->GetBasisVectorV(hyperreduce, j, vj);
-            operFOM->MultMv(vj, Mvj);
-            operFOM->MultMvInv(vj, Mvj);
+            gf.SetFromTrueDofs(vj);
+            operFOM->MultMvInv(gf, Mvj);
 
             for (int i=0; i<size_H1; ++i)
                 (*Wmat)(i,j) = Mvj[i];
         }
     }
-    else if (!hyperreduce && !eqp)
+    else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
     }
@@ -2831,7 +2834,7 @@ void ROM_Operator::ComputeReducedMe()
 
         invMeROM.Invert();
     }
-    else if (eqp && rank == 0)
+    else if (eqp)
     {
         const int size_L2 = basis->SolutionSizeL2FOM();
 
@@ -2842,15 +2845,13 @@ void ROM_Operator::ComputeReducedMe()
         for (int j=0; j<ne; ++j)
         {
             basis->GetBasisVectorE(hyperreduce, j, ej);
-            operFOM->MultMe(ej, Mej);
-
             operFOM->MultMeInv(ej, Mej);
 
             for (int i=0; i<size_L2; ++i)
                 (*Wmat_E)(i,j) = Mej[i];
         }
     }
-    else if (!hyperreduce && !eqp)
+    else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
     }
@@ -4075,43 +4076,12 @@ CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, co
     return parameterPointGreedySampler;
 }
 
-void ROM_Operator::GetBasisIndices(std::vector<int> const& ids, CAROM::Matrix* B,
-                                   DenseMatrix & B_rows, bool H1) const
-{
-    const int rdim = B->numColumns();
-    B_rows.SetSize(ids.size(), rdim);
-
-    const int tsize = H1 ? basis->SolutionSizeH1FOM() : basis->SolutionSizeL2FOM();
-
-    MFEM_VERIFY(B->numRows() == tsize, "");
-
-    // Since ids contains local DOFs rather than true DOFs, each column of V,
-    // containing true DOFs, must be converted to local DOFs in gf.
-
-    ParGridFunction gf(H1 ? H1spaceFOM : L2spaceFOM);
-    Vector tdof(tsize);
-
-    for (int j=0; j<rdim; ++j)
-    {
-        for (int i=0; i<tsize; ++i)
-            tdof[i] = (*B)(i,j);
-
-        gf.SetFromTrueDofs(tdof);
-
-        for (int i=0; i<ids.size(); ++i)
-            B_rows(i,j) = gf(ids[i]);
-    }
-}
-
 void ROM_Operator::ForceIntegratorEQP(Vector & res) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimV();
-    MFEM_VERIFY(eqpI.size() == eqpW.size() && eqpI.size() > 0, "");
+    MFEM_VERIFY(eqpI.size() == eqpW.size(), "");
     MFEM_VERIFY(res.Size() == rdim, "");
-
-    MFEM_VERIFY(rank == 0, "TODO: generalize to parallel. This uses full dofs"
-                << " in V, which has true dofs");
 
     const int nqe = ir->GetWeights().Size();
 
@@ -4176,7 +4146,10 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
         MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
         MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 
-        GetBasisIndices(elemDofs, Wmat, W_elems, true);
+        W_elems.SetSize(elemDofs.size(), rdim);
+        for (int j=0; j<rdim; ++j)
+            for (int i=0; i<elemDofs.size(); ++i)
+                W_elems(i,j) = (*Wmat)(elemDofs[i],j);
     }
 
     int elemIndex = -1;
@@ -4254,17 +4227,17 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
             res[j] += (v_e * Vloc_force) * (shape * unitE);
         }  // Loop (j) over V basis vectors
     } // Loop (i) over EQP points
+
+    MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
 }
 
 void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimE();
-    MFEM_VERIFY(eqpI_E.size() == eqpW_E.size() && eqpI_E.size() > 0, "");
+    MFEM_VERIFY(eqpI_E.size() == eqpW_E.size(), "");
     MFEM_VERIFY(res.Size() == rdim, "");
-
-    MFEM_VERIFY(rank == 0, "TODO: generalize to parallel. This uses full dofs"
-                << " in V, which has true dofs");
 
     const int nqe = ir->GetWeights().Size();
 
@@ -4339,7 +4312,10 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
         MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
         MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 
-        GetBasisIndices(elemDofs, Wmat_E, W_E_elems, false);
+        W_E_elems.SetSize(elemDofs.size(), rdim);
+        for (int j=0; j<rdim; ++j)
+            for (int i=0; i<elemDofs.size(); ++i)
+                W_E_elems(i,j) = (*Wmat_E)(elemDofs[i],j);
     }
 
     int elemIndex = -1;
@@ -4419,6 +4395,9 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
             res[j] += (v_e * Vloc_force) * (shape * w_e);
         }  // Loop (j) over V basis vectors
     } // Loop (i) over EQP points
+
+    MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
 }
 
 void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
