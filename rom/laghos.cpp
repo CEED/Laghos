@@ -994,12 +994,13 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
-        const bool noMvSolve = rom_online && romOptions.EQP;
-        const bool noMeSolve = false;  // TODO: implement EQP for E equation.
+        const bool noMassSolve = rom_online && romOptions.EQP;
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
-                                           ess_tdofs, *rho, source, cfl, mat_gf_coeff,
-                                           visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                                           H1FEC.GetBasisType(), noMvSolve, noMeSolve,
+                                           ess_tdofs, *rho, source, cfl,
+                                           mat_gf_coeff, visc, vort, p_assembly,
+                                           cg_tol, cg_max_iter, ftz_tol,
+                                           H1FEC.GetBasisType(), noMassSolve,
+                                           noMassSolve,
                                            rom_online && romOptions.EQP);
     }
 

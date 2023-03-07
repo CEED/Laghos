@@ -170,6 +170,7 @@ public:
     void MultMe(const Vector &u, Vector &v);
 
     void MultMvInv(Vector &u, Vector &v);
+    void MultMeInv(Vector &u, Vector &v);
 
     void SetRomOperator(const ROM_Operator *rop) {
         rom_op = rop;

@@ -406,7 +406,14 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
     if (p_assembly)
     {
         timer.sw_force.Start();
-        ForcePA.MultTranspose(v, e_rhs);
+        if (eqp)
+        {
+            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs);
+        }
+        else
+        {
+            ForcePA.MultTranspose(v, e_rhs);
+        }
         timer.sw_force.Stop();
 
         if (e_source) {
@@ -531,6 +538,25 @@ void LagrangianHydroOperator::MultMe(const Vector &u, Vector &v)
             Me(z).Mult(loc_rhs, loc_v);
             v.SetSubVector(l2dofs, loc_v);
         }
+    }
+}
+
+void LagrangianHydroOperator::MultMeInv(Vector &u, Vector &v)
+{
+    MFEM_VERIFY(p_assembly, "Without PA, implement MultMeInv with Me");
+
+    v = 0.0;
+
+    Array<int> l2dofs;
+    Vector loc_u(l2dofs_cnt), loc_v(l2dofs_cnt);
+
+    for (int z = 0; z < nzones; z++)
+    {
+        L2FESpace.GetElementDofs(z, l2dofs);
+        u.GetSubVector(l2dofs, loc_u);
+        locEMassPA.SetZoneId(z);
+        locCG.Mult(loc_u, loc_v);
+        v.SetSubVector(l2dofs, loc_v);
     }
 }
 

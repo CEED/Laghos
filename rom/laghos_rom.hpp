@@ -818,7 +818,7 @@ private:
                           const CAROM::Matrix* basisV, ROM_Options const& input);
 
     void SetupEQP_Force_E(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                          const CAROM::Matrix* basisE, ROM_Options const& input);
+                          const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input);
 };
 
 class ROM_Basis
@@ -845,6 +845,7 @@ public:
 
     void LiftROMtoFOM(Vector const& r, Vector & f);
     void LiftROMtoFOM_dVdt(Vector const& r, Vector & f);
+    void LiftROMtoFOM_dEdt(Vector const& r, Vector & f);
 
     ParMesh *GetSampleMesh() {
         return sample_pmesh;
@@ -864,6 +865,10 @@ public:
 
     int SolutionSizeH1FOM() const {
         return H1size;
+    }
+
+    int SolutionSizeL2FOM() const {
+        return L2size;
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
@@ -1216,9 +1221,12 @@ public:
     void ForceIntegratorEQP_FOM(Vector & rhs) const;
     void ForceIntegratorEQP(Vector & res) const;
 
+    void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
+    void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
+
     // Input ids are local DOFs, not true DOFs.
-    void GetBasisIndicesH1(std::vector<int> const& ids, CAROM::Matrix* B,
-                           DenseMatrix & B_rows) const;
+    void GetBasisIndices(std::vector<int> const& ids, CAROM::Matrix* B,
+                         DenseMatrix & B_rows, bool H1) const;
 
     ~ROM_Operator()
     {
@@ -1285,18 +1293,23 @@ private:
 
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
 
-    void ReadSolutionNNLS(ROM_Options const& input);
+    void ReadSolutionNNLS(ROM_Options const& input, string basename,
+                          std::vector<int> & indices,
+                          std::vector<double> & weights);
 
     // Data for EQP
-    std::vector<int> eqpI;
-    std::vector<double> eqpW;
+    std::vector<int> eqpI, eqpI_E;
+    std::vector<double> eqpW, eqpW_E;
 
     mutable bool eqp_init = false;
+    mutable bool eqp_init_E = false;
     mutable int nvdof = 0;
+    mutable int nedof = 0;
 
-    mutable DenseMatrix W_elems;
+    mutable DenseMatrix W_elems, W_E_elems;
 
     CAROM::Matrix* Wmat = 0;
+    CAROM::Matrix* Wmat_E = 0;
 
     ParFiniteElementSpace *H1spaceFOM = nullptr; // FOM H1 FEM space
     ParFiniteElementSpace *L2spaceFOM = nullptr; // FOM L2 FEM space
