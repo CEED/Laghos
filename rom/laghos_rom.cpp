@@ -410,144 +410,30 @@ void WriteSolutionNNLS(CAROM::Vector const& sol, const string filename)
     outfile.close();
 }
 
-void ROM_Sampler::SetupEQP_Force_V(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
-                                   const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
-                                   ROM_Options const& input)
+void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
+                                    const CAROM::Matrix* snapV,
+                                    const CAROM::Matrix* snapE,
+                                    const CAROM::Matrix* basisV,
+                                    const CAROM::Matrix* basisE,
+                                    ROM_Options const& input,
+                                    bool equationE)
 {
     const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
     const int nqe = ir0->GetNPoints();
     const int ne = input.H1FESpace->GetNE();
     const int NQ = ne * nqe;
-    const int NB = basisV->numColumns();
-    const int nsnap = snapX->numColumns();
+    const int NB = equationE ? basisE->numColumns() : basisV->numColumns();
 
-    MFEM_VERIFY(nsnap == snapV->numColumns(), "");
-    MFEM_VERIFY(nsnap == snapE->numColumns(), "");
+    Array<int> numSnapVar(3);
+    numSnapVar[0] = snapX->numColumns();
+    numSnapVar[1] = snapV->numColumns();
+    numSnapVar[2] = snapE->numColumns();
 
-    Vector r(nqe);
+    const int nsnap = numSnapVar.Max();
 
-    // Compute G of size (NB * (nsnap+1)) x NQ, storing its transpose Gt.
-    CAROM::Matrix Gt(NQ, NB * (nsnap+1), true);
-
-    // For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-    // G(j + (i*NB), (e*nqe) + m)
-    // is the coefficient of v_j^T M_v^{-1} F(v_i,e_i,x_i) * 1 at point m of
-    // element e, with respect to the integration rule weight at that point,
-    // where the local "exact" quadrature solution is ir0->GetWeights().
-
-    ParGridFunction gf2H1(gfH1);
-
-    Vector v_i(tH1size);
-    Vector x_i(tH1size);
-    Vector e_i(tL2size);
-
-    Vector v_j_e;
-
-    Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
-
-    MFEM_VERIFY(tH1size == basisV->numRows(), "");
-    CAROM::Matrix W(H1size, NB, true);
-    for (int i=0; i<NB; ++i)
-    {
-        for (int j=0; j<tH1size; ++j)
-            v_i[j] = (*basisV)(j,i);
-
-        gfH1.SetFromTrueDofs(v_i);
-        input.FOMoper->MultMvInv(gfH1, gf2H1);
-
-        for (int j=0; j<H1size; ++j)
-            W(j,i) = gf2H1[j];
-    }
-
-    Array<double> const& w_el = ir0->GetWeights();
-    MFEM_VERIFY(w_el.Size() == nqe, "");
-
-    for (int i=0; i<nsnap+1; ++i)
-    {
-        if (i == 0)  // Use the initial state as the first snapshot.
-        {
-            v_i = 0.0;
-            x_i = 0.0;
-            e_i = 0.0;
-        }
-        else
-        {
-            for (int j = 0; j < tH1size; ++j)
-            {
-                v_i[j] = (*snapV)(j, i-1);
-                x_i[j] = (*snapX)(j, i-1);
-            }
-
-            for (int j = 0; j < tL2size; ++j)
-            {
-                e_i[j] = (*snapE)(j, i-1);
-            }
-        }
-
-        SetStateFromTrueDOFs(x_i, v_i, e_i, S);
-
-        // NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
-        input.FOMoper->ResetQuadratureData();
-        input.FOMoper->GetTimeStepEstimate(S);  // Call this to call UpdateQuadratureData
-        input.FOMoper->ResetQuadratureData();
-
-        for (int j=0; j<NB; ++j)
-        {
-            for (int k = 0; k < H1size; ++k) gfH1[k] = W(k, j);
-
-            for (int e=0; e<ne; ++e)
-            {
-                gfH1.GetElementDofValues(e, v_j_e);
-                const FiniteElement &fe = *input.H1FESpace->GetFE(e);
-
-                ComputeElementRowOfG_V(ir0, input.FOMoper->GetQuadData(), v_j_e,
-                                       *input.H1FESpace->GetFE(e),
-                                       *input.L2FESpace->GetFE(e), e, r);
-
-                for (int m=0; m<nqe; ++m)
-                {
-                    Gt((e*nqe) + m, j + (i*NB)) = r[m];
-                }
-            }  // e
-        }  // j
-    }  // i
-
-    CAROM::Vector w(ne * nqe, true);
-
-    for (int i=0; i<ne; ++i)
-    {
-        for (int j=0; j<nqe; ++j)
-            w((i*nqe) + j) = w_el[j];
-    }
-
-    // TODO: input these NNLS parameters?
-    double tolNNLS = 1.0e-14;
-    int maxNNLSnnz = 0;
-
-    CAROM::Vector sol(ne * nqe, true);
-    SolveNNLS(rank, tolNNLS, maxNNLSnnz, w, Gt, sol);
-
-    WriteSolutionNNLS(sol, "run/nnlsV" + std::to_string(input.window) + "_" +
-                      std::to_string(rank));
-}
-
-void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
-                                   const CAROM::Matrix* snapV,
-                                   const CAROM::Matrix* snapE,
-                                   const CAROM::Matrix* basisV,
-                                   const CAROM::Matrix* basisE,
-                                   ROM_Options const& input)
-{
-    const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
-
-    const int nqe = ir0->GetNPoints();
-    const int ne = input.H1FESpace->GetNE();
-    const int NQ = ne * nqe;
-    const int NB = basisE->numColumns();
-    const int nsnap = snapX->numColumns();
-
-    MFEM_VERIFY(nsnap == snapV->numColumns(), "");
-    MFEM_VERIFY(nsnap == snapE->numColumns(), "");
+    Array<int> numSkipped(3);
+    for (int i=0; i<3; ++i) numSkipped[i] = nsnap - numSnapVar[i];
+    MFEM_VERIFY(numSkipped.Max() <= 1, "");
 
     Vector r(nqe);
 
@@ -560,30 +446,44 @@ void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
     // element e, with respect to the integration rule weight at that point,
     // where the "exact" quadrature solution is ir0->GetWeights().
 
-    const int tH1size = input.H1FESpace->GetTrueVSize();
-    const int tL2size = input.L2FESpace->GetTrueVSize();
-
     Vector v_i(tH1size);
     Vector x_i(tH1size);
     Vector e_i(tL2size);
 
-    Vector w_j_e, v_i_e;
+    Vector w_j_e, v_i_e, v_j_e;
 
     Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
     Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
 
     MFEM_VERIFY(tH1size == basisV->numRows(), "");
     MFEM_VERIFY(tL2size == basisE->numRows(), "");
-    CAROM::Matrix W(tL2size, NB, true);
+    CAROM::Matrix W(equationE ? L2size : H1size, NB, true);
+
+    ParGridFunction gf2H1(gfH1);
+
     for (int j=0; j<NB; ++j)
     {
-        for (int i=0; i<tL2size; ++i)
-            v_i[i] = (*basisE)(i,j);
+        if (equationE)
+        {
+            for (int i=0; i<tL2size; ++i)
+                v_i[i] = (*basisE)(i,j);
 
-        input.FOMoper->MultMeInv(v_i, x_i);
+            input.FOMoper->MultMeInv(v_i, x_i);
 
-        for (int i=0; i<tL2size; ++i)
-            W(i,j) = x_i[i];
+            for (int i=0; i<tL2size; ++i)
+                W(i,j) = x_i[i];
+        }
+        else
+        {
+            for (int i=0; i<tH1size; ++i)
+                v_i[i] = (*basisV)(i,j);
+
+            gfH1.SetFromTrueDofs(v_i);
+            input.FOMoper->MultMvInv(gfH1, gf2H1);
+
+            for (int i=0; i<H1size; ++i)
+                W(i,j) = gf2H1[i];
+        }
     }
 
     Array<double> const& w_el = ir0->GetWeights();
@@ -599,15 +499,32 @@ void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
         }
         else
         {
-            for (int j = 0; j < tH1size; ++j)
+            if (i == 1 && numSkipped[0] == 1)
             {
-                v_i[j] = (*snapV)(j, i-1);
-                x_i[j] = (*snapX)(j, i-1);
+                x_i = 0.0;
+            }
+            else
+            {
+                for (int j = 0; j < tH1size; ++j)
+                    x_i[j] = (*snapX)(j, i - 1 - numSkipped[0]);
             }
 
-            for (int j = 0; j < tL2size; ++j)
+            if (i == 1 && numSkipped[1] == 1)
+                v_i = 0.0;
+            else
             {
-                e_i[j] = (*snapE)(j, i-1);
+                for (int j = 0; j < tH1size; ++j)
+                    v_i[j] = (*snapV)(j, i - 1 - numSkipped[1]);
+            }
+
+            if (i == 1 && numSkipped[2] == 1)
+                e_i = 0.0;
+            else
+            {
+                for (int j = 0; j < tL2size; ++j)
+                {
+                    e_i[j] = (*snapE)(j, i - 1 - numSkipped[2]);
+                }
             }
         }
 
@@ -620,23 +537,39 @@ void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
 
         for (int j=0; j<NB; ++j)
         {
-            for (int k = 0; k < basisE->numRows(); ++k)
+            if (equationE)
             {
-                Ediff[k] = W(k, j);
-            }
+                for (int k = 0; k < basisE->numRows(); ++k)
+                {
+                    Ediff[k] = W(k, j);
+                }
 
-            gfL2.SetFromTrueDofs(Ediff);
-            gfH1 = S_v;
+                gfL2.SetFromTrueDofs(Ediff);
+                gfH1 = S_v;
+            }
+            else
+            {
+                for (int k = 0; k < H1size; ++k) gfH1[k] = W(k, j);
+            }
 
             for (int e=0; e<ne; ++e)
             {
-                gfL2.GetElementDofValues(e, w_j_e);
-                gfH1.GetElementDofValues(e, v_i_e);
-                const FiniteElement &fe = *input.L2FESpace->GetFE(e);
+                if (equationE)
+                {
+                    gfL2.GetElementDofValues(e, w_j_e);
+                    gfH1.GetElementDofValues(e, v_i_e);
 
-                ComputeElementRowOfG_E(ir0, input.FOMoper->GetQuadData(), w_j_e, v_i_e,
-                                       *input.H1FESpace->GetFE(e),
-                                       *input.L2FESpace->GetFE(e), e, r);
+                    ComputeElementRowOfG_E(ir0, input.FOMoper->GetQuadData(), w_j_e, v_i_e,
+                                           *input.H1FESpace->GetFE(e),
+                                           *input.L2FESpace->GetFE(e), e, r);
+                }
+                else
+                {
+                    gfH1.GetElementDofValues(e, v_j_e);
+                    ComputeElementRowOfG_V(ir0, input.FOMoper->GetQuadData(), v_j_e,
+                                           *input.H1FESpace->GetFE(e),
+                                           *input.L2FESpace->GetFE(e), e, r);
+                }
 
                 for (int m=0; m<nqe; ++m)
                 {
@@ -661,7 +594,8 @@ void ROM_Sampler::SetupEQP_Force_E(const CAROM::Matrix* snapX,
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, tolNNLS, maxNNLSnnz, w, Gt, sol);
 
-    WriteSolutionNNLS(sol, "run/nnlsE" + std::to_string(input.window) + "_" +
+    const std::string varName = equationE ? "E" : "V";
+    WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window) + "_" +
                       std::to_string(rank));
 }
 
@@ -676,8 +610,8 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     MFEM_VERIFY(snapV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(snapE->numRows() == input.L2FESpace->GetTrueVSize(), "");
 
-    SetupEQP_Force_V(snapX, snapV, snapE, basisV, input);
-    SetupEQP_Force_E(snapX, snapV, snapE, basisV, basisE, input);
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false);
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true);
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
@@ -886,7 +820,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), basisIdentifier(input.basisIdentifier),
       hyperreductionSamplingType(input.hyperreductionSamplingType), spaceTimeMethod(input.spaceTimeMethod),
-      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
+      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos), eqp(input.EQP)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -1913,6 +1847,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
+    if (eqp) return;
+
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
         basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
@@ -2878,7 +2814,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
 
-    MFEM_VERIFY(!eqp, "TODO: is there any difference with FOM?");
+    if (eqp) operFOM->SetRomOperator(this);
 
     if (hyperreduce)
     {
@@ -4429,10 +4365,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->LiftROMtoFOM(S, fx);
 
-        if (eqp)
-        {
-            operFOM->SetRomOperator(this);
-        }
+        if (eqp) operFOM->SetRomOperator(this);
 
         const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();
