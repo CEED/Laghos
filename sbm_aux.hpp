@@ -95,6 +95,12 @@ void Line_Dist(const Vector &x, Vector &D){
 }
 
 // Unit normal of circle of radius 0.2 - centered at 0.5, 0.5
+void Line_Normal(const Vector &x, Vector &tN){
+  tN(0) = 0.0;
+  tN(1) = 1.0;
+}
+
+// Unit normal of circle of radius 0.2 - centered at 0.5, 0.5
 void VerticalLine_Normal(const Vector &x, Vector &tN){
   tN(0) = 1.0;
   tN(1) = 0.0;
@@ -105,12 +111,6 @@ void VerticalLine_Dist(const Vector &x, Vector &D){
   double xVertLine = 0.3;
   D(0) = xVertLine - x(0) ;
   D(1) = 0.0;
-}
-
-// Unit normal of circle of radius 0.2 - centered at 0.5, 0.5
-void Line_Normal(const Vector &x, Vector &tN){
-  tN(0) = 0.0;
-  tN(1) = 1.0;
 }
 
 /// Analytic distance to the 0 level set.

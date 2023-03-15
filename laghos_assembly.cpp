@@ -606,7 +606,18 @@ namespace mfem
 	      vD->Eval(D_el1, Trans_el1, eip);
 	      vN->Eval(tN_el1, Trans_el1, eip);
 	      /////
-
+	      double sign = 0.0;
+	      double normD = 0.0;
+	      for (int a = 0; a < dim; a++){ 
+		normD += D_el1(a) * D_el1(a);
+	      }
+	      normD  = std::pow(normD,0.5);
+	      for( int b = 0; b < dim; b++){
+		sign += D_el1(b) * tN_el1(b) / normD;  
+	      }
+	      if (sign < 0.0){
+		std::cout << " shit " << std::endl;
+	      }
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
 		  for (int j = 0; j < dim; j++){
@@ -819,6 +830,20 @@ namespace mfem
 	      vN->Eval(tN_el2, Trans_el2, eip);
 	      /////
 
+	      double sign = 0.0;
+	      double normD = 0.0;
+	      for (int a = 0; a < dim; a++){ 
+		normD += D_el2(a) * D_el2(a);
+	      }
+	    
+	      normD  = std::pow(normD,0.5);
+	      for( int b = 0; b < dim; b++){
+		sign += D_el2(b) * tN_el2(b) / normD;  
+	      }
+	      if (sign < 0.0){
+		std::cout << " shit " << std::endl;
+	      }
+	     
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
 		  for (int j = 0; j < dim; j++){

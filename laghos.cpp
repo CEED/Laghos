@@ -93,7 +93,9 @@ int main(int argc, char *argv[])
   int geometricShape = 0;
   int nTerms = 1; 
   bool fullPenalty = false;
-   
+  double ghostPenaltyCoefficient = 1.0;
+  int numberGhostTerms = 1;
+  
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -151,7 +153,10 @@ int main(int argc, char *argv[])
   args.AddOption(&fullPenalty, "-fP", "--full-Penalty", "-first-order-penalty",
 		 "--first-order-penalty",
 		 "Use full or first order for SBM penalty.");
- 
+  args.AddOption(&numberGhostTerms, "-nGT", "--numberGhostTerms",
+                 "Number of terms in the ghost penalty operator.");
+  args.AddOption(&ghostPenaltyCoefficient, "-gPenCoef", "--ghost-penalty-coefficient",
+                 "Ghost penalty scaling."); 
   args.Parse();
   if (!args.Good())
     {
@@ -376,7 +381,7 @@ int main(int argc, char *argv[])
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
+					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty, numberGhostTerms, ghostPenaltyCoefficient);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

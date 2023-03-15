@@ -109,7 +109,7 @@ namespace mfem
 						     const double penaltyParameter,
 						     const double nitscheVersion,
 						     const bool useEmb, const int gS,
-						     int nT, bool fP) :
+						     int nT, bool fP, int nGT, double gPenCoef) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       alpha_fes(NULL), alpha_fec(NULL),
@@ -138,6 +138,7 @@ namespace mfem
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
+      shifted_ghostPenvmi(NULL),
       wall_dist_coef(NULL),
       combo_dist_coef(NULL),
       distance_vec_space(NULL),
@@ -194,7 +195,9 @@ namespace mfem
       e_rhs(L2Vsize),
       be_rhs(L2Vsize),
       nTerms(nT),
-      fullPenalty(fP)
+      fullPenalty(fP),
+      numberGhostTerms(nGT),
+      ghostPenaltyParameter(gPenCoef)
     {
       block_offsets[0] = 0;
       block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -361,7 +364,11 @@ namespace mfem
 
 	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
-	Mv.AddInteriorFaceIntegrator(shifted_nvmi);	
+	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
+
+	shifted_ghostPenvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, ghostPenaltyParameter, numberGhostTerms);
+	shifted_ghostPenvmi->SetIntRule(&b_ir);
+	Mv.AddInteriorFaceIntegrator(shifted_ghostPenvmi);	
       }
       
     }
@@ -694,10 +701,11 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      ElementTransformation *T = H1.GetElementTransformation(z_id);
-	      Jpr_b[z].SetSize(dim, dim, nqp);
-	      e.GetValues(z_id, ir, e_vals);
-	      for (int q = 0; q < nqp; q++)
+	      if ((pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::GHOST)) {
+	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
+		Jpr_b[z].SetSize(dim, dim, nqp);
+		e.GetValues(z_id, ir, e_vals);
+		for (int q = 0; q < nqp; q++)
 		{
 		  const IntegrationPoint &ip = ir.IntPoint(q);
 		  T->SetIntPoint(&ip);
@@ -710,17 +718,19 @@ namespace mfem
 		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / detJ;
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
-	      ++z_id;
+		++z_id;
+	      }
 	    }
-
+	  
 	  // Batched computation of material properties.
 	  ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
 
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      ElementTransformation *T = H1.GetElementTransformation(z_id);
-	      for (int q = 0; q < nqp; q++)
+	      if ((pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::GHOST)) {
+		ElementTransformation *T = H1.GetElementTransformation(z_id);
+		for (int q = 0; q < nqp; q++)
 		{
 		  const IntegrationPoint &ip = ir.IntPoint(q);
 		  T->SetIntPoint(&ip);
@@ -794,6 +804,7 @@ namespace mfem
 			}
 		    }
 		}
+	      }
 	      ++z_id;
 	    }
 	}
@@ -829,12 +840,13 @@ namespace mfem
 
       for (int i = 0; i < NE; i++)
 	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
-	  const int gl_nqp = ir_p.GetNPoints();
-
-	  ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
-	  for (int q = 0; q < gl_nqp; q++)
+	  if ((pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::GHOST)){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
+	    const int gl_nqp = ir_p.GetNPoints();
+	    
+	    ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
+	    for (int q = 0; q < gl_nqp; q++)
 	    {
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
@@ -896,9 +908,9 @@ namespace mfem
 		  if( h > max_h){
 		    max_h = h;
 		  }
-
 		}
 	    }
+	  }
 	}
 
       double global_max_vorticity = 0.0;

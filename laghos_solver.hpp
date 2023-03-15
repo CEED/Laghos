@@ -21,7 +21,7 @@
 #include "laghos_assembly.hpp"
 #include "dist_solver.hpp"
 #include "marking.hpp"
-
+#include "ghost_penalty.hpp"
 
 #ifdef MFEM_USE_MPI
 class Dist_Level_Set_Coefficient;
@@ -102,6 +102,8 @@ namespace mfem
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
+      const double ghostPenaltyParameter;
+      const int numberGhostTerms;
       const double nitscheVersion;
       const bool useEmbedded;
       const int geometricShape;
@@ -116,6 +118,7 @@ namespace mfem
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
+      GhostStressFullGradPenaltyIntegrator *shifted_ghostPenvmi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       Combo_Level_Set_Coefficient *combo_dist_coef;
@@ -163,7 +166,7 @@ namespace mfem
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,
-			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP);
+			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP, int nGT, double gPenCoef);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.
