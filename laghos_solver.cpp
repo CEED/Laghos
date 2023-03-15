@@ -112,6 +112,7 @@ namespace mfem
 						     int nT, bool fP) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+      alpha_fes(NULL), alpha_fec(NULL),
       pmesh(H1.GetParMesh()),
       H1Vsize(H1.GetVSize()),
       L2Vsize(L2.GetVSize()),
@@ -201,6 +202,10 @@ namespace mfem
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
 
+      alpha_fec = new L2_FECollection(0, pmesh->Dimension());
+      alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
+      alpha_fes->ExchangeFaceNbrData();
+    
       if (useEmbedded){
 	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
 	mfem::ParFiniteElementSpace* lsfes = new mfem::ParFiniteElementSpace(pmesh,lsvec);
@@ -209,7 +214,7 @@ namespace mfem
 	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
 	Array<int> ess_vdofs;
 	level_set_gf = new ParGridFunction(lsfes);
-	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, 0);
+	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, *alpha_fes, 0);
 	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
 	combo_dist_coef = new Combo_Level_Set_Coefficient;
 	
@@ -233,8 +238,10 @@ namespace mfem
       const int max_elem_attr = pmesh->attributes.Max();
       ess_elem.SetSize(max_elem_attr);
       ess_elem = 1;
+      //    Set the entry corresponding to the inactive attribute to 0
       if (useEmbedded && (max_elem_attr >= 2)){
-	ess_elem[max_elem_attr-1] = 0;
+	ess_elem[ShiftedFaceMarker::SBElementType::OUTSIDE-1] = 0;
+	ess_elem[ShiftedFaceMarker::SBElementType::CUT-1] = 0;
       }
 
       // Standard local assembly and inversion for energy mass matrices.
@@ -542,13 +549,8 @@ namespace mfem
       
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmbedded){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
 	  L2.GetElementDofs(e, l2dofs);	 
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
@@ -595,13 +597,8 @@ namespace mfem
       di.SetIntRule(&ir);
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmbedded){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
 	  L2.GetElementDofs(e, dofs);
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
 	    const FiniteElement &fe = *L2.GetFE(e);
 	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	    di.AssembleRHSElementVect(fe, eltr, rhs);
@@ -627,13 +624,8 @@ namespace mfem
       double loc_ie = 0.0;
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmbedded){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
 	  L2.GetElementDofs(e, l2dofs);
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){    
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
 	    gf.GetSubVector(l2dofs, loc_e);
 	    loc_ie += Me(e).InnerProduct(loc_e, one);
 	  }

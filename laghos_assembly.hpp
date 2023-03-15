@@ -21,7 +21,6 @@
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 #include "auxiliary_functions.hpp"
-#include "AnalyticalGeometricShape.hpp"
 #include "marking.hpp"
 
 using namespace std;

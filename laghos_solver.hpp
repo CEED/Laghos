@@ -48,6 +48,8 @@ namespace mfem
     protected:
       ParFiniteElementSpace &H1, &L2, &P_L2, &PFace_L2;
       mutable ParFiniteElementSpace H1c;
+      mfem::ParFiniteElementSpace* alpha_fes;
+      mfem::L2_FECollection* alpha_fec;     
       ParMesh *pmesh;
       // FE spaces local and global sizes
       const int H1Vsize;
@@ -73,7 +75,6 @@ namespace mfem
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
-      
       IntegrationRules GLIntRules;
       
       // Velocity mass matrix and local inverses of the energy mass matrices. These

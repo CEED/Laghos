@@ -371,26 +371,7 @@ namespace mfem
 									FaceElementTransformations &Tr,
 									Vector &elvect)      
     {
-      const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-      MPI_Comm comm = pmesh->GetComm();
-      int myid;
-      MPI_Comm_rank(comm, &myid);
-      int NEproc = pmesh->GetNE();
-      int elem1 = Tr.Elem1No;
-      int elem2 = Tr.Elem2No;
-      int elemStatus1 = elemStatus[elem1];
-      int elemStatus2;
-      if (Tr.Elem2No >= NEproc)
-	{
-	  elemStatus2 = elemStatus[NEproc+par_shared_face_count];
-	  par_shared_face_count++;
-	}
-      else
-	{
-	  elemStatus2 = elemStatus[elem2];
-	}
-            
-      if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+      if (Tr.Attribute == 12 ){
 	const int dim = el.GetDim();      
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
@@ -443,7 +424,7 @@ namespace mfem
 	      }
 	  }
       }
-      else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+     else if (Tr.Attribute == 21 ){
 	const int dim = el2.GetDim();      
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
@@ -511,27 +492,8 @@ namespace mfem
 								      FaceElementTransformations &Tr,
 								      Vector &elvect)
     {
-      if (Vnpt_gf != NULL){	
-	const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	MPI_Comm comm = pmesh->GetComm();
-	int myid;
-	MPI_Comm_rank(comm, &myid);
-	int NEproc = pmesh->GetNE();
-	int elem1 = Tr.Elem1No;
-	int elem2 = Tr.Elem2No;
-	int elemStatus1 = elemStatus[elem1];
-	int elemStatus2;
-	if (Tr.Elem2No >= NEproc)
-	  {
-	    elemStatus2 = elemStatus[NEproc+par_shared_face_count];
-	    par_shared_face_count++;
-	  }
-	else
-	  {
-	    elemStatus2 = elemStatus[elem2];
-	  }
-	
-	if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+      if (Vnpt_gf != NULL){ 
+	if (Tr.Attribute == 12 ){
 	  const int dim = el.GetDim();
 	  DenseMatrix identity(dim);
 	  identity = 0.0;
@@ -741,7 +703,7 @@ namespace mfem
 		}
 	    }
 	}
-	else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+	else if (Tr.Attribute == 21 ){
 	  const int dim = el2.GetDim();
 	  DenseMatrix identity(dim);
 	  identity = 0.0;
@@ -975,26 +937,7 @@ namespace mfem
 								 FaceElementTransformations &Tr,
 								 DenseMatrix &elmat)
     {
-      const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-      MPI_Comm comm = pmesh->GetComm();
-      int myid;
-      MPI_Comm_rank(comm, &myid);
-      int NEproc = pmesh->GetNE();
-      int elem1 = Tr.Elem1No;
-      int elem2 = Tr.Elem2No;
-      int elemStatus1 = elemStatus[elem1];
-      int elemStatus2;
-      if (Tr.Elem2No >= NEproc)
-	{
-	  elemStatus2 = elemStatus[NEproc+par_shared_face_count];
-	  par_shared_face_count++;
-	}
-      else
-	{
-	  elemStatus2 = elemStatus[elem2];
-	}
-      
-      if ( (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus2 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+      if (Tr.Attribute == 12 ){	
 	const int dim = fe.GetDim();
 	DenseMatrix identity(dim);
 	identity = 0.0;
@@ -1134,7 +1077,7 @@ namespace mfem
 	      }
 	  }
       }
-      else if ( (elemStatus2 == AnalyticalGeometricShape::SBElementType::INSIDE) && (elemStatus1 == AnalyticalGeometricShape::SBElementType::CUT) ) {
+      else if (Tr.Attribute == 21 ){	
 	const int dim = fe2.GetDim();
 	DenseMatrix identity(dim);
 	identity = 0.0;

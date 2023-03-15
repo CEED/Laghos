@@ -26,16 +26,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh(); 
       rho_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -56,16 +52,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh(); 
       p_gf = 0.0;      
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -88,16 +80,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh(); 
       cs_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -119,16 +107,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh(); 
       rho_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -149,16 +133,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh();
       p_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -181,16 +161,12 @@ namespace mfem
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh(); 
       cs_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  int elemStatus1 = AnalyticalGeometricShape::SBElementType::INSIDE;
-	  if (useEmb){
-	    const Array<int> &elemStatus = analyticalSurface->GetElement_Status();
-	    elemStatus1 = elemStatus[e];
-	  }
-	  if (elemStatus1 == AnalyticalGeometricShape::SBElementType::INSIDE){
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();

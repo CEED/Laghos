@@ -18,7 +18,6 @@
 #define MFEM_AUXILIARY_FUNCTIONS
 
 #include "mfem.hpp"
-#include "AnalyticalGeometricShape.hpp"
 #include "marking.hpp"
 
 #ifdef MFEM_USE_MPI
